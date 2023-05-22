@@ -8,6 +8,7 @@ const uri = require("./util/uri.js");
 
 let fileTokens = {};
 let remoteConfig = null;
+let remoteConfigPromise = null;
 
 class Api extends events.EventTarget {
     constructor() {
@@ -68,12 +69,20 @@ class Api extends events.EventTarget {
 
     fetchConfig() {
         if (remoteConfig === null) {
-            return this.get(uri.formatApiLink("info")).then((response) => {
+            if (remoteConfigPromise !== null) {
+                return Promise.resolve(remoteConfigPromise);
+            }
+            remoteConfigPromise = this.get(uri.formatApiLink("info")).then((response) => {
                 remoteConfig = response.config;
             });
+            return remoteConfigPromise;
         } else {
             return Promise.resolve();
         }
+    }
+
+    getPostCount() {
+        return remoteConfig.postCount;
     }
 
     getName() {

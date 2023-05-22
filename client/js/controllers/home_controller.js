@@ -2,7 +2,6 @@
 
 const api = require("../api.js");
 const config = require("../config.js");
-const Info = require("../models/info.js");
 const topNavigation = require("../models/top_navigation.js");
 const HomeView = require("../views/home_view.js");
 
@@ -20,20 +19,11 @@ class HomeController {
             isDevelopmentMode: config.environment == "development",
         });
 
-        Info.get().then(
-            (info) => {
-                this._homeView.setStats({
-                    diskUsage: info.diskUsage,
-                    postCount: info.postCount,
-                });
-                this._homeView.setFeaturedPost({
-                    featuredPost: info.featuredPost,
-                    featuringUser: info.featuringUser,
-                    featuringTime: info.featuringTime,
-                });
-            },
-            (error) => this._homeView.showError(error.message)
-        );
+        api.fetchConfig().then(() => {
+            this._homeView.setStats({
+                postCount: api.getPostCount(),
+            });
+        });
     }
 
     showSuccess(message) {
