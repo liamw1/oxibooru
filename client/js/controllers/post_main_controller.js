@@ -117,6 +117,12 @@ class PostMainController extends BasePostController {
                         (e) => this._evtDeleteComment(e)
                     );
                 }
+
+                if (this._view.postDescription) {
+                    this._view.postDescription.addEventListener("change", (e) =>
+                        this._evtPostChange(e)
+                    );
+                }
             },
             (error) => {
                 this._view = new EmptyView();

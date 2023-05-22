@@ -37,11 +37,11 @@ class PostMainView {
 
                 return [
                     window.innerWidth -
-                        postContainerNode.getBoundingClientRect().left -
-                        margin,
+                    postContainerNode.getBoundingClientRect().left -
+                    margin,
                     iosCorrectedInnerHeight() -
-                        topNavigationNode.getBoundingClientRect().height -
-                        margin * 2,
+                    topNavigationNode.getBoundingClientRect().height -
+                    margin * 2,
                 ];
             }
         );
@@ -58,6 +58,7 @@ class PostMainView {
         this._installSidebar(ctx);
         this._installCommentForm();
         this._installComments(ctx.post.comments);
+        this.postDescription = document.getElementById("post-description");
 
         const showPreviousImage = () => {
             if (ctx.prevPostId) {
