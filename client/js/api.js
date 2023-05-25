@@ -9,6 +9,8 @@ const uri = require("./util/uri.js");
 let fileTokens = {};
 let remoteConfig = null;
 let remoteConfigPromise = null;
+let postCount = 0;
+let serverTime = "";
 
 class Api extends events.EventTarget {
     constructor() {
@@ -74,6 +76,8 @@ class Api extends events.EventTarget {
             }
             remoteConfigPromise = this.get(uri.formatApiLink("info")).then((response) => {
                 remoteConfig = response.config;
+                postCount = response.postCount;
+                serverTime = response.serverTime;
             });
             return remoteConfigPromise;
         } else {
@@ -82,7 +86,11 @@ class Api extends events.EventTarget {
     }
 
     getPostCount() {
-        return remoteConfig.postCount;
+        return postCount;
+    }
+
+    getServerTime() {
+        return serverTime;
     }
 
     getName() {
