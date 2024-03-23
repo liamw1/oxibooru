@@ -307,7 +307,16 @@ module.exports = (router) => {
         if (ctx.state.parameters) {
             Object.assign(ctx.parameters, ctx.state.parameters);
         }
-        ctx.controller = new PostMainController(ctx, true);
+        const canEditPosts = api.hasPrivilege("post_edit");
+        if (canEditPosts) {
+            ctx.controller = new PostMainController(ctx, true);
+        } else {
+            router.show(uri.formatClientLink(
+                "post",
+                ctx.parameters.id,
+                ctx.parameters ? { query: ctx.parameters.query } : {}
+            ));
+        }
     });
     router.enter(["post", ":id"], (ctx, next) => {
         // restore parameters from history state
