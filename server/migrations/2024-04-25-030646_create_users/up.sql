@@ -6,6 +6,6 @@ CREATE TABLE users (
     email VARCHAR(64),
     rank VARCHAR(32) NOT NULL,
     creation_time TIMESTAMP WITH TIME ZONE NOT NULL,
-    last_login_time TIMESTAMP WITH TIME ZONE,
+    last_login_time TIMESTAMP WITH TIME ZONE NOT NULL,
     UNIQUE (name)
 )

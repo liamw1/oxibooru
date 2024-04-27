@@ -3,8 +3,7 @@ pub mod schema;
 
 use diesel::pg::PgConnection;
 use diesel::prelude::*;
-use models::NewUser;
-use models::User;
+use models::{NewUser, User};
 use std::result::Result;
 use thiserror::Error;
 
@@ -29,10 +28,17 @@ pub fn establish_connection() -> Result<PgConnection, ConnectionError> {
     PgConnection::establish(&database_url).map_err(|error| ConnectionError::DieselConnection(error))
 }
 
-pub fn create_user(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
-    let new_post = NewUser { name };
+pub fn create_user(connection: &mut PgConnection, name: &str) -> QueryResult<User> {
+    let current_time = chrono::Utc::now();
+    let new_user = NewUser {
+        name,
+        password_hash: "password",
+        rank: "new_user",
+        creation_time: current_time,
+        last_login_time: current_time,
+    };
     diesel::insert_into(schema::users::table)
-        .values(new_post)
+        .values(new_user)
         .returning(User::as_returning())
-        .get_result(conn)
+        .get_result(connection)
 }

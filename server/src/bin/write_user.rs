@@ -11,7 +11,7 @@ pub enum WriteError {
 fn upload_user_to_database(username: &String) -> Result<(), server::QueryError> {
     let connection = &mut server::establish_connection()?;
     let user = server::create_user(connection, &username)?;
-    println!("\nSaved user {} with id {}", username, user.id);
+    println!("\nSaved user {username} with id {}", user.id);
     Ok(())
 }
 

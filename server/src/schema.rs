@@ -14,6 +14,6 @@ diesel::table! {
         #[max_length = 32]
         rank -> Varchar,
         creation_time -> Timestamptz,
-        last_login_time -> Nullable<Timestamptz>,
+        last_login_time -> Timestamptz,
     }
 }
