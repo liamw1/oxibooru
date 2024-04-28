@@ -1,11 +1,11 @@
-use crate::schema::users;
+use crate::schema::user;
 use chrono::DateTime;
 use chrono::Utc;
 use diesel::prelude::*;
 use std::option::Option;
 
 #[derive(Queryable, Selectable)]
-#[diesel(table_name = users)]
+#[diesel(table_name = user)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
     pub id: i32,
@@ -19,7 +19,7 @@ pub struct User {
 }
 
 #[derive(Insertable)]
-#[diesel(table_name = users)]
+#[diesel(table_name = user)]
 pub struct NewUser<'a> {
     pub name: &'a str,
     pub password_hash: &'a str,

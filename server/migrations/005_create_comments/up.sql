@@ -1,0 +1,16 @@
+CREATE TABLE "comment" (
+    "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    "user_id" INTEGER NOT NULL REFERENCES "user" ON DELETE CASCADE,
+    "post_id" INTEGER NOT NULL REFERENCES "post" ON DELETE CASCADE,
+    "text" TEXT,
+    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL,
+    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL
+);
+
+CREATE TABLE "comment_score" (
+    "comment_id" INTEGER NOT NULL REFERENCES "comment" ON DELETE CASCADE,
+    "user_id" INTEGER NOT NULL REFERENCES "user" ON DELETE CASCADE,
+    "score" INTEGER NOT NULL,
+    "time" TIMESTAMP WITH TIME ZONE NOT NULL,
+    PRIMARY KEY ("comment_id", "user_id")
+);

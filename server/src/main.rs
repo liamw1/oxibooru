@@ -21,15 +21,15 @@ pub fn establish_connection() -> Result<PgConnection, ConnectionError> {
 }
 
 fn delete_users(connection: &mut PgConnection, pattern: &str) -> QueryResult<usize> {
-    use schema::users;
-    let num_deleted = diesel::delete(users::table.filter(users::columns::name.like(pattern)))
+    use schema::user;
+    let num_deleted = diesel::delete(user::table.filter(user::columns::name.like(pattern)))
         .execute(connection)?;
 
     Ok(num_deleted)
 }
 
 fn print_users(connection: &mut PgConnection) {
-    let query_result = schema::users::table
+    let query_result = schema::user::table
         .limit(5)
         .select(User::as_select())
         .load(connection);
@@ -58,7 +58,7 @@ pub fn write_user(connection: &mut PgConnection, name: &str) -> QueryResult<User
         creation_time: current_time,
         last_login_time: current_time,
     };
-    diesel::insert_into(schema::users::table)
+    diesel::insert_into(schema::user::table)
         .values(new_user)
         .returning(User::as_returning())
         .get_result(connection)
@@ -73,7 +73,7 @@ fn create_user(connection: &mut PgConnection, name: &str) -> QueryResult<User> {
         creation_time: current_time,
         last_login_time: current_time,
     };
-    diesel::insert_into(schema::users::table)
+    diesel::insert_into(schema::user::table)
         .values(new_user)
         .returning(User::as_returning())
         .get_result(connection)
