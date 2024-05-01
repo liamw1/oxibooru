@@ -46,7 +46,6 @@ pub struct Post {
     pub last_edit_time: DateTime<Utc>,
 }
 
-#[allow(dead_code)]
 type NewPostRelation = PostRelation;
 
 #[derive(Queryable, Selectable, Insertable)]
@@ -57,7 +56,6 @@ pub struct PostRelation {
     pub child_id: i32,
 }
 
-#[allow(dead_code)]
 type NewPostTag = PostTag;
 
 #[derive(Queryable, Selectable, Insertable)]
@@ -68,7 +66,6 @@ pub struct PostTag {
     pub tag_id: i32,
 }
 
-#[allow(dead_code)]
 type NewPostFavorite = PostFavorite;
 
 #[derive(Queryable, Selectable, Insertable)]
@@ -114,7 +111,6 @@ pub struct PostNote {
     pub text: String,
 }
 
-#[allow(dead_code)]
 type NewPostScore = PostScore;
 
 #[derive(Queryable, Selectable, Insertable)]

@@ -63,7 +63,6 @@ pub struct TagName {
     pub name: String,
 }
 
-#[allow(dead_code)]
 type NewTagImplication = TagImplication;
 
 #[derive(Queryable, Selectable, Insertable)]
@@ -74,7 +73,6 @@ pub struct TagImplication {
     pub child_id: i32,
 }
 
-#[allow(dead_code)]
 type NewTagSuggestion = TagSuggestion;
 
 #[derive(Queryable, Selectable, Insertable)]

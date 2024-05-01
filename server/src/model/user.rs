@@ -1,3 +1,7 @@
+use crate::schema::comment;
+use crate::schema::post;
+use crate::schema::post_favorite;
+use crate::schema::post_score;
 use crate::schema::user;
 use crate::schema::user_token;
 use chrono::DateTime;
@@ -27,6 +31,45 @@ pub struct User {
     pub rank: String,
     pub creation_time: DateTime<Utc>,
     pub last_login_time: DateTime<Utc>,
+}
+
+impl User {
+    pub fn post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
+        post::table
+            .filter(post::user_id.eq(self.id))
+            .count()
+            .first::<i64>(conn)
+    }
+
+    pub fn comment_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
+        comment::table
+            .filter(comment::user_id.eq(self.id))
+            .count()
+            .first::<i64>(conn)
+    }
+
+    pub fn favorite_post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
+        post_favorite::table
+            .filter(post_favorite::user_id.eq(self.id))
+            .count()
+            .first::<i64>(conn)
+    }
+
+    pub fn liked_post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
+        post_score::table
+            .filter(post_score::user_id.eq(self.id))
+            .filter(post_score::score.eq(1))
+            .count()
+            .first::<i64>(conn)
+    }
+
+    pub fn disliked_post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
+        post_score::table
+            .filter(post_score::user_id.eq(self.id))
+            .filter(post_score::score.eq(-1))
+            .count()
+            .first::<i64>(conn)
+    }
 }
 
 #[derive(Insertable)]

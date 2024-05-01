@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub mod model;
 pub mod schema;
 
@@ -20,19 +22,19 @@ pub fn establish_connection() -> Result<PgConnection, ConnectionError> {
     PgConnection::establish(&database_url).map_err(|error| ConnectionError::DieselConnection(error))
 }
 
-fn delete_users(connection: &mut PgConnection, pattern: &str) -> QueryResult<usize> {
+fn delete_users(conn: &mut PgConnection, pattern: &str) -> QueryResult<usize> {
     use schema::user;
-    let num_deleted = diesel::delete(user::table.filter(user::columns::name.like(pattern)))
-        .execute(connection)?;
+    let num_deleted =
+        diesel::delete(user::table.filter(user::columns::name.like(pattern))).execute(conn)?;
 
     Ok(num_deleted)
 }
 
-fn print_users(connection: &mut PgConnection) {
+fn print_users(conn: &mut PgConnection) {
     let query_result = schema::user::table
         .limit(5)
         .select(User::as_select())
-        .load(connection);
+        .load(conn);
 
     let users = match query_result {
         Ok(users) => users,
@@ -49,7 +51,7 @@ fn print_users(connection: &mut PgConnection) {
     }
 }
 
-pub fn write_user(connection: &mut PgConnection, name: &str) -> QueryResult<User> {
+pub fn write_user(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
     let current_time = chrono::Utc::now();
     let new_user = NewUser {
         name,
@@ -61,10 +63,10 @@ pub fn write_user(connection: &mut PgConnection, name: &str) -> QueryResult<User
     diesel::insert_into(schema::user::table)
         .values(new_user)
         .returning(User::as_returning())
-        .get_result(connection)
+        .get_result(conn)
 }
 
-fn create_user(connection: &mut PgConnection, name: &str) -> QueryResult<User> {
+fn create_user(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
     let current_time = chrono::Utc::now();
     let new_user = NewUser {
         name,
@@ -76,7 +78,7 @@ fn create_user(connection: &mut PgConnection, name: &str) -> QueryResult<User> {
     diesel::insert_into(schema::user::table)
         .values(new_user)
         .returning(User::as_returning())
-        .get_result(connection)
+        .get_result(conn)
 }
 
 fn request_user_input() -> std::io::Result<String> {
@@ -86,8 +88,8 @@ fn request_user_input() -> std::io::Result<String> {
 }
 
 fn main() {
-    let mut connection = match establish_connection() {
-        Ok(connection) => connection,
+    let mut conn = match establish_connection() {
+        Ok(conn) => conn,
         Err(error) => return println!("{error}"),
     };
 
@@ -98,14 +100,14 @@ fn main() {
     };
 
     match command.as_str() {
-        "show" => return print_users(&mut connection),
+        "show" => return print_users(&mut conn),
         "create" => (),
         "delete" => (),
         _ => return println!("Invalid command. Valid commands are 'show', 'create', 'delete'."),
     }
 
     if command.as_str() == "show" {
-        return print_users(&mut connection);
+        return print_users(&mut conn);
     }
 
     println!("Please type the user's name.");
@@ -115,8 +117,8 @@ fn main() {
     };
 
     let error = match command.as_str() {
-        "create" => create_user(&mut connection, username.as_str()).err(),
-        "delete" => delete_users(&mut connection, username.as_str()).err(),
+        "create" => create_user(&mut conn, username.as_str()).err(),
+        "delete" => delete_users(&mut conn, username.as_str()).err(),
         _ => return,
     };
     match error {

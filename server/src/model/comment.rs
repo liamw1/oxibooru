@@ -26,7 +26,16 @@ pub struct Comment {
     pub last_edit_time: DateTime<Utc>,
 }
 
-#[allow(dead_code)]
+impl Comment {
+    pub fn score(&self, conn: &mut PgConnection) -> QueryResult<i64> {
+        comment_score::table
+            .filter(comment_score::comment_id.eq(self.id))
+            .select(diesel::dsl::sum(comment_score::score))
+            .first::<Option<i64>>(conn)
+            .map(|n| n.unwrap_or(0))
+    }
+}
+
 type NewCommentScore = CommentScore;
 
 #[derive(Queryable, Selectable, Insertable)]

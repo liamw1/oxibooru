@@ -60,7 +60,6 @@ pub struct PoolName {
     pub name: String,
 }
 
-#[allow(dead_code)]
 type NewPoolPost = PoolPost;
 
 #[derive(Queryable, Selectable, Insertable)]
