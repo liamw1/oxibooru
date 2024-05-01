@@ -1,8 +1,8 @@
-pub mod models;
+pub mod model;
 pub mod schema;
 
 use diesel::prelude::*;
-use models::{NewUser, User};
+use model::user::{NewUser, User};
 use std::result::Result;
 use thiserror::Error;
 
