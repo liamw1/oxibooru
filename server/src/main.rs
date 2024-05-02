@@ -2,6 +2,8 @@
 
 pub mod model;
 pub mod schema;
+#[cfg(test)]
+mod test;
 
 use diesel::prelude::*;
 use model::user::{NewUser, User};
@@ -90,13 +92,13 @@ fn request_user_input() -> std::io::Result<String> {
 fn main() {
     let mut conn = match establish_connection() {
         Ok(conn) => conn,
-        Err(error) => return println!("{error}"),
+        Err(err) => return println!("{err}"),
     };
 
     println!("What command would you like to run?");
     let command = match request_user_input() {
         Ok(input) => input,
-        Err(error) => return println!("{error}"),
+        Err(err) => return println!("{err}"),
     };
 
     match command.as_str() {
@@ -113,7 +115,7 @@ fn main() {
     println!("Please type the user's name.");
     let username = match request_user_input() {
         Ok(input) => input,
-        Err(error) => return println!("{error}"),
+        Err(err) => return println!("{err}"),
     };
 
     let error = match command.as_str() {
@@ -122,7 +124,7 @@ fn main() {
         _ => return,
     };
     match error {
-        Some(error) => println!("{error}"),
+        Some(err) => println!("{err}"),
         None => (),
     }
 }

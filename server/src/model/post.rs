@@ -46,7 +46,7 @@ pub struct Post {
     pub last_edit_time: DateTime<Utc>,
 }
 
-type NewPostRelation = PostRelation;
+pub type NewPostRelation = PostRelation;
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = post_relation)]
@@ -56,7 +56,7 @@ pub struct PostRelation {
     pub child_id: i32,
 }
 
-type NewPostTag = PostTag;
+pub type NewPostTag = PostTag;
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = post_tag)]
@@ -66,7 +66,7 @@ pub struct PostTag {
     pub tag_id: i32,
 }
 
-type NewPostFavorite = PostFavorite;
+pub type NewPostFavorite = PostFavorite;
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = post_favorite)]
@@ -111,7 +111,7 @@ pub struct PostNote {
     pub text: String,
 }
 
-type NewPostScore = PostScore;
+pub type NewPostScore = PostScore;
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = post_score)]

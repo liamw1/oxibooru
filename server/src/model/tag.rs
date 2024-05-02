@@ -63,7 +63,7 @@ pub struct TagName {
     pub name: String,
 }
 
-type NewTagImplication = TagImplication;
+pub type NewTagImplication = TagImplication;
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = tag_implication)]
@@ -73,7 +73,7 @@ pub struct TagImplication {
     pub child_id: i32,
 }
 
-type NewTagSuggestion = TagSuggestion;
+pub type NewTagSuggestion = TagSuggestion;
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = tag_suggestion)]

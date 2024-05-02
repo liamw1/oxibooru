@@ -60,7 +60,7 @@ pub struct PoolName {
     pub name: String,
 }
 
-type NewPoolPost = PoolPost;
+pub type NewPoolPost = PoolPost;
 
 #[derive(Queryable, Selectable, Insertable)]
 #[diesel(table_name = pool_post)]
