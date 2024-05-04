@@ -1,8 +1,7 @@
-use crate::schema::comment;
-use crate::schema::comment_score;
-use chrono::DateTime;
-use chrono::Utc;
+use crate::schema::{comment, comment_score};
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use diesel::result::{DatabaseErrorKind, Error};
 
 #[derive(Insertable)]
 #[diesel(table_name = comment)]
@@ -27,12 +26,29 @@ pub struct Comment {
 }
 
 impl Comment {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        comment::table.count().first(conn)
+    }
+
     pub fn score(&self, conn: &mut PgConnection) -> QueryResult<i64> {
         comment_score::table
             .filter(comment_score::comment_id.eq(self.id))
             .select(diesel::dsl::sum(comment_score::score))
             .first::<Option<i64>>(conn)
             .map(|n| n.unwrap_or(0))
+    }
+
+    pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
+        conn.transaction(|conn| {
+            let num_deleted = diesel::delete(comment::table.filter(comment::columns::id.eq(self.id))).execute(conn)?;
+            let error_message =
+                |msg: String| -> Error { Error::DatabaseError(DatabaseErrorKind::UniqueViolation, Box::new(msg)) };
+            match num_deleted {
+                0 => Err(error_message(format!("Failed to delete comment: no comment with id {}", self.id))),
+                1 => Ok(()),
+                _ => Err(error_message(format!("Failed to delete comment: id {} is not unique", self.id))),
+            }
+        })
     }
 }
 
@@ -48,53 +64,52 @@ pub struct CommentScore {
     pub time: DateTime<Utc>,
 }
 
+impl CommentScore {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        comment_score::table.count().first(conn)
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use super::Comment;
-    use crate::schema::comment_score;
+    use super::{Comment, CommentScore};
+    use crate::model::user::User;
     use crate::test::*;
-    use chrono::TimeZone;
     use diesel::prelude::*;
     use diesel::result::Error;
 
     #[test]
     fn test_saving_comment() {
-        let mut conn = crate::establish_connection().unwrap_or_else(|err| panic!("{err}"));
-        let comment = conn.test_transaction::<Comment, Error, _>(|conn| {
-            create_test_user(conn)
-                .and_then(|user| create_test_post(conn, user.id))
-                .and_then(|post| create_test_comment(conn, post.user_id.unwrap(), post.id))
+        let comment_text = "This is a test comment";
+        let comment = establish_connection_or_panic().test_transaction::<Comment, Error, _>(|conn| {
+            let user = create_test_user(conn)?;
+            create_test_post(conn, user.id).and_then(|post| user.add_comment(conn, &post, comment_text))
         });
 
-        let y2k = chrono::Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap();
-        assert_eq!(comment.text, "text");
-        assert_eq!(comment.creation_time, y2k);
+        assert_eq!(comment.text, comment_text, "Comment text does not match");
     }
 
     #[test]
     fn test_cascade_deletions() {
-        let mut conn = crate::establish_connection().unwrap_or_else(|err| panic!("{err}"));
-        conn.test_transaction::<_, Error, _>(|conn| {
-            let comment_score_count = comment_score::table.count().first::<i64>(conn)?;
-            let comment_score = create_test_user(conn)
-                .and_then(|user| create_test_post(conn, user.id))
-                .and_then(|post| create_test_comment(conn, post.user_id.unwrap(), post.id))
-                .and_then(|comment| create_test_comment_score(conn, comment.user_id, comment.id))?;
+        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+            let user_count = User::count(conn)?;
+            let comment_count = Comment::count(conn)?;
+            let comment_score_count = CommentScore::count(conn)?;
 
-            assert_eq!(
-                comment_score_count + 1,
-                comment_score::table.count().first::<i64>(conn)?
-            );
+            let user = create_test_user(conn)?;
+            let comment = create_test_post(conn, user.id)
+                .and_then(|post| user.add_comment(conn, &post, "This is a test comment"))?;
+            user.like_comment(conn, &comment)?;
 
-            let num_deleted = diesel::delete(
-                comment_score::table.filter(comment_score::user_id.eq(comment_score.user_id)),
-            )
-            .execute(conn)?;
-            assert_eq!(num_deleted, 1);
-            assert_eq!(
-                comment_score_count,
-                comment_score::table.count().first::<i64>(conn)?
-            );
+            assert_eq!(User::count(conn)?, user_count + 1, "User insertion failed");
+            assert_eq!(Comment::count(conn)?, comment_count + 1, "Comment insertion failed");
+            assert_eq!(CommentScore::count(conn)?, comment_score_count + 1, "Comment score insertion failed");
+
+            comment.delete(conn)?;
+
+            assert_eq!(User::count(conn)?, user_count + 1, "User should not have been deleted");
+            assert_eq!(Comment::count(conn)?, comment_count, "Comment deletion failed");
+            assert_eq!(CommentScore::count(conn)?, comment_score_count, "Comment score cascade deletion failed");
 
             Ok(())
         });

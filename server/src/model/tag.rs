@@ -1,10 +1,5 @@
-use crate::schema::tag;
-use crate::schema::tag_category;
-use crate::schema::tag_implication;
-use crate::schema::tag_name;
-use crate::schema::tag_suggestion;
-use chrono::DateTime;
-use chrono::Utc;
+use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use std::option::Option;
 
@@ -26,6 +21,12 @@ pub struct TagCategory {
     pub color: String,
 }
 
+impl TagCategory {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        tag_category::table.count().first(conn)
+    }
+}
+
 #[derive(Insertable)]
 #[diesel(table_name = tag)]
 pub struct NewTag {
@@ -43,6 +44,12 @@ pub struct Tag {
     pub description: Option<String>,
     pub creation_time: DateTime<Utc>,
     pub last_edit_time: DateTime<Utc>,
+}
+
+impl Tag {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        tag::table.count().first(conn)
+    }
 }
 
 #[derive(Insertable)]
@@ -63,6 +70,12 @@ pub struct TagName {
     pub name: String,
 }
 
+impl TagName {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        tag_name::table.count().first(conn)
+    }
+}
+
 pub type NewTagImplication = TagImplication;
 
 #[derive(Queryable, Selectable, Insertable)]
@@ -73,6 +86,12 @@ pub struct TagImplication {
     pub child_id: i32,
 }
 
+impl TagImplication {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        tag_implication::table.count().first(conn)
+    }
+}
+
 pub type NewTagSuggestion = TagSuggestion;
 
 #[derive(Queryable, Selectable, Insertable)]
@@ -81,4 +100,10 @@ pub type NewTagSuggestion = TagSuggestion;
 pub struct TagSuggestion {
     pub parent_id: i32,
     pub child_id: i32,
+}
+
+impl TagSuggestion {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        tag_suggestion::table.count().first(conn)
+    }
 }

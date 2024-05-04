@@ -26,17 +26,13 @@ pub fn establish_connection() -> Result<PgConnection, ConnectionError> {
 
 fn delete_users(conn: &mut PgConnection, pattern: &str) -> QueryResult<usize> {
     use schema::user;
-    let num_deleted =
-        diesel::delete(user::table.filter(user::columns::name.like(pattern))).execute(conn)?;
+    let num_deleted = diesel::delete(user::table.filter(user::columns::name.like(pattern))).execute(conn)?;
 
     Ok(num_deleted)
 }
 
 fn print_users(conn: &mut PgConnection) {
-    let query_result = schema::user::table
-        .limit(5)
-        .select(User::as_select())
-        .load(conn);
+    let query_result = schema::user::table.limit(5).select(User::as_select()).load(conn);
 
     let users = match query_result {
         Ok(users) => users,

@@ -6,6 +6,8 @@ CREATE TABLE "tag_category" (
     UNIQUE ("name")
 );
 
+INSERT INTO "tag_category" ("id", "order", "name", "color") OVERRIDING SYSTEM VALUE VALUES (0, 0, 'default', 'blue');
+
 CREATE TABLE "tag" (
     "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     "category_id" INTEGER NOT NULL DEFAULT 0 REFERENCES "tag_category" ON DELETE SET DEFAULT,

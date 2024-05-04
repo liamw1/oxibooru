@@ -1,18 +1,24 @@
-use crate::model::comment::{Comment, CommentScore, NewComment, NewCommentScore};
+use crate::model::pool::{NewPoolCategory, PoolCategory};
 use crate::model::post::{NewPost, Post};
 use crate::model::user::{NewUser, User};
-use chrono::TimeZone;
+use chrono::{DateTime, TimeZone, Utc};
 use diesel::prelude::*;
 
-pub fn create_test_user(conn: &mut PgConnection) -> QueryResult<User> {
-    let y2k = chrono::Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap();
+pub fn test_time() -> DateTime<Utc> {
+    Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap()
+}
 
+pub fn establish_connection_or_panic() -> PgConnection {
+    crate::establish_connection().unwrap_or_else(|err| panic!("{err}"))
+}
+
+pub fn create_test_user(conn: &mut PgConnection) -> QueryResult<User> {
     let new_user = NewUser {
-        name: "test-user",
-        password_hash: "test-password",
+        name: "test_user",
+        password_hash: "test_password",
         rank: "test",
-        creation_time: y2k,
-        last_login_time: y2k,
+        creation_time: test_time(),
+        last_login_time: test_time(),
     };
 
     diesel::insert_into(crate::schema::user::table)
@@ -22,8 +28,6 @@ pub fn create_test_user(conn: &mut PgConnection) -> QueryResult<User> {
 }
 
 pub fn create_test_post(conn: &mut PgConnection, user_id: i32) -> QueryResult<Post> {
-    let y2k = chrono::Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap();
-
     let new_post = NewPost {
         user_id,
         file_size: 64,
@@ -33,8 +37,8 @@ pub fn create_test_post(conn: &mut PgConnection, user_id: i32) -> QueryResult<Po
         file_type: "image",
         mime_type: "png",
         checksum: "",
-        creation_time: y2k,
-        last_edit_time: y2k,
+        creation_time: test_time(),
+        last_edit_time: test_time(),
     };
 
     diesel::insert_into(crate::schema::post::table)
@@ -43,43 +47,14 @@ pub fn create_test_post(conn: &mut PgConnection, user_id: i32) -> QueryResult<Po
         .get_result(conn)
 }
 
-pub fn create_test_comment(
-    conn: &mut PgConnection,
-    user_id: i32,
-    post_id: i32,
-) -> QueryResult<Comment> {
-    let y2k = chrono::Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap();
-
-    let new_comment = NewComment {
-        user_id,
-        post_id,
-        text: "text",
-        creation_time: y2k,
-        last_edit_time: y2k,
+pub fn create_test_pool_category(conn: &mut PgConnection) -> QueryResult<PoolCategory> {
+    let new_pool_category = NewPoolCategory {
+        name: "test_pool",
+        color: "white",
     };
 
-    diesel::insert_into(crate::schema::comment::table)
-        .values(&new_comment)
-        .returning(Comment::as_returning())
-        .get_result(conn)
-}
-
-pub fn create_test_comment_score(
-    conn: &mut PgConnection,
-    user_id: i32,
-    comment_id: i32,
-) -> QueryResult<CommentScore> {
-    let y2k = chrono::Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap();
-
-    let new_comment_score = NewCommentScore {
-        comment_id,
-        user_id,
-        score: 1,
-        time: y2k,
-    };
-
-    diesel::insert_into(crate::schema::comment_score::table)
-        .values(&new_comment_score)
-        .returning(CommentScore::as_returning())
+    diesel::insert_into(crate::schema::pool_category::table)
+        .values(&new_pool_category)
+        .returning(PoolCategory::as_returning())
         .get_result(conn)
 }

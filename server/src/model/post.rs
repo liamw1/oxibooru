@@ -1,14 +1,10 @@
-use crate::schema::post;
-use crate::schema::post_favorite;
-use crate::schema::post_feature;
-use crate::schema::post_note;
-use crate::schema::post_relation;
-use crate::schema::post_score;
-use crate::schema::post_signature;
-use crate::schema::post_tag;
-use chrono::DateTime;
-use chrono::Utc;
+use crate::model::pool::Pool;
+use crate::schema::{
+    pool, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
+};
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use diesel::result::{DatabaseErrorKind, Error};
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -46,6 +42,32 @@ pub struct Post {
     pub last_edit_time: DateTime<Utc>,
 }
 
+impl Post {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        post::table.count().first(conn)
+    }
+
+    pub fn pools_in(&self, conn: &mut PgConnection) -> QueryResult<Vec<Pool>> {
+        let pool_ids = pool_post::table
+            .filter(pool_post::columns::post_id.eq(self.id))
+            .select(pool_post::columns::pool_id);
+        pool::table.filter(pool::columns::id.eq_any(pool_ids)).load(conn)
+    }
+
+    pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
+        conn.transaction(|conn| {
+            let num_deleted = diesel::delete(post::table.filter(post::columns::id.eq(self.id))).execute(conn)?;
+            let error_message =
+                |msg: String| -> Error { Error::DatabaseError(DatabaseErrorKind::UniqueViolation, Box::new(msg)) };
+            match num_deleted {
+                0 => Err(error_message(format!("Failed to delete post: no post with id {}", self.id))),
+                1 => Ok(()),
+                _ => Err(error_message(format!("Failed to delete post: id {} is not unique", self.id))),
+            }
+        })
+    }
+}
+
 pub type NewPostRelation = PostRelation;
 
 #[derive(Queryable, Selectable, Insertable)]
@@ -54,6 +76,12 @@ pub type NewPostRelation = PostRelation;
 pub struct PostRelation {
     pub parent_id: i32,
     pub child_id: i32,
+}
+
+impl PostRelation {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        post_relation::table.count().first(conn)
+    }
 }
 
 pub type NewPostTag = PostTag;
@@ -66,6 +94,12 @@ pub struct PostTag {
     pub tag_id: i32,
 }
 
+impl PostTag {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        post_tag::table.count().first(conn)
+    }
+}
+
 pub type NewPostFavorite = PostFavorite;
 
 #[derive(Queryable, Selectable, Insertable)]
@@ -75,6 +109,12 @@ pub struct PostFavorite {
     pub post_id: i32,
     pub user_id: i32,
     pub time: DateTime<Utc>,
+}
+
+impl PostFavorite {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        post_favorite::table.count().first(conn)
+    }
 }
 
 #[derive(Insertable)]
@@ -91,6 +131,12 @@ pub struct PostFeature {
     pub id: i32,
     pub post_id: i32,
     pub user_id: i32,
+}
+
+impl PostFeature {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        post_feature::table.count().first(conn)
+    }
 }
 
 #[derive(Insertable)]
@@ -111,6 +157,12 @@ pub struct PostNote {
     pub text: String,
 }
 
+impl PostNote {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        post_note::table.count().first(conn)
+    }
+}
+
 pub type NewPostScore = PostScore;
 
 #[derive(Queryable, Selectable, Insertable)]
@@ -121,6 +173,12 @@ pub struct PostScore {
     pub user_id: i32,
     pub score: i32,
     pub time: DateTime<Utc>,
+}
+
+impl PostScore {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        post_score::table.count().first(conn)
+    }
 }
 
 #[derive(Insertable)]
@@ -138,4 +196,10 @@ pub struct PostSignature {
     pub post_id: i32,
     pub signature: Vec<u8>,
     pub words: Vec<Option<i32>>,
+}
+
+impl PostSignature {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        post_signature::table.count().first(conn)
+    }
 }

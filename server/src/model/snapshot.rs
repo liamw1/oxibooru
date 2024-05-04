@@ -1,6 +1,5 @@
 use crate::schema::snapshot;
-use chrono::DateTime;
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use std::option::Option;
 
@@ -27,4 +26,10 @@ pub struct Snapshot {
     pub operation: String,
     pub data: Option<Vec<u8>>,
     pub creation_time: DateTime<Utc>,
+}
+
+impl Snapshot {
+    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
+        snapshot::table.count().first(conn)
+    }
 }
