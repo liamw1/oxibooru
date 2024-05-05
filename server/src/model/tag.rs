@@ -1,6 +1,7 @@
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use diesel::result::{DatabaseErrorKind, Error};
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -47,8 +48,34 @@ pub struct Tag {
 }
 
 impl Tag {
+    pub fn new(conn: &mut PgConnection) -> QueryResult<Tag> {
+        let now = Utc::now();
+        let new_tag = NewTag {
+            category_id: 0,
+            creation_time: now,
+            last_edit_time: now,
+        };
+        diesel::insert_into(tag::table)
+            .values(&new_tag)
+            .returning(Tag::as_returning())
+            .get_result(conn)
+    }
+
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         tag::table.count().first(conn)
+    }
+
+    pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
+        conn.transaction(|conn| {
+            let num_deleted = diesel::delete(tag::table.filter(tag::columns::id.eq(self.id))).execute(conn)?;
+            let error_message =
+                |msg: String| -> Error { Error::DatabaseError(DatabaseErrorKind::UniqueViolation, Box::new(msg)) };
+            match num_deleted {
+                0 => Err(error_message(format!("Failed to delete tag: no tag with id {}", self.id))),
+                1 => Ok(()),
+                _ => Err(error_message(format!("Failed to delete tag: id {} is not unique", self.id))),
+            }
+        })
     }
 }
 

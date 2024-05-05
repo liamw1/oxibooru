@@ -83,7 +83,7 @@ mod test {
         let comment_text = "This is a test comment";
         let comment = establish_connection_or_panic().test_transaction::<Comment, Error, _>(|conn| {
             let user = create_test_user(conn)?;
-            create_test_post(conn, user.id).and_then(|post| user.add_comment(conn, &post, comment_text))
+            create_test_post(conn, &user).and_then(|post| user.add_comment(conn, &post, comment_text))
         });
 
         assert_eq!(comment.text, comment_text, "Comment text does not match");
@@ -97,7 +97,7 @@ mod test {
             let comment_score_count = CommentScore::count(conn)?;
 
             let user = create_test_user(conn)?;
-            let comment = create_test_post(conn, user.id)
+            let comment = create_test_post(conn, &user)
                 .and_then(|post| user.add_comment(conn, &post, "This is a test comment"))?;
             user.like_comment(conn, &comment)?;
 

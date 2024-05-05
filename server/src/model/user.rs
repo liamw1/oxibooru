@@ -1,6 +1,6 @@
 use crate::model::comment::{Comment, CommentScore, NewComment, NewCommentScore};
-use crate::model::post::Post;
-use crate::schema::{comment, comment_score, post, post_favorite, post_score, user, user_token};
+use crate::model::post::{NewPostFavorite, NewPostFeature, NewPostScore, Post, PostFavorite, PostFeature, PostScore};
+use crate::schema::{comment, comment_score, post, post_favorite, post_feature, post_score, user, user_token};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use std::option::Option;
@@ -74,7 +74,6 @@ impl User {
             creation_time: now,
             last_edit_time: now,
         };
-
         diesel::insert_into(comment::table)
             .values(&new_comment)
             .returning(Comment::as_returning())
@@ -88,10 +87,45 @@ impl User {
             score: 1,
             time: chrono::Utc::now(),
         };
-
         diesel::insert_into(comment_score::table)
             .values(&new_comment_score)
             .returning(CommentScore::as_returning())
+            .get_result(conn)
+    }
+
+    pub fn like_post(&self, conn: &mut PgConnection, post: &Post) -> QueryResult<PostScore> {
+        let new_post_score = NewPostScore {
+            post_id: post.id,
+            user_id: self.id,
+            score: 1,
+            time: chrono::Utc::now(),
+        };
+        diesel::insert_into(post_score::table)
+            .values(&new_post_score)
+            .returning(PostScore::as_returning())
+            .get_result(conn)
+    }
+
+    pub fn favorite_post(&self, conn: &mut PgConnection, post: &Post) -> QueryResult<PostFavorite> {
+        let new_post_favorite = NewPostFavorite {
+            post_id: post.id,
+            user_id: self.id,
+            time: Utc::now(),
+        };
+        diesel::insert_into(post_favorite::table)
+            .values(&new_post_favorite)
+            .returning(PostFavorite::as_returning())
+            .get_result(conn)
+    }
+
+    pub fn feature_post(&self, conn: &mut PgConnection, post: &Post) -> QueryResult<PostFeature> {
+        let new_post_feature = NewPostFeature {
+            post_id: post.id,
+            user_id: self.id,
+        };
+        diesel::insert_into(post_feature::table)
+            .values(&new_post_feature)
+            .returning(PostFeature::as_returning())
             .get_result(conn)
     }
 }

@@ -1,5 +1,5 @@
 use crate::model::pool::{NewPoolCategory, PoolCategory};
-use crate::model::post::{NewPost, Post};
+use crate::model::post::{NewPost, NewPostNote, NewPostSignature, Post, PostNote, PostSignature};
 use crate::model::user::{NewUser, User};
 use chrono::{DateTime, TimeZone, Utc};
 use diesel::prelude::*;
@@ -20,16 +20,15 @@ pub fn create_test_user(conn: &mut PgConnection) -> QueryResult<User> {
         creation_time: test_time(),
         last_login_time: test_time(),
     };
-
     diesel::insert_into(crate::schema::user::table)
         .values(&new_user)
         .returning(User::as_returning())
         .get_result(conn)
 }
 
-pub fn create_test_post(conn: &mut PgConnection, user_id: i32) -> QueryResult<Post> {
+pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Post> {
     let new_post = NewPost {
-        user_id,
+        user_id: user.id,
         file_size: 64,
         width: 64,
         height: 64,
@@ -40,10 +39,33 @@ pub fn create_test_post(conn: &mut PgConnection, user_id: i32) -> QueryResult<Po
         creation_time: test_time(),
         last_edit_time: test_time(),
     };
-
     diesel::insert_into(crate::schema::post::table)
         .values(&new_post)
         .returning(Post::as_returning())
+        .get_result(conn)
+}
+
+pub fn create_test_post_note(conn: &mut PgConnection, post: &Post) -> QueryResult<PostNote> {
+    let new_post_note = NewPostNote {
+        post_id: post.id,
+        polygon: &[],
+        text: String::from("This is a test note"),
+    };
+    diesel::insert_into(crate::schema::post_note::table)
+        .values(&new_post_note)
+        .returning(PostNote::as_returning())
+        .get_result(conn)
+}
+
+pub fn create_test_post_signature(conn: &mut PgConnection, post: &Post) -> QueryResult<PostSignature> {
+    let new_post_signature = NewPostSignature {
+        post_id: post.id,
+        signature: &[],
+        words: &[],
+    };
+    diesel::insert_into(crate::schema::post_signature::table)
+        .values(&new_post_signature)
+        .returning(PostSignature::as_returning())
         .get_result(conn)
 }
 
@@ -52,7 +74,6 @@ pub fn create_test_pool_category(conn: &mut PgConnection) -> QueryResult<PoolCat
         name: "test_pool",
         color: "white",
     };
-
     diesel::insert_into(crate::schema::pool_category::table)
         .values(&new_pool_category)
         .returning(PoolCategory::as_returning())
