@@ -1,8 +1,8 @@
 use crate::model::post::Post;
 use crate::schema::{pool, pool_category, pool_name, pool_post};
+use crate::util;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use diesel::result::{DatabaseErrorKind, Error};
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -66,10 +66,7 @@ impl Pool {
     }
 
     pub fn post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
-        pool_post::table
-            .filter(pool_post::pool_id.eq(self.id))
-            .count()
-            .first(conn)
+        PoolPost::belonging_to(self).count().first(conn)
     }
 
     pub fn add_name(&self, conn: &mut PgConnection, name: &str) -> QueryResult<PoolName> {
@@ -97,16 +94,7 @@ impl Pool {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| {
-            let num_deleted = diesel::delete(pool::table.filter(pool::columns::id.eq(self.id))).execute(conn)?;
-            let error_message =
-                |msg: String| -> Error { Error::DatabaseError(DatabaseErrorKind::UniqueViolation, Box::new(msg)) };
-            match num_deleted {
-                0 => Err(error_message(format!("Failed to delete pool: no pool with id {}", self.id))),
-                1 => Ok(()),
-                _ => Err(error_message(format!("Failed to delete pool: id {} is not unique", self.id))),
-            }
-        })
+        conn.transaction(|conn| util::validate_uniqueness("pool", diesel::delete(&self).execute(conn)?))
     }
 }
 

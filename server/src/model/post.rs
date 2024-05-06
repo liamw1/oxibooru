@@ -4,9 +4,9 @@ use crate::model::user::User;
 use crate::schema::{
     pool, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
 };
+use crate::util;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use diesel::result::{DatabaseErrorKind, Error};
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -51,10 +51,7 @@ impl Post {
     }
 
     pub fn tag_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
-        post_tag::table
-            .filter(post_tag::columns::post_id.eq(self.id))
-            .count()
-            .first(conn)
+        PostTag::belonging_to(self).count().first(conn)
     }
 
     pub fn pools_in(&self, conn: &mut PgConnection) -> QueryResult<Vec<Pool>> {
@@ -94,16 +91,7 @@ impl Post {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| {
-            let num_deleted = diesel::delete(post::table.filter(post::columns::id.eq(self.id))).execute(conn)?;
-            let error_message =
-                |msg: String| -> Error { Error::DatabaseError(DatabaseErrorKind::UniqueViolation, Box::new(msg)) };
-            match num_deleted {
-                0 => Err(error_message(format!("Failed to delete post: no post with id {}", self.id))),
-                1 => Ok(()),
-                _ => Err(error_message(format!("Failed to delete post: id {} is not unique", self.id))),
-            }
-        })
+        conn.transaction(|conn| util::validate_uniqueness("post", diesel::delete(&self).execute(conn)?))
     }
 }
 

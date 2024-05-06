@@ -1,7 +1,7 @@
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::util;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use diesel::result::{DatabaseErrorKind, Error};
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -67,16 +67,7 @@ impl Tag {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| {
-            let num_deleted = diesel::delete(tag::table.filter(tag::columns::id.eq(self.id))).execute(conn)?;
-            let error_message =
-                |msg: String| -> Error { Error::DatabaseError(DatabaseErrorKind::UniqueViolation, Box::new(msg)) };
-            match num_deleted {
-                0 => Err(error_message(format!("Failed to delete tag: no tag with id {}", self.id))),
-                1 => Ok(()),
-                _ => Err(error_message(format!("Failed to delete tag: id {} is not unique", self.id))),
-            }
-        })
+        conn.transaction(|conn| util::validate_uniqueness("tag", diesel::delete(&self).execute(conn)?))
     }
 }
 

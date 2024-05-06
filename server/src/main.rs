@@ -4,6 +4,7 @@ pub mod model;
 pub mod schema;
 #[cfg(test)]
 mod test;
+pub mod util;
 
 use diesel::prelude::*;
 use model::user::{NewUser, User};

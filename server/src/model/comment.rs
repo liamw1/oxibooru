@@ -1,9 +1,9 @@
 use crate::model::post::Post;
 use crate::model::user::User;
 use crate::schema::{comment, comment_score};
+use crate::util;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use diesel::result::{DatabaseErrorKind, Error};
 
 #[derive(Insertable)]
 #[diesel(table_name = comment)]
@@ -41,16 +41,7 @@ impl Comment {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| {
-            let num_deleted = diesel::delete(comment::table.filter(comment::columns::id.eq(self.id))).execute(conn)?;
-            let error_message =
-                |msg: String| -> Error { Error::DatabaseError(DatabaseErrorKind::UniqueViolation, Box::new(msg)) };
-            match num_deleted {
-                0 => Err(error_message(format!("Failed to delete comment: no comment with id {}", self.id))),
-                1 => Ok(()),
-                _ => Err(error_message(format!("Failed to delete comment: id {} is not unique", self.id))),
-            }
-        })
+        conn.transaction(|conn| util::validate_uniqueness("comment", diesel::delete(&self).execute(conn)?))
     }
 }
 
