@@ -1,3 +1,4 @@
+use crate::model::user::User;
 use crate::schema::snapshot;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
@@ -14,7 +15,8 @@ pub struct NewSnapshot<'a> {
     pub creation_time: DateTime<Utc>,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(User))]
 #[diesel(table_name = snapshot)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Snapshot {

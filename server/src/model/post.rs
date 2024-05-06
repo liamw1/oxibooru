@@ -1,5 +1,6 @@
 use crate::model::pool::Pool;
 use crate::model::tag::Tag;
+use crate::model::user::User;
 use crate::schema::{
     pool, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
 };
@@ -23,7 +24,8 @@ pub struct NewPost<'a> {
     pub last_edit_time: DateTime<Utc>,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(User))]
 #[diesel(table_name = post)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Post {
@@ -57,8 +59,8 @@ impl Post {
 
     pub fn pools_in(&self, conn: &mut PgConnection) -> QueryResult<Vec<Pool>> {
         let pool_ids = pool_post::table
-            .filter(pool_post::columns::post_id.eq(self.id))
-            .select(pool_post::columns::pool_id);
+            .select(pool_post::columns::pool_id)
+            .filter(pool_post::columns::post_id.eq(self.id));
         pool::table.filter(pool::columns::id.eq_any(pool_ids)).load(conn)
     }
 
@@ -107,8 +109,10 @@ impl Post {
 
 pub type NewPostRelation = PostRelation;
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[diesel(belongs_to(Post, foreign_key = parent_id))]
 #[diesel(table_name = post_relation)]
+#[diesel(primary_key(parent_id, child_id))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PostRelation {
     pub parent_id: i32,
@@ -123,8 +127,10 @@ impl PostRelation {
 
 pub type NewPostTag = PostTag;
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[diesel(belongs_to(Post), belongs_to(Tag))]
 #[diesel(table_name = post_tag)]
+#[diesel(primary_key(post_id, tag_id))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PostTag {
     pub post_id: i32,
@@ -139,8 +145,10 @@ impl PostTag {
 
 pub type NewPostFavorite = PostFavorite;
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_favorite)]
+#[diesel(primary_key(post_id, user_id))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PostFavorite {
     pub post_id: i32,
@@ -161,7 +169,8 @@ pub struct NewPostFeature {
     pub user_id: i32,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_feature)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PostFeature {
@@ -184,7 +193,8 @@ pub struct NewPostNote<'a> {
     pub text: String,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(Post))]
 #[diesel(table_name = post_note)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PostNote {
@@ -202,8 +212,10 @@ impl PostNote {
 
 pub type NewPostScore = PostScore;
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_score)]
+#[diesel(primary_key(post_id, user_id))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PostScore {
     pub post_id: i32,
@@ -226,8 +238,10 @@ pub struct NewPostSignature<'a> {
     pub words: &'a [i32],
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(Post))]
 #[diesel(table_name = post_signature)]
+#[diesel(primary_key(post_id))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PostSignature {
     pub post_id: i32,
@@ -254,7 +268,7 @@ mod test {
     #[test]
     fn test_saving_post() {
         let post = establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
-            create_test_user(conn).and_then(|user| create_test_post(conn, &user))
+            create_test_user(conn, test_user_name()).and_then(|user| create_test_post(conn, &user))
         });
         assert_eq!(post.safety, "safe");
         assert_eq!(post.creation_time, test_time());
@@ -275,7 +289,7 @@ mod test {
             let post_favorite_count = PostFavorite::count(conn)?;
             let post_signature_count = PostSignature::count(conn)?;
 
-            let user = create_test_user(conn)?;
+            let user = create_test_user(conn, test_user_name())?;
             let tag1 = Tag::new(conn)?;
             let tag2 = Tag::new(conn)?;
             let post = create_test_post(conn, &user)?;
@@ -329,7 +343,7 @@ mod test {
     #[test]
     fn test_tracking_tag_count() {
         establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
-            let post = create_test_user(conn).and_then(|user| create_test_post(conn, &user))?;
+            let post = create_test_user(conn, test_user_name()).and_then(|user| create_test_post(conn, &user))?;
             let tag1 = Tag::new(conn)?;
             let tag2 = Tag::new(conn)?;
 

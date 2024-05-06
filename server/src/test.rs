@@ -8,13 +8,17 @@ pub fn test_time() -> DateTime<Utc> {
     Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap()
 }
 
+pub fn test_user_name() -> &'static str {
+    return "test_user";
+}
+
 pub fn establish_connection_or_panic() -> PgConnection {
     crate::establish_connection().unwrap_or_else(|err| panic!("{err}"))
 }
 
-pub fn create_test_user(conn: &mut PgConnection) -> QueryResult<User> {
+pub fn create_test_user(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
     let new_user = NewUser {
-        name: "test_user",
+        name,
         password_hash: "test_password",
         rank: "test",
         creation_time: test_time(),

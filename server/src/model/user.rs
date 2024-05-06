@@ -15,7 +15,7 @@ pub struct NewUser<'a> {
     pub last_login_time: DateTime<Utc>,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Identifiable, Queryable, Selectable)]
 #[diesel(table_name = user)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
@@ -93,6 +93,19 @@ impl User {
             .get_result(conn)
     }
 
+    pub fn dislike_comment(&self, conn: &mut PgConnection, comment: &Comment) -> QueryResult<CommentScore> {
+        let new_comment_score = NewCommentScore {
+            comment_id: comment.id,
+            user_id: self.id,
+            score: -1,
+            time: chrono::Utc::now(),
+        };
+        diesel::insert_into(comment_score::table)
+            .values(&new_comment_score)
+            .returning(CommentScore::as_returning())
+            .get_result(conn)
+    }
+
     pub fn like_post(&self, conn: &mut PgConnection, post: &Post) -> QueryResult<PostScore> {
         let new_post_score = NewPostScore {
             post_id: post.id,
@@ -142,8 +155,10 @@ pub struct NewUserToken<'a> {
     pub last_usage_time: DateTime<Utc>,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(User))]
 #[diesel(table_name = user_token)]
+#[diesel(primary_key(user_id))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct UserToken {
     pub user_id: i32,

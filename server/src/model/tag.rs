@@ -12,7 +12,7 @@ pub struct NewTagCategory<'a> {
     pub color: &'a str,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Identifiable, Queryable, Selectable)]
 #[diesel(table_name = tag_category)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct TagCategory {
@@ -36,7 +36,8 @@ pub struct NewTag {
     pub last_edit_time: DateTime<Utc>,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(TagCategory, foreign_key = category_id))]
 #[diesel(table_name = tag)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Tag {
@@ -87,7 +88,8 @@ pub struct NewTagName<'a> {
     pub name: &'a str,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(Tag))]
 #[diesel(table_name = tag_name)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct TagName {
@@ -105,8 +107,10 @@ impl TagName {
 
 pub type NewTagImplication = TagImplication;
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[diesel(belongs_to(Tag, foreign_key = parent_id))]
 #[diesel(table_name = tag_implication)]
+#[diesel(primary_key(parent_id, child_id))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct TagImplication {
     pub parent_id: i32,
@@ -121,8 +125,10 @@ impl TagImplication {
 
 pub type NewTagSuggestion = TagSuggestion;
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[diesel(belongs_to(Tag, foreign_key = parent_id))]
 #[diesel(table_name = tag_suggestion)]
+#[diesel(primary_key(parent_id, child_id))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct TagSuggestion {
     pub parent_id: i32,

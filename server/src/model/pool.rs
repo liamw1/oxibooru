@@ -12,7 +12,7 @@ pub struct NewPoolCategory<'a> {
     pub color: &'a str,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Identifiable, Queryable, Selectable)]
 #[diesel(table_name = pool_category)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PoolCategory {
@@ -35,7 +35,8 @@ pub struct NewPool {
     pub last_edit_time: DateTime<Utc>,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(PoolCategory, foreign_key = category_id))]
 #[diesel(table_name = pool)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct Pool {
@@ -117,7 +118,8 @@ pub struct NewPoolName<'a> {
     pub name: &'a str,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(Pool))]
 #[diesel(table_name = pool_name)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PoolName {
@@ -135,8 +137,10 @@ impl PoolName {
 
 pub type NewPoolPost = PoolPost;
 
-#[derive(Queryable, Selectable, Insertable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[diesel(belongs_to(Pool), belongs_to(Post))]
 #[diesel(table_name = pool_post)]
+#[diesel(primary_key(pool_id, post_id))]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PoolPost {
     pub pool_id: i32,
@@ -175,7 +179,7 @@ mod test {
             let pool = Pool::new(conn)?;
             pool.add_name(conn, "test_pool")?;
             pool.add_name(conn, "test_pool_alias")?;
-            create_test_user(conn)
+            create_test_user(conn, test_user_name())
                 .and_then(|user| create_test_post(conn, &user))
                 .and_then(|post| pool.add_post(conn, &post))?;
 
@@ -198,7 +202,7 @@ mod test {
     #[test]
     fn test_tracking_post_count() {
         establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
-            let user = create_test_user(conn)?;
+            let user = create_test_user(conn, test_user_name())?;
             let post1 = create_test_post(conn, &user)?;
             let post2 = create_test_post(conn, &user)?;
             let pool1 = Pool::new(conn)?;
