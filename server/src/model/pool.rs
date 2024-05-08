@@ -158,7 +158,7 @@ mod test {
 
     #[test]
     fn test_saving_pool() {
-        let pool = establish_connection_or_panic().test_transaction::<Pool, Error, _>(|conn| Pool::new(conn));
+        let pool = establish_connection_or_panic().test_transaction(|conn| Pool::new(conn));
         assert_eq!(pool.category_id, 0, "New pool is not in default category");
     }
 

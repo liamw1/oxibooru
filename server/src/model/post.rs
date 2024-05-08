@@ -255,11 +255,12 @@ mod test {
 
     #[test]
     fn test_saving_post() {
-        let post = establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        let post = establish_connection_or_panic().test_transaction(|conn| {
             create_test_user(conn, test_user_name()).and_then(|user| create_test_post(conn, &user))
         });
-        assert_eq!(post.safety, "safe");
-        assert_eq!(post.creation_time, test_time());
+
+        assert_eq!(post.safety, "safe", "Incorrect post safety");
+        assert_eq!(post.creation_time, test_time(), "Incorrect post creation time");
     }
 
     #[test]

@@ -76,12 +76,12 @@ mod test {
     #[test]
     fn test_saving_comment() {
         let comment_text = "This is a test comment";
-        let comment = establish_connection_or_panic().test_transaction::<Comment, Error, _>(|conn| {
+        let comment = establish_connection_or_panic().test_transaction(|conn| {
             let user = create_test_user(conn, test_user_name())?;
             create_test_post(conn, &user).and_then(|post| user.add_comment(conn, &post, comment_text))
         });
 
-        assert_eq!(comment.text, comment_text, "Comment text does not match");
+        assert_eq!(comment.text, comment_text, "Incorrect comment text");
     }
 
     #[test]

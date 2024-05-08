@@ -49,7 +49,7 @@ CREATE TABLE "post_note" (
 
 CREATE TABLE "post_score" (
     "post_id" INTEGER NOT NULL REFERENCES "post" ON DELETE CASCADE,
-    "user_id" INTEGER REFERENCES "user" ON DELETE SET NULL,
+    "user_id" INTEGER NOT NULL REFERENCES "user" ON DELETE CASCADE,
     "score" INTEGER NOT NULL,
     "time" TIMESTAMP WITH TIME ZONE NOT NULL,
     PRIMARY KEY ("post_id", "user_id")

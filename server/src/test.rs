@@ -1,6 +1,6 @@
 use crate::model::pool::{NewPoolCategory, PoolCategory};
 use crate::model::post::{NewPost, NewPostNote, NewPostSignature, Post, PostNote, PostSignature};
-use crate::model::user::{NewUser, User};
+use crate::model::user::{NewUser, NewUserToken, User, UserToken};
 use chrono::{DateTime, TimeZone, Utc};
 use diesel::prelude::*;
 
@@ -27,6 +27,22 @@ pub fn create_test_user(conn: &mut PgConnection, name: &str) -> QueryResult<User
     diesel::insert_into(crate::schema::user::table)
         .values(&new_user)
         .returning(User::as_returning())
+        .get_result(conn)
+}
+
+pub fn create_test_user_token(conn: &mut PgConnection, user: &User) -> QueryResult<UserToken> {
+    let new_user_token = NewUserToken {
+        user_id: user.id,
+        token: "dummy",
+        enabled: false,
+        expiration_time: None,
+        creation_time: test_time(),
+        last_edit_time: test_time(),
+        last_usage_time: test_time(),
+    };
+    diesel::insert_into(crate::schema::user_token::table)
+        .values(&new_user_token)
+        .returning(UserToken::as_returning())
         .get_result(conn)
 }
 
