@@ -69,10 +69,15 @@ impl Pool {
         PoolPost::belonging_to(self).count().first(conn)
     }
 
+    pub fn names(&self, conn: &mut PgConnection) -> QueryResult<Vec<String>> {
+        PoolName::belonging_to(self).select(pool_name::columns::name).load(conn)
+    }
+
     pub fn add_name(&self, conn: &mut PgConnection, name: &str) -> QueryResult<PoolName> {
+        let name_count = PoolName::belonging_to(self).count().first::<i64>(conn)?;
         let new_pool_name = NewPoolName {
             pool_id: self.id,
-            order: 0,
+            order: name_count as i32,
             name,
         };
         diesel::insert_into(pool_name::table)
@@ -82,10 +87,11 @@ impl Pool {
     }
 
     pub fn add_post(&self, conn: &mut PgConnection, post: &Post) -> QueryResult<PoolPost> {
+        let post_count = self.post_count(conn)?;
         let new_pool_post = NewPoolPost {
             pool_id: self.id,
             post_id: post.id,
-            order: 0,
+            order: post_count as i32,
         };
         diesel::insert_into(pool_post::table)
             .values(&new_pool_post)
@@ -175,6 +181,7 @@ mod test {
             assert_eq!(Pool::count(conn)?, pool_count + 1, "Pool insertion failed");
             assert_eq!(PoolName::count(conn)?, pool_name_count + 2, "Pool name insertion failed");
             assert_eq!(PoolPost::count(conn)?, pool_post_count + 1, "Pool post insertion failed");
+            assert_eq!(pool.names(conn)?, vec!["test_pool", "test_pool_alias"], "Incorrect pool names");
 
             pool.delete(conn)?;
 

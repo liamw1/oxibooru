@@ -1,8 +1,8 @@
-use crate::model::pool::Pool;
+use crate::model::pool::{Pool, PoolPost};
 use crate::model::tag::Tag;
 use crate::model::user::User;
 use crate::schema::{
-    pool, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
+    pool, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
 };
 use crate::util;
 use chrono::{DateTime, Utc};
@@ -55,17 +55,17 @@ impl Post {
     }
 
     pub fn pools_in(&self, conn: &mut PgConnection) -> QueryResult<Vec<Pool>> {
-        let pool_ids = pool_post::table
-            .select(pool_post::columns::pool_id)
-            .filter(pool_post::columns::post_id.eq(self.id));
-        pool::table.filter(pool::columns::id.eq_any(pool_ids)).load(conn)
+        PoolPost::belonging_to(self)
+            .inner_join(pool::table)
+            .select(Pool::as_select())
+            .load(conn)
     }
 
     pub fn related_posts(&self, conn: &mut PgConnection) -> QueryResult<Vec<Post>> {
-        let post_ids = post_relation::table
-            .filter(post_relation::columns::parent_id.eq(self.id))
-            .select(post_relation::columns::child_id);
-        post::table.filter(post::columns::id.eq_any(post_ids)).load(conn)
+        PostRelation::belonging_to(self)
+            .inner_join(post::table.on(post::columns::id.eq(post_relation::columns::child_id)))
+            .select(Post::as_select())
+            .load(conn)
     }
 
     pub fn add_tag(&self, conn: &mut PgConnection, tag: &Tag) -> QueryResult<PostTag> {
