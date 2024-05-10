@@ -3,9 +3,11 @@ CREATE TABLE "comment" (
     "user_id" INTEGER NOT NULL REFERENCES "user" ON DELETE CASCADE,
     "post_id" INTEGER NOT NULL REFERENCES "post" ON DELETE CASCADE,
     "text" TEXT NOT NULL,
-    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL,
-    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL
+    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+SELECT diesel_manage_last_edit_time('comment');
 
 CREATE TABLE "comment_score" (
     "comment_id" INTEGER NOT NULL REFERENCES "comment" ON DELETE CASCADE,

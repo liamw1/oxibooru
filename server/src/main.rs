@@ -2,6 +2,7 @@
 
 pub mod func;
 pub mod model;
+pub mod query;
 pub mod schema;
 #[cfg(test)]
 mod test;
@@ -53,17 +54,12 @@ fn print_users(conn: &mut PgConnection) {
 }
 
 pub fn write_user(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
-    let current_time = chrono::Utc::now();
-
     let new_user = NewUser {
         name,
         password_hash: "password",
         password_salt: "salt",
         rank: UserPrivilege::Regular,
-        creation_time: current_time,
-        last_login_time: current_time,
     };
-
     diesel::insert_into(schema::user::table)
         .values(new_user)
         .returning(User::as_returning())
@@ -71,17 +67,12 @@ pub fn write_user(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
 }
 
 fn create_user(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
-    let current_time = chrono::Utc::now();
-
     let new_user = NewUser {
         name,
         password_hash: "password",
         password_salt: "salt",
         rank: UserPrivilege::Regular,
-        creation_time: current_time,
-        last_login_time: current_time,
     };
-
     diesel::insert_into(schema::user::table)
         .values(new_user)
         .returning(User::as_returning())

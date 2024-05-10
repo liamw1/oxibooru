@@ -12,7 +12,6 @@ pub struct NewSnapshot<'a> {
     pub resource_type: &'a str,
     pub resource_name: &'a str,
     pub operation: &'a str,
-    pub creation_time: DateTime<Utc>,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]

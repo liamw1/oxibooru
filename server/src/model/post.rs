@@ -20,8 +20,6 @@ pub struct NewPost<'a> {
     pub file_type: &'a str,
     pub mime_type: &'a str,
     pub checksum: &'a str,
-    pub creation_time: DateTime<Utc>,
-    pub last_edit_time: DateTime<Utc>,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
@@ -73,7 +71,6 @@ impl Post {
             post_id: self.id,
             tag_id: tag.id,
         };
-
         diesel::insert_into(post_tag::table)
             .values(&new_post_tag)
             .returning(PostTag::as_returning())
@@ -85,7 +82,6 @@ impl Post {
             parent_id: self.id,
             child_id: related_post.id,
         };
-
         diesel::insert_into(post_relation::table)
             .values(&new_post_relation)
             .returning(PostRelation::as_returning())
@@ -261,7 +257,6 @@ mod test {
         });
 
         assert_eq!(post.safety, "safe", "Incorrect post safety");
-        assert_eq!(post.creation_time, test_time(), "Incorrect post creation time");
     }
 
     #[test]

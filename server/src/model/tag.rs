@@ -33,8 +33,6 @@ impl TagCategory {
 #[diesel(table_name = tag)]
 pub struct NewTag {
     pub category_id: i32,
-    pub creation_time: DateTime<Utc>,
-    pub last_edit_time: DateTime<Utc>,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
@@ -51,14 +49,7 @@ pub struct Tag {
 
 impl Tag {
     pub fn new(conn: &mut PgConnection) -> QueryResult<Self> {
-        let now = Utc::now();
-
-        let new_tag = NewTag {
-            category_id: 0,
-            creation_time: now,
-            last_edit_time: now,
-        };
-
+        let new_tag = NewTag { category_id: 0 };
         diesel::insert_into(tag::table)
             .values(&new_tag)
             .returning(Tag::as_returning())
@@ -100,13 +91,11 @@ impl Tag {
 
     pub fn add_name(&self, conn: &mut PgConnection, name: &str) -> QueryResult<TagName> {
         let name_count = TagName::belonging_to(self).count().first::<i64>(conn)?;
-
         let new_tag_name = NewTagName {
             tag_id: self.id,
             order: name_count as i32,
             name,
         };
-
         diesel::insert_into(tag_name::table)
             .values(&new_tag_name)
             .returning(TagName::as_returning())
@@ -118,7 +107,6 @@ impl Tag {
             parent_id: self.id,
             child_id: implied_tag.id,
         };
-
         diesel::insert_into(tag_implication::table)
             .values(&new_tag_implication)
             .returning(TagImplication::as_returning())
@@ -130,7 +118,6 @@ impl Tag {
             parent_id: self.id,
             child_id: implied_tag.id,
         };
-
         diesel::insert_into(tag_suggestion::table)
             .values(&new_tag_suggestion)
             .returning(TagSuggestion::as_returning())

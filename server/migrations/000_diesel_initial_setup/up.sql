@@ -6,30 +6,30 @@
 
 
 -- Sets up a trigger for the given table to automatically set a column called
--- `updated_at` whenever the row is modified (unless `updated_at` was included
+-- `last_edit_time` whenever the row is modified (unless `last_edit_time` was included
 -- in the modified columns)
 --
 -- # Example
 --
 -- ```sql
--- CREATE TABLE users (id SERIAL PRIMARY KEY, updated_at TIMESTAMP NOT NULL DEFAULT NOW());
+-- CREATE TABLE users (id SERIAL PRIMARY KEY, last_edit_time TIMESTAMP NOT NULL DEFAULT NOW());
 --
--- SELECT diesel_manage_updated_at('users');
+-- SELECT diesel_manage_last_edit_time('users');
 -- ```
-CREATE OR REPLACE FUNCTION diesel_manage_updated_at(_tbl regclass) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION diesel_manage_last_edit_time(_tbl regclass) RETURNS VOID AS $$
 BEGIN
-    EXECUTE format('CREATE TRIGGER set_updated_at BEFORE UPDATE ON %s
-                    FOR EACH ROW EXECUTE PROCEDURE diesel_set_updated_at()', _tbl);
+    EXECUTE format('CREATE TRIGGER set_last_edit_time BEFORE UPDATE ON %s
+                    FOR EACH ROW EXECUTE PROCEDURE diesel_set_last_edit_time()', _tbl);
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION diesel_set_updated_at() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION diesel_set_last_edit_time() RETURNS trigger AS $$
 BEGIN
     IF (
         NEW IS DISTINCT FROM OLD AND
-        NEW.updated_at IS NOT DISTINCT FROM OLD.updated_at
+        NEW.last_edit_time IS NOT DISTINCT FROM OLD.last_edit_time
     ) THEN
-        NEW.updated_at := current_timestamp;
+        NEW.last_edit_time := CURRENT_TIMESTAMP;
     END IF;
     RETURN NEW;
 END;

@@ -31,8 +31,6 @@ impl PoolCategory {
 #[diesel(table_name = pool)]
 pub struct NewPool {
     pub category_id: i32,
-    pub creation_time: DateTime<Utc>,
-    pub last_edit_time: DateTime<Utc>,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
@@ -49,14 +47,9 @@ pub struct Pool {
 
 impl Pool {
     pub fn new(conn: &mut PgConnection) -> QueryResult<Self> {
-        let now = chrono::Utc::now();
-
         let new_pool = NewPool {
             category_id: 0, // Default pool category
-            creation_time: now,
-            last_edit_time: now,
         };
-
         diesel::insert_into(pool::table)
             .values(&new_pool)
             .returning(Pool::as_returning())
@@ -77,13 +70,11 @@ impl Pool {
 
     pub fn add_name(&self, conn: &mut PgConnection, name: &str) -> QueryResult<PoolName> {
         let name_count = PoolName::belonging_to(self).count().first::<i64>(conn)?;
-
         let new_pool_name = NewPoolName {
             pool_id: self.id,
             order: name_count as i32,
             name,
         };
-
         diesel::insert_into(pool_name::table)
             .values(&new_pool_name)
             .returning(PoolName::as_returning())
@@ -92,13 +83,11 @@ impl Pool {
 
     pub fn add_post(&self, conn: &mut PgConnection, post: &Post) -> QueryResult<PoolPost> {
         let post_count = self.post_count(conn)?;
-
         let new_pool_post = NewPoolPost {
             pool_id: self.id,
             post_id: post.id,
             order: post_count as i32,
         };
-
         diesel::insert_into(pool_post::table)
             .values(&new_pool_post)
             .returning(PoolPost::as_returning())

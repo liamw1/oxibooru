@@ -5,8 +5,8 @@ CREATE TABLE "user" (
     "email" VARCHAR(64),
     "password_hash" VARCHAR(128) NOT NULL,
     "password_salt" VARCHAR(32) NOT NULL,
-    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL,
-    "last_login_time" TIMESTAMP WITH TIME ZONE NOT NULL,
+    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "last_login_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE ("name")
 );
 
@@ -16,7 +16,9 @@ CREATE TABLE "user_token" (
     "note" VARCHAR(128),
     "enabled" BOOLEAN NOT NULL,
     "expiration_time" TIMESTAMP WITH TIME ZONE,
-    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL,
-    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL,
-    "last_usage_time" TIMESTAMP WITH TIME ZONE NOT NULL
+    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "last_usage_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+SELECT diesel_manage_last_edit_time('user_token');

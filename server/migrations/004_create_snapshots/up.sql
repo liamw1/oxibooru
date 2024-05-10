@@ -6,5 +6,5 @@ CREATE TABLE "snapshot" (
     "resource_name" VARCHAR(128) NOT NULL,
     "operation" VARCHAR(16) NOT NULL,
     "data" BYTEA,
-    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL
+    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

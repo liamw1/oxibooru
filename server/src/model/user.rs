@@ -25,8 +25,6 @@ pub struct NewUser<'a> {
     pub password_hash: &'a str,
     pub password_salt: &'a str,
     pub rank: UserPrivilege,
-    pub creation_time: DateTime<Utc>,
-    pub last_login_time: DateTime<Utc>,
 }
 
 #[derive(Identifiable, Queryable, Selectable)]
@@ -52,17 +50,12 @@ impl User {
     ) -> Result<User, UserCreationError> {
         let salt = SaltString::generate(&mut OsRng);
         let hash = auth::hash_password(password, salt.as_str())?;
-        let now = Utc::now();
-
         let new_user = NewUser {
             name,
             password_hash: &hash,
             password_salt: salt.as_str(),
             rank,
-            creation_time: now,
-            last_login_time: now,
         };
-
         diesel::insert_into(user::table)
             .values(&new_user)
             .returning(User::as_returning())
@@ -106,16 +99,11 @@ impl User {
     }
 
     pub fn add_comment(&self, conn: &mut PgConnection, post: &Post, text: &str) -> QueryResult<Comment> {
-        let now = Utc::now();
-
         let new_comment = NewComment {
             user_id: self.id,
             post_id: post.id,
             text,
-            creation_time: now,
-            last_edit_time: now,
         };
-
         diesel::insert_into(comment::table)
             .values(&new_comment)
             .returning(Comment::as_returning())
@@ -129,7 +117,6 @@ impl User {
             score: 1,
             time: chrono::Utc::now(),
         };
-
         diesel::insert_into(comment_score::table)
             .values(&new_comment_score)
             .returning(CommentScore::as_returning())
@@ -143,7 +130,6 @@ impl User {
             score: -1,
             time: chrono::Utc::now(),
         };
-
         diesel::insert_into(comment_score::table)
             .values(&new_comment_score)
             .returning(CommentScore::as_returning())
@@ -157,7 +143,6 @@ impl User {
             score: 1,
             time: chrono::Utc::now(),
         };
-
         diesel::insert_into(post_score::table)
             .values(&new_post_score)
             .returning(PostScore::as_returning())
@@ -170,7 +155,6 @@ impl User {
             user_id: self.id,
             time: Utc::now(),
         };
-
         diesel::insert_into(post_favorite::table)
             .values(&new_post_favorite)
             .returning(PostFavorite::as_returning())
@@ -182,7 +166,6 @@ impl User {
             post_id: post.id,
             user_id: self.id,
         };
-
         diesel::insert_into(post_feature::table)
             .values(&new_post_feature)
             .returning(PostFeature::as_returning())
@@ -201,9 +184,6 @@ pub struct NewUserToken<'a> {
     pub token: &'a str,
     pub enabled: bool,
     pub expiration_time: Option<DateTime<Utc>>,
-    pub creation_time: DateTime<Utc>,
-    pub last_edit_time: DateTime<Utc>,
-    pub last_usage_time: DateTime<Utc>,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
@@ -244,7 +224,6 @@ mod test {
         assert_eq!(user.password_hash, TEST_HASH, "Incorrect user password hash");
         assert_eq!(user.password_salt, TEST_SALT, "Incorrect user password salt");
         assert_eq!(user.rank, TEST_PRIVILEGE, "Incorrect user rank");
-        assert_eq!(user.creation_time, test_time(), "Incorrect user creation time");
     }
 
     #[test]
@@ -255,7 +234,6 @@ mod test {
 
         assert!(!user_token.enabled, "Test user token should not be enabled");
         assert_eq!(user_token.expiration_time, None, "Incorrect user token expiration time");
-        assert_eq!(user_token.creation_time, test_time(), "Incorrect user token creation time");
     }
 
     #[test]

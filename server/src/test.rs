@@ -3,12 +3,8 @@ use crate::model::post::{NewPost, NewPostNote, NewPostSignature, Post, PostNote,
 use crate::model::privilege::UserPrivilege;
 use crate::model::user::{NewUser, NewUserToken, User, UserToken};
 use crate::schema::{pool_category, post, post_note, post_signature, user, user_token};
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-
-pub fn test_time() -> DateTime<Utc> {
-    Utc.with_ymd_and_hms(2000, 1, 1, 0, 0, 0).unwrap()
-}
 
 pub const TEST_PRIVILEGE: UserPrivilege = UserPrivilege::Regular;
 pub const TEST_USERNAME: &str = "test_user";
@@ -27,10 +23,7 @@ pub fn create_test_user(conn: &mut PgConnection, name: &str) -> QueryResult<User
         password_hash: TEST_HASH,
         password_salt: TEST_SALT,
         rank: TEST_PRIVILEGE,
-        creation_time: test_time(),
-        last_login_time: test_time(),
     };
-
     diesel::insert_into(user::table)
         .values(&new_user)
         .returning(User::as_returning())
@@ -48,11 +41,7 @@ pub fn create_test_user_token(
         token: "dummy",
         enabled,
         expiration_time,
-        creation_time: test_time(),
-        last_edit_time: test_time(),
-        last_usage_time: test_time(),
     };
-
     diesel::insert_into(user_token::table)
         .values(&new_user_token)
         .returning(UserToken::as_returning())
@@ -69,10 +58,7 @@ pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Pos
         file_type: "image",
         mime_type: "png",
         checksum: "",
-        creation_time: test_time(),
-        last_edit_time: test_time(),
     };
-
     diesel::insert_into(post::table)
         .values(&new_post)
         .returning(Post::as_returning())
@@ -85,7 +71,6 @@ pub fn create_test_post_note(conn: &mut PgConnection, post: &Post) -> QueryResul
         polygon: &[],
         text: String::from("This is a test note"),
     };
-
     diesel::insert_into(post_note::table)
         .values(&new_post_note)
         .returning(PostNote::as_returning())
@@ -98,7 +83,6 @@ pub fn create_test_post_signature(conn: &mut PgConnection, post: &Post) -> Query
         signature: &[],
         words: &[],
     };
-
     diesel::insert_into(post_signature::table)
         .values(&new_post_signature)
         .returning(PostSignature::as_returning())
@@ -110,7 +94,6 @@ pub fn create_test_pool_category(conn: &mut PgConnection) -> QueryResult<PoolCat
         name: "test_pool",
         color: "white",
     };
-
     diesel::insert_into(pool_category::table)
         .values(&new_pool_category)
         .returning(PoolCategory::as_returning())

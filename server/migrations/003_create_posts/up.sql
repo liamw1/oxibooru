@@ -11,9 +11,11 @@ CREATE TABLE "post" (
     "checksum_md5" VARCHAR(32),
     "flags" VARCHAR(32),
     "source" VARCHAR(2048),
-    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL,
-    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL
+    "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+SELECT diesel_manage_last_edit_time('post');
 
 CREATE TABLE "post_relation" (
     "parent_id" INTEGER NOT NULL REFERENCES "post" ON DELETE CASCADE,

@@ -11,8 +11,6 @@ pub struct NewComment<'a> {
     pub user_id: i32,
     pub post_id: i32,
     pub text: &'a str,
-    pub creation_time: DateTime<Utc>,
-    pub last_edit_time: DateTime<Utc>,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
