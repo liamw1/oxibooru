@@ -1,10 +1,10 @@
 CREATE TABLE "user" (
     "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     "name" VARCHAR(32) NOT NULL,
-    "rank" VARCHAR(32) NOT NULL,
+    "rank" SMALLINT NOT NULL,
     "email" VARCHAR(64),
     "password_hash" VARCHAR(128) NOT NULL,
-    "password_salt" VARCHAR(32),
+    "password_salt" VARCHAR(32) NOT NULL,
     "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL,
     "last_login_time" TIMESTAMP WITH TIME ZONE NOT NULL,
     UNIQUE ("name")

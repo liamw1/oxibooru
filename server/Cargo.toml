@@ -6,7 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-diesel = { version = "2.1.0", features = ["postgres", "chrono"] }
+diesel = { version = "2.1", features = ["postgres", "chrono"] }
+argon2 = { version = "0.5", features = ["std"] }
+rand_core = { version = "0.6", features = ["std"] }   # Necessary for argon2
+pbkdf2 = { version = "0.12", features = ["simple"] }  # Necessary for argon2
+chrono = "0.4"
 dotenvy = "0.15"
-thiserror = "1.0.59"
-chrono = "0.4.38"
+thiserror = "1.0"
+num-traits = "0.2"
+num-derive = "0.4"

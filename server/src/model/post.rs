@@ -73,6 +73,7 @@ impl Post {
             post_id: self.id,
             tag_id: tag.id,
         };
+
         diesel::insert_into(post_tag::table)
             .values(&new_post_tag)
             .returning(PostTag::as_returning())
@@ -84,6 +85,7 @@ impl Post {
             parent_id: self.id,
             child_id: related_post.id,
         };
+
         diesel::insert_into(post_relation::table)
             .values(&new_post_relation)
             .returning(PostRelation::as_returning())
@@ -245,18 +247,17 @@ impl PostSignature {
 
 #[cfg(test)]
 mod test {
-    use super::{Post, PostFavorite, PostFeature, PostNote, PostRelation, PostScore, PostSignature, PostTag};
+    use super::*;
     use crate::model::comment::Comment;
     use crate::model::tag::Tag;
     use crate::model::user::User;
     use crate::test::*;
-    use diesel::prelude::*;
     use diesel::result::Error;
 
     #[test]
     fn test_saving_post() {
         let post = establish_connection_or_panic().test_transaction(|conn| {
-            create_test_user(conn, test_user_name()).and_then(|user| create_test_post(conn, &user))
+            create_test_user(conn, TEST_USERNAME).and_then(|user| create_test_post(conn, &user))
         });
 
         assert_eq!(post.safety, "safe", "Incorrect post safety");
@@ -278,7 +279,7 @@ mod test {
             let post_favorite_count = PostFavorite::count(conn)?;
             let post_signature_count = PostSignature::count(conn)?;
 
-            let user = create_test_user(conn, test_user_name())?;
+            let user = create_test_user(conn, TEST_USERNAME)?;
             let tag1 = Tag::new(conn)?;
             let tag2 = Tag::new(conn)?;
             let post = create_test_post(conn, &user)?;
@@ -332,7 +333,7 @@ mod test {
     #[test]
     fn test_tracking_tag_count() {
         establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
-            let post = create_test_user(conn, test_user_name()).and_then(|user| create_test_post(conn, &user))?;
+            let post = create_test_user(conn, TEST_USERNAME).and_then(|user| create_test_post(conn, &user))?;
             let tag1 = Tag::new(conn)?;
             let tag2 = Tag::new(conn)?;
 

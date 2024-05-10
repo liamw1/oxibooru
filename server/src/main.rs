@@ -1,5 +1,6 @@
 #![allow(dead_code)]
 
+pub mod func;
 pub mod model;
 pub mod schema;
 #[cfg(test)]
@@ -7,6 +8,7 @@ mod test;
 pub mod util;
 
 use diesel::prelude::*;
+use model::privilege::UserPrivilege;
 use model::user::{NewUser, User};
 use std::result::Result;
 use thiserror::Error;
@@ -52,13 +54,16 @@ fn print_users(conn: &mut PgConnection) {
 
 pub fn write_user(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
     let current_time = chrono::Utc::now();
+
     let new_user = NewUser {
         name,
         password_hash: "password",
-        rank: "new_user",
+        password_salt: "salt",
+        rank: UserPrivilege::Regular,
         creation_time: current_time,
         last_login_time: current_time,
     };
+
     diesel::insert_into(schema::user::table)
         .values(new_user)
         .returning(User::as_returning())
@@ -67,13 +72,16 @@ pub fn write_user(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
 
 fn create_user(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
     let current_time = chrono::Utc::now();
+
     let new_user = NewUser {
         name,
         password_hash: "password",
-        rank: "new_user",
+        password_salt: "salt",
+        rank: UserPrivilege::Regular,
         creation_time: current_time,
         last_login_time: current_time,
     };
+
     diesel::insert_into(schema::user::table)
         .values(new_user)
         .returning(User::as_returning())

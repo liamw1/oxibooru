@@ -1,17 +1,30 @@
+use crate::func::auth;
 use crate::model::comment::{Comment, CommentScore, NewComment, NewCommentScore};
 use crate::model::post::{NewPostFavorite, NewPostFeature, NewPostScore, Post, PostFavorite, PostFeature, PostScore};
+use crate::model::privilege::UserPrivilege;
 use crate::schema::{comment, comment_score, post, post_favorite, post_feature, post_score, user, user_token};
 use crate::util;
+use argon2::password_hash::SaltString;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use rand_core::OsRng;
 use std::option::Option;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub enum UserCreationError {
+    Authentication(#[from] auth::AuthenticationError),
+    Insertion(#[from] diesel::result::Error),
+}
 
 #[derive(Insertable)]
 #[diesel(table_name = user)]
 pub struct NewUser<'a> {
     pub name: &'a str,
     pub password_hash: &'a str,
-    pub rank: &'a str,
+    pub password_salt: &'a str,
+    pub rank: UserPrivilege,
     pub creation_time: DateTime<Utc>,
     pub last_login_time: DateTime<Utc>,
 }
@@ -23,14 +36,40 @@ pub struct User {
     pub id: i32,
     pub name: String,
     pub password_hash: String,
-    pub password_salt: Option<String>,
+    pub password_salt: String,
     pub email: Option<String>,
-    pub rank: String,
+    pub rank: UserPrivilege,
     pub creation_time: DateTime<Utc>,
     pub last_login_time: DateTime<Utc>,
 }
 
 impl User {
+    pub fn new(
+        conn: &mut PgConnection,
+        name: &str,
+        password: &str,
+        rank: UserPrivilege,
+    ) -> Result<User, UserCreationError> {
+        let salt = SaltString::generate(&mut OsRng);
+        let hash = auth::hash_password(password, salt.as_str())?;
+        let now = Utc::now();
+
+        let new_user = NewUser {
+            name,
+            password_hash: &hash,
+            password_salt: salt.as_str(),
+            rank,
+            creation_time: now,
+            last_login_time: now,
+        };
+
+        diesel::insert_into(user::table)
+            .values(&new_user)
+            .returning(User::as_returning())
+            .get_result(conn)
+            .map_err(|err| UserCreationError::from(err))
+    }
+
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         user::table.count().first(conn)
     }
@@ -68,6 +107,7 @@ impl User {
 
     pub fn add_comment(&self, conn: &mut PgConnection, post: &Post, text: &str) -> QueryResult<Comment> {
         let now = Utc::now();
+
         let new_comment = NewComment {
             user_id: self.id,
             post_id: post.id,
@@ -75,6 +115,7 @@ impl User {
             creation_time: now,
             last_edit_time: now,
         };
+
         diesel::insert_into(comment::table)
             .values(&new_comment)
             .returning(Comment::as_returning())
@@ -88,6 +129,7 @@ impl User {
             score: 1,
             time: chrono::Utc::now(),
         };
+
         diesel::insert_into(comment_score::table)
             .values(&new_comment_score)
             .returning(CommentScore::as_returning())
@@ -101,6 +143,7 @@ impl User {
             score: -1,
             time: chrono::Utc::now(),
         };
+
         diesel::insert_into(comment_score::table)
             .values(&new_comment_score)
             .returning(CommentScore::as_returning())
@@ -114,6 +157,7 @@ impl User {
             score: 1,
             time: chrono::Utc::now(),
         };
+
         diesel::insert_into(post_score::table)
             .values(&new_post_score)
             .returning(PostScore::as_returning())
@@ -126,6 +170,7 @@ impl User {
             user_id: self.id,
             time: Utc::now(),
         };
+
         diesel::insert_into(post_favorite::table)
             .values(&new_post_favorite)
             .returning(PostFavorite::as_returning())
@@ -137,6 +182,7 @@ impl User {
             post_id: post.id,
             user_id: self.id,
         };
+
         diesel::insert_into(post_feature::table)
             .values(&new_post_feature)
             .returning(PostFeature::as_returning())
@@ -184,29 +230,31 @@ impl UserToken {
 
 #[cfg(test)]
 mod test {
-    use super::User;
+    use super::*;
     use crate::model::comment::{Comment, CommentScore};
     use crate::model::post::{Post, PostFavorite, PostFeature, PostScore};
     use crate::test::*;
-    use diesel::prelude::*;
     use diesel::result::Error;
 
     #[test]
     fn test_saving_user() {
-        let name = "test_user";
-        let user = establish_connection_or_panic().test_transaction(|conn| create_test_user(conn, name));
+        let user = establish_connection_or_panic().test_transaction(|conn| create_test_user(conn, TEST_USERNAME));
 
-        assert_eq!(user.name, name, "Incorrect user name");
+        assert_eq!(user.name, TEST_USERNAME, "Incorrect user name");
+        assert_eq!(user.password_hash, TEST_HASH, "Incorrect user password hash");
+        assert_eq!(user.password_salt, TEST_SALT, "Incorrect user password salt");
+        assert_eq!(user.rank, TEST_PRIVILEGE, "Incorrect user rank");
         assert_eq!(user.creation_time, test_time(), "Incorrect user creation time");
     }
 
     #[test]
     fn test_saving_user_token() {
         let user_token = establish_connection_or_panic().test_transaction(|conn| {
-            create_test_user(conn, "test_user").and_then(|user| create_test_user_token(conn, &user))
+            create_test_user(conn, "test_user").and_then(|user| create_test_user_token(conn, &user, false, None))
         });
 
         assert!(!user_token.enabled, "Test user token should not be enabled");
+        assert_eq!(user_token.expiration_time, None, "Incorrect user token expiration time");
         assert_eq!(user_token.creation_time, test_time(), "Incorrect user token creation time");
     }
 

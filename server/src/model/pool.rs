@@ -48,13 +48,15 @@ pub struct Pool {
 }
 
 impl Pool {
-    pub fn new(conn: &mut PgConnection) -> QueryResult<Pool> {
+    pub fn new(conn: &mut PgConnection) -> QueryResult<Self> {
         let now = chrono::Utc::now();
+
         let new_pool = NewPool {
             category_id: 0, // Default pool category
             creation_time: now,
             last_edit_time: now,
         };
+
         diesel::insert_into(pool::table)
             .values(&new_pool)
             .returning(Pool::as_returning())
@@ -75,11 +77,13 @@ impl Pool {
 
     pub fn add_name(&self, conn: &mut PgConnection, name: &str) -> QueryResult<PoolName> {
         let name_count = PoolName::belonging_to(self).count().first::<i64>(conn)?;
+
         let new_pool_name = NewPoolName {
             pool_id: self.id,
             order: name_count as i32,
             name,
         };
+
         diesel::insert_into(pool_name::table)
             .values(&new_pool_name)
             .returning(PoolName::as_returning())
@@ -88,11 +92,13 @@ impl Pool {
 
     pub fn add_post(&self, conn: &mut PgConnection, post: &Post) -> QueryResult<PoolPost> {
         let post_count = self.post_count(conn)?;
+
         let new_pool_post = NewPoolPost {
             pool_id: self.id,
             post_id: post.id,
             order: post_count as i32,
         };
+
         diesel::insert_into(pool_post::table)
             .values(&new_pool_post)
             .returning(PoolPost::as_returning())
@@ -150,10 +156,9 @@ impl PoolPost {
 
 #[cfg(test)]
 mod test {
-    use super::{Pool, PoolName, PoolPost};
+    use super::*;
     use crate::model::post::Post;
     use crate::test::*;
-    use diesel::prelude::*;
     use diesel::result::Error;
 
     #[test]
@@ -173,7 +178,7 @@ mod test {
             let pool = Pool::new(conn)?;
             pool.add_name(conn, "test_pool")?;
             pool.add_name(conn, "test_pool_alias")?;
-            create_test_user(conn, test_user_name())
+            create_test_user(conn, TEST_USERNAME)
                 .and_then(|user| create_test_post(conn, &user))
                 .and_then(|post| pool.add_post(conn, &post))?;
 
@@ -197,7 +202,7 @@ mod test {
     #[test]
     fn test_tracking_post_count() {
         establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
-            let user = create_test_user(conn, test_user_name())?;
+            let user = create_test_user(conn, TEST_USERNAME)?;
             let post1 = create_test_post(conn, &user)?;
             let post2 = create_test_post(conn, &user)?;
             let pool1 = Pool::new(conn)?;

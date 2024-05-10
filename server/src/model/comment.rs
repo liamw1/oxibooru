@@ -67,17 +67,16 @@ impl CommentScore {
 
 #[cfg(test)]
 mod test {
-    use super::{Comment, CommentScore};
+    use super::*;
     use crate::model::user::User;
     use crate::test::*;
-    use diesel::prelude::*;
     use diesel::result::Error;
 
     #[test]
     fn test_saving_comment() {
         let comment_text = "This is a test comment";
         let comment = establish_connection_or_panic().test_transaction(|conn| {
-            let user = create_test_user(conn, test_user_name())?;
+            let user = create_test_user(conn, TEST_USERNAME)?;
             create_test_post(conn, &user).and_then(|post| user.add_comment(conn, &post, comment_text))
         });
 
@@ -91,7 +90,7 @@ mod test {
             let comment_count = Comment::count(conn)?;
             let comment_score_count = CommentScore::count(conn)?;
 
-            let user = create_test_user(conn, test_user_name())?;
+            let user = create_test_user(conn, TEST_USERNAME)?;
             let comment = create_test_post(conn, &user)
                 .and_then(|post| user.add_comment(conn, &post, "This is a test comment"))?;
             user.like_comment(conn, &comment)?;
