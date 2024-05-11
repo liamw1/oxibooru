@@ -13,7 +13,7 @@ pub struct NewComment<'a> {
     pub text: &'a str,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User), belongs_to(Post))]
 #[diesel(table_name = comment)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -23,7 +23,6 @@ pub struct Comment {
     pub post_id: i32,
     pub text: String,
     pub creation_time: DateTime<Utc>,
-    pub last_edit_time: DateTime<Utc>,
 }
 
 impl Comment {
@@ -38,14 +37,29 @@ impl Comment {
             .map(|n| n.unwrap_or(0))
     }
 
+    pub fn update_text(mut self, conn: &mut PgConnection, text: String) -> QueryResult<Comment> {
+        self.text = text;
+        let query = diesel::update(&self).set(comment::text.eq(&self.text));
+
+        conn.transaction(|conn| util::validate_update("comment", query.execute(conn)?))
+            .map(|_| self)
+    }
+
+    pub fn update(&mut self, conn: &mut PgConnection, text: String) -> bool {
+        let query = diesel::update(comment::table.find(self.id)).set(comment::text.eq(&text));
+
+        let result = conn.transaction(|conn| util::validate_update("comment", query.execute(conn)?));
+        result.is_ok()
+    }
+
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| util::validate_uniqueness("comment", diesel::delete(&self).execute(conn)?))
+        conn.transaction(|conn| util::validate_deletion("comment", diesel::delete(&self).execute(conn)?))
     }
 }
 
 pub type NewCommentScore = CommentScore;
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Comment), belongs_to(User))]
 #[diesel(table_name = comment_score)]
 #[diesel(primary_key(comment_id, user_id))]
@@ -67,23 +81,23 @@ impl CommentScore {
 mod test {
     use super::*;
     use crate::model::user::User;
+    use crate::query::read::*;
     use crate::test::*;
-    use diesel::result::Error;
 
     #[test]
     fn test_saving_comment() {
         let comment_text = "This is a test comment";
-        let comment = establish_connection_or_panic().test_transaction(|conn| {
+        let comment = test_transaction(|conn: &mut PgConnection| {
             let user = create_test_user(conn, TEST_USERNAME)?;
             create_test_post(conn, &user).and_then(|post| user.add_comment(conn, &post, comment_text))
         });
 
-        assert_eq!(comment.text, comment_text, "Incorrect comment text");
+        assert_eq!(comment.text, comment_text);
     }
 
     #[test]
     fn test_cascade_deletions() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let user_count = User::count(conn)?;
             let comment_count = Comment::count(conn)?;
             let comment_score_count = CommentScore::count(conn)?;
@@ -93,15 +107,15 @@ mod test {
                 .and_then(|post| user.add_comment(conn, &post, "This is a test comment"))?;
             user.like_comment(conn, &comment)?;
 
-            assert_eq!(User::count(conn)?, user_count + 1, "User insertion failed");
-            assert_eq!(Comment::count(conn)?, comment_count + 1, "Comment insertion failed");
-            assert_eq!(CommentScore::count(conn)?, comment_score_count + 1, "Comment score insertion failed");
+            assert_eq!(User::count(conn)?, user_count + 1);
+            assert_eq!(Comment::count(conn)?, comment_count + 1);
+            assert_eq!(CommentScore::count(conn)?, comment_score_count + 1);
 
             comment.delete(conn)?;
 
-            assert_eq!(User::count(conn)?, user_count + 1, "User should not have been deleted");
-            assert_eq!(Comment::count(conn)?, comment_count, "Comment deletion failed");
-            assert_eq!(CommentScore::count(conn)?, comment_score_count, "Comment score cascade deletion failed");
+            assert_eq!(User::count(conn)?, user_count + 1);
+            assert_eq!(Comment::count(conn)?, comment_count);
+            assert_eq!(CommentScore::count(conn)?, comment_score_count);
 
             Ok(())
         });
@@ -109,7 +123,7 @@ mod test {
 
     #[test]
     fn test_comment_scoring() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let user1 = create_test_user(conn, "user1")?;
             let user2 = create_test_user(conn, "user2")?;
             let user3 = create_test_user(conn, "user3")?;
@@ -119,17 +133,43 @@ mod test {
                 .and_then(|post| user1.add_comment(conn, &post, "This is a test comment"))?;
             user1.like_comment(conn, &comment)?;
 
-            assert_eq!(comment.score(conn)?, 1, "Comment should have a score of 1");
+            assert_eq!(comment.score(conn)?, 1);
 
             user2.like_comment(conn, &comment)?;
 
-            assert_eq!(comment.score(conn)?, 2, "Comment should have a score of 2");
+            assert_eq!(comment.score(conn)?, 2);
 
             user3.dislike_comment(conn, &comment)?;
             user4.dislike_comment(conn, &comment)?;
             user5.dislike_comment(conn, &comment)?;
 
-            assert_eq!(comment.score(conn)?, -1, "Comment should have score of -1");
+            assert_eq!(comment.score(conn)?, -1);
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn update_comment() {
+        test_transaction(|conn: &mut PgConnection| {
+            let user = create_test_user(conn, "test_user")?;
+            let comment =
+                create_test_post(conn, &user).and_then(|post| user.add_comment(conn, &post, "test_comment"))?;
+            let comment_id = comment.id;
+
+            let new_text = "new_comment_text";
+            let comment = comment.update_text(conn, new_text.into())?;
+
+            assert_eq!(comment.id, comment_id);
+            assert_eq!(comment.text, new_text);
+            assert_eq!(get_comment(conn, comment_id)?, comment);
+
+            let new_text = "";
+            let comment = comment.update_text(conn, new_text.into())?;
+
+            assert_eq!(comment.id, comment_id);
+            assert_eq!(comment.text, new_text);
+            assert_eq!(get_comment(conn, comment_id)?, comment);
 
             Ok(())
         });

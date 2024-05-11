@@ -13,7 +13,7 @@ pub struct NewTagCategory<'a> {
     pub color: &'a str,
 }
 
-#[derive(Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Identifiable, Queryable, Selectable)]
 #[diesel(table_name = tag_category)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct TagCategory {
@@ -35,7 +35,7 @@ pub struct NewTag {
     pub category_id: i32,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(TagCategory, foreign_key = category_id))]
 #[diesel(table_name = tag)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -44,7 +44,6 @@ pub struct Tag {
     pub category_id: i32,
     pub description: Option<String>,
     pub creation_time: DateTime<Utc>,
-    pub last_edit_time: DateTime<Utc>,
 }
 
 impl Tag {
@@ -125,7 +124,7 @@ impl Tag {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| util::validate_uniqueness("tag", diesel::delete(&self).execute(conn)?))
+        conn.transaction(|conn| util::validate_deletion("tag", diesel::delete(&self).execute(conn)?))
     }
 }
 
@@ -137,7 +136,7 @@ pub struct NewTagName<'a> {
     pub name: &'a str,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag))]
 #[diesel(table_name = tag_name)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -156,7 +155,7 @@ impl TagName {
 
 pub type NewTagImplication = TagImplication;
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag, foreign_key = parent_id))]
 #[diesel(table_name = tag_implication)]
 #[diesel(primary_key(parent_id, child_id))]
@@ -174,7 +173,7 @@ impl TagImplication {
 
 pub type NewTagSuggestion = TagSuggestion;
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag, foreign_key = parent_id))]
 #[diesel(table_name = tag_suggestion)]
 #[diesel(primary_key(parent_id, child_id))]
@@ -194,11 +193,10 @@ impl TagSuggestion {
 mod test {
     use super::*;
     use crate::test::*;
-    use diesel::result::Error;
 
     #[test]
     fn test_saving_tag() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let tag = Tag::new(conn)?;
             let implication1 = Tag::new(conn)?;
             let implication2 = Tag::new(conn)?;
@@ -216,7 +214,7 @@ mod test {
             suggestion1.add_name(conn, "sug1")?;
             suggestion2.add_name(conn, "sug2")?;
 
-            assert_eq!(tag.names(conn)?, vec!["alias1", "alias2"], "Incorrect tag names");
+            assert_eq!(tag.names(conn)?, vec!["alias1", "alias2"]);
 
             let implication_names = tag
                 .implications(conn)?
@@ -229,16 +227,16 @@ mod test {
                 .map(|suggestion| suggestion.primary_name(conn))
                 .collect::<QueryResult<Vec<_>>>()?;
 
-            assert_eq!(implication_names, vec!["imp1", "imp2"], "Incorrect implication names");
-            assert_eq!(suggestion_names, vec!["sug1", "sug2"], "Incorrect suggestion names");
+            assert_eq!(implication_names, vec!["imp1", "imp2"]);
+            assert_eq!(suggestion_names, vec!["sug1", "sug2"]);
 
             Ok(())
-        })
+        });
     }
 
     #[test]
     fn test_cascade_deletions() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let tag_count = Tag::count(conn)?;
             let tag_name_count = TagName::count(conn)?;
             let tag_implication_count = TagImplication::count(conn)?;
@@ -261,25 +259,25 @@ mod test {
             suggestion1.add_name(conn, "sug1")?;
             suggestion2.add_name(conn, "sug2")?;
 
-            assert_eq!(Tag::count(conn)?, tag_count + 5, "Tag insertion failed");
-            assert_eq!(TagName::count(conn)?, tag_name_count + 6, "Tag name insertion failed");
-            assert_eq!(TagImplication::count(conn)?, tag_implication_count + 2, "Tag implication insertion failed");
-            assert_eq!(TagSuggestion::count(conn)?, tag_suggestion_count + 2, "Tag suggestion insertion failed");
+            assert_eq!(Tag::count(conn)?, tag_count + 5);
+            assert_eq!(TagName::count(conn)?, tag_name_count + 6);
+            assert_eq!(TagImplication::count(conn)?, tag_implication_count + 2);
+            assert_eq!(TagSuggestion::count(conn)?, tag_suggestion_count + 2);
 
             tag.delete(conn)?;
 
-            assert_eq!(Tag::count(conn)?, tag_count + 4, "Only one tag should have been deleted");
-            assert_eq!(TagName::count(conn)?, tag_name_count + 4, "Only two tag names should have been deleted");
-            assert_eq!(TagImplication::count(conn)?, tag_implication_count, "Tag implication cascade deletion failed");
-            assert_eq!(TagSuggestion::count(conn)?, tag_suggestion_count, "Tag suggestion cascade deletion failed");
+            assert_eq!(Tag::count(conn)?, tag_count + 4);
+            assert_eq!(TagName::count(conn)?, tag_name_count + 4);
+            assert_eq!(TagImplication::count(conn)?, tag_implication_count);
+            assert_eq!(TagSuggestion::count(conn)?, tag_suggestion_count);
 
             Ok(())
-        })
+        });
     }
 
     #[test]
     fn test_tracking_post_count() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let user = create_test_user(conn, "test_user")?;
             let post1 = create_test_post(conn, &user)?;
             let post2 = create_test_post(conn, &user)?;
@@ -290,21 +288,21 @@ mod test {
             post2.add_tag(conn, &tag1)?;
             post2.add_tag(conn, &tag2)?;
 
-            assert_eq!(post1.tag_count(conn)?, 1, "Post should have one tag");
-            assert_eq!(post2.tag_count(conn)?, 2, "Post should have two tags");
-            assert_eq!(tag1.post_count(conn)?, 2, "Tag should be on two posts");
-            assert_eq!(tag2.post_count(conn)?, 1, "Tag should be on one post");
+            assert_eq!(post1.tag_count(conn)?, 1);
+            assert_eq!(post2.tag_count(conn)?, 2);
+            assert_eq!(tag1.post_count(conn)?, 2);
+            assert_eq!(tag2.post_count(conn)?, 1);
 
             post2.delete(conn)?;
 
-            assert_eq!(tag1.post_count(conn)?, 1, "Tag should now be on one post");
-            assert_eq!(tag2.post_count(conn)?, 0, "Tag should now be on no posts");
+            assert_eq!(tag1.post_count(conn)?, 1);
+            assert_eq!(tag2.post_count(conn)?, 0);
 
             post1.delete(conn)?;
 
-            assert_eq!(tag1.post_count(conn)?, 0, "Both tags should now be on no posts");
+            assert_eq!(tag1.post_count(conn)?, 0);
 
             Ok(())
-        })
+        });
     }
 }

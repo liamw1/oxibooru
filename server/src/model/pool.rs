@@ -12,7 +12,7 @@ pub struct NewPoolCategory<'a> {
     pub color: &'a str,
 }
 
-#[derive(Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Identifiable, Queryable, Selectable)]
 #[diesel(table_name = pool_category)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct PoolCategory {
@@ -33,7 +33,7 @@ pub struct NewPool {
     pub category_id: i32,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(PoolCategory, foreign_key = category_id))]
 #[diesel(table_name = pool)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -42,7 +42,6 @@ pub struct Pool {
     pub category_id: i32,
     pub description: Option<String>,
     pub creation_time: DateTime<Utc>,
-    pub last_edit_time: DateTime<Utc>,
 }
 
 impl Pool {
@@ -95,7 +94,7 @@ impl Pool {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| util::validate_uniqueness("pool", diesel::delete(&self).execute(conn)?))
+        conn.transaction(|conn| util::validate_deletion("pool", diesel::delete(&self).execute(conn)?))
     }
 }
 
@@ -107,7 +106,7 @@ pub struct NewPoolName<'a> {
     pub name: &'a str,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Pool))]
 #[diesel(table_name = pool_name)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -126,7 +125,7 @@ impl PoolName {
 
 pub type NewPoolPost = PoolPost;
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Pool), belongs_to(Post))]
 #[diesel(table_name = pool_post)]
 #[diesel(primary_key(pool_id, post_id))]
@@ -148,17 +147,16 @@ mod test {
     use super::*;
     use crate::model::post::Post;
     use crate::test::*;
-    use diesel::result::Error;
 
     #[test]
     fn test_saving_pool() {
-        let pool = establish_connection_or_panic().test_transaction(|conn| Pool::new(conn));
-        assert_eq!(pool.category_id, 0, "New pool is not in default category");
+        let pool = test_transaction(|conn: &mut PgConnection| Pool::new(conn));
+        assert_eq!(pool.category_id, 0);
     }
 
     #[test]
     fn test_cascade_deletions() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let post_count = Post::count(conn)?;
             let pool_count = Pool::count(conn)?;
             let pool_name_count = PoolName::count(conn)?;
@@ -171,18 +169,18 @@ mod test {
                 .and_then(|user| create_test_post(conn, &user))
                 .and_then(|post| pool.add_post(conn, &post))?;
 
-            assert_eq!(Post::count(conn)?, post_count + 1, "Post insertion failed");
-            assert_eq!(Pool::count(conn)?, pool_count + 1, "Pool insertion failed");
-            assert_eq!(PoolName::count(conn)?, pool_name_count + 2, "Pool name insertion failed");
-            assert_eq!(PoolPost::count(conn)?, pool_post_count + 1, "Pool post insertion failed");
-            assert_eq!(pool.names(conn)?, vec!["test_pool", "test_pool_alias"], "Incorrect pool names");
+            assert_eq!(Post::count(conn)?, post_count + 1);
+            assert_eq!(Pool::count(conn)?, pool_count + 1);
+            assert_eq!(PoolName::count(conn)?, pool_name_count + 2);
+            assert_eq!(PoolPost::count(conn)?, pool_post_count + 1);
+            assert_eq!(pool.names(conn)?, vec!["test_pool", "test_pool_alias"]);
 
             pool.delete(conn)?;
 
-            assert_eq!(Post::count(conn)?, post_count + 1, "Post should not have been deleted");
-            assert_eq!(Pool::count(conn)?, pool_count, "Pool deletion failed");
-            assert_eq!(PoolName::count(conn)?, pool_name_count, "Pool name cascade deletion failed");
-            assert_eq!(PoolPost::count(conn)?, pool_post_count, "Pool post cascade deletion failed");
+            assert_eq!(Post::count(conn)?, post_count + 1);
+            assert_eq!(Pool::count(conn)?, pool_count);
+            assert_eq!(PoolName::count(conn)?, pool_name_count);
+            assert_eq!(PoolPost::count(conn)?, pool_post_count);
 
             Ok(())
         });
@@ -190,7 +188,7 @@ mod test {
 
     #[test]
     fn test_tracking_post_count() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let user = create_test_user(conn, TEST_USERNAME)?;
             let post1 = create_test_post(conn, &user)?;
             let post2 = create_test_post(conn, &user)?;
@@ -201,19 +199,19 @@ mod test {
             pool2.add_post(conn, &post1)?;
             pool2.add_post(conn, &post2)?;
 
-            assert_eq!(pool1.post_count(conn)?, 1, "Pool should have one post");
-            assert_eq!(pool2.post_count(conn)?, 2, "Pool should have two posts");
-            assert_eq!(post1.pools_in(conn)?.len(), 2, "Post should be in two pools");
-            assert_eq!(post2.pools_in(conn)?.len(), 1, "Post should be in one pool");
+            assert_eq!(pool1.post_count(conn)?, 1);
+            assert_eq!(pool2.post_count(conn)?, 2);
+            assert_eq!(post1.pools_in(conn)?.len(), 2);
+            assert_eq!(post2.pools_in(conn)?.len(), 1);
 
             post1.delete(conn)?;
 
-            assert_eq!(pool1.post_count(conn)?, 0, "Pool should now have no posts");
-            assert_eq!(pool2.post_count(conn)?, 1, "Pool should now have one post");
+            assert_eq!(pool1.post_count(conn)?, 0);
+            assert_eq!(pool2.post_count(conn)?, 1);
 
             post2.delete(conn)?;
 
-            assert_eq!(pool2.post_count(conn)?, 0, "Both pools should be empty");
+            assert_eq!(pool2.post_count(conn)?, 0);
 
             Ok(())
         });

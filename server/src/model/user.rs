@@ -27,7 +27,7 @@ pub struct NewUser<'a> {
     pub rank: UserPrivilege,
 }
 
-#[derive(Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Identifiable, Queryable, Selectable)]
 #[diesel(table_name = user)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct User {
@@ -173,7 +173,7 @@ impl User {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| util::validate_uniqueness("user", diesel::delete(&self).execute(conn)?))
+        conn.transaction(|conn| util::validate_deletion("user", diesel::delete(&self).execute(conn)?))
     }
 }
 
@@ -186,7 +186,7 @@ pub struct NewUserToken<'a> {
     pub expiration_time: Option<DateTime<Utc>>,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = user_token)]
 #[diesel(primary_key(user_id))]
@@ -198,7 +198,6 @@ pub struct UserToken {
     pub enabled: bool,
     pub expiration_time: Option<DateTime<Utc>>,
     pub creation_time: DateTime<Utc>,
-    pub last_edit_time: DateTime<Utc>,
     pub last_usage_time: DateTime<Utc>,
 }
 
@@ -214,55 +213,54 @@ mod test {
     use crate::model::comment::{Comment, CommentScore};
     use crate::model::post::{Post, PostFavorite, PostFeature, PostScore};
     use crate::test::*;
-    use diesel::result::Error;
 
     #[test]
     fn test_saving_user() {
-        let user = establish_connection_or_panic().test_transaction(|conn| create_test_user(conn, TEST_USERNAME));
+        let user = test_transaction(|conn: &mut PgConnection| create_test_user(conn, TEST_USERNAME));
 
-        assert_eq!(user.name, TEST_USERNAME, "Incorrect user name");
-        assert_eq!(user.password_hash, TEST_HASH, "Incorrect user password hash");
-        assert_eq!(user.password_salt, TEST_SALT, "Incorrect user password salt");
-        assert_eq!(user.rank, TEST_PRIVILEGE, "Incorrect user rank");
+        assert_eq!(user.name, TEST_USERNAME);
+        assert_eq!(user.password_hash, TEST_HASH);
+        assert_eq!(user.password_salt, TEST_SALT);
+        assert_eq!(user.rank, TEST_PRIVILEGE);
     }
 
     #[test]
     fn test_saving_user_token() {
-        let user_token = establish_connection_or_panic().test_transaction(|conn| {
+        let user_token = test_transaction(|conn: &mut PgConnection| {
             create_test_user(conn, "test_user").and_then(|user| create_test_user_token(conn, &user, false, None))
         });
 
-        assert!(!user_token.enabled, "Test user token should not be enabled");
-        assert_eq!(user_token.expiration_time, None, "Incorrect user token expiration time");
+        assert!(!user_token.enabled);
+        assert_eq!(user_token.expiration_time, None);
     }
 
     #[test]
     fn test_user_statistics() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let user = create_test_user(conn, "test_user")?;
 
-            assert_eq!(user.post_count(conn)?, 0, "User should have no posts");
-            assert_eq!(user.comment_count(conn)?, 0, "User should have no comments");
-            assert_eq!(user.liked_post_count(conn)?, 0, "User should have no liked posts");
-            assert_eq!(user.favorite_post_count(conn)?, 0, "User should have no favorite posts");
+            assert_eq!(user.post_count(conn)?, 0);
+            assert_eq!(user.comment_count(conn)?, 0);
+            assert_eq!(user.liked_post_count(conn)?, 0);
+            assert_eq!(user.favorite_post_count(conn)?, 0);
 
             let post = create_test_post(conn, &user)?;
             user.add_comment(conn, &post, "test comment")?;
             user.like_post(conn, &post)?;
             user.favorite_post(conn, &post)?;
 
-            assert_eq!(user.post_count(conn)?, 1, "User should have one post");
-            assert_eq!(user.comment_count(conn)?, 1, "User should have one comment");
-            assert_eq!(user.liked_post_count(conn)?, 1, "User should have one liked post");
-            assert_eq!(user.favorite_post_count(conn)?, 1, "User should have one favorite post");
+            assert_eq!(user.post_count(conn)?, 1);
+            assert_eq!(user.comment_count(conn)?, 1);
+            assert_eq!(user.liked_post_count(conn)?, 1);
+            assert_eq!(user.favorite_post_count(conn)?, 1);
 
             Ok(())
-        })
+        });
     }
 
     #[test]
     fn test_cascade_deletions() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let user_count = User::count(conn)?;
             let post_count = Post::count(conn)?;
             let post_score_count = PostScore::count(conn)?;
@@ -280,25 +278,25 @@ mod test {
             user.feature_post(conn, &post)?;
             user.like_comment(conn, &comment)?;
 
-            assert_eq!(User::count(conn)?, user_count + 1, "User insertion failed");
-            assert_eq!(Post::count(conn)?, post_count + 1, "Post insertion failed");
-            assert_eq!(PostScore::count(conn)?, post_score_count + 1, "Post score insertion failed");
-            assert_eq!(PostFavorite::count(conn)?, post_favorite_count + 1, "Post favorite insertion failed");
-            assert_eq!(PostFeature::count(conn)?, post_feature_count + 1, "Post feature insertion failed");
-            assert_eq!(Comment::count(conn)?, comment_count + 1, "Comment insertion failed");
-            assert_eq!(CommentScore::count(conn)?, comment_score_count + 1, "Comment score insertion failed");
+            assert_eq!(User::count(conn)?, user_count + 1);
+            assert_eq!(Post::count(conn)?, post_count + 1);
+            assert_eq!(PostScore::count(conn)?, post_score_count + 1);
+            assert_eq!(PostFavorite::count(conn)?, post_favorite_count + 1);
+            assert_eq!(PostFeature::count(conn)?, post_feature_count + 1);
+            assert_eq!(Comment::count(conn)?, comment_count + 1);
+            assert_eq!(CommentScore::count(conn)?, comment_score_count + 1);
 
             user.delete(conn)?;
 
-            assert_eq!(User::count(conn)?, user_count, "User deletion failed");
-            assert_eq!(Post::count(conn)?, post_count + 1, "Post should not have been deleted");
-            assert_eq!(PostScore::count(conn)?, post_score_count, "Post score cascade deletion failed");
-            assert_eq!(PostFavorite::count(conn)?, post_favorite_count, "Post favorite cascade deletion failed");
-            assert_eq!(PostFeature::count(conn)?, post_feature_count, "Post feature cascade deletion failed");
-            assert_eq!(Comment::count(conn)?, comment_count, "Comment cascade deletion failed");
-            assert_eq!(CommentScore::count(conn)?, comment_score_count, "Comment score cascade deletion failed");
+            assert_eq!(User::count(conn)?, user_count);
+            assert_eq!(Post::count(conn)?, post_count + 1);
+            assert_eq!(PostScore::count(conn)?, post_score_count);
+            assert_eq!(PostFavorite::count(conn)?, post_favorite_count);
+            assert_eq!(PostFeature::count(conn)?, post_feature_count);
+            assert_eq!(Comment::count(conn)?, comment_count);
+            assert_eq!(CommentScore::count(conn)?, comment_score_count);
 
             Ok(())
-        })
+        });
     }
 }

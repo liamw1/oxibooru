@@ -22,7 +22,7 @@ pub struct NewPost<'a> {
     pub checksum: &'a str,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = post)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -40,7 +40,6 @@ pub struct Post {
     pub flags: Option<String>,
     pub source: Option<String>,
     pub creation_time: DateTime<Utc>,
-    pub last_edit_time: DateTime<Utc>,
 }
 
 impl Post {
@@ -89,13 +88,13 @@ impl Post {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| util::validate_uniqueness("post", diesel::delete(&self).execute(conn)?))
+        conn.transaction(|conn| util::validate_deletion("post", diesel::delete(&self).execute(conn)?))
     }
 }
 
 pub type NewPostRelation = PostRelation;
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post, foreign_key = parent_id))]
 #[diesel(table_name = post_relation)]
 #[diesel(primary_key(parent_id, child_id))]
@@ -113,7 +112,7 @@ impl PostRelation {
 
 pub type NewPostTag = PostTag;
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(Tag))]
 #[diesel(table_name = post_tag)]
 #[diesel(primary_key(post_id, tag_id))]
@@ -131,7 +130,7 @@ impl PostTag {
 
 pub type NewPostFavorite = PostFavorite;
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_favorite)]
 #[diesel(primary_key(post_id, user_id))]
@@ -155,7 +154,7 @@ pub struct NewPostFeature {
     pub user_id: i32,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_feature)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -179,7 +178,7 @@ pub struct NewPostNote<'a> {
     pub text: String,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Post))]
 #[diesel(table_name = post_note)]
 #[diesel(check_for_backend(diesel::pg::Pg))]
@@ -198,7 +197,7 @@ impl PostNote {
 
 pub type NewPostScore = PostScore;
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_score)]
 #[diesel(primary_key(post_id, user_id))]
@@ -224,7 +223,7 @@ pub struct NewPostSignature<'a> {
     pub words: &'a [i32],
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Post))]
 #[diesel(table_name = post_signature)]
 #[diesel(primary_key(post_id))]
@@ -248,20 +247,19 @@ mod test {
     use crate::model::tag::Tag;
     use crate::model::user::User;
     use crate::test::*;
-    use diesel::result::Error;
 
     #[test]
     fn test_saving_post() {
-        let post = establish_connection_or_panic().test_transaction(|conn| {
+        let post = test_transaction(|conn: &mut PgConnection| {
             create_test_user(conn, TEST_USERNAME).and_then(|user| create_test_post(conn, &user))
         });
 
-        assert_eq!(post.safety, "safe", "Incorrect post safety");
+        assert_eq!(post.safety, "safe");
     }
 
     #[test]
     fn test_cascade_deletions() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let user_count = User::count(conn)?;
             let tag_count = Tag::count(conn)?;
             let comment_count = Comment::count(conn)?;
@@ -294,32 +292,32 @@ mod test {
             user.favorite_post(conn, &post)?;
             user.feature_post(conn, &post)?;
 
-            assert_eq!(post.related_posts(conn)?.len(), 2, "Post should have two relations");
-            assert_eq!(User::count(conn)?, user_count + 1, "User insertion failed");
-            assert_eq!(Tag::count(conn)?, tag_count + 2, "Tag insertion failed");
-            assert_eq!(Comment::count(conn)?, comment_count + 1, "Comment insertion failed");
-            assert_eq!(Post::count(conn)?, post_count + 3, "Post insertion failed");
-            assert_eq!(PostTag::count(conn)?, post_tag_count + 2, "Post tag insertion failed");
-            assert_eq!(PostRelation::count(conn)?, post_relation_count + 2, "Post relation insertion failed");
-            assert_eq!(PostScore::count(conn)?, post_score_count + 1, "Post score insertion failed");
-            assert_eq!(PostNote::count(conn)?, post_note_count + 1, "Post note insertion failed");
-            assert_eq!(PostFeature::count(conn)?, post_feature_count + 1, "Post feature insertion failed");
-            assert_eq!(PostFavorite::count(conn)?, post_favorite_count + 1, "Post favorite insertion failed");
-            assert_eq!(PostSignature::count(conn)?, post_signature_count + 1, "Post signature insertion failed");
+            assert_eq!(post.related_posts(conn)?.len(), 2);
+            assert_eq!(User::count(conn)?, user_count + 1);
+            assert_eq!(Tag::count(conn)?, tag_count + 2);
+            assert_eq!(Comment::count(conn)?, comment_count + 1);
+            assert_eq!(Post::count(conn)?, post_count + 3);
+            assert_eq!(PostTag::count(conn)?, post_tag_count + 2);
+            assert_eq!(PostRelation::count(conn)?, post_relation_count + 2);
+            assert_eq!(PostScore::count(conn)?, post_score_count + 1);
+            assert_eq!(PostNote::count(conn)?, post_note_count + 1);
+            assert_eq!(PostFeature::count(conn)?, post_feature_count + 1);
+            assert_eq!(PostFavorite::count(conn)?, post_favorite_count + 1);
+            assert_eq!(PostSignature::count(conn)?, post_signature_count + 1);
 
             post.delete(conn)?;
 
-            assert_eq!(User::count(conn)?, user_count + 1, "User should not have been deleted");
-            assert_eq!(Tag::count(conn)?, tag_count + 2, "Tags should not have been deleted");
-            assert_eq!(Comment::count(conn)?, comment_count, "Comment cascade deletion failed");
-            assert_eq!(Post::count(conn)?, post_count + 2, "Related posts should not have been deleted");
-            assert_eq!(PostTag::count(conn)?, post_tag_count, "Post tag cascade deletion failed");
-            assert_eq!(PostRelation::count(conn)?, post_relation_count, "Post relation cascade deletion failed");
-            assert_eq!(PostScore::count(conn)?, post_score_count, "Post score cascade deletion failed");
-            assert_eq!(PostNote::count(conn)?, post_note_count, "Post note cascade deletion failed");
-            assert_eq!(PostFeature::count(conn)?, post_feature_count, "Post feature cascade deletion failed");
-            assert_eq!(PostFavorite::count(conn)?, post_favorite_count, "Post favorite cascade deletion failed");
-            assert_eq!(PostSignature::count(conn)?, post_signature_count, "Post signature cascade deletion failed");
+            assert_eq!(User::count(conn)?, user_count + 1);
+            assert_eq!(Tag::count(conn)?, tag_count + 2);
+            assert_eq!(Comment::count(conn)?, comment_count);
+            assert_eq!(Post::count(conn)?, post_count + 2);
+            assert_eq!(PostTag::count(conn)?, post_tag_count);
+            assert_eq!(PostRelation::count(conn)?, post_relation_count);
+            assert_eq!(PostScore::count(conn)?, post_score_count);
+            assert_eq!(PostNote::count(conn)?, post_note_count);
+            assert_eq!(PostFeature::count(conn)?, post_feature_count);
+            assert_eq!(PostFavorite::count(conn)?, post_favorite_count);
+            assert_eq!(PostSignature::count(conn)?, post_signature_count);
 
             Ok(())
         });
@@ -327,7 +325,7 @@ mod test {
 
     #[test]
     fn test_tracking_tag_count() {
-        establish_connection_or_panic().test_transaction::<_, Error, _>(|conn| {
+        test_transaction(|conn: &mut PgConnection| {
             let post = create_test_user(conn, TEST_USERNAME).and_then(|user| create_test_post(conn, &user))?;
             let tag1 = Tag::new(conn)?;
             let tag2 = Tag::new(conn)?;
@@ -335,17 +333,17 @@ mod test {
             post.add_tag(conn, &tag1)?;
             post.add_tag(conn, &tag2)?;
 
-            assert_eq!(post.tag_count(conn)?, 2, "Post should have two tags");
+            assert_eq!(post.tag_count(conn)?, 2);
 
             tag1.delete(conn)?;
 
-            assert_eq!(post.tag_count(conn)?, 1, "Post should have one tag");
+            assert_eq!(post.tag_count(conn)?, 1);
 
             tag2.delete(conn)?;
 
-            assert_eq!(post.tag_count(conn)?, 0, "Post should have no tags");
+            assert_eq!(post.tag_count(conn)?, 0);
 
             Ok(())
-        })
+        });
     }
 }
