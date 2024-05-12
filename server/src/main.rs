@@ -23,7 +23,7 @@ pub enum ConnectionError {
 pub fn establish_connection() -> Result<PgConnection, ConnectionError> {
     dotenvy::dotenv()?;
     let database_url = std::env::var("DATABASE_URL")?;
-    PgConnection::establish(&database_url).map_err(|error| ConnectionError::DieselConnection(error))
+    PgConnection::establish(&database_url).map_err(ConnectionError::DieselConnection)
 }
 
 fn delete_users(conn: &mut PgConnection, pattern: &str) -> QueryResult<usize> {

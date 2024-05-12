@@ -22,6 +22,14 @@ pub struct PoolCategory {
 }
 
 impl PoolCategory {
+    pub fn new(conn: &mut PgConnection, name: &str, color: &str) -> QueryResult<Self> {
+        let new_pool_category = NewPoolCategory { name, color };
+        diesel::insert_into(pool_category::table)
+            .values(&new_pool_category)
+            .returning(Self::as_returning())
+            .get_result(conn)
+    }
+
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         pool_category::table.count().first(conn)
     }
@@ -51,7 +59,7 @@ impl Pool {
         };
         diesel::insert_into(pool::table)
             .values(&new_pool)
-            .returning(Pool::as_returning())
+            .returning(Self::as_returning())
             .get_result(conn)
     }
 

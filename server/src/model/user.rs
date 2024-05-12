@@ -47,7 +47,7 @@ impl User {
         name: &str,
         password: &str,
         rank: UserPrivilege,
-    ) -> Result<User, UserCreationError> {
+    ) -> Result<Self, UserCreationError> {
         let salt = SaltString::generate(&mut OsRng);
         let hash = auth::hash_password(password, salt.as_str())?;
         let new_user = NewUser {
@@ -58,9 +58,9 @@ impl User {
         };
         diesel::insert_into(user::table)
             .values(&new_user)
-            .returning(User::as_returning())
+            .returning(Self::as_returning())
             .get_result(conn)
-            .map_err(|err| UserCreationError::from(err))
+            .map_err(UserCreationError::from)
     }
 
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {

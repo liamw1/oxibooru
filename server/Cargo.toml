@@ -10,8 +10,10 @@ diesel = { version = "2.1", features = ["postgres", "chrono"] }
 argon2 = { version = "0.5", features = ["std"] }
 rand_core = { version = "0.6", features = ["std"] }   # Necessary for argon2
 pbkdf2 = { version = "0.12", features = ["simple"] }  # Necessary for argon2
+image = "0.25"
 chrono = "0.4"
 dotenvy = "0.15"
 thiserror = "1.0"
+once_cell = "1.19"
 num-traits = "0.2"
 num-derive = "0.4"

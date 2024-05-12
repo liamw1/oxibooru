@@ -51,7 +51,7 @@ impl Tag {
         let new_tag = NewTag { category_id: 0 };
         diesel::insert_into(tag::table)
             .values(&new_tag)
-            .returning(Tag::as_returning())
+            .returning(Self::as_returning())
             .get_result(conn)
     }
 

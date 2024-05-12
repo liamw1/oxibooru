@@ -10,8 +10,7 @@ pub const TEST_PRIVILEGE: UserPrivilege = UserPrivilege::Regular;
 pub const TEST_USERNAME: &str = "test_user";
 pub const TEST_PASSWORD: &str = "test_password";
 pub const TEST_SALT: &str = "test_salt";
-pub const TEST_HASH: &str =
-    "$argon2id$v=19$m=19456,t=2,p=1$Y2hhbmdldGVzdF9zYWx0$zHr+zrjtMKzg7wvAZBGg7YCvLHz04UJ+pZArvplfv0o";
+pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
 
 pub fn establish_connection_or_panic() -> PgConnection {
     crate::establish_connection().unwrap_or_else(|err| panic!("{err}"))
