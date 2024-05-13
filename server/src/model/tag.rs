@@ -1,4 +1,5 @@
 use crate::model::post::PostTag;
+use crate::model::TableName;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::util;
 use chrono::{DateTime, Utc};
@@ -46,6 +47,12 @@ pub struct Tag {
     pub creation_time: DateTime<Utc>,
 }
 
+impl TableName for Tag {
+    fn table_name() -> &'static str {
+        "tag"
+    }
+}
+
 impl Tag {
     pub fn new(conn: &mut PgConnection) -> QueryResult<Self> {
         let new_tag = NewTag { category_id: 0 };
@@ -74,17 +81,17 @@ impl Tag {
         TagName::belonging_to(self).select(tag_name::columns::name).load(conn)
     }
 
-    pub fn implications(&self, conn: &mut PgConnection) -> QueryResult<Vec<Tag>> {
+    pub fn implications(&self, conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
         TagImplication::belonging_to(self)
             .inner_join(tag::table.on(tag::columns::id.eq(tag_implication::columns::child_id)))
-            .select(Tag::as_select())
+            .select(Self::as_select())
             .load(conn)
     }
 
-    pub fn suggestions(&self, conn: &mut PgConnection) -> QueryResult<Vec<Tag>> {
+    pub fn suggestions(&self, conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
         TagSuggestion::belonging_to(self)
             .inner_join(tag::table.on(tag::columns::id.eq(tag_suggestion::columns::child_id)))
-            .select(Tag::as_select())
+            .select(Self::as_select())
             .load(conn)
     }
 
@@ -101,7 +108,7 @@ impl Tag {
             .get_result(conn)
     }
 
-    pub fn add_implication(&self, conn: &mut PgConnection, implied_tag: &Tag) -> QueryResult<TagImplication> {
+    pub fn add_implication(&self, conn: &mut PgConnection, implied_tag: &Self) -> QueryResult<TagImplication> {
         let new_tag_implication = NewTagImplication {
             parent_id: self.id,
             child_id: implied_tag.id,
@@ -112,7 +119,7 @@ impl Tag {
             .get_result(conn)
     }
 
-    pub fn add_suggestion(&self, conn: &mut PgConnection, implied_tag: &Tag) -> QueryResult<TagSuggestion> {
+    pub fn add_suggestion(&self, conn: &mut PgConnection, implied_tag: &Self) -> QueryResult<TagSuggestion> {
         let new_tag_suggestion = NewTagSuggestion {
             parent_id: self.id,
             child_id: implied_tag.id,
@@ -124,7 +131,7 @@ impl Tag {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| util::validate_deletion("tag", diesel::delete(&self).execute(conn)?))
+        util::delete(conn, &self)
     }
 }
 

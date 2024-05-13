@@ -1,6 +1,7 @@
 use crate::model::pool::{Pool, PoolPost};
 use crate::model::tag::Tag;
 use crate::model::user::User;
+use crate::model::TableName;
 use crate::schema::{
     pool, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
 };
@@ -42,6 +43,12 @@ pub struct Post {
     pub creation_time: DateTime<Utc>,
 }
 
+impl TableName for Post {
+    fn table_name() -> &'static str {
+        "post"
+    }
+}
+
 impl Post {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         post::table.count().first(conn)
@@ -58,10 +65,10 @@ impl Post {
             .load(conn)
     }
 
-    pub fn related_posts(&self, conn: &mut PgConnection) -> QueryResult<Vec<Post>> {
+    pub fn related_posts(&self, conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
         PostRelation::belonging_to(self)
             .inner_join(post::table.on(post::columns::id.eq(post_relation::columns::child_id)))
-            .select(Post::as_select())
+            .select(Self::as_select())
             .load(conn)
     }
 
@@ -76,7 +83,7 @@ impl Post {
             .get_result(conn)
     }
 
-    pub fn add_relation(&self, conn: &mut PgConnection, related_post: &Post) -> QueryResult<PostRelation> {
+    pub fn add_relation(&self, conn: &mut PgConnection, related_post: &Self) -> QueryResult<PostRelation> {
         let new_post_relation = NewPostRelation {
             parent_id: self.id,
             child_id: related_post.id,
@@ -88,7 +95,7 @@ impl Post {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| util::validate_deletion("post", diesel::delete(&self).execute(conn)?))
+        util::delete(conn, &self)
     }
 }
 

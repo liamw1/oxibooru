@@ -1,5 +1,6 @@
 use crate::model::post::Post;
 use crate::model::user::User;
+use crate::model::TableName;
 use crate::schema::{comment, comment_score};
 use crate::util;
 use chrono::{DateTime, Utc};
@@ -25,6 +26,12 @@ pub struct Comment {
     pub creation_time: DateTime<Utc>,
 }
 
+impl TableName for Comment {
+    fn table_name() -> &'static str {
+        "comment"
+    }
+}
+
 impl Comment {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         comment::table.count().first(conn)
@@ -37,23 +44,14 @@ impl Comment {
             .map(|n| n.unwrap_or(0))
     }
 
-    pub fn update_text(mut self, conn: &mut PgConnection, text: String) -> QueryResult<Comment> {
+    pub fn update_text(mut self, conn: &mut PgConnection, text: String) -> QueryResult<Self> {
         self.text = text;
-        let query = diesel::update(&self).set(comment::text.eq(&self.text));
-
-        conn.transaction(|conn| util::validate_update("comment", query.execute(conn)?))
-            .map(|_| self)
-    }
-
-    pub fn update(&mut self, conn: &mut PgConnection, text: String) -> bool {
-        let query = diesel::update(comment::table.find(self.id)).set(comment::text.eq(&text));
-
-        let result = conn.transaction(|conn| util::validate_update("comment", query.execute(conn)?));
-        result.is_ok()
+        util::update_single_row(conn, &self, comment::text.eq(&self.text))?;
+        Ok(self)
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| util::validate_deletion("comment", diesel::delete(&self).execute(conn)?))
+        util::delete(conn, &self)
     }
 }
 

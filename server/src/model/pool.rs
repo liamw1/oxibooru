@@ -1,4 +1,5 @@
 use crate::model::post::Post;
+use crate::model::TableName;
 use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::util;
 use chrono::{DateTime, Utc};
@@ -21,6 +22,12 @@ pub struct PoolCategory {
     pub color: String,
 }
 
+impl TableName for PoolCategory {
+    fn table_name() -> &'static str {
+        "pool_category"
+    }
+}
+
 impl PoolCategory {
     pub fn new(conn: &mut PgConnection, name: &str, color: &str) -> QueryResult<Self> {
         let new_pool_category = NewPoolCategory { name, color };
@@ -32,6 +39,12 @@ impl PoolCategory {
 
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         pool_category::table.count().first(conn)
+    }
+
+    pub fn update_name(mut self, conn: &mut PgConnection, name: String) -> QueryResult<Self> {
+        self.name = name;
+        util::update_single_row(conn, &self, pool_category::name.eq(&self.name))?;
+        Ok(self)
     }
 }
 
@@ -50,6 +63,12 @@ pub struct Pool {
     pub category_id: i32,
     pub description: Option<String>,
     pub creation_time: DateTime<Utc>,
+}
+
+impl TableName for Pool {
+    fn table_name() -> &'static str {
+        "pool"
+    }
 }
 
 impl Pool {
@@ -102,7 +121,7 @@ impl Pool {
     }
 
     pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        conn.transaction(|conn| util::validate_deletion("pool", diesel::delete(&self).execute(conn)?))
+        util::delete(conn, &self)
     }
 }
 
