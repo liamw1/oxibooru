@@ -256,7 +256,7 @@ mod test {
     use crate::test::*;
 
     #[test]
-    fn test_saving_post() {
+    fn save_post() {
         let post = test_transaction(|conn: &mut PgConnection| {
             create_test_user(conn, TEST_USERNAME).and_then(|user| create_test_post(conn, &user))
         });
@@ -265,7 +265,7 @@ mod test {
     }
 
     #[test]
-    fn test_cascade_deletions() {
+    fn cascade_deletions() {
         test_transaction(|conn: &mut PgConnection| {
             let user_count = User::count(conn)?;
             let tag_count = Tag::count(conn)?;
@@ -331,7 +331,7 @@ mod test {
     }
 
     #[test]
-    fn test_tracking_tag_count() {
+    fn track_tag_count() {
         test_transaction(|conn: &mut PgConnection| {
             let post = create_test_user(conn, TEST_USERNAME).and_then(|user| create_test_post(conn, &user))?;
             let tag1 = Tag::new(conn)?;

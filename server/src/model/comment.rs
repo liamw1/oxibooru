@@ -83,7 +83,7 @@ mod test {
     use crate::test::*;
 
     #[test]
-    fn test_saving_comment() {
+    fn save_comment() {
         let comment_text = "This is a test comment";
         let comment = test_transaction(|conn: &mut PgConnection| {
             let user = create_test_user(conn, TEST_USERNAME)?;
@@ -94,7 +94,7 @@ mod test {
     }
 
     #[test]
-    fn test_cascade_deletions() {
+    fn cascade_deletions() {
         test_transaction(|conn: &mut PgConnection| {
             let user_count = User::count(conn)?;
             let comment_count = Comment::count(conn)?;
@@ -120,7 +120,7 @@ mod test {
     }
 
     #[test]
-    fn test_comment_scoring() {
+    fn comment_scoring() {
         test_transaction(|conn: &mut PgConnection| {
             let user1 = create_test_user(conn, "user1")?;
             let user2 = create_test_user(conn, "user2")?;

@@ -44,7 +44,7 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_privilege_ordering() {
+    fn privilege_ordering() {
         assert!(UserPrivilege::Restricted < UserPrivilege::Regular);
         assert!(UserPrivilege::Administrator > UserPrivilege::Moderator);
         assert_eq!(UserPrivilege::Regular, UserPrivilege::Regular);

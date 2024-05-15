@@ -12,7 +12,7 @@ mod test {
     use crate::test::*;
 
     #[test]
-    fn test_get_comment() {
+    fn read_comment() {
         test_transaction(|conn: &mut PgConnection| {
             let user = create_test_user(conn, "test_user")?;
             let comment =

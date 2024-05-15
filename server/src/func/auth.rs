@@ -46,13 +46,13 @@ mod test {
     use diesel::prelude::*;
 
     #[test]
-    fn test_hash_password() {
+    fn hash_password() {
         let user = establish_connection_or_panic().test_transaction(|conn| create_test_user(conn, TEST_USERNAME));
         assert!(is_valid_password(&user, TEST_PASSWORD))
     }
 
     #[test]
-    fn test_is_valid_token() {
+    fn validate_token() {
         let mut conn = establish_connection_or_panic();
         let future_time = Utc::now().checked_add_days(Days::new(1)).unwrap();
 

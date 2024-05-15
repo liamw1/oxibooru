@@ -176,13 +176,13 @@ mod test {
     use crate::test::*;
 
     #[test]
-    fn test_saving_pool() {
+    fn save_pool() {
         let pool = test_transaction(|conn: &mut PgConnection| Pool::new(conn));
         assert_eq!(pool.category_id, 0);
     }
 
     #[test]
-    fn test_cascade_deletions() {
+    fn cascade_deletions() {
         test_transaction(|conn: &mut PgConnection| {
             let post_count = Post::count(conn)?;
             let pool_count = Pool::count(conn)?;
@@ -214,7 +214,7 @@ mod test {
     }
 
     #[test]
-    fn test_tracking_post_count() {
+    fn track_post_count() {
         test_transaction(|conn: &mut PgConnection| {
             let user = create_test_user(conn, TEST_USERNAME)?;
             let post1 = create_test_post(conn, &user)?;

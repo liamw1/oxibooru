@@ -202,7 +202,7 @@ mod test {
     use crate::test::*;
 
     #[test]
-    fn test_saving_tag() {
+    fn save_tag() {
         test_transaction(|conn: &mut PgConnection| {
             let tag = Tag::new(conn)?;
             let implication1 = Tag::new(conn)?;
@@ -242,7 +242,7 @@ mod test {
     }
 
     #[test]
-    fn test_cascade_deletions() {
+    fn cascade_deletions() {
         test_transaction(|conn: &mut PgConnection| {
             let tag_count = Tag::count(conn)?;
             let tag_name_count = TagName::count(conn)?;
@@ -283,7 +283,7 @@ mod test {
     }
 
     #[test]
-    fn test_tracking_post_count() {
+    fn track_post_count() {
         test_transaction(|conn: &mut PgConnection| {
             let user = create_test_user(conn, "test_user")?;
             let post1 = create_test_post(conn, &user)?;

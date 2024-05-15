@@ -222,7 +222,7 @@ mod test {
     use crate::test::*;
 
     #[test]
-    fn test_saving_user() {
+    fn save_user() {
         let user = test_transaction(|conn: &mut PgConnection| create_test_user(conn, TEST_USERNAME));
 
         assert_eq!(user.name, TEST_USERNAME);
@@ -232,7 +232,7 @@ mod test {
     }
 
     #[test]
-    fn test_saving_user_token() {
+    fn save_user_token() {
         let user_token = test_transaction(|conn: &mut PgConnection| {
             create_test_user(conn, "test_user").and_then(|user| create_test_user_token(conn, &user, false, None))
         });
@@ -242,7 +242,7 @@ mod test {
     }
 
     #[test]
-    fn test_user_statistics() {
+    fn user_statistics() {
         test_transaction(|conn: &mut PgConnection| {
             let user = create_test_user(conn, "test_user")?;
 
@@ -266,7 +266,7 @@ mod test {
     }
 
     #[test]
-    fn test_cascade_deletions() {
+    fn cascade_deletions() {
         test_transaction(|conn: &mut PgConnection| {
             let user_count = User::count(conn)?;
             let post_count = Post::count(conn)?;
