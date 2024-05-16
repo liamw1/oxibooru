@@ -1,4 +1,6 @@
 pub mod func;
+pub mod image;
+pub mod math;
 pub mod model;
 pub mod query;
 pub mod schema;
