@@ -98,7 +98,7 @@ impl Pool {
         let name_count = PoolName::belonging_to(self).count().first::<i64>(conn)?;
         let new_pool_name = NewPoolName {
             pool_id: self.id,
-            order: name_count as i32,
+            order: i32::try_from(name_count).unwrap_or_else(|err| panic!("{err}")),
             name,
         };
         diesel::insert_into(pool_name::table)
@@ -112,7 +112,7 @@ impl Pool {
         let new_pool_post = NewPoolPost {
             pool_id: self.id,
             post_id: post.id,
-            order: post_count as i32,
+            order: i32::try_from(post_count).unwrap_or_else(|err| panic!("{err}")),
         };
         diesel::insert_into(pool_post::table)
             .values(&new_pool_post)

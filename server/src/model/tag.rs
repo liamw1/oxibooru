@@ -96,10 +96,10 @@ impl Tag {
     }
 
     pub fn add_name(&self, conn: &mut PgConnection, name: &str) -> QueryResult<TagName> {
-        let name_count = TagName::belonging_to(self).count().first::<i64>(conn)?;
+        let name_count: i64 = TagName::belonging_to(self).count().first::<i64>(conn)?;
         let new_tag_name = NewTagName {
             tag_id: self.id,
-            order: name_count as i32,
+            order: i32::try_from(name_count).unwrap_or_else(|err| panic!("{err}")),
             name,
         };
         diesel::insert_into(tag_name::table)

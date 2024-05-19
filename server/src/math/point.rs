@@ -10,6 +10,10 @@ impl<I: PrimInt> IPoint2<I> {
     pub fn new(i: I, j: I) -> Self {
         Self { i, j }
     }
+
+    pub fn zero() -> Self {
+        Self::new(I::zero(), I::zero())
+    }
 }
 
 #[cfg(test)]

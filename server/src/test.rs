@@ -5,6 +5,7 @@ use crate::schema::{post, post_note, post_signature, user, user_token};
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::result::Error;
+use std::path::{Path, PathBuf};
 
 pub const TEST_PRIVILEGE: UserPrivilege = UserPrivilege::Regular;
 pub const TEST_USERNAME: &str = "test_user";
@@ -14,6 +15,14 @@ pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZ
 
 pub fn establish_connection_or_panic() -> PgConnection {
     crate::establish_connection().unwrap_or_else(|err| panic!("{err}"))
+}
+
+pub fn asset_path(relative_path: &Path) -> PathBuf {
+    let mut project_root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|err| panic!("{err}")));
+    project_root.push("assets");
+    project_root.push("test");
+    project_root.push(relative_path);
+    project_root
 }
 
 // Used in place of conn.test_transaction as that function doesn't give any useful information on failure

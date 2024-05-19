@@ -4,10 +4,10 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::SmallInt;
 use diesel::FromSqlRow;
 use diesel::{deserialize, AsExpression};
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
+use num_traits::{FromPrimitive, ToPrimitive};
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, AsExpression, FromSqlRow, FromPrimitive)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, AsExpression, FromSqlRow, FromPrimitive, ToPrimitive)]
 #[diesel(sql_type = SmallInt)]
 pub enum UserPrivilege {
     Anonymous,
@@ -25,7 +25,7 @@ where
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, DB>) -> serialize::Result {
         // I have to do this jank here to get around the fact that to_sql doesn't work when called on a temporary
         const VALUES: [i16; 6] = [0, 1, 2, 3, 4, 5];
-        VALUES[*self as usize].to_sql(out)
+        VALUES[self.to_usize().unwrap()].to_sql(out)
     }
 }
 
