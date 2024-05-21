@@ -59,11 +59,11 @@ impl<T: PrimInt> IRect<T> {
     }
 
     pub fn min_corner(&self) -> IPoint2<T> {
-        IPoint2::new(self.i_bounds.min, self.j_bounds.min)
+        IPoint2::new(self.i_bounds.min(), self.j_bounds.min())
     }
 
     pub fn max_corner(&self) -> IPoint2<T> {
-        IPoint2::new(self.i_bounds.max, self.j_bounds.max)
+        IPoint2::new(self.i_bounds.max(), self.j_bounds.max())
     }
 
     pub fn iter(&self) -> IRectIter<T> {
@@ -176,12 +176,17 @@ where
         }
     }
 
-    pub fn index_iter(&self) -> IRectIter<usize> {
-        self.bounds().iter()
+    pub fn iter(&self) -> std::slice::Iter<T> {
+        self.data.iter()
     }
 
-    pub fn iter(&self) -> std::slice::Iter<'_, T> {
-        self.data.iter()
+    pub fn enumerate(&self) -> std::iter::Zip<IRectIter<usize>, std::slice::Iter<T>> {
+        self.bounds().iter().zip(self.iter())
+    }
+
+    pub fn signed_enumerate(&self) -> std::iter::Zip<IRectIter<isize>, std::slice::Iter<T>> {
+        let signed_bounds = self.bounds().to_signed().unwrap();
+        signed_bounds.iter().zip(self.iter())
     }
 
     fn compute_linear_index(&self, index: IPoint2<usize>) -> usize {

@@ -61,7 +61,7 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
         .unwrap();
 
     let mut mean_matrix = Array2D::new_square(NUM_GRID_POINTS, 0);
-    for (matrix_index, (&pixel_i, &pixel_j)) in grid_points.index_iter().zip(grid_points.iter()) {
+    for (matrix_index, (&pixel_i, &pixel_j)) in grid_points.enumerate() {
         let grid_square_center = IPoint2::new(pixel_i, pixel_j).to_signed().unwrap();
         let grid_square = IRect::new_centered_square(grid_square_center, grid_square_size / 2);
         let sum = IRect::intersection(grid_square, image_bounds)
@@ -80,9 +80,7 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
 
 fn compute_differentials(mean_matrix: &Array2D<u8>) -> Vec<[i16; 8]> {
     mean_matrix
-        .index_iter()
-        .map(|matrix_index| matrix_index.to_signed().unwrap())
-        .zip(mean_matrix.iter())
+        .signed_enumerate()
         .map(|(matrix_index, &center_value)| {
             IRect::new_centered_square(matrix_index, 1)
                 .iter()

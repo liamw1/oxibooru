@@ -1,35 +1,59 @@
 use crate::math::{From, SignedCast, UnsignedCast};
 use num_traits::PrimInt;
 use std::num::TryFromIntError;
+use std::ops::Range;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Interval<T: PrimInt> {
-    pub min: T,
-    pub max: T,
+    start: T,
+    end: T,
 }
 
 impl<T: PrimInt> Interval<T> {
     pub fn new(min: T, max: T) -> Self {
-        Self { min, max }
+        Self {
+            start: min,
+            end: max + T::one(),
+        }
+    }
+
+    pub fn min(self) -> T {
+        self.start
+    }
+
+    pub fn max(self) -> T {
+        self.end - T::one()
+    }
+
+    pub fn start(self) -> T {
+        self.start
+    }
+
+    pub fn end(self) -> T {
+        self.end
     }
 
     pub fn length(self) -> T {
-        let len = self.max - self.min + T::one();
+        let len = self.end - self.start;
         std::cmp::max(len, T::zero())
     }
 
+    pub fn is_empty_set(self) -> bool {
+        self.start >= self.end
+    }
+
     pub fn contains<U: PrimInt>(self, value: U) -> bool {
-        T::from(value).map_or(false, |n| self.min <= n && n <= self.max)
+        T::from(value).map_or(false, |n| self.start <= n && n < self.end)
     }
 
     pub fn intersection(a: Self, b: Self) -> Self {
-        let min = std::cmp::max(a.min, b.min);
-        let max = std::cmp::min(a.max, b.max);
-        Self::new(min, max)
+        let start = std::cmp::max(a.start, b.start);
+        let end = std::cmp::min(a.end, b.end);
+        Self { start, end }
     }
 
-    pub fn is_empty_set(self) -> bool {
-        self.min > self.max
+    pub fn iter(self) -> Range<T> {
+        self.start..self.end
     }
 }
 
@@ -39,9 +63,9 @@ where
     <U as SignedCast>::Signed: PrimInt,
 {
     pub fn to_signed(self) -> Result<Interval<U::Signed>, TryFromIntError> {
-        let min = self.min.to_signed()?;
-        let max = self.max.to_signed()?;
-        Ok(Interval::new(min, max))
+        let start = self.start.to_signed()?;
+        let end = self.end.to_signed()?;
+        Ok(Interval { start, end })
     }
 }
 
@@ -51,17 +75,17 @@ where
     <S as UnsignedCast>::Unsigned: PrimInt,
 {
     pub fn to_unsigned(self) -> Result<Interval<S::Unsigned>, TryFromIntError> {
-        let min = self.min.to_unsigned()?;
-        let max = self.max.to_unsigned()?;
-        Ok(Interval::new(min, max))
+        let start = self.start.to_unsigned()?;
+        let end = self.end.to_unsigned()?;
+        Ok(Interval { start, end })
     }
 }
 
 impl<T: PrimInt, U: PrimInt> From<Interval<U>> for Interval<T> {
     fn from(interval: &Interval<U>) -> Option<Self> {
-        let min = T::from(interval.min)?;
-        let max = T::from(interval.max)?;
-        Some(Self::new(min, max))
+        let start = T::from(interval.start)?;
+        let end = T::from(interval.end)?;
+        Some(Interval { start, end })
     }
 }
 

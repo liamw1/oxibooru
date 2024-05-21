@@ -34,8 +34,13 @@ impl<L, R> CartesianProduct<L, R> {
         }
     }
 
-    pub fn index_iter(&self) -> IRectIter<usize> {
-        self.bounds().iter()
+    pub fn enumerate(&self) -> std::iter::Zip<IRectIter<usize>, CartesianProductIter<L, R>> {
+        self.bounds().iter().zip(self.iter())
+    }
+
+    pub fn signed_enumerate(&self) -> std::iter::Zip<IRectIter<isize>, CartesianProductIter<L, R>> {
+        let signed_bounds = self.bounds().to_signed().unwrap();
+        signed_bounds.iter().zip(self.iter())
     }
 
     fn last_element_index(&self) -> IPoint2<usize> {
