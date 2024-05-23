@@ -1,6 +1,6 @@
 use num_traits::PrimInt;
 
-pub fn symmetric_linspace<T: PrimInt>(start: T, end: T, num: usize) -> Vec<T> {
+pub fn symmetric_linspace<T: PrimInt>(start: T, end: T, num: u32) -> Vec<T> {
     let start_f64 = start.to_f64().unwrap();
     let end_f64 = end.to_f64().unwrap();
     let num_f64 = num as f64;
@@ -21,7 +21,7 @@ pub fn symmetric_linspace<T: PrimInt>(start: T, end: T, num: usize) -> Vec<T> {
     }
 }
 
-pub fn left_linspace<T: PrimInt>(start: T, end: T, num: usize) -> Vec<T> {
+pub fn left_linspace<T: PrimInt>(start: T, end: T, num: u32) -> Vec<T> {
     if num == 0 {
         return vec![];
     }

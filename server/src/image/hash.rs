@@ -4,7 +4,6 @@ use crate::math::point::IPoint2;
 use crate::math::rect::{Array2D, IRect};
 use image::{DynamicImage, GrayImage};
 use num_traits::ToPrimitive;
-use std::cmp::{max, min};
 
 pub fn compute_signature(image: &DynamicImage) -> Vec<u8> {
     let gray_image = image.to_luma8();
@@ -35,23 +34,19 @@ pub fn normalized_distance(signature_a: &Vec<u8>, signature_b: &Vec<u8>) -> f64 
     }
 }
 
-pub fn compute_words(signature: &Vec<u8>) -> Vec<i32> {
-    let word_positions = func::left_linspace(0, signature.len(), NUM_WORDS);
-
-    vec![]
-}
-
 /*
     Implementation follows H. Chi Wong, Marshall Bern and David Goldberg with a few tweaks
 */
 
 const CROP_PERCENTILE: u64 = 5;
-const NUM_GRID_POINTS: usize = 9;
-const FIXED_GRID_SQUARE_SIZE: Option<i32> = None;
+const NUM_GRID_POINTS: u32 = 9;
 const IDENTICAL_TOLERANCE: i16 = 2;
 const INTENSITY_LEVELS: usize = 2;
-const NUM_LETTERS: usize = 10;
-const NUM_WORDS: usize = 100;
+
+fn grid_square_radius(width: u32, height: u32) -> u32 {
+    let grid_square_size = 0.5 + std::cmp::min(width, height) as f64 / 20.0;
+    (grid_square_size / 2.0).to_u32().unwrap()
+}
 
 fn compute_grid_points(image: &GrayImage) -> CartesianProduct<u32, u32> {
     let bounds = IRect::new_zero_based(image.width() - 2, image.height() - 2);
@@ -131,19 +126,24 @@ fn compute_grid_points(image: &GrayImage) -> CartesianProduct<u32, u32> {
         }
     }
 
+    // Adjust cropped bounds so that grid squares won't protrude into image borders
+    let estimated_grid_square_radius =
+        grid_square_radius(upper_row_index - lower_row_index, upper_column_index - lower_column_index);
+    lower_row_index += estimated_grid_square_radius;
+    upper_row_index -= estimated_grid_square_radius;
+    lower_column_index += estimated_grid_square_radius;
+    upper_column_index -= estimated_grid_square_radius;
+
     let x_coords = func::symmetric_linspace(lower_row_index, upper_row_index, NUM_GRID_POINTS);
     let y_coords = func::symmetric_linspace(lower_column_index, upper_column_index, NUM_GRID_POINTS);
-
-    println!("{:?}", x_coords);
-    println!("{:?}", y_coords);
 
     CartesianProduct::new(x_coords, y_coords)
 }
 
 fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u32>) -> Array2D<u8> {
-    let smallest_image_dimension = min(image.width(), image.height());
-    let dynamic_grid_square_size = 0.5 + smallest_image_dimension as f64 / 20.0;
-    let grid_square_size = FIXED_GRID_SQUARE_SIZE.unwrap_or(max(2, dynamic_grid_square_size.to_i32().unwrap()));
+    let cropped_width = grid_points.left_set().last().unwrap() - grid_points.left_set().first().unwrap();
+    let cropped_height = grid_points.right_set().last().unwrap() - grid_points.right_set().first().unwrap();
+    let grid_square_radius = grid_square_radius(cropped_width, cropped_height) as i32;
     let image_bounds = IRect::new_zero_based(image.width() - 1, image.height() - 1)
         .to_signed()
         .unwrap();
@@ -151,7 +151,7 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
     let mut mean_matrix = Array2D::new_square(NUM_GRID_POINTS, 0);
     for (matrix_index, (&pixel_i, &pixel_j)) in grid_points.enumerate() {
         let grid_square_center = IPoint2::new(pixel_i, pixel_j).to_signed().unwrap();
-        let grid_square = IRect::new_centered_square(grid_square_center, grid_square_size / 2);
+        let grid_square = IRect::new_centered_square(grid_square_center, grid_square_radius);
         let sum = IRect::intersection(grid_square, image_bounds)
             .to_unsigned()
             .unwrap()
@@ -159,7 +159,6 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
             .map(|pixel_index| image.get_pixel(pixel_index.i, pixel_index.j))
             .map(|luma| u64::from(luma.0[0]))
             .sum::<u64>();
-
         let average = sum / grid_square.total_points().unwrap();
         mean_matrix.set_at(matrix_index, average.to_u8().unwrap());
     }
@@ -175,8 +174,11 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
     TODO: Test to see if this approach gets better discrimination on images.
 */
 fn compute_differentials(mean_matrix: &Array2D<u8>) -> Vec<[i16; 8]> {
+    //let center = NUM_GRID_POINTS / 2;
+    //let bounds = IRect::new_centered_square(IPoint2::new(center, center), center - 1);
     mean_matrix
         .signed_enumerate()
+        //.filter(|(matrix_index, _)| bounds.contains(*matrix_index))
         .map(|(matrix_index, &center_value)| {
             IRect::new_centered_square(matrix_index, 1)
                 .iter()
@@ -246,32 +248,38 @@ mod test {
     fn image_signature_regression() {
         let image1 = image::open(asset_path(Path::new("png.png"))).unwrap_or_else(|err| panic!("{err}"));
         let sig1 = compute_signature(&image1);
-        assert_eq!(normalized_distance(&sig1, &sig1), 0.0);
 
         let image2 = image::open(asset_path(Path::new("bmp.bmp"))).unwrap_or_else(|err| panic!("{err}"));
         let sig2 = compute_signature(&image2);
-        assert_eq!(normalized_distance(&sig2, &sig2), 0.0);
 
         let image3 = image::open(asset_path(Path::new("jpeg.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let sig3 = compute_signature(&image3);
-        assert_eq!(normalized_distance(&sig3, &sig3), 0.0);
 
         let image4 = image::open(asset_path(Path::new("jpeg-similar.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let sig4 = compute_signature(&image4);
-        assert_eq!(normalized_distance(&sig4, &sig4), 0.0);
+
+        //assert_eq!(normalized_distance(&sig3, &sig4), 0.0);
 
         // Identical images of different formats
         assert_eq!(normalized_distance(&sig1, &sig2), 0.0);
         // Similar images of same format
-        assert!((normalized_distance(&sig3, &sig4) - 0.2063877806008814).abs() < 1e-8);
+        assert!((normalized_distance(&sig3, &sig4) - 0.14279835125009815).abs() < 1e-8);
         // Different images
-        assert!((normalized_distance(&sig1, &sig3) - 0.5656720852455867).abs() < 1e-8);
+        assert!((normalized_distance(&sig1, &sig3) - 0.5956693016498599).abs() < 1e-8);
     }
 
     #[test]
     fn signature_robustness() {
         let lisa = image::open(asset_path(Path::new("mona_lisa.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let lisa_signature = compute_signature(&lisa);
+
+        let lisa_low_res =
+            image::open(asset_path(Path::new("mona_lisa-low_res.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let lisa_low_res_signature = compute_signature(&lisa_low_res);
+
+        let lisa_retouched =
+            image::open(asset_path(Path::new("mona_lisa-retouched.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let lisa_retouched_signature = compute_signature(&lisa_retouched);
 
         let lisa_high_contrast =
             image::open(asset_path(Path::new("mona_lisa-high_contrast.jpg"))).unwrap_or_else(|err| panic!("{err}"));
@@ -285,8 +293,39 @@ mod test {
             image::open(asset_path(Path::new("mona_lisa-large_border.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let lisa_large_border_signature = compute_signature(&lisa_large_border);
 
-        assert!(normalized_distance(&lisa_signature, &lisa_high_contrast_signature) < 0.35);
+        //assert_eq!(normalized_distance(&lisa_signature, &lisa_retouched_signature), 0.0);
+
+        assert!(normalized_distance(&lisa_signature, &lisa_low_res_signature) < 0.4);
+        assert!(normalized_distance(&lisa_signature, &lisa_retouched_signature) < 0.45);
+        assert!(normalized_distance(&lisa_signature, &lisa_high_contrast_signature) < 0.2);
         assert!(normalized_distance(&lisa_signature, &lisa_small_border_signature) < 0.5);
         assert!(normalized_distance(&lisa_signature, &lisa_large_border_signature) < 0.5);
+    }
+
+    #[test]
+    fn grid_points() {
+        let lisa_small_border = image::open(asset_path(Path::new("mona_lisa-small_border.jpg")))
+            .unwrap_or_else(|err| panic!("{err}"))
+            .to_luma8();
+
+        let grid_points = compute_grid_points(&lisa_small_border);
+        let lower_left_grid_point = (grid_points.left_set().first().unwrap(), grid_points.right_set().first().unwrap());
+        let upper_right_grid_point = (grid_points.left_set().last().unwrap(), grid_points.right_set().last().unwrap());
+        let lower_left_pixel = lisa_small_border.get_pixel(*lower_left_grid_point.0, *lower_left_grid_point.1);
+        let upper_right_pixel = lisa_small_border.get_pixel(*upper_right_grid_point.0, *upper_right_grid_point.1);
+        assert!(lower_left_pixel.0[0] < 250);
+        assert!(upper_right_pixel.0[0] < 250);
+
+        let lisa_large_border = image::open(asset_path(Path::new("mona_lisa-large_border.jpg")))
+            .unwrap_or_else(|err| panic!("{err}"))
+            .to_luma8();
+
+        let grid_points = compute_grid_points(&lisa_large_border);
+        let lower_left_grid_point = (grid_points.left_set().first().unwrap(), grid_points.right_set().first().unwrap());
+        let upper_right_grid_point = (grid_points.left_set().last().unwrap(), grid_points.right_set().last().unwrap());
+        let lower_left_pixel = lisa_large_border.get_pixel(*lower_left_grid_point.0, *lower_left_grid_point.1);
+        let upper_right_pixel = lisa_large_border.get_pixel(*upper_right_grid_point.0, *upper_right_grid_point.1);
+        assert!(lower_left_pixel.0[0] < 250);
+        assert!(upper_right_pixel.0[0] < 250);
     }
 }

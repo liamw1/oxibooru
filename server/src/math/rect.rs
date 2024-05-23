@@ -136,40 +136,41 @@ where
 
 pub struct Array2D<T> {
     data: Vec<T>,
-    dimensions: (usize, usize),
+    dimensions: (u32, u32),
 }
 
 impl<T> Array2D<T>
 where
     T: Copy,
 {
-    pub fn new(dimensions: (usize, usize), initial_value: T) -> Self {
+    pub fn new(dimensions: (u32, u32), initial_value: T) -> Self {
         let array_size = dimensions.0 * dimensions.1;
         Array2D {
-            data: vec![initial_value; array_size],
+            data: vec![initial_value; array_size as usize],
             dimensions,
         }
     }
 
-    pub fn new_square(dimensions: usize, initial_value: T) -> Self {
+    pub fn new_square(dimensions: u32, initial_value: T) -> Self {
         Self::new((dimensions, dimensions), initial_value)
     }
 
-    pub fn bounds(&self) -> IRect<usize> {
+    pub fn bounds(&self) -> IRect<u32> {
         IRect::new_zero_based(self.dimensions.0 - 1, self.dimensions.1 - 1)
     }
 
-    pub fn at(&self, index: IPoint2<usize>) -> T {
+    pub fn at(&self, index: IPoint2<u32>) -> T {
         self.data[self.compute_linear_index(index)]
     }
 
-    pub fn set_at(&mut self, index: IPoint2<usize>, value: T) {
-        let index = self.compute_linear_index(index);
+    pub fn set_at<I: PrimInt>(&mut self, index: IPoint2<I>, value: T) {
+        let converted_index = <IPoint2<u32> as From<IPoint2<I>>>::from(&index).unwrap();
+        let index = self.compute_linear_index(converted_index);
         self.data[index] = value;
     }
 
     pub fn get<I: PrimInt>(&self, index: IPoint2<I>) -> Option<T> {
-        let converted_index = <IPoint2<usize> as From<IPoint2<I>>>::from(&index)?;
+        let converted_index = <IPoint2<u32> as From<IPoint2<I>>>::from(&index)?;
         match self.bounds().contains(index) {
             false => None,
             true => Some(self.at(converted_index)),
@@ -180,17 +181,25 @@ where
         self.data.iter()
     }
 
-    pub fn enumerate(&self) -> std::iter::Zip<IRectIter<usize>, std::slice::Iter<T>> {
+    pub fn enumerate(&self) -> std::iter::Zip<IRectIter<u32>, std::slice::Iter<T>> {
         self.bounds().iter().zip(self.iter())
     }
 
-    pub fn signed_enumerate(&self) -> std::iter::Zip<IRectIter<isize>, std::slice::Iter<T>> {
+    pub fn signed_enumerate(&self) -> std::iter::Zip<IRectIter<i32>, std::slice::Iter<T>> {
         let signed_bounds = self.bounds().to_signed().unwrap();
         signed_bounds.iter().zip(self.iter())
     }
 
-    fn compute_linear_index(&self, index: IPoint2<usize>) -> usize {
-        self.dimensions.1 * index.i + index.j
+    pub fn iter_mut(&mut self) -> std::slice::IterMut<T> {
+        self.data.iter_mut()
+    }
+
+    pub fn enumerate_mut(&mut self) -> std::iter::Zip<IRectIter<u32>, std::slice::IterMut<T>> {
+        self.bounds().iter().zip(self.iter_mut())
+    }
+
+    fn compute_linear_index(&self, index: IPoint2<u32>) -> usize {
+        self.dimensions.1 as usize * index.i as usize + index.j as usize
     }
 }
 
