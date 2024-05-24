@@ -1,5 +1,6 @@
 use crate::math::cartesian::CartesianProduct;
 use crate::math::func;
+use crate::math::interval::Interval;
 use crate::math::point::IPoint2;
 use crate::math::rect::{Array2D, IRect};
 use image::{DynamicImage, GrayImage};
@@ -67,8 +68,8 @@ const CROP_PERCENTILE: u64 = 5;
 const NUM_GRID_POINTS: u32 = 9;
 const IDENTICAL_TOLERANCE: i16 = 2;
 const LUMINANCE_LEVELS: u32 = 2;
-const NUM_LETTERS: u32 = 19;
-const NUM_WORDS: u32 = 100;
+const NUM_LETTERS: u32 = 16;
+const NUM_WORDS: u32 = 63;
 const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS as usize + 1;
 
 fn grid_square_radius(width: u32, height: u32) -> u32 {
@@ -91,67 +92,71 @@ fn compute_grid_points(image: &GrayImage) -> CartesianProduct<u32, u32> {
         total_column_delta += u64::from(pixel_value.abs_diff(column_adjacent_value));
     }
 
+    let calc_row_delta = |i: u32| -> u64 {
+        (0..image.height())
+            .into_iter()
+            .map(|j| {
+                let pixel_value = image.get_pixel(i, j).0[0];
+                let row_adjacent_value = image.get_pixel(i + 1, j).0[0];
+                u64::from(pixel_value.abs_diff(row_adjacent_value))
+            })
+            .sum()
+    };
+    let calc_column_delta = |j: u32| -> u64 {
+        (0..image.width())
+            .into_iter()
+            .map(|i| {
+                let pixel_value = image.get_pixel(i, j).0[0];
+                let column_adjacent_value = image.get_pixel(i, j + 1).0[0];
+                u64::from(pixel_value.abs_diff(column_adjacent_value))
+            })
+            .sum()
+    };
+
     let row_delta_limit = CROP_PERCENTILE * total_row_delta / 100;
     let column_delta_limit = CROP_PERCENTILE * total_column_delta / 100;
 
+    let rows = Interval::new(0, image.width() - 2);
+    let columns = Interval::new(0, image.height() - 2);
+
     let mut lower_row_index = 0;
-    let mut row_delta = 0;
-    for i in 0..(image.width() - 1) {
-        if row_delta >= row_delta_limit {
+    let mut cumulative_row_delta = 0;
+    for i in rows.iter() {
+        if cumulative_row_delta >= row_delta_limit {
             lower_row_index = i;
             break;
         }
-
-        for j in 0..image.height() {
-            let pixel_value = image.get_pixel(i, j).0[0];
-            let row_adjacent_value = image.get_pixel(i + 1, j).0[0];
-            row_delta += u64::from(pixel_value.abs_diff(row_adjacent_value));
-        }
+        cumulative_row_delta += calc_row_delta(i);
     }
 
     let mut upper_row_index = image.width() - 1;
-    let mut row_delta = 0;
-    for i in (0..(image.width() - 1)).rev() {
-        if row_delta >= row_delta_limit {
+    let mut cumulative_row_delta = 0;
+    for i in rows.iter().rev() {
+        if cumulative_row_delta >= row_delta_limit {
             upper_row_index = i;
             break;
         }
-
-        for j in 0..image.height() {
-            let pixel_value = image.get_pixel(i, j).0[0];
-            let row_adjacent_value = image.get_pixel(i + 1, j).0[0];
-            row_delta += u64::from(pixel_value.abs_diff(row_adjacent_value));
-        }
+        cumulative_row_delta += calc_row_delta(i);
     }
 
     let mut lower_column_index = 0;
-    let mut column_delta = 0;
-    for j in 0..(image.height() - 1) {
-        if column_delta >= column_delta_limit {
+    let mut cumulative_column_delta = 0;
+    for j in columns.iter() {
+        if cumulative_column_delta >= column_delta_limit {
             lower_column_index = j;
             break;
         }
-
-        for i in 0..image.width() {
-            let pixel_value = image.get_pixel(i, j).0[0];
-            let column_adjacent_value = image.get_pixel(i, j + 1).0[0];
-            column_delta += u64::from(pixel_value.abs_diff(column_adjacent_value));
-        }
+        cumulative_column_delta += calc_column_delta(j);
     }
 
     let mut upper_column_index = image.height() - 1;
-    let mut column_delta = 0;
-    for j in (0..(image.height() - 1)).rev() {
-        if column_delta >= column_delta_limit {
+    let mut cumulative_column_delta = 0;
+    for j in columns.iter().rev() {
+        if cumulative_column_delta >= column_delta_limit {
             upper_column_index = j;
             break;
         }
-
-        for i in 0..image.width() {
-            let pixel_value = image.get_pixel(i, j).0[0];
-            let column_adjacent_value = image.get_pixel(i, j + 1).0[0];
-            column_delta += u64::from(pixel_value.abs_diff(column_adjacent_value));
-        }
+        cumulative_column_delta += calc_column_delta(j);
     }
 
     // Adjust cropped bounds so that grid squares won't protrude into image borders
@@ -327,24 +332,24 @@ mod test {
         let lisa_cat_signature = compute_signature(&lisa_cat);
         let lisa_cat_indexes = generate_indexes(&lisa_cat_signature);
 
-        let starry_night = image::open(asset_path(Path::new("starry_night.jpg"))).unwrap_or_else(|err| panic!("{err}"));
-        let starry_night_signature = compute_signature(&starry_night);
-        let starry_night_indexes = generate_indexes(&starry_night_signature);
-
-        println!("Distances:");
-        println!("{}", normalized_distance(&lisa_signature, &lisa_border_signature));
-        println!("{}", normalized_distance(&lisa_signature, &lisa_large_border_signature));
-        println!("{}", normalized_distance(&lisa_signature, &lisa_wide_signature));
-        println!("{}", normalized_distance(&lisa_signature, &lisa_filtered_signature));
-        println!("{}", normalized_distance(&lisa_signature, &lisa_cat_signature));
-        println!("{}", normalized_distance(&lisa_signature, &starry_night_signature));
-        println!("Matches:");
-        println!("{}", matching_indexes(&lisa_indexes, &lisa_border_indexes));
-        println!("{}", matching_indexes(&lisa_indexes, &lisa_large_border_indexes));
-        println!("{}", matching_indexes(&lisa_indexes, &lisa_wide_indexes));
-        println!("{}", matching_indexes(&lisa_indexes, &lisa_filtered_indexes));
-        println!("{}", matching_indexes(&lisa_indexes, &lisa_cat_indexes));
-        println!("{}", matching_indexes(&lisa_indexes, &starry_night_indexes));
+        // let starry_night = image::open(asset_path(Path::new("starry_night.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        // let starry_night_signature = compute_signature(&starry_night);
+        // let starry_night_indexes = generate_indexes(&starry_night_signature);
+        //
+        // println!("Distances:");
+        // println!("{}", normalized_distance(&lisa_signature, &lisa_border_signature));
+        // println!("{}", normalized_distance(&lisa_signature, &lisa_large_border_signature));
+        // println!("{}", normalized_distance(&lisa_signature, &lisa_wide_signature));
+        // println!("{}", normalized_distance(&lisa_signature, &lisa_filtered_signature));
+        // println!("{}", normalized_distance(&lisa_signature, &lisa_cat_signature));
+        // println!("{}", normalized_distance(&lisa_signature, &starry_night_signature));
+        // println!("Matches:");
+        // println!("{}", matching_indexes(&lisa_indexes, &lisa_border_indexes));
+        // println!("{}", matching_indexes(&lisa_indexes, &lisa_large_border_indexes));
+        // println!("{}", matching_indexes(&lisa_indexes, &lisa_wide_indexes));
+        // println!("{}", matching_indexes(&lisa_indexes, &lisa_filtered_indexes));
+        // println!("{}", matching_indexes(&lisa_indexes, &lisa_cat_indexes));
+        // println!("{}", matching_indexes(&lisa_indexes, &starry_night_indexes));
 
         assert!(normalized_distance(&lisa_signature, &lisa_border_signature) < 0.2);
         assert!(normalized_distance(&lisa_signature, &lisa_large_border_signature) < 0.2);
@@ -361,7 +366,7 @@ mod test {
 
     #[test]
     fn grid_points() {
-        let lisa_small_border = image::open(asset_path(Path::new("mona_lisa-small_border.jpg")))
+        let lisa_small_border = image::open(asset_path(Path::new("lisa-border.jpg")))
             .unwrap_or_else(|err| panic!("{err}"))
             .to_luma8();
 
@@ -373,7 +378,7 @@ mod test {
         assert!(lower_left_pixel.0[0] < 250);
         assert!(upper_right_pixel.0[0] < 250);
 
-        let lisa_large_border = image::open(asset_path(Path::new("mona_lisa-large_border.jpg")))
+        let lisa_large_border = image::open(asset_path(Path::new("lisa-large_border.jpg")))
             .unwrap_or_else(|err| panic!("{err}"))
             .to_luma8();
 
