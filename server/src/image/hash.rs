@@ -17,14 +17,13 @@ pub fn normalized_distance(signature_a: &Vec<u8>, signature_b: &Vec<u8>) -> f64 
     let l2_squared_distance = signature_a
         .iter()
         .zip(signature_b.iter())
-        .map(|(&a, &b)| (i64::from(a), i64::from(b)))
+        .map(|(&a, &b)| (i64::from(a as i8), i64::from(b as i8)))
         .map(|(a, b)| (a - b) * (a - b))
         .sum::<i64>();
     let l2_distance = (l2_squared_distance as f64).sqrt();
 
-    let offset = INTENSITY_LEVELS as i64;
-    let l2_squared_norm_a: i64 = signature_a.iter().map(|&a| i64::from(a) - offset).map(|a| a * a).sum();
-    let l2_squared_norm_b: i64 = signature_b.iter().map(|&b| i64::from(b) - offset).map(|b| b * b).sum();
+    let l2_squared_norm_a: i64 = signature_a.iter().map(|&a| i64::from(a as i8)).map(|a| a * a).sum();
+    let l2_squared_norm_b: i64 = signature_b.iter().map(|&b| i64::from(b as i8)).map(|b| b * b).sum();
     let denominator = (l2_squared_norm_a as f64).sqrt() + (l2_squared_norm_b as f64).sqrt();
 
     if denominator == 0.0 {
@@ -34,6 +33,32 @@ pub fn normalized_distance(signature_a: &Vec<u8>, signature_b: &Vec<u8>) -> f64 
     }
 }
 
+pub fn generate_indexes(signature: &Vec<u8>) -> Vec<Option<i32>> {
+    const NUM_REDUCED_SYMBOLS: i32 = 3;
+    debug_assert!(i64::from(NUM_REDUCED_SYMBOLS).pow(NUM_LETTERS) < i64::from(i32::MAX));
+
+    const NUM_LETTERS_USIZE: usize = NUM_LETTERS as usize;
+    let word_positions = func::symmetric_linspace(0, signature.len() - NUM_LETTERS_USIZE, NUM_WORDS);
+
+    let words: Vec<[u8; NUM_LETTERS_USIZE]> = word_positions
+        .iter()
+        .map(|&pos| signature[pos..(pos + NUM_LETTERS_USIZE)].try_into().unwrap())
+        .collect();
+
+    words
+        .iter()
+        .map(|word| {
+            word.iter()
+                .map(|&letter| letter as i8)
+                .map(|letter| letter.clamp(-1, 1))
+                .enumerate()
+                .map(|(i, letter)| i32::from(letter) * NUM_REDUCED_SYMBOLS.pow(i as u32))
+                .sum()
+        })
+        .map(|index| Some(index)) // Need this to conform to SQL type
+        .collect()
+}
+
 /*
     Implementation follows H. Chi Wong, Marshall Bern and David Goldberg with a few tweaks
 */
@@ -41,7 +66,10 @@ pub fn normalized_distance(signature_a: &Vec<u8>, signature_b: &Vec<u8>) -> f64 
 const CROP_PERCENTILE: u64 = 5;
 const NUM_GRID_POINTS: u32 = 9;
 const IDENTICAL_TOLERANCE: i16 = 2;
-const INTENSITY_LEVELS: usize = 2;
+const LUMINANCE_LEVELS: u32 = 2;
+const NUM_LETTERS: u32 = 15;
+const NUM_WORDS: u32 = 100;
+const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS as usize + 1;
 
 fn grid_square_radius(width: u32, height: u32) -> u32 {
     let grid_square_size = 0.5 + std::cmp::min(width, height) as f64 / 20.0;
@@ -203,9 +231,10 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &Vec<[i16; 8]>, filter: F)
         .collect::<Vec<_>>();
     filtered_values.sort();
 
-    let chunk_size = match filtered_values.len() % INTENSITY_LEVELS {
-        0 => filtered_values.len() / INTENSITY_LEVELS,
-        _ => filtered_values.len() / INTENSITY_LEVELS + 1,
+    const LUMINANCE_LEVELS_USIZE: usize = LUMINANCE_LEVELS as usize;
+    let chunk_size = match filtered_values.len() % LUMINANCE_LEVELS_USIZE {
+        0 => filtered_values.len() / LUMINANCE_LEVELS_USIZE,
+        _ => filtered_values.len() / LUMINANCE_LEVELS_USIZE + 1,
     };
 
     filtered_values
@@ -221,7 +250,7 @@ fn normalize(differentials: &Vec<[i16; 8]>) -> Vec<u8> {
     let mut cutoffs = dark_cutoffs;
     cutoffs.push(Some(IDENTICAL_TOLERANCE));
     cutoffs.extend(light_cutoffs);
-    debug_assert_eq!(cutoffs.len(), 2 * INTENSITY_LEVELS + 1);
+    debug_assert_eq!(cutoffs.len(), NUM_SYMBOLS);
 
     differentials
         .iter()
@@ -229,12 +258,14 @@ fn normalize(differentials: &Vec<[i16; 8]>) -> Vec<u8> {
         .map(|&diff| {
             for (level, &cutoff) in cutoffs.iter().enumerate() {
                 match cutoff {
-                    Some(cutoff) if diff <= cutoff => return level as u8,
+                    Some(cutoff) if diff <= cutoff => return level as i8,
                     _ => (),
                 }
             }
             panic!("Expected diff to be under at least one cutoff");
         })
+        .map(|level| level - LUMINANCE_LEVELS as i8) // Map to range of [-LUMINANCE_LEVELS, LUMINANCE_LEVELS]
+        .map(|level| level as u8) // Convert to byte. Can convert back by casting back to i8
         .collect()
 }
 
@@ -248,50 +279,65 @@ mod test {
     fn image_signature_regression() {
         let image1 = image::open(asset_path(Path::new("png.png"))).unwrap_or_else(|err| panic!("{err}"));
         let sig1 = compute_signature(&image1);
+        let indexes1 = generate_indexes(&sig1);
 
         let image2 = image::open(asset_path(Path::new("bmp.bmp"))).unwrap_or_else(|err| panic!("{err}"));
         let sig2 = compute_signature(&image2);
+        let indexes2 = generate_indexes(&sig2);
 
         let image3 = image::open(asset_path(Path::new("jpeg.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let sig3 = compute_signature(&image3);
+        let indexes3 = generate_indexes(&sig3);
 
         let image4 = image::open(asset_path(Path::new("jpeg-similar.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let sig4 = compute_signature(&image4);
+        let indexes4 = generate_indexes(&sig4);
 
         //assert_eq!(normalized_distance(&sig3, &sig4), 0.0);
 
         // Identical images of different formats
         assert_eq!(normalized_distance(&sig1, &sig2), 0.0);
+        assert_eq!(matching_indexes(&indexes1, &indexes2), NUM_WORDS as usize);
+
         // Similar images of same format
         assert!((normalized_distance(&sig3, &sig4) - 0.14279835125009815).abs() < 1e-8);
+        assert_eq!(matching_indexes(&indexes3, &indexes4), 62);
+
         // Different images
         assert!((normalized_distance(&sig1, &sig3) - 0.5956693016498599).abs() < 1e-8);
+        //assert_eq!(matching_indexes(&indexes1, &indexes3), 0);
     }
 
     #[test]
     fn signature_robustness() {
         let lisa = image::open(asset_path(Path::new("mona_lisa.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let lisa_signature = compute_signature(&lisa);
+        let lisa_indexes = generate_indexes(&lisa_signature);
 
         let lisa_low_res =
             image::open(asset_path(Path::new("mona_lisa-low_res.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let lisa_low_res_signature = compute_signature(&lisa_low_res);
+        let lisa_low_res_indexes = generate_indexes(&lisa_low_res_signature);
 
         let lisa_retouched =
             image::open(asset_path(Path::new("mona_lisa-retouched.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let lisa_retouched_signature = compute_signature(&lisa_retouched);
+        let lisa_retouched_indexes = generate_indexes(&lisa_retouched_signature);
 
         let lisa_high_contrast =
             image::open(asset_path(Path::new("mona_lisa-high_contrast.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let lisa_high_contrast_signature = compute_signature(&lisa_high_contrast);
+        let lisa_high_contrast_indexes = generate_indexes(&lisa_high_contrast_signature);
 
         let lisa_small_border =
             image::open(asset_path(Path::new("mona_lisa-small_border.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let lisa_small_border_signature = compute_signature(&lisa_small_border);
+        let lisa_small_border_indexes = generate_indexes(&lisa_small_border_signature);
 
         let lisa_large_border =
             image::open(asset_path(Path::new("mona_lisa-large_border.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let lisa_large_border_signature = compute_signature(&lisa_large_border);
+        let lisa_large_border_indexes = generate_indexes(&lisa_large_border_signature);
 
         //assert_eq!(normalized_distance(&lisa_signature, &lisa_retouched_signature), 0.0);
 
@@ -300,6 +346,12 @@ mod test {
         assert!(normalized_distance(&lisa_signature, &lisa_high_contrast_signature) < 0.2);
         assert!(normalized_distance(&lisa_signature, &lisa_small_border_signature) < 0.5);
         assert!(normalized_distance(&lisa_signature, &lisa_large_border_signature) < 0.5);
+
+        assert!(matching_indexes(&lisa_indexes, &lisa_low_res_indexes) > 0);
+        assert!(matching_indexes(&lisa_indexes, &lisa_retouched_indexes) > 0);
+        assert!(matching_indexes(&lisa_indexes, &lisa_high_contrast_indexes) > 0);
+        assert!(matching_indexes(&lisa_indexes, &lisa_small_border_indexes) > 0);
+        assert!(matching_indexes(&lisa_indexes, &lisa_large_border_indexes) > 0);
     }
 
     #[test]
@@ -327,5 +379,13 @@ mod test {
         let upper_right_pixel = lisa_large_border.get_pixel(*upper_right_grid_point.0, *upper_right_grid_point.1);
         assert!(lower_left_pixel.0[0] < 250);
         assert!(upper_right_pixel.0[0] < 250);
+    }
+
+    fn matching_indexes(indexes_a: &Vec<Option<i32>>, indexes_b: &Vec<Option<i32>>) -> usize {
+        indexes_a
+            .iter()
+            .zip(indexes_b.iter())
+            .filter(|(a, b)| a.unwrap() == b.unwrap())
+            .count()
     }
 }

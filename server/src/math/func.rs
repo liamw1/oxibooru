@@ -50,6 +50,7 @@ mod test {
         assert_eq!(symmetric_linspace(0, 5, 3), vec![0, 3, 5]);
         assert_eq!(symmetric_linspace(0, 100, 6), vec![0, 20, 40, 60, 80, 100]);
         assert_eq!(symmetric_linspace(0, 100, 7), vec![0, 17, 33, 50, 67, 83, 100]);
+        assert_eq!(symmetric_linspace(100, 0, 7), vec![100, 83, 67, 50, 33, 17, 0]);
 
         assert_eq!(left_linspace(0, 2, 0), vec![]);
         assert_eq!(left_linspace(0, 2, 1), vec![0]);
@@ -58,5 +59,6 @@ mod test {
         assert_eq!(left_linspace(0, 5, 3), vec![0, 2, 3]);
         assert_eq!(left_linspace(0, 100, 6), vec![0, 17, 33, 50, 67, 83]);
         assert_eq!(left_linspace(0, 100, 7), vec![0, 14, 29, 43, 57, 71, 86]);
+        assert_eq!(left_linspace(100, 0, 7), vec![100, 86, 71, 57, 43, 29, 14]);
     }
 }
