@@ -24,7 +24,7 @@ impl<L, R> CartesianProduct<L, R> {
     }
 
     pub fn bounds(&self) -> IRect<usize> {
-        IRect::new_zero_based(self.left.len(), self.right.len())
+        IRect::new_zero_based(self.left.len() - 1, self.right.len() - 1)
     }
 
     pub fn iter<'a>(&'a self) -> CartesianProductIter<'a, L, R> {
@@ -42,10 +42,6 @@ impl<L, R> CartesianProduct<L, R> {
         let signed_bounds = self.bounds().to_signed().unwrap();
         signed_bounds.iter().zip(self.iter())
     }
-
-    fn last_element_index(&self) -> IPoint2<usize> {
-        IPoint2::new(self.left.len() - 1, self.right.len() - 1)
-    }
 }
 
 pub struct CartesianProductIter<'a, L, R> {
@@ -56,7 +52,7 @@ pub struct CartesianProductIter<'a, L, R> {
 impl<'a, L, R> Iterator for CartesianProductIter<'a, L, R> {
     type Item = (&'a L, &'a R);
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current > self.cartesian_product.last_element_index() {
+        if self.current > self.cartesian_product.bounds().max_corner() {
             return None;
         }
 
@@ -66,7 +62,7 @@ impl<'a, L, R> Iterator for CartesianProductIter<'a, L, R> {
             self.current.j += 1;
         } else {
             self.current.j = 0;
-            self.current.i += 1
+            self.current.i += 1;
         }
 
         Some(self.cartesian_product.at(current.i, current.j))

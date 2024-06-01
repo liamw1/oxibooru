@@ -53,7 +53,7 @@ pub fn generate_indexes(signature: &Vec<u8>) -> Vec<Option<i32>> {
                 .map(|&letter| letter as i8)
                 .map(|letter| letter.clamp(-1, 1))
                 .enumerate()
-                .map(|(i, letter)| i32::from(letter) * NUM_REDUCED_SYMBOLS.pow(i as u32))
+                .map(|(i, letter)| i32::from(letter + 1) * NUM_REDUCED_SYMBOLS.pow(i as u32))
                 .sum()
         })
         .map(|index| Some(index)) // Need this to conform to SQL type
@@ -68,8 +68,8 @@ const CROP_PERCENTILE: u64 = 5;
 const NUM_GRID_POINTS: u32 = 9;
 const IDENTICAL_TOLERANCE: i16 = 2;
 const LUMINANCE_LEVELS: u32 = 2;
-const NUM_LETTERS: u32 = 16;
-const NUM_WORDS: u32 = 63;
+const NUM_LETTERS: u32 = 10;
+const NUM_WORDS: u32 = 100;
 const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS as usize + 1;
 
 fn grid_square_radius(width: u32, height: u32) -> u32 {
@@ -202,35 +202,27 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
     The original paper describes computing the differences of each grid square with its neighbors.
     Grids squares on the boundaries of the 9x9 grid will have no neighbors, so differences between them
     are considered 0. However, I would think that this would increase the likelihood of random
-    signatures matching on certain words. It may be better to increase the size of the grid to 11x11
-    and compute a signature using the interior 9x9 grid squares, which will all have neighbors.
-    TODO: Test to see if this approach gets better discrimination on images.
+    signatures matching on certain words. I've simply excluded these differences from the final signature.
 */
-fn compute_differentials(mean_matrix: &Array2D<u8>) -> Vec<[i16; 8]> {
-    //let center = NUM_GRID_POINTS / 2;
-    //let bounds = IRect::new_centered_square(IPoint2::new(center, center), center - 1);
+fn compute_differentials(mean_matrix: &Array2D<u8>) -> Vec<i16> {
     mean_matrix
         .signed_enumerate()
-        //.filter(|(matrix_index, _)| bounds.contains(*matrix_index))
-        .map(|(matrix_index, &center_value)| {
+        .flat_map(|(matrix_index, &center_value)| {
             IRect::new_centered_square(matrix_index, 1)
                 .iter()
-                .filter(|&neighbor| neighbor != matrix_index)
-                .map(|neighbor| match mean_matrix.get(neighbor) {
-                    None => 0, // Difference assumed to be 0 if neighbor is outside grid bounds
-                    Some(neighbor_value) => i16::from(neighbor_value) - i16::from(center_value),
+                .filter(move |&neighbor| neighbor != matrix_index)
+                .filter_map(move |neighbor| {
+                    mean_matrix
+                        .get(neighbor)
+                        .map(|neighbor_value| i16::from(neighbor_value) - i16::from(center_value))
                 })
-                .collect::<Vec<_>>()
-                .try_into()
-                .expect("Expected exactly eight neighbors")
         })
         .collect()
 }
 
-fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &Vec<[i16; 8]>, filter: F) -> Vec<Option<i16>> {
+fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &Vec<i16>, filter: F) -> Vec<Option<i16>> {
     let mut filtered_values = differentials
         .iter()
-        .flat_map(|neighbors| neighbors.iter())
         .filter(|&&diff| filter(diff))
         .map(|&diff| diff)
         .collect::<Vec<_>>();
@@ -248,7 +240,7 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &Vec<[i16; 8]>, filter: F)
         .collect::<Vec<_>>()
 }
 
-fn normalize(differentials: &Vec<[i16; 8]>) -> Vec<u8> {
+fn normalize(differentials: &Vec<i16>) -> Vec<u8> {
     let dark_cutoffs = compute_cutoffs(differentials, |diff: i16| diff < -IDENTICAL_TOLERANCE);
     let light_cutoffs = compute_cutoffs(differentials, |diff: i16| diff > IDENTICAL_TOLERANCE);
 
@@ -259,7 +251,6 @@ fn normalize(differentials: &Vec<[i16; 8]>) -> Vec<u8> {
 
     differentials
         .iter()
-        .flat_map(|neighbors| neighbors.iter())
         .map(|&diff| {
             for (level, &cutoff) in cutoffs.iter().enumerate() {
                 match cutoff {
@@ -294,12 +285,18 @@ mod test {
         let image4 = image::open(asset_path(Path::new("jpeg-similar.jpg"))).unwrap_or_else(|err| panic!("{err}"));
         let sig4 = compute_signature(&image4);
 
+        // println!("");
+        // println!("Distances:");
+        // println!("{}", normalized_distance(&sig3, &sig4));
+        // println!("{}", normalized_distance(&sig1, &sig3));
+        // println!("");
+
         // Identical images of different formats
         assert_eq!(normalized_distance(&sig1, &sig2), 0.0);
         // Similar images of same format
-        assert!((normalized_distance(&sig3, &sig4) - 0.14279835125009815).abs() < 1e-8);
+        assert!((normalized_distance(&sig3, &sig4) - 0.16047177803512905).abs() < 1e-8);
         // Different images
-        assert!((normalized_distance(&sig1, &sig3) - 0.5956693016498599).abs() < 1e-8);
+        assert!((normalized_distance(&sig1, &sig3) - 0.7024853863965695).abs() < 1e-8);
     }
 
     #[test]
@@ -332,10 +329,11 @@ mod test {
         let lisa_cat_signature = compute_signature(&lisa_cat);
         let lisa_cat_indexes = generate_indexes(&lisa_cat_signature);
 
-        // let starry_night = image::open(asset_path(Path::new("starry_night.jpg"))).unwrap_or_else(|err| panic!("{err}"));
-        // let starry_night_signature = compute_signature(&starry_night);
-        // let starry_night_indexes = generate_indexes(&starry_night_signature);
-        //
+        let starry_night = image::open(asset_path(Path::new("starry_night.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let starry_night_signature = compute_signature(&starry_night);
+        let starry_night_indexes = generate_indexes(&starry_night_signature);
+
+        // println!("");
         // println!("Distances:");
         // println!("{}", normalized_distance(&lisa_signature, &lisa_border_signature));
         // println!("{}", normalized_distance(&lisa_signature, &lisa_large_border_signature));
@@ -350,18 +348,20 @@ mod test {
         // println!("{}", matching_indexes(&lisa_indexes, &lisa_filtered_indexes));
         // println!("{}", matching_indexes(&lisa_indexes, &lisa_cat_indexes));
         // println!("{}", matching_indexes(&lisa_indexes, &starry_night_indexes));
+        // println!("");
 
         assert!(normalized_distance(&lisa_signature, &lisa_border_signature) < 0.2);
         assert!(normalized_distance(&lisa_signature, &lisa_large_border_signature) < 0.2);
         assert!(normalized_distance(&lisa_signature, &lisa_wide_signature) < 0.3);
-        assert!(normalized_distance(&lisa_signature, &lisa_filtered_signature) < 0.45);
-        assert!(normalized_distance(&lisa_signature, &lisa_cat_signature) < 0.5);
+        assert!(normalized_distance(&lisa_signature, &lisa_filtered_signature) < 0.5);
+        assert!(normalized_distance(&lisa_signature, &lisa_cat_signature) < 0.55);
 
         assert!(matching_indexes(&lisa_indexes, &lisa_border_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_large_border_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_wide_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_filtered_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_cat_indexes) > 0);
+        assert_eq!(matching_indexes(&lisa_indexes, &starry_night_indexes), 0);
     }
 
     #[test]
