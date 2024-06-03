@@ -35,6 +35,7 @@ impl<L, R> CartesianProduct<L, R> {
     }
 
     pub fn enumerate(&self) -> std::iter::Zip<IRectIter<usize>, CartesianProductIter<L, R>> {
+        // This is a bit wasteful, since CartesianProductIter already contains an index
         self.bounds().iter().zip(self.iter())
     }
 
