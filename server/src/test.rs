@@ -17,12 +17,16 @@ pub fn establish_connection_or_panic() -> PgConnection {
     crate::establish_connection().unwrap_or_else(|err| panic!("{err}"))
 }
 
+pub fn use_dist_config() {
+    std::env::set_var("USE_DIST_CONFIG", "1");
+}
+
 pub fn asset_path(relative_path: &Path) -> PathBuf {
-    let mut project_root = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|err| panic!("{err}")));
-    project_root.push("assets");
-    project_root.push("test");
-    project_root.push(relative_path);
-    project_root
+    let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|err| panic!("{err}")));
+    path.push("assets");
+    path.push("test");
+    path.push(relative_path);
+    path
 }
 
 // Used in place of conn.test_transaction as that function doesn't give any useful information on failure

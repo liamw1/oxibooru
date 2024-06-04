@@ -1,3 +1,5 @@
+pub mod api;
+pub mod config;
 pub mod func;
 pub mod image;
 pub mod math;

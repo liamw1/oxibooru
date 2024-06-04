@@ -7,6 +7,8 @@ use diesel::{deserialize, AsExpression};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
 
+pub struct ParseUserPrivilegeError;
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, AsExpression, FromSqlRow, FromPrimitive, ToPrimitive)]
 #[diesel(sql_type = SmallInt)]
 pub enum UserPrivilege {
@@ -16,6 +18,21 @@ pub enum UserPrivilege {
     Power,
     Moderator,
     Administrator,
+}
+
+impl std::str::FromStr for UserPrivilege {
+    type Err = ParseUserPrivilegeError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "anonymous" => Ok(UserPrivilege::Anonymous),
+            "restricted" => Ok(UserPrivilege::Restricted),
+            "regular" => Ok(UserPrivilege::Regular),
+            "power" => Ok(UserPrivilege::Power),
+            "moderator" => Ok(UserPrivilege::Moderator),
+            "administrator" => Ok(UserPrivilege::Administrator),
+            _ => Err(ParseUserPrivilegeError),
+        }
+    }
 }
 
 impl<DB: Backend> ToSql<SmallInt, DB> for UserPrivilege

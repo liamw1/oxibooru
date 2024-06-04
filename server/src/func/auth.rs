@@ -1,9 +1,12 @@
+use crate::config::CONFIG;
+use crate::model::privilege::UserPrivilege;
 use crate::model::user::{User, UserToken};
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use argon2::{Algorithm, Params, Version};
 use chrono::Utc;
 use once_cell::sync::Lazy;
+use std::str::FromStr;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -32,6 +35,19 @@ pub fn is_valid_token(user_token: &UserToken) -> bool {
     user_token.enabled && !expired
 }
 
+pub fn has_privilege(user: &User, action_name: &str) -> bool {
+    let required_privilege = match CONFIG
+        .get("privileges")
+        .and_then(|table| table.get(action_name))
+        .and_then(|parsed| parsed.as_str())
+        .and_then(|name| UserPrivilege::from_str(name).ok())
+    {
+        Some(p) => p,
+        None => return false,
+    };
+    user.rank >= required_privilege
+}
+
 static PEPPER: Lazy<String> = Lazy::new(|| std::env::var("PEPPER").unwrap_or_else(|err| panic!("{err}")));
 static ARGON_CONTEXT: Lazy<Argon2> = Lazy::new(|| {
     Argon2::new_with_secret(PEPPER.as_bytes(), Algorithm::default(), Version::default(), Params::default())
@@ -43,23 +59,21 @@ mod test {
     use super::*;
     use crate::test::*;
     use chrono::{DateTime, Days, Utc};
-    use diesel::prelude::*;
 
     #[test]
     fn hash_password() {
-        let user = establish_connection_or_panic().test_transaction(|conn| create_test_user(conn, TEST_USERNAME));
+        let user = test_transaction(|conn| create_test_user(conn, TEST_USERNAME));
         assert!(is_valid_password(&user, TEST_PASSWORD))
     }
 
     #[test]
     fn validate_token() {
-        let mut conn = establish_connection_or_panic();
         let future_time = Utc::now().checked_add_days(Days::new(1)).unwrap();
 
-        let permanent_user_token = create_token(&mut conn, true, None);
-        let temporary_user_token = create_token(&mut conn, true, Some(future_time));
-        let expired_user_token = create_token(&mut conn, true, Some(Utc::now()));
-        let disabled_user_token = create_token(&mut conn, false, None);
+        let permanent_user_token = create_token(true, None);
+        let temporary_user_token = create_token(true, Some(future_time));
+        let expired_user_token = create_token(true, Some(Utc::now()));
+        let disabled_user_token = create_token(false, None);
 
         assert!(is_valid_token(&permanent_user_token));
         assert!(is_valid_token(&temporary_user_token));
@@ -67,8 +81,22 @@ mod test {
         assert!(!is_valid_token(&disabled_user_token));
     }
 
-    fn create_token(conn: &mut PgConnection, enabled: bool, expiration_time: Option<DateTime<Utc>>) -> UserToken {
-        conn.test_transaction(|conn| {
+    #[test]
+    fn privilege() {
+        use_dist_config();
+        test_transaction(|conn| {
+            let user = create_test_user(conn, TEST_USERNAME)?;
+            assert!(has_privilege(&user, "user-create-self"));
+            assert!(has_privilege(&user, "post-list"));
+            assert!(!has_privilege(&user, "user-edit-self-rank"));
+            assert!(!has_privilege(&user, "user-delete-any"));
+            assert!(!has_privilege(&user, "fake-action"));
+            Ok(())
+        });
+    }
+
+    fn create_token(enabled: bool, expiration_time: Option<DateTime<Utc>>) -> UserToken {
+        test_transaction(|conn| {
             create_test_user(conn, TEST_USERNAME)
                 .and_then(|user| create_test_user_token(conn, &user, enabled, expiration_time))
         })
