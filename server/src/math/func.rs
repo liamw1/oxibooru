@@ -43,7 +43,7 @@ mod test {
 
     #[test]
     fn create_linspace() {
-        assert_eq!(symmetric_linspace(0, 2, 0), vec![]);
+        assert_eq!(symmetric_linspace(0, 2, 0), Vec::<i32>::new());
         assert_eq!(symmetric_linspace(0, 2, 1), vec![1]);
         assert_eq!(symmetric_linspace(0, 2, 2), vec![0, 2]);
         assert_eq!(symmetric_linspace(0, 2, 3), vec![0, 1, 2]);
@@ -52,7 +52,7 @@ mod test {
         assert_eq!(symmetric_linspace(0, 100, 7), vec![0, 17, 33, 50, 67, 83, 100]);
         assert_eq!(symmetric_linspace(100, 0, 7), vec![100, 83, 67, 50, 33, 17, 0]);
 
-        assert_eq!(left_linspace(0, 2, 0), vec![]);
+        assert_eq!(left_linspace(0, 2, 0), Vec::<i32>::new());
         assert_eq!(left_linspace(0, 2, 1), vec![0]);
         assert_eq!(left_linspace(0, 2, 2), vec![0, 1]);
         assert_eq!(left_linspace(0, 2, 3), vec![0, 1, 1]);
