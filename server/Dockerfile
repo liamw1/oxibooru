@@ -1,76 +1,31 @@
 ARG ALPINE_VERSION=3.13
 
 
-FROM alpine:$ALPINE_VERSION as prereqs
+FROM rust:1.79-alpine as build
 WORKDIR /opt/app
+
+COPY . .
 
 RUN apk --no-cache add \
-        python3 \
-        python3-dev \
-        py3-pip \
-        build-base \
-        libheif \
-        libheif-dev \
-        libavif \
-        libavif-dev \
-        ffmpeg \
-        # from requirements.txt:
-        py3-yaml \
-        py3-psycopg2 \
-        py3-sqlalchemy \
-        py3-certifi \
-        py3-numpy \
-        py3-pillow \
-        py3-pynacl \
-        py3-tz \
-        py3-pyrfc3339
-RUN pip3 install --no-cache-dir --disable-pip-version-check \
-        "alembic>=0.8.5" \
-        "coloredlogs==5.0" \
-        "pyheif==0.6.1" \
-        "heif-image-plugin>=0.3.2" \
-        yt-dlp \
-        "pillow-avif-plugin~=1.1.0"
-RUN apk --no-cache del py3-pip
-
-COPY ./ /opt/app/
-RUN rm -rf /opt/app/szurubooru/tests
+        musl-dev \
+        postgresql-dev
+RUN cargo build --release
 
 
-FROM --platform=$BUILDPLATFORM prereqs as testing
+FROM alpine:$ALPINE_VERSION as release
 WORKDIR /opt/app
 
-RUN apk --no-cache add \
-        py3-pip \
-        py3-pytest \
-        py3-pytest-cov \
-        postgresql \
- && pip3 install --no-cache-dir --disable-pip-version-check \
-        pytest-pgsql \
-        freezegun \
- && apk --no-cache del py3-pip \
- && addgroup app \
- && adduser -SDH -h /opt/app -g '' -G app app \
- && chown app:app /opt/app
-
-COPY --chown=app:app ./szurubooru/tests /opt/app/szurubooru/tests/
-
-ENV TEST_ENVIRONMENT="true"
-USER app
-ENTRYPOINT ["pytest", "--tb=short"]
-CMD ["szurubooru/"]
-
-
-FROM prereqs as release
-WORKDIR /opt/app
+COPY --from=build /opt/app/assets assets
+COPY --from=build /opt/app/target/release/server server
+COPY --from=build /opt/app/.env .env
+COPY --from=build /opt/app/config.toml config.toml
+COPY --from=build /opt/app/docker-start.sh docker-start.sh
 
 ARG PUID=1000
 ARG PGID=1000
 
 RUN apk --no-cache add \
         dumb-init \
-        py3-setuptools \
-        py3-waitress \
  && mkdir -p /opt/app /data \
  && addgroup -g ${PGID} app \
  && adduser -SDH -h /opt/app -g '' -G app -u ${PUID} app \

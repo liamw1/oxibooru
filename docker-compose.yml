@@ -2,12 +2,11 @@
 ##
 ## Use this as a template to set up docker-compose, or as guide to set up other
 ## orchestration services
-version: '2'
 
 services:
 
   server:
-    image: szurubooru/server:latest
+    build: server
     depends_on:
       - sql
     environment:
@@ -24,10 +23,10 @@ services:
       THREADS:
     volumes:
       - "${MOUNT_DATA}:/data"
-      - "./server/config.yaml:/opt/app/config.yaml"
+      - "./server/config.toml:/opt/app/config.toml"
 
   client:
-    image: szurubooru/client:latest
+    build: client
     depends_on:
       - server
     environment:

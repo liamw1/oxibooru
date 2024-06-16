@@ -1,15 +1,15 @@
-# Linter configs
-pyproject.toml
-.flake8
-
-# Python requirements files
-requirements.txt
-dev-requirements.txt
-
 # Docker build files
 Dockerfile
 .dockerignore
-hooks/
 
-# User configured config file
-config.yaml
+# Config template
+config.toml.dist
+
+# Cargo lock file
+Cargo.lock
+
+# Build artifacts
+target
+
+# Test files
+assets

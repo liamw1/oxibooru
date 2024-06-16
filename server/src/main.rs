@@ -31,6 +31,8 @@ pub fn establish_connection() -> Result<PgConnection, ConnectionError> {
 
 #[tokio::main]
 async fn main() {
+    println!("hello world!");
+
     // GET /hello/warp => 200 OK with body "Hello, warp!"
     let hello = warp::path!("hello" / String).map(|name| format!("Hello, {}!", name));
 
