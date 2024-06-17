@@ -11,30 +11,31 @@ mod test;
 pub mod util;
 
 use diesel::prelude::*;
-use std::result::Result;
-use thiserror::Error;
+use warp::http::StatusCode;
 use warp::Filter;
 
-#[derive(Debug, Error)]
-#[error(transparent)]
-pub enum ConnectionError {
-    Dotenvy(#[from] dotenvy::Error),
-    EnvVar(#[from] std::env::VarError),
-    DieselConnection(#[from] diesel::ConnectionError),
-}
-
-pub fn establish_connection() -> Result<PgConnection, ConnectionError> {
-    dotenvy::dotenv()?;
-    let database_url = std::env::var("DATABASE_URL")?;
-    PgConnection::establish(&database_url).map_err(ConnectionError::DieselConnection)
+pub fn establish_connection() -> ConnectionResult<PgConnection> {
+    let database_url = match std::env::var("DOCKER_DEPLOYMENT") {
+        Ok(_) => "postgres://postgres:admin@host.docker.internal/booru",
+        Err(_) => "postgres://postgres:admin@localhost/booru",
+    };
+    PgConnection::establish(&database_url)
 }
 
 #[tokio::main]
 async fn main() {
-    println!("hello world!");
+    let get_info = warp::get()
+        .and(warp::path("info"))
+        .and(warp::path::end())
+        .and_then(api::info::get_info);
 
-    // GET /hello/warp => 200 OK with body "Hello, warp!"
-    let hello = warp::path!("hello" / String).map(|name| format!("Hello, {}!", name));
+    let catch_all = warp::any().map(|| {
+        println!("Unimplemented request!");
+        warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
+    });
 
-    warp::serve(hello).run(([127, 0, 0, 1], 3030)).await;
+    let routes = get_info.or(catch_all);
+
+    // Define the server address and run the warp server
+    warp::serve(routes).run(([0, 0, 0, 0], 6666)).await;
 }

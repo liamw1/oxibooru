@@ -48,7 +48,12 @@ pub fn has_privilege(user: &User, action_name: &str) -> bool {
     user.rank >= required_privilege
 }
 
-static PEPPER: Lazy<String> = Lazy::new(|| std::env::var("PEPPER").unwrap_or_else(|err| panic!("{err}")));
+static PEPPER: Lazy<&'static str> = Lazy::new(|| {
+    CONFIG
+        .get("secret")
+        .and_then(|parsed| parsed.as_str())
+        .unwrap_or_else(|| panic!("No secret found in config.toml"))
+});
 static ARGON_CONTEXT: Lazy<Argon2> = Lazy::new(|| {
     Argon2::new_with_secret(PEPPER.as_bytes(), Algorithm::default(), Version::default(), Params::default())
         .unwrap_or_else(|err| panic!("{err}"))

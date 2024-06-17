@@ -10,12 +10,21 @@ pub static CONFIG: Lazy<Table> = Lazy::new(|| {
 });
 
 fn get_config_path() -> PathBuf {
-    let filename = match std::env::var("USE_DIST_CONFIG") {
-        Ok(_) => "config.toml.dist",
-        Err(_) => "config.toml",
-    };
-
-    let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|err| panic!("{err}")));
-    path.push(filename);
-    path
+    // Use config.toml.dist if in development environment, config.toml if in production
+    match std::env::var("CARGO_MANIFEST_DIR") {
+        Ok(var) => {
+            let mut project_path = PathBuf::from(var);
+            project_path.push("config.toml.dist");
+            project_path
+        }
+        Err(_) => {
+            let exe_path = std::env::current_exe().unwrap_or_else(|err| panic!("{err}"));
+            let mut parent_path = exe_path
+                .parent()
+                .unwrap_or_else(|| panic!("Exe path has no parent"))
+                .to_owned();
+            parent_path.push("config.toml");
+            parent_path
+        }
+    }
 }

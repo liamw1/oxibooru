@@ -1,3 +1,34 @@
+# Shown in the website title and on the front page
+name = "oxibooru"
+
+# Used to salt the users' password hashes and generate filenames for static content
+secret = "change"
+
+# Delete thumbnails and source files on post delete
+# Original functionality is false, to mitigate the impacts of admins going on unchecked post purges
+delete_source_files = false
+
+enable_safety = true
+
+# Don't make these more restrictive unless you want to annoy people
+# If you do customize them, make sure to update the instructions in the registration form template as well
+password_regex  = "^.{5,}$"
+username_regex  = "^[a-zA-Z0-9_-]{1,32}$"
+
+tag_name_regex     = "^\\S+$"
+tag_category_regex = "^[^\\s%+#/]+$"
+
+pool_name_regex     = "^\\S+$"
+pool_category_regex = "^[^\\s%+#/]+$"
+
+default_user_rank = "regular"
+
+[thumbnails]
+avatar_width  = 300
+avatar_height = 300
+post_width    = 300
+post_height   = 300
+
 [privileges]
 user-create-self            = "anonymous" # Registration permission
 user-create-any             = "administrator"

@@ -24,6 +24,8 @@ services:
     volumes:
       - "${MOUNT_DATA}:/data"
       - "./server/config.toml:/opt/app/config.toml"
+    ports:
+      - 6666:6666
 
   client:
     build: client
