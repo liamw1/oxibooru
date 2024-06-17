@@ -18,7 +18,6 @@ WORKDIR /opt/app
 ENV DOCKER_DEPLOYMENT=1
 
 COPY --from=build /opt/app/target/release/server server
-COPY --from=build /opt/app/.env .env
 COPY --from=build /opt/app/config.toml config.toml
 COPY --from=build /opt/app/docker-start.sh docker-start.sh
 

@@ -24,10 +24,7 @@ pub fn establish_connection() -> ConnectionResult<PgConnection> {
 
 #[tokio::main]
 async fn main() {
-    let get_info = warp::get()
-        .and(warp::path("info"))
-        .and(warp::path::end())
-        .and_then(api::info::get_info);
+    let get_info = warp::get().and(warp::path!("info")).and_then(api::info::get_info);
 
     let catch_all = warp::any().map(|| {
         println!("Unimplemented request!");
