@@ -1,4 +1,4 @@
-use crate::func::auth;
+use crate::auth::hash;
 use crate::model::comment::{Comment, CommentScore, NewComment, NewCommentScore};
 use crate::model::post::{NewPostFavorite, NewPostFeature, NewPostScore, Post, PostFavorite, PostFeature, PostScore};
 use crate::model::privilege::UserPrivilege;
@@ -15,7 +15,7 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub enum UserCreationError {
-    Authentication(#[from] auth::AuthenticationError),
+    Authentication(#[from] crate::auth::AuthenticationError),
     Insertion(#[from] diesel::result::Error),
 }
 
@@ -56,7 +56,7 @@ impl User {
         rank: UserPrivilege,
     ) -> Result<Self, UserCreationError> {
         let salt = SaltString::generate(&mut OsRng);
-        let hash = auth::hash_password(password, salt.as_str())?;
+        let hash = hash::hash_password(password, salt.as_str())?;
         let new_user = NewUser {
             name,
             password_hash: &hash,

@@ -2149,11 +2149,15 @@ data.
         "featuringUser": <user>,
         "serverTime": <server-time>,
         "config": {
+            "name": <name>,
             "userNameRegex": <user-name-regex>,
             "passwordRegex": <password-regex>,
             "tagNameRegex": <tag-name-regex>,
             "tagCategoryNameRegex": <tag-category-name-regex>,
             "defaultUserRank": <default-rank>,
+            "enableSafety": <enable-safety>,
+            "contact_email": <contact-email>,
+            "canSendMails": <can-send-mails>,
             "privileges": <privileges>
         }
     }
