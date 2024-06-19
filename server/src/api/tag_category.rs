@@ -1,4 +1,5 @@
 use crate::api::ApiError;
+use crate::model::rank::UserRank;
 use crate::model::tag::TagCategory;
 use crate::schema::tag;
 use crate::schema::tag_category;
@@ -8,8 +9,8 @@ use serde::Serialize;
 use warp::reject::Rejection;
 use warp::reply::Reply;
 
-pub async fn list_tag_categories() -> Result<Box<dyn Reply>, Rejection> {
-    Ok(match collect_tag_categories() {
+pub async fn list_tag_categories(privilege: UserRank) -> Result<Box<dyn Reply>, Rejection> {
+    Ok(match collect_tag_categories(privilege) {
         Ok(categories) => Box::new(warp::reply::json(&categories)),
         Err(err) => Box::new(err.to_reply()),
     })
@@ -30,9 +31,12 @@ struct TagCategoryList {
     results: Vec<TagCategoryInfo>,
 }
 
-fn collect_tag_categories() -> Result<TagCategoryList, ApiError> {
-    let mut conn = crate::establish_connection()?;
+fn collect_tag_categories(privilege: UserRank) -> Result<TagCategoryList, ApiError> {
+    if !privilege.has_permission_to("tag_categories:list") {
+        return Err(ApiError::InsufficientPrivileges);
+    }
 
+    let mut conn = crate::establish_connection()?;
     let tag_categories = tag_category::table.select(TagCategory::as_select()).load(&mut conn)?;
     let tag_category_usages: Vec<Option<i64>> = tag_category::table
         .left_join(tag::table.on(tag::category_id.eq(tag_category::id)))

@@ -1,7 +1,7 @@
 use crate::auth::hash;
 use crate::model::comment::{Comment, CommentScore, NewComment, NewCommentScore};
 use crate::model::post::{NewPostFavorite, NewPostFeature, NewPostScore, Post, PostFavorite, PostFeature, PostScore};
-use crate::model::privilege::UserPrivilege;
+use crate::model::rank::UserRank;
 use crate::model::TableName;
 use crate::schema::{comment, comment_score, post, post_favorite, post_feature, post_score, user, user_token};
 use crate::util;
@@ -25,7 +25,7 @@ pub struct NewUser<'a> {
     pub name: &'a str,
     pub password_hash: &'a str,
     pub password_salt: &'a str,
-    pub rank: UserPrivilege,
+    pub rank: UserRank,
 }
 
 #[derive(Debug, PartialEq, Eq, Identifiable, Queryable, Selectable)]
@@ -37,7 +37,7 @@ pub struct User {
     pub password_hash: String,
     pub password_salt: String,
     pub email: Option<String>,
-    pub rank: UserPrivilege,
+    pub rank: UserRank,
     pub creation_time: DateTime<Utc>,
     pub last_login_time: DateTime<Utc>,
 }
@@ -49,12 +49,7 @@ impl TableName for User {
 }
 
 impl User {
-    pub fn new(
-        conn: &mut PgConnection,
-        name: &str,
-        password: &str,
-        rank: UserPrivilege,
-    ) -> Result<Self, UserCreationError> {
+    pub fn new(conn: &mut PgConnection, name: &str, password: &str, rank: UserRank) -> Result<Self, UserCreationError> {
         let salt = SaltString::generate(&mut OsRng);
         let hash = hash::hash_password(password, salt.as_str())?;
         let new_user = NewUser {

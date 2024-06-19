@@ -1,5 +1,6 @@
 use crate::api::ApiError;
 use crate::model::pool::PoolCategory;
+use crate::model::rank::UserRank;
 use crate::schema::pool;
 use crate::schema::pool_category;
 use diesel::dsl::count;
@@ -8,8 +9,8 @@ use serde::Serialize;
 use warp::reject::Rejection;
 use warp::reply::Reply;
 
-pub async fn list_pool_categories() -> Result<Box<dyn Reply>, Rejection> {
-    Ok(match collect_pool_categories() {
+pub async fn list_pool_categories(privilege: UserRank) -> Result<Box<dyn Reply>, Rejection> {
+    Ok(match collect_pool_categories(privilege) {
         Ok(categories) => Box::new(warp::reply::json(&categories)),
         Err(err) => Box::new(err.to_reply()),
     })
@@ -29,9 +30,12 @@ struct PoolCategoryList {
     results: Vec<PoolCategoryInfo>,
 }
 
-fn collect_pool_categories() -> Result<PoolCategoryList, ApiError> {
-    let mut conn = crate::establish_connection()?;
+fn collect_pool_categories(privilege: UserRank) -> Result<PoolCategoryList, ApiError> {
+    if !privilege.has_permission_to("pool_categories:list") {
+        return Err(ApiError::InsufficientPrivileges);
+    }
 
+    let mut conn = crate::establish_connection()?;
     let pool_categories = pool_category::table.select(PoolCategory::as_select()).load(&mut conn)?;
     let pool_category_usages: Vec<Option<i64>> = pool_category::table
         .left_join(pool::table.on(pool::category_id.eq(pool_category::id)))

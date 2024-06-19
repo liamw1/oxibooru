@@ -1,5 +1,5 @@
 use crate::model::post::{NewPost, NewPostNote, NewPostSignature, Post, PostNote, PostSignature};
-use crate::model::privilege::UserPrivilege;
+use crate::model::rank::UserRank;
 use crate::model::user::{NewUser, NewUserToken, User, UserToken};
 use crate::schema::{post, post_note, post_signature, user, user_token};
 use chrono::{DateTime, Utc};
@@ -7,7 +7,7 @@ use diesel::prelude::*;
 use diesel::result::Error;
 use std::path::{Path, PathBuf};
 
-pub const TEST_PRIVILEGE: UserPrivilege = UserPrivilege::Regular;
+pub const TEST_PRIVILEGE: UserRank = UserRank::Regular;
 pub const TEST_USERNAME: &str = "test_user";
 pub const TEST_PASSWORD: &str = "test_password";
 pub const TEST_SALT: &str = "test_salt";

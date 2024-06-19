@@ -14,6 +14,7 @@ use diesel::prelude::*;
 use once_cell::sync::Lazy;
 use warp::http::StatusCode;
 use warp::Filter;
+use model::rank::UserRank;
 
 pub fn establish_connection() -> ConnectionResult<PgConnection> {
     PgConnection::establish(&DATABASE_URL)
@@ -31,12 +32,22 @@ async fn main() {
     //     .and(warp::header::headers_cloned())
     //     .map(|h| println!("{:?}", h));
 
+    let default_auth = warp::any().map(|| UserRank::Anonymous);
+    let auth = warp::header::<String>("Authorization")
+        .map(|_token| 
+            // TODO
+            UserRank::Anonymous)
+        .or(default_auth)
+        .unify();
+
     let get_info = warp::get().and(warp::path!("info")).and_then(api::info::get_info);
     let list_tag_categories = warp::get()
         .and(warp::path!("tag-categories"))
+        .and(auth)
         .and_then(api::tag_category::list_tag_categories);
     let list_pool_categories = warp::get()
         .and(warp::path!("pool-categories"))
+        .and(auth)
         .and_then(api::pool_category::list_pool_categories);
 
     let catch_all = warp::any().map(|| {
