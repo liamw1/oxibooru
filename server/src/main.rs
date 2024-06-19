@@ -32,13 +32,19 @@ async fn main() {
     //     .map(|h| println!("{:?}", h));
 
     let get_info = warp::get().and(warp::path!("info")).and_then(api::info::get_info);
+    let list_tag_categories = warp::get()
+        .and(warp::path!("tag-categories"))
+        .and_then(api::tag_category::list_tag_categories);
+    let list_pool_categories = warp::get()
+        .and(warp::path!("pool-categories"))
+        .and_then(api::pool_category::list_pool_categories);
 
     let catch_all = warp::any().map(|| {
         println!("Unimplemented request!");
         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
     });
 
-    let routes = get_info.or(catch_all);
+    let routes = get_info.or(list_tag_categories).or(list_pool_categories).or(catch_all);
 
     // Define the server address and run the warp server
     let port: u16 = std::env::var("PORT")

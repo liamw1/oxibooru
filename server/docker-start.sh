@@ -2,5 +2,5 @@
 set -e
 cd /opt/app
 
-echo "Starting szurubooru API on port ${PORT}"
+echo "Starting oxibooru API on port ${PORT}"
 exec ./server

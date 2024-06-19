@@ -68,8 +68,8 @@ const CROP_PERCENTILE: u64 = 5;
 const NUM_GRID_POINTS: u32 = 9;
 const IDENTICAL_TOLERANCE: i16 = 2;
 const LUMINANCE_LEVELS: u32 = 2;
-const NUM_LETTERS: u32 = 10;
 const NUM_WORDS: u32 = 100;
+const NUM_LETTERS: u32 = 10;
 const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS as usize + 1;
 
 fn grid_square_radius(width: u32, height: u32) -> u32 {
@@ -298,9 +298,6 @@ mod test {
         // Different images
         assert!((normalized_distance(&sig1, &sig3) - 0.7024853863965695).abs() < 1e-8);
     }
-
-    #[test]
-    fn image_indexes_regression() {}
 
     #[test]
     fn signature_robustness() {

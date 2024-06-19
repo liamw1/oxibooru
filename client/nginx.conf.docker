@@ -92,7 +92,7 @@ http {
         }
 
         location @badproxy {
-            return 502 "Failed to connect to szurubooru REST API";
+            return 502 "Failed to connect to oxibooru REST API";
             default_type text/plain;
         }
     }

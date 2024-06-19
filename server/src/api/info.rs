@@ -2,22 +2,26 @@ use crate::api::ApiError;
 use crate::config::CONFIG;
 use crate::model::post::Post;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use toml::Table;
 use warp::reject::Rejection;
 use warp::reply::Reply;
 
 pub async fn get_info() -> Result<Box<dyn Reply>, Rejection> {
-    match collect_info() {
-        Ok(info) => Ok(Box::new(warp::reply::json(&info))),
-        Err(err) => err.to_reply().map(|reply| Box::new(reply) as Box<dyn Reply>),
-    }
+    Ok(match collect_info() {
+        Ok(info) => Box::new(warp::reply::json(&info)),
+        Err(err) => Box::new(err.to_reply()),
+    })
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+// TODO: Remove renames by changing references to these names in client
+#[derive(Serialize)]
 struct Info {
+    #[serde(rename(serialize = "postCount"))]
     post_count: i64,
+    #[serde(rename(serialize = "diskUsage"))]
     disk_usage: i64,
+    #[serde(rename(serialize = "serverTime"))]
     server_time: String,
     config: Table,
 }
@@ -31,6 +35,7 @@ fn read_required_table(name: &str) -> &'static Table {
 
 fn collect_info() -> Result<Info, ApiError> {
     let mut conn = crate::establish_connection()?;
+
     let info = Info {
         post_count: Post::count(&mut conn)?,
         disk_usage: 0, // TODO

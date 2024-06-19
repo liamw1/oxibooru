@@ -1,7 +1,21 @@
 use crate::api::ApiError;
+use crate::model::tag::TagCategory;
+use crate::schema::tag;
+use crate::schema::tag_category;
+use diesel::dsl::count;
+use diesel::prelude::*;
+use serde::Serialize;
+use warp::reject::Rejection;
+use warp::reply::Reply;
 
-// pub fn get_tag_categories() -> Result<impl Reply, Rejection> {}
+pub async fn list_tag_categories() -> Result<Box<dyn Reply>, Rejection> {
+    Ok(match collect_tag_categories() {
+        Ok(categories) => Box::new(warp::reply::json(&categories)),
+        Err(err) => Box::new(err.to_reply()),
+    })
+}
 
+#[derive(Serialize)]
 struct TagCategoryInfo {
     version: i32,
     name: String,
@@ -11,18 +25,34 @@ struct TagCategoryInfo {
     default: bool,
 }
 
-fn collect_tag_categories() -> Result<TagCategoryInfo, ApiError> {
-    let header = warp::header::optional::<String>("Authorization");
+#[derive(Serialize)]
+struct TagCategoryList {
+    results: Vec<TagCategoryInfo>,
+}
 
+fn collect_tag_categories() -> Result<TagCategoryList, ApiError> {
     let mut conn = crate::establish_connection()?;
-    let info = TagCategoryInfo {
-        version: 0,
-        name: String::new(),
-        color: String::new(),
-        usages: 0,
-        order: 0,
-        default: false,
-    };
 
-    Ok(info)
+    let tag_categories = tag_category::table.select(TagCategory::as_select()).load(&mut conn)?;
+    let tag_category_usages: Vec<Option<i64>> = tag_category::table
+        .left_join(tag::table.on(tag::category_id.eq(tag_category::id)))
+        .select(count(tag::id).nullable())
+        .group_by(tag_category::id)
+        .order(tag_category::order.asc())
+        .load(&mut conn)?;
+
+    Ok(TagCategoryList {
+        results: tag_categories
+            .into_iter()
+            .zip(tag_category_usages.into_iter())
+            .map(|(category, usages)| TagCategoryInfo {
+                version: 0,
+                name: category.name,
+                color: category.color,
+                usages: usages.unwrap_or(0),
+                order: category.order,
+                default: category.id == 0,
+            })
+            .collect(),
+    })
 }

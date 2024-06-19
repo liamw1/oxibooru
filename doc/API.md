@@ -1,4 +1,4 @@
-`szurubooru` uses REST API for all operations.
+`oxibooru` uses REST API for all operations.
 
 
 
@@ -257,7 +257,7 @@ GET /posts/?fields=id,tags
 
 ## Versioning
 
-To prevent problems with concurrent resource modification, szurubooru
+To prevent problems with concurrent resource modification, oxibooru
 implements optimistic locks using resource versions. Each modifiable resource
 has its `version` returned to the client with `GET` requests. At the same time,
 each `PUT` and `DELETE` request sent by the client must present the same
@@ -2795,7 +2795,7 @@ Note the similarities with the structure of post creation snapshots.
 
 Since the snapshot dictionaries structure is pretty immutable, you probably
 won't see `added property` or `deleted property` around. This observation holds
-true even if the way the snapshots are generated changes - szurubooru stores
+true even if the way the snapshots are generated changes - oxibooru stores
 just the diffs rather than original snapshots, so it wouldn't be able to
 generate a diff against an old version.
 
