@@ -3,12 +3,14 @@ pub mod pool_category;
 pub mod tag_category;
 pub mod user;
 
+use crate::model::rank::UserRank;
 use serde::Serialize;
 use thiserror::Error;
 use warp::http::StatusCode;
 use warp::reply::Json;
 use warp::reply::Response;
 use warp::reply::WithStatus;
+use warp::Filter;
 
 pub enum Reply {
     Json(Json),
@@ -34,6 +36,37 @@ impl warp::Reply for Reply {
             Self::WithStatus(reply) => reply.into_response(),
         }
     }
+}
+
+pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert::Infallible> + Clone {
+    let auth = warp::header::optional("Authorization").map(|_token: Option<String>| UserRank::Anonymous);
+    let log = warp::filters::log::custom(|info| println!("{} {} [{}]", info.method(), info.path(), info.status()));
+
+    let get_info = warp::get().and(warp::path!("info")).and_then(info::get_info);
+    let list_tag_categories = warp::get()
+        .and(warp::path!("tag-categories"))
+        .and(auth)
+        .and_then(tag_category::list_tag_categories);
+    let list_pool_categories = warp::get()
+        .and(warp::path!("pool-categories"))
+        .and(auth)
+        .and_then(pool_category::list_pool_categories);
+    let post_user = warp::post()
+        .and(warp::path!("users"))
+        .and(warp::body::bytes())
+        .and_then(user::post_user);
+
+    let catch_all = warp::any().map(|| {
+        println!("Unimplemented request!");
+        warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
+    });
+
+    get_info
+        .or(list_tag_categories)
+        .or(list_pool_categories)
+        .or(post_user)
+        .or(catch_all)
+        .with(log)
 }
 
 #[derive(Debug, Error)]
