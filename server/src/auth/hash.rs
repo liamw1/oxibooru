@@ -1,4 +1,4 @@
-use crate::auth::AuthenticationError;
+use crate::auth::HashError;
 use crate::config::CONFIG;
 use crate::model::user::{User, UserToken};
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
@@ -7,7 +7,7 @@ use argon2::{Algorithm, Params, Version};
 use chrono::Utc;
 use once_cell::sync::Lazy;
 
-pub fn hash_password(password: &str, salt: &str) -> Result<String, AuthenticationError> {
+pub fn hash_password(password: &str, salt: &str) -> Result<String, HashError> {
     // TODO: Handle hash rotations
     let salt_string = SaltString::encode_b64(salt.as_bytes())?;
     let password_hash = ARGON_CONTEXT.hash_password(password.as_bytes(), &salt_string)?;

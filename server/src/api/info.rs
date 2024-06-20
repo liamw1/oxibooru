@@ -1,17 +1,14 @@
 use crate::api::ApiError;
+use crate::api::Reply;
 use crate::config::CONFIG;
 use crate::model::post::Post;
 use chrono::Utc;
 use serde::Serialize;
 use toml::Table;
 use warp::reject::Rejection;
-use warp::reply::Reply;
 
-pub async fn get_info() -> Result<Box<dyn Reply>, Rejection> {
-    Ok(match collect_info() {
-        Ok(info) => Box::new(warp::reply::json(&info)),
-        Err(err) => Box::new(err.to_reply()),
-    })
+pub async fn get_info() -> Result<Reply, Rejection> {
+    Ok(Reply::from(collect_info()))
 }
 
 // TODO: Remove renames by changing references to these names in client

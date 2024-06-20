@@ -29,6 +29,20 @@ impl UserRank {
     }
 }
 
+impl std::string::ToString for UserRank {
+    fn to_string(&self) -> String {
+        match self {
+            UserRank::Anonymous => "anonymous",
+            UserRank::Restricted => "restricted",
+            UserRank::Regular => "regular",
+            UserRank::Power => "power",
+            UserRank::Moderator => "moderator",
+            UserRank::Administrator => "administrator",
+        }
+        .to_string()
+    }
+}
+
 impl std::str::FromStr for UserRank {
     type Err = ParseUserPrivilegeError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {

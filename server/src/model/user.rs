@@ -1,23 +1,12 @@
-use crate::auth::hash;
 use crate::model::comment::{Comment, CommentScore, NewComment, NewCommentScore};
 use crate::model::post::{NewPostFavorite, NewPostFeature, NewPostScore, Post, PostFavorite, PostFeature, PostScore};
 use crate::model::rank::UserRank;
 use crate::model::TableName;
 use crate::schema::{comment, comment_score, post, post_favorite, post_feature, post_score, user, user_token};
 use crate::util;
-use argon2::password_hash::SaltString;
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use rand_core::OsRng;
 use std::option::Option;
-use thiserror::Error;
-
-#[derive(Debug, Error)]
-#[error(transparent)]
-pub enum UserCreationError {
-    Authentication(#[from] crate::auth::AuthenticationError),
-    Insertion(#[from] diesel::result::Error),
-}
 
 #[derive(Insertable)]
 #[diesel(table_name = user)]
@@ -25,6 +14,7 @@ pub struct NewUser<'a> {
     pub name: &'a str,
     pub password_hash: &'a str,
     pub password_salt: &'a str,
+    pub email: Option<&'a str>,
     pub rank: UserRank,
 }
 
@@ -49,22 +39,6 @@ impl TableName for User {
 }
 
 impl User {
-    pub fn new(conn: &mut PgConnection, name: &str, password: &str, rank: UserRank) -> Result<Self, UserCreationError> {
-        let salt = SaltString::generate(&mut OsRng);
-        let hash = hash::hash_password(password, salt.as_str())?;
-        let new_user = NewUser {
-            name,
-            password_hash: &hash,
-            password_salt: salt.as_str(),
-            rank,
-        };
-        diesel::insert_into(user::table)
-            .values(&new_user)
-            .returning(Self::as_returning())
-            .get_result(conn)
-            .map_err(UserCreationError::from)
-    }
-
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         user::table.count().first(conn)
     }

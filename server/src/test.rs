@@ -43,6 +43,7 @@ pub fn create_test_user(conn: &mut PgConnection, name: &str) -> QueryResult<User
         name,
         password_hash: TEST_HASH,
         password_salt: TEST_SALT,
+        email: None,
         rank: TEST_PRIVILEGE,
     };
     diesel::insert_into(user::table)

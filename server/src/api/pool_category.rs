@@ -1,4 +1,5 @@
 use crate::api::ApiError;
+use crate::api::Reply;
 use crate::model::pool::PoolCategory;
 use crate::model::rank::UserRank;
 use crate::schema::pool;
@@ -7,13 +8,9 @@ use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
 use warp::reject::Rejection;
-use warp::reply::Reply;
 
-pub async fn list_pool_categories(privilege: UserRank) -> Result<Box<dyn Reply>, Rejection> {
-    Ok(match collect_pool_categories(privilege) {
-        Ok(categories) => Box::new(warp::reply::json(&categories)),
-        Err(err) => Box::new(err.to_reply()),
-    })
+pub async fn list_pool_categories(privilege: UserRank) -> Result<Reply, Rejection> {
+    Ok(Reply::from(collect_pool_categories(privilege)))
 }
 
 #[derive(Serialize)]
