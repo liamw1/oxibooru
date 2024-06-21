@@ -1,4 +1,6 @@
+use crate::api;
 use crate::api::ApiError;
+use crate::api::AuthenticationResult;
 use crate::api::Reply;
 use crate::model::pool::PoolCategory;
 use crate::model::rank::UserRank;
@@ -9,8 +11,8 @@ use diesel::prelude::*;
 use serde::Serialize;
 use warp::reject::Rejection;
 
-pub async fn list_pool_categories(privilege: UserRank) -> Result<Reply, Rejection> {
-    Ok(Reply::from(collect_pool_categories(privilege)))
+pub async fn list_pool_categories(auth_result: AuthenticationResult) -> Result<Reply, Rejection> {
+    Ok(Reply::from(api::access_level(auth_result).and_then(read_pool_categories)))
 }
 
 #[derive(Serialize)]
@@ -27,8 +29,8 @@ struct PoolCategoryList {
     results: Vec<PoolCategoryInfo>,
 }
 
-fn collect_pool_categories(privilege: UserRank) -> Result<PoolCategoryList, ApiError> {
-    if !privilege.has_permission_to("pool_categories:list") {
+fn read_pool_categories(access_level: UserRank) -> Result<PoolCategoryList, ApiError> {
+    if !access_level.has_permission_to("pool_categories:list") {
         return Err(ApiError::InsufficientPrivileges);
     }
 

@@ -8,7 +8,7 @@ use toml::Table;
 use warp::reject::Rejection;
 
 pub async fn get_info() -> Result<Reply, Rejection> {
-    Ok(Reply::from(collect_info()))
+    Ok(Reply::from(read_info()))
 }
 
 // TODO: Remove renames by changing references to these names in client
@@ -30,7 +30,7 @@ fn read_required_table(name: &str) -> &'static Table {
         .unwrap_or_else(|| panic!("Table {name} not found in config.toml"))
 }
 
-fn collect_info() -> Result<Info, ApiError> {
+fn read_info() -> Result<Info, ApiError> {
     let mut conn = crate::establish_connection()?;
 
     let info = Info {

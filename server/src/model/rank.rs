@@ -7,7 +7,10 @@ use diesel::FromSqlRow;
 use diesel::{deserialize, AsExpression};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
+use thiserror::Error;
 
+#[derive(Debug, Error)]
+#[error("Failed to parse user privilege")]
 pub struct ParseUserPrivilegeError;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, AsExpression, FromSqlRow, FromPrimitive, ToPrimitive)]
@@ -85,7 +88,7 @@ mod test {
     use crate::test::*;
 
     #[test]
-    fn privilege_ordering() {
+    fn rank_ordering() {
         assert!(UserRank::Restricted < UserRank::Regular);
         assert!(UserRank::Administrator > UserRank::Moderator);
         assert_eq!(UserRank::Regular, UserRank::Regular);
@@ -93,7 +96,7 @@ mod test {
     }
 
     #[test]
-    fn privilege() {
+    fn permission() {
         use_dist_config();
         test_transaction(|conn| {
             let user = create_test_user(conn, TEST_USERNAME)?;

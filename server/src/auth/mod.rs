@@ -1,4 +1,5 @@
 pub mod hash;
+pub mod header;
 
 use crate::config::CONFIG;
 use crate::model::rank::UserRank;

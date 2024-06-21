@@ -3,7 +3,10 @@ pub mod pool_category;
 pub mod tag_category;
 pub mod user;
 
+use crate::auth::header::{self, AuthenticationError};
+use crate::error::ErrorKind;
 use crate::model::rank::UserRank;
+use crate::model::user::User;
 use serde::Serialize;
 use thiserror::Error;
 use warp::http::StatusCode;
@@ -14,7 +17,7 @@ use warp::Filter;
 
 pub enum Reply {
     Json(Json),
-    WithStatus(WithStatus<String>),
+    WithStatus(WithStatus<Json>),
 }
 
 impl Reply {
@@ -23,7 +26,8 @@ impl Reply {
             Ok(response) => Self::Json(warp::reply::json(&response)),
             Err(err) => {
                 println!("ERROR: {err}");
-                Self::WithStatus(warp::reply::with_status(err.to_string(), err.status_code()))
+                let response = warp::reply::json(&err.response());
+                Self::WithStatus(warp::reply::with_status(response, err.status_code()))
             }
         }
     }
@@ -38,9 +42,91 @@ impl warp::Reply for Reply {
     }
 }
 
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub enum ApiError {
+    BadBody(#[from] serde_json::Error),
+    BadHash(#[from] crate::auth::HashError),
+    BadHeader(#[from] warp::http::header::ToStrError),
+    BadUserPrivilege(#[from] crate::model::rank::ParseUserPrivilegeError),
+    FailedAuthentication(#[from] AuthenticationError),
+    FailedConnection(#[from] diesel::ConnectionError),
+    FailedQuery(#[from] diesel::result::Error),
+    #[error("Insufficient privileges")]
+    InsufficientPrivileges,
+}
+
+impl ApiError {
+    fn status_code(&self) -> StatusCode {
+        type QueryError = diesel::result::Error;
+
+        let query_error_status_code = |err: &QueryError| match err {
+            QueryError::NotFound => StatusCode::NOT_FOUND,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        match self {
+            ApiError::BadBody(_) => StatusCode::BAD_REQUEST,
+            ApiError::BadHash(_) => StatusCode::BAD_REQUEST,
+            ApiError::BadHeader(_) => StatusCode::BAD_REQUEST,
+            ApiError::BadUserPrivilege(_) => StatusCode::BAD_REQUEST,
+            ApiError::FailedAuthentication(err) => match err {
+                AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
+                AuthenticationError::FailedQuery(err) => query_error_status_code(err),
+                _ => StatusCode::UNAUTHORIZED,
+            },
+            ApiError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
+            ApiError::FailedQuery(err) => query_error_status_code(err),
+            ApiError::InsufficientPrivileges => StatusCode::FORBIDDEN,
+        }
+    }
+
+    fn category(&self) -> &'static str {
+        match self {
+            ApiError::BadBody(_) => "Bad Body",
+            ApiError::BadHash(_) => "Bad Hash",
+            ApiError::BadHeader(_) => "Bad Header",
+            ApiError::BadUserPrivilege(_) => "Bad User Privilege",
+            ApiError::FailedAuthentication(_) => "Failed Authentication",
+            ApiError::FailedConnection(_) => "Failed Connection",
+            ApiError::FailedQuery(_) => "Failed Query",
+            ApiError::InsufficientPrivileges => "Insufficient Privileges",
+        }
+    }
+
+    fn response(&self) -> ErrorResponse {
+        ErrorResponse {
+            name: self.kind().to_owned(),
+            title: self.category().to_owned(),
+            description: self.to_string(),
+        }
+    }
+}
+
+impl ErrorKind for ApiError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::BadBody(err) => err.kind(),
+            Self::BadHash(err) => err.kind(),
+            Self::BadHeader(_) => "BadHeader",
+            Self::BadUserPrivilege(_) => "BadUserPrivilege",
+            Self::FailedAuthentication(err) => err.kind(),
+            Self::FailedConnection(err) => err.kind(),
+            Self::FailedQuery(err) => err.kind(),
+            Self::InsufficientPrivileges => "InsufficientPrivileges",
+        }
+    }
+}
+
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert::Infallible> + Clone {
-    let auth = warp::header::optional("Authorization").map(|_token: Option<String>| UserRank::Anonymous);
-    let log = warp::filters::log::custom(|info| println!("{} {} [{}]", info.method(), info.path(), info.status()));
+    let auth = warp::header::optional("Authorization").map(|opt_auth: Option<_>| match opt_auth {
+        Some(auth) => header::authenticate_user(auth).map(Some).map_err(ApiError::from),
+        None => Ok(None),
+    });
+    let log = warp::filters::log::custom(|info| {
+        // println!("Header: {:?}", info.request_headers());
+        println!("{} {} [{}]", info.method(), info.path(), info.status());
+    });
 
     let get_info = warp::get().and(warp::path!("info")).and_then(info::get_info);
     let list_tag_categories = warp::get()
@@ -51,8 +137,13 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
         .and(warp::path!("pool-categories"))
         .and(auth)
         .and_then(pool_category::list_pool_categories);
+    let get_user = warp::get()
+        .and(warp::path!("user" / String))
+        .and(auth)
+        .and_then(user::get_user);
     let post_user = warp::post()
         .and(warp::path!("users"))
+        .and(auth)
         .and(warp::body::bytes())
         .and_then(user::post_user);
 
@@ -64,45 +155,34 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
     get_info
         .or(list_tag_categories)
         .or(list_pool_categories)
+        .or(get_user)
         .or(post_user)
         .or(catch_all)
         .with(log)
 }
 
-#[derive(Debug, Error)]
-#[error(transparent)]
-enum ApiError {
-    FailedConnection(#[from] diesel::ConnectionError),
-    FailedQuery(#[from] diesel::result::Error),
-    #[error("Insufficient privileges")]
-    InsufficientPrivileges,
-    #[error("Missing '{0}' in header")]
-    MissingBodyParam(&'static str),
-    BadHeader(#[from] warp::http::header::ToStrError),
-    BadBody(#[from] serde_json::Error),
-    BadHash(#[from] crate::auth::HashError),
+type AuthenticationResult = Result<Option<User>, ApiError>;
+
+#[derive(Serialize)]
+struct ErrorResponse {
+    title: String,
+    name: String,
+    description: String,
 }
 
-impl ApiError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            ApiError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
-            ApiError::FailedQuery(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            ApiError::InsufficientPrivileges => StatusCode::FORBIDDEN,
-            ApiError::MissingBodyParam(_) => StatusCode::BAD_REQUEST,
-            ApiError::BadHeader(_) => StatusCode::BAD_REQUEST,
-            ApiError::BadBody(_) => StatusCode::BAD_REQUEST,
-            ApiError::BadHash(_) => StatusCode::BAD_REQUEST,
-        }
-    }
+fn client_access_level(client: Option<&User>) -> UserRank {
+    client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
+}
+
+fn access_level(auth_result: AuthenticationResult) -> Result<UserRank, ApiError> {
+    auth_result.map(|client| client_access_level(client.as_ref()))
 }
 
 /*
-    We read in request body as bytes because the client doesn't utf-8 encode them,
-    so warp::body::json can't be used. Instead, we interpret incoming bytes as chars,
-    encode them into a String, and then parse as a json. TODO: Fix client
+    For some reason warp::body::json rejects incoming requests, perhaps due to encoding
+    issues. Instead, we will parse the raw bytes into a deserialize-capable structure.
 */
-fn parse_body(body: warp::hyper::body::Bytes) -> Result<serde_json::Value, ApiError> {
-    let utf8_body = body.into_iter().map(|b| b as char).collect::<String>();
-    serde_json::from_str(&utf8_body).map_err(ApiError::from)
+fn parse_body<'a, T: serde::Deserialize<'a>>(body: &'a [u8]) -> Result<T, ApiError> {
+    println!("Incoming body: {}", std::str::from_utf8(body).unwrap_or("ERROR: Failed to parse"));
+    serde_json::from_slice(body).map_err(ApiError::from)
 }

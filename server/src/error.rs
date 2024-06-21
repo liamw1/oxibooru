@@ -1,0 +1,153 @@
+pub trait ErrorKind {
+    fn kind(&self) -> &'static str;
+}
+
+impl ErrorKind for std::env::VarError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::NotPresent => "NotPresent",
+            Self::NotUnicode(_) => "NotUnicode",
+        }
+    }
+}
+
+impl ErrorKind for argon2::password_hash::errors::B64Error {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::InvalidEncoding => "InvalidEncoding",
+            Self::InvalidLength => "InvalidLength",
+        }
+    }
+}
+
+impl ErrorKind for argon2::password_hash::errors::InvalidValue {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::InvalidChar(_) => "InvalidChar",
+            Self::InvalidFormat => "InvalidFormat",
+            Self::Malformed => "MalformedValue",
+            Self::TooLong => "ValueTooLong",
+            Self::TooShort => "ValueTooShort",
+            _ => "UnknownArgonInvalidValue",
+        }
+    }
+}
+
+impl ErrorKind for argon2::password_hash::Error {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Algorithm => "UnsupportedAlgorithm",
+            Self::B64Encoding(err) => err.kind(),
+            Self::Crypto => "CryptoError",
+            Self::OutputSize { .. } => "UnexpectedOutputSize",
+            Self::ParamNameDuplicated => "ParamNameDuplicated",
+            Self::ParamNameInvalid => "ParamNameInvalid",
+            Self::ParamValueInvalid(err) => err.kind(),
+            Self::ParamsMaxExceeded => "ParamsMaxExceeded",
+            Self::Password => "InvalidPassword",
+            Self::PhcStringField => "InvalidPhcStringField",
+            Self::PhcStringTrailingData => "PhcStringTrailingData",
+            Self::SaltInvalid(err) => err.kind(),
+            Self::Version => "InvalidVersion",
+            _ => "UnknownArgonError",
+        }
+    }
+}
+
+impl ErrorKind for crate::auth::HashError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::EnvVar(err) => err.kind(),
+            Self::Hash(err) => err.kind(),
+        }
+    }
+}
+
+impl ErrorKind for diesel::result::DatabaseErrorKind {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::CheckViolation => "CheckViolation",
+            Self::ClosedConnection => "ClosedConnection",
+            Self::ForeignKeyViolation => "ForeignKeyViolation",
+            Self::NotNullViolation => "NotNullViolation",
+            Self::ReadOnlyTransaction => "ReadOnlyTransaction",
+            Self::SerializationFailure => "SerializationFailure",
+            Self::UnableToSendCommand => "UnableToSendCommand",
+            Self::UniqueViolation => "UniqueViolation",
+            _ => "UnknownDatabaseError",
+        }
+    }
+}
+
+impl ErrorKind for diesel::result::Error {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::AlreadyInTransaction => "AlreadyInTransaction",
+            Self::BrokenTransactionManager => "BrokenTransactionManager",
+            Self::DatabaseError(err, _) => err.kind(),
+            Self::DeserializationError(_) => "DeserializationError",
+            Self::InvalidCString(_) => "InvalidCString",
+            Self::NotFound => "NotFound",
+            Self::NotInTransaction => "NotInTransaction",
+            Self::QueryBuilderError(_) => "QueryBuilderError",
+            Self::RollbackErrorOnCommit { rollback_error, .. } => rollback_error.kind(),
+            Self::RollbackTransaction => "RollbackTransaction",
+            Self::SerializationError(_) => "SerializationError",
+            _ => "UnknownQueryError",
+        }
+    }
+}
+
+impl ErrorKind for diesel::ConnectionError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::BadConnection(_) => "BadConnection",
+            Self::CouldntSetupConfiguration(err) => err.kind(),
+            Self::InvalidCString(_) => "InvalidCString",
+            Self::InvalidConnectionUrl(_) => "InvalidConnectionUrl",
+            _ => "UnknownDatabaseConnectionError",
+        }
+    }
+}
+
+impl ErrorKind for serde_json::error::Category {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Data => "JsonDataError",
+            Self::Eof => "JsonEofError",
+            Self::Io => "JsonIoError",
+            Self::Syntax => "JsonSyntaxError",
+        }
+    }
+}
+
+impl ErrorKind for serde_json::Error {
+    fn kind(&self) -> &'static str {
+        self.classify().kind()
+    }
+}
+
+impl ErrorKind for base64::DecodeError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::InvalidByte(..) => "InvalidByte",
+            Self::InvalidLastSymbol(..) => "InvalidLastSymbol",
+            Self::InvalidLength(_) => "InvalidLength",
+            Self::InvalidPadding => "InvalidPadding",
+        }
+    }
+}
+
+impl ErrorKind for crate::auth::header::AuthenticationError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::FailedConnection(err) => err.kind(),
+            Self::FailedQuery(err) => err.kind(),
+            Self::InvalidAuthType => "InvalidAuthType",
+            Self::InvalidEncoding(err) => err.kind(),
+            Self::InvalidPassword => "InvalidPassword",
+            Self::MalformedCredentials => "MalformedCredentials",
+            Self::Utf8Conversion(_) => "Utf8ConversionError",
+        }
+    }
+}
