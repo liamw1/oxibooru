@@ -2,13 +2,13 @@ pub mod info;
 pub mod pool_category;
 pub mod tag_category;
 pub mod user;
+pub mod user_token;
 
 use crate::auth::header::{self, AuthenticationError};
 use crate::error::ErrorKind;
 use crate::model::rank::UserRank;
 use crate::model::user::User;
 use serde::Serialize;
-use thiserror::Error;
 use warp::http::StatusCode;
 use warp::reply::Json;
 use warp::reply::Response;
@@ -20,9 +20,18 @@ pub enum Reply {
     WithStatus(WithStatus<Json>),
 }
 
-impl Reply {
-    fn from<T: Serialize>(result: Result<T, ApiError>) -> Self {
-        match result {
+impl warp::Reply for Reply {
+    fn into_response(self) -> Response {
+        match self {
+            Self::Json(reply) => reply.into_response(),
+            Self::WithStatus(reply) => reply.into_response(),
+        }
+    }
+}
+
+impl<T: Serialize> From<Result<T, Error>> for Reply {
+    fn from(value: Result<T, Error>) -> Self {
+        match value {
             Ok(response) => Self::Json(warp::reply::json(&response)),
             Err(err) => {
                 println!("ERROR: {err}");
@@ -33,18 +42,9 @@ impl Reply {
     }
 }
 
-impl warp::Reply for Reply {
-    fn into_response(self) -> Response {
-        match self {
-            Self::Json(reply) => reply.into_response(),
-            Self::WithStatus(reply) => reply.into_response(),
-        }
-    }
-}
-
-#[derive(Debug, Error)]
+#[derive(Debug, thiserror::Error)]
 #[error(transparent)]
-pub enum ApiError {
+pub enum Error {
     BadBody(#[from] serde_json::Error),
     BadHash(#[from] crate::auth::HashError),
     BadHeader(#[from] warp::http::header::ToStrError),
@@ -56,7 +56,7 @@ pub enum ApiError {
     InsufficientPrivileges,
 }
 
-impl ApiError {
+impl Error {
     fn status_code(&self) -> StatusCode {
         type QueryError = diesel::result::Error;
 
@@ -66,31 +66,31 @@ impl ApiError {
         };
 
         match self {
-            ApiError::BadBody(_) => StatusCode::BAD_REQUEST,
-            ApiError::BadHash(_) => StatusCode::BAD_REQUEST,
-            ApiError::BadHeader(_) => StatusCode::BAD_REQUEST,
-            ApiError::BadUserPrivilege(_) => StatusCode::BAD_REQUEST,
-            ApiError::FailedAuthentication(err) => match err {
+            Error::BadBody(_) => StatusCode::BAD_REQUEST,
+            Error::BadHash(_) => StatusCode::BAD_REQUEST,
+            Error::BadHeader(_) => StatusCode::BAD_REQUEST,
+            Error::BadUserPrivilege(_) => StatusCode::BAD_REQUEST,
+            Error::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
                 AuthenticationError::FailedQuery(err) => query_error_status_code(err),
                 _ => StatusCode::UNAUTHORIZED,
             },
-            ApiError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
-            ApiError::FailedQuery(err) => query_error_status_code(err),
-            ApiError::InsufficientPrivileges => StatusCode::FORBIDDEN,
+            Error::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
+            Error::FailedQuery(err) => query_error_status_code(err),
+            Error::InsufficientPrivileges => StatusCode::FORBIDDEN,
         }
     }
 
     fn category(&self) -> &'static str {
         match self {
-            ApiError::BadBody(_) => "Bad Body",
-            ApiError::BadHash(_) => "Bad Hash",
-            ApiError::BadHeader(_) => "Bad Header",
-            ApiError::BadUserPrivilege(_) => "Bad User Privilege",
-            ApiError::FailedAuthentication(_) => "Failed Authentication",
-            ApiError::FailedConnection(_) => "Failed Connection",
-            ApiError::FailedQuery(_) => "Failed Query",
-            ApiError::InsufficientPrivileges => "Insufficient Privileges",
+            Error::BadBody(_) => "Bad Body",
+            Error::BadHash(_) => "Bad Hash",
+            Error::BadHeader(_) => "Bad Header",
+            Error::BadUserPrivilege(_) => "Bad User Privilege",
+            Error::FailedAuthentication(_) => "Failed Authentication",
+            Error::FailedConnection(_) => "Failed Connection",
+            Error::FailedQuery(_) => "Failed Query",
+            Error::InsufficientPrivileges => "Insufficient Privileges",
         }
     }
 
@@ -103,7 +103,7 @@ impl ApiError {
     }
 }
 
-impl ErrorKind for ApiError {
+impl ErrorKind for Error {
     fn kind(&self) -> &'static str {
         match self {
             Self::BadBody(err) => err.kind(),
@@ -120,7 +120,7 @@ impl ErrorKind for ApiError {
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert::Infallible> + Clone {
     let auth = warp::header::optional("Authorization").map(|opt_auth: Option<_>| match opt_auth {
-        Some(auth) => header::authenticate_user(auth).map(Some).map_err(ApiError::from),
+        Some(auth) => header::authenticate_user(auth).map(Some).map_err(Error::from),
         None => Ok(None),
     });
     let log = warp::filters::log::custom(|info| {
@@ -161,7 +161,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
         .with(log)
 }
 
-type AuthenticationResult = Result<Option<User>, ApiError>;
+type AuthenticationResult = Result<Option<User>, Error>;
 
 #[derive(Serialize)]
 struct ErrorResponse {
@@ -174,15 +174,22 @@ fn client_access_level(client: Option<&User>) -> UserRank {
     client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
 }
 
-fn access_level(auth_result: AuthenticationResult) -> Result<UserRank, ApiError> {
+fn access_level(auth_result: AuthenticationResult) -> Result<UserRank, Error> {
     auth_result.map(|client| client_access_level(client.as_ref()))
+}
+
+fn validate_privilege(client_rank: UserRank, requested_action: &str) -> Result<(), Error> {
+    if !client_rank.has_permission_to(requested_action) {
+        return Err(Error::InsufficientPrivileges);
+    }
+    Ok(())
 }
 
 /*
     For some reason warp::body::json rejects incoming requests, perhaps due to encoding
     issues. Instead, we will parse the raw bytes into a deserialize-capable structure.
 */
-fn parse_body<'a, T: serde::Deserialize<'a>>(body: &'a [u8]) -> Result<T, ApiError> {
+fn parse_body<'a, T: serde::Deserialize<'a>>(body: &'a [u8]) -> Result<T, Error> {
     println!("Incoming body: {}", std::str::from_utf8(body).unwrap_or("ERROR: Failed to parse"));
-    serde_json::from_slice(body).map_err(ApiError::from)
+    serde_json::from_slice(body).map_err(Error::from)
 }

@@ -1,5 +1,4 @@
-use crate::api::ApiError;
-use crate::api::Reply;
+use crate::api;
 use crate::config::CONFIG;
 use crate::model::post::Post;
 use chrono::Utc;
@@ -7,8 +6,8 @@ use serde::Serialize;
 use toml::Table;
 use warp::reject::Rejection;
 
-pub async fn get_info() -> Result<Reply, Rejection> {
-    Ok(Reply::from(read_info()))
+pub async fn get_info() -> Result<api::Reply, Rejection> {
+    Ok(read_info().into())
 }
 
 // TODO: Remove renames by changing references to these names in client
@@ -30,7 +29,7 @@ fn read_required_table(name: &str) -> &'static Table {
         .unwrap_or_else(|| panic!("Table {name} not found in config.toml"))
 }
 
-fn read_info() -> Result<Info, ApiError> {
+fn read_info() -> Result<Info, api::Error> {
     let mut conn = crate::establish_connection()?;
 
     let info = Info {

@@ -1,7 +1,4 @@
 use crate::api;
-use crate::api::ApiError;
-use crate::api::AuthenticationResult;
-use crate::api::Reply;
 use crate::auth::hash;
 use crate::model::rank::UserRank;
 use crate::model::user::{NewUser, User};
@@ -14,14 +11,16 @@ use std::str::FromStr;
 use warp::hyper::body::Bytes;
 use warp::reject::Rejection;
 
-pub async fn get_user(username: String, auth_result: AuthenticationResult) -> Result<Reply, Rejection> {
-    Ok(Reply::from(auth_result.and_then(|client| read_user(username, client.as_ref()))))
+pub async fn get_user(username: String, auth_result: api::AuthenticationResult) -> Result<api::Reply, Rejection> {
+    Ok(auth_result
+        .and_then(|client| read_user(username, client.as_ref()))
+        .into())
 }
 
-pub async fn post_user(auth_result: AuthenticationResult, body: Bytes) -> Result<Reply, Rejection> {
-    Ok(Reply::from(auth_result.and_then(|client| {
-        api::parse_body(&body).and_then(|user_info| create_user(user_info, client.as_ref()))
-    })))
+pub async fn post_user(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Rejection> {
+    Ok(auth_result
+        .and_then(|client| api::parse_body(&body).and_then(|user_info| create_user(user_info, client.as_ref())))
+        .into())
 }
 
 #[derive(Deserialize)]
@@ -60,7 +59,7 @@ struct UserInfo {
 }
 
 impl UserInfo {
-    fn new(conn: &mut PgConnection, user: User) -> Result<UserInfo, ApiError> {
+    fn new(conn: &mut PgConnection, user: User) -> Result<UserInfo, api::Error> {
         let comment_count = user.comment_count(conn)?;
         let uploaded_post_count = user.post_count(conn)?;
         let liked_post_count = user.liked_post_count(conn)?;
@@ -85,21 +84,17 @@ impl UserInfo {
     }
 }
 
-fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo, ApiError> {
+fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo, api::Error> {
+    let target = if client.is_some() { "any" } else { "self" };
+    let client_rank = api::client_access_level(client);
     let requested_rank = match user_info.rank {
         Some(rank) => UserRank::from_str(&rank)?,
         None => UserRank::Regular,
     };
-    let rank = match client {
-        Some(client_user) => match client_user.rank.has_permission_to("users:create:any") {
-            true => requested_rank.clamp(UserRank::Restricted, client_user.rank),
-            false => return Err(ApiError::InsufficientPrivileges),
-        },
-        None => match UserRank::Anonymous.has_permission_to("users:create:self") {
-            true => UserRank::Regular,
-            false => return Err(ApiError::InsufficientPrivileges),
-        },
-    };
+    let requested_action = "users:create:".to_owned() + target;
+
+    api::validate_privilege(client_rank, &requested_action)?;
+    let rank = requested_rank.clamp(UserRank::Restricted, client_rank);
 
     let salt = SaltString::generate(&mut OsRng);
     let hash = hash::hash_password(&user_info.password, salt.as_str())?;
@@ -116,19 +111,18 @@ fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo
         .values(&new_user)
         .returning(User::as_returning())
         .get_result(&mut conn)
-        .map_err(ApiError::from)?;
+        .map_err(api::Error::from)?;
     UserInfo::new(&mut conn, user)
 }
 
 // NOTE: Should we query by user_id instead?
-fn read_user(username: String, client: Option<&User>) -> Result<UserInfo, ApiError> {
+fn read_user(username: String, client: Option<&User>) -> Result<UserInfo, api::Error> {
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
 
-    let access_level = api::client_access_level(client);
     let client_id = client.map(|user| user.id);
-    if client_id != Some(user.id) && !access_level.has_permission_to("users:view") {
-        return Err(ApiError::InsufficientPrivileges);
+    if client_id != Some(user.id) {
+        api::validate_privilege(api::client_access_level(client), "users:view")?;
     }
 
     UserInfo::new(&mut conn, user)
