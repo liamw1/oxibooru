@@ -5,7 +5,6 @@ pub mod error;
 pub mod image;
 pub mod math;
 pub mod model;
-pub mod query;
 pub mod schema;
 #[cfg(test)]
 mod test;

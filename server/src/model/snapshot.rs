@@ -1,8 +1,8 @@
 use crate::model::user::User;
 use crate::schema::snapshot;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use std::option::Option;
+use time::OffsetDateTime;
 
 #[derive(Insertable)]
 #[diesel(table_name = snapshot)]
@@ -26,7 +26,7 @@ pub struct Snapshot {
     pub resource_name: String,
     pub operation: String,
     pub data: Option<Vec<u8>>,
-    pub creation_time: DateTime<Utc>,
+    pub creation_time: OffsetDateTime,
 }
 
 impl Snapshot {

@@ -6,9 +6,9 @@ use crate::schema::{
     pool, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
 };
 use crate::util;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use std::option::Option;
+use time::OffsetDateTime;
 
 #[derive(Insertable)]
 #[diesel(table_name = post)]
@@ -40,7 +40,7 @@ pub struct Post {
     pub checksum_md5: Option<String>,
     pub flags: Option<String>,
     pub source: Option<String>,
-    pub creation_time: DateTime<Utc>,
+    pub creation_time: OffsetDateTime,
 }
 
 impl TableName for Post {
@@ -145,7 +145,7 @@ pub type NewPostFavorite = PostFavorite;
 pub struct PostFavorite {
     pub post_id: i32,
     pub user_id: i32,
-    pub time: DateTime<Utc>,
+    pub time: OffsetDateTime,
 }
 
 impl PostFavorite {
@@ -213,7 +213,7 @@ pub struct PostScore {
     pub post_id: i32,
     pub user_id: i32,
     pub score: i32,
-    pub time: DateTime<Utc>,
+    pub time: OffsetDateTime,
 }
 
 impl PostScore {

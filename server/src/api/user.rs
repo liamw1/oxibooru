@@ -8,6 +8,8 @@ use diesel::prelude::*;
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use time::serde::rfc3339;
+use time::OffsetDateTime;
 use warp::hyper::body::Bytes;
 use warp::reject::Rejection;
 
@@ -38,10 +40,10 @@ struct UserInfo {
     name: String,
     email: Option<String>,
     rank: String,
-    #[serde(rename(serialize = "lastLogintime"))]
-    last_login_time: String,
-    #[serde(rename(serialize = "creationTime"))]
-    creation_time: String,
+    #[serde(with = "rfc3339", rename(serialize = "lastLogintime"))]
+    last_login_time: OffsetDateTime,
+    #[serde(with = "rfc3339", rename(serialize = "creationTime"))]
+    creation_time: OffsetDateTime,
     #[serde(rename(serialize = "avatarStyle"))]
     avatar_style: String,
     #[serde(rename(serialize = "avatarUrl"))]
@@ -71,8 +73,8 @@ impl UserInfo {
             name: user.name,
             email: user.email,
             rank: user.rank.to_string(),
-            last_login_time: user.last_login_time.to_string(),
-            creation_time: user.creation_time.to_string(),
+            last_login_time: user.last_login_time,
+            creation_time: user.creation_time,
             avatar_url: String::new(),
             avatar_style: String::new(),
             comment_count,
@@ -94,7 +96,7 @@ fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo
     let requested_action = "users:create:".to_owned() + target;
 
     api::validate_privilege(client_rank, &requested_action)?;
-    let rank = requested_rank.clamp(UserRank::Restricted, client_rank);
+    let rank = requested_rank.clamp(UserRank::Restricted, std::cmp::max(client_rank, UserRank::Regular));
 
     let salt = SaltString::generate(&mut OsRng);
     let hash = hash::hash_password(&user_info.password, salt.as_str())?;

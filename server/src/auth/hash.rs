@@ -4,8 +4,8 @@ use crate::model::user::{User, UserToken};
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use argon2::{Algorithm, Params, Version};
-use chrono::Utc;
 use once_cell::sync::Lazy;
+use time::OffsetDateTime;
 
 pub fn hash_password(password: &str, salt: &str) -> Result<String, HashError> {
     // TODO: Handle hash rotations
@@ -22,7 +22,9 @@ pub fn is_valid_password(user: &User, password: &str) -> bool {
 }
 
 pub fn is_valid_token(user_token: &UserToken) -> bool {
-    let expired = user_token.expiration_time.map_or(false, |time| time < Utc::now());
+    let expired = user_token
+        .expiration_time
+        .map_or(false, |time| time < OffsetDateTime::now_utc());
     user_token.enabled && !expired
 }
 
@@ -41,7 +43,7 @@ static ARGON_CONTEXT: Lazy<Argon2> = Lazy::new(|| {
 mod test {
     use super::*;
     use crate::test::*;
-    use chrono::{DateTime, Days, Utc};
+    use time::Duration;
 
     #[test]
     fn hash_password() {
@@ -51,11 +53,11 @@ mod test {
 
     #[test]
     fn validate_token() {
-        let future_time = Utc::now().checked_add_days(Days::new(1)).unwrap();
+        let future_time = OffsetDateTime::now_utc().checked_add(Duration::DAY).unwrap();
 
         let permanent_user_token = create_token(true, None);
         let temporary_user_token = create_token(true, Some(future_time));
-        let expired_user_token = create_token(true, Some(Utc::now()));
+        let expired_user_token = create_token(true, Some(OffsetDateTime::now_utc()));
         let disabled_user_token = create_token(false, None);
 
         assert!(is_valid_token(&permanent_user_token));
@@ -64,7 +66,7 @@ mod test {
         assert!(!is_valid_token(&disabled_user_token));
     }
 
-    fn create_token(enabled: bool, expiration_time: Option<DateTime<Utc>>) -> UserToken {
+    fn create_token(enabled: bool, expiration_time: Option<OffsetDateTime>) -> UserToken {
         test_transaction(|conn| {
             create_test_user(conn, TEST_USERNAME)
                 .and_then(|user| create_test_user_token(conn, &user, enabled, expiration_time))

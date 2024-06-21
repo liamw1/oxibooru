@@ -4,9 +4,9 @@ use crate::model::rank::UserRank;
 use crate::model::TableName;
 use crate::schema::{comment, comment_score, post, post_favorite, post_feature, post_score, user, user_token};
 use crate::util;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use std::option::Option;
+use time::OffsetDateTime;
 
 #[derive(Insertable)]
 #[diesel(table_name = user)]
@@ -28,8 +28,8 @@ pub struct User {
     pub password_salt: String,
     pub email: Option<String>,
     pub rank: UserRank,
-    pub creation_time: DateTime<Utc>,
-    pub last_login_time: DateTime<Utc>,
+    pub creation_time: OffsetDateTime,
+    pub last_login_time: OffsetDateTime,
 }
 
 impl TableName for User {
@@ -98,7 +98,7 @@ impl User {
             comment_id: comment.id,
             user_id: self.id,
             score: 1,
-            time: chrono::Utc::now(),
+            time: OffsetDateTime::now_utc(),
         };
         diesel::insert_into(comment_score::table)
             .values(&new_comment_score)
@@ -111,7 +111,7 @@ impl User {
             comment_id: comment.id,
             user_id: self.id,
             score: -1,
-            time: chrono::Utc::now(),
+            time: OffsetDateTime::now_utc(),
         };
         diesel::insert_into(comment_score::table)
             .values(&new_comment_score)
@@ -124,7 +124,7 @@ impl User {
             post_id: post.id,
             user_id: self.id,
             score: 1,
-            time: chrono::Utc::now(),
+            time: OffsetDateTime::now_utc(),
         };
         diesel::insert_into(post_score::table)
             .values(&new_post_score)
@@ -136,7 +136,7 @@ impl User {
         let new_post_favorite = NewPostFavorite {
             post_id: post.id,
             user_id: self.id,
-            time: Utc::now(),
+            time: OffsetDateTime::now_utc(),
         };
         diesel::insert_into(post_favorite::table)
             .values(&new_post_favorite)
@@ -166,7 +166,7 @@ pub struct NewUserToken<'a> {
     pub user_id: i32,
     pub token: &'a str,
     pub enabled: bool,
-    pub expiration_time: Option<DateTime<Utc>>,
+    pub expiration_time: Option<OffsetDateTime>,
 }
 
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
@@ -179,9 +179,9 @@ pub struct UserToken {
     pub token: String,
     pub note: Option<String>,
     pub enabled: bool,
-    pub expiration_time: Option<DateTime<Utc>>,
-    pub creation_time: DateTime<Utc>,
-    pub last_usage_time: DateTime<Utc>,
+    pub expiration_time: Option<OffsetDateTime>,
+    pub creation_time: OffsetDateTime,
+    pub last_usage_time: OffsetDateTime,
 }
 
 impl UserToken {

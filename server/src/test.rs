@@ -2,10 +2,10 @@ use crate::model::post::{NewPost, NewPostNote, NewPostSignature, Post, PostNote,
 use crate::model::rank::UserRank;
 use crate::model::user::{NewUser, NewUserToken, User, UserToken};
 use crate::schema::{post, post_note, post_signature, user, user_token};
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
 use diesel::result::Error;
 use std::path::{Path, PathBuf};
+use time::OffsetDateTime;
 
 pub const TEST_PRIVILEGE: UserRank = UserRank::Regular;
 pub const TEST_USERNAME: &str = "test_user";
@@ -56,7 +56,7 @@ pub fn create_test_user_token(
     conn: &mut PgConnection,
     user: &User,
     enabled: bool,
-    expiration_time: Option<DateTime<Utc>>,
+    expiration_time: Option<OffsetDateTime>,
 ) -> QueryResult<UserToken> {
     let new_user_token = NewUserToken {
         user_id: user.id,
@@ -91,7 +91,7 @@ pub fn create_test_post_note(conn: &mut PgConnection, post: &Post) -> QueryResul
     let new_post_note = NewPostNote {
         post_id: post.id,
         polygon: &[],
-        text: "This is a test note".into(),
+        text: "This is a test note".to_owned(),
     };
     diesel::insert_into(post_note::table)
         .values(&new_post_note)

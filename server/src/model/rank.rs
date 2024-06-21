@@ -78,9 +78,13 @@ where
 {
     fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
-        UserRank::from_i16(database_value).ok_or("Invalid user rank".into())
+        UserRank::from_i16(database_value).ok_or(DeserializeUserPrivilegeError.into())
     }
 }
+
+#[derive(Debug, Error)]
+#[error("Failed to deserialize user privilege")]
+struct DeserializeUserPrivilegeError;
 
 #[cfg(test)]
 mod test {

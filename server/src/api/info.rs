@@ -1,8 +1,9 @@
 use crate::api;
 use crate::config::CONFIG;
 use crate::model::post::Post;
-use chrono::Utc;
 use serde::Serialize;
+use time::serde::rfc3339;
+use time::OffsetDateTime;
 use toml::Table;
 use warp::reject::Rejection;
 
@@ -17,8 +18,8 @@ struct Info {
     post_count: i64,
     #[serde(rename(serialize = "diskUsage"))]
     disk_usage: i64,
-    #[serde(rename(serialize = "serverTime"))]
-    server_time: String,
+    #[serde(with = "rfc3339", rename(serialize = "serverTime"))]
+    server_time: OffsetDateTime,
     config: Table,
 }
 
@@ -35,7 +36,7 @@ fn read_info() -> Result<Info, api::Error> {
     let info = Info {
         post_count: Post::count(&mut conn)?,
         disk_usage: 0, // TODO
-        server_time: Utc::now().to_string(),
+        server_time: OffsetDateTime::now_utc(),
         config: read_required_table("public_info").clone(),
     };
 

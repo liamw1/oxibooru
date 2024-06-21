@@ -3,8 +3,8 @@ use crate::model::user::User;
 use crate::model::TableName;
 use crate::schema::{comment, comment_score};
 use crate::util;
-use chrono::{DateTime, Utc};
 use diesel::prelude::*;
+use time::OffsetDateTime;
 
 #[derive(Insertable)]
 #[diesel(table_name = comment)]
@@ -23,7 +23,7 @@ pub struct Comment {
     pub user_id: i32,
     pub post_id: i32,
     pub text: String,
-    pub creation_time: DateTime<Utc>,
+    pub creation_time: OffsetDateTime,
 }
 
 impl TableName for Comment {
@@ -66,7 +66,7 @@ pub struct CommentScore {
     pub comment_id: i32,
     pub user_id: i32,
     pub score: i32,
-    pub time: DateTime<Utc>,
+    pub time: OffsetDateTime,
 }
 
 impl CommentScore {
@@ -79,7 +79,6 @@ impl CommentScore {
 mod test {
     use super::*;
     use crate::model::user::User;
-    use crate::query::read::*;
     use crate::test::*;
 
     #[test]
@@ -142,32 +141,6 @@ mod test {
             user5.dislike_comment(conn, &comment)?;
 
             assert_eq!(comment.score(conn)?, -1);
-
-            Ok(())
-        });
-    }
-
-    #[test]
-    fn update_comment() {
-        test_transaction(|conn: &mut PgConnection| {
-            let user = create_test_user(conn, "test_user")?;
-            let comment =
-                create_test_post(conn, &user).and_then(|post| user.add_comment(conn, &post, "test_comment"))?;
-            let comment_id = comment.id;
-
-            let new_text = "new_comment_text";
-            let comment = comment.update_text(conn, new_text.into())?;
-
-            assert_eq!(comment.id, comment_id);
-            assert_eq!(comment.text, new_text);
-            assert_eq!(get_comment(conn, comment_id)?, comment);
-
-            let new_text = "";
-            let comment = comment.update_text(conn, new_text.into())?;
-
-            assert_eq!(comment.id, comment_id);
-            assert_eq!(comment.text, new_text);
-            assert_eq!(get_comment(conn, comment_id)?, comment);
 
             Ok(())
         });
