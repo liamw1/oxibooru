@@ -24,6 +24,7 @@ pub fn authenticate_user(auth: String) -> Result<User, AuthenticationError> {
     let (auth_type, credentials) = auth.split_once(' ').ok_or(AuthenticationError::MalformedCredentials)?;
     match auth_type {
         "Basic" => basic_access_authentication(credentials),
+        // TODO: Handle "Token"
         _ => Err(AuthenticationError::InvalidAuthType),
     }
 }

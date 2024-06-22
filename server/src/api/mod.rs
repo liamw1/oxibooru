@@ -8,7 +8,7 @@ use crate::auth::header::{self, AuthenticationError};
 use crate::error::ErrorKind;
 use crate::model::rank::UserRank;
 use crate::model::user::User;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use warp::http::StatusCode;
 use warp::reply::Json;
 use warp::reply::Response;
@@ -146,6 +146,11 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
         .and(auth)
         .and(warp::body::bytes())
         .and_then(user::post_user);
+    let post_user_token = warp::post()
+        .and(warp::path!("user-token" / String))
+        .and(auth)
+        .and(warp::body::bytes())
+        .and_then(user_token::post_user);
 
     let catch_all = warp::any().map(|| {
         println!("Unimplemented request!");
@@ -157,6 +162,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
         .or(list_pool_categories)
         .or(get_user)
         .or(post_user)
+        .or(post_user_token)
         .or(catch_all)
         .with(log)
 }
@@ -168,6 +174,23 @@ struct ErrorResponse {
     title: String,
     name: String,
     description: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct MicroUser {
+    name: String,
+    #[serde(rename(serialize = "avatarUrl", deserialize = "avatarUrl"))]
+    avatar_url: String,
+}
+
+impl MicroUser {
+    fn new(user: User) -> Self {
+        let avatar_url = user.avatar_url();
+        Self {
+            name: user.name,
+            avatar_url,
+        }
+    }
 }
 
 fn client_access_level(client: Option<&User>) -> UserRank {

@@ -6,12 +6,14 @@ use crate::util::DateTime;
 use diesel::prelude::*;
 use diesel::result::Error;
 use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
 pub const TEST_PRIVILEGE: UserRank = UserRank::Regular;
 pub const TEST_USERNAME: &str = "test_user";
 pub const TEST_PASSWORD: &str = "test_password";
 pub const TEST_SALT: &str = "test_salt";
 pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
+pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
 
 pub fn establish_connection_or_panic() -> PgConnection {
     crate::establish_connection().unwrap_or_else(|err| panic!("{err}"))
@@ -60,7 +62,8 @@ pub fn create_test_user_token(
 ) -> QueryResult<UserToken> {
     let new_user_token = NewUserToken {
         user_id: user.id,
-        token: "dummy",
+        token: TEST_TOKEN,
+        note: None,
         enabled,
         expiration_time,
     };

@@ -17,6 +17,12 @@ struct Info {
     post_count: i64,
     #[serde(rename(serialize = "diskUsage"))]
     disk_usage: i64,
+    #[serde(rename(serialize = "featuredPost"))]
+    featured_post: Option<i64>,
+    #[serde(rename(serialize = "featuringTime"))]
+    featuring_time: Option<DateTime>,
+    #[serde(rename(serialize = "featuringUser"))]
+    featuring_user: Option<String>,
     #[serde(rename(serialize = "serverTime"))]
     server_time: DateTime,
     config: Table,
@@ -35,6 +41,9 @@ fn read_info() -> Result<Info, api::Error> {
     let info = Info {
         post_count: Post::count(&mut conn)?,
         disk_usage: 0, // TODO
+        featured_post: None,
+        featuring_time: None,
+        featuring_user: None,
         server_time: DateTime::now(),
         config: read_required_table("public_info").clone(),
     };

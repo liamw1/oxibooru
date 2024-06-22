@@ -7,6 +7,7 @@ use crate::util;
 use crate::util::DateTime;
 use diesel::prelude::*;
 use std::option::Option;
+use uuid::Uuid;
 
 #[derive(Insertable)]
 #[diesel(table_name = user)]
@@ -27,6 +28,7 @@ pub struct User {
     pub password_hash: String,
     pub password_salt: String,
     pub email: Option<String>,
+    pub avatar_style: String,
     pub rank: UserRank,
     pub creation_time: DateTime,
     pub last_login_time: DateTime,
@@ -48,6 +50,10 @@ impl User {
 
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         user::table.count().first(conn)
+    }
+
+    pub fn avatar_url(&self) -> String {
+        "unimplemented".to_owned() // TODO
     }
 
     pub fn post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
@@ -164,7 +170,8 @@ impl User {
 #[diesel(table_name = user_token)]
 pub struct NewUserToken<'a> {
     pub user_id: i32,
-    pub token: &'a str,
+    pub token: Uuid,
+    pub note: Option<&'a str>,
     pub enabled: bool,
     pub expiration_time: Option<DateTime>,
 }
@@ -176,11 +183,12 @@ pub struct NewUserToken<'a> {
 #[diesel(check_for_backend(diesel::pg::Pg))]
 pub struct UserToken {
     pub user_id: i32,
-    pub token: String,
+    pub token: Uuid,
     pub note: Option<String>,
     pub enabled: bool,
     pub expiration_time: Option<DateTime>,
     pub creation_time: DateTime,
+    pub last_edit_time: DateTime,
     pub last_usage_time: DateTime,
 }
 
@@ -213,6 +221,8 @@ mod test {
             create_test_user(conn, "test_user").and_then(|user| create_test_user_token(conn, &user, false, None))
         });
 
+        assert_eq!(user_token.token, TEST_TOKEN);
+        assert_eq!(user_token.note, None);
         assert!(!user_token.enabled);
         assert_eq!(user_token.expiration_time, None);
     }

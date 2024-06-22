@@ -3,6 +3,7 @@ CREATE TABLE "user" (
     "name" VARCHAR(32) NOT NULL,
     "rank" SMALLINT NOT NULL,
     "email" VARCHAR(64),
+    "avatar_style" VARCHAR(32) NOT NULL DEFAULT 'gravatar',
     "password_hash" VARCHAR(128) NOT NULL,
     "password_salt" VARCHAR(32) NOT NULL,
     "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -12,7 +13,7 @@ CREATE TABLE "user" (
 
 CREATE TABLE "user_token" (
     "user_id" INTEGER PRIMARY KEY REFERENCES "user" ON DELETE CASCADE,
-    "token" VARCHAR(36) NOT NULL,
+    "token" UUID NOT NULL,
     "note" VARCHAR(128),
     "enabled" BOOLEAN NOT NULL,
     "expiration_time" TIMESTAMP WITH TIME ZONE,

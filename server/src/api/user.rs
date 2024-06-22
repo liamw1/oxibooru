@@ -52,34 +52,60 @@ struct UserInfo {
     #[serde(rename(serialize = "uploadedPostCount"))]
     uploaded_post_count: i64,
     #[serde(rename(serialize = "likedPostCount"))]
-    liked_post_count: i64,
+    liked_post_count: String,
     #[serde(rename(serialize = "dislikedPostCount"))]
-    disliked_post_count: i64,
+    disliked_post_count: String,
     #[serde(rename(serialize = "favoritePostCount"))]
     favorite_post_count: i64,
 }
 
 impl UserInfo {
-    fn new(conn: &mut PgConnection, user: User) -> Result<UserInfo, api::Error> {
+    fn full(conn: &mut PgConnection, user: User) -> Result<Self, api::Error> {
+        let avatar_url = user.avatar_url();
         let comment_count = user.comment_count(conn)?;
         let uploaded_post_count = user.post_count(conn)?;
         let liked_post_count = user.liked_post_count(conn)?;
         let disliked_post_count = user.disliked_post_count(conn)?;
         let favorite_post_count = user.favorite_post_count(conn)?;
 
-        Ok(UserInfo {
+        Ok(Self {
             version: 0,
             name: user.name,
             email: user.email,
             rank: user.rank.to_string(),
             last_login_time: user.last_login_time,
             creation_time: user.creation_time,
-            avatar_url: String::new(),
-            avatar_style: String::new(),
+            avatar_url,
+            avatar_style: user.avatar_style,
             comment_count,
             uploaded_post_count,
-            liked_post_count,
-            disliked_post_count,
+            liked_post_count: liked_post_count.to_string(),
+            disliked_post_count: disliked_post_count.to_string(),
+            favorite_post_count,
+        })
+    }
+
+    // Returns a subset of the information available about a user
+    fn public_only(conn: &mut PgConnection, user: User) -> Result<Self, api::Error> {
+        let avatar_url = user.avatar_url();
+        let comment_count = user.comment_count(conn)?;
+        let uploaded_post_count = user.post_count(conn)?;
+        let favorite_post_count = user.favorite_post_count(conn)?;
+
+        const HIDDEN: &'static str = "false";
+        Ok(Self {
+            version: 0,
+            name: user.name,
+            email: Some(HIDDEN.to_owned()),
+            rank: user.rank.to_string(),
+            last_login_time: user.last_login_time,
+            creation_time: user.creation_time,
+            avatar_url,
+            avatar_style: user.avatar_style,
+            comment_count,
+            uploaded_post_count,
+            liked_post_count: HIDDEN.to_owned(),
+            disliked_post_count: HIDDEN.to_owned(),
             favorite_post_count,
         })
     }
@@ -95,7 +121,7 @@ fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo
     let requested_action = "users:create:".to_owned() + target;
 
     api::validate_privilege(client_rank, &requested_action)?;
-    let rank = requested_rank.clamp(UserRank::Restricted, std::cmp::max(client_rank, UserRank::Regular));
+    let rank = requested_rank.clamp(UserRank::Regular, std::cmp::max(client_rank, UserRank::Regular));
 
     let salt = SaltString::generate(&mut OsRng);
     let hash = hash::hash_password(&user_info.password, salt.as_str())?;
@@ -111,9 +137,8 @@ fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo
     let user: User = diesel::insert_into(user::table)
         .values(&new_user)
         .returning(User::as_returning())
-        .get_result(&mut conn)
-        .map_err(api::Error::from)?;
-    UserInfo::new(&mut conn, user)
+        .get_result(&mut conn)?;
+    UserInfo::full(&mut conn, user)
 }
 
 // NOTE: Should we query by user_id instead?
@@ -124,7 +149,7 @@ fn read_user(username: String, client: Option<&User>) -> Result<UserInfo, api::E
     let client_id = client.map(|user| user.id);
     if client_id != Some(user.id) {
         api::validate_privilege(api::client_access_level(client), "users:view")?;
+        return UserInfo::public_only(&mut conn, user);
     }
-
-    UserInfo::new(&mut conn, user)
+    UserInfo::full(&mut conn, user)
 }
