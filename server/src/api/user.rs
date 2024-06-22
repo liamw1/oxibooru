@@ -3,13 +3,12 @@ use crate::auth::hash;
 use crate::model::rank::UserRank;
 use crate::model::user::{NewUser, User};
 use crate::schema::user;
+use crate::util::DateTime;
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
-use time::serde::rfc3339;
-use time::OffsetDateTime;
 use warp::hyper::body::Bytes;
 use warp::reject::Rejection;
 
@@ -40,10 +39,10 @@ struct UserInfo {
     name: String,
     email: Option<String>,
     rank: String,
-    #[serde(with = "rfc3339", rename(serialize = "lastLogintime"))]
-    last_login_time: OffsetDateTime,
-    #[serde(with = "rfc3339", rename(serialize = "creationTime"))]
-    creation_time: OffsetDateTime,
+    #[serde(rename(serialize = "lastLogintime"))]
+    last_login_time: DateTime,
+    #[serde(rename(serialize = "creationTime"))]
+    creation_time: DateTime,
     #[serde(rename(serialize = "avatarStyle"))]
     avatar_style: String,
     #[serde(rename(serialize = "avatarUrl"))]

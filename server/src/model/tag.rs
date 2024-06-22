@@ -2,9 +2,9 @@ use crate::model::post::PostTag;
 use crate::model::TableName;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::util;
+use crate::util::DateTime;
 use diesel::prelude::*;
 use std::option::Option;
-use time::OffsetDateTime;
 
 #[derive(Insertable)]
 #[diesel(table_name = tag_category)]
@@ -44,7 +44,7 @@ pub struct Tag {
     pub id: i32,
     pub category_id: i32,
     pub description: Option<String>,
-    pub creation_time: OffsetDateTime,
+    pub creation_time: DateTime,
 }
 
 impl TableName for Tag {

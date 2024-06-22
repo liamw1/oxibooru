@@ -2,9 +2,9 @@ use crate::model::post::Post;
 use crate::model::TableName;
 use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::util;
+use crate::util::DateTime;
 use diesel::prelude::*;
 use std::option::Option;
-use time::OffsetDateTime;
 
 #[derive(Insertable)]
 #[diesel(table_name = pool_category)]
@@ -62,7 +62,7 @@ pub struct Pool {
     pub id: i32,
     pub category_id: i32,
     pub description: Option<String>,
-    pub creation_time: OffsetDateTime,
+    pub creation_time: DateTime,
 }
 
 impl TableName for Pool {

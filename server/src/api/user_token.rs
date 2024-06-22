@@ -1,8 +1,7 @@
 use crate::api;
 use crate::model::user::{NewUserToken, User, UserToken};
+use crate::util::DateTime;
 use serde::{Deserialize, Serialize};
-use time::serde::rfc3339;
-use time::OffsetDateTime;
 use warp::hyper::body::Bytes;
 use warp::Rejection;
 
@@ -21,9 +20,10 @@ pub async fn post_user(
 #[derive(Deserialize)]
 struct NewUserTokenInfo {
     enabled: bool,
-    note: String,
-    #[serde(with = "rfc3339", rename(serialize = "expirationTime"))]
-    expiration_time: OffsetDateTime,
+    note: Option<String>,
+    #[serde(default)]
+    #[serde(rename(serialize = "expirationTime"))]
+    expiration_time: Option<DateTime>,
 }
 
 // TODO: Remove renames by changing references to these names in client
@@ -34,14 +34,14 @@ struct UserTokenInfo {
     token: String,
     note: String,
     enabled: bool,
-    #[serde(with = "rfc3339", rename(serialize = "expirationTime"))]
-    expiration_time: OffsetDateTime,
-    #[serde(with = "rfc3339", rename(serialize = "creationTime"))]
-    creation_time: OffsetDateTime,
-    #[serde(with = "rfc3339", rename(serialize = "lastEditTime"))]
-    last_edit_time: OffsetDateTime,
-    #[serde(with = "rfc3339", rename(serialize = "lastUsageTime"))]
-    last_usage_time: OffsetDateTime,
+    #[serde(rename(serialize = "expirationTime"))]
+    expiration_time: DateTime,
+    #[serde(rename(serialize = "creationTime"))]
+    creation_time: DateTime,
+    #[serde(rename(serialize = "lastEditTime"))]
+    last_edit_time: DateTime,
+    #[serde(rename(serialize = "lastUsageTime"))]
+    last_usage_time: DateTime,
 }
 
 fn create_user_token(
@@ -63,9 +63,9 @@ fn create_user_token(
         token: String::new(),
         note: String::new(),
         enabled: false,
-        expiration_time: OffsetDateTime::now_utc(),
-        creation_time: OffsetDateTime::now_utc(),
-        last_edit_time: OffsetDateTime::now_utc(),
-        last_usage_time: OffsetDateTime::now_utc(),
+        expiration_time: DateTime::now(),
+        creation_time: DateTime::now(),
+        last_edit_time: DateTime::now(),
+        last_usage_time: DateTime::now(),
     })
 }

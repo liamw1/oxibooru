@@ -3,8 +3,8 @@ use crate::model::user::User;
 use crate::model::TableName;
 use crate::schema::{comment, comment_score};
 use crate::util;
+use crate::util::DateTime;
 use diesel::prelude::*;
-use time::OffsetDateTime;
 
 #[derive(Insertable)]
 #[diesel(table_name = comment)]
@@ -23,7 +23,7 @@ pub struct Comment {
     pub user_id: i32,
     pub post_id: i32,
     pub text: String,
-    pub creation_time: OffsetDateTime,
+    pub creation_time: DateTime,
 }
 
 impl TableName for Comment {
@@ -66,7 +66,7 @@ pub struct CommentScore {
     pub comment_id: i32,
     pub user_id: i32,
     pub score: i32,
-    pub time: OffsetDateTime,
+    pub time: DateTime,
 }
 
 impl CommentScore {
