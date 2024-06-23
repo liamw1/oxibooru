@@ -41,15 +41,15 @@ impl TableName for User {
 }
 
 impl User {
-    pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<User> {
-        user::table
-            .select(User::as_select())
-            .filter(user::name.eq(name))
-            .first(conn)
-    }
-
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         user::table.count().first(conn)
+    }
+
+    pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<Self> {
+        user::table
+            .select(Self::as_select())
+            .filter(user::name.eq(name))
+            .first(conn)
     }
 
     pub fn avatar_url(&self) -> String {

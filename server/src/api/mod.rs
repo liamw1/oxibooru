@@ -15,6 +15,13 @@ use warp::reply::Response;
 use warp::reply::WithStatus;
 use warp::Filter;
 
+/*
+    NOTE: In general, it seems like we do not send the id of a resource back to the
+          client. Perhaps we should consider doing this as then we could query
+          user, tags, etc. by their primary key. We could also use #[serde(flatten)]
+          to use the actual resource structs in the serialize structs.
+*/
+
 pub enum Reply {
     Json(Json),
     WithStatus(WithStatus<Json>),
@@ -119,9 +126,11 @@ impl ErrorKind for Error {
 }
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert::Infallible> + Clone {
-    let auth = warp::header::optional("Authorization").map(|opt_auth: Option<_>| match opt_auth {
-        Some(auth) => header::authenticate_user(auth).map(Some).map_err(Error::from),
-        None => Ok(None),
+    let auth = warp::header::optional("Authorization").map(|opt_auth: Option<_>| {
+        opt_auth
+            .map(|auth| header::authenticate_user(auth).map(Some))
+            .unwrap_or(Ok(None))
+            .map_err(Error::from)
     });
     let log = warp::filters::log::custom(|info| {
         // println!("Header: {:?}", info.request_headers());

@@ -141,7 +141,6 @@ fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo
     UserInfo::full(&mut conn, user)
 }
 
-// NOTE: Should we query by user_id instead?
 fn read_user(username: String, client: Option<&User>) -> Result<UserInfo, api::Error> {
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
