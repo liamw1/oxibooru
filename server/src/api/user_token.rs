@@ -20,8 +20,18 @@ pub async fn post_user(
         .into())
 }
 
+pub async fn delete_user(
+    username: String,
+    token: Uuid,
+    auth_result: api::AuthenticationResult,
+) -> Result<api::Reply, Rejection> {
+    Ok(auth_result
+        .and_then(|client| remove_user_token(username, token, client.as_ref()))
+        .into())
+}
+
 #[derive(Deserialize)]
-struct NewUserTokenInfo {
+struct PostUserTokenInfo {
     enabled: bool,
     note: Option<String>,
     #[serde(rename(deserialize = "expirationTime"))]
@@ -64,7 +74,7 @@ impl UserTokenInfo {
 
 fn create_user_token(
     username: String,
-    token_info: NewUserTokenInfo,
+    token_info: PostUserTokenInfo,
     client: Option<&User>,
 ) -> Result<UserTokenInfo, api::Error> {
     let mut conn = crate::establish_connection()?;
@@ -87,4 +97,20 @@ fn create_user_token(
         .returning(UserToken::as_returning())
         .get_result(&mut conn)?;
     UserTokenInfo::new(api::MicroUser::new(user), user_token)
+}
+
+fn remove_user_token(username: String, token: Uuid, client: Option<&User>) -> Result<(), api::Error> {
+    let mut conn = crate::establish_connection()?;
+    let user = User::from_name(&mut conn, &username)?;
+
+    let client_id = client.map(|user| user.id);
+    let target = if client_id == Some(user.id) { "self" } else { "any" };
+    let requested_action = "user_tokens:delete:".to_owned() + target;
+    api::validate_privilege(api::client_access_level(client), &requested_action)?;
+
+    let user_token = UserToken::belonging_to(&user)
+        .select(UserToken::as_select())
+        .filter(user_token::token.eq(token))
+        .first(&mut conn)?;
+    user_token.delete(&mut conn).map_err(api::Error::from)
 }

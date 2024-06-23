@@ -2016,9 +2016,7 @@ data.
 - **Input**
 
     ```json5
-    {
-        "version": <version>
-    }
+    {}
     ```
 
 - **Output**

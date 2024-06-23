@@ -9,6 +9,7 @@ use crate::error::ErrorKind;
 use crate::model::rank::UserRank;
 use crate::model::user::User;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 use warp::http::StatusCode;
 use warp::reply::Json;
 use warp::reply::Response;
@@ -61,6 +62,11 @@ pub enum Error {
     FailedQuery(#[from] diesel::result::Error),
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
+    #[error("Resource does not exist")]
+    ResourceDoesNotExist,
+    // Someone else modified this in the meantime. Please try again.
+    #[error("Resouce was modified by someone else")]
+    ResourceModified,
 }
 
 impl Error {
@@ -85,6 +91,8 @@ impl Error {
             Error::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Error::FailedQuery(err) => query_error_status_code(err),
             Error::InsufficientPrivileges => StatusCode::FORBIDDEN,
+            Error::ResourceDoesNotExist => StatusCode::GONE,
+            Error::ResourceModified => StatusCode::CONFLICT,
         }
     }
 
@@ -98,6 +106,8 @@ impl Error {
             Error::FailedConnection(_) => "Failed Connection",
             Error::FailedQuery(_) => "Failed Query",
             Error::InsufficientPrivileges => "Insufficient Privileges",
+            Error::ResourceDoesNotExist => "Resource Does Not Exist",
+            Error::ResourceModified => "Resource Modified",
         }
     }
 
@@ -121,6 +131,8 @@ impl ErrorKind for Error {
             Self::FailedConnection(err) => err.kind(),
             Self::FailedQuery(err) => err.kind(),
             Self::InsufficientPrivileges => "InsufficientPrivileges",
+            Self::ResourceDoesNotExist => "ResourceDoesNotExist",
+            Self::ResourceModified => "ResourceModified",
         }
     }
 }
@@ -160,6 +172,10 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
         .and(auth)
         .and(warp::body::bytes())
         .and_then(user_token::post_user);
+    let delete_user_token = warp::delete()
+        .and(warp::path!("user-token" / String / Uuid))
+        .and(auth)
+        .and_then(user_token::delete_user);
 
     let catch_all = warp::any().map(|| {
         println!("Unimplemented request!");
@@ -172,6 +188,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
         .or(get_user)
         .or(post_user)
         .or(post_user_token)
+        .or(delete_user_token)
         .or(catch_all)
         .with(log)
 }

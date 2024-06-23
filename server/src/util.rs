@@ -44,12 +44,13 @@ where
 }
 
 fn validate_uniqueness(table_name: &str, transaction_type: &str, rows_changed: usize) -> QueryResult<()> {
-    let error_message =
-        |msg: String| -> Error { Error::DatabaseError(DatabaseErrorKind::UniqueViolation, Box::new(msg)) };
     match rows_changed {
-        0 => Err(error_message(format!("Failed to {transaction_type} {table_name}: no entry found"))),
+        0 => Err(Error::NotFound),
         1 => Ok(()),
-        _ => Err(error_message(format!("Failed to {transaction_type} {table_name}: entry is not unique"))),
+        _ => Err(Error::DatabaseError(
+            DatabaseErrorKind::UniqueViolation,
+            Box::new(format!("Failed to {transaction_type} {table_name}: entry is not unique")),
+        )),
     }
 }
 

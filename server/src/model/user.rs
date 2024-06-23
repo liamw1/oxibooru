@@ -193,9 +193,19 @@ pub struct UserToken {
     pub last_usage_time: DateTime,
 }
 
+impl TableName for UserToken {
+    fn table_name() -> &'static str {
+        "user_token"
+    }
+}
+
 impl UserToken {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         user_token::table.count().first(conn)
+    }
+
+    pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
+        util::delete(conn, &self)
     }
 }
 
