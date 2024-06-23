@@ -22,6 +22,7 @@ pub struct TagCategory {
     pub order: i32,
     pub name: String,
     pub color: String,
+    pub last_edit_time: DateTime,
 }
 
 impl TagCategory {

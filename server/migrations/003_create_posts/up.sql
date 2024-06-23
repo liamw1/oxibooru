@@ -14,7 +14,6 @@ CREATE TABLE "post" (
     "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
 SELECT diesel_manage_last_edit_time('post');
 
 CREATE TABLE "post_relation" (

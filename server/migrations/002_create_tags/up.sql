@@ -3,9 +3,10 @@ CREATE TABLE "tag_category" (
     "order" INTEGER NOT NULL,
     "name" VARCHAR(32) NOT NULL,
     "color" VARCHAR(32) NOT NULL,
+    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE ("name")
 );
-
+SELECT diesel_manage_last_edit_time('tag_category');
 INSERT INTO "tag_category" ("id", "order", "name", "color") OVERRIDING SYSTEM VALUE VALUES (0, 0, 'default', 'blue');
 
 CREATE TABLE "tag" (
@@ -15,7 +16,6 @@ CREATE TABLE "tag" (
     "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
 SELECT diesel_manage_last_edit_time('tag');
 
 CREATE TABLE "tag_name" (

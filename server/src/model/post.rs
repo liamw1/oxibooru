@@ -41,6 +41,7 @@ pub struct Post {
     pub flags: Option<String>,
     pub source: Option<String>,
     pub creation_time: DateTime,
+    pub last_edit_time: DateTime,
 }
 
 impl TableName for Post {

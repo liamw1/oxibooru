@@ -35,7 +35,7 @@ struct NewUserInfo {
 // TODO: Remove renames by changing references to these names in client
 #[derive(Serialize)]
 struct UserInfo {
-    version: i32,
+    version: DateTime,
     name: String,
     email: Option<String>,
     rank: String,
@@ -69,7 +69,7 @@ impl UserInfo {
         let favorite_post_count = user.favorite_post_count(conn)?;
 
         Ok(Self {
-            version: 0,
+            version: user.last_edit_time,
             name: user.name,
             email: user.email,
             rank: user.rank.to_string(),
@@ -94,7 +94,7 @@ impl UserInfo {
 
         const HIDDEN: &'static str = "false";
         Ok(Self {
-            version: 0,
+            version: user.last_edit_time,
             name: user.name,
             email: Some(HIDDEN.to_owned()),
             rank: user.rank.to_string(),

@@ -2,9 +2,10 @@ CREATE TABLE "pool_category" (
     "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     "name" VARCHAR(32) NOT NULL,
     "color" VARCHAR(32) NOT NULL,
+    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     UNIQUE ("name")
 );
-
+SELECT diesel_manage_last_edit_time('pool_category');
 INSERT INTO "pool_category" ("id", "name", "color") OVERRIDING SYSTEM VALUE VALUES (0, 'default', 'blue');
 
 CREATE TABLE "pool" (
@@ -14,7 +15,6 @@ CREATE TABLE "pool" (
     "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
 SELECT diesel_manage_last_edit_time('pool');
 
 CREATE TABLE "pool_name" (

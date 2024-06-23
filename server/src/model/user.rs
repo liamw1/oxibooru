@@ -32,6 +32,7 @@ pub struct User {
     pub rank: UserRank,
     pub creation_time: DateTime,
     pub last_login_time: DateTime,
+    pub last_edit_time: DateTime,
 }
 
 impl TableName for User {

@@ -31,7 +31,7 @@ struct NewUserTokenInfo {
 // TODO: Remove renames by changing references to these names in client
 #[derive(Serialize)]
 struct UserTokenInfo {
-    version: i32,
+    version: DateTime, // TODO: Remove last_edit_time as it fills the same role as version here
     user: api::MicroUser,
     token: Uuid,
     note: Option<String>,
@@ -49,7 +49,7 @@ struct UserTokenInfo {
 impl UserTokenInfo {
     fn new(user: api::MicroUser, user_token: UserToken) -> Result<Self, api::Error> {
         Ok(UserTokenInfo {
-            version: 0,
+            version: user_token.last_edit_time.clone().into(),
             user,
             token: user_token.token,
             note: user_token.note,

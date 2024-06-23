@@ -3,6 +3,7 @@ use crate::model::pool::PoolCategory;
 use crate::model::rank::UserRank;
 use crate::schema::pool;
 use crate::schema::pool_category;
+use crate::util::DateTime;
 use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -14,7 +15,7 @@ pub async fn list_pool_categories(auth_result: api::AuthenticationResult) -> Res
 
 #[derive(Serialize)]
 struct PoolCategoryInfo {
-    version: i32,
+    version: DateTime,
     name: String,
     color: String,
     usages: i64,
@@ -43,7 +44,7 @@ fn read_pool_categories(access_level: UserRank) -> Result<PoolCategoryList, api:
             .into_iter()
             .zip(pool_category_usages.into_iter())
             .map(|(category, usages)| PoolCategoryInfo {
-                version: 0,
+                version: category.last_edit_time,
                 name: category.name,
                 color: category.color,
                 usages: usages.unwrap_or(0),

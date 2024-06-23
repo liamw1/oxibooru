@@ -3,6 +3,7 @@ use crate::model::rank::UserRank;
 use crate::model::tag::TagCategory;
 use crate::schema::tag;
 use crate::schema::tag_category;
+use crate::util::DateTime;
 use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -14,7 +15,7 @@ pub async fn list_tag_categories(auth_result: api::AuthenticationResult) -> Resu
 
 #[derive(Serialize)]
 struct TagCategoryInfo {
-    version: i32,
+    version: DateTime,
     name: String,
     color: String,
     usages: i64,
@@ -44,7 +45,7 @@ fn read_tag_categories(access_level: UserRank) -> Result<TagCategoryList, api::E
             .into_iter()
             .zip(tag_category_usages.into_iter())
             .map(|(category, usages)| TagCategoryInfo {
-                version: 0,
+                version: category.last_edit_time,
                 name: category.name,
                 color: category.color,
                 usages: usages.unwrap_or(0),

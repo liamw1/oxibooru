@@ -20,6 +20,7 @@ pub struct PoolCategory {
     pub id: i32,
     pub name: String,
     pub color: String,
+    pub last_edit_time: DateTime,
 }
 
 impl TableName for PoolCategory {
