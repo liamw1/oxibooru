@@ -1,6 +1,6 @@
 use crate::api;
-use crate::auth::hash;
-use crate::model::rank::UserRank;
+use crate::auth::password;
+use crate::model::enums::UserRank;
 use crate::model::user::{NewUser, User};
 use crate::schema::user;
 use crate::util::DateTime;
@@ -8,7 +8,6 @@ use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use warp::hyper::body::Bytes;
 use warp::reject::Rejection;
 
@@ -29,33 +28,25 @@ struct NewUserInfo {
     name: String,
     password: String,
     email: Option<String>,
-    rank: Option<String>,
+    rank: Option<UserRank>,
 }
 
 // TODO: Remove renames by changing references to these names in client
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct UserInfo {
     version: DateTime,
     name: String,
     email: Option<String>,
-    rank: String,
-    #[serde(rename(serialize = "lastLogintime"))]
+    rank: UserRank,
     last_login_time: DateTime,
-    #[serde(rename(serialize = "creationTime"))]
     creation_time: DateTime,
-    #[serde(rename(serialize = "avatarStyle"))]
     avatar_style: String,
-    #[serde(rename(serialize = "avatarUrl"))]
     avatar_url: String,
-    #[serde(rename(serialize = "commentCount"))]
     comment_count: i64,
-    #[serde(rename(serialize = "uploadedPostCount"))]
     uploaded_post_count: i64,
-    #[serde(rename(serialize = "likedPostCount"))]
     liked_post_count: String,
-    #[serde(rename(serialize = "dislikedPostCount"))]
     disliked_post_count: String,
-    #[serde(rename(serialize = "favoritePostCount"))]
     favorite_post_count: i64,
 }
 
@@ -72,7 +63,7 @@ impl UserInfo {
             version: user.last_edit_time,
             name: user.name,
             email: user.email,
-            rank: user.rank.to_string(),
+            rank: user.rank,
             last_login_time: user.last_login_time,
             creation_time: user.creation_time,
             avatar_url,
@@ -97,7 +88,7 @@ impl UserInfo {
             version: user.last_edit_time,
             name: user.name,
             email: Some(HIDDEN.to_owned()),
-            rank: user.rank.to_string(),
+            rank: user.rank,
             last_login_time: user.last_login_time,
             creation_time: user.creation_time,
             avatar_url,
@@ -114,17 +105,14 @@ impl UserInfo {
 fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo, api::Error> {
     let target = if client.is_some() { "any" } else { "self" };
     let client_rank = api::client_access_level(client);
-    let requested_rank = match user_info.rank {
-        Some(rank) => UserRank::from_str(&rank)?,
-        None => UserRank::Regular,
-    };
+    let requested_rank = user_info.rank.unwrap_or(UserRank::Regular);
     let requested_action = "users:create:".to_owned() + target;
 
     api::validate_privilege(client_rank, &requested_action)?;
     let rank = requested_rank.clamp(UserRank::Regular, std::cmp::max(client_rank, UserRank::Regular));
 
     let salt = SaltString::generate(&mut OsRng);
-    let hash = hash::hash_password(&user_info.password, salt.as_str())?;
+    let hash = password::hash_password(&user_info.password, salt.as_str())?;
     let new_user = NewUser {
         name: &user_info.name,
         password_hash: &hash,

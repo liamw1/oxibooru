@@ -1,3 +1,4 @@
+use crate::model::enums::{MimeType, PostSafety, PostType};
 use crate::model::pool::{Pool, PoolPost};
 use crate::model::tag::Tag;
 use crate::model::user::User;
@@ -17,9 +18,9 @@ pub struct NewPost<'a> {
     pub file_size: i64,
     pub width: i32,
     pub height: i32,
-    pub safety: &'a str,
-    pub file_type: &'a str,
-    pub mime_type: &'a str,
+    pub safety: PostSafety,
+    pub type_: PostType,
+    pub mime_type: MimeType,
     pub checksum: &'a str,
 }
 
@@ -33,9 +34,9 @@ pub struct Post {
     pub file_size: i64,
     pub width: i32,
     pub height: i32,
-    pub safety: String,
-    pub file_type: String,
-    pub mime_type: String,
+    pub safety: PostSafety,
+    pub type_: PostType,
+    pub mime_type: MimeType,
     pub checksum: String,
     pub checksum_md5: Option<String>,
     pub flags: Option<String>,
@@ -262,7 +263,7 @@ mod test {
             create_test_user(conn, TEST_USERNAME).and_then(|user| create_test_post(conn, &user))
         });
 
-        assert_eq!(post.safety, "safe");
+        assert_eq!(post.safety, PostSafety::Safe);
     }
 
     #[test]

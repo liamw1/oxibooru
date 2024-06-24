@@ -1,6 +1,6 @@
 use crate::api;
+use crate::model::enums::UserRank;
 use crate::model::pool::PoolCategory;
-use crate::model::rank::UserRank;
 use crate::schema::pool;
 use crate::schema::pool_category;
 use crate::util::DateTime;

@@ -1,12 +1,13 @@
 pub mod info;
 pub mod pool_category;
+pub mod post;
 pub mod tag_category;
 pub mod user;
 pub mod user_token;
 
 use crate::auth::header::{self, AuthenticationError};
 use crate::error::ErrorKind;
-use crate::model::rank::UserRank;
+use crate::model::enums::UserRank;
 use crate::model::user::User;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -56,7 +57,7 @@ pub enum Error {
     BadBody(#[from] serde_json::Error),
     BadHash(#[from] crate::auth::HashError),
     BadHeader(#[from] warp::http::header::ToStrError),
-    BadUserPrivilege(#[from] crate::model::rank::ParseUserPrivilegeError),
+    BadUserPrivilege(#[from] crate::model::enums::ParseUserRankError),
     FailedAuthentication(#[from] AuthenticationError),
     FailedConnection(#[from] diesel::ConnectionError),
     FailedQuery(#[from] diesel::result::Error),
@@ -203,9 +204,9 @@ struct ErrorResponse {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct MicroUser {
     name: String,
-    #[serde(rename(serialize = "avatarUrl", deserialize = "avatarUrl"))]
     avatar_url: String,
 }
 

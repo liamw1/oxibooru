@@ -61,7 +61,7 @@ fn basic_access_authentication(credentials: &str) -> Result<User, Authentication
 
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
-    match auth::hash::is_valid_password(&user, &password) {
+    match auth::password::is_valid_password(&user, &password) {
         true => Ok(user),
         false => Err(AuthenticationError::InvalidPassword),
     }
@@ -77,7 +77,7 @@ fn token_authentication(credentials: &str) -> Result<User, AuthenticationError> 
         .select(UserToken::as_select())
         .filter(user_token::token.eq(token))
         .first(&mut conn)?;
-    match auth::hash::is_valid_token(&user_token) {
+    match auth::token::is_valid_token(&user_token) {
         true => Ok(user),
         false => Err(AuthenticationError::InvalidToken),
     }

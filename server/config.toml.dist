@@ -1,5 +1,10 @@
-# Used to salt the users' password hashes and generate filenames for static content
-secret = "change"
+# Used to salt the users' password hashes
+password_secret = "change"
+# Used to generate filenames for static content
+content_secret = "change"
+
+data_url = "data/"
+data_dir = "/data/"
 
 # Delete thumbnails and source files on post delete
 # Original functionality is false, to mitigate the impacts of admins going on unchecked post purges

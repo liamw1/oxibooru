@@ -12,18 +12,13 @@ pub async fn get_info() -> Result<api::Reply, Rejection> {
 
 // TODO: Remove renames by changing references to these names in client
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Info {
-    #[serde(rename(serialize = "postCount"))]
     post_count: i64,
-    #[serde(rename(serialize = "diskUsage"))]
     disk_usage: i64,
-    #[serde(rename(serialize = "featuredPost"))]
     featured_post: Option<i64>,
-    #[serde(rename(serialize = "featuringTime"))]
     featuring_time: Option<DateTime>,
-    #[serde(rename(serialize = "featuringUser"))]
     featuring_user: Option<String>,
-    #[serde(rename(serialize = "serverTime"))]
     server_time: DateTime,
     config: Table,
 }

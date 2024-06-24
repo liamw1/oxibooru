@@ -1,6 +1,6 @@
 use crate::model::comment::{Comment, CommentScore, NewComment, NewCommentScore};
+use crate::model::enums::UserRank;
 use crate::model::post::{NewPostFavorite, NewPostFeature, NewPostScore, Post, PostFavorite, PostFeature, PostScore};
-use crate::model::rank::UserRank;
 use crate::model::TableName;
 use crate::schema::{comment, comment_score, post, post_favorite, post_feature, post_score, user, user_token};
 use crate::util;

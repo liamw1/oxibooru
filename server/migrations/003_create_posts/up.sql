@@ -4,9 +4,9 @@ CREATE TABLE "post" (
     "file_size" BIGINT NOT NULL,
     "width" INTEGER NOT NULL,
     "height" INTEGER NOT NULL,
-    "safety" VARCHAR(32) NOT NULL,
-    "file_type" VARCHAR(32) NOT NULL,
-    "mime_type" VARCHAR(32) NOT NULL,   -- MIME stands for Multipurpose Internet Mail Extensions
+    "safety" SMALLINT NOT NULL,
+    "type" SMALLINT NOT NULL,
+    "mime_type" SMALLINT NOT NULL,   -- MIME stands for Multipurpose Internet Mail Extensions
     "checksum" VARCHAR(64) NOT NULL,
     "checksum_md5" VARCHAR(32),
     "flags" VARCHAR(32),

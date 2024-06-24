@@ -1,5 +1,6 @@
+use crate::model::enums::{MimeType, UserRank};
+use crate::model::enums::{PostSafety, PostType};
 use crate::model::post::{NewPost, NewPostNote, NewPostSignature, Post, PostNote, PostSignature};
-use crate::model::rank::UserRank;
 use crate::model::user::{NewUser, NewUserToken, User, UserToken};
 use crate::schema::{post, post_note, post_signature, user, user_token};
 use crate::util::DateTime;
@@ -79,9 +80,9 @@ pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Pos
         file_size: 64,
         width: 64,
         height: 64,
-        safety: "safe",
-        file_type: "image",
-        mime_type: "png",
+        safety: PostSafety::Safe,
+        type_: PostType::Image,
+        mime_type: MimeType::PNG,
         checksum: "",
     };
     diesel::insert_into(post::table)

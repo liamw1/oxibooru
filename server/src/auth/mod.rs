@@ -1,8 +1,10 @@
-pub mod hash;
+pub mod content;
 pub mod header;
+pub mod password;
+pub mod token;
 
 use crate::config::CONFIG;
-use crate::model::rank::UserRank;
+use crate::model::enums::UserRank;
 use std::str::FromStr;
 use thiserror::Error;
 

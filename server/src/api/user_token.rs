@@ -31,28 +31,25 @@ pub async fn delete_user(
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct PostUserTokenInfo {
     enabled: bool,
     note: Option<String>,
-    #[serde(rename(deserialize = "expirationTime"))]
     expiration_time: Option<DateTime>,
 }
 
 // TODO: Remove renames by changing references to these names in client
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct UserTokenInfo {
     version: DateTime, // TODO: Remove last_edit_time as it fills the same role as version here
     user: api::MicroUser,
     token: Uuid,
     note: Option<String>,
     enabled: bool,
-    #[serde(rename(serialize = "expirationTime"))]
     expiration_time: Option<DateTime>,
-    #[serde(rename(serialize = "creationTime"))]
     creation_time: DateTime,
-    #[serde(rename(serialize = "lastEditTime"))]
     last_edit_time: DateTime,
-    #[serde(rename(serialize = "lastUsageTime"))]
     last_usage_time: DateTime,
 }
 

@@ -1,5 +1,5 @@
 use crate::api;
-use crate::model::rank::UserRank;
+use crate::model::enums::UserRank;
 use crate::model::tag::TagCategory;
 use crate::schema::tag;
 use crate::schema::tag_category;
