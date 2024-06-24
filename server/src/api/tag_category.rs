@@ -29,7 +29,7 @@ struct TagCategoryList {
 }
 
 fn read_tag_categories(access_level: UserRank) -> Result<TagCategoryList, api::Error> {
-    api::validate_privilege(access_level, "tag_categories:list")?;
+    api::verify_privilege(access_level, "tag_categories:list")?;
 
     let mut conn = crate::establish_connection()?;
     let tag_categories = tag_category::table.select(TagCategory::as_select()).load(&mut conn)?;

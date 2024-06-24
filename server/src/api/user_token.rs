@@ -9,7 +9,7 @@ use uuid::Uuid;
 use warp::hyper::body::Bytes;
 use warp::Rejection;
 
-pub async fn post_user(
+pub async fn post_user_token(
     username: String,
     auth_result: api::AuthenticationResult,
     body: Bytes,
@@ -21,7 +21,7 @@ pub async fn post_user(
         .into())
 }
 
-pub async fn delete_user(
+pub async fn delete_user_token(
     username: String,
     token: Uuid,
     auth_result: api::AuthenticationResult,
@@ -81,7 +81,7 @@ fn create_user_token(
     let client_id = client.map(|user| user.id);
     let target = if client_id == Some(user.id) { "self" } else { "any" };
     let requested_action = "user_tokens:create:".to_owned() + target;
-    api::validate_privilege(api::client_access_level(client), &requested_action)?;
+    api::verify_privilege(api::client_access_level(client), &requested_action)?;
 
     let new_user_token = NewUserToken {
         user_id: user.id,
@@ -104,7 +104,7 @@ fn remove_user_token(username: String, token: Uuid, client: Option<&User>) -> Re
     let client_id = client.map(|user| user.id);
     let target = if client_id == Some(user.id) { "self" } else { "any" };
     let requested_action = "user_tokens:delete:".to_owned() + target;
-    api::validate_privilege(api::client_access_level(client), &requested_action)?;
+    api::verify_privilege(api::client_access_level(client), &requested_action)?;
 
     let user_token = UserToken::belonging_to(&user)
         .select(UserToken::as_select())

@@ -11,6 +11,12 @@ use serde::{Deserialize, Serialize};
 use warp::hyper::body::Bytes;
 use warp::reject::Rejection;
 
+pub async fn list_users(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Rejection> {
+    Ok(auth_result
+        .and_then(|client| api::parse_body(&body).and_then(|request| read_users(request, client.as_ref())))
+        .into())
+}
+
 pub async fn get_user(username: String, auth_result: api::AuthenticationResult) -> Result<api::Reply, Rejection> {
     Ok(auth_result
         .and_then(|client| read_user(username, client.as_ref()))
@@ -49,6 +55,7 @@ struct UserInfo {
     disliked_post_count: String,
     favorite_post_count: i64,
 }
+type PagedUserInfo = api::PagedResponse<UserInfo>;
 
 impl UserInfo {
     fn full(conn: &mut PgConnection, user: User) -> Result<Self, api::Error> {
@@ -108,7 +115,7 @@ fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo
     let requested_rank = user_info.rank.unwrap_or(UserRank::Regular);
     let requested_action = "users:create:".to_owned() + target;
 
-    api::validate_privilege(client_rank, &requested_action)?;
+    api::verify_privilege(client_rank, &requested_action)?;
     let rank = requested_rank.clamp(UserRank::Regular, std::cmp::max(client_rank, UserRank::Regular));
 
     let salt = SaltString::generate(&mut OsRng);
@@ -135,8 +142,33 @@ fn read_user(username: String, client: Option<&User>) -> Result<UserInfo, api::E
 
     let client_id = client.map(|user| user.id);
     if client_id != Some(user.id) {
-        api::validate_privilege(api::client_access_level(client), "users:view")?;
+        api::verify_privilege(api::client_access_level(client), "users:view")?;
         return UserInfo::public_only(&mut conn, user);
     }
     UserInfo::full(&mut conn, user)
+}
+
+fn read_users(body: api::PagedRequest, client: Option<&User>) -> Result<PagedUserInfo, api::Error> {
+    api::verify_privilege(api::client_access_level(client), "users:list")?;
+
+    let offset = body.offset.unwrap_or(0);
+    let limit = body.limit.unwrap_or(40);
+
+    let mut conn = crate::establish_connection()?;
+    let users = user::table
+        .select(User::as_select())
+        .limit(limit)
+        .offset(offset)
+        .load(&mut conn)?;
+
+    Ok(PagedUserInfo {
+        query: body.query,
+        offset,
+        limit,
+        total: users.len() as i64,
+        results: users
+            .into_iter()
+            .map(|user| UserInfo::public_only(&mut conn, user))
+            .collect::<Result<_, _>>()?,
+    })
 }

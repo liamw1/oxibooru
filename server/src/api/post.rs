@@ -12,10 +12,13 @@ use crate::schema::{post, post_favorite, post_score, post_tag, tag, user};
 use crate::util::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
+use warp::hyper::body::Bytes;
 use warp::Rejection;
 
-pub async fn list_posts(auth_result: api::AuthenticationResult) -> Result<api::Reply, Rejection> {
-    Ok(auth_result.and_then(|client| read_posts(client.as_ref())).into())
+pub async fn list_posts(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Rejection> {
+    Ok(auth_result
+        .and_then(|client| api::parse_body(&body).and_then(|parsed_body| read_posts(parsed_body, client.as_ref())))
+        .into())
 }
 
 #[derive(Serialize)]
@@ -31,15 +34,6 @@ impl PostNoteInfo {
             text: note.text,
         }
     }
-}
-
-#[derive(Serialize)]
-struct PagedPostInfo {
-    query: String,
-    offset: i32,
-    limit: i32,
-    total: i32,
-    results: Vec<PostInfo>,
 }
 
 #[derive(Serialize)]
@@ -80,6 +74,7 @@ struct PostInfo {
     comments: Vec<CommentInfo>,
     pools: Vec<MicroPool>,
 }
+type PagedPostInfo = api::PagedResponse<PostInfo>;
 
 impl PostInfo {
     fn new(conn: &mut PgConnection, post: Post, client: Option<i32>) -> Result<PostInfo, api::Error> {
@@ -175,19 +170,25 @@ impl PostInfo {
     }
 }
 
-fn read_posts(client: Option<&User>) -> Result<PagedPostInfo, api::Error> {
-    api::validate_privilege(api::client_access_level(client), "posts:list")?;
+fn read_posts(body: api::PagedRequest, client: Option<&User>) -> Result<PagedPostInfo, api::Error> {
+    api::verify_privilege(api::client_access_level(client), "posts:list")?;
 
     let client_id = client.map(|user| user.id);
+    let offset = body.offset.unwrap_or(0);
+    let limit = body.limit.unwrap_or(40);
 
     let mut conn = crate::establish_connection()?;
-    let posts = post::table.select(Post::as_select()).limit(40).load(&mut conn)?; // All posts for now
+    let posts = post::table
+        .select(Post::as_select())
+        .limit(limit)
+        .offset(offset)
+        .load(&mut conn)?;
 
     Ok(PagedPostInfo {
-        query: String::new(),
-        offset: 0,
-        limit: 40,
-        total: posts.len() as i32,
+        query: body.query,
+        offset,
+        limit,
+        total: posts.len() as i64,
         results: posts
             .into_iter()
             .map(|post| PostInfo::new(&mut conn, post, client_id))

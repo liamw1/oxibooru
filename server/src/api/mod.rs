@@ -11,9 +11,10 @@ use crate::auth::header::{self, AuthenticationError};
 use crate::error::ErrorKind;
 use crate::model::enums::UserRank;
 use crate::model::user::User;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use warp::http::StatusCode;
+use warp::hyper::body::Bytes;
 use warp::reply::Json;
 use warp::reply::Response;
 use warp::reply::WithStatus;
@@ -140,7 +141,7 @@ impl ErrorKind for Error {
     }
 }
 
-pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert::Infallible> + Clone {
+pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
     let auth = warp::header::optional("Authorization").map(|opt_auth: Option<_>| {
         opt_auth
             .map(|auth| header::authenticate_user(auth).map(Some))
@@ -164,7 +165,13 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
     let list_posts = warp::get()
         .and(warp::path!("posts"))
         .and(auth)
+        .and(warp::body::bytes())
         .and_then(post::list_posts);
+    let list_users = warp::get()
+        .and(warp::path!("users"))
+        .and(auth)
+        .and(warp::body::bytes())
+        .and_then(user::list_users);
     let get_user = warp::get()
         .and(warp::path!("user" / String))
         .and(auth)
@@ -178,14 +185,15 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
         .and(warp::path!("user-token" / String))
         .and(auth)
         .and(warp::body::bytes())
-        .and_then(user_token::post_user);
+        .and_then(user_token::post_user_token);
     let delete_user_token = warp::delete()
         .and(warp::path!("user-token" / String / Uuid))
         .and(auth)
-        .and_then(user_token::delete_user);
+        .and_then(user_token::delete_user_token);
 
-    let catch_all = warp::any().map(|| {
+    let catch_all = warp::any().and(warp::body::bytes()).map(|body: Bytes| {
         println!("Unimplemented request!");
+        log_body(&body);
         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
     });
 
@@ -193,6 +201,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
         .or(list_tag_categories)
         .or(list_pool_categories)
         .or(list_posts)
+        .or(list_users)
         .or(get_user)
         .or(post_user)
         .or(post_user_token)
@@ -202,6 +211,22 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
 }
 
 type AuthenticationResult = Result<Option<User>, Error>;
+
+#[derive(Deserialize)]
+struct PagedRequest {
+    offset: Option<i64>,
+    limit: Option<i64>,
+    query: Option<String>,
+}
+
+#[derive(Serialize)]
+struct PagedResponse<T: Serialize> {
+    query: Option<String>,
+    offset: i64,
+    limit: i64,
+    total: i64,
+    results: Vec<T>,
+}
 
 #[derive(Serialize)]
 struct ErrorResponse {
@@ -218,11 +243,17 @@ fn access_level(auth_result: AuthenticationResult) -> Result<UserRank, Error> {
     auth_result.map(|client| client_access_level(client.as_ref()))
 }
 
-fn validate_privilege(client_rank: UserRank, requested_action: &str) -> Result<(), Error> {
+fn verify_privilege(client_rank: UserRank, requested_action: &str) -> Result<(), Error> {
     if !client_rank.has_permission_to(requested_action) {
         return Err(Error::InsufficientPrivileges);
     }
     Ok(())
+}
+
+fn log_body(body: &[u8]) {
+    if !body.is_empty() {
+        println!("Incoming body: {}", std::str::from_utf8(body).unwrap_or("ERROR: Failed to parse"));
+    }
 }
 
 /*
@@ -230,6 +261,10 @@ fn validate_privilege(client_rank: UserRank, requested_action: &str) -> Result<(
     issues. Instead, we will parse the raw bytes into a deserialize-capable structure.
 */
 fn parse_body<'a, T: serde::Deserialize<'a>>(body: &'a [u8]) -> Result<T, Error> {
-    println!("Incoming body: {}", std::str::from_utf8(body).unwrap_or("ERROR: Failed to parse"));
-    serde_json::from_slice(body).map_err(Error::from)
+    if body.is_empty() {
+        serde_json::from_slice("{}".as_bytes()).map_err(Error::from)
+    } else {
+        log_body(body);
+        serde_json::from_slice(body).map_err(Error::from)
+    }
 }

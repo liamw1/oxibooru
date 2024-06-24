@@ -28,7 +28,7 @@ struct PoolCategoryList {
 }
 
 fn read_pool_categories(access_level: UserRank) -> Result<PoolCategoryList, api::Error> {
-    api::validate_privilege(access_level, "pool_categories:list")?;
+    api::verify_privilege(access_level, "pool_categories:list")?;
 
     let mut conn = crate::establish_connection()?;
     let pool_categories = pool_category::table.select(PoolCategory::as_select()).load(&mut conn)?;
