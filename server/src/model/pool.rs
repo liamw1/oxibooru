@@ -92,7 +92,7 @@ impl Pool {
     }
 
     pub fn names(&self, conn: &mut PgConnection) -> QueryResult<Vec<String>> {
-        PoolName::belonging_to(self).select(pool_name::columns::name).load(conn)
+        PoolName::belonging_to(self).select(pool_name::name).load(conn)
     }
 
     pub fn add_name(&self, conn: &mut PgConnection, name: &str) -> QueryResult<PoolName> {

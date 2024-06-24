@@ -1,4 +1,6 @@
+pub mod comment;
 pub mod info;
+pub mod micro;
 pub mod pool_category;
 pub mod post;
 pub mod tag_category;
@@ -9,7 +11,7 @@ use crate::auth::header::{self, AuthenticationError};
 use crate::error::ErrorKind;
 use crate::model::enums::UserRank;
 use crate::model::user::User;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use uuid::Uuid;
 use warp::http::StatusCode;
 use warp::reply::Json;
@@ -159,6 +161,10 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
         .and(warp::path!("pool-categories"))
         .and(auth)
         .and_then(pool_category::list_pool_categories);
+    let list_posts = warp::get()
+        .and(warp::path!("posts"))
+        .and(auth)
+        .and_then(post::list_posts);
     let get_user = warp::get()
         .and(warp::path!("user" / String))
         .and(auth)
@@ -186,6 +192,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = std::convert:
     get_info
         .or(list_tag_categories)
         .or(list_pool_categories)
+        .or(list_posts)
         .or(get_user)
         .or(post_user)
         .or(post_user_token)
@@ -201,23 +208,6 @@ struct ErrorResponse {
     title: String,
     name: String,
     description: String,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct MicroUser {
-    name: String,
-    avatar_url: String,
-}
-
-impl MicroUser {
-    fn new(user: User) -> Self {
-        let avatar_url = user.avatar_url();
-        Self {
-            name: user.name,
-            avatar_url,
-        }
-    }
 }
 
 fn client_access_level(client: Option<&User>) -> UserRank {

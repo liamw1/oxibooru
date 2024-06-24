@@ -24,6 +24,7 @@ pub struct Comment {
     pub post_id: i32,
     pub text: String,
     pub creation_time: DateTime,
+    pub last_edit_time: DateTime,
 }
 
 impl TableName for Comment {

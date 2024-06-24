@@ -1,4 +1,5 @@
 use crate::api;
+use crate::api::micro::MicroUser;
 use crate::model::user::{NewUserToken, User, UserToken};
 use crate::schema::user_token;
 use crate::util::DateTime;
@@ -43,7 +44,7 @@ struct PostUserTokenInfo {
 #[serde(rename_all = "camelCase")]
 struct UserTokenInfo {
     version: DateTime, // TODO: Remove last_edit_time as it fills the same role as version here
-    user: api::MicroUser,
+    user: MicroUser,
     token: Uuid,
     note: Option<String>,
     enabled: bool,
@@ -54,7 +55,7 @@ struct UserTokenInfo {
 }
 
 impl UserTokenInfo {
-    fn new(user: api::MicroUser, user_token: UserToken) -> Result<Self, api::Error> {
+    fn new(user: MicroUser, user_token: UserToken) -> Result<Self, api::Error> {
         Ok(UserTokenInfo {
             version: user_token.last_edit_time.clone().into(),
             user,
@@ -93,7 +94,7 @@ fn create_user_token(
         .values(&new_user_token)
         .returning(UserToken::as_returning())
         .get_result(&mut conn)?;
-    UserTokenInfo::new(api::MicroUser::new(user), user_token)
+    UserTokenInfo::new(MicroUser::new(user), user_token)
 }
 
 fn remove_user_token(username: String, token: Uuid, client: Option<&User>) -> Result<(), api::Error> {

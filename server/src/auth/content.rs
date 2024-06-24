@@ -15,6 +15,10 @@ pub fn post_content_url(post: &Post) -> String {
     format!("{}/posts/{}_{}.{}", *DATA_URL, post.id, post_security_hash(post.id), post.mime_type.extension())
 }
 
+pub fn post_thumbnail_url(post: &Post) -> String {
+    format!("{}/generated-thumbnails/{}_{}.jpg", *DATA_URL, post.id, post_security_hash(post.id))
+}
+
 type Hmac = SimpleHmac<blake3::Hasher>;
 
 static SECRET: Lazy<&'static str> = Lazy::new(|| util::read_required_config("content_secret"));

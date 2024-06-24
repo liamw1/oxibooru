@@ -56,6 +56,21 @@ impl Post {
         post::table.count().first(conn)
     }
 
+    pub fn score(&self, conn: &mut PgConnection) -> QueryResult<i64> {
+        PostScore::belonging_to(self)
+            .select(diesel::dsl::sum(post_score::score))
+            .first::<Option<_>>(conn)
+            .map(|n| n.unwrap_or(0))
+    }
+
+    pub fn favorite_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
+        PostFavorite::belonging_to(self).count().first(conn)
+    }
+
+    pub fn feature_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
+        PostFeature::belonging_to(self).count().first(conn)
+    }
+
     pub fn tag_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
         PostTag::belonging_to(self).count().first(conn)
     }
@@ -69,7 +84,7 @@ impl Post {
 
     pub fn related_posts(&self, conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
         PostRelation::belonging_to(self)
-            .inner_join(post::table.on(post::columns::id.eq(post_relation::columns::child_id)))
+            .inner_join(post::table.on(post::id.eq(post_relation::child_id)))
             .select(Self::as_select())
             .load(conn)
     }

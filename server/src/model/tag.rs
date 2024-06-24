@@ -67,31 +67,31 @@ impl Tag {
         tag::table.count().first(conn)
     }
 
-    pub fn post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
+    pub fn usages(&self, conn: &mut PgConnection) -> QueryResult<i64> {
         PostTag::belonging_to(self).count().first(conn)
     }
 
     pub fn primary_name(&self, conn: &mut PgConnection) -> QueryResult<String> {
         TagName::belonging_to(self)
-            .select(tag_name::columns::name)
-            .filter(tag_name::columns::order.eq(0))
+            .select(tag_name::name)
+            .filter(tag_name::order.eq(0))
             .first(conn)
     }
 
     pub fn names(&self, conn: &mut PgConnection) -> QueryResult<Vec<String>> {
-        TagName::belonging_to(self).select(tag_name::columns::name).load(conn)
+        TagName::belonging_to(self).select(tag_name::name).load(conn)
     }
 
     pub fn implications(&self, conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
         TagImplication::belonging_to(self)
-            .inner_join(tag::table.on(tag::columns::id.eq(tag_implication::columns::child_id)))
+            .inner_join(tag::table.on(tag::id.eq(tag_implication::child_id)))
             .select(Self::as_select())
             .load(conn)
     }
 
     pub fn suggestions(&self, conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
         TagSuggestion::belonging_to(self)
-            .inner_join(tag::table.on(tag::columns::id.eq(tag_suggestion::columns::child_id)))
+            .inner_join(tag::table.on(tag::id.eq(tag_suggestion::child_id)))
             .select(Self::as_select())
             .load(conn)
     }
@@ -298,17 +298,17 @@ mod test {
 
             assert_eq!(post1.tag_count(conn)?, 1);
             assert_eq!(post2.tag_count(conn)?, 2);
-            assert_eq!(tag1.post_count(conn)?, 2);
-            assert_eq!(tag2.post_count(conn)?, 1);
+            assert_eq!(tag1.usages(conn)?, 2);
+            assert_eq!(tag2.usages(conn)?, 1);
 
             post2.delete(conn)?;
 
-            assert_eq!(tag1.post_count(conn)?, 1);
-            assert_eq!(tag2.post_count(conn)?, 0);
+            assert_eq!(tag1.usages(conn)?, 1);
+            assert_eq!(tag2.usages(conn)?, 0);
 
             post1.delete(conn)?;
 
-            assert_eq!(tag1.post_count(conn)?, 0);
+            assert_eq!(tag1.usages(conn)?, 0);
 
             Ok(())
         });
