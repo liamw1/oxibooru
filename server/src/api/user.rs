@@ -1,6 +1,6 @@
 use crate::api;
 use crate::auth::password;
-use crate::model::enums::UserRank;
+use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::schema::user;
 use crate::util::DateTime;
@@ -47,7 +47,7 @@ struct UserInfo {
     rank: UserRank,
     last_login_time: DateTime,
     creation_time: DateTime,
-    avatar_style: String,
+    avatar_style: AvatarStyle,
     avatar_url: String,
     comment_count: i64,
     uploaded_post_count: i64,
@@ -126,6 +126,7 @@ fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo
         password_salt: salt.as_str(),
         email: user_info.email.as_deref(),
         rank,
+        avatar_style: AvatarStyle::Gravatar,
     };
 
     let mut conn = crate::establish_connection()?;

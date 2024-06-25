@@ -1,4 +1,3 @@
-use crate::config::CONFIG;
 use crate::model::TableName;
 use diesel::associations::HasTable;
 use diesel::backend::Backend;
@@ -14,13 +13,6 @@ use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
 use time::serde::rfc3339;
 use time::OffsetDateTime;
-
-pub fn read_required_config(name: &'static str) -> &'static str {
-    CONFIG
-        .get(name)
-        .and_then(|parsed| parsed.as_str())
-        .unwrap_or_else(|| panic!("No {name} found in config.toml"))
-}
 
 pub fn delete<R>(conn: &mut PgConnection, row: R) -> QueryResult<()>
 where

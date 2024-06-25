@@ -3,7 +3,7 @@ password_secret = "change"
 # Used to generate filenames for static content
 content_secret = "change"
 
-data_url = "data/"
+data_url = "data"
 data_dir = "/data/"
 
 # Delete thumbnails and source files on post delete

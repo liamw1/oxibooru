@@ -1,4 +1,4 @@
-use crate::model::enums::{MimeType, UserRank};
+use crate::model::enums::{AvatarStyle, MimeType, UserRank};
 use crate::model::enums::{PostSafety, PostType};
 use crate::model::post::{NewPost, NewPostNote, NewPostSignature, Post, PostNote, PostSignature};
 use crate::model::user::{NewUser, NewUserToken, User, UserToken};
@@ -48,6 +48,7 @@ pub fn create_test_user(conn: &mut PgConnection, name: &str) -> QueryResult<User
         password_salt: TEST_SALT,
         email: None,
         rank: TEST_PRIVILEGE,
+        avatar_style: AvatarStyle::Manual,
     };
     diesel::insert_into(user::table)
         .values(&new_user)

@@ -1,20 +1,46 @@
 use crate::auth;
-use diesel::backend::Backend;
-use diesel::deserialize::FromSql;
+use diesel::deserialize::{self, FromSql};
+use diesel::pg::Pg;
 use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::SmallInt;
+use diesel::AsExpression;
 use diesel::FromSqlRow;
-use diesel::{deserialize, AsExpression};
-use num_derive::{FromPrimitive, ToPrimitive};
-use num_traits::{FromPrimitive, ToPrimitive};
+use num_derive::FromPrimitive;
+use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use thiserror::Error;
 
-#[derive(
-    Debug, Copy, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize,
-)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize)]
+#[diesel(sql_type = SmallInt)]
+#[serde(rename_all = "lowercase")]
+pub enum AvatarStyle {
+    Gravatar,
+    Manual,
+}
+
+impl ToSql<SmallInt, Pg> for AvatarStyle
+where
+    i16: ToSql<SmallInt, Pg>,
+{
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        let value = *self as i16;
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
+    }
+}
+
+impl FromSql<SmallInt, Pg> for AvatarStyle
+where
+    i16: FromSql<SmallInt, Pg>,
+{
+    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
+        let database_value = i16::from_sql(bytes)?;
+        AvatarStyle::from_i16(database_value).ok_or(DeserializeAvatarStyleError.into())
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
 pub enum PostType {
@@ -25,30 +51,27 @@ pub enum PostType {
     Youtube,
 }
 
-impl<DB: Backend> ToSql<SmallInt, DB> for PostType
+impl ToSql<SmallInt, Pg> for PostType
 where
-    i16: ToSql<SmallInt, DB>,
+    i16: ToSql<SmallInt, Pg>,
 {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, DB>) -> serialize::Result {
-        // I have to do this jank here to get around the fact that to_sql doesn't work when called on a temporary
-        const VALUES: [i16; 5] = [0, 1, 2, 3, 4];
-        VALUES[self.to_usize().unwrap()].to_sql(out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        let value = *self as i16;
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl<DB: Backend> FromSql<SmallInt, DB> for PostType
+impl FromSql<SmallInt, Pg> for PostType
 where
-    i16: FromSql<SmallInt, DB>,
+    i16: FromSql<SmallInt, Pg>,
 {
-    fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
+    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
         PostType::from_i16(database_value).ok_or(DeserializePostTypeError.into())
     }
 }
 
-#[derive(
-    Debug, Copy, Clone, PartialEq, Eq, FromPrimitive, ToPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize,
-)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[diesel(sql_type = SmallInt)]
 pub enum MimeType {
     #[serde(rename = "image/bmp")]
@@ -84,41 +107,28 @@ impl MimeType {
     }
 }
 
-impl<DB: Backend> ToSql<SmallInt, DB> for MimeType
+impl ToSql<SmallInt, Pg> for MimeType
 where
-    i16: ToSql<SmallInt, DB>,
+    i16: ToSql<SmallInt, Pg>,
 {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, DB>) -> serialize::Result {
-        // I have to do this jank here to get around the fact that to_sql doesn't work when called on a temporary
-        const VALUES: [i16; 9] = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-        VALUES[self.to_usize().unwrap()].to_sql(out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        let value = *self as i16;
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl<DB: Backend> FromSql<SmallInt, DB> for MimeType
+impl FromSql<SmallInt, Pg> for MimeType
 where
-    i16: FromSql<SmallInt, DB>,
+    i16: FromSql<SmallInt, Pg>,
 {
-    fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
+    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
         MimeType::from_i16(database_value).ok_or(DeserializeMimeTypeError.into())
     }
 }
 
 #[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    FromPrimitive,
-    ToPrimitive,
-    AsExpression,
-    FromSqlRow,
-    Serialize,
-    Deserialize,
+    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize,
 )]
 #[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
@@ -128,22 +138,21 @@ pub enum PostSafety {
     Unsafe,
 }
 
-impl<DB: Backend> ToSql<SmallInt, DB> for PostSafety
+impl ToSql<SmallInt, Pg> for PostSafety
 where
-    i16: ToSql<SmallInt, DB>,
+    i16: ToSql<SmallInt, Pg>,
 {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, DB>) -> serialize::Result {
-        // I have to do this jank here to get around the fact that to_sql doesn't work when called on a temporary
-        const VALUES: [i16; 3] = [0, 1, 2];
-        VALUES[self.to_usize().unwrap()].to_sql(out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        let value = *self as i16;
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl<DB: Backend> FromSql<SmallInt, DB> for PostSafety
+impl FromSql<SmallInt, Pg> for PostSafety
 where
-    i16: FromSql<SmallInt, DB>,
+    i16: FromSql<SmallInt, Pg>,
 {
-    fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
+    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
         PostSafety::from_i16(database_value).ok_or(DeserializePostSafetyError.into())
     }
@@ -163,7 +172,6 @@ pub struct ParseUserRankError;
     Ord,
     EnumIter,
     FromPrimitive,
-    ToPrimitive,
     AsExpression,
     FromSqlRow,
     Serialize,
@@ -208,26 +216,29 @@ impl std::str::FromStr for UserRank {
     }
 }
 
-impl<DB: Backend> ToSql<SmallInt, DB> for UserRank
+impl ToSql<SmallInt, Pg> for UserRank
 where
-    i16: ToSql<SmallInt, DB>,
+    i16: ToSql<SmallInt, Pg>,
 {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, DB>) -> serialize::Result {
-        // I have to do this jank here to get around the fact that to_sql doesn't work when called on a temporary
-        const VALUES: [i16; 6] = [0, 1, 2, 3, 4, 5];
-        VALUES[self.to_usize().unwrap()].to_sql(out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        let value = *self as i16;
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl<DB: Backend> FromSql<SmallInt, DB> for UserRank
+impl FromSql<SmallInt, Pg> for UserRank
 where
-    i16: FromSql<SmallInt, DB>,
+    i16: FromSql<SmallInt, Pg>,
 {
-    fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
+    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
         UserRank::from_i16(database_value).ok_or(DeserializeUserPrivilegeError.into())
     }
 }
+
+#[derive(Debug, Error)]
+#[error("Failed to deserialize avatar style")]
+struct DeserializeAvatarStyleError;
 
 #[derive(Debug, Error)]
 #[error("Failed to deserialize post type")]

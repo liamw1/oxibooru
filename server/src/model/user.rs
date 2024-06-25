@@ -1,5 +1,6 @@
+use crate::auth::content;
 use crate::model::comment::{Comment, CommentScore, NewComment, NewCommentScore};
-use crate::model::enums::UserRank;
+use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::post::{NewPostFavorite, NewPostFeature, NewPostScore, Post, PostFavorite, PostFeature, PostScore};
 use crate::model::TableName;
 use crate::schema::{comment, comment_score, post, post_favorite, post_feature, post_score, user, user_token};
@@ -17,6 +18,7 @@ pub struct NewUser<'a> {
     pub password_salt: &'a str,
     pub email: Option<&'a str>,
     pub rank: UserRank,
+    pub avatar_style: AvatarStyle,
 }
 
 #[derive(Debug, PartialEq, Eq, Identifiable, Queryable, Selectable)]
@@ -28,7 +30,7 @@ pub struct User {
     pub password_hash: String,
     pub password_salt: String,
     pub email: Option<String>,
-    pub avatar_style: String,
+    pub avatar_style: AvatarStyle,
     pub rank: UserRank,
     pub creation_time: DateTime,
     pub last_login_time: DateTime,
@@ -54,7 +56,10 @@ impl User {
     }
 
     pub fn avatar_url(&self) -> String {
-        "unimplemented".to_owned() // TODO
+        match self.avatar_style {
+            AvatarStyle::Gravatar => content::gravatar_url(&self.name),
+            AvatarStyle::Manual => content::manual_url(&self.name),
+        }
     }
 
     pub fn post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
