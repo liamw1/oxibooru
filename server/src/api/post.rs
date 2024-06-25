@@ -12,13 +12,18 @@ use crate::schema::{post, post_favorite, post_score, post_tag, tag, user};
 use crate::util::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
+use std::convert::Infallible;
 use warp::hyper::body::Bytes;
-use warp::Rejection;
+use warp::{Filter, Rejection, Reply};
 
-pub async fn list_posts(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Rejection> {
-    Ok(auth_result
-        .and_then(|client| api::parse_body(&body).and_then(|parsed_body| read_posts(parsed_body, client.as_ref())))
-        .into())
+pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    let list_posts = warp::get()
+        .and(warp::path!("posts"))
+        .and(api::auth())
+        .and(warp::body::bytes())
+        .and_then(list_posts_endpoint);
+
+    list_posts
 }
 
 #[derive(Serialize)]
@@ -170,7 +175,13 @@ impl PostInfo {
     }
 }
 
-fn read_posts(body: api::PagedRequest, client: Option<&User>) -> Result<PagedPostInfo, api::Error> {
+async fn list_posts_endpoint(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Infallible> {
+    Ok(auth_result
+        .and_then(|client| api::parse_body(&body).and_then(|parsed_body| list_posts(parsed_body, client.as_ref())))
+        .into())
+}
+
+fn list_posts(body: api::PagedRequest, client: Option<&User>) -> Result<PagedPostInfo, api::Error> {
     api::verify_privilege(api::client_access_level(client), "posts:list")?;
 
     let client_id = client.map(|user| user.id);

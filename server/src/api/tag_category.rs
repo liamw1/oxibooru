@@ -7,10 +7,16 @@ use crate::util::DateTime;
 use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
-use warp::reject::Rejection;
+use std::convert::Infallible;
+use warp::{Filter, Rejection, Reply};
 
-pub async fn list_tag_categories(auth_result: api::AuthenticationResult) -> Result<api::Reply, Rejection> {
-    Ok(api::access_level(auth_result).and_then(read_tag_categories).into())
+pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    let list_tag_categories = warp::get()
+        .and(warp::path!("tag-categories"))
+        .and(api::auth())
+        .and_then(list_tag_categories_endpoint);
+
+    list_tag_categories
 }
 
 #[derive(Serialize)]
@@ -28,7 +34,11 @@ struct TagCategoryList {
     results: Vec<TagCategoryInfo>,
 }
 
-fn read_tag_categories(access_level: UserRank) -> Result<TagCategoryList, api::Error> {
+async fn list_tag_categories_endpoint(auth_result: api::AuthenticationResult) -> Result<api::Reply, Infallible> {
+    Ok(api::access_level(auth_result).and_then(list_tag_categories).into())
+}
+
+fn list_tag_categories(access_level: UserRank) -> Result<TagCategoryList, api::Error> {
     api::verify_privilege(access_level, "tag_categories:list")?;
 
     let mut conn = crate::establish_connection()?;

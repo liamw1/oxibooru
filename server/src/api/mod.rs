@@ -12,13 +12,13 @@ use crate::error::ErrorKind;
 use crate::model::enums::UserRank;
 use crate::model::user::User;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use warp::http::StatusCode;
 use warp::hyper::body::Bytes;
 use warp::reply::Json;
 use warp::reply::Response;
 use warp::reply::WithStatus;
 use warp::Filter;
+use warp::Rejection;
 
 /*
     NOTE: In general, it seems like we do not send the id of a resource back to the
@@ -142,70 +142,22 @@ impl ErrorKind for Error {
 }
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    let auth = warp::header::optional("Authorization").map(|opt_auth: Option<_>| {
-        opt_auth
-            .map(|auth| header::authenticate_user(auth).map(Some))
-            .unwrap_or(Ok(None))
-            .map_err(Error::from)
-    });
     let log = warp::filters::log::custom(|info| {
         // println!("Header: {:?}", info.request_headers());
         println!("{} {} [{}]", info.method(), info.path(), info.status());
     });
-
-    let get_info = warp::get().and(warp::path!("info")).and_then(info::get_info);
-    let list_tag_categories = warp::get()
-        .and(warp::path!("tag-categories"))
-        .and(auth)
-        .and_then(tag_category::list_tag_categories);
-    let list_pool_categories = warp::get()
-        .and(warp::path!("pool-categories"))
-        .and(auth)
-        .and_then(pool_category::list_pool_categories);
-    let list_posts = warp::get()
-        .and(warp::path!("posts"))
-        .and(auth)
-        .and(warp::body::bytes())
-        .and_then(post::list_posts);
-    let list_users = warp::get()
-        .and(warp::path!("users"))
-        .and(auth)
-        .and(warp::body::bytes())
-        .and_then(user::list_users);
-    let get_user = warp::get()
-        .and(warp::path!("user" / String))
-        .and(auth)
-        .and_then(user::get_user);
-    let post_user = warp::post()
-        .and(warp::path!("users"))
-        .and(auth)
-        .and(warp::body::bytes())
-        .and_then(user::post_user);
-    let post_user_token = warp::post()
-        .and(warp::path!("user-token" / String))
-        .and(auth)
-        .and(warp::body::bytes())
-        .and_then(user_token::post_user_token);
-    let delete_user_token = warp::delete()
-        .and(warp::path!("user-token" / String / Uuid))
-        .and(auth)
-        .and_then(user_token::delete_user_token);
-
     let catch_all = warp::any().and(warp::body::bytes()).map(|body: Bytes| {
         println!("Unimplemented request!");
         log_body(&body);
         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
     });
 
-    get_info
-        .or(list_tag_categories)
-        .or(list_pool_categories)
-        .or(list_posts)
-        .or(list_users)
-        .or(get_user)
-        .or(post_user)
-        .or(post_user_token)
-        .or(delete_user_token)
+    info::routes()
+        .or(pool_category::routes())
+        .or(post::routes())
+        .or(tag_category::routes())
+        .or(user_token::routes())
+        .or(user::routes())
         .or(catch_all)
         .with(log)
 }
@@ -267,4 +219,13 @@ fn parse_body<'a, T: serde::Deserialize<'a>>(body: &'a [u8]) -> Result<T, Error>
         log_body(body);
         serde_json::from_slice(body).map_err(Error::from)
     }
+}
+
+fn auth() -> impl Filter<Extract = (Result<Option<User>, Error>,), Error = Rejection> + Clone {
+    warp::header::optional("Authorization").map(|opt_auth: Option<_>| {
+        opt_auth
+            .map(|auth| header::authenticate_user(auth).map(Some))
+            .unwrap_or(Ok(None))
+            .map_err(Error::from)
+    })
 }

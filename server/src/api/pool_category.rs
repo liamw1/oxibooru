@@ -7,10 +7,16 @@ use crate::util::DateTime;
 use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
-use warp::reject::Rejection;
+use std::convert::Infallible;
+use warp::{Filter, Rejection, Reply};
 
-pub async fn list_pool_categories(auth_result: api::AuthenticationResult) -> Result<api::Reply, Rejection> {
-    Ok(api::access_level(auth_result).and_then(read_pool_categories).into())
+pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    let list_pool_categories = warp::get()
+        .and(warp::path!("pool-categories"))
+        .and(api::auth())
+        .and_then(list_pool_categories_endpoint);
+
+    list_pool_categories
 }
 
 #[derive(Serialize)]
@@ -27,7 +33,11 @@ struct PoolCategoryList {
     results: Vec<PoolCategoryInfo>,
 }
 
-fn read_pool_categories(access_level: UserRank) -> Result<PoolCategoryList, api::Error> {
+async fn list_pool_categories_endpoint(auth_result: api::AuthenticationResult) -> Result<api::Reply, Infallible> {
+    Ok(api::access_level(auth_result).and_then(list_pool_categories).into())
+}
+
+fn list_pool_categories(access_level: UserRank) -> Result<PoolCategoryList, api::Error> {
     api::verify_privilege(access_level, "pool_categories:list")?;
 
     let mut conn = crate::establish_connection()?;

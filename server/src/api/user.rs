@@ -8,25 +8,27 @@ use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
 use warp::hyper::body::Bytes;
-use warp::reject::Rejection;
+use warp::{Filter, Rejection, Reply};
 
-pub async fn list_users(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Rejection> {
-    Ok(auth_result
-        .and_then(|client| api::parse_body(&body).and_then(|request| read_users(request, client.as_ref())))
-        .into())
-}
+pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    let list_users = warp::get()
+        .and(warp::path!("users"))
+        .and(api::auth())
+        .and(warp::body::bytes())
+        .and_then(list_users_endpoint);
+    let get_user = warp::get()
+        .and(warp::path!("user" / String))
+        .and(api::auth())
+        .and_then(get_user_endpoint);
+    let post_user = warp::post()
+        .and(warp::path!("users"))
+        .and(api::auth())
+        .and(warp::body::bytes())
+        .and_then(post_user_endpoint);
 
-pub async fn get_user(username: String, auth_result: api::AuthenticationResult) -> Result<api::Reply, Rejection> {
-    Ok(auth_result
-        .and_then(|client| read_user(username, client.as_ref()))
-        .into())
-}
-
-pub async fn post_user(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Rejection> {
-    Ok(auth_result
-        .and_then(|client| api::parse_body(&body).and_then(|user_info| create_user(user_info, client.as_ref())))
-        .into())
+    list_users.or(get_user).or(post_user)
 }
 
 #[derive(Deserialize)]
@@ -43,7 +45,7 @@ struct NewUserInfo {
 struct UserInfo {
     version: DateTime,
     name: String,
-    email: Option<String>,
+    email: String,
     rank: UserRank,
     last_login_time: DateTime,
     creation_time: DateTime,
@@ -69,7 +71,7 @@ impl UserInfo {
         Ok(Self {
             version: user.last_edit_time,
             name: user.name,
-            email: user.email,
+            email: user.email.unwrap_or(String::from("null")),
             rank: user.rank,
             last_login_time: user.last_login_time,
             creation_time: user.creation_time,
@@ -94,7 +96,7 @@ impl UserInfo {
         Ok(Self {
             version: user.last_edit_time,
             name: user.name,
-            email: Some(HIDDEN.to_owned()),
+            email: String::from(HIDDEN),
             rank: user.rank,
             last_login_time: user.last_login_time,
             creation_time: user.creation_time,
@@ -102,18 +104,24 @@ impl UserInfo {
             avatar_style: user.avatar_style,
             comment_count,
             uploaded_post_count,
-            liked_post_count: HIDDEN.to_owned(),
-            disliked_post_count: HIDDEN.to_owned(),
+            liked_post_count: String::from(HIDDEN),
+            disliked_post_count: String::from(HIDDEN),
             favorite_post_count,
         })
     }
+}
+
+async fn post_user_endpoint(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Infallible> {
+    Ok(auth_result
+        .and_then(|client| api::parse_body(&body).and_then(|user_info| create_user(user_info, client.as_ref())))
+        .into())
 }
 
 fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo, api::Error> {
     let target = if client.is_some() { "any" } else { "self" };
     let client_rank = api::client_access_level(client);
     let requested_rank = user_info.rank.unwrap_or(UserRank::Regular);
-    let requested_action = "users:create:".to_owned() + target;
+    let requested_action = String::from("users:create:") + target;
 
     api::verify_privilege(client_rank, &requested_action)?;
     let rank = requested_rank.clamp(UserRank::Regular, std::cmp::max(client_rank, UserRank::Regular));
@@ -137,7 +145,13 @@ fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo
     UserInfo::full(&mut conn, user)
 }
 
-fn read_user(username: String, client: Option<&User>) -> Result<UserInfo, api::Error> {
+async fn get_user_endpoint(username: String, auth_result: api::AuthenticationResult) -> Result<api::Reply, Infallible> {
+    Ok(auth_result
+        .and_then(|client| get_user(username, client.as_ref()))
+        .into())
+}
+
+fn get_user(username: String, client: Option<&User>) -> Result<UserInfo, api::Error> {
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
 
@@ -149,7 +163,13 @@ fn read_user(username: String, client: Option<&User>) -> Result<UserInfo, api::E
     UserInfo::full(&mut conn, user)
 }
 
-fn read_users(body: api::PagedRequest, client: Option<&User>) -> Result<PagedUserInfo, api::Error> {
+async fn list_users_endpoint(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Infallible> {
+    Ok(auth_result
+        .and_then(|client| api::parse_body(&body).and_then(|request| get_users(request, client.as_ref())))
+        .into())
+}
+
+fn get_users(body: api::PagedRequest, client: Option<&User>) -> Result<PagedUserInfo, api::Error> {
     api::verify_privilege(api::client_access_level(client), "users:list")?;
 
     let offset = body.offset.unwrap_or(0);

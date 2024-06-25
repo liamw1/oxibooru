@@ -3,11 +3,14 @@ use crate::config::CONFIG;
 use crate::model::post::Post;
 use crate::util::DateTime;
 use serde::Serialize;
+use std::convert::Infallible;
 use toml::Table;
-use warp::reject::Rejection;
+use warp::{Filter, Rejection, Reply};
 
-pub async fn get_info() -> Result<api::Reply, Rejection> {
-    Ok(read_info().into())
+pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
+    let get_info = warp::get().and(warp::path!("info")).and_then(get_info_endpoint);
+
+    get_info
 }
 
 // TODO: Remove renames by changing references to these names in client
@@ -30,7 +33,11 @@ fn read_required_table(name: &str) -> &'static Table {
         .unwrap_or_else(|| panic!("Table {name} not found in config.toml"))
 }
 
-fn read_info() -> Result<Info, api::Error> {
+async fn get_info_endpoint() -> Result<api::Reply, Infallible> {
+    Ok(get_info().into())
+}
+
+fn get_info() -> Result<Info, api::Error> {
     let mut conn = crate::establish_connection()?;
 
     let info = Info {

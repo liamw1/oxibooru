@@ -96,7 +96,7 @@ pub fn create_test_post_note(conn: &mut PgConnection, post: &Post) -> QueryResul
     let new_post_note = NewPostNote {
         post_id: post.id,
         polygon: &[],
-        text: "This is a test note".to_owned(),
+        text: String::from("This is a test note"),
     };
     diesel::insert_into(post_note::table)
         .values(&new_post_note)
