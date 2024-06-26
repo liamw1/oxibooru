@@ -88,6 +88,9 @@ fn create_user_token(
     let requested_action = String::from("user_tokens:create:") + target;
     api::verify_privilege(api::client_access_level(client), &requested_action)?;
 
+    // Delete previous token, if it exists
+    diesel::delete(user_token::table.find(user.id)).execute(&mut conn)?;
+
     let new_user_token = NewUserToken {
         user_id: user.id,
         token: Uuid::new_v4(),

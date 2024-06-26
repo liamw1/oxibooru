@@ -39,13 +39,20 @@ struct NewUserInfo {
     rank: Option<UserRank>,
 }
 
+#[derive(Serialize)]
+#[serde(untagged)]
+enum PrivateData<T> {
+    Expose(T),
+    Visible(bool), // Set to false to indicate hidden
+}
+
 // TODO: Remove renames by changing references to these names in client
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct UserInfo {
     version: DateTime,
     name: String,
-    email: String,
+    email: PrivateData<Option<String>>,
     rank: UserRank,
     last_login_time: DateTime,
     creation_time: DateTime,
@@ -53,8 +60,8 @@ struct UserInfo {
     avatar_url: String,
     comment_count: i64,
     uploaded_post_count: i64,
-    liked_post_count: String,
-    disliked_post_count: String,
+    liked_post_count: PrivateData<i64>,
+    disliked_post_count: PrivateData<i64>,
     favorite_post_count: i64,
 }
 type PagedUserInfo = api::PagedResponse<UserInfo>;
@@ -71,7 +78,7 @@ impl UserInfo {
         Ok(Self {
             version: user.last_edit_time,
             name: user.name,
-            email: user.email.unwrap_or(String::from("null")),
+            email: PrivateData::Expose(user.email),
             rank: user.rank,
             last_login_time: user.last_login_time,
             creation_time: user.creation_time,
@@ -79,8 +86,8 @@ impl UserInfo {
             avatar_style: user.avatar_style,
             comment_count,
             uploaded_post_count,
-            liked_post_count: liked_post_count.to_string(),
-            disliked_post_count: disliked_post_count.to_string(),
+            liked_post_count: PrivateData::Expose(liked_post_count),
+            disliked_post_count: PrivateData::Expose(disliked_post_count),
             favorite_post_count,
         })
     }
@@ -92,11 +99,10 @@ impl UserInfo {
         let uploaded_post_count = user.post_count(conn)?;
         let favorite_post_count = user.favorite_post_count(conn)?;
 
-        const HIDDEN: &'static str = "false";
         Ok(Self {
             version: user.last_edit_time,
             name: user.name,
-            email: String::from(HIDDEN),
+            email: PrivateData::Visible(false),
             rank: user.rank,
             last_login_time: user.last_login_time,
             creation_time: user.creation_time,
@@ -104,8 +110,8 @@ impl UserInfo {
             avatar_style: user.avatar_style,
             comment_count,
             uploaded_post_count,
-            liked_post_count: String::from(HIDDEN),
-            disliked_post_count: String::from(HIDDEN),
+            liked_post_count: PrivateData::Visible(false),
+            disliked_post_count: PrivateData::Visible(false),
             favorite_post_count,
         })
     }

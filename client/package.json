@@ -1,5 +1,5 @@
 {
-  "name": "szurubooru",
+  "name": "oxibooru",
   "private": true,
   "scripts": {
     "build": "node build.js",

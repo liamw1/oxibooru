@@ -142,14 +142,14 @@ impl ErrorKind for Error {
 }
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    let log = warp::filters::log::custom(|info| {
-        // println!("Header: {:?}", info.request_headers());
-        println!("{} {} [{}]", info.method(), info.path(), info.status());
-    });
     let catch_all = warp::any().and(warp::body::bytes()).map(|body: Bytes| {
         println!("Unimplemented request!");
         log_body(&body);
         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
+    });
+    let log = warp::filters::log::custom(|info| {
+        // println!("Header: {:?}", info.request_headers());
+        println!("{} {} [{}]", info.method(), info.path(), info.status());
     });
 
     info::routes()
