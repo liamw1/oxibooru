@@ -183,10 +183,10 @@ fn get_users(body: api::PagedRequest, client: Option<&User>) -> Result<PagedUser
         .load(&mut conn)?;
 
     Ok(PagedUserInfo {
-        query: body.query,
+        query: body.query.unwrap_or(String::new()),
         offset,
         limit,
-        total: users.len() as i64,
+        total: User::count(&mut conn)?,
         results: users
             .into_iter()
             .map(|user| UserInfo::public_only(&mut conn, user))

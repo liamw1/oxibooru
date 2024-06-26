@@ -173,7 +173,7 @@ struct PagedRequest {
 
 #[derive(Serialize)]
 struct PagedResponse<T: Serialize> {
-    query: Option<String>,
+    query: String,
     offset: i64,
     limit: i64,
     total: i64,
@@ -222,7 +222,7 @@ fn parse_body<'a, T: serde::Deserialize<'a>>(body: &'a [u8]) -> Result<T, Error>
 }
 
 fn auth() -> impl Filter<Extract = (Result<Option<User>, Error>,), Error = Rejection> + Clone {
-    warp::header::optional("Authorization").map(|opt_auth: Option<_>| {
+    warp::header::optional("authorization").map(|opt_auth: Option<_>| {
         opt_auth
             .map(|auth| header::authenticate_user(auth).map(Some))
             .unwrap_or(Ok(None))

@@ -196,10 +196,10 @@ fn list_posts(body: api::PagedRequest, client: Option<&User>) -> Result<PagedPos
         .load(&mut conn)?;
 
     Ok(PagedPostInfo {
-        query: body.query,
+        query: body.query.unwrap_or(String::new()),
         offset,
         limit,
-        total: posts.len() as i64,
+        total: Post::count(&mut conn)?,
         results: posts
             .into_iter()
             .map(|post| PostInfo::new(&mut conn, post, client_id))
