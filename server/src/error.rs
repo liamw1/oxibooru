@@ -154,3 +154,50 @@ impl ErrorKind for crate::auth::header::AuthenticationError {
         }
     }
 }
+
+impl ErrorKind for image::error::LimitErrorKind {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::DimensionError => "DimensionLimitsExceeded",
+            Self::InsufficientMemory => "OutOfMemory",
+            Self::Unsupported { .. } => "UnsupportedImageDimensions",
+            _ => "UnknownImageLimitError",
+        }
+    }
+}
+
+impl ErrorKind for image::error::ParameterErrorKind {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::DimensionMismatch => "DimensionMismatch",
+            Self::FailedAlready => "FailedAlready",
+            Self::Generic(_) => "GenericError",
+            Self::NoMoreData => "NoMoreData",
+            _ => "UnknownImageParameterError",
+        }
+    }
+}
+
+impl ErrorKind for image::error::UnsupportedErrorKind {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Color(_) => "UnsupportedColor",
+            Self::Format(_) => "UnsupportedFormat",
+            Self::GenericFeature(_) => "UnsupportedFeature",
+            _ => "UnknownImageUnsupportedError",
+        }
+    }
+}
+
+impl ErrorKind for image::ImageError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Decoding(_) => "FailedDecoding",
+            Self::Encoding(_) => "FailedEncoding",
+            Self::IoError(_) => "IOError",
+            Self::Limits(err) => err.kind().kind(),
+            Self::Parameter(err) => err.kind().kind(),
+            Self::Unsupported(err) => err.kind().kind(),
+        }
+    }
+}

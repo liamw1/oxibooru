@@ -70,7 +70,7 @@ async fn post_user_token_endpoint(
 ) -> Result<api::Reply, Infallible> {
     Ok(auth_result
         .and_then(|client| {
-            api::parse_body(&body).and_then(|user_info| create_user_token(username, user_info, client.as_ref()))
+            api::parse_json_body(&body).and_then(|user_info| create_user_token(username, user_info, client.as_ref()))
         })
         .into())
 }

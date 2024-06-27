@@ -16,7 +16,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     let list_users = warp::get()
         .and(warp::path!("users"))
         .and(api::auth())
-        .and(warp::body::bytes())
+        .and(warp::query())
         .and_then(list_users_endpoint);
     let get_user = warp::get()
         .and(warp::path!("user" / String))
@@ -119,7 +119,7 @@ impl UserInfo {
 
 async fn post_user_endpoint(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Infallible> {
     Ok(auth_result
-        .and_then(|client| api::parse_body(&body).and_then(|user_info| create_user(user_info, client.as_ref())))
+        .and_then(|client| api::parse_json_body(&body).and_then(|user_info| create_user(user_info, client.as_ref())))
         .into())
 }
 
@@ -169,17 +169,18 @@ fn get_user(username: String, client: Option<&User>) -> Result<UserInfo, api::Er
     UserInfo::full(&mut conn, user)
 }
 
-async fn list_users_endpoint(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Infallible> {
-    Ok(auth_result
-        .and_then(|client| api::parse_body(&body).and_then(|request| get_users(request, client.as_ref())))
-        .into())
+async fn list_users_endpoint(
+    auth_result: api::AuthenticationResult,
+    query: api::PagedQuery,
+) -> Result<api::Reply, Infallible> {
+    Ok(auth_result.and_then(|client| get_users(query, client.as_ref())).into())
 }
 
-fn get_users(body: api::PagedRequest, client: Option<&User>) -> Result<PagedUserInfo, api::Error> {
+fn get_users(query_info: api::PagedQuery, client: Option<&User>) -> Result<PagedUserInfo, api::Error> {
     api::verify_privilege(api::client_access_level(client), "users:list")?;
 
-    let offset = body.offset.unwrap_or(0);
-    let limit = body.limit.unwrap_or(40);
+    let offset = query_info.offset.unwrap_or(0);
+    let limit = query_info.limit.unwrap_or(40);
 
     let mut conn = crate::establish_connection()?;
     let users = user::table
@@ -189,7 +190,7 @@ fn get_users(body: api::PagedRequest, client: Option<&User>) -> Result<PagedUser
         .load(&mut conn)?;
 
     Ok(PagedUserInfo {
-        query: body.query.unwrap_or(String::new()),
+        query: query_info.query.unwrap_or(String::new()),
         offset,
         limit,
         total: User::count(&mut conn)?,

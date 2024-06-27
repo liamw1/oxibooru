@@ -51,6 +51,21 @@ pub enum PostType {
     Youtube,
 }
 
+impl From<MimeType> for PostType {
+    fn from(value: MimeType) -> Self {
+        match value {
+            MimeType::BMP => Self::Image,
+            MimeType::GIF => Self::Image,
+            MimeType::JPEG => Self::Image,
+            MimeType::PNG => Self::Image,
+            MimeType::WEBP => Self::Image,
+            MimeType::MP4 => Self::Video,
+            MimeType::MOV => Self::Video,
+            MimeType::WEBM => Self::Video,
+        }
+    }
+}
+
 impl ToSql<SmallInt, Pg> for PostType
 where
     i16: ToSql<SmallInt, Pg>,
@@ -71,7 +86,9 @@ where
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize)]
+#[derive(
+    Debug, Copy, Clone, PartialEq, Eq, EnumIter, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize,
+)]
 #[diesel(sql_type = SmallInt)]
 pub enum MimeType {
     #[serde(rename = "image/bmp")]
@@ -93,6 +110,19 @@ pub enum MimeType {
 }
 
 impl MimeType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::BMP => "image/bmp",
+            Self::GIF => "image/gif",
+            Self::JPEG => "image/jpeg",
+            Self::PNG => "image/png",
+            Self::WEBP => "image/webp",
+            Self::MP4 => "video/mp4",
+            Self::MOV => "video/mov",
+            Self::WEBM => "video/webm",
+        }
+    }
+
     pub fn extension(self) -> &'static str {
         match self {
             Self::BMP => "bmp",
@@ -104,6 +134,15 @@ impl MimeType {
             Self::MOV => "mov",
             Self::WEBM => "webm",
         }
+    }
+}
+
+impl std::str::FromStr for MimeType {
+    type Err = ParseMimeTypeError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        MimeType::iter()
+            .find(|mime_type| s == mime_type.as_str())
+            .ok_or(ParseMimeTypeError)
     }
 }
 
@@ -157,6 +196,10 @@ where
         PostSafety::from_i16(database_value).ok_or(DeserializePostSafetyError.into())
     }
 }
+
+#[derive(Debug, Error)]
+#[error("Failed to mime type")]
+pub struct ParseMimeTypeError;
 
 #[derive(Debug, Error)]
 #[error("Failed to parse user privilege")]

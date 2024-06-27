@@ -4,6 +4,7 @@ pub mod micro;
 pub mod pool_category;
 pub mod post;
 pub mod tag_category;
+pub mod upload;
 pub mod user;
 pub mod user_token;
 
@@ -12,20 +13,13 @@ use crate::error::ErrorKind;
 use crate::model::enums::UserRank;
 use crate::model::user::User;
 use serde::{Deserialize, Serialize};
+use std::convert::Infallible;
 use warp::http::StatusCode;
-use warp::hyper::body::Bytes;
 use warp::reply::Json;
 use warp::reply::Response;
 use warp::reply::WithStatus;
 use warp::Filter;
 use warp::Rejection;
-
-/*
-    NOTE: In general, it seems like we do not send the id of a resource back to the
-          client. Perhaps we should consider doing this as then we could query
-          user, tags, etc. by their primary key. We could also use #[serde(flatten)]
-          to use the actual resource structs in the serialize structs.
-*/
 
 pub enum Reply {
     Json(Json),
@@ -60,17 +54,25 @@ pub enum Error {
     BadBody(#[from] serde_json::Error),
     BadHash(#[from] crate::auth::HashError),
     BadHeader(#[from] warp::http::header::ToStrError),
+    BadMimeType(#[from] crate::model::enums::ParseMimeTypeError),
+    #[error("Multi-part form error")]
+    BadMultiPartForm,
     BadUserPrivilege(#[from] crate::model::enums::ParseUserRankError),
+    #[error("Request content-type did not match file extension")]
+    ContentTypeMismatch,
     FailedAuthentication(#[from] AuthenticationError),
     FailedConnection(#[from] diesel::ConnectionError),
     FailedQuery(#[from] diesel::result::Error),
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
+    ImageError(#[from] image::ImageError),
+    IoError(#[from] std::io::Error),
     #[error("Resource does not exist")]
     ResourceDoesNotExist,
     // Someone else modified this in the meantime. Please try again.
     #[error("Resouce was modified by someone else")]
     ResourceModified,
+    WarpError(#[from] warp::Error),
 }
 
 impl Error {
@@ -83,35 +85,47 @@ impl Error {
         };
 
         match self {
-            Error::BadBody(_) => StatusCode::BAD_REQUEST,
-            Error::BadHash(_) => StatusCode::BAD_REQUEST,
-            Error::BadHeader(_) => StatusCode::BAD_REQUEST,
-            Error::BadUserPrivilege(_) => StatusCode::BAD_REQUEST,
-            Error::FailedAuthentication(err) => match err {
+            Self::BadBody(_) => StatusCode::BAD_REQUEST,
+            Self::BadHash(_) => StatusCode::BAD_REQUEST,
+            Self::BadHeader(_) => StatusCode::BAD_REQUEST,
+            Self::BadMimeType(_) => StatusCode::BAD_REQUEST,
+            Self::BadMultiPartForm => StatusCode::BAD_REQUEST,
+            Self::BadUserPrivilege(_) => StatusCode::BAD_REQUEST,
+            Self::ContentTypeMismatch => StatusCode::BAD_REQUEST,
+            Self::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
                 AuthenticationError::FailedQuery(err) => query_error_status_code(err),
                 _ => StatusCode::UNAUTHORIZED,
             },
-            Error::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
-            Error::FailedQuery(err) => query_error_status_code(err),
-            Error::InsufficientPrivileges => StatusCode::FORBIDDEN,
-            Error::ResourceDoesNotExist => StatusCode::GONE,
-            Error::ResourceModified => StatusCode::CONFLICT,
+            Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
+            Self::FailedQuery(err) => query_error_status_code(err),
+            Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
+            Self::ImageError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::ResourceDoesNotExist => StatusCode::GONE,
+            Self::ResourceModified => StatusCode::CONFLICT,
+            Self::WarpError(_) => StatusCode::BAD_REQUEST,
         }
     }
 
     fn category(&self) -> &'static str {
         match self {
-            Error::BadBody(_) => "Bad Body",
-            Error::BadHash(_) => "Bad Hash",
-            Error::BadHeader(_) => "Bad Header",
-            Error::BadUserPrivilege(_) => "Bad User Privilege",
-            Error::FailedAuthentication(_) => "Failed Authentication",
-            Error::FailedConnection(_) => "Failed Connection",
-            Error::FailedQuery(_) => "Failed Query",
-            Error::InsufficientPrivileges => "Insufficient Privileges",
-            Error::ResourceDoesNotExist => "Resource Does Not Exist",
-            Error::ResourceModified => "Resource Modified",
+            Self::BadBody(_) => "Bad Body",
+            Self::BadHash(_) => "Bad Hash",
+            Self::BadHeader(_) => "Bad Header",
+            Self::BadMimeType(_) => "Bad MIME Type",
+            Self::BadMultiPartForm => "Bad Multi-Part Form",
+            Self::BadUserPrivilege(_) => "Bad User Privilege",
+            Self::ContentTypeMismatch => "Content Type Mismatch",
+            Self::FailedAuthentication(_) => "Failed Authentication",
+            Self::FailedConnection(_) => "Failed Connection",
+            Self::FailedQuery(_) => "Failed Query",
+            Self::InsufficientPrivileges => "Insufficient Privileges",
+            Self::ImageError(_) => "Image Error",
+            Self::IoError(_) => "IO Error",
+            Self::ResourceDoesNotExist => "Resource Does Not Exist",
+            Self::ResourceModified => "Resource Modified",
+            Self::WarpError(_) => "Warp Error",
         }
     }
 
@@ -130,21 +144,26 @@ impl ErrorKind for Error {
             Self::BadBody(err) => err.kind(),
             Self::BadHash(err) => err.kind(),
             Self::BadHeader(_) => "BadHeader",
+            Self::BadMimeType(_) => "BadMimeType",
+            Self::BadMultiPartForm => "BadMultiPartForm",
             Self::BadUserPrivilege(_) => "BadUserPrivilege",
+            Self::ContentTypeMismatch => "ContentTypeMismatch",
             Self::FailedAuthentication(err) => err.kind(),
             Self::FailedConnection(err) => err.kind(),
             Self::FailedQuery(err) => err.kind(),
             Self::InsufficientPrivileges => "InsufficientPrivileges",
+            Self::ImageError(err) => err.kind(),
+            Self::IoError(_) => "IOError",
             Self::ResourceDoesNotExist => "ResourceDoesNotExist",
             Self::ResourceModified => "ResourceModified",
+            Self::WarpError(_) => "WarpError",
         }
     }
 }
 
-pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejection> + Clone {
-    let catch_all = warp::any().and(warp::body::bytes()).map(|body: Bytes| {
+pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> + Clone {
+    let catch_all = warp::any().map(|| {
         println!("Unimplemented request!");
-        log_body(&body);
         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
     });
     let log = warp::filters::log::custom(|info| {
@@ -156,6 +175,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
         .or(pool_category::routes())
         .or(post::routes())
         .or(tag_category::routes())
+        .or(upload::routes())
         .or(user_token::routes())
         .or(user::routes())
         .or(catch_all)
@@ -165,7 +185,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = warp::Rejecti
 type AuthenticationResult = Result<Option<User>, Error>;
 
 #[derive(Deserialize)]
-struct PagedRequest {
+struct PagedQuery {
     offset: Option<i64>,
     limit: Option<i64>,
     query: Option<String>,
@@ -212,7 +232,7 @@ fn log_body(body: &[u8]) {
     For some reason warp::body::json rejects incoming requests, perhaps due to encoding
     issues. Instead, we will parse the raw bytes into a deserialize-capable structure.
 */
-fn parse_body<'a, T: serde::Deserialize<'a>>(body: &'a [u8]) -> Result<T, Error> {
+fn parse_json_body<'a, T: serde::Deserialize<'a>>(body: &'a [u8]) -> Result<T, Error> {
     if body.is_empty() {
         serde_json::from_slice("{}".as_bytes()).map_err(Error::from)
     } else {

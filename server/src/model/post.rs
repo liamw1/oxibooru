@@ -14,7 +14,7 @@ use std::option::Option;
 #[derive(Insertable)]
 #[diesel(table_name = post)]
 pub struct NewPost<'a> {
-    pub user_id: i32,
+    pub user_id: Option<i32>,
     pub file_size: i64,
     pub width: i32,
     pub height: i32,

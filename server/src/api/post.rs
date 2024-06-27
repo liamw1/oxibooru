@@ -13,14 +13,13 @@ use crate::util::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
 use std::convert::Infallible;
-use warp::hyper::body::Bytes;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_posts = warp::get()
         .and(warp::path!("posts"))
         .and(api::auth())
-        .and(warp::body::bytes())
+        .and(warp::query())
         .and_then(list_posts_endpoint);
 
     list_posts
@@ -175,18 +174,19 @@ impl PostInfo {
     }
 }
 
-async fn list_posts_endpoint(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Infallible> {
-    Ok(auth_result
-        .and_then(|client| api::parse_body(&body).and_then(|parsed_body| list_posts(parsed_body, client.as_ref())))
-        .into())
+async fn list_posts_endpoint(
+    auth_result: api::AuthenticationResult,
+    query: api::PagedQuery,
+) -> Result<api::Reply, Infallible> {
+    Ok(auth_result.and_then(|client| list_posts(query, client.as_ref())).into())
 }
 
-fn list_posts(body: api::PagedRequest, client: Option<&User>) -> Result<PagedPostInfo, api::Error> {
+fn list_posts(query_info: api::PagedQuery, client: Option<&User>) -> Result<PagedPostInfo, api::Error> {
     api::verify_privilege(api::client_access_level(client), "posts:list")?;
 
     let client_id = client.map(|user| user.id);
-    let offset = body.offset.unwrap_or(0);
-    let limit = body.limit.unwrap_or(40);
+    let offset = query_info.offset.unwrap_or(0);
+    let limit = query_info.limit.unwrap_or(40);
 
     let mut conn = crate::establish_connection()?;
     let posts = post::table
@@ -196,7 +196,7 @@ fn list_posts(body: api::PagedRequest, client: Option<&User>) -> Result<PagedPos
         .load(&mut conn)?;
 
     Ok(PagedPostInfo {
-        query: body.query.unwrap_or(String::new()),
+        query: query_info.query.unwrap_or(String::new()),
         offset,
         limit,
         total: Post::count(&mut conn)?,

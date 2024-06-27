@@ -77,7 +77,7 @@ pub fn create_test_user_token(
 
 pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Post> {
     let new_post = NewPost {
-        user_id: user.id,
+        user_id: Some(user.id),
         file_size: 64,
         width: 64,
         height: 64,

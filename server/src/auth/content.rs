@@ -2,12 +2,14 @@ use crate::config;
 use crate::model::post::Post;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::prelude::*;
+use hmac::digest::CtOutput;
 use hmac::{Mac, SimpleHmac};
 use once_cell::sync::Lazy;
 
 pub fn gravatar_url(username: &str) -> String {
-    let username_hash = url_safe_hash(username.to_lowercase().as_bytes());
-    format!("https://gravatar.com/avatar/{}?d=retro&s={}", username_hash, *AVATAR_WIDTH)
+    let username_hash = hmac_hash(username.to_lowercase().as_bytes());
+    let hex_encoded_hash = hex::encode(username_hash.into_bytes());
+    format!("https://gravatar.com/avatar/{hex_encoded_hash}?d=retro&s={}", *AVATAR_WIDTH)
 }
 
 pub fn manual_url(username: &str) -> String {
@@ -34,12 +36,13 @@ static AVATAR_WIDTH: Lazy<i64> = Lazy::new(|| {
         .unwrap_or_else(|| panic!("Config avatar_width is not an integer"))
 });
 
-fn url_safe_hash(bytes: &[u8]) -> String {
+fn hmac_hash(bytes: &[u8]) -> CtOutput<Hmac> {
     let mut mac = Hmac::new_from_slice(SECRET.as_bytes()).expect("HMAC can take key of any size");
     mac.update(bytes);
-    URL_SAFE_NO_PAD.encode(mac.finalize().into_bytes())
+    mac.finalize()
 }
 
 fn post_security_hash(post_id: i32) -> String {
-    url_safe_hash(&post_id.to_le_bytes())
+    let hash = hmac_hash(&post_id.to_le_bytes());
+    URL_SAFE_NO_PAD.encode(hash.into_bytes())
 }
