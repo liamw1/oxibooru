@@ -9,6 +9,22 @@ pub static CONFIG: Lazy<Table> = Lazy::new(|| {
         .unwrap_or_else(|err| panic!("{err}"))
 });
 
+pub fn read_required_string(name: &'static str) -> &'static str {
+    CONFIG
+        .get(name)
+        .unwrap_or_else(|| panic!("Config {name} missing from config.toml"))
+        .as_str()
+        .unwrap_or_else(|| panic!("Config {name} is not a string"))
+}
+
+pub fn read_required_table(name: &'static str) -> &'static Table {
+    CONFIG
+        .get(name)
+        .unwrap_or_else(|| panic!("Config {name} missing from config.toml"))
+        .as_table()
+        .unwrap_or_else(|| panic!("Config {name} is not a table"))
+}
+
 fn get_config_path() -> PathBuf {
     // Use config.toml.dist if in development environment, config.toml if in production
     match std::env::var("CARGO_MANIFEST_DIR") {
@@ -27,20 +43,4 @@ fn get_config_path() -> PathBuf {
             parent_path
         }
     }
-}
-
-pub fn read_required_string(name: &'static str) -> &'static str {
-    CONFIG
-        .get(name)
-        .unwrap_or_else(|| panic!("Config {name} missing from config.toml"))
-        .as_str()
-        .unwrap_or_else(|| panic!("Config {name} is not a string"))
-}
-
-pub fn read_required_table(name: &'static str) -> &'static Table {
-    CONFIG
-        .get(name)
-        .unwrap_or_else(|| panic!("Config {name} missing from config.toml"))
-        .as_table()
-        .unwrap_or_else(|| panic!("Config {name} is not a table"))
 }

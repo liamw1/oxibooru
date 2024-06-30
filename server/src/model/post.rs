@@ -9,6 +9,7 @@ use crate::schema::{
 use crate::util;
 use crate::util::DateTime;
 use diesel::prelude::*;
+use diesel::sql_types::*;
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -247,7 +248,7 @@ pub struct NewPostSignature<'a> {
     pub words: &'a [i32],
 }
 
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, QueryableByName, Selectable)]
 #[diesel(belongs_to(Post))]
 #[diesel(table_name = post_signature)]
 #[diesel(primary_key(post_id))]
@@ -261,6 +262,18 @@ pub struct PostSignature {
 impl PostSignature {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         post_signature::table.count().first(conn)
+    }
+
+    pub fn find_similar(conn: &mut PgConnection, words: Vec<Option<i32>>) -> QueryResult<Vec<Self>> {
+        // Is GROUP necessary here?
+        let query = diesel::sql_query(
+            "SELECT s.post_id, s.signature, s.words
+             FROM post_signature AS s, unnest(s.words, $1) AS a(word, query)
+             WHERE a.word = a.query
+             GROUP BY s.post_id
+             ORDER BY count(a.query) DESC LIMIT 100;",
+        );
+        query.bind::<Array<Nullable<Int4>>, _>(words).load(conn)
     }
 }
 

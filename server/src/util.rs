@@ -43,17 +43,6 @@ where
     })
 }
 
-fn validate_uniqueness(table_name: &str, transaction_type: &str, rows_changed: usize) -> QueryResult<()> {
-    match rows_changed {
-        0 => Err(Error::NotFound),
-        1 => Ok(()),
-        _ => Err(Error::DatabaseError(
-            DatabaseErrorKind::UniqueViolation,
-            Box::new(format!("Failed to {transaction_type} {table_name}: entry is not unique")),
-        )),
-    }
-}
-
 // A wrapper for time::OffsetDateTime that serializes/deserializes according to RFC 3339.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Timestamptz)]
@@ -99,5 +88,16 @@ where
 {
     fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
         OffsetDateTime::from_sql(bytes).map(|time| DateTime(time))
+    }
+}
+
+fn validate_uniqueness(table_name: &str, transaction_type: &str, rows_changed: usize) -> QueryResult<()> {
+    match rows_changed {
+        0 => Err(Error::NotFound),
+        1 => Ok(()),
+        _ => Err(Error::DatabaseError(
+            DatabaseErrorKind::UniqueViolation,
+            Box::new(format!("Failed to {transaction_type} {table_name}: entry is not unique")),
+        )),
     }
 }

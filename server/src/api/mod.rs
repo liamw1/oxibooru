@@ -52,6 +52,7 @@ impl<T: Serialize> From<Result<T, Error>> for Reply {
 #[error(transparent)]
 pub enum Error {
     BadBody(#[from] serde_json::Error),
+    BadExtension(#[from] crate::model::enums::ParseExtensionError),
     BadHash(#[from] crate::auth::HashError),
     BadHeader(#[from] warp::http::header::ToStrError),
     BadMimeType(#[from] crate::model::enums::ParseMimeTypeError),
@@ -86,6 +87,7 @@ impl Error {
 
         match self {
             Self::BadBody(_) => StatusCode::BAD_REQUEST,
+            Self::BadExtension(_) => StatusCode::BAD_REQUEST,
             Self::BadHash(_) => StatusCode::BAD_REQUEST,
             Self::BadHeader(_) => StatusCode::BAD_REQUEST,
             Self::BadMimeType(_) => StatusCode::BAD_REQUEST,
@@ -111,6 +113,7 @@ impl Error {
     fn category(&self) -> &'static str {
         match self {
             Self::BadBody(_) => "Bad Body",
+            Self::BadExtension(_) => "Bad Extension",
             Self::BadHash(_) => "Bad Hash",
             Self::BadHeader(_) => "Bad Header",
             Self::BadMimeType(_) => "Bad MIME Type",
@@ -142,6 +145,7 @@ impl ErrorKind for Error {
     fn kind(&self) -> &'static str {
         match self {
             Self::BadBody(err) => err.kind(),
+            Self::BadExtension(_) => "BadExtension",
             Self::BadHash(err) => err.kind(),
             Self::BadHeader(_) => "BadHeader",
             Self::BadMimeType(_) => "BadMimeType",

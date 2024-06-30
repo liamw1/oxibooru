@@ -34,7 +34,7 @@ pub fn normalized_distance(signature_a: &Vec<u8>, signature_b: &Vec<u8>) -> f64 
     }
 }
 
-pub fn generate_indexes(signature: &Vec<u8>) -> Vec<Option<i32>> {
+pub fn generate_indexes(signature: &Vec<u8>) -> Vec<i32> {
     const NUM_REDUCED_SYMBOLS: i32 = 3;
     debug_assert!(i64::from(NUM_REDUCED_SYMBOLS).pow(NUM_LETTERS) < i64::from(i32::MAX));
 
@@ -56,7 +56,6 @@ pub fn generate_indexes(signature: &Vec<u8>) -> Vec<Option<i32>> {
                 .map(|(i, letter)| i32::from(letter + 1) * NUM_REDUCED_SYMBOLS.pow(i as u32))
                 .sum()
         })
-        .map(|index| Some(index)) // Need this to conform to SQL type
         .collect()
 }
 
@@ -388,11 +387,7 @@ mod test {
         assert!(upper_right_pixel.0[0] < 250);
     }
 
-    fn matching_indexes(indexes_a: &Vec<Option<i32>>, indexes_b: &Vec<Option<i32>>) -> usize {
-        indexes_a
-            .iter()
-            .zip(indexes_b.iter())
-            .filter(|(a, b)| a.unwrap() == b.unwrap())
-            .count()
+    fn matching_indexes(indexes_a: &Vec<i32>, indexes_b: &Vec<i32>) -> usize {
+        indexes_a.iter().zip(indexes_b.iter()).filter(|(a, b)| a == b).count()
     }
 }

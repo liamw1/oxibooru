@@ -110,6 +110,14 @@ pub enum MimeType {
 }
 
 impl MimeType {
+    pub fn from_extension(extension: &str) -> Result<Self, ParseExtensionError> {
+        MimeType::iter()
+            .find(|mime_type| extension == mime_type.extension())
+            .ok_or(ParseExtensionError {
+                ext: extension.to_owned(),
+            })
+    }
+
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::BMP => "image/bmp",
@@ -142,7 +150,7 @@ impl std::str::FromStr for MimeType {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         MimeType::iter()
             .find(|mime_type| s == mime_type.as_str())
-            .ok_or(ParseMimeTypeError)
+            .ok_or(ParseMimeTypeError { name: s.to_owned() })
     }
 }
 
@@ -198,8 +206,16 @@ where
 }
 
 #[derive(Debug, Error)]
-#[error("Failed to mime type")]
-pub struct ParseMimeTypeError;
+#[error("{name} is not a supported MIME type")]
+pub struct ParseMimeTypeError {
+    name: String,
+}
+
+#[derive(Debug, Error)]
+#[error("{ext} is not a supported file extension")]
+pub struct ParseExtensionError {
+    ext: String,
+}
 
 #[derive(Debug, Error)]
 #[error("Failed to parse user privilege")]
