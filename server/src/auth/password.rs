@@ -22,8 +22,7 @@ pub fn is_valid_password(user: &User, password: &str) -> bool {
 
 static SECRET: Lazy<&'static str> = Lazy::new(|| config::read_required_string("password_secret"));
 static ARGON_CONTEXT: Lazy<Argon2> = Lazy::new(|| {
-    Argon2::new_with_secret(SECRET.as_bytes(), Algorithm::default(), Version::default(), Params::default())
-        .unwrap_or_else(|err| panic!("{err}"))
+    Argon2::new_with_secret(SECRET.as_bytes(), Algorithm::default(), Version::default(), Params::default()).unwrap()
 });
 
 #[cfg(test)]

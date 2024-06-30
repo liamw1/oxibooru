@@ -256,7 +256,6 @@ pub struct NewPostSignature<'a> {
 pub struct PostSignature {
     pub post_id: i32,
     pub signature: Vec<u8>,
-    pub words: Vec<Option<i32>>,
 }
 
 impl PostSignature {
@@ -264,16 +263,16 @@ impl PostSignature {
         post_signature::table.count().first(conn)
     }
 
-    pub fn find_similar(conn: &mut PgConnection, words: Vec<Option<i32>>) -> QueryResult<Vec<Self>> {
-        // Is GROUP necessary here?
-        let query = diesel::sql_query(
-            "SELECT s.post_id, s.signature, s.words
+    pub fn find_similar(conn: &mut PgConnection, words: Vec<i32>) -> QueryResult<Vec<Self>> {
+        diesel::sql_query(
+            "SELECT s.post_id, s.signature
              FROM post_signature AS s, unnest(s.words, $1) AS a(word, query)
              WHERE a.word = a.query
              GROUP BY s.post_id
              ORDER BY count(a.query) DESC LIMIT 100;",
-        );
-        query.bind::<Array<Nullable<Int4>>, _>(words).load(conn)
+        )
+        .bind::<Array<Int4>, _>(words)
+        .load(conn)
     }
 }
 

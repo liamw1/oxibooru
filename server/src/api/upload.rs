@@ -5,7 +5,7 @@ use crate::model::user::User;
 use futures::{StreamExt, TryStreamExt};
 use serde::Serialize;
 use std::convert::Infallible;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use uuid::Uuid;
 use warp::multipart::FormData;
@@ -52,7 +52,7 @@ async fn upload(form: FormData, client: Option<&User>) -> Result<UploadResponse,
     // Parse first part and ensure file extension matches content type
     let part = form.into_stream().next().await.ok_or(api::Error::BadMultiPartForm)??;
     let content_type = MimeType::from_str(part.content_type().unwrap_or(""))?;
-    let filename = PathBuf::from(part.filename().unwrap_or(""));
+    let filename = Path::new(part.filename().unwrap_or(""));
     if filename.extension().map(|ext| ext.to_str().unwrap_or("")) != Some(content_type.extension()) {
         return Err(api::Error::ContentTypeMismatch);
     }

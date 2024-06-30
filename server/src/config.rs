@@ -2,12 +2,7 @@ use once_cell::sync::Lazy;
 use std::path::PathBuf;
 use toml::Table;
 
-pub static CONFIG: Lazy<Table> = Lazy::new(|| {
-    std::fs::read_to_string(get_config_path())
-        .unwrap_or_else(|err| panic!("{err}"))
-        .parse()
-        .unwrap_or_else(|err| panic!("{err}"))
-});
+pub static CONFIG: Lazy<Table> = Lazy::new(|| std::fs::read_to_string(get_config_path()).unwrap().parse().unwrap());
 
 pub fn read_required_string(name: &'static str) -> &'static str {
     CONFIG
@@ -34,11 +29,8 @@ fn get_config_path() -> PathBuf {
             project_path
         }
         Err(_) => {
-            let exe_path = std::env::current_exe().unwrap_or_else(|err| panic!("{err}"));
-            let mut parent_path = exe_path
-                .parent()
-                .unwrap_or_else(|| panic!("Exe path has no parent"))
-                .to_owned();
+            let exe_path = std::env::current_exe().unwrap();
+            let mut parent_path = exe_path.parent().expect("Exe path should have parent").to_owned();
             parent_path.push("config.toml");
             parent_path
         }

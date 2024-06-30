@@ -269,16 +269,16 @@ mod test {
 
     #[test]
     fn image_signature_regression() {
-        let image1 = image::open(asset_path(Path::new("png.png"))).unwrap_or_else(|err| panic!("{err}"));
+        let image1 = image::open(asset_path(Path::new("png.png"))).unwrap();
         let sig1 = compute_signature(&image1);
 
-        let image2 = image::open(asset_path(Path::new("bmp.bmp"))).unwrap_or_else(|err| panic!("{err}"));
+        let image2 = image::open(asset_path(Path::new("bmp.bmp"))).unwrap();
         let sig2 = compute_signature(&image2);
 
-        let image3 = image::open(asset_path(Path::new("jpeg.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let image3 = image::open(asset_path(Path::new("jpeg.jpg"))).unwrap();
         let sig3 = compute_signature(&image3);
 
-        let image4 = image::open(asset_path(Path::new("jpeg-similar.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let image4 = image::open(asset_path(Path::new("jpeg-similar.jpg"))).unwrap();
         let sig4 = compute_signature(&image4);
 
         // println!("");
@@ -297,32 +297,31 @@ mod test {
 
     #[test]
     fn signature_robustness() {
-        let lisa = image::open(asset_path(Path::new("lisa.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let lisa = image::open(asset_path(Path::new("lisa.jpg"))).unwrap();
         let lisa_signature = compute_signature(&lisa);
         let lisa_indexes = generate_indexes(&lisa_signature);
 
-        let lisa_border = image::open(asset_path(Path::new("lisa-border.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let lisa_border = image::open(asset_path(Path::new("lisa-border.jpg"))).unwrap();
         let lisa_border_signature = compute_signature(&lisa_border);
         let lisa_border_indexes = generate_indexes(&lisa_border_signature);
 
-        let lisa_large_border =
-            image::open(asset_path(Path::new("lisa-large_border.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let lisa_large_border = image::open(asset_path(Path::new("lisa-large_border.jpg"))).unwrap();
         let lisa_large_border_signature = compute_signature(&lisa_large_border);
         let lisa_large_border_indexes = generate_indexes(&lisa_large_border_signature);
 
-        let lisa_wide = image::open(asset_path(Path::new("lisa-wide.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let lisa_wide = image::open(asset_path(Path::new("lisa-wide.jpg"))).unwrap();
         let lisa_wide_signature = compute_signature(&lisa_wide);
         let lisa_wide_indexes = generate_indexes(&lisa_wide_signature);
 
-        let lisa_filtered = image::open(asset_path(Path::new("lisa-filt.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let lisa_filtered = image::open(asset_path(Path::new("lisa-filt.jpg"))).unwrap();
         let lisa_filtered_signature = compute_signature(&lisa_filtered);
         let lisa_filtered_indexes = generate_indexes(&lisa_filtered_signature);
 
-        let lisa_cat = image::open(asset_path(Path::new("lisa-cat.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let lisa_cat = image::open(asset_path(Path::new("lisa-cat.jpg"))).unwrap();
         let lisa_cat_signature = compute_signature(&lisa_cat);
         let lisa_cat_indexes = generate_indexes(&lisa_cat_signature);
 
-        let starry_night = image::open(asset_path(Path::new("starry_night.jpg"))).unwrap_or_else(|err| panic!("{err}"));
+        let starry_night = image::open(asset_path(Path::new("starry_night.jpg"))).unwrap();
         let starry_night_signature = compute_signature(&starry_night);
         let starry_night_indexes = generate_indexes(&starry_night_signature);
 
@@ -360,7 +359,7 @@ mod test {
     #[test]
     fn grid_points() {
         let lisa_small_border = image::open(asset_path(Path::new("lisa-border.jpg")))
-            .unwrap_or_else(|err| panic!("{err}"))
+            .unwrap()
             .to_luma8();
 
         let grid_points = compute_grid_points(&lisa_small_border);
@@ -372,7 +371,7 @@ mod test {
         assert!(upper_right_pixel.0[0] < 250);
 
         let lisa_large_border = image::open(asset_path(Path::new("lisa-large_border.jpg")))
-            .unwrap_or_else(|err| panic!("{err}"))
+            .unwrap()
             .to_luma8();
 
         let grid_points = compute_grid_points(&lisa_large_border);

@@ -1,9 +1,10 @@
-use crate::api;
 use crate::config::CONFIG;
 use crate::model::post::Post;
 use crate::util::DateTime;
+use crate::{api, config};
 use serde::Serialize;
 use std::convert::Infallible;
+use std::path::Path;
 use toml::Table;
 use warp::{Filter, Rejection, Reply};
 
@@ -18,7 +19,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 #[serde(rename_all = "camelCase")]
 struct Info {
     post_count: i64,
-    disk_usage: i64,
+    disk_usage: u64,
     featured_post: Option<i64>,
     featuring_time: Option<DateTime>,
     featuring_user: Option<String>,
@@ -38,11 +39,13 @@ async fn get_info_endpoint() -> Result<api::Reply, Infallible> {
 }
 
 fn get_info() -> Result<Info, api::Error> {
-    let mut conn = crate::establish_connection()?;
+    let data_directory = Path::new(config::read_required_string("data_dir"));
+    let disk_usage = calculate_directory_size(&data_directory)?;
 
+    let mut conn = crate::establish_connection()?;
     let info = Info {
         post_count: Post::count(&mut conn)?,
-        disk_usage: 0, // TODO
+        disk_usage,
         featured_post: None,
         featuring_time: None,
         featuring_user: None,
@@ -51,4 +54,17 @@ fn get_info() -> Result<Info, api::Error> {
     };
 
     Ok(info)
+}
+
+fn calculate_directory_size(path: &Path) -> std::io::Result<u64> {
+    let mut total_size = 0;
+    if path.is_dir() {
+        for entry in std::fs::read_dir(path)? {
+            let path = entry?.path();
+            total_size += calculate_directory_size(&path)?;
+        }
+    } else {
+        total_size += std::fs::metadata(path)?.len();
+    }
+    Ok(total_size)
 }

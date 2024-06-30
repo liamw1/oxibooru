@@ -100,7 +100,7 @@ impl Tag {
         let name_count: i64 = TagName::belonging_to(self).count().first::<i64>(conn)?;
         let new_tag_name = NewTagName {
             tag_id: self.id,
-            order: i32::try_from(name_count).unwrap_or_else(|err| panic!("{err}")),
+            order: i32::try_from(name_count).unwrap(),
             name,
         };
         diesel::insert_into(tag_name::table)

@@ -54,18 +54,18 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 static THUMBNAIL_WIDTH: Lazy<u32> = Lazy::new(|| {
     config::read_required_table("thumbnails")
         .get("post_width")
-        .unwrap_or_else(|| panic!("Config post_width missing from [thumbnails]"))
+        .expect("Config post_width should be in [thumbnails]")
         .as_integer()
-        .unwrap_or_else(|| panic!("Config post_width is not an integer"))
+        .expect("Config post_width should be an integer")
         .try_into()
         .unwrap_or_else(|value| panic!("Config post_width ({value}) cannot be represented as u32"))
 });
 static THUMBNAIL_HEIGHT: Lazy<u32> = Lazy::new(|| {
     config::read_required_table("thumbnails")
         .get("post_height")
-        .unwrap_or_else(|| panic!("Config post_height missing from [thumbnails]"))
+        .expect("Config post_height should be in [thumbnails]")
         .as_integer()
-        .unwrap_or_else(|| panic!("Config post_height is not an integer"))
+        .expect("Config post_height should be an integer")
         .try_into()
         .unwrap_or_else(|value| panic!("Config post_height ({value}) cannot be represented as u32"))
 });
@@ -126,6 +126,7 @@ struct PostInfo {
 type PagedPostInfo = api::PagedResponse<PostInfo>;
 
 impl PostInfo {
+    // Retrieving all information for now, but will need to add support for partial post queries, TODO
     fn new(conn: &mut PgConnection, post: Post, client: Option<i32>) -> QueryResult<PostInfo> {
         let content_url = content::post_content_url(&post);
         let thumbnail_url = content::post_thumbnail_url(&post);
@@ -286,6 +287,7 @@ fn get_post_around(post_id: i32, client: Option<&User>) -> Result<PostNeighbors,
     let previous_post = post::table
         .select(Post::as_select())
         .filter(post::id.lt(post_id))
+        .order_by(post::id.desc())
         .first(&mut conn)
         .optional()?;
     let prev = previous_post
@@ -295,6 +297,7 @@ fn get_post_around(post_id: i32, client: Option<&User>) -> Result<PostNeighbors,
     let next_post = post::table
         .select(Post::as_select())
         .filter(post::id.gt(post_id))
+        .order_by(post::id.asc())
         .first(&mut conn)
         .optional()?;
     let next = next_post
@@ -346,13 +349,9 @@ fn reverse_search_from_temporary(token: ContentToken, client: Option<&User>) -> 
     let path = PathBuf::from(format!("{data_directory}/temporary-uploads/{}", token.content_token));
     let image = image::open(path)?;
     let image_signature = signature::compute_signature(&image);
-    let indexes = signature::generate_indexes(&image_signature)
-        .into_iter()
-        .map(|index| Some(index))
-        .collect::<Vec<_>>();
 
     let mut conn = crate::establish_connection()?;
-    let similar_signatures = PostSignature::find_similar(&mut conn, indexes)?; // Might be better served as a method on Post
+    let similar_signatures = PostSignature::find_similar(&mut conn, signature::generate_indexes(&image_signature))?;
 
     let mut similar_posts = Vec::new();
     for post_signature in similar_signatures.into_iter() {

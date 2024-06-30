@@ -36,9 +36,9 @@ static DATA_URL: Lazy<&'static str> = Lazy::new(|| config::read_required_string(
 static AVATAR_WIDTH: Lazy<i64> = Lazy::new(|| {
     config::read_required_table("thumbnails")
         .get("avatar_width")
-        .unwrap_or_else(|| panic!("Config avatar_width missing from [thumbnails]"))
+        .expect("Config avatar_width should be in [thumbnails]")
         .as_integer()
-        .unwrap_or_else(|| panic!("Config avatar_width is not an integer"))
+        .expect("Config avatar_width should be an integer")
 });
 
 fn hmac_hash(bytes: &[u8]) -> CtOutput<Hmac> {
