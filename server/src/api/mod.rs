@@ -248,8 +248,8 @@ fn parse_json_body<'a, T: serde::Deserialize<'a>>(body: &'a [u8]) -> Result<T, E
 fn auth() -> impl Filter<Extract = (Result<Option<User>, Error>,), Error = Rejection> + Clone {
     warp::header::optional("authorization").map(|opt_auth: Option<_>| {
         opt_auth
-            .map(|auth| header::authenticate_user(auth).map(Some))
-            .unwrap_or(Ok(None))
+            .map(|auth| header::authenticate_user(auth))
+            .transpose()
             .map_err(Error::from)
     })
 }

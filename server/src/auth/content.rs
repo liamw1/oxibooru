@@ -24,6 +24,11 @@ pub fn post_thumbnail_url(post: &Post) -> String {
     format!("{}/generated-thumbnails/{}_{}.jpg", *DATA_URL, post.id, post_security_hash(post.id))
 }
 
+pub fn post_security_hash(post_id: i32) -> String {
+    let hash = hmac_hash(&post_id.to_le_bytes());
+    URL_SAFE_NO_PAD.encode(hash.into_bytes())
+}
+
 type Hmac = SimpleHmac<blake3::Hasher>;
 
 static SECRET: Lazy<&'static str> = Lazy::new(|| config::read_required_string("content_secret"));
@@ -40,9 +45,4 @@ fn hmac_hash(bytes: &[u8]) -> CtOutput<Hmac> {
     let mut mac = Hmac::new_from_slice(SECRET.as_bytes()).expect("HMAC can take key of any size");
     mac.update(bytes);
     mac.finalize()
-}
-
-fn post_security_hash(post_id: i32) -> String {
-    let hash = hmac_hash(&post_id.to_le_bytes());
-    URL_SAFE_NO_PAD.encode(hash.into_bytes())
 }

@@ -15,11 +15,11 @@ impl<L, R> CartesianProduct<L, R> {
         (&self.left[i], &self.right[j])
     }
 
-    pub fn left_set(&self) -> &Vec<L> {
+    pub fn left_set(&self) -> &[L] {
         &self.left
     }
 
-    pub fn right_set(&self) -> &Vec<R> {
+    pub fn right_set(&self) -> &[R] {
         &self.right
     }
 

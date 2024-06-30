@@ -14,7 +14,7 @@ pub fn compute_signature(image: &DynamicImage) -> Vec<u8> {
     normalize(&differentials)
 }
 
-pub fn normalized_distance(signature_a: &Vec<u8>, signature_b: &Vec<u8>) -> f64 {
+pub fn normalized_distance(signature_a: &[u8], signature_b: &[u8]) -> f64 {
     let l2_squared_distance = signature_a
         .iter()
         .zip(signature_b.iter())
@@ -34,7 +34,7 @@ pub fn normalized_distance(signature_a: &Vec<u8>, signature_b: &Vec<u8>) -> f64 
     }
 }
 
-pub fn generate_indexes(signature: &Vec<u8>) -> Vec<i32> {
+pub fn generate_indexes(signature: &[u8]) -> Vec<i32> {
     const NUM_REDUCED_SYMBOLS: i32 = 3;
     debug_assert!(i64::from(NUM_REDUCED_SYMBOLS).pow(NUM_LETTERS) < i64::from(i32::MAX));
 
@@ -219,7 +219,7 @@ fn compute_differentials(mean_matrix: &Array2D<u8>) -> Vec<i16> {
         .collect()
 }
 
-fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &Vec<i16>, filter: F) -> Vec<Option<i16>> {
+fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &[i16], filter: F) -> Vec<Option<i16>> {
     let mut filtered_values = differentials
         .iter()
         .filter(|&&diff| filter(diff))
@@ -236,10 +236,10 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &Vec<i16>, filter: F) -> V
     filtered_values
         .chunks(chunk_size)
         .map(|chunk| chunk.last().map(|x| *x))
-        .collect::<Vec<_>>()
+        .collect()
 }
 
-fn normalize(differentials: &Vec<i16>) -> Vec<u8> {
+fn normalize(differentials: &[i16]) -> Vec<u8> {
     let dark_cutoffs = compute_cutoffs(differentials, |diff: i16| diff < -IDENTICAL_TOLERANCE);
     let light_cutoffs = compute_cutoffs(differentials, |diff: i16| diff > IDENTICAL_TOLERANCE);
 
@@ -251,13 +251,10 @@ fn normalize(differentials: &Vec<i16>) -> Vec<u8> {
     differentials
         .iter()
         .map(|&diff| {
-            for (level, &cutoff) in cutoffs.iter().enumerate() {
-                match cutoff {
-                    Some(cutoff) if diff <= cutoff => return level as i8,
-                    _ => (),
-                }
-            }
-            panic!("Expected diff to be under at least one cutoff");
+            cutoffs
+                .iter()
+                .position(|opt_cutoff| opt_cutoff.map(|cutoff| diff <= cutoff).unwrap_or(false))
+                .expect("Expected diff to be under at least one cutoff") as i8
         })
         .map(|level| level - LUMINANCE_LEVELS as i8) // Map to range of [-LUMINANCE_LEVELS, LUMINANCE_LEVELS]
         .map(|level| level as u8) // Convert to byte. Can convert back by casting back to i8
@@ -387,7 +384,7 @@ mod test {
         assert!(upper_right_pixel.0[0] < 250);
     }
 
-    fn matching_indexes(indexes_a: &Vec<i32>, indexes_b: &Vec<i32>) -> usize {
+    fn matching_indexes(indexes_a: &[i32], indexes_b: &[i32]) -> usize {
         indexes_a.iter().zip(indexes_b.iter()).filter(|(a, b)| a == b).count()
     }
 }

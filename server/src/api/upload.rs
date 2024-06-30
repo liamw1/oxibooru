@@ -71,29 +71,5 @@ async fn upload(form: FormData, client: Option<&User>) -> Result<UploadResponse,
         .expect("Folding error");
     std::fs::write(&path, &data)?;
 
-    // let post_type = PostType::from(content_type);
-    // if post_type != PostType::Image {
-    //     panic!("Unsupported post type!") // TODO
-    // }
-    //
-    // let image_size = std::fs::metadata(path)?.len();
-    // let image = ImageReader::with_format(std::io::Cursor::new(data), image::ImageFormat::Jpeg).decode()?;
-    //
-    // let mut conn = crate::establish_connection()?;
-    // let new_post = NewPost {
-    //     user_id: client.map(|user| user.id),
-    //     file_size: image_size as i64,
-    //     width: image.width() as i32,
-    //     height: image.height() as i32,
-    //     safety: PostSafety::Safe,
-    //     type_: post_type,
-    //     mime_type: content_type,
-    //     checksum: "", // TODO
-    // };
-    // let post = diesel::insert_into(post::table)
-    //     .values(&new_post)
-    //     .returning(Post::as_returning())
-    //     .get_result(&mut conn)?;
-
     Ok(UploadResponse { token: upload_token })
 }

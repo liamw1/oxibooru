@@ -171,10 +171,7 @@ where
 
     pub fn get<I: PrimInt>(&self, index: IPoint2<I>) -> Option<T> {
         let converted_index = <IPoint2<u32> as From<IPoint2<I>>>::from(&index)?;
-        match self.bounds().contains(index) {
-            false => None,
-            true => Some(self.at(converted_index)),
-        }
+        self.bounds().contains(index).then(|| self.at(converted_index))
     }
 
     pub fn iter(&self) -> std::slice::Iter<T> {

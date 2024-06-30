@@ -39,7 +39,7 @@ where
     R::Target: TableName,
 {
     conn.transaction(|conn| {
-        validate_uniqueness(R::Target::table_name(), "update", diesel::update(row).set::<V>(values).execute(conn)?)
+        validate_uniqueness(R::Target::table_name(), "update", diesel::update(row).set(values).execute(conn)?)
     })
 }
 

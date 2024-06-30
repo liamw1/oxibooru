@@ -39,10 +39,10 @@ pub fn authenticate_user(auth: String) -> Result<User, AuthenticationError> {
 }
 
 fn decode_credentials(credentials: &str) -> Result<(String, String), AuthenticationError> {
-    let ascii_encoded_b64: Vec<u8> = credentials
+    let ascii_encoded_b64 = credentials
         .chars()
         .map(|c| c.is_ascii().then_some(c as u8))
-        .collect::<Option<_>>()
+        .collect::<Option<Vec<_>>>()
         .ok_or(AuthenticationError::NonAsciiCredentials)?;
     let decoded_credentials = BASE64_STANDARD.decode(ascii_encoded_b64)?;
     let utf8_encoded_credentials = decoded_credentials
@@ -61,10 +61,9 @@ fn basic_access_authentication(credentials: &str) -> Result<User, Authentication
 
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
-    match auth::password::is_valid_password(&user, &password) {
-        true => Ok(user),
-        false => Err(AuthenticationError::InvalidPassword),
-    }
+    auth::password::is_valid_password(&user, &password)
+        .then_some(user)
+        .ok_or(AuthenticationError::InvalidPassword)
 }
 
 fn token_authentication(credentials: &str) -> Result<User, AuthenticationError> {
@@ -77,8 +76,7 @@ fn token_authentication(credentials: &str) -> Result<User, AuthenticationError> 
         .select(UserToken::as_select())
         .filter(user_token::token.eq(token))
         .first(&mut conn)?;
-    match auth::token::is_valid_token(&user_token) {
-        true => Ok(user),
-        false => Err(AuthenticationError::InvalidToken),
-    }
+    auth::token::is_valid_token(&user_token)
+        .then_some(user)
+        .ok_or(AuthenticationError::InvalidToken)
 }

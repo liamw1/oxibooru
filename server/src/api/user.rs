@@ -67,7 +67,7 @@ struct UserInfo {
 type PagedUserInfo = api::PagedResponse<UserInfo>;
 
 impl UserInfo {
-    fn full(conn: &mut PgConnection, user: User) -> Result<Self, api::Error> {
+    fn full(conn: &mut PgConnection, user: User) -> QueryResult<Self> {
         let avatar_url = user.avatar_url();
         let comment_count = user.comment_count(conn)?;
         let uploaded_post_count = user.post_count(conn)?;
@@ -93,7 +93,7 @@ impl UserInfo {
     }
 
     // Returns a subset of the information available about a user
-    fn public_only(conn: &mut PgConnection, user: User) -> Result<Self, api::Error> {
+    fn public_only(conn: &mut PgConnection, user: User) -> QueryResult<Self> {
         let avatar_url = user.avatar_url();
         let comment_count = user.comment_count(conn)?;
         let uploaded_post_count = user.post_count(conn)?;
@@ -148,7 +148,7 @@ fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo
         .values(&new_user)
         .returning(User::as_returning())
         .get_result(&mut conn)?;
-    UserInfo::full(&mut conn, user)
+    UserInfo::full(&mut conn, user).map_err(api::Error::from)
 }
 
 async fn get_user_endpoint(username: String, auth_result: api::AuthenticationResult) -> Result<api::Reply, Infallible> {
@@ -164,9 +164,9 @@ fn get_user(username: String, client: Option<&User>) -> Result<UserInfo, api::Er
     let client_id = client.map(|user| user.id);
     if client_id != Some(user.id) {
         api::verify_privilege(api::client_access_level(client), "users:view")?;
-        return UserInfo::public_only(&mut conn, user);
+        return UserInfo::public_only(&mut conn, user).map_err(api::Error::from);
     }
-    UserInfo::full(&mut conn, user)
+    UserInfo::full(&mut conn, user).map_err(api::Error::from)
 }
 
 async fn list_users_endpoint(
@@ -197,6 +197,6 @@ fn get_users(query_info: api::PagedQuery, client: Option<&User>) -> Result<Paged
         results: users
             .into_iter()
             .map(|user| UserInfo::public_only(&mut conn, user))
-            .collect::<Result<_, _>>()?,
+            .collect::<QueryResult<_>>()?,
     })
 }

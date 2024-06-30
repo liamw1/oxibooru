@@ -12,6 +12,7 @@ use crate::schema::{post, post_favorite, post_score, post_signature, post_tag, t
 use crate::util::DateTime;
 use crate::{api, config};
 use diesel::prelude::*;
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::path::PathBuf;
@@ -49,6 +50,25 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(reverse_search)
         .or(post_post)
 }
+
+static THUMBNAIL_WIDTH: Lazy<u32> = Lazy::new(|| {
+    config::read_required_table("thumbnails")
+        .get("post_width")
+        .unwrap_or_else(|| panic!("Config post_width missing from [thumbnails]"))
+        .as_integer()
+        .unwrap_or_else(|| panic!("Config post_width is not an integer"))
+        .try_into()
+        .unwrap_or_else(|value| panic!("Config post_width ({value}) cannot be represented as u32"))
+});
+static THUMBNAIL_HEIGHT: Lazy<u32> = Lazy::new(|| {
+    config::read_required_table("thumbnails")
+        .get("post_height")
+        .unwrap_or_else(|| panic!("Config post_height missing from [thumbnails]"))
+        .as_integer()
+        .unwrap_or_else(|| panic!("Config post_height is not an integer"))
+        .try_into()
+        .unwrap_or_else(|value| panic!("Config post_height ({value}) cannot be represented as u32"))
+});
 
 #[derive(Serialize)]
 struct PostNoteInfo {
@@ -106,7 +126,7 @@ struct PostInfo {
 type PagedPostInfo = api::PagedResponse<PostInfo>;
 
 impl PostInfo {
-    fn new(conn: &mut PgConnection, post: Post, client: Option<i32>) -> Result<PostInfo, api::Error> {
+    fn new(conn: &mut PgConnection, post: Post, client: Option<i32>) -> QueryResult<PostInfo> {
         let content_url = content::post_content_url(&post);
         let thumbnail_url = content::post_thumbnail_url(&post);
         let tags = PostTag::belonging_to(&post)
@@ -116,42 +136,42 @@ impl PostInfo {
         let micro_tags = tags
             .into_iter()
             .map(|tag| MicroTag::new(conn, tag))
-            .collect::<Result<_, _>>()?;
+            .collect::<QueryResult<_>>()?;
         let related_posts = post.related_posts(conn)?;
         let micro_relations = related_posts.iter().map(|post| MicroPost::new(&post)).collect();
         let notes = PostNote::belonging_to(&post).select(PostNote::as_select()).load(conn)?;
         let score = post.score(conn)?;
-        let owner = match post.user_id {
-            Some(id) => Some(user::table.find(id).select(User::as_select()).first(conn)?),
-            None => None,
-        };
-        let client_score = match client {
-            Some(client_id) => post_score::table
-                .find((post.id, client_id))
-                .select(post_score::score)
-                .load(conn)?,
-            None => Vec::new(),
-        };
-        let client_favorited = match client {
-            Some(client_id) => post_favorite::table
-                .find((post.id, client_id))
-                .count()
-                .first(conn)
-                .map(|n: i64| n > 0)?,
-            None => false,
-        };
+        let owner = post
+            .user_id
+            .map(|id| user::table.find(id).select(User::as_select()).first(conn))
+            .transpose()?;
+        let client_score = client
+            .map(|id| {
+                post_score::table
+                    .find((post.id, id))
+                    .select(post_score::score)
+                    .first::<i32>(conn)
+                    .optional()
+            })
+            .transpose()?;
+        let client_favorited = client
+            .map(|id| {
+                post_favorite::table
+                    .find((post.id, id))
+                    .count()
+                    .first(conn)
+                    .map(|n: i64| n > 0)
+            })
+            .transpose()?;
         let tag_count = post.tag_count(conn)?;
         let favorite_count = post.favorite_count(conn)?;
         let note_count = notes.len() as i64;
         let feature_count = post.feature_count(conn)?;
         let comments = Comment::belonging_to(&post).select(Comment::as_select()).load(conn)?;
-        let comment_info = match client {
-            Some(client_id) => comments
-                .into_iter()
-                .map(|comment| CommentInfo::new(conn, comment, client_id))
-                .collect::<Result<_, _>>()?,
-            None => Vec::new(),
-        };
+        let comment_info = comments
+            .into_iter()
+            .map(|comment| CommentInfo::new(conn, comment, client))
+            .collect::<QueryResult<Vec<_>>>()?;
         let favorited_by = PostFavorite::belonging_to(&post)
             .inner_join(user::table.on(post_favorite::user_id.eq(user::id)))
             .select(User::as_select())
@@ -178,8 +198,8 @@ impl PostInfo {
             notes: notes.into_iter().map(|note| PostNoteInfo::new(note)).collect(),
             user: owner.map(MicroUser::new),
             score,
-            own_score: client_score.first().map(|&s| s),
-            own_favorite: client_favorited,
+            own_score: client_score.flatten(),
+            own_favorite: client_favorited.unwrap_or(false),
             tag_count,
             favorite_count,
             comment_count: comment_info.len() as i64,
@@ -194,7 +214,7 @@ impl PostInfo {
             pools: pools_in
                 .into_iter()
                 .map(|pool| MicroPool::new(conn, pool))
-                .collect::<Result<_, _>>()?,
+                .collect::<QueryResult<_>>()?,
         })
     }
 }
@@ -228,7 +248,7 @@ fn list_posts(query_info: api::PagedQuery, client: Option<&User>) -> Result<Page
         results: posts
             .into_iter()
             .map(|post| PostInfo::new(&mut conn, post, client_id))
-            .collect::<Result<_, _>>()?,
+            .collect::<QueryResult<_>>()?,
     })
 }
 
@@ -241,13 +261,13 @@ fn get_post(post_id: i32, client: Option<&User>) -> Result<PostInfo, api::Error>
 
     let mut conn = crate::establish_connection()?;
     let post = post::table.find(post_id).select(Post::as_select()).first(&mut conn)?;
-    PostInfo::new(&mut conn, post, client_id)
+    PostInfo::new(&mut conn, post, client_id).map_err(api::Error::from)
 }
 
 #[derive(Serialize)]
 struct PostNeighbors {
-    prev: PostInfo,
-    next: PostInfo,
+    prev: Option<PostInfo>,
+    next: Option<PostInfo>,
 }
 
 async fn get_post_around_endpoint(
@@ -261,21 +281,27 @@ async fn get_post_around_endpoint(
 
 fn get_post_around(post_id: i32, client: Option<&User>) -> Result<PostNeighbors, api::Error> {
     let client_id = client.map(|user| user.id);
-
     let mut conn = crate::establish_connection()?;
-    let prev_post = post::table
+
+    let previous_post = post::table
         .select(Post::as_select())
         .filter(post::id.lt(post_id))
-        .first(&mut conn)?;
+        .first(&mut conn)
+        .optional()?;
+    let prev = previous_post
+        .map(|post| PostInfo::new(&mut conn, post, client_id))
+        .transpose()?;
+
     let next_post = post::table
         .select(Post::as_select())
         .filter(post::id.gt(post_id))
-        .first(&mut conn)?;
+        .first(&mut conn)
+        .optional()?;
+    let next = next_post
+        .map(|post| PostInfo::new(&mut conn, post, client_id))
+        .transpose()?;
 
-    Ok(PostNeighbors {
-        prev: PostInfo::new(&mut conn, prev_post, client_id)?,
-        next: PostInfo::new(&mut conn, next_post, client_id)?,
-    })
+    Ok(PostNeighbors { prev, next })
 }
 
 #[derive(Deserialize)]
@@ -377,9 +403,9 @@ fn post_post(post_info: NewPostInfo, client: Option<&User>) -> Result<PostInfo, 
     }
 
     let data_directory = config::read_required_string("data_dir");
-    let path = PathBuf::from(format!("{data_directory}/temporary-uploads/{}", post_info.content_token));
-    let image_size = std::fs::metadata(&path)?.len();
-    let image = image::open(path)?;
+    let temp_path = PathBuf::from(format!("{data_directory}/temporary-uploads/{}", post_info.content_token));
+    let image_size = std::fs::metadata(&temp_path)?.len();
+    let image = image::open(&temp_path)?;
 
     let client_id = client.map(|user| user.id);
     let new_post = NewPost {
@@ -390,7 +416,7 @@ fn post_post(post_info: NewPostInfo, client: Option<&User>) -> Result<PostInfo, 
         safety: post_info.safety,
         type_: post_type,
         mime_type: content_type,
-        checksum: "",
+        checksum: "", // TODO
     };
 
     let mut conn = crate::establish_connection()?;
@@ -410,5 +436,29 @@ fn post_post(post_info: NewPostInfo, client: Option<&User>) -> Result<PostInfo, 
         .returning(PostSignature::as_returning())
         .get_result(&mut conn)?;
 
-    PostInfo::new(&mut conn, post, client_id)
+    let posts_folder = PathBuf::from(format!("{data_directory}/posts"));
+    if !posts_folder.exists() {
+        std::fs::create_dir(&posts_folder)?;
+    }
+    let post_path = PathBuf::from(format!(
+        "{data_directory}/posts/{}_{}.{}",
+        post.id,
+        content::post_security_hash(post.id),
+        post.mime_type.extension()
+    ));
+    std::fs::rename(temp_path, post_path)?;
+
+    let thumbnail_folder = PathBuf::from(format!("{data_directory}/generated-thumbnails"));
+    if !thumbnail_folder.exists() {
+        std::fs::create_dir(&thumbnail_folder)?;
+    }
+    let thumbnail_path = PathBuf::from(format!(
+        "{data_directory}/generated-thumbnails/{}_{}.jpg",
+        post.id,
+        content::post_security_hash(post.id)
+    ));
+    let thumbnail = image.resize_to_fill(*THUMBNAIL_WIDTH, *THUMBNAIL_HEIGHT, image::imageops::FilterType::Nearest);
+    thumbnail.save(thumbnail_path)?;
+
+    PostInfo::new(&mut conn, post, client_id).map_err(api::Error::from)
 }
