@@ -1,4 +1,4 @@
-use crate::api;
+use crate::api::{self, AuthResult};
 use crate::auth::password;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::user::{NewUser, User};
@@ -8,8 +8,6 @@ use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
-use warp::hyper::body::Bytes;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -17,16 +15,19 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::path!("users"))
         .and(api::auth())
         .and(warp::query())
-        .and_then(list_users_endpoint);
+        .map(list_users)
+        .map(api::Reply::from);
     let get_user = warp::get()
         .and(warp::path!("user" / String))
         .and(api::auth())
-        .and_then(get_user_endpoint);
+        .map(get_user)
+        .map(api::Reply::from);
     let post_user = warp::post()
         .and(warp::path!("users"))
         .and(api::auth())
-        .and(warp::body::bytes())
-        .and_then(post_user_endpoint);
+        .and(warp::body::json())
+        .map(create_user)
+        .map(api::Reply::from);
 
     list_users.or(get_user).or(post_user)
 }
@@ -117,19 +118,15 @@ impl UserInfo {
     }
 }
 
-async fn post_user_endpoint(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Infallible> {
-    Ok(auth_result
-        .and_then(|client| api::parse_json_body(&body).and_then(|user_info| create_user(user_info, client.as_ref())))
-        .into())
-}
-
-fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo, api::Error> {
+fn create_user(auth_result: AuthResult, user_info: NewUserInfo) -> Result<UserInfo, api::Error> {
+    let client = auth_result?;
     let target = if client.is_some() { "any" } else { "self" };
-    let client_rank = api::client_access_level(client);
+    let client_rank = api::client_access_level(client.as_ref());
+
     let requested_rank = user_info.rank.unwrap_or(UserRank::Regular);
     let requested_action = String::from("users:create:") + target;
 
-    api::verify_privilege(client_rank, &requested_action)?;
+    api::verify_privilege(client.as_ref(), &requested_action)?;
     let rank = requested_rank.clamp(UserRank::Regular, std::cmp::max(client_rank, UserRank::Regular));
 
     let salt = SaltString::generate(&mut OsRng);
@@ -151,36 +148,25 @@ fn create_user(user_info: NewUserInfo, client: Option<&User>) -> Result<UserInfo
     UserInfo::full(&mut conn, user).map_err(api::Error::from)
 }
 
-async fn get_user_endpoint(username: String, auth_result: api::AuthenticationResult) -> Result<api::Reply, Infallible> {
-    Ok(auth_result
-        .and_then(|client| get_user(username, client.as_ref()))
-        .into())
-}
-
-fn get_user(username: String, client: Option<&User>) -> Result<UserInfo, api::Error> {
+fn get_user(username: String, auth_result: AuthResult) -> Result<UserInfo, api::Error> {
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
 
-    let client_id = client.map(|user| user.id);
+    let client = auth_result?;
+    let client_id = client.as_ref().map(|user| user.id);
     if client_id != Some(user.id) {
-        api::verify_privilege(api::client_access_level(client), "users:view")?;
+        api::verify_privilege(client.as_ref(), "users:view")?;
         return UserInfo::public_only(&mut conn, user).map_err(api::Error::from);
     }
     UserInfo::full(&mut conn, user).map_err(api::Error::from)
 }
 
-async fn list_users_endpoint(
-    auth_result: api::AuthenticationResult,
-    query: api::PagedQuery,
-) -> Result<api::Reply, Infallible> {
-    Ok(auth_result.and_then(|client| get_users(query, client.as_ref())).into())
-}
-
-fn get_users(query_info: api::PagedQuery, client: Option<&User>) -> Result<PagedUserInfo, api::Error> {
-    api::verify_privilege(api::client_access_level(client), "users:list")?;
+fn list_users(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<PagedUserInfo, api::Error> {
+    let client = auth_result?;
+    api::verify_privilege(client.as_ref(), "users:list")?;
 
     let offset = query_info.offset.unwrap_or(0);
-    let limit = query_info.limit.unwrap_or(40);
+    let limit = query_info.limit;
 
     let mut conn = crate::establish_connection()?;
     let users = user::table

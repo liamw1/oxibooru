@@ -110,23 +110,6 @@ impl ErrorKind for diesel::ConnectionError {
     }
 }
 
-impl ErrorKind for serde_json::error::Category {
-    fn kind(&self) -> &'static str {
-        match self {
-            Self::Data => "JsonDataError",
-            Self::Eof => "JsonEofError",
-            Self::Io => "JsonIoError",
-            Self::Syntax => "JsonSyntaxError",
-        }
-    }
-}
-
-impl ErrorKind for serde_json::Error {
-    fn kind(&self) -> &'static str {
-        self.classify().kind()
-    }
-}
-
 impl ErrorKind for base64::DecodeError {
     fn kind(&self) -> &'static str {
         match self {

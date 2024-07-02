@@ -1,5 +1,4 @@
-use crate::api;
-use crate::model::enums::UserRank;
+use crate::api::{self, AuthResult};
 use crate::model::tag::TagCategory;
 use crate::schema::tag;
 use crate::schema::tag_category;
@@ -7,14 +6,14 @@ use crate::util::DateTime;
 use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
-use std::convert::Infallible;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_tag_categories = warp::get()
         .and(warp::path!("tag-categories"))
         .and(api::auth())
-        .and_then(list_tag_categories_endpoint);
+        .map(list_tag_categories)
+        .map(api::Reply::from);
 
     list_tag_categories
 }
@@ -34,12 +33,9 @@ struct TagCategoryList {
     results: Vec<TagCategoryInfo>,
 }
 
-async fn list_tag_categories_endpoint(auth_result: api::AuthenticationResult) -> Result<api::Reply, Infallible> {
-    Ok(api::access_level(auth_result).and_then(list_tag_categories).into())
-}
-
-fn list_tag_categories(access_level: UserRank) -> Result<TagCategoryList, api::Error> {
-    api::verify_privilege(access_level, "tag_categories:list")?;
+fn list_tag_categories(auth_result: AuthResult) -> Result<TagCategoryList, api::Error> {
+    let client = auth_result?;
+    api::verify_privilege(client.as_ref(), "tag_categories:list")?;
 
     let mut conn = crate::establish_connection()?;
     let tag_categories = tag_category::table.select(TagCategory::as_select()).load(&mut conn)?;

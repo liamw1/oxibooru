@@ -1,9 +1,10 @@
 use crate::config;
-use crate::model::post::Post;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use crate::model::enums::MimeType;
+use base64::engine::general_purpose::{STANDARD_NO_PAD, URL_SAFE_NO_PAD};
 use base64::prelude::*;
 use hmac::digest::CtOutput;
 use hmac::{Mac, SimpleHmac};
+use image::DynamicImage;
 use once_cell::sync::Lazy;
 
 pub fn gravatar_url(username: &str) -> String {
@@ -12,21 +13,26 @@ pub fn gravatar_url(username: &str) -> String {
     format!("https://gravatar.com/avatar/{hex_encoded_hash}?d=retro&s={}", *AVATAR_WIDTH)
 }
 
-pub fn manual_url(username: &str) -> String {
+pub fn custom_avatar_url(username: &str) -> String {
     format!("{}/avatars/{}.png", *DATA_URL, username.to_lowercase())
 }
 
-pub fn post_content_url(post: &Post) -> String {
-    format!("{}/posts/{}_{}.{}", *DATA_URL, post.id, post_security_hash(post.id), post.mime_type.extension())
+pub fn post_content_url(post_id: i32, content_type: MimeType) -> String {
+    format!("{}/posts/{}_{}.{}", *DATA_URL, post_id, post_security_hash(post_id), content_type.extension())
 }
 
-pub fn post_thumbnail_url(post: &Post) -> String {
-    format!("{}/generated-thumbnails/{}_{}.jpg", *DATA_URL, post.id, post_security_hash(post.id))
+pub fn post_thumbnail_url(post_id: i32) -> String {
+    format!("{}/generated-thumbnails/{}_{}.jpg", *DATA_URL, post_id, post_security_hash(post_id))
 }
 
 pub fn post_security_hash(post_id: i32) -> String {
     let hash = hmac_hash(&post_id.to_le_bytes());
     URL_SAFE_NO_PAD.encode(hash.into_bytes())
+}
+
+pub fn image_checksum(image: &DynamicImage) -> String {
+    let hash = hmac_hash(image.as_bytes());
+    STANDARD_NO_PAD.encode(hash.into_bytes())
 }
 
 type Hmac = SimpleHmac<blake3::Hasher>;

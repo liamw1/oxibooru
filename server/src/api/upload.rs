@@ -1,7 +1,6 @@
-use crate::api;
+use crate::api::{self, AuthResult};
 use crate::config;
 use crate::model::enums::MimeType;
-use crate::model::user::User;
 use futures::{StreamExt, TryStreamExt};
 use serde::Serialize;
 use std::convert::Infallible;
@@ -26,21 +25,14 @@ struct UploadResponse {
     token: String,
 }
 
-async fn upload_endpoint(auth_result: api::AuthenticationResult, form: FormData) -> Result<api::Reply, Infallible> {
-    let client = match auth_result {
-        Ok(authenticated_user) => authenticated_user,
-        Err(err) => {
-            let result: Result<(), _> = Err(err);
-            return Ok(result.into());
-        }
-    };
-
-    Ok(upload(form, client.as_ref()).await.into())
+async fn upload_endpoint(auth_result: AuthResult, form: FormData) -> Result<api::Reply, Infallible> {
+    Ok(upload(auth_result, form).await.into())
 }
 
 // TODO: Cleanup on failure
-async fn upload(form: FormData, client: Option<&User>) -> Result<UploadResponse, api::Error> {
-    api::verify_privilege(api::client_access_level(client), "uploads:create")?;
+async fn upload(auth_result: AuthResult, form: FormData) -> Result<UploadResponse, api::Error> {
+    let client = auth_result?;
+    api::verify_privilege(client.as_ref(), "uploads:create")?;
 
     // Set up temp directory if necessary
     let data_directory = config::read_required_string("data_dir");

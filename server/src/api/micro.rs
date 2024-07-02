@@ -85,7 +85,7 @@ impl MicroPost {
     pub fn new(post: &Post) -> Self {
         MicroPost {
             id: post.id,
-            thumbnail_url: content::post_thumbnail_url(post),
+            thumbnail_url: content::post_thumbnail_url(post.id),
         }
     }
 }

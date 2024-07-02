@@ -1,22 +1,23 @@
 use crate::api::comment::CommentInfo;
 use crate::api::micro::{MicroPool, MicroPost, MicroTag, MicroUser};
+use crate::api::{self, AuthResult};
 use crate::auth::content;
+use crate::config;
 use crate::image::signature;
 use crate::model::comment::Comment;
 use crate::model::enums::MimeType;
 use crate::model::enums::{PostSafety, PostType};
-use crate::model::post::{NewPost, NewPostSignature, Post, PostFavorite, PostNote, PostSignature, PostTag};
+use crate::model::post::{
+    NewPost, NewPostRelation, NewPostSignature, Post, PostFavorite, PostNote, PostSignature, PostTag,
+};
 use crate::model::tag::Tag;
 use crate::model::user::User;
-use crate::schema::{post, post_favorite, post_score, post_signature, post_tag, tag, user};
+use crate::schema::{post, post_favorite, post_relation, post_score, post_signature, post_tag, tag, user};
 use crate::util::DateTime;
-use crate::{api, config};
 use diesel::prelude::*;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
 use std::path::PathBuf;
-use warp::hyper::body::Bytes;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -24,32 +25,40 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::path!("posts"))
         .and(api::auth())
         .and(warp::query())
-        .and_then(list_posts_endpoint);
+        .map(list_posts)
+        .map(api::Reply::from);
     let get_post = warp::get()
         .and(warp::path!("post" / i32))
         .and(api::auth())
-        .and_then(get_post_endpoint);
-    let get_post_around = warp::get()
+        .map(get_post)
+        .map(api::Reply::from);
+    let get_post_neighbors = warp::get()
         .and(warp::path!("post" / i32 / "around"))
         .and(api::auth())
-        .and_then(get_post_around_endpoint);
+        .map(get_post_neighbors)
+        .map(api::Reply::from);
     let reverse_search = warp::post()
         .and(warp::path!("posts" / "reverse-search"))
         .and(api::auth())
-        .and(warp::body::bytes())
-        .and_then(reverse_search_from_temporary_endpoint);
+        .and(warp::body::json())
+        .map(reverse_search)
+        .map(api::Reply::from);
     let post_post = warp::post()
         .and(warp::path!("posts"))
         .and(api::auth())
-        .and(warp::body::bytes())
-        .and_then(post_post_endpoint);
+        .and(warp::body::json())
+        .map(create_post)
+        .map(api::Reply::from);
 
     list_posts
         .or(get_post)
-        .or(get_post_around)
+        .or(get_post_neighbors)
         .or(reverse_search)
         .or(post_post)
 }
+
+const MAX_POSTS_PER_PAGE: i64 = 50;
+const POST_SIMILARITY_THRESHOLD: f64 = 0.6;
 
 static THUMBNAIL_WIDTH: Lazy<u32> = Lazy::new(|| {
     config::read_required_table("thumbnails")
@@ -98,6 +107,7 @@ struct PostInfo {
     checksum: String,
     #[serde(rename = "checksumMD5")]
     checksum_md5: Option<String>,
+    file_size: i64,
     canvas_width: i32,
     canvas_height: i32,
     content_url: String,
@@ -128,8 +138,8 @@ type PagedPostInfo = api::PagedResponse<PostInfo>;
 impl PostInfo {
     // Retrieving all information for now, but will need to add support for partial post queries, TODO
     fn new(conn: &mut PgConnection, post: Post, client: Option<i32>) -> QueryResult<PostInfo> {
-        let content_url = content::post_content_url(&post);
-        let thumbnail_url = content::post_thumbnail_url(&post);
+        let content_url = content::post_content_url(post.id, post.mime_type);
+        let thumbnail_url = content::post_thumbnail_url(post.id);
         let tags = PostTag::belonging_to(&post)
             .inner_join(tag::table.on(post_tag::tag_id.eq(tag::id)))
             .select(Tag::as_select())
@@ -189,6 +199,7 @@ impl PostInfo {
             type_: post.type_,
             checksum: post.checksum,
             checksum_md5: post.checksum_md5,
+            file_size: post.file_size,
             canvas_width: post.width,
             canvas_height: post.height,
             content_url,
@@ -220,19 +231,13 @@ impl PostInfo {
     }
 }
 
-async fn list_posts_endpoint(
-    auth_result: api::AuthenticationResult,
-    query: api::PagedQuery,
-) -> Result<api::Reply, Infallible> {
-    Ok(auth_result.and_then(|client| list_posts(query, client.as_ref())).into())
-}
-
-fn list_posts(query_info: api::PagedQuery, client: Option<&User>) -> Result<PagedPostInfo, api::Error> {
-    api::verify_privilege(api::client_access_level(client), "posts:list")?;
+fn list_posts(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<PagedPostInfo, api::Error> {
+    let client = auth_result?;
+    api::verify_privilege(client.as_ref(), "posts:list")?;
 
     let client_id = client.map(|user| user.id);
     let offset = query_info.offset.unwrap_or(0);
-    let limit = query_info.limit.unwrap_or(40);
+    let limit = std::cmp::min(query_info.limit, MAX_POSTS_PER_PAGE);
 
     let mut conn = crate::establish_connection()?;
     let posts = post::table
@@ -253,15 +258,13 @@ fn list_posts(query_info: api::PagedQuery, client: Option<&User>) -> Result<Page
     })
 }
 
-async fn get_post_endpoint(post_id: i32, auth_result: api::AuthenticationResult) -> Result<api::Reply, Infallible> {
-    Ok(auth_result.and_then(|client| get_post(post_id, client.as_ref())).into())
-}
-
-fn get_post(post_id: i32, client: Option<&User>) -> Result<PostInfo, api::Error> {
-    let client_id = client.map(|user| user.id);
+fn get_post(post_id: i32, auth_result: AuthResult) -> Result<PostInfo, api::Error> {
+    let client = auth_result?;
+    api::verify_privilege(client.as_ref(), "posts:view")?;
 
     let mut conn = crate::establish_connection()?;
     let post = post::table.find(post_id).select(Post::as_select()).first(&mut conn)?;
+    let client_id = client.map(|user| user.id);
     PostInfo::new(&mut conn, post, client_id).map_err(api::Error::from)
 }
 
@@ -271,16 +274,10 @@ struct PostNeighbors {
     next: Option<PostInfo>,
 }
 
-async fn get_post_around_endpoint(
-    post_id: i32,
-    auth_result: api::AuthenticationResult,
-) -> Result<api::Reply, Infallible> {
-    Ok(auth_result
-        .and_then(|client| get_post_around(post_id, client.as_ref()))
-        .into())
-}
+fn get_post_neighbors(post_id: i32, auth_result: AuthResult) -> Result<PostNeighbors, api::Error> {
+    let client = auth_result?;
+    api::verify_privilege(client.as_ref(), "posts:list")?;
 
-fn get_post_around(post_id: i32, client: Option<&User>) -> Result<PostNeighbors, api::Error> {
     let client_id = client.map(|user| user.id);
     let mut conn = crate::establish_connection()?;
 
@@ -326,18 +323,10 @@ struct ReverseSearchInfo {
     similar_posts: Vec<SimilarPostInfo>,
 }
 
-async fn reverse_search_from_temporary_endpoint(
-    auth_result: api::AuthenticationResult,
-    body: Bytes,
-) -> Result<api::Reply, Infallible> {
-    Ok(auth_result
-        .and_then(|client| {
-            api::parse_json_body(&body).and_then(|token| reverse_search_from_temporary(token, client.as_ref()))
-        })
-        .into())
-}
+fn reverse_search(auth_result: AuthResult, token: ContentToken) -> Result<ReverseSearchInfo, api::Error> {
+    let client = auth_result?;
+    api::verify_privilege(client.as_ref(), "posts:reverse_search")?;
 
-fn reverse_search_from_temporary(token: ContentToken, client: Option<&User>) -> Result<ReverseSearchInfo, api::Error> {
     let (_uuid, extension) = token.content_token.split_once('.').unwrap();
     let content_type = MimeType::from_extension(extension)?;
     let post_type = PostType::from(content_type);
@@ -349,27 +338,47 @@ fn reverse_search_from_temporary(token: ContentToken, client: Option<&User>) -> 
     let path = PathBuf::from(format!("{data_directory}/temporary-uploads/{}", token.content_token));
     let image = image::open(path)?;
     let image_signature = signature::compute_signature(&image);
+    let image_checksum = content::image_checksum(&image);
 
     let mut conn = crate::establish_connection()?;
-    let similar_signatures = PostSignature::find_similar(&mut conn, signature::generate_indexes(&image_signature))?;
 
+    // Check for exact match
+    let client_id = client.map(|user| user.id);
+    let exact_post = post::table
+        .select(Post::as_select())
+        .filter(post::checksum.eq(image_checksum))
+        .first(&mut conn)
+        .optional()?;
+    if exact_post.is_some() {
+        return Ok(ReverseSearchInfo {
+            exact_post: exact_post
+                .map(|post| PostInfo::new(&mut conn, post, client_id))
+                .transpose()?,
+            similar_posts: Vec::new(),
+        });
+    }
+
+    // Search for similar images
     let mut similar_posts = Vec::new();
+    let similar_signatures = PostSignature::find_similar(&mut conn, signature::generate_indexes(&image_signature))?;
     for post_signature in similar_signatures.into_iter() {
         let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
-        if distance < 0.6 {
-            let post = post::table
-                .find(post_signature.post_id)
-                .select(Post::as_select())
-                .first(&mut conn)?;
-            similar_posts.push(SimilarPostInfo {
-                distance,
-                post: PostInfo::new(&mut conn, post, client.map(|user| user.id))?,
-            });
+        if distance > POST_SIMILARITY_THRESHOLD {
+            continue;
         }
+
+        let post = post::table
+            .find(post_signature.post_id)
+            .select(Post::as_select())
+            .first(&mut conn)?;
+        similar_posts.push(SimilarPostInfo {
+            distance,
+            post: PostInfo::new(&mut conn, post, client_id)?,
+        });
     }
 
     Ok(ReverseSearchInfo {
-        exact_post: None, // TODO
+        exact_post: None,
         similar_posts,
     })
 }
@@ -380,20 +389,19 @@ struct NewPostInfo {
     tags: Option<Vec<String>>,
     safety: PostSafety,
     source: Option<String>,
-    relations: Option<Vec<i64>>,
-    notes: Option<Vec<String>>,
+    relations: Option<Vec<i32>>,
     flags: Option<Vec<String>>, // TODO
     anonymous: Option<bool>,
     content_token: String,
 }
 
-async fn post_post_endpoint(auth_result: api::AuthenticationResult, body: Bytes) -> Result<api::Reply, Infallible> {
-    Ok(auth_result
-        .and_then(|client| api::parse_json_body(&body).and_then(|post_info| post_post(post_info, client.as_ref())))
-        .into())
-}
+fn create_post(auth_result: AuthResult, post_info: NewPostInfo) -> Result<PostInfo, api::Error> {
+    let anonymous_post = post_info.anonymous.unwrap_or(false);
+    let target = if anonymous_post { "anonymous" } else { "identified" };
+    let requested_action = String::from("posts:create:") + target;
+    let client = auth_result?;
+    api::verify_privilege(client.as_ref(), &requested_action)?;
 
-fn post_post(post_info: NewPostInfo, client: Option<&User>) -> Result<PostInfo, api::Error> {
     let (_uuid, extension) = post_info.content_token.split_once('.').unwrap();
     let content_type = MimeType::from_extension(extension)?;
     let post_type = PostType::from(content_type);
@@ -405,6 +413,7 @@ fn post_post(post_info: NewPostInfo, client: Option<&User>) -> Result<PostInfo, 
     let temp_path = PathBuf::from(format!("{data_directory}/temporary-uploads/{}", post_info.content_token));
     let image_size = std::fs::metadata(&temp_path)?.len();
     let image = image::open(&temp_path)?;
+    let image_checksum = content::image_checksum(&image);
 
     let client_id = client.map(|user| user.id);
     let new_post = NewPost {
@@ -415,7 +424,8 @@ fn post_post(post_info: NewPostInfo, client: Option<&User>) -> Result<PostInfo, 
         safety: post_info.safety,
         type_: post_type,
         mime_type: content_type,
-        checksum: "", // TODO
+        checksum: &image_checksum,
+        source: post_info.source.as_deref(),
     };
 
     let mut conn = crate::establish_connection()?;
@@ -424,6 +434,25 @@ fn post_post(post_info: NewPostInfo, client: Option<&User>) -> Result<PostInfo, 
         .returning(Post::as_returning())
         .get_result(&mut conn)?;
 
+    // Add tags: TODO
+
+    // Add relations
+    let mut new_relations = Vec::new();
+    for related_post_id in post_info.relations.unwrap_or_default().into_iter() {
+        new_relations.push(NewPostRelation {
+            parent_id: post.id,
+            child_id: related_post_id,
+        });
+        new_relations.push(NewPostRelation {
+            parent_id: related_post_id,
+            child_id: post.id,
+        })
+    }
+    diesel::insert_into(post_relation::table)
+        .values(&new_relations)
+        .execute(&mut conn)?;
+
+    // Generate image signature
     let image_signature = signature::compute_signature(&image);
     let new_post_signature = NewPostSignature {
         post_id: post.id,
@@ -432,9 +461,9 @@ fn post_post(post_info: NewPostInfo, client: Option<&User>) -> Result<PostInfo, 
     };
     diesel::insert_into(post_signature::table)
         .values(&new_post_signature)
-        .returning(PostSignature::as_returning())
-        .get_result(&mut conn)?;
+        .execute(&mut conn)?;
 
+    // Move content to permanent location
     let posts_folder = PathBuf::from(format!("{data_directory}/posts"));
     if !posts_folder.exists() {
         std::fs::create_dir(&posts_folder)?;
@@ -447,6 +476,7 @@ fn post_post(post_info: NewPostInfo, client: Option<&User>) -> Result<PostInfo, 
     ));
     std::fs::rename(temp_path, post_path)?;
 
+    // Generate thumbnail
     let thumbnail_folder = PathBuf::from(format!("{data_directory}/generated-thumbnails"));
     if !thumbnail_folder.exists() {
         std::fs::create_dir(&thumbnail_folder)?;
@@ -460,4 +490,8 @@ fn post_post(post_info: NewPostInfo, client: Option<&User>) -> Result<PostInfo, 
     thumbnail.save(thumbnail_path)?;
 
     PostInfo::new(&mut conn, post, client_id).map_err(api::Error::from)
+}
+
+fn delete_post(client: Option<&User>, post_version: api::ResourceVersion) -> Result<(), api::Error> {
+    Ok(())
 }

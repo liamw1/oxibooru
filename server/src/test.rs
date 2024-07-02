@@ -82,6 +82,7 @@ pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Pos
         type_: PostType::Image,
         mime_type: MimeType::PNG,
         checksum: "",
+        source: None,
     };
     diesel::insert_into(post::table)
         .values(&new_post)

@@ -2,6 +2,7 @@ pub mod api;
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod filesystem;
 pub mod image;
 pub mod math;
 pub mod model;
@@ -25,6 +26,8 @@ fn establish_connection() -> ConnectionResult<PgConnection> {
 
 #[tokio::main]
 async fn main() {
+    filesystem::purge_temporary_uploads().unwrap();
+
     // Define the server address and run the warp server
     let port: u16 = std::env::var("PORT")
         .map(|var| var.parse().unwrap_or(DEFAULT_PORT))

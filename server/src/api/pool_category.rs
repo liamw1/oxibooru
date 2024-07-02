@@ -1,5 +1,4 @@
-use crate::api;
-use crate::model::enums::UserRank;
+use crate::api::{self, AuthResult};
 use crate::model::pool::PoolCategory;
 use crate::schema::pool;
 use crate::schema::pool_category;
@@ -7,14 +6,14 @@ use crate::util::DateTime;
 use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
-use std::convert::Infallible;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_pool_categories = warp::get()
         .and(warp::path!("pool-categories"))
         .and(api::auth())
-        .and_then(list_pool_categories_endpoint);
+        .map(list_pool_categories)
+        .map(api::Reply::from);
 
     list_pool_categories
 }
@@ -33,12 +32,9 @@ struct PoolCategoryList {
     results: Vec<PoolCategoryInfo>,
 }
 
-async fn list_pool_categories_endpoint(auth_result: api::AuthenticationResult) -> Result<api::Reply, Infallible> {
-    Ok(api::access_level(auth_result).and_then(list_pool_categories).into())
-}
-
-fn list_pool_categories(access_level: UserRank) -> Result<PoolCategoryList, api::Error> {
-    api::verify_privilege(access_level, "pool_categories:list")?;
+fn list_pool_categories(auth_result: AuthResult) -> Result<PoolCategoryList, api::Error> {
+    let client = auth_result?;
+    api::verify_privilege(client.as_ref(), "pool_categories:list")?;
 
     let mut conn = crate::establish_connection()?;
     let pool_categories = pool_category::table.select(PoolCategory::as_select()).load(&mut conn)?;

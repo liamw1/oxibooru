@@ -2393,6 +2393,7 @@ One file together with its metadata posted to the site.
     "type":               <type>,
     "checksum":           <checksum>,
     "checksumMD5":        <checksum-MD5>,
+    "fileSize":           <file-size>,
     "canvasWidth":        <canvas-width>,
     "canvasHeight":       <canvas-height>,
     "contentUrl":         <content-url>,
@@ -2456,6 +2457,7 @@ One file together with its metadata posted to the site.
 - `<checksum>`: the SHA1 file checksum. Used in snapshots to signify changes of the
   post content.
 - `<checksum-MD5>`: the MD5 file checksum.
+- `<file-size>`: the size of the file in bytes.
 - `<canvas-width>` and `<canvas-height>`: the original width and height of the
   post content.
 - `<content-url>`: where the post content is located.

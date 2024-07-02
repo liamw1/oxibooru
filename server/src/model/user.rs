@@ -58,7 +58,7 @@ impl User {
     pub fn avatar_url(&self) -> String {
         match self.avatar_style {
             AvatarStyle::Gravatar => content::gravatar_url(&self.name),
-            AvatarStyle::Manual => content::manual_url(&self.name),
+            AvatarStyle::Manual => content::custom_avatar_url(&self.name),
         }
     }
 

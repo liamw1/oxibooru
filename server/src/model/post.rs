@@ -23,6 +23,7 @@ pub struct NewPost<'a> {
     pub type_: PostType,
     pub mime_type: MimeType,
     pub checksum: &'a str,
+    pub source: Option<&'a str>,
 }
 
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]

@@ -1,25 +1,25 @@
-use crate::api;
 use crate::api::micro::MicroUser;
+use crate::api::{self, AuthResult};
 use crate::model::user::{NewUserToken, User, UserToken};
 use crate::schema::user_token;
 use crate::util::DateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::convert::Infallible;
 use uuid::Uuid;
-use warp::hyper::body::Bytes;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let post_user_token = warp::post()
         .and(warp::path!("user-token" / String))
         .and(api::auth())
-        .and(warp::body::bytes())
-        .and_then(post_user_token_endpoint);
+        .and(warp::body::json())
+        .map(create_user_token)
+        .map(api::Reply::from);
     let delete_user_token = warp::delete()
         .and(warp::path!("user-token" / String / Uuid))
         .and(api::auth())
-        .and_then(delete_user_token_endpoint);
+        .map(delete_user_token)
+        .map(api::Reply::from);
 
     post_user_token.or(delete_user_token)
 }
@@ -63,30 +63,19 @@ impl UserTokenInfo {
     }
 }
 
-async fn post_user_token_endpoint(
-    username: String,
-    auth_result: api::AuthenticationResult,
-    body: Bytes,
-) -> Result<api::Reply, Infallible> {
-    Ok(auth_result
-        .and_then(|client| {
-            api::parse_json_body(&body).and_then(|user_info| create_user_token(username, user_info, client.as_ref()))
-        })
-        .into())
-}
-
 fn create_user_token(
     username: String,
+    auth_result: AuthResult,
     token_info: PostUserTokenInfo,
-    client: Option<&User>,
 ) -> Result<UserTokenInfo, api::Error> {
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
 
-    let client_id = client.map(|user| user.id);
+    let client = auth_result?;
+    let client_id = client.as_ref().map(|user| user.id);
     let target = if client_id == Some(user.id) { "self" } else { "any" };
     let requested_action = String::from("user_tokens:create:") + target;
-    api::verify_privilege(api::client_access_level(client), &requested_action)?;
+    api::verify_privilege(client.as_ref(), &requested_action)?;
 
     // Delete previous token, if it exists
     diesel::delete(user_token::table.find(user.id)).execute(&mut conn)?;
@@ -105,24 +94,15 @@ fn create_user_token(
     UserTokenInfo::new(MicroUser::new(user), user_token)
 }
 
-async fn delete_user_token_endpoint(
-    username: String,
-    token: Uuid,
-    auth_result: api::AuthenticationResult,
-) -> Result<api::Reply, Infallible> {
-    Ok(auth_result
-        .and_then(|client| delete_user_token(username, token, client.as_ref()))
-        .into())
-}
-
-fn delete_user_token(username: String, token: Uuid, client: Option<&User>) -> Result<(), api::Error> {
+fn delete_user_token(username: String, token: Uuid, auth_result: AuthResult) -> Result<(), api::Error> {
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
 
-    let client_id = client.map(|user| user.id);
+    let client = auth_result?;
+    let client_id = client.as_ref().map(|user| user.id);
     let target = if client_id == Some(user.id) { "self" } else { "any" };
     let requested_action = String::from("user_tokens:delete:") + target;
-    api::verify_privilege(api::client_access_level(client), &requested_action)?;
+    api::verify_privilege(client.as_ref(), &requested_action)?;
 
     let user_token = UserToken::belonging_to(&user)
         .select(UserToken::as_select())

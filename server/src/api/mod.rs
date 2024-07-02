@@ -12,6 +12,7 @@ use crate::auth::header::{self, AuthenticationError};
 use crate::error::ErrorKind;
 use crate::model::enums::UserRank;
 use crate::model::user::User;
+use crate::util::DateTime;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use warp::http::StatusCode;
@@ -51,7 +52,6 @@ impl<T: Serialize> From<Result<T, Error>> for Reply {
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub enum Error {
-    BadBody(#[from] serde_json::Error),
     BadExtension(#[from] crate::model::enums::ParseExtensionError),
     BadHash(#[from] crate::auth::HashError),
     BadHeader(#[from] warp::http::header::ToStrError),
@@ -86,7 +86,6 @@ impl Error {
         };
 
         match self {
-            Self::BadBody(_) => StatusCode::BAD_REQUEST,
             Self::BadExtension(_) => StatusCode::BAD_REQUEST,
             Self::BadHash(_) => StatusCode::BAD_REQUEST,
             Self::BadHeader(_) => StatusCode::BAD_REQUEST,
@@ -112,7 +111,6 @@ impl Error {
 
     fn category(&self) -> &'static str {
         match self {
-            Self::BadBody(_) => "Bad Body",
             Self::BadExtension(_) => "Bad Extension",
             Self::BadHash(_) => "Bad Hash",
             Self::BadHeader(_) => "Bad Header",
@@ -144,7 +142,6 @@ impl Error {
 impl ErrorKind for Error {
     fn kind(&self) -> &'static str {
         match self {
-            Self::BadBody(err) => err.kind(),
             Self::BadExtension(_) => "BadExtension",
             Self::BadHash(err) => err.kind(),
             Self::BadHeader(_) => "BadHeader",
@@ -186,12 +183,17 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
         .with(log)
 }
 
-type AuthenticationResult = Result<Option<User>, Error>;
+type AuthResult = Result<Option<User>, AuthenticationError>;
+
+#[derive(Deserialize)]
+struct ResourceVersion {
+    version: DateTime,
+}
 
 #[derive(Deserialize)]
 struct PagedQuery {
     offset: Option<i64>,
-    limit: Option<i64>,
+    limit: i64,
     query: Option<String>,
 }
 
@@ -215,41 +217,14 @@ fn client_access_level(client: Option<&User>) -> UserRank {
     client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
 }
 
-fn access_level(auth_result: AuthenticationResult) -> Result<UserRank, Error> {
-    auth_result.map(|client| client_access_level(client.as_ref()))
+fn verify_privilege(client: Option<&User>, requested_action: &str) -> Result<(), Error> {
+    client_access_level(client)
+        .has_permission_to(requested_action)
+        .then_some(())
+        .ok_or(Error::InsufficientPrivileges)
 }
 
-fn verify_privilege(client_rank: UserRank, requested_action: &str) -> Result<(), Error> {
-    if !client_rank.has_permission_to(requested_action) {
-        return Err(Error::InsufficientPrivileges);
-    }
-    Ok(())
-}
-
-fn log_body(body: &[u8]) {
-    if !body.is_empty() {
-        println!("Incoming body: {}", std::str::from_utf8(body).unwrap_or("ERROR: Failed to parse"));
-    }
-}
-
-/*
-    For some reason warp::body::json rejects incoming requests, perhaps due to encoding
-    issues. Instead, we will parse the raw bytes into a deserialize-capable structure.
-*/
-fn parse_json_body<'a, T: serde::Deserialize<'a>>(body: &'a [u8]) -> Result<T, Error> {
-    if body.is_empty() {
-        serde_json::from_slice("{}".as_bytes()).map_err(Error::from)
-    } else {
-        log_body(body);
-        serde_json::from_slice(body).map_err(Error::from)
-    }
-}
-
-fn auth() -> impl Filter<Extract = (Result<Option<User>, Error>,), Error = Rejection> + Clone {
-    warp::header::optional("authorization").map(|opt_auth: Option<_>| {
-        opt_auth
-            .map(|auth| header::authenticate_user(auth))
-            .transpose()
-            .map_err(Error::from)
-    })
+fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {
+    warp::header::optional("authorization")
+        .map(|opt_auth: Option<_>| opt_auth.map(|auth| header::authenticate_user(auth)).transpose())
 }
