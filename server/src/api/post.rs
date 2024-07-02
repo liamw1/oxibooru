@@ -143,14 +143,21 @@ impl PostInfo {
         let tags = PostTag::belonging_to(&post)
             .inner_join(tag::table.on(post_tag::tag_id.eq(tag::id)))
             .select(Tag::as_select())
-            .load(conn)?;
-        let micro_tags = tags
+            .load(conn)?
             .into_iter()
             .map(|tag| MicroTag::new(conn, tag))
             .collect::<QueryResult<_>>()?;
-        let related_posts = post.related_posts(conn)?;
-        let micro_relations = related_posts.iter().map(|post| MicroPost::new(&post)).collect();
-        let notes = PostNote::belonging_to(&post).select(PostNote::as_select()).load(conn)?;
+        let relations = post
+            .related_posts(conn)?
+            .into_iter()
+            .map(|post| MicroPost::new(&post))
+            .collect::<Vec<_>>();
+        let notes = PostNote::belonging_to(&post)
+            .select(PostNote::as_select())
+            .load(conn)?
+            .into_iter()
+            .map(|note| PostNoteInfo::new(note))
+            .collect::<Vec<_>>();
         let score = post.score(conn)?;
         let owner = post
             .user_id
@@ -177,17 +184,26 @@ impl PostInfo {
         let tag_count = post.tag_count(conn)?;
         let favorite_count = post.favorite_count(conn)?;
         let note_count = notes.len() as i64;
+        let relation_count = relations.len() as i64;
         let feature_count = post.feature_count(conn)?;
-        let comments = Comment::belonging_to(&post).select(Comment::as_select()).load(conn)?;
-        let comment_info = comments
+        let comments = Comment::belonging_to(&post)
+            .select(Comment::as_select())
+            .load(conn)?
             .into_iter()
             .map(|comment| CommentInfo::new(conn, comment, client))
             .collect::<QueryResult<Vec<_>>>()?;
         let favorited_by = PostFavorite::belonging_to(&post)
             .inner_join(user::table.on(post_favorite::user_id.eq(user::id)))
             .select(User::as_select())
-            .load(conn)?;
-        let pools_in = post.pools_in(conn)?;
+            .load(conn)?
+            .into_iter()
+            .map(MicroUser::new)
+            .collect::<Vec<_>>();
+        let pools = post
+            .pools_in(conn)?
+            .into_iter()
+            .map(|pool| MicroPool::new(conn, pool))
+            .collect::<QueryResult<_>>()?;
 
         Ok(PostInfo {
             version: post.last_edit_time.clone().into(),
@@ -205,28 +221,25 @@ impl PostInfo {
             content_url,
             thumbnail_url,
             flags: post.flags,
-            tags: micro_tags,
-            relations: micro_relations,
-            notes: notes.into_iter().map(|note| PostNoteInfo::new(note)).collect(),
+            tags,
+            relations,
+            notes,
             user: owner.map(MicroUser::new),
             score,
             own_score: client_score.flatten(),
             own_favorite: client_favorited.unwrap_or(false),
             tag_count,
             favorite_count,
-            comment_count: comment_info.len() as i64,
+            comment_count: comments.len() as i64,
             note_count,
             feature_count,
-            relation_count: related_posts.len() as i64,
+            relation_count,
             last_feature_time: None, // TODO
-            favorited_by: favorited_by.into_iter().map(MicroUser::new).collect(),
+            favorited_by,
             has_custom_thumbnail: false, // TODO
             mime_type: post.mime_type,
-            comments: comment_info,
-            pools: pools_in
-                .into_iter()
-                .map(|pool| MicroPool::new(conn, pool))
-                .collect::<QueryResult<_>>()?,
+            comments,
+            pools,
         })
     }
 }
