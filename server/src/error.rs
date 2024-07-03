@@ -184,3 +184,27 @@ impl ErrorKind for image::ImageError {
         }
     }
 }
+
+impl ErrorKind for crate::api::Error {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::BadExtension(_) => "BadExtension",
+            Self::BadHash(err) => err.kind(),
+            Self::BadHeader(_) => "BadHeader",
+            Self::BadMimeType(_) => "BadMimeType",
+            Self::BadMultiPartForm => "BadMultiPartForm",
+            Self::BadUserPrivilege(_) => "BadUserPrivilege",
+            Self::ContentTypeMismatch => "ContentTypeMismatch",
+            Self::FailedAuthentication(err) => err.kind(),
+            Self::FailedConnection(err) => err.kind(),
+            Self::FailedQuery(err) => err.kind(),
+            Self::InsufficientPrivileges => "InsufficientPrivileges",
+            Self::ImageError(err) => err.kind(),
+            Self::IoError(_) => "IOError",
+            Self::OutOfDate => "OutOfDate",
+            Self::ResourceDoesNotExist => "ResourceDoesNotExist",
+            Self::ResourceModified => "ResourceModified",
+            Self::WarpError(_) => "WarpError",
+        }
+    }
+}

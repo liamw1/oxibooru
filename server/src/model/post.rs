@@ -270,7 +270,7 @@ impl PostSignature {
              FROM post_signature AS s, unnest(s.words, $1) AS a(word, query)
              WHERE a.word = a.query
              GROUP BY s.post_id
-             ORDER BY count(a.query) DESC LIMIT 100;",
+             ORDER BY count(a.query) DESC LIMIT 1000;",
         )
         .bind::<Array<Int4>, _>(words)
         .load(conn)

@@ -68,6 +68,8 @@ pub enum Error {
     InsufficientPrivileges,
     ImageError(#[from] image::ImageError),
     IoError(#[from] std::io::Error),
+    #[error("Resource is out-of-date")]
+    OutOfDate,
     #[error("Resource does not exist")]
     ResourceDoesNotExist,
     // Someone else modified this in the meantime. Please try again.
@@ -103,6 +105,7 @@ impl Error {
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::ImageError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::OutOfDate => StatusCode::CONFLICT,
             Self::ResourceDoesNotExist => StatusCode::GONE,
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::WarpError(_) => StatusCode::BAD_REQUEST,
@@ -124,6 +127,7 @@ impl Error {
             Self::InsufficientPrivileges => "Insufficient Privileges",
             Self::ImageError(_) => "Image Error",
             Self::IoError(_) => "IO Error",
+            Self::OutOfDate => "Out-of-date",
             Self::ResourceDoesNotExist => "Resource Does Not Exist",
             Self::ResourceModified => "Resource Modified",
             Self::WarpError(_) => "Warp Error",
@@ -135,29 +139,6 @@ impl Error {
             name: self.kind(),
             title: self.category(),
             description: self.to_string(),
-        }
-    }
-}
-
-impl ErrorKind for Error {
-    fn kind(&self) -> &'static str {
-        match self {
-            Self::BadExtension(_) => "BadExtension",
-            Self::BadHash(err) => err.kind(),
-            Self::BadHeader(_) => "BadHeader",
-            Self::BadMimeType(_) => "BadMimeType",
-            Self::BadMultiPartForm => "BadMultiPartForm",
-            Self::BadUserPrivilege(_) => "BadUserPrivilege",
-            Self::ContentTypeMismatch => "ContentTypeMismatch",
-            Self::FailedAuthentication(err) => err.kind(),
-            Self::FailedConnection(err) => err.kind(),
-            Self::FailedQuery(err) => err.kind(),
-            Self::InsufficientPrivileges => "InsufficientPrivileges",
-            Self::ImageError(err) => err.kind(),
-            Self::IoError(_) => "IOError",
-            Self::ResourceDoesNotExist => "ResourceDoesNotExist",
-            Self::ResourceModified => "ResourceModified",
-            Self::WarpError(_) => "WarpError",
         }
     }
 }
@@ -221,6 +202,12 @@ fn verify_privilege(client: Option<&User>, required_rank: UserRank) -> Result<()
     (client_access_level(client) >= required_rank)
         .then_some(())
         .ok_or(Error::InsufficientPrivileges)
+}
+
+fn verify_version(current_version: DateTime, client_version: ResourceVersion) -> Result<(), Error> {
+    (current_version == client_version.version)
+        .then_some(())
+        .ok_or(Error::OutOfDate)
 }
 
 fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {

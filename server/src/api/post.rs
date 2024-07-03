@@ -47,16 +47,23 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .map(create_post)
         .map(api::Reply::from);
+    let delete_post = warp::delete()
+        .and(warp::path!("post" / i32))
+        .and(api::auth())
+        .and(warp::body::json())
+        .map(delete_post)
+        .map(api::Reply::from);
 
     list_posts
         .or(get_post)
         .or(get_post_neighbors)
         .or(reverse_search)
         .or(post_post)
+        .or(delete_post)
 }
 
 const MAX_POSTS_PER_PAGE: i64 = 50;
-const POST_SIMILARITY_THRESHOLD: f64 = 0.6;
+const POST_SIMILARITY_THRESHOLD: f64 = 0.4;
 
 #[derive(Serialize)]
 struct PostNoteInfo {
@@ -352,6 +359,7 @@ fn reverse_search(auth_result: AuthResult, token: ContentToken) -> Result<Revers
     // Search for similar images
     let mut similar_posts = Vec::new();
     let similar_signatures = PostSignature::find_similar(&mut conn, signature::generate_indexes(&image_signature))?;
+    println!("Found {} similar signatures", similar_signatures.len());
     for post_signature in similar_signatures.into_iter() {
         let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
         if distance > POST_SIMILARITY_THRESHOLD {
@@ -471,11 +479,20 @@ fn create_post(auth_result: AuthResult, post_info: NewPostInfo) -> Result<PostIn
         config::get().thumbnails.post_height,
         image::imageops::FilterType::Nearest,
     );
-    thumbnail.save(content::post_thumbnail_path(post.id))?;
+    thumbnail.to_rgb8().save(content::post_thumbnail_path(post.id))?;
 
     PostInfo::new(&mut conn, post, client_id).map_err(api::Error::from)
 }
 
-fn delete_post(client: Option<&User>, post_version: api::ResourceVersion) -> Result<(), api::Error> {
+fn delete_post(post_id: i32, auth_result: AuthResult, client_version: api::ResourceVersion) -> Result<(), api::Error> {
+    let client = auth_result?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
+
+    let mut conn = crate::establish_connection()?;
+    let post = post::table.find(post_id).select(Post::as_select()).first(&mut conn)?;
+    api::verify_version(post.last_edit_time, client_version)?;
+
+    post.delete(&mut conn)?;
+
     Ok(())
 }

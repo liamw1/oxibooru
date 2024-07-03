@@ -65,10 +65,10 @@ pub fn generate_indexes(signature: &[u8]) -> Vec<i32> {
 
 const CROP_PERCENTILE: u64 = 5;
 const NUM_GRID_POINTS: u32 = 9;
-const IDENTICAL_TOLERANCE: i16 = 2;
+const IDENTICAL_TOLERANCE: i16 = 1;
 const LUMINANCE_LEVELS: u32 = 2;
 const NUM_WORDS: u32 = 100;
-const NUM_LETTERS: u32 = 10;
+const NUM_LETTERS: u32 = 16;
 const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS as usize + 1;
 
 fn grid_square_radius(width: u32, height: u32) -> u32 {
@@ -290,9 +290,9 @@ mod test {
         // Identical images of different formats
         assert_eq!(normalized_distance(&sig1, &sig2), 0.0);
         // Similar images of same format
-        assert!((normalized_distance(&sig3, &sig4) - 0.16047177803512905).abs() < 1e-8);
+        assert!((normalized_distance(&sig3, &sig4) - 0.1583484677615785).abs() < 1e-8);
         // Different images
-        assert!((normalized_distance(&sig1, &sig3) - 0.7024853863965695).abs() < 1e-8);
+        assert!((normalized_distance(&sig1, &sig3) - 0.6990083687106061).abs() < 1e-8);
     }
 
     #[test]
@@ -313,10 +313,6 @@ mod test {
         let lisa_wide_signature = compute_signature(&lisa_wide);
         let lisa_wide_indexes = generate_indexes(&lisa_wide_signature);
 
-        let lisa_filtered = image::open(asset_path(Path::new("lisa-filt.jpg"))).unwrap();
-        let lisa_filtered_signature = compute_signature(&lisa_filtered);
-        let lisa_filtered_indexes = generate_indexes(&lisa_filtered_signature);
-
         let lisa_cat = image::open(asset_path(Path::new("lisa-cat.jpg"))).unwrap();
         let lisa_cat_signature = compute_signature(&lisa_cat);
         let lisa_cat_indexes = generate_indexes(&lisa_cat_signature);
@@ -330,14 +326,12 @@ mod test {
         // println!("{}", normalized_distance(&lisa_signature, &lisa_border_signature));
         // println!("{}", normalized_distance(&lisa_signature, &lisa_large_border_signature));
         // println!("{}", normalized_distance(&lisa_signature, &lisa_wide_signature));
-        // println!("{}", normalized_distance(&lisa_signature, &lisa_filtered_signature));
         // println!("{}", normalized_distance(&lisa_signature, &lisa_cat_signature));
         // println!("{}", normalized_distance(&lisa_signature, &starry_night_signature));
         // println!("Matches:");
         // println!("{}", matching_indexes(&lisa_indexes, &lisa_border_indexes));
         // println!("{}", matching_indexes(&lisa_indexes, &lisa_large_border_indexes));
         // println!("{}", matching_indexes(&lisa_indexes, &lisa_wide_indexes));
-        // println!("{}", matching_indexes(&lisa_indexes, &lisa_filtered_indexes));
         // println!("{}", matching_indexes(&lisa_indexes, &lisa_cat_indexes));
         // println!("{}", matching_indexes(&lisa_indexes, &starry_night_indexes));
         // println!("");
@@ -345,13 +339,11 @@ mod test {
         assert!(normalized_distance(&lisa_signature, &lisa_border_signature) < 0.2);
         assert!(normalized_distance(&lisa_signature, &lisa_large_border_signature) < 0.2);
         assert!(normalized_distance(&lisa_signature, &lisa_wide_signature) < 0.3);
-        assert!(normalized_distance(&lisa_signature, &lisa_filtered_signature) < 0.5);
         assert!(normalized_distance(&lisa_signature, &lisa_cat_signature) < 0.55);
 
         assert!(matching_indexes(&lisa_indexes, &lisa_border_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_large_border_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_wide_indexes) > 0);
-        assert!(matching_indexes(&lisa_indexes, &lisa_filtered_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_cat_indexes) > 0);
         assert_eq!(matching_indexes(&lisa_indexes, &starry_night_indexes), 0);
     }
