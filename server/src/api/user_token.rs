@@ -1,8 +1,9 @@
 use crate::api::micro::MicroUser;
-use crate::api::{self, AuthResult};
+use crate::api::AuthResult;
 use crate::model::user::{NewUserToken, User, UserToken};
 use crate::schema::user_token;
 use crate::util::DateTime;
+use crate::{api, config};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -73,9 +74,11 @@ fn create_user_token(
 
     let client = auth_result?;
     let client_id = client.as_ref().map(|user| user.id);
-    let target = if client_id == Some(user.id) { "self" } else { "any" };
-    let requested_action = String::from("user_tokens:create:") + target;
-    api::verify_privilege(client.as_ref(), &requested_action)?;
+    let required_rank = match client_id == Some(user.id) {
+        true => config::privileges().user_token_create_self,
+        false => config::privileges().user_token_create_any,
+    };
+    api::verify_privilege(client.as_ref(), required_rank)?;
 
     // Delete previous token, if it exists
     diesel::delete(user_token::table.find(user.id)).execute(&mut conn)?;
@@ -100,9 +103,11 @@ fn delete_user_token(username: String, token: Uuid, auth_result: AuthResult) -> 
 
     let client = auth_result?;
     let client_id = client.as_ref().map(|user| user.id);
-    let target = if client_id == Some(user.id) { "self" } else { "any" };
-    let requested_action = String::from("user_tokens:delete:") + target;
-    api::verify_privilege(client.as_ref(), &requested_action)?;
+    let required_rank = match client_id == Some(user.id) {
+        true => config::privileges().user_token_delete_self,
+        false => config::privileges().user_token_delete_any,
+    };
+    api::verify_privilege(client.as_ref(), required_rank)?;
 
     let user_token = UserToken::belonging_to(&user)
         .select(UserToken::as_select())

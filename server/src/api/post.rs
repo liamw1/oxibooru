@@ -1,8 +1,7 @@
 use crate::api::comment::CommentInfo;
 use crate::api::micro::{MicroPool, MicroPost, MicroTag, MicroUser};
-use crate::api::{self, AuthResult};
+use crate::api::AuthResult;
 use crate::auth::content;
-use crate::config;
 use crate::image::signature;
 use crate::model::comment::Comment;
 use crate::model::enums::MimeType;
@@ -14,10 +13,9 @@ use crate::model::tag::Tag;
 use crate::model::user::User;
 use crate::schema::{post, post_favorite, post_relation, post_score, post_signature, post_tag, tag, user};
 use crate::util::DateTime;
+use crate::{api, config, filesystem};
 use diesel::prelude::*;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -59,25 +57,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 
 const MAX_POSTS_PER_PAGE: i64 = 50;
 const POST_SIMILARITY_THRESHOLD: f64 = 0.6;
-
-static THUMBNAIL_WIDTH: Lazy<u32> = Lazy::new(|| {
-    config::read_required_table("thumbnails")
-        .get("post_width")
-        .expect("Config post_width should be in [thumbnails]")
-        .as_integer()
-        .expect("Config post_width should be an integer")
-        .try_into()
-        .unwrap_or_else(|value| panic!("Config post_width ({value}) cannot be represented as u32"))
-});
-static THUMBNAIL_HEIGHT: Lazy<u32> = Lazy::new(|| {
-    config::read_required_table("thumbnails")
-        .get("post_height")
-        .expect("Config post_height should be in [thumbnails]")
-        .as_integer()
-        .expect("Config post_height should be an integer")
-        .try_into()
-        .unwrap_or_else(|value| panic!("Config post_height ({value}) cannot be represented as u32"))
-});
 
 #[derive(Serialize)]
 struct PostNoteInfo {
@@ -246,7 +225,7 @@ impl PostInfo {
 
 fn list_posts(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<PagedPostInfo, api::Error> {
     let client = auth_result?;
-    api::verify_privilege(client.as_ref(), "posts:list")?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
     let offset = query_info.offset.unwrap_or(0);
@@ -273,7 +252,7 @@ fn list_posts(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<Pa
 
 fn get_post(post_id: i32, auth_result: AuthResult) -> Result<PostInfo, api::Error> {
     let client = auth_result?;
-    api::verify_privilege(client.as_ref(), "posts:view")?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_view)?;
 
     let mut conn = crate::establish_connection()?;
     let post = post::table.find(post_id).select(Post::as_select()).first(&mut conn)?;
@@ -289,7 +268,7 @@ struct PostNeighbors {
 
 fn get_post_neighbors(post_id: i32, auth_result: AuthResult) -> Result<PostNeighbors, api::Error> {
     let client = auth_result?;
-    api::verify_privilege(client.as_ref(), "posts:list")?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
     let mut conn = crate::establish_connection()?;
@@ -338,7 +317,7 @@ struct ReverseSearchInfo {
 
 fn reverse_search(auth_result: AuthResult, token: ContentToken) -> Result<ReverseSearchInfo, api::Error> {
     let client = auth_result?;
-    api::verify_privilege(client.as_ref(), "posts:reverse_search")?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_reverse_search)?;
 
     let (_uuid, extension) = token.content_token.split_once('.').unwrap();
     let content_type = MimeType::from_extension(extension)?;
@@ -347,9 +326,8 @@ fn reverse_search(auth_result: AuthResult, token: ContentToken) -> Result<Revers
         panic!("Unsupported post type!") // TODO
     }
 
-    let data_directory = config::read_required_string("data_dir");
-    let path = PathBuf::from(format!("{data_directory}/temporary-uploads/{}", token.content_token));
-    let image = image::open(path)?;
+    let temp_path = filesystem::temporary_upload_filepath(&token.content_token);
+    let image = image::open(temp_path)?;
     let image_signature = signature::compute_signature(&image);
     let image_checksum = content::image_checksum(&image);
 
@@ -409,11 +387,12 @@ struct NewPostInfo {
 }
 
 fn create_post(auth_result: AuthResult, post_info: NewPostInfo) -> Result<PostInfo, api::Error> {
-    let anonymous_post = post_info.anonymous.unwrap_or(false);
-    let target = if anonymous_post { "anonymous" } else { "identified" };
-    let requested_action = String::from("posts:create:") + target;
+    let required_rank = match post_info.anonymous.unwrap_or(false) {
+        true => config::privileges().post_create_anonymous,
+        false => config::privileges().post_create_identified,
+    };
     let client = auth_result?;
-    api::verify_privilege(client.as_ref(), &requested_action)?;
+    api::verify_privilege(client.as_ref(), required_rank)?;
 
     let (_uuid, extension) = post_info.content_token.split_once('.').unwrap();
     let content_type = MimeType::from_extension(extension)?;
@@ -422,8 +401,7 @@ fn create_post(auth_result: AuthResult, post_info: NewPostInfo) -> Result<PostIn
         panic!("Unsupported post type!") // TODO
     }
 
-    let data_directory = config::read_required_string("data_dir");
-    let temp_path = PathBuf::from(format!("{data_directory}/temporary-uploads/{}", post_info.content_token));
+    let temp_path = filesystem::temporary_upload_filepath(&post_info.content_token);
     let image_size = std::fs::metadata(&temp_path)?.len();
     let image = image::open(&temp_path)?;
     let image_checksum = content::image_checksum(&image);
@@ -477,30 +455,23 @@ fn create_post(auth_result: AuthResult, post_info: NewPostInfo) -> Result<PostIn
         .execute(&mut conn)?;
 
     // Move content to permanent location
-    let posts_folder = PathBuf::from(format!("{data_directory}/posts"));
+    let posts_folder = filesystem::posts_directory();
     if !posts_folder.exists() {
         std::fs::create_dir(&posts_folder)?;
     }
-    let post_path = PathBuf::from(format!(
-        "{data_directory}/posts/{}_{}.{}",
-        post.id,
-        content::post_security_hash(post.id),
-        post.mime_type.extension()
-    ));
-    std::fs::rename(temp_path, post_path)?;
+    std::fs::rename(temp_path, content::post_content_path(post.id, post.mime_type))?;
 
     // Generate thumbnail
-    let thumbnail_folder = PathBuf::from(format!("{data_directory}/generated-thumbnails"));
+    let thumbnail_folder = filesystem::generated_thumbnails_directory();
     if !thumbnail_folder.exists() {
         std::fs::create_dir(&thumbnail_folder)?;
     }
-    let thumbnail_path = PathBuf::from(format!(
-        "{data_directory}/generated-thumbnails/{}_{}.jpg",
-        post.id,
-        content::post_security_hash(post.id)
-    ));
-    let thumbnail = image.resize_to_fill(*THUMBNAIL_WIDTH, *THUMBNAIL_HEIGHT, image::imageops::FilterType::Nearest);
-    thumbnail.save(thumbnail_path)?;
+    let thumbnail = image.resize_to_fill(
+        config::get().thumbnails.post_width,
+        config::get().thumbnails.post_height,
+        image::imageops::FilterType::Nearest,
+    );
+    thumbnail.save(content::post_thumbnail_path(post.id))?;
 
     PostInfo::new(&mut conn, post, client_id).map_err(api::Error::from)
 }

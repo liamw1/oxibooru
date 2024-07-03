@@ -1,8 +1,9 @@
-use crate::api::{self, AuthResult};
+use crate::api::AuthResult;
 use crate::model::tag::TagCategory;
 use crate::schema::tag;
 use crate::schema::tag_category;
 use crate::util::DateTime;
+use crate::{api, config};
 use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -35,7 +36,7 @@ struct TagCategoryList {
 
 fn list_tag_categories(auth_result: AuthResult) -> Result<TagCategoryList, api::Error> {
     let client = auth_result?;
-    api::verify_privilege(client.as_ref(), "tag_categories:list")?;
+    api::verify_privilege(client.as_ref(), config::privileges().tag_category_list)?;
 
     let mut conn = crate::establish_connection()?;
     let tag_categories = tag_category::table.select(TagCategory::as_select()).load(&mut conn)?;

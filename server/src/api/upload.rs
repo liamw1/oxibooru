@@ -1,10 +1,10 @@
-use crate::api::{self, AuthResult};
-use crate::config;
+use crate::api::AuthResult;
 use crate::model::enums::MimeType;
+use crate::{api, config, filesystem};
 use futures::{StreamExt, TryStreamExt};
 use serde::Serialize;
 use std::convert::Infallible;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::str::FromStr;
 use uuid::Uuid;
 use warp::multipart::FormData;
@@ -32,11 +32,10 @@ async fn upload_endpoint(auth_result: AuthResult, form: FormData) -> Result<api:
 // TODO: Cleanup on failure
 async fn upload(auth_result: AuthResult, form: FormData) -> Result<UploadResponse, api::Error> {
     let client = auth_result?;
-    api::verify_privilege(client.as_ref(), "uploads:create")?;
+    api::verify_privilege(client.as_ref(), config::privileges().upload_create)?;
 
     // Set up temp directory if necessary
-    let data_directory = config::read_required_string("data_dir");
-    let temp_path = PathBuf::from(format!("{data_directory}/temporary-uploads"));
+    let temp_path = filesystem::temporary_upload_directory();
     if !temp_path.exists() {
         std::fs::create_dir(&temp_path)?;
     }

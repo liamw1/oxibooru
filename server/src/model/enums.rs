@@ -1,4 +1,3 @@
-use crate::auth;
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::Pg;
 use diesel::serialize::{self, Output, ToSql};
@@ -248,12 +247,6 @@ pub enum UserRank {
 }
 
 impl UserRank {
-    pub fn has_permission_to(self, action: &str) -> bool {
-        auth::privilege_needed(action)
-            .map(|required_rank| self >= required_rank)
-            .unwrap_or(false)
-    }
-
     pub const fn as_str(self) -> &'static str {
         match self {
             UserRank::Anonymous => "anonymous",
@@ -318,7 +311,7 @@ struct DeserializeUserPrivilegeError;
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::test::*;
+    use crate::{config, test::*};
 
     #[test]
     fn safety_ordering() {
@@ -341,11 +334,10 @@ mod test {
         use_dist_config();
         test_transaction(|conn| {
             let user = create_test_user(conn, TEST_USERNAME)?;
-            assert!(user.rank.has_permission_to("users:create:self"));
-            assert!(user.rank.has_permission_to("posts:list"));
-            assert!(!user.rank.has_permission_to("users:edit:self:rank"));
-            assert!(!user.rank.has_permission_to("users:delete:any"));
-            assert!(!user.rank.has_permission_to("fake:action"));
+            assert!(user.rank >= config::privileges().user_create_self);
+            assert!(user.rank >= config::privileges().post_list);
+            assert!(user.rank < config::privileges().user_edit_self_rank);
+            assert!(user.rank < config::privileges().user_delete_any);
             Ok(())
         });
     }

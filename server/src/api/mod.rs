@@ -217,9 +217,8 @@ fn client_access_level(client: Option<&User>) -> UserRank {
     client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
 }
 
-fn verify_privilege(client: Option<&User>, requested_action: &str) -> Result<(), Error> {
-    client_access_level(client)
-        .has_permission_to(requested_action)
+fn verify_privilege(client: Option<&User>, required_rank: UserRank) -> Result<(), Error> {
+    (client_access_level(client) >= required_rank)
         .then_some(())
         .ok_or(Error::InsufficientPrivileges)
 }

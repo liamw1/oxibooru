@@ -1,11 +1,9 @@
-use crate::config::CONFIG;
 use crate::model::post::Post;
 use crate::util::DateTime;
 use crate::{api, config};
 use serde::Serialize;
 use std::convert::Infallible;
 use std::path::Path;
-use toml::Table;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -24,14 +22,7 @@ struct Info {
     featuring_time: Option<DateTime>,
     featuring_user: Option<String>,
     server_time: DateTime,
-    config: Table,
-}
-
-fn read_required_table(name: &str) -> &'static Table {
-    CONFIG
-        .get(name)
-        .and_then(|parsed| parsed.as_table())
-        .unwrap_or_else(|| panic!("Table {name} not found in config.toml"))
+    config: &'static config::PublicInfo,
 }
 
 async fn get_info_endpoint() -> Result<api::Reply, Infallible> {
@@ -39,8 +30,7 @@ async fn get_info_endpoint() -> Result<api::Reply, Infallible> {
 }
 
 fn get_info() -> Result<Info, api::Error> {
-    let data_directory = Path::new(config::read_required_string("data_dir"));
-    let disk_usage = calculate_directory_size(&data_directory)?;
+    let disk_usage = calculate_directory_size(Path::new(&config::get().data_dir))?;
 
     let mut conn = crate::establish_connection()?;
     let info = Info {
@@ -50,7 +40,7 @@ fn get_info() -> Result<Info, api::Error> {
         featuring_time: None,
         featuring_user: None,
         server_time: DateTime::now(),
-        config: read_required_table("public_info").clone(),
+        config: &config::get().public_info,
     };
 
     Ok(info)

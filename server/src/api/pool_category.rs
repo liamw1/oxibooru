@@ -1,8 +1,9 @@
-use crate::api::{self, AuthResult};
+use crate::api::AuthResult;
 use crate::model::pool::PoolCategory;
 use crate::schema::pool;
 use crate::schema::pool_category;
 use crate::util::DateTime;
+use crate::{api, config};
 use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -34,7 +35,7 @@ struct PoolCategoryList {
 
 fn list_pool_categories(auth_result: AuthResult) -> Result<PoolCategoryList, api::Error> {
     let client = auth_result?;
-    api::verify_privilege(client.as_ref(), "pool_categories:list")?;
+    api::verify_privilege(client.as_ref(), config::privileges().pool_category_list)?;
 
     let mut conn = crate::establish_connection()?;
     let pool_categories = pool_category::table.select(PoolCategory::as_select()).load(&mut conn)?;

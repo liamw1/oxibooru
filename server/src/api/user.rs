@@ -1,9 +1,10 @@
-use crate::api::{self, AuthResult};
+use crate::api::AuthResult;
 use crate::auth::password;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::schema::user;
 use crate::util::DateTime;
+use crate::{api, config};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
@@ -120,14 +121,16 @@ impl UserInfo {
 
 fn create_user(auth_result: AuthResult, user_info: NewUserInfo) -> Result<UserInfo, api::Error> {
     let client = auth_result?;
-    let target = if client.is_some() { "any" } else { "self" };
     let client_rank = api::client_access_level(client.as_ref());
 
-    let requested_rank = user_info.rank.unwrap_or(UserRank::Regular);
-    let requested_action = String::from("users:create:") + target;
+    let creation_rank = user_info.rank.unwrap_or(UserRank::Regular);
+    let required_rank = match client.is_some() {
+        true => config::privileges().user_create_any,
+        false => config::privileges().user_create_self,
+    };
 
-    api::verify_privilege(client.as_ref(), &requested_action)?;
-    let rank = requested_rank.clamp(UserRank::Regular, std::cmp::max(client_rank, UserRank::Regular));
+    api::verify_privilege(client.as_ref(), required_rank)?;
+    let rank = creation_rank.clamp(UserRank::Regular, std::cmp::max(client_rank, UserRank::Regular));
 
     let salt = SaltString::generate(&mut OsRng);
     let hash = password::hash_password(&user_info.password, salt.as_str())?;
@@ -155,7 +158,7 @@ fn get_user(username: String, auth_result: AuthResult) -> Result<UserInfo, api::
     let client = auth_result?;
     let client_id = client.as_ref().map(|user| user.id);
     if client_id != Some(user.id) {
-        api::verify_privilege(client.as_ref(), "users:view")?;
+        api::verify_privilege(client.as_ref(), config::privileges().user_view)?;
         return UserInfo::public_only(&mut conn, user).map_err(api::Error::from);
     }
     UserInfo::full(&mut conn, user).map_err(api::Error::from)
@@ -163,7 +166,7 @@ fn get_user(username: String, auth_result: AuthResult) -> Result<UserInfo, api::
 
 fn list_users(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<PagedUserInfo, api::Error> {
     let client = auth_result?;
-    api::verify_privilege(client.as_ref(), "users:list")?;
+    api::verify_privilege(client.as_ref(), config::privileges().user_list)?;
 
     let offset = query_info.offset.unwrap_or(0);
     let limit = query_info.limit;
