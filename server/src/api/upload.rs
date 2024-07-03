@@ -50,8 +50,7 @@ async fn upload(auth_result: AuthResult, form: FormData) -> Result<UploadRespons
 
     // Give content a temporary handle and write it to disk
     let upload_token = format!("{}.{}", Uuid::new_v4(), content_type.extension());
-    let mut path = temp_path.clone();
-    path.push(&upload_token);
+    let upload_path = filesystem::temporary_upload_filepath(&upload_token);
     let data = part
         .stream()
         .try_fold(Vec::new(), |mut acc, buf| async move {
@@ -60,7 +59,7 @@ async fn upload(auth_result: AuthResult, form: FormData) -> Result<UploadRespons
         })
         .await
         .expect("Folding error");
-    std::fs::write(&path, &data)?;
+    std::fs::write(&upload_path, &data)?;
 
     Ok(UploadResponse { token: upload_token })
 }

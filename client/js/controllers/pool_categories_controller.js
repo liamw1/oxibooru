@@ -9,7 +9,7 @@ const EmptyView = require("../views/empty_view.js");
 
 class PoolCategoriesController {
     constructor() {
-        if (!api.hasPrivilege("poolCategories:list")) {
+        if (!api.hasPrivilege("pool_category_list")) {
             this._view = new EmptyView();
             this._view.showError(
                 "You don't have privileges to view pool categories."
@@ -24,14 +24,14 @@ class PoolCategoriesController {
                 this._poolCategories = response.results;
                 this._view = new PoolCategoriesView({
                     poolCategories: this._poolCategories,
-                    canEditName: api.hasPrivilege("poolCategories:edit:name"),
+                    canEditName: api.hasPrivilege("pool_category_edit_name"),
                     canEditColor: api.hasPrivilege(
-                        "poolCategories:edit:color"
+                        "pool_category_edit_color"
                     ),
-                    canDelete: api.hasPrivilege("poolCategories:delete"),
-                    canCreate: api.hasPrivilege("poolCategories:create"),
+                    canDelete: api.hasPrivilege("pool_category_delete"),
+                    canCreate: api.hasPrivilege("pool_category_create"),
                     canSetDefault: api.hasPrivilege(
-                        "poolCategories:setDefault"
+                        "pool_category_set_default"
                     ),
                 });
                 this._view.addEventListener("submit", (e) =>

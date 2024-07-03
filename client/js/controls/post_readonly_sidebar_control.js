@@ -25,9 +25,9 @@ class PostReadonlySidebarControl extends events.EventTarget {
             template({
                 post: this._post,
                 enableSafety: api.safetyEnabled(),
-                canListPosts: api.hasPrivilege("posts:list"),
-                canEditPosts: api.hasPrivilege("posts:edit"),
-                canViewTags: api.hasPrivilege("tags:view"),
+                canListPosts: api.hasPrivilege("post_list"),
+                canEditPosts: api.hasPrivilege("post_edit"),
+                canViewTags: api.hasPrivilege("tag_view"),
                 escapeTagName: uri.escapeTagName,
                 extractRootDomain: uri.extractRootDomain,
                 getPrettyName: misc.getPrettyName,
@@ -105,7 +105,7 @@ class PostReadonlySidebarControl extends events.EventTarget {
             favTemplate({
                 favoriteCount: this._post.favoriteCount,
                 ownFavorite: this._post.ownFavorite,
-                canFavorite: api.hasPrivilege("posts:favorite"),
+                canFavorite: api.hasPrivilege("post_favorite"),
             })
         );
 
@@ -127,7 +127,7 @@ class PostReadonlySidebarControl extends events.EventTarget {
             scoreTemplate({
                 score: this._post.score,
                 ownScore: this._post.ownScore,
-                canScore: api.hasPrivilege("posts:score"),
+                canScore: api.hasPrivilege("post_score"),
             })
         );
         if (this._upvoteButtonNode) {

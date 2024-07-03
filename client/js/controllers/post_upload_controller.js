@@ -19,7 +19,7 @@ class PostUploadController {
     constructor() {
         this._lastCancellablePromise = null;
 
-        if (!api.hasPrivilege("posts:create")) {
+        if (!api.hasPrivilege("post_create")) {
             this._view = new EmptyView();
             this._view.showError("You don't have privileges to upload posts.");
             return;
@@ -28,8 +28,8 @@ class PostUploadController {
         topNavigation.activate("upload");
         topNavigation.setTitle("Upload");
         this._view = new PostUploadView({
-            canUploadAnonymously: api.hasPrivilege("posts:create:anonymous"),
-            canViewPosts: api.hasPrivilege("posts:view"),
+            canUploadAnonymously: api.hasPrivilege("post_create_anonymous"),
+            canViewPosts: api.hasPrivilege("post_view"),
             enableSafety: api.safetyEnabled(),
         });
         this._view.addEventListener("change", (e) => this._evtChange(e));
@@ -137,7 +137,7 @@ class PostUploadController {
                         } else {
                             let error = new Error(
                                 "Post already uploaded " +
-                                    `(@${searchResult.exactPost.id})`
+                                `(@${searchResult.exactPost.id})`
                             );
                             error.uploadable = uploadable;
                             return Promise.reject(error);
@@ -151,7 +151,7 @@ class PostUploadController {
                     ) {
                         let error = new Error(
                             `Found ${searchResult.similarPosts.length} similar ` +
-                                "posts.\nYou can resume or discard this upload."
+                            "posts.\nYou can resume or discard this upload."
                         );
                         error.uploadable = uploadable;
                         error.similarPosts = searchResult.similarPosts;

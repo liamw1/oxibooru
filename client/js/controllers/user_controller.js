@@ -15,7 +15,7 @@ class UserController {
     constructor(ctx, section) {
         const userName = ctx.parameters.name;
         if (
-            !api.hasPrivilege("users:view") &&
+            !api.hasPrivilege("user_view") &&
             !api.isLoggedIn({ name: userName })
         ) {
             this._view = new EmptyView();
@@ -78,29 +78,29 @@ class UserController {
                     user: user,
                     section: section,
                     isLoggedIn: isLoggedIn,
-                    canEditName: api.hasPrivilege(`users:edit:${infix}:name`),
+                    canEditName: api.hasPrivilege(`user_edit_${infix}_name`),
                     canEditPassword: api.hasPrivilege(
-                        `users:edit:${infix}:pass`
+                        `user_edit_${infix}_pass`
                     ),
                     canEditEmail: api.hasPrivilege(
-                        `users:edit:${infix}:email`
+                        `user_edit_${infix}_email`
                     ),
-                    canEditRank: api.hasPrivilege(`users:edit:${infix}:rank`),
+                    canEditRank: api.hasPrivilege(`user_edit_${infix}_rank`),
                     canEditAvatar: api.hasPrivilege(
-                        `users:edit:${infix}:avatar`
+                        `user_edit_${infix}_avatar`
                     ),
-                    canEditAnything: api.hasPrivilege(`users:edit:${infix}`),
+                    canEditAnything: api.hasPrivilege(`user_edit_${infix}`),
                     canListTokens: api.hasPrivilege(
-                        `userTokens:list:${infix}`
+                        `user_token_list_${infix}`
                     ),
                     canCreateToken: api.hasPrivilege(
-                        `userTokens:create:${infix}`
+                        `user_token_create_${infix}`
                     ),
-                    canEditToken: api.hasPrivilege(`userTokens:edit:${infix}`),
+                    canEditToken: api.hasPrivilege(`user_token_edit_${infix}`),
                     canDeleteToken: api.hasPrivilege(
-                        `userTokens:delete:${infix}`
+                        `user_token_delete_${infix}`
                     ),
-                    canDelete: api.hasPrivilege(`users:delete:${infix}`),
+                    canDelete: api.hasPrivilege(`user_delete_${infix}`),
                     ranks: ranks,
                     tokens: userTokens,
                 });
@@ -201,10 +201,10 @@ class UserController {
             .then(() => {
                 return isLoggedIn
                     ? api.login(
-                          e.detail.name || api.userName,
-                          e.detail.password || api.userPassword,
-                          false
-                      )
+                        e.detail.name || api.userName,
+                        e.detail.password || api.userPassword,
+                        false
+                    )
                     : Promise.resolve();
             })
             .then(
@@ -229,7 +229,7 @@ class UserController {
                     api.forget();
                     api.logout();
                 }
-                if (api.hasPrivilege("users:list")) {
+                if (api.hasPrivilege("user_list")) {
                     const ctx = router.show(uri.formatClientLink("users"));
                     ctx.controller.showSuccess("Account deleted.");
                 } else {

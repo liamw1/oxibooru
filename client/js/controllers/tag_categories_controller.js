@@ -9,7 +9,7 @@ const EmptyView = require("../views/empty_view.js");
 
 class TagCategoriesController {
     constructor() {
-        if (!api.hasPrivilege("tagCategories:list")) {
+        if (!api.hasPrivilege("tag_category_list")) {
             this._view = new EmptyView();
             this._view.showError(
                 "You don't have privileges to view tag categories."
@@ -24,13 +24,13 @@ class TagCategoriesController {
                 this._tagCategories = response.results;
                 this._view = new TagCategoriesView({
                     tagCategories: this._tagCategories,
-                    canEditName: api.hasPrivilege("tagCategories:edit:name"),
-                    canEditColor: api.hasPrivilege("tagCategories:edit:color"),
-                    canEditOrder: api.hasPrivilege("tagCategories:edit:order"),
-                    canDelete: api.hasPrivilege("tagCategories:delete"),
-                    canCreate: api.hasPrivilege("tagCategories:create"),
+                    canEditName: api.hasPrivilege("tag_category_edit_name"),
+                    canEditColor: api.hasPrivilege("tag_category_edit_color"),
+                    canEditOrder: api.hasPrivilege("tag_category_edit_order"),
+                    canDelete: api.hasPrivilege("tag_category_delete"),
+                    canCreate: api.hasPrivilege("tag_category_create"),
                     canSetDefault: api.hasPrivilege(
-                        "tagCategories:setDefault"
+                        "tag_category_set_default"
                     ),
                 });
                 this._view.addEventListener("submit", (e) =>

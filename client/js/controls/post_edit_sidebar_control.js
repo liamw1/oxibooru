@@ -30,24 +30,24 @@ class PostEditSidebarControl extends events.EventTarget {
                 post: this._post,
                 enableSafety: api.safetyEnabled(),
                 hasClipboard: document.queryCommandSupported("copy"),
-                canEditPostSafety: api.hasPrivilege("posts:edit:safety"),
-                canEditPostSource: api.hasPrivilege("posts:edit:source"),
-                canEditPostTags: api.hasPrivilege("posts:edit:tags"),
-                canEditPostRelations: api.hasPrivilege("posts:edit:relations"),
+                canEditPostSafety: api.hasPrivilege("post_edit_safety"),
+                canEditPostSource: api.hasPrivilege("post_edit_source"),
+                canEditPostTags: api.hasPrivilege("post_edit_tag"),
+                canEditPostRelations: api.hasPrivilege("post_edit_relation"),
                 canEditPostNotes:
-                    api.hasPrivilege("posts:edit:notes") &&
+                    api.hasPrivilege("post_edit_note") &&
                     post.type !== "video" &&
                     post.type !== "flash",
-                canEditPostFlags: api.hasPrivilege("posts:edit:flags"),
-                canEditPostContent: api.hasPrivilege("posts:edit:content"),
-                canEditPostThumbnail: api.hasPrivilege("posts:edit:thumbnail"),
-                canEditPoolPosts: api.hasPrivilege("pools:edit:posts"),
+                canEditPostFlags: api.hasPrivilege("post_edit_flag"),
+                canEditPostContent: api.hasPrivilege("post_edit_content"),
+                canEditPostThumbnail: api.hasPrivilege("post_edit_thumbnail"),
+                canEditPoolPosts: api.hasPrivilege("pool_edit_post"),
                 canCreateAnonymousPosts: api.hasPrivilege(
-                    "posts:create:anonymous"
+                    "post_create_anonymous"
                 ),
-                canDeletePosts: api.hasPrivilege("posts:delete"),
-                canFeaturePosts: api.hasPrivilege("posts:feature"),
-                canMergePosts: api.hasPrivilege("posts:merge"),
+                canDeletePosts: api.hasPrivilege("post_delete"),
+                canFeaturePosts: api.hasPrivilege("post_feature"),
+                canMergePosts: api.hasPrivilege("post_merge"),
             })
         );
 
@@ -400,8 +400,8 @@ class PostEditSidebarControl extends events.EventTarget {
 
                     safety: this._safetyButtonNodes.length
                         ? Array.from(this._safetyButtonNodes)
-                              .filter((node) => node.checked)[0]
-                              .value.toLowerCase()
+                            .filter((node) => node.checked)[0]
+                            .value.toLowerCase()
                         : undefined,
 
                     flags: this._videoFlags,
@@ -416,10 +416,10 @@ class PostEditSidebarControl extends events.EventTarget {
 
                     relations: this._relationsInputNode
                         ? misc
-                              .splitByWhitespace(
-                                  this._relationsInputNode.value
-                              )
-                              .map((x) => parseInt(x))
+                            .splitByWhitespace(
+                                this._relationsInputNode.value
+                            )
+                            .map((x) => parseInt(x))
                         : undefined,
 
                     content: this._newPostContent

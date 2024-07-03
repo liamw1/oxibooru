@@ -29,9 +29,9 @@ class CommentControl extends events.EventTarget {
             template({
                 comment: comment,
                 user: comment ? comment.user : api.user,
-                canViewUsers: api.hasPrivilege("users:view"),
-                canEditComment: api.hasPrivilege(`comments:edit:${infix}`),
-                canDeleteComment: api.hasPrivilege(`comments:delete:${infix}`),
+                canViewUsers: api.hasPrivilege("user_view"),
+                canEditComment: api.hasPrivilege(`comment_edit_${infix}`),
+                canDeleteComment: api.hasPrivilege(`comment_delete_${infix}`),
                 onlyEditing: onlyEditing,
             })
         );
@@ -129,7 +129,7 @@ class CommentControl extends events.EventTarget {
             scoreTemplate({
                 score: this._comment ? this._comment.score : 0,
                 ownScore: this._comment ? this._comment.ownScore : 0,
-                canScore: api.hasPrivilege("comments:score"),
+                canScore: api.hasPrivilege("comment_score"),
             })
         );
 
@@ -183,7 +183,7 @@ class CommentControl extends events.EventTarget {
 
     _evtScoreClick(e, score) {
         e.preventDefault();
-        if (!api.hasPrivilege("comments:score")) {
+        if (!api.hasPrivilege("comment_score")) {
             return;
         }
         this.dispatchEvent(

@@ -10,7 +10,7 @@ const EmptyView = require("../views/empty_view.js");
 
 class PoolCreateController {
     constructor(ctx) {
-        if (!api.hasPrivilege("pools:create")) {
+        if (!api.hasPrivilege("pool_create")) {
             this._view = new EmptyView();
             this._view.showError("You don't have privileges to create pools.");
             return;
@@ -24,7 +24,7 @@ class PoolCreateController {
                 }
 
                 this._view = new PoolCreateView({
-                    canCreate: api.hasPrivilege("pools:create"),
+                    canCreate: api.hasPrivilege("pool_create"),
                     categories: categories,
                     escapeTagName: uri.escapeTagName,
                 });

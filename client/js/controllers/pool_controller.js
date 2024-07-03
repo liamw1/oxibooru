@@ -13,7 +13,7 @@ const EmptyView = require("../views/empty_view.js");
 
 class PoolController {
     constructor(ctx, section) {
-        if (!api.hasPrivilege("pools:view")) {
+        if (!api.hasPrivilege("pool_view")) {
             this._view = new EmptyView();
             this._view.showError("You don't have privileges to view pools.");
             return;
@@ -42,15 +42,15 @@ class PoolController {
                 this._view = new PoolView({
                     pool: pool,
                     section: section,
-                    canEditAnything: api.hasPrivilege("pools:edit"),
-                    canEditNames: api.hasPrivilege("pools:edit:names"),
-                    canEditCategory: api.hasPrivilege("pools:edit:category"),
+                    canEditAnything: api.hasPrivilege("pool_edit"),
+                    canEditNames: api.hasPrivilege("pool_edit_name"),
+                    canEditCategory: api.hasPrivilege("pool_edit_category"),
                     canEditDescription: api.hasPrivilege(
-                        "pools:edit:description"
+                        "pool_edit_description"
                     ),
-                    canEditPosts: api.hasPrivilege("pools:edit:posts"),
-                    canMerge: api.hasPrivilege("pools:merge"),
-                    canDelete: api.hasPrivilege("pools:delete"),
+                    canEditPosts: api.hasPrivilege("pool_edit_posts"),
+                    canMerge: api.hasPrivilege("pool_merge"),
+                    canDelete: api.hasPrivilege("pool_delete"),
                     categories: categories,
                     escapeTagName: uri.escapeTagName,
                 });

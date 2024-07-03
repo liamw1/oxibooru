@@ -10,7 +10,7 @@ const EmptyView = require("../views/empty_view.js");
 
 class SnapshotsController {
     constructor(ctx) {
-        if (!api.hasPrivilege("snapshots:list")) {
+        if (!api.hasPrivilege("snapshot_list")) {
             this._view = new EmptyView();
             this._view.showError("You don't have privileges to view history.");
             return;
@@ -35,9 +35,9 @@ class SnapshotsController {
             },
             pageRenderer: (pageCtx) => {
                 Object.assign(pageCtx, {
-                    canViewPosts: api.hasPrivilege("posts:view"),
-                    canViewUsers: api.hasPrivilege("users:view"),
-                    canViewTags: api.hasPrivilege("tags:view"),
+                    canViewPosts: api.hasPrivilege("post_view"),
+                    canViewUsers: api.hasPrivilege("user_view"),
+                    canViewTags: api.hasPrivilege("tag_view"),
                 });
                 return new SnapshotsPageView(pageCtx);
             },

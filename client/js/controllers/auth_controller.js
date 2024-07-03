@@ -26,7 +26,7 @@ class LoginController {
             () => {
                 const ctx = router.show(uri.formatClientLink());
                 ctx.controller.showSuccess("Logged in");
-                // reload tag category color map, this is required when `tag_categories:list` has a permission other than anonymous
+                // reload tag category color map, this is required when `tag_category_list` has a permission other than anonymous
                 tags.refreshCategoryColorMap();
                 pools.refreshCategoryColorMap();
             },

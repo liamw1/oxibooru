@@ -35,31 +35,31 @@ class TopNavigationController {
             : null;
 
         topNavigation.showAll();
-        if (!api.hasPrivilege("posts:list")) {
+        if (!api.hasPrivilege("post_list")) {
             topNavigation.hide("posts");
         }
-        if (!api.hasPrivilege("posts:create")) {
+        if (!api.hasPrivilege("post_create")) {
             topNavigation.hide("upload");
         }
-        if (!api.hasPrivilege("comments:list")) {
+        if (!api.hasPrivilege("comment_list")) {
             topNavigation.hide("comments");
         }
-        if (!api.hasPrivilege("tags:list")) {
+        if (!api.hasPrivilege("tag_list")) {
             topNavigation.hide("tags");
         }
-        if (!api.hasPrivilege("users:list")) {
+        if (!api.hasPrivilege("user_list")) {
             topNavigation.hide("users");
         }
-        if (!api.hasPrivilege("pools:list")) {
+        if (!api.hasPrivilege("pool_list")) {
             topNavigation.hide("pools");
         }
         if (api.isLoggedIn()) {
-            if (!api.hasPrivilege("users:create:any")) {
+            if (!api.hasPrivilege("user_create_any")) {
                 topNavigation.hide("register");
             }
             topNavigation.hide("login");
         } else {
-            if (!api.hasPrivilege("users:create:self")) {
+            if (!api.hasPrivilege("user_create_self")) {
                 topNavigation.hide("register");
             }
             topNavigation.hide("account");

@@ -23,7 +23,7 @@ class PoolListController {
     constructor(ctx) {
         this._pageController = new PageController();
 
-        if (!api.hasPrivilege("pools:list")) {
+        if (!api.hasPrivilege("pool_list")) {
             this._view = new EmptyView();
             this._view.showError("You don't have privileges to view pools.");
             return;
@@ -37,8 +37,8 @@ class PoolListController {
         this._headerView = new PoolsHeaderView({
             hostNode: this._pageController.view.pageHeaderHolderNode,
             parameters: ctx.parameters,
-            canCreate: api.hasPrivilege("pools:create"),
-            canEditPoolCategories: api.hasPrivilege("poolCategories:edit"),
+            canCreate: api.hasPrivilege("pool_create"),
+            canEditPoolCategories: api.hasPrivilege("pool_category_edit"),
         });
         this._headerView.addEventListener(
             "submit",

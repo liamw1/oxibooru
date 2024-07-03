@@ -33,10 +33,10 @@ class PostMainController extends BasePostController {
                     ctx.state.parameters = parameters;
                     const url = editMode
                         ? uri.formatClientLink(
-                              "post",
-                              ctx.parameters.id,
-                              "edit"
-                          )
+                            "post",
+                            ctx.parameters.id,
+                            "edit"
+                        )
                         : uri.formatClientLink("post", ctx.parameters.id);
                     router.replace(url, ctx.state, false);
                 }
@@ -51,11 +51,11 @@ class PostMainController extends BasePostController {
                     nextPostId: aroundResponse.next
                         ? aroundResponse.next.id
                         : null,
-                    canEditPosts: api.hasPrivilege("posts:edit"),
-                    canDeletePosts: api.hasPrivilege("posts:delete"),
-                    canFeaturePosts: api.hasPrivilege("posts:feature"),
-                    canListComments: api.hasPrivilege("comments:list"),
-                    canCreateComments: api.hasPrivilege("comments:create"),
+                    canEditPosts: api.hasPrivilege("post_edit"),
+                    canDeletePosts: api.hasPrivilege("post_delete"),
+                    canFeaturePosts: api.hasPrivilege("post_feature"),
+                    canListComments: api.hasPrivilege("comment_list"),
+                    canCreateComments: api.hasPrivilege("comment_create"),
                     parameters: parameters,
                 });
 
@@ -248,7 +248,7 @@ class PostMainController extends BasePostController {
     }
 
     _evtScorePost(e) {
-        if (!api.hasPrivilege("posts:score")) {
+        if (!api.hasPrivilege("post_score")) {
             return;
         }
         e.detail.post
@@ -257,7 +257,7 @@ class PostMainController extends BasePostController {
     }
 
     _evtFavoritePost(e) {
-        if (!api.hasPrivilege("posts:favorite")) {
+        if (!api.hasPrivilege("post_favorite")) {
             return;
         }
         e.detail.post
@@ -266,7 +266,7 @@ class PostMainController extends BasePostController {
     }
 
     _evtUnfavoritePost(e) {
-        if (!api.hasPrivilege("posts:favorite")) {
+        if (!api.hasPrivilege("post_favorite")) {
             return;
         }
         e.detail.post

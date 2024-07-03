@@ -185,7 +185,7 @@ impl PostInfo {
             .collect::<QueryResult<_>>()?;
 
         Ok(PostInfo {
-            version: post.last_edit_time.clone().into(),
+            version: post.last_edit_time,
             id: post.id,
             creation_time: post.creation_time,
             last_edit_time: post.last_edit_time,

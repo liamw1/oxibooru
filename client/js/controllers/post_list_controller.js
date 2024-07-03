@@ -27,7 +27,7 @@ class PostListController {
     constructor(ctx) {
         this._pageController = new PageController();
 
-        if (!api.hasPrivilege("posts:list")) {
+        if (!api.hasPrivilege("post_list")) {
             this._view = new EmptyView();
             this._view.showError("You don't have privileges to view posts.");
             return;
@@ -42,9 +42,9 @@ class PostListController {
             hostNode: this._pageController.view.pageHeaderHolderNode,
             parameters: ctx.parameters,
             enableSafety: api.safetyEnabled(),
-            canBulkEditTags: api.hasPrivilege("posts:bulk-edit:tags"),
-            canBulkEditSafety: api.hasPrivilege("posts:bulk-edit:safety"),
-            canBulkDelete: api.hasPrivilege("posts:bulk-edit:delete"),
+            canBulkEditTags: api.hasPrivilege("post_bulk_edit_tag"),
+            canBulkEditSafety: api.hasPrivilege("post_bulk_edit_safety"),
+            canBulkDelete: api.hasPrivilege("post_bulk_edit_delete"),
             bulkEdit: {
                 tags: this._bulkEditTags,
             },
@@ -155,12 +155,12 @@ class PostListController {
             },
             pageRenderer: (pageCtx) => {
                 Object.assign(pageCtx, {
-                    canViewPosts: api.hasPrivilege("posts:view"),
-                    canBulkEditTags: api.hasPrivilege("posts:bulk-edit:tags"),
+                    canViewPosts: api.hasPrivilege("post_view"),
+                    canBulkEditTags: api.hasPrivilege("post_bulk_edit_tag"),
                     canBulkEditSafety: api.hasPrivilege(
-                        "posts:bulk-edit:safety"
+                        "post_bulk_edit_safety"
                     ),
-                    canBulkDelete: api.hasPrivilege("posts:bulk-edit:delete"),
+                    canBulkDelete: api.hasPrivilege("post_bulk_edit_delete"),
                     bulkEdit: {
                         tags: this._bulkEditTags,
                         markedForDeletion: this._postsMarkedForDeletion,

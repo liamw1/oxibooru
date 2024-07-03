@@ -51,7 +51,7 @@ struct UserTokenInfo {
 impl UserTokenInfo {
     fn new(user: MicroUser, user_token: UserToken) -> Result<Self, api::Error> {
         Ok(UserTokenInfo {
-            version: user_token.last_edit_time.clone().into(),
+            version: user_token.last_edit_time,
             user,
             token: user_token.token,
             note: user_token.note,

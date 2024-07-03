@@ -14,7 +14,7 @@ class UserListController {
     constructor(ctx) {
         this._pageController = new PageController();
 
-        if (!api.hasPrivilege("users:list")) {
+        if (!api.hasPrivilege("user_list")) {
             this._view = new EmptyView();
             this._view.showError("You don't have privileges to view users.");
             return;
@@ -68,7 +68,7 @@ class UserListController {
             },
             pageRenderer: (pageCtx) => {
                 Object.assign(pageCtx, {
-                    canViewUsers: api.hasPrivilege("users:view"),
+                    canViewUsers: api.hasPrivilege("user_view"),
                 });
                 return new UsersPageView(pageCtx);
             },

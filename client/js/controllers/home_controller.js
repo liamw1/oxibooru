@@ -15,8 +15,8 @@ class HomeController {
             name: api.getName(),
             version: config.meta.version,
             buildDate: config.meta.buildDate,
-            canListSnapshots: api.hasPrivilege("snapshots:list"),
-            canListPosts: api.hasPrivilege("posts:list"),
+            canListSnapshots: api.hasPrivilege("snapshot_list"),
+            canListPosts: api.hasPrivilege("post_list"),
             isDevelopmentMode: config.environment == "development",
         });
 

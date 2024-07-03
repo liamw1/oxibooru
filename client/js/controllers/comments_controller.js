@@ -12,7 +12,7 @@ const fields = ["id", "comments", "commentCount", "thumbnailUrl"];
 
 class CommentsController {
     constructor(ctx) {
-        if (!api.hasPrivilege("comments:list")) {
+        if (!api.hasPrivilege("comment_list")) {
             this._view = new EmptyView();
             this._view.showError(
                 "You don't have privileges to view comments."
@@ -44,7 +44,7 @@ class CommentsController {
             },
             pageRenderer: (pageCtx) => {
                 Object.assign(pageCtx, {
-                    canViewPosts: api.hasPrivilege("posts:view"),
+                    canViewPosts: api.hasPrivilege("post_view"),
                 });
                 const view = new CommentsPageView(pageCtx);
                 view.addEventListener("submit", (e) => this._evtUpdate(e));

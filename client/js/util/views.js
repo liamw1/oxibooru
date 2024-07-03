@@ -45,9 +45,9 @@ function makeThumbnail(url) {
         "span",
         url
             ? {
-                  class: "thumbnail",
-                  style: `background-image: url(\'${url}\')`,
-              }
+                class: "thumbnail",
+                style: `background-image: url(\'${url}\')`,
+            }
             : { class: "thumbnail empty" },
         makeElement("img", { alt: "thumbnail", src: url })
     );
@@ -199,12 +199,12 @@ function makePostLink(id, includeHash) {
     if (includeHash) {
         text = "@" + id;
     }
-    return api.hasPrivilege("posts:view")
+    return api.hasPrivilege("post_view")
         ? makeElement(
-              "a",
-              { href: uri.formatClientLink("post", id) },
-              misc.escapeHtml(text)
-          )
+            "a",
+            { href: uri.formatClientLink("post", id) },
+            misc.escapeHtml(text)
+        )
         : misc.escapeHtml(text);
 }
 
@@ -217,20 +217,20 @@ function makeTagLink(name, includeHash, includeCount, tag) {
     if (includeCount === true) {
         text += " (" + (tag && tag.postCount ? tag.postCount : 0) + ")";
     }
-    return api.hasPrivilege("tags:view")
+    return api.hasPrivilege("tag_view")
         ? makeElement(
-              "a",
-              {
-                  href: uri.formatClientLink("tag", name),
-                  class: misc.makeCssName(category, "tag"),
-              },
-              misc.escapeHtml(text)
-          )
+            "a",
+            {
+                href: uri.formatClientLink("tag", name),
+                class: misc.makeCssName(category, "tag"),
+            },
+            misc.escapeHtml(text)
+        )
         : makeElement(
-              "span",
-              { class: misc.makeCssName(category, "tag") },
-              misc.escapeHtml(text)
-          );
+            "span",
+            { class: misc.makeCssName(category, "tag") },
+            misc.escapeHtml(text)
+        );
 }
 
 function makePoolLink(id, includeHash, includeCount, pool, name) {
@@ -244,32 +244,32 @@ function makePoolLink(id, includeHash, includeCount, pool, name) {
     if (includeCount === true) {
         text += " (" + (pool && pool.postCount ? pool.postCount : 0) + ")";
     }
-    return api.hasPrivilege("pools:view")
+    return api.hasPrivilege("pool_view")
         ? makeElement(
-              "a",
-              {
-                  href: uri.formatClientLink("pool", id),
-                  class: misc.makeCssName(category, "pool"),
-              },
-              misc.escapeHtml(text)
-          )
+            "a",
+            {
+                href: uri.formatClientLink("pool", id),
+                class: misc.makeCssName(category, "pool"),
+            },
+            misc.escapeHtml(text)
+        )
         : makeElement(
-              "span",
-              { class: misc.makeCssName(category, "pool") },
-              misc.escapeHtml(text)
-          );
+            "span",
+            { class: misc.makeCssName(category, "pool") },
+            misc.escapeHtml(text)
+        );
 }
 
 function makeUserLink(user) {
     let text = makeThumbnail(user ? user.avatarUrl : null);
     text += user && user.name ? misc.escapeHtml(user.name) : "Anonymous";
     const link =
-        user && user.name && api.hasPrivilege("users:view")
+        user && user.name && api.hasPrivilege("user_view")
             ? makeElement(
-                  "a",
-                  { href: uri.formatClientLink("user", user.name) },
-                  text
-              )
+                "a",
+                { href: uri.formatClientLink("user", user.name) },
+                text
+            )
             : text;
     return makeElement("span", { class: "user" }, link);
 }

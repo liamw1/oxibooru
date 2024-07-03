@@ -12,7 +12,7 @@ const EmptyView = require("../views/empty_view.js");
 
 class TagController {
     constructor(ctx, section) {
-        if (!api.hasPrivilege("tags:view")) {
+        if (!api.hasPrivilege("tag_view")) {
             this._view = new EmptyView();
             this._view.showError("You don't have privileges to view tags.");
             return;
@@ -41,20 +41,20 @@ class TagController {
                 this._view = new TagView({
                     tag: tag,
                     section: section,
-                    canEditAnything: api.hasPrivilege("tags:edit"),
-                    canEditNames: api.hasPrivilege("tags:edit:names"),
-                    canEditCategory: api.hasPrivilege("tags:edit:category"),
+                    canEditAnything: api.hasPrivilege("tag_edit"),
+                    canEditNames: api.hasPrivilege("tag_edit_name"),
+                    canEditCategory: api.hasPrivilege("tag_edit_category"),
                     canEditImplications: api.hasPrivilege(
-                        "tags:edit:implications"
+                        "tag_edit_implication"
                     ),
                     canEditSuggestions: api.hasPrivilege(
-                        "tags:edit:suggestions"
+                        "tag_edit_suggestion"
                     ),
                     canEditDescription: api.hasPrivilege(
-                        "tags:edit:description"
+                        "tag_edit_description"
                     ),
-                    canMerge: api.hasPrivilege("tags:merge"),
-                    canDelete: api.hasPrivilege("tags:delete"),
+                    canMerge: api.hasPrivilege("tag_merge"),
+                    canDelete: api.hasPrivilege("tag_delete"),
                     categories: categories,
                     escapeTagName: uri.escapeTagName,
                 });

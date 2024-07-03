@@ -38,7 +38,7 @@ impl CommentInfo {
             .transpose()?;
 
         Ok(CommentInfo {
-            version: comment.last_edit_time.clone().into(),
+            version: comment.last_edit_time,
             id: comment.id,
             post_id: comment.post_id,
             user: MicroUser::new(owner),

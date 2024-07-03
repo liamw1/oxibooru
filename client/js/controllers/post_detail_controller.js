@@ -38,7 +38,7 @@ class PostDetailController extends BasePostController {
         this._view = new PostDetailView({
             post: post,
             section: section,
-            canMerge: api.hasPrivilege("posts:merge"),
+            canMerge: api.hasPrivilege("post_merge"),
         });
 
         this._view.addEventListener("select", (e) => this._evtSelect(e));

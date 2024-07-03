@@ -10,7 +10,7 @@ const EmptyView = require("../views/empty_view.js");
 
 class UserRegistrationController {
     constructor() {
-        if (!api.hasPrivilege("users:create:self")) {
+        if (!api.hasPrivilege("user_create_self")) {
             this._view = new EmptyView();
             this._view.showError("Registration is closed.");
             return;

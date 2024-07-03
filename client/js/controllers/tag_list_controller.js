@@ -23,7 +23,7 @@ class TagListController {
     constructor(ctx) {
         this._pageController = new PageController();
 
-        if (!api.hasPrivilege("tags:list")) {
+        if (!api.hasPrivilege("tag_list")) {
             this._view = new EmptyView();
             this._view.showError("You don't have privileges to view tags.");
             return;
@@ -37,7 +37,7 @@ class TagListController {
         this._headerView = new TagsHeaderView({
             hostNode: this._pageController.view.pageHeaderHolderNode,
             parameters: ctx.parameters,
-            canEditTagCategories: api.hasPrivilege("tagCategories:edit"),
+            canEditTagCategories: api.hasPrivilege("tag_category_edit"),
         });
         this._headerView.addEventListener("navigate", (e) =>
             this._evtNavigate(e)

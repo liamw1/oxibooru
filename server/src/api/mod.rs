@@ -132,8 +132,8 @@ impl Error {
 
     fn response(&self) -> ErrorResponse {
         ErrorResponse {
-            name: self.kind().to_owned(),
-            title: self.category().to_owned(),
+            name: self.kind(),
+            title: self.category(),
             description: self.to_string(),
         }
     }
@@ -208,8 +208,8 @@ struct PagedResponse<T: Serialize> {
 
 #[derive(Serialize)]
 struct ErrorResponse {
-    title: String,
-    name: String,
+    title: &'static str,
+    name: &'static str,
     description: String,
 }
 
