@@ -1,6 +1,7 @@
 use crate::model::user::User;
 use crate::schema::snapshot;
 use crate::util::DateTime;
+use diesel::pg::Pg;
 use diesel::prelude::*;
 use std::option::Option;
 
@@ -17,7 +18,7 @@ pub struct NewSnapshot<'a> {
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = snapshot)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct Snapshot {
     pub id: i32,
     pub user_id: Option<i32>,

@@ -231,6 +231,8 @@ impl PostInfo {
 }
 
 fn list_posts(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<PagedPostInfo, api::Error> {
+    println!("Query: {}", query_info.query.as_deref().unwrap_or(""));
+
     let client = auth_result?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
@@ -385,11 +387,11 @@ fn reverse_search(auth_result: AuthResult, token: ContentToken) -> Result<Revers
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct NewPostInfo {
-    tags: Option<Vec<String>>,
+    _tags: Option<Vec<String>>, // TODO
     safety: PostSafety,
     source: Option<String>,
     relations: Option<Vec<i32>>,
-    flags: Option<Vec<String>>, // TODO
+    _flags: Option<Vec<String>>, // TODO
     anonymous: Option<bool>,
     content_token: String,
 }

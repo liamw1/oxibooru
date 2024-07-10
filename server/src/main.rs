@@ -7,6 +7,7 @@ pub mod image;
 pub mod math;
 pub mod model;
 pub mod schema;
+pub mod search;
 #[cfg(test)]
 mod test;
 pub mod util;

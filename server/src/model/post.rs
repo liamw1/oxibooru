@@ -8,6 +8,7 @@ use crate::schema::{
 };
 use crate::util;
 use crate::util::DateTime;
+use diesel::pg::Pg;
 use diesel::prelude::*;
 use diesel::sql_types::*;
 use std::option::Option;
@@ -29,7 +30,7 @@ pub struct NewPost<'a> {
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = post)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct Post {
     pub id: i32,
     pub user_id: Option<i32>,
@@ -124,7 +125,7 @@ pub type NewPostRelation = PostRelation;
 #[diesel(belongs_to(Post, foreign_key = parent_id))]
 #[diesel(table_name = post_relation)]
 #[diesel(primary_key(parent_id, child_id))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct PostRelation {
     pub parent_id: i32,
     pub child_id: i32,
@@ -142,7 +143,7 @@ pub type NewPostTag = PostTag;
 #[diesel(belongs_to(Post), belongs_to(Tag))]
 #[diesel(table_name = post_tag)]
 #[diesel(primary_key(post_id, tag_id))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct PostTag {
     pub post_id: i32,
     pub tag_id: i32,
@@ -160,7 +161,7 @@ pub type NewPostFavorite = PostFavorite;
 #[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_favorite)]
 #[diesel(primary_key(post_id, user_id))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct PostFavorite {
     pub post_id: i32,
     pub user_id: i32,
@@ -183,7 +184,7 @@ pub struct NewPostFeature {
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_feature)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct PostFeature {
     pub id: i32,
     pub post_id: i32,
@@ -207,7 +208,7 @@ pub struct NewPostNote<'a> {
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Post))]
 #[diesel(table_name = post_note)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct PostNote {
     pub id: i32,
     pub post_id: i32,
@@ -227,7 +228,7 @@ pub type NewPostScore = PostScore;
 #[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_score)]
 #[diesel(primary_key(post_id, user_id))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct PostScore {
     pub post_id: i32,
     pub user_id: i32,
@@ -253,7 +254,7 @@ pub struct NewPostSignature<'a> {
 #[diesel(belongs_to(Post))]
 #[diesel(table_name = post_signature)]
 #[diesel(primary_key(post_id))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct PostSignature {
     pub post_id: i32,
     pub signature: Vec<u8>,

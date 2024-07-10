@@ -4,6 +4,7 @@ use crate::model::TableName;
 use crate::schema::{comment, comment_score};
 use crate::util;
 use crate::util::DateTime;
+use diesel::pg::Pg;
 use diesel::prelude::*;
 
 #[derive(Insertable)]
@@ -17,7 +18,7 @@ pub struct NewComment<'a> {
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User), belongs_to(Post))]
 #[diesel(table_name = comment)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct Comment {
     pub id: i32,
     pub user_id: i32,
@@ -62,7 +63,7 @@ pub type NewCommentScore = CommentScore;
 #[diesel(belongs_to(Comment), belongs_to(User))]
 #[diesel(table_name = comment_score)]
 #[diesel(primary_key(comment_id, user_id))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct CommentScore {
     pub comment_id: i32,
     pub user_id: i32,

@@ -6,6 +6,7 @@ use crate::model::TableName;
 use crate::schema::{comment, comment_score, post, post_favorite, post_feature, post_score, user, user_token};
 use crate::util;
 use crate::util::DateTime;
+use diesel::pg::Pg;
 use diesel::prelude::*;
 use std::option::Option;
 use uuid::Uuid;
@@ -23,7 +24,7 @@ pub struct NewUser<'a> {
 
 #[derive(Debug, PartialEq, Eq, Identifiable, Queryable, Selectable)]
 #[diesel(table_name = user)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct User {
     pub id: i32,
     pub name: String,
@@ -186,7 +187,7 @@ pub struct NewUserToken<'a> {
 #[diesel(belongs_to(User))]
 #[diesel(table_name = user_token)]
 #[diesel(primary_key(user_id))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct UserToken {
     pub user_id: i32,
     pub token: Uuid,

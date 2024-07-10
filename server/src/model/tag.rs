@@ -3,6 +3,7 @@ use crate::model::TableName;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::util;
 use crate::util::DateTime;
+use diesel::pg::Pg;
 use diesel::prelude::*;
 use std::option::Option;
 
@@ -16,7 +17,7 @@ pub struct NewTagCategory<'a> {
 
 #[derive(Debug, PartialEq, Eq, Identifiable, Queryable, Selectable)]
 #[diesel(table_name = tag_category)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct TagCategory {
     pub id: i32,
     pub order: i32,
@@ -40,7 +41,7 @@ pub struct NewTag {
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(TagCategory, foreign_key = category_id))]
 #[diesel(table_name = tag)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct Tag {
     pub id: i32,
     pub category_id: i32,
@@ -147,7 +148,7 @@ pub struct NewTagName<'a> {
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag))]
 #[diesel(table_name = tag_name)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct TagName {
     pub id: i32,
     pub tag_id: i32,
@@ -167,7 +168,7 @@ pub type NewTagImplication = TagImplication;
 #[diesel(belongs_to(Tag, foreign_key = parent_id))]
 #[diesel(table_name = tag_implication)]
 #[diesel(primary_key(parent_id, child_id))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct TagImplication {
     pub parent_id: i32,
     pub child_id: i32,
@@ -185,7 +186,7 @@ pub type NewTagSuggestion = TagSuggestion;
 #[diesel(belongs_to(Tag, foreign_key = parent_id))]
 #[diesel(table_name = tag_suggestion)]
 #[diesel(primary_key(parent_id, child_id))]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+#[diesel(check_for_backend(Pg))]
 pub struct TagSuggestion {
     pub parent_id: i32,
     pub child_id: i32,

@@ -3,6 +3,7 @@ pub mod info;
 pub mod micro;
 pub mod pool_category;
 pub mod post;
+pub mod tag;
 pub mod tag_category;
 pub mod upload;
 pub mod user;
