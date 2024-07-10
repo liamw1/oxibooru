@@ -24,8 +24,6 @@ enum Error {
     ParseFailed(#[from] Box<dyn std::error::Error>),
 }
 
-enum NamedToken {}
-
 fn parse_str_filter_type(filter: &str) -> FilterType<&str> {
     if let Some(split_str) = filter.split_once("..") {
         return match split_str {
