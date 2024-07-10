@@ -6,19 +6,19 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+# Disable default-features to limit columns to 16
+diesel = { version = "2.1", default-features = false, features = ["with-deprecated", "postgres", "time", "uuid"] }
 tokio = { version = "1.38", features = ["full"] }
-diesel = { version = "2.1", features = ["postgres", "time", "uuid"] }
 serde = { version = "1.0", features = ["derive"] }
 time = { version = "0.3", features = ["serde-human-readable"] }
 uuid = { version = "1.8", features = ["v4", "serde"] }
-argon2 = { version = "0.5", features = ["std"] }
 blake3 = { version = "1.5", features = ["std", "traits-preview"] }
+argon2 = { version = "0.5", features = ["std"] }
 rand_core = { version = "0.6", features = ["std"] }   # Necessary for argon2
 pbkdf2 = { version = "0.12", features = ["simple"] }  # Necessary for argon2
 warp = "0.3"
 toml = "0.8"
 image = "0.25"
-regex = "1.10"
 hmac = "0.12"
 base64 = "0.22"
 hex = "0.4"

@@ -21,8 +21,11 @@ where
     ) -> BoxedSelectStatement<'a, <C::Table as AsQuery>::SqlType, FromClause<C::Table>, Pg>;
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum FilterType<V> {
     Values(Vec<V>),
+    GreaterEq(V),
+    LessEq(V),
     Range(Range<V>),
 }
 
@@ -51,11 +54,15 @@ where
         if self.negated {
             match self.filter_type {
                 FilterType::Values(values) => query.filter(self.column.ne_all(values)),
+                FilterType::GreaterEq(value) => query.filter(self.column.lt(value)),
+                FilterType::LessEq(value) => query.filter(self.column.gt(value)),
                 FilterType::Range(range) => query.filter(self.column.not_between(range.start, range.end)),
             }
         } else {
             match self.filter_type {
                 FilterType::Values(values) => query.filter(self.column.eq_any(values)),
+                FilterType::GreaterEq(value) => query.filter(self.column.ge(value)),
+                FilterType::LessEq(value) => query.filter(self.column.le(value)),
                 FilterType::Range(range) => query.filter(self.column.between(range.start, range.end)),
             }
         }

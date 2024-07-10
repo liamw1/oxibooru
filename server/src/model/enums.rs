@@ -8,8 +8,14 @@ use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
 use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
+use strum_macros::{EnumIter, EnumString};
 use thiserror::Error;
+
+#[derive(Debug, Error)]
+#[error("{extenstion} is not a supported file extension")]
+pub struct ParseExtensionError {
+    extenstion: String,
+}
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[diesel(sql_type = SmallInt)]
@@ -86,25 +92,44 @@ where
 }
 
 #[derive(
-    Debug, Copy, Clone, PartialEq, Eq, EnumIter, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    EnumIter,
+    EnumString,
+    FromPrimitive,
+    AsExpression,
+    FromSqlRow,
+    Serialize,
+    Deserialize,
 )]
 #[diesel(sql_type = SmallInt)]
 pub enum MimeType {
     #[serde(rename = "image/bmp")]
+    #[strum(serialize = "image/bmp")]
     BMP,
     #[serde(rename = "image/gif")]
+    #[strum(serialize = "image/gif")]
     GIF,
     #[serde(rename = "image/jpeg")]
+    #[strum(serialize = "image/jpeg")]
     JPEG,
     #[serde(rename = "image/png")]
+    #[strum(serialize = "image/png")]
     PNG,
     #[serde(rename = "image/webp")]
+    #[strum(serialize = "image/webp")]
     WEBP,
     #[serde(rename = "video/mp4")]
+    #[strum(serialize = "video/mp4")]
     MP4,
     #[serde(rename = "video/mov")]
+    #[strum(serialize = "video/mov")]
     MOV,
     #[serde(rename = "video/webm")]
+    #[strum(serialize = "video/webm")]
     WEBM,
 }
 
@@ -113,21 +138,8 @@ impl MimeType {
         MimeType::iter()
             .find(|mime_type| extension == mime_type.extension())
             .ok_or(ParseExtensionError {
-                ext: extension.to_owned(),
+                extenstion: extension.to_owned(),
             })
-    }
-
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::BMP => "image/bmp",
-            Self::GIF => "image/gif",
-            Self::JPEG => "image/jpeg",
-            Self::PNG => "image/png",
-            Self::WEBP => "image/webp",
-            Self::MP4 => "video/mp4",
-            Self::MOV => "video/mov",
-            Self::WEBM => "video/webm",
-        }
     }
 
     pub fn extension(self) -> &'static str {
@@ -141,15 +153,6 @@ impl MimeType {
             Self::MOV => "mov",
             Self::WEBM => "webm",
         }
-    }
-}
-
-impl std::str::FromStr for MimeType {
-    type Err = ParseMimeTypeError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        MimeType::iter()
-            .find(|mime_type| s == mime_type.as_str())
-            .ok_or(ParseMimeTypeError { name: s.to_owned() })
     }
 }
 
@@ -174,10 +177,23 @@ where
 }
 
 #[derive(
-    Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    EnumString,
+    FromPrimitive,
+    AsExpression,
+    FromSqlRow,
+    Serialize,
+    Deserialize,
 )]
 #[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum PostSafety {
     Safe,
     Sketchy,
@@ -204,22 +220,6 @@ where
     }
 }
 
-#[derive(Debug, Error)]
-#[error("{name} is not a supported MIME type")]
-pub struct ParseMimeTypeError {
-    name: String,
-}
-
-#[derive(Debug, Error)]
-#[error("{ext} is not a supported file extension")]
-pub struct ParseExtensionError {
-    ext: String,
-}
-
-#[derive(Debug, Error)]
-#[error("Failed to parse user privilege")]
-pub struct ParseUserRankError;
-
 #[derive(
     Debug,
     Copy,
@@ -228,7 +228,7 @@ pub struct ParseUserRankError;
     Eq,
     PartialOrd,
     Ord,
-    EnumIter,
+    EnumString,
     FromPrimitive,
     AsExpression,
     FromSqlRow,
@@ -237,6 +237,7 @@ pub struct ParseUserRankError;
 )]
 #[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 pub enum UserRank {
     Anonymous,
     Restricted,
@@ -244,28 +245,6 @@ pub enum UserRank {
     Power,
     Moderator,
     Administrator,
-}
-
-impl UserRank {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            UserRank::Anonymous => "anonymous",
-            UserRank::Restricted => "restricted",
-            UserRank::Regular => "regular",
-            UserRank::Power => "power",
-            UserRank::Moderator => "moderator",
-            UserRank::Administrator => "administrator",
-        }
-    }
-}
-
-impl std::str::FromStr for UserRank {
-    type Err = ParseUserRankError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        UserRank::iter()
-            .find(|rank| s == rank.as_str())
-            .ok_or(ParseUserRankError)
-    }
 }
 
 impl ToSql<SmallInt, Pg> for UserRank

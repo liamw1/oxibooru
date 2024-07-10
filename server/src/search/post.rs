@@ -1,14 +1,14 @@
 use crate::model::post::Post;
 use crate::schema::{post, post_tag};
-use crate::search::{self, ColumnFilter};
+use crate::search::{ColumnFilter, FilterType, SimpleFilter};
 use diesel::prelude::*;
 
 pub fn test() {
     let query = post::table.into_boxed();
     let query = query.filter(post::file_size.gt(100));
 
-    let filter_type = search::FilterType::Range(0..1);
-    let post_filter = search::SimpleFilter {
+    let filter_type = FilterType::Range(0..1);
+    let post_filter = SimpleFilter {
         filter_type,
         negated: false,
         column: post::id,

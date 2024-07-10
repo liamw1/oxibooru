@@ -3,7 +3,7 @@ ARG RUST_VERSION=1.79
 
 
 
-FROM rust:$RUST_VERSION as build
+FROM rust:$RUST_VERSION AS build
 WORKDIR /opt/app
 
 COPY . .
@@ -12,7 +12,7 @@ RUN cargo build --release
 
 
 
-FROM debian:$DEBIAN_VERSION as release
+FROM debian:$DEBIAN_VERSION AS release
 WORKDIR /opt/app
 
 ENV DOCKER_DEPLOYMENT=1
