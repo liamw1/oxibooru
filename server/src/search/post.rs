@@ -1,19 +1,19 @@
 use crate::model::post::Post;
 use crate::schema::{post, post_tag};
-use crate::search::{ColumnFilter, FilterType, SimpleFilter};
+use crate::search::filter::*;
+use crate::search::UnparsedFilter;
 use diesel::prelude::*;
 
 pub fn test() {
     let query = post::table.into_boxed();
     let query = query.filter(post::file_size.gt(100));
 
-    let filter_type = FilterType::Range(0..1);
-    let post_filter = SimpleFilter {
-        filter_type,
+    let filter = UnparsedFilter {
+        kind: 0,
+        criteria: "0..1",
         negated: false,
-        column: post::id,
     };
-    let query = post_filter.apply(query);
+    let query = apply_i32_filter(query, post::id, filter).unwrap();
 
     let query = query.inner_join(post_tag::table);
     let query = query.filter(post_tag::tag_id.gt(1));

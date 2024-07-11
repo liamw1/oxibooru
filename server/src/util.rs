@@ -11,8 +11,9 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Timestamptz;
 use serde::{Deserialize, Serialize};
 use std::ops::{Deref, DerefMut};
+use time::error::ComponentRange;
 use time::serde::rfc3339;
-use time::OffsetDateTime;
+use time::{Date, Month, OffsetDateTime, PrimitiveDateTime};
 
 // A wrapper for time::OffsetDateTime that serializes/deserializes according to RFC 3339.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, AsExpression, FromSqlRow)]
@@ -21,7 +22,29 @@ pub struct DateTime(#[serde(with = "rfc3339")] OffsetDateTime);
 
 impl DateTime {
     pub fn now() -> Self {
-        DateTime(OffsetDateTime::now_utc())
+        OffsetDateTime::now_utc().into()
+    }
+
+    pub fn today() -> Self {
+        Self::now().date().midnight().assume_utc().into()
+    }
+
+    pub fn yesterday() -> Self {
+        Self::now()
+            .date()
+            .previous_day()
+            .unwrap()
+            .midnight()
+            .assume_utc()
+            .into()
+    }
+
+    pub fn from_date(year: i32, month: u8, day: u8) -> Result<Self, ComponentRange> {
+        Month::try_from(month)
+            .and_then(|month| Date::from_calendar_date(year, month, day))
+            .map(Date::midnight)
+            .map(PrimitiveDateTime::assume_utc)
+            .map(Self::from)
     }
 }
 
@@ -58,7 +81,7 @@ where
     OffsetDateTime: FromSql<diesel::sql_types::Timestamptz, DB>,
 {
     fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
-        OffsetDateTime::from_sql(bytes).map(|time| DateTime(time))
+        OffsetDateTime::from_sql(bytes).map(DateTime)
     }
 }
 

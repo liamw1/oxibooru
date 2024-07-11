@@ -55,7 +55,8 @@ impl<T: PrimInt> IRect<T> {
         self.i_bounds
             .length()
             .checked_mul(&self.j_bounds.length())
-            .and_then(|prod| prod.to_u64())
+            .as_ref()
+            .and_then(T::to_u64)
     }
 
     pub fn min_corner(&self) -> IPoint2<T> {

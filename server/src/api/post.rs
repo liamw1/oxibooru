@@ -133,16 +133,12 @@ impl PostInfo {
             .into_iter()
             .map(|tag| MicroTag::new(conn, tag))
             .collect::<QueryResult<_>>()?;
-        let relations = post
-            .related_posts(conn)?
-            .into_iter()
-            .map(|post| MicroPost::new(&post))
-            .collect::<Vec<_>>();
+        let relations = post.related_posts(conn)?.iter().map(MicroPost::new).collect::<Vec<_>>();
         let notes = PostNote::belonging_to(&post)
             .select(PostNote::as_select())
             .load(conn)?
             .into_iter()
-            .map(|note| PostNoteInfo::new(note))
+            .map(PostNoteInfo::new)
             .collect::<Vec<_>>();
         let score = post.score(conn)?;
         let owner = post

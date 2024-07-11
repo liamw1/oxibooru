@@ -51,7 +51,7 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
         .collect::<Result<Vec<_>, _>>()?;
     utf8_encoded_credentials
         .into_iter()
-        .map(|s| s.to_owned())
+        .map(str::to_owned)
         .collect_tuple()
         .ok_or(AuthenticationError::MalformedCredentials)
 }

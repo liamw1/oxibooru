@@ -4,11 +4,8 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::SmallInt;
 use diesel::AsExpression;
 use diesel::FromSqlRow;
-use num_derive::FromPrimitive;
-use num_traits::FromPrimitive;
 use serde::{Deserialize, Serialize};
-use strum::IntoEnumIterator;
-use strum_macros::{EnumIter, EnumString};
+use strum::{EnumIter, EnumString, FromRepr, IntoEnumIterator};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -17,9 +14,10 @@ pub struct ParseExtensionError {
     extenstion: String,
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
+#[repr(i16)]
 pub enum AvatarStyle {
     Gravatar,
     Manual,
@@ -41,13 +39,14 @@ where
 {
     fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
-        AvatarStyle::from_i16(database_value).ok_or(DeserializeAvatarStyleError.into())
+        AvatarStyle::from_repr(database_value).ok_or(DeserializeAvatarStyleError.into())
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, FromPrimitive, AsExpression, FromSqlRow, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
+#[repr(i16)]
 pub enum PostType {
     Image,
     Animation,
@@ -87,25 +86,15 @@ where
 {
     fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
-        PostType::from_i16(database_value).ok_or(DeserializePostTypeError.into())
+        PostType::from_repr(database_value).ok_or(DeserializePostTypeError.into())
     }
 }
 
 #[derive(
-    Debug,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    EnumIter,
-    EnumString,
-    FromPrimitive,
-    AsExpression,
-    FromSqlRow,
-    Serialize,
-    Deserialize,
+    Debug, Copy, Clone, PartialEq, Eq, EnumIter, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize,
 )]
 #[diesel(sql_type = SmallInt)]
+#[repr(i16)]
 pub enum MimeType {
     #[serde(rename = "image/bmp")]
     #[strum(serialize = "image/bmp")]
@@ -172,7 +161,7 @@ where
 {
     fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
-        MimeType::from_i16(database_value).ok_or(DeserializeMimeTypeError.into())
+        MimeType::from_repr(database_value).ok_or(DeserializeMimeTypeError.into())
     }
 }
 
@@ -185,7 +174,7 @@ where
     PartialOrd,
     Ord,
     EnumString,
-    FromPrimitive,
+    FromRepr,
     AsExpression,
     FromSqlRow,
     Serialize,
@@ -194,6 +183,7 @@ where
 #[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
+#[repr(i16)]
 pub enum PostSafety {
     Safe,
     Sketchy,
@@ -216,7 +206,7 @@ where
 {
     fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
-        PostSafety::from_i16(database_value).ok_or(DeserializePostSafetyError.into())
+        PostSafety::from_repr(database_value).ok_or(DeserializePostSafetyError.into())
     }
 }
 
@@ -229,7 +219,7 @@ where
     PartialOrd,
     Ord,
     EnumString,
-    FromPrimitive,
+    FromRepr,
     AsExpression,
     FromSqlRow,
     Serialize,
@@ -238,6 +228,7 @@ where
 #[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
+#[repr(i16)]
 pub enum UserRank {
     Anonymous,
     Restricted,
@@ -263,7 +254,7 @@ where
 {
     fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
-        UserRank::from_i16(database_value).ok_or(DeserializeUserPrivilegeError.into())
+        UserRank::from_repr(database_value).ok_or(DeserializeUserPrivilegeError.into())
     }
 }
 

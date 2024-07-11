@@ -10,6 +10,7 @@ edition = "2021"
 diesel = { version = "2.1", default-features = false, features = ["with-deprecated", "postgres", "time", "uuid"] }
 tokio = { version = "1.38", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
+strum = { version = "0.26", features = ["derive", "phf"] }
 time = { version = "0.3", features = ["serde-human-readable"] }
 uuid = { version = "1.8", features = ["v4", "serde"] }
 blake3 = { version = "1.5", features = ["std", "traits-preview"] }
@@ -25,8 +26,5 @@ hex = "0.4"
 futures = "0.3"
 thiserror = "1.0"
 itertools = "0.13"
-strum = "0.26"
-strum_macros = "0.26"
 once_cell = "1.19"
 num-traits = "0.2"
-num-derive = "0.4"

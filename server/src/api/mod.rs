@@ -209,6 +209,5 @@ fn verify_version(current_version: DateTime, client_version: ResourceVersion) ->
 }
 
 fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {
-    warp::header::optional("authorization")
-        .map(|opt_auth: Option<_>| opt_auth.map(|auth| header::authenticate_user(auth)).transpose())
+    warp::header::optional("authorization").map(|auth: Option<_>| auth.map(header::authenticate_user).transpose())
 }

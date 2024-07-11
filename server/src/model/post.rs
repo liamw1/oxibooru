@@ -63,7 +63,7 @@ impl Post {
         PostScore::belonging_to(self)
             .select(diesel::dsl::sum(post_score::score))
             .first::<Option<_>>(conn)
-            .map(|n| n.unwrap_or(0))
+            .map(Option::unwrap_or_default)
     }
 
     pub fn favorite_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {

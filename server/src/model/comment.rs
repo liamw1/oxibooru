@@ -43,7 +43,7 @@ impl Comment {
         CommentScore::belonging_to(self)
             .select(diesel::dsl::sum(comment_score::score))
             .first::<Option<i64>>(conn)
-            .map(|n| n.unwrap_or(0))
+            .map(Option::unwrap_or_default)
     }
 
     pub fn update_text(mut self, conn: &mut PgConnection, text: String) -> QueryResult<Self> {
