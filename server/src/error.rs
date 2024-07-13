@@ -185,6 +185,40 @@ impl ErrorKind for image::ImageError {
     }
 }
 
+impl ErrorKind for std::num::IntErrorKind {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Empty => "EmptyValue",
+            Self::InvalidDigit => "InvalidDigit",
+            Self::PosOverflow => "PositiveOverflow",
+            Self::NegOverflow => "NegativeOverflow",
+            Self::Zero => "Zero",
+            _ => "UnknownIntParseError",
+        }
+    }
+}
+
+impl ErrorKind for crate::search::TimeParsingError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::TooFewArgs => "TooFewArgs",
+            Self::TooManyArgs => "TooManyArgs",
+            Self::NotAnInteger(err) => err.kind().kind(),
+            Self::OutOfRange(_) => "OutOfRange",
+        }
+    }
+}
+
+impl ErrorKind for crate::search::Error {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::ParseFailed(_) => "SearchParseFailed",
+            Self::InvalidTime(err) => err.kind(),
+            Self::NotLoggedIn => "NotLoggedIn",
+        }
+    }
+}
+
 impl ErrorKind for crate::api::Error {
     fn kind(&self) -> &'static str {
         match self {
@@ -203,6 +237,7 @@ impl ErrorKind for crate::api::Error {
             Self::OutOfDate => "OutOfDate",
             Self::ResourceDoesNotExist => "ResourceDoesNotExist",
             Self::ResourceModified => "ResourceModified",
+            Self::SearchError(err) => err.kind(),
             Self::WarpError(_) => "WarpError",
         }
     }

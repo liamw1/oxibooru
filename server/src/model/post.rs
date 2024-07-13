@@ -131,6 +131,8 @@ pub struct PostRelation {
     pub child_id: i32,
 }
 
+diesel::joinable!(post_relation -> post (parent_id));
+
 impl PostRelation {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         post_relation::table.count().first(conn)
@@ -179,6 +181,7 @@ impl PostFavorite {
 pub struct NewPostFeature {
     pub post_id: i32,
     pub user_id: i32,
+    pub time: DateTime,
 }
 
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
@@ -189,6 +192,7 @@ pub struct PostFeature {
     pub id: i32,
     pub post_id: i32,
     pub user_id: i32,
+    pub time: DateTime,
 }
 
 impl PostFeature {
@@ -271,7 +275,7 @@ impl PostSignature {
              FROM post_signature AS s, unnest(s.words, $1) AS a(word, query)
              WHERE a.word = a.query
              GROUP BY s.post_id
-             ORDER BY count(a.query) DESC LIMIT 1000;",
+             ORDER BY count(a.query) DESC;",
         )
         .bind::<Array<Int4>, _>(words)
         .load(conn)

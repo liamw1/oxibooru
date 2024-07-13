@@ -179,7 +179,7 @@ fn list_users(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<Pa
         .load(&mut conn)?;
 
     Ok(PagedUserInfo {
-        query: query_info.query.unwrap_or(String::new()),
+        query: query_info.query,
         offset,
         limit,
         total: User::count(&mut conn)?,

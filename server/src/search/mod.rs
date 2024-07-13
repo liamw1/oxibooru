@@ -1,5 +1,5 @@
-mod filter;
-pub mod parse;
+mod macros;
+mod parse;
 pub mod post;
 
 use std::ops::Range;
@@ -20,6 +20,8 @@ pub enum TimeParsingError {
 pub enum Error {
     ParseFailed(#[from] Box<dyn std::error::Error>),
     InvalidTime(#[from] TimeParsingError),
+    #[error("This operation requires you to be logged in")]
+    NotLoggedIn,
 }
 
 #[derive(Debug, PartialEq, Eq)]

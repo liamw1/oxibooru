@@ -1,142 +1,118 @@
-use crate::schema::post;
-use crate::search::filter::*;
-use crate::search::{Error, ParsedSort, UnparsedFilter};
-use diesel::prelude::*;
+use crate::search::Error;
+use crate::search::{Criteria, TimeParsingError};
+use crate::util::DateTime;
 use std::str::FromStr;
-use strum::EnumString;
 
-pub fn post_query(client_query: &str) -> Result<(), Error> {
-    let mut post_column_filters: Vec<UnparsedFilter<PostColumnToken>> = Vec::new();
-    let mut post_column_sorts: Vec<ParsedSort<PostColumnToken>> = Vec::new();
-    let mut join_filters: Vec<UnparsedFilter<JoinToken>> = Vec::new();
-    let mut join_sorts: Vec<ParsedSort<JoinToken>> = Vec::new();
-    let mut special_tokens: Vec<SpecialToken> = Vec::new();
-    let mut random_sort = false;
+pub fn str_criteria(filter: &str) -> Criteria<&str> {
+    if let Some(split_str) = filter.split_once("..") {
+        return match split_str {
+            (left, "") => Criteria::GreaterEq(left),
+            ("", right) => Criteria::LessEq(right),
+            (left, right) => Criteria::Range(left..right),
+        };
+    }
+    Criteria::Values(filter.split(',').collect())
+}
 
-    for mut term in client_query.split_whitespace() {
-        let negated = term.chars().nth(0) == Some('-');
-        if negated {
-            term = term.strip_prefix('-').unwrap();
-        }
+pub fn time_criteria(filter: &str) -> Result<Criteria<DateTime>, Error> {
+    if let Some(split_str) = filter.split_once("..") {
+        return match split_str {
+            (left, "") => parse_time(left).map(Criteria::GreaterEq).map_err(Error::from),
+            ("", right) => parse_time(right).map(Criteria::LessEq).map_err(Error::from),
+            (left, right) => Ok(Criteria::Range(parse_time(left)?..parse_time(right)?)),
+        };
+    }
+    filter
+        .split(',')
+        .map(parse_time)
+        .collect::<Result<_, _>>()
+        .map(Criteria::Values)
+        .map_err(Error::from)
+}
 
-        match term.split_once(':') {
-            Some(("special", value)) => special_tokens.push(SpecialToken::from_str(value).map_err(Box::from)?),
-            Some(("sort", "random")) => random_sort = true,
-            Some(("sort", value)) => {
-                if let Ok(kind) = PostColumnToken::from_str(value) {
-                    post_column_sorts.push(ParsedSort { kind, negated });
-                } else {
-                    let kind = JoinToken::from_str(value).map_err(Box::from)?;
-                    join_sorts.push(ParsedSort { kind, negated });
-                }
-            }
-            Some((key, criteria)) => {
-                if let Ok(kind) = PostColumnToken::from_str(key) {
-                    post_column_filters.push(UnparsedFilter {
-                        kind,
-                        criteria,
-                        negated,
-                    });
-                } else {
-                    let kind = JoinToken::from_str(key).map_err(Box::from)?;
-                    join_filters.push(UnparsedFilter {
-                        kind,
-                        criteria,
-                        negated,
-                    });
-                }
-            }
-            None => join_filters.push(UnparsedFilter {
-                kind: JoinToken::Tag,
-                criteria: term,
-                negated,
-            }),
-        }
+pub fn criteria<T>(filter: &str) -> Result<Criteria<T>, Error>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::error::Error,
+    <T as FromStr>::Err: 'static,
+{
+    if let Some(split_str) = filter.split_once("..") {
+        return match split_str {
+            (left, "") => Ok(Criteria::GreaterEq(left.parse().map_err(Box::from)?)),
+            ("", right) => Ok(Criteria::LessEq(right.parse().map_err(Box::from)?)),
+            (left, right) => Ok(Criteria::Range(left.parse().map_err(Box::from)?..right.parse().map_err(Box::from)?)),
+        };
+    }
+    filter
+        .split(',')
+        .map(str::parse)
+        .collect::<Result<_, _>>()
+        .map(Criteria::Values)
+        .map_err(Box::from)
+        .map_err(Error::from)
+}
+
+fn parse_time(time: &str) -> Result<DateTime, TimeParsingError> {
+    if time == "today" {
+        return Ok(DateTime::today());
+    } else if time == "yesterday" {
+        return Ok(DateTime::yesterday());
     }
 
-    let query = post_column_filters
-        .into_iter()
-        .try_fold(post::table.into_boxed(), |query, filter| match filter.kind {
-            PostColumnToken::Id => apply_i32_filter(query, post::id, filter),
-            PostColumnToken::FileSize => apply_i64_filter(query, post::file_size, filter),
-            PostColumnToken::ImageWidth => apply_i32_filter(query, post::width, filter),
-            PostColumnToken::ImageHeight => apply_i32_filter(query, post::height, filter),
-            PostColumnToken::ImageArea => unimplemented!(),
-            PostColumnToken::ImageAspectRatio => unimplemented!(),
-            PostColumnToken::Safety => apply_i16_filter(query, post::safety, filter),
-            PostColumnToken::Type => apply_i16_filter(query, post::type_, filter),
-            PostColumnToken::ContentChecksum => Ok(apply_str_filter(query, post::checksum, filter)),
-            PostColumnToken::CreationTime => apply_time_filter(query, post::creation_time, filter),
-            PostColumnToken::LastEditTime => apply_time_filter(query, post::last_edit_time, filter),
-        });
+    let mut date_iterator = time.split('-');
+    let year: i32 = date_iterator
+        .next()
+        .ok_or(TimeParsingError::TooFewArgs)
+        .and_then(|value| value.parse().map_err(TimeParsingError::from))?;
+    let month: Option<u8> = date_iterator.next().map(|value| value.parse()).transpose()?;
+    let day: Option<u8> = date_iterator.next().map(|value| value.parse()).transpose()?;
+    if date_iterator.next().is_some() {
+        return Err(TimeParsingError::TooManyArgs);
+    }
 
-    Ok(())
+    DateTime::from_date(year, month.unwrap_or(1), day.unwrap_or(1)).map_err(TimeParsingError::from)
 }
 
-#[derive(Clone, Copy, EnumString)]
-#[strum(serialize_all = "kebab-case")]
-#[strum(use_phf)]
-enum PostColumnToken {
-    Id,
-    FileSize,
-    #[strum(serialize = "width", serialize = "image-width")]
-    ImageWidth,
-    #[strum(serialize = "height", serialize = "image-height")]
-    ImageHeight,
-    #[strum(serialize = "area", serialize = "image-area")]
-    ImageArea,
-    #[strum(serialize = "ar", serialize = "image-ar", serialize = "image-aspect-ratio")]
-    ImageAspectRatio,
-    #[strum(serialize = "rating", serialize = "safety")]
-    Safety,
-    Type,
-    ContentChecksum,
-    #[strum(
-        serialize = "date",
-        serialize = "time",
-        serialize = "creation-date",
-        serialize = "creation-time"
-    )]
-    CreationTime,
-    #[strum(
-        serialize = "edit-date",
-        serialize = "edit-time",
-        serialize = "last-edit-date",
-        serialize = "last-edit-time"
-    )]
-    LastEditTime,
-}
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::model::enums::PostSafety;
 
-#[derive(Clone, Copy, EnumString)]
-#[strum(serialize_all = "kebab-case")]
-#[strum(use_phf)]
-enum JoinToken {
-    Tag,
-    #[strum(serialize = "submit", serialize = "upload", serialize = "uploader")]
-    Uploader,
-    Comment,
-    Fav,
-    Pool,
-    TagCount,
-    CommentCount,
-    FavCount,
-    NoteCount,
-    NoteText,
-    RelationCount,
-    FeatureCount,
-    #[strum(serialize = "comment-date", serialize = "comment-time")]
-    CommentTime,
-    #[strum(serialize = "fav-date", serialize = "fav-time")]
-    FavTime,
-    #[strum(serialize = "feature-date", serialize = "feature-time")]
-    FeatureTime,
-}
+    #[test]
+    fn time_parsing() {
+        assert_eq!(parse_time("1970").unwrap(), DateTime::from_date(1970, 1, 1).unwrap());
+        assert_eq!(parse_time("2024").unwrap(), DateTime::from_date(2024, 1, 1).unwrap());
+        assert_eq!(parse_time("2024-7").unwrap(), DateTime::from_date(2024, 7, 1).unwrap());
+        assert_eq!(parse_time("2024-7-11").unwrap(), DateTime::from_date(2024, 7, 11).unwrap());
+        assert_eq!(parse_time("2024-07-11").unwrap(), DateTime::from_date(2024, 7, 11).unwrap());
+        assert_eq!(parse_time("2024-2-29").unwrap(), DateTime::from_date(2024, 2, 29).unwrap());
 
-#[derive(Clone, Copy, EnumString)]
-#[strum(serialize_all = "kebab-case")]
-enum SpecialToken {
-    Liked,
-    Disliked,
-    Fav,
-    Tumbleweed,
+        assert!(parse_time("").is_err());
+        assert!(parse_time("2000-01-01-01").is_err());
+        assert!(parse_time("2025-2-29").is_err());
+        assert!(parse_time("Hello World!").is_err());
+        assert!(parse_time("a-b-c").is_err());
+        assert!(parse_time("--").is_err());
+    }
+
+    #[test]
+    fn criteria_parsing() {
+        assert_eq!(criteria("1").unwrap(), Criteria::Values(vec![1]));
+        assert_eq!(criteria("-137").unwrap(), Criteria::Values(vec![-137]));
+        assert_eq!(criteria("0,1,2,3").unwrap(), Criteria::Values(vec![0, 1, 2, 3]));
+        assert_eq!(criteria("-4,-1,0,0,70,6").unwrap(), Criteria::Values(vec![-4, -1, 0, 0, 70, 6]));
+        assert_eq!(criteria("7..").unwrap(), Criteria::GreaterEq(7));
+        assert_eq!(criteria("..7").unwrap(), Criteria::LessEq(7));
+        assert_eq!(criteria("0..1").unwrap(), Criteria::Range(0..1));
+        assert_eq!(criteria("-10..5").unwrap(), Criteria::Range(-10..5));
+
+        assert_eq!(str_criteria("str"), Criteria::Values(vec!["str"]));
+        assert_eq!(str_criteria("a,b,c"), Criteria::Values(vec!["a", "b", "c"]));
+        assert_eq!(str_criteria("a.."), Criteria::GreaterEq("a"));
+        assert_eq!(str_criteria("..z"), Criteria::LessEq("z"));
+        assert_eq!(str_criteria("a..z"), Criteria::Range("a".."z"));
+
+        assert_eq!(criteria("safe").unwrap(), Criteria::Values(vec![PostSafety::Safe]));
+        assert_eq!(criteria("safe..unsafe").unwrap(), Criteria::Range(PostSafety::Safe..PostSafety::Unsafe));
+    }
 }

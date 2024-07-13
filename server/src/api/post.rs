@@ -7,11 +7,14 @@ use crate::model::comment::Comment;
 use crate::model::enums::MimeType;
 use crate::model::enums::{PostSafety, PostType};
 use crate::model::post::{
-    NewPost, NewPostRelation, NewPostSignature, Post, PostFavorite, PostNote, PostSignature, PostTag,
+    NewPost, NewPostRelation, NewPostSignature, Post, PostFavorite, PostFeature, PostNote, PostSignature, PostTag,
 };
 use crate::model::tag::Tag;
 use crate::model::user::User;
-use crate::schema::{post, post_favorite, post_relation, post_score, post_signature, post_tag, tag, user};
+use crate::schema::{
+    post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag, tag, user,
+};
+use crate::search;
 use crate::util::DateTime;
 use crate::{api, config, filesystem};
 use diesel::prelude::*;
@@ -150,7 +153,7 @@ impl PostInfo {
                 post_score::table
                     .find((post.id, id))
                     .select(post_score::score)
-                    .first::<i32>(conn)
+                    .first(conn)
                     .optional()
             })
             .transpose()?;
@@ -166,8 +169,13 @@ impl PostInfo {
         let tag_count = post.tag_count(conn)?;
         let favorite_count = post.favorite_count(conn)?;
         let note_count = notes.len() as i64;
-        let relation_count = relations.len() as i64;
         let feature_count = post.feature_count(conn)?;
+        let relation_count = relations.len() as i64;
+        let last_feature_time = PostFeature::belonging_to(&post)
+            .select(post_feature::time)
+            .order_by(post_feature::time.desc())
+            .first(conn)
+            .optional()?;
         let comments = Comment::belonging_to(&post)
             .select(Comment::as_select())
             .load(conn)?
@@ -216,7 +224,7 @@ impl PostInfo {
             note_count,
             feature_count,
             relation_count,
-            last_feature_time: None, // TODO
+            last_feature_time,
             favorited_by,
             has_custom_thumbnail: false, // TODO
             mime_type: post.mime_type,
@@ -235,21 +243,21 @@ fn list_posts(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<Pa
     let client_id = client.map(|user| user.id);
     let offset = query_info.offset.unwrap_or(0);
     let limit = std::cmp::min(query_info.limit, MAX_POSTS_PER_PAGE);
+    let query = search::post::build_query(client_id, query_info.query.as_deref().unwrap_or(""))?;
+    println!("{}", diesel::debug_query::<diesel::pg::Pg, _>(&query).to_string());
 
     let mut conn = crate::establish_connection()?;
-    let posts = post::table
-        .select(Post::as_select())
-        .limit(limit)
-        .offset(offset)
-        .load(&mut conn)?;
+    let posts: Vec<Post> = query.load(&mut conn)?;
 
     Ok(PagedPostInfo {
-        query: query_info.query.unwrap_or(String::new()),
+        query: query_info.query,
         offset,
         limit,
-        total: Post::count(&mut conn)?,
+        total: posts.len() as i64,
         results: posts
             .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
             .map(|post| PostInfo::new(&mut conn, post, client_id))
             .collect::<QueryResult<_>>()?,
     })

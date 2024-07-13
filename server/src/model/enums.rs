@@ -43,9 +43,10 @@ where
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, FromRepr, EnumString, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
 #[repr(i16)]
 pub enum PostType {
     Image,

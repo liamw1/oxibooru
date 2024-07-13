@@ -161,6 +161,7 @@ impl User {
         let new_post_feature = NewPostFeature {
             post_id: post.id,
             user_id: self.id,
+            time: DateTime::now(),
         };
         diesel::insert_into(post_feature::table)
             .values(&new_post_feature)

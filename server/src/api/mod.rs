@@ -75,6 +75,7 @@ pub enum Error {
     // Someone else modified this in the meantime. Please try again.
     #[error("Resouce was modified by someone else")]
     ResourceModified,
+    SearchError(#[from] crate::search::Error),
     WarpError(#[from] warp::Error),
 }
 
@@ -107,6 +108,7 @@ impl Error {
             Self::OutOfDate => StatusCode::CONFLICT,
             Self::ResourceDoesNotExist => StatusCode::GONE,
             Self::ResourceModified => StatusCode::CONFLICT,
+            Self::SearchError(_) => StatusCode::BAD_REQUEST,
             Self::WarpError(_) => StatusCode::BAD_REQUEST,
         }
     }
@@ -128,6 +130,7 @@ impl Error {
             Self::OutOfDate => "Out-of-date",
             Self::ResourceDoesNotExist => "Resource Does Not Exist",
             Self::ResourceModified => "Resource Modified",
+            Self::SearchError(_) => "Search Error",
             Self::WarpError(_) => "Warp Error",
         }
     }
@@ -178,7 +181,7 @@ struct PagedQuery {
 
 #[derive(Serialize)]
 struct PagedResponse<T: Serialize> {
-    query: String,
+    query: Option<String>,
     offset: i64,
     limit: i64,
     total: i64,
