@@ -7,9 +7,9 @@
 macro_rules! apply_sort {
     ($query:expr, $expression:expr, $sort:expr) => {
         if $sort.negated {
-            $query.order($expression.desc())
+            $query.then_order_by($expression.desc())
         } else {
-            $query.order($expression.asc())
+            $query.then_order_by($expression.asc())
         }
     };
 }

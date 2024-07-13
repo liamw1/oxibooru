@@ -752,8 +752,6 @@ data.
     | `uploader`           | uploaded by given user (accepts wildcards)                                                                                              |
     | `upload`             | alias of upload                                                                                                                         |
     | `submit`             | alias of upload                                                                                                                         |
-    | `comment`            | commented by given user (accepts wildcards)                                                                                             |
-    | `fav`                | favorited by given user (accepts wildcards)                                                                                             |
     | `pool`               | belonging to the pool with the given ID                                                                                                 |
     | `tag-count`          | having given number of tags                                                                                                             |
     | `comment-count`      | having given number of comments                                                                                                         |

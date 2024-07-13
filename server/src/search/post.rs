@@ -10,7 +10,6 @@ use crate::{apply_filter, apply_having_clause, apply_sort, apply_str_filter, app
 use diesel::dsl::{self, AsSelect, Eq, GroupBy, InnerJoinOn, IntoBoxed, LeftJoin, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use diesel::sql_types::Bool;
 use std::str::FromStr;
 use strum::EnumString;
 
@@ -78,8 +77,6 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
         }
     }
 
-    // let expr: Box<dyn BoxableExpression<_, Pg, SqlType = Bool>> = Box::new(post::id.eq(0));
-
     // Performing all potentially necessary joins here and hope that the optimizer eliminates the unnecessary ones
     let joined_tables = post::table
         .select(Post::as_select())
@@ -111,8 +108,6 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
 
             Token::Tag => Ok(apply_str_filter!(query, tag_name::name, filter)),
             Token::Uploader => Ok(apply_str_filter!(query, user::name, filter)),
-            Token::Comment => unimplemented!(),
-            Token::Fav => unimplemented!(),
             Token::Pool => apply_filter!(query, pool_post::pool_id, filter, i32),
             Token::TagCount => apply_having_clause!(query, post_tag::tag_id, filter),
             Token::CommentCount => apply_having_clause!(query, comment::id, filter),
@@ -152,38 +147,33 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
         unimplemented!()
     }
 
-    Ok(sorts
-        .into_iter()
-        .rev() // Apply in order of appearance in query
-        .fold(query, |query, sort| match sort.kind {
-            Token::Id => apply_sort!(query, post::id, sort),
-            Token::FileSize => apply_sort!(query, post::file_size, sort),
-            Token::ImageWidth => apply_sort!(query, post::width, sort),
-            Token::ImageHeight => apply_sort!(query, post::height, sort),
-            Token::ImageArea => apply_sort!(query, post::width * post::height, sort),
-            Token::ImageAspectRatio => apply_sort!(query, post::width / post::height, sort),
-            Token::Safety => apply_sort!(query, post::safety, sort),
-            Token::Type => apply_sort!(query, post::type_, sort),
-            Token::ContentChecksum => apply_sort!(query, post::checksum, sort),
-            Token::CreationTime => apply_sort!(query, post::creation_time, sort),
-            Token::LastEditTime => apply_sort!(query, post::last_edit_time, sort),
+    Ok(sorts.into_iter().fold(query, |query, sort| match sort.kind {
+        Token::Id => apply_sort!(query, post::id, sort),
+        Token::FileSize => apply_sort!(query, post::file_size, sort),
+        Token::ImageWidth => apply_sort!(query, post::width, sort),
+        Token::ImageHeight => apply_sort!(query, post::height, sort),
+        Token::ImageArea => apply_sort!(query, post::width * post::height, sort),
+        Token::ImageAspectRatio => apply_sort!(query, post::width / post::height, sort),
+        Token::Safety => apply_sort!(query, post::safety, sort),
+        Token::Type => apply_sort!(query, post::type_, sort),
+        Token::ContentChecksum => apply_sort!(query, post::checksum, sort),
+        Token::CreationTime => apply_sort!(query, post::creation_time, sort),
+        Token::LastEditTime => apply_sort!(query, post::last_edit_time, sort),
 
-            Token::Tag => apply_sort!(query, tag_name::name, sort),
-            Token::Uploader => apply_sort!(query, user::name, sort),
-            Token::Comment => unimplemented!(),
-            Token::Fav => unimplemented!(),
-            Token::Pool => apply_sort!(query, pool_post::pool_id, sort),
-            Token::TagCount => apply_sort!(query, dsl::count(post_tag::tag_id), sort),
-            Token::CommentCount => apply_sort!(query, dsl::count(comment::id), sort),
-            Token::FavCount => apply_sort!(query, dsl::count(post_favorite::user_id), sort),
-            Token::NoteCount => apply_sort!(query, dsl::count(post_note::id), sort),
-            Token::NoteText => apply_sort!(query, post_note::text, sort),
-            Token::RelationCount => apply_sort!(query, dsl::count(post_relation::child_id), sort),
-            Token::FeatureCount => apply_sort!(query, dsl::count(post_feature::id), sort),
-            Token::CommentTime => apply_sort!(query, comment::creation_time, sort),
-            Token::FavTime => apply_sort!(query, post_favorite::time, sort),
-            Token::FeatureTime => apply_sort!(query, post_feature::time, sort),
-        }))
+        Token::Tag => apply_sort!(query, tag_name::name, sort),
+        Token::Uploader => apply_sort!(query, user::name, sort),
+        Token::Pool => apply_sort!(query, pool_post::pool_id, sort),
+        Token::TagCount => apply_sort!(query, dsl::count(post_tag::tag_id), sort),
+        Token::CommentCount => apply_sort!(query, dsl::count(comment::id), sort),
+        Token::FavCount => apply_sort!(query, dsl::count(post_favorite::user_id), sort),
+        Token::NoteCount => apply_sort!(query, dsl::count(post_note::id), sort),
+        Token::NoteText => apply_sort!(query, post_note::text, sort),
+        Token::RelationCount => apply_sort!(query, dsl::count(post_relation::child_id), sort),
+        Token::FeatureCount => apply_sort!(query, dsl::count(post_feature::id), sort),
+        Token::CommentTime => apply_sort!(query, comment::creation_time, sort),
+        Token::FavTime => apply_sort!(query, post_favorite::time, sort),
+        Token::FeatureTime => apply_sort!(query, post_feature::time, sort),
+    }))
 }
 
 #[derive(Clone, Copy, EnumString)]
@@ -228,8 +218,6 @@ enum Token {
     Tag,
     #[strum(serialize = "submit", serialize = "upload", serialize = "uploader")]
     Uploader,
-    Comment,
-    Fav,
     Pool,
     TagCount,
     CommentCount,
