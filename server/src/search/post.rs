@@ -7,41 +7,13 @@ use crate::schema::{
 use crate::search::Error;
 use crate::search::{ParsedSort, UnparsedFilter};
 use crate::{apply_filter, apply_having_clause, apply_sort, apply_str_filter, apply_time_filter};
-use diesel::dsl::{self, AsSelect, Eq, GroupBy, InnerJoinOn, IntoBoxed, LeftJoin, Select};
+use diesel::dsl::{self, AsSelect, IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use std::str::FromStr;
 use strum::EnumString;
 
-pub type BoxedQuery<'a> = IntoBoxed<
-    'a,
-    LeftJoin<
-        LeftJoin<
-            LeftJoin<
-                LeftJoin<
-                    LeftJoin<
-                        LeftJoin<
-                            LeftJoin<
-                                LeftJoin<
-                                    LeftJoin<GroupBy<Select<post::table, AsSelect<Post, Pg>>, post::id>, user::table>,
-                                    comment::table,
-                                >,
-                                pool_post::table,
-                            >,
-                            post_score::table,
-                        >,
-                        post_favorite::table,
-                    >,
-                    post_feature::table,
-                >,
-                post_relation::table,
-            >,
-            post_note::table,
-        >,
-        InnerJoinOn<post_tag::table, tag_name::table, Eq<post_tag::tag_id, tag_name::tag_id>>,
-    >,
-    Pg,
->;
+pub type BoxedQuery<'a> = IntoBoxed<'a, Select<post::table, AsSelect<Post, Pg>>, Pg>;
 
 pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery, Error> {
     let mut filters: Vec<UnparsedFilter<Token>> = Vec::new();
@@ -77,28 +49,9 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
         }
     }
 
-    /*
-        Performing all potentially necessary joins here because diesel makes dynamically joining very difficult.
-        Preemptively joining all these tables can make for some pretty inefficient queries...
-        If Postgres had DISTINCT left join elimination the query planner could remove the unneeded ones automatically.
-        TODO: Get rid of the unnecessary joins somehow.
-    */
-    let joined_tables = post::table
-        .select(Post::as_select())
-        .group_by(post::id)
-        .left_join(user::table)
-        .left_join(comment::table)
-        .left_join(pool_post::table)
-        .left_join(post_score::table)
-        .left_join(post_favorite::table)
-        .left_join(post_feature::table)
-        .left_join(post_relation::table)
-        .left_join(post_note::table)
-        .left_join(post_tag::table.inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id))));
-
     let query = filters
         .into_iter()
-        .try_fold(joined_tables.into_boxed(), |query, filter| match filter.kind {
+        .try_fold(post::table.select(Post::as_select()).into_boxed(), |query, filter| match filter.kind {
             Token::Id => apply_filter!(query, post::id, filter, i32),
             Token::FileSize => apply_filter!(query, post::file_size, filter, i64),
             Token::ImageWidth => apply_filter!(query, post::width, filter, i32),
@@ -110,42 +63,149 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
             Token::ContentChecksum => Ok(apply_str_filter!(query, post::checksum, filter)),
             Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
             Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
-
-            Token::Tag => Ok(apply_str_filter!(query, tag_name::name, filter)),
-            Token::Uploader => Ok(apply_str_filter!(query, user::name, filter)),
-            Token::Pool => apply_filter!(query, pool_post::pool_id, filter, i32),
-            Token::TagCount => apply_having_clause!(query, post_tag::tag_id, filter),
-            Token::CommentCount => apply_having_clause!(query, comment::id, filter),
-            Token::FavCount => apply_having_clause!(query, post_favorite::user_id, filter),
-            Token::NoteCount => apply_having_clause!(query, post_note::id, filter),
-            Token::NoteText => Ok(apply_str_filter!(query, post_note::text, filter)),
-            Token::RelationCount => apply_having_clause!(query, post_relation::child_id, filter),
-            Token::FeatureCount => apply_having_clause!(query, post_feature::id, filter),
-            Token::CommentTime => apply_time_filter!(query, comment::creation_time, filter),
-            Token::FavTime => apply_time_filter!(query, post_favorite::time, filter),
-            Token::FeatureTime => apply_time_filter!(query, post_feature::time, filter),
+            Token::Tag => {
+                let tags = post_tag::table
+                    .select(post_tag::post_id)
+                    .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
+                    .into_boxed();
+                let subquery = apply_str_filter!(tags, tag_name::name, filter);
+                Ok(query.filter(post::id.eq_any(subquery)))
+            }
+            Token::Uploader => {
+                let users = user::table.select(user::id).into_boxed();
+                let subquery = apply_str_filter!(users, user::name, filter);
+                Ok(query
+                    .filter(post::user_id.is_not_null())
+                    .filter(post::user_id.assume_not_null().eq_any(subquery)))
+            }
+            Token::Pool => {
+                let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
+                apply_filter!(pool_posts, pool_post::pool_id, filter, i32)
+                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+            }
+            Token::TagCount => {
+                let post_tags = post::table
+                    .select(post::id)
+                    .left_join(post_tag::table)
+                    .group_by(post::id)
+                    .into_boxed();
+                apply_having_clause!(post_tags, post_tag::post_id, filter)
+                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+            }
+            Token::CommentCount => {
+                let comments = post::table
+                    .select(post::id)
+                    .left_join(comment::table)
+                    .group_by(post::id)
+                    .into_boxed();
+                apply_having_clause!(comments, comment::post_id, filter)
+                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+            }
+            Token::FavCount => {
+                let post_favorites = post::table
+                    .select(post::id)
+                    .left_join(post_favorite::table)
+                    .group_by(post::id)
+                    .into_boxed();
+                apply_having_clause!(post_favorites, post_favorite::post_id, filter)
+                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+            }
+            Token::NoteCount => {
+                let post_notes = post::table
+                    .select(post::id)
+                    .left_join(post_note::table)
+                    .group_by(post::id)
+                    .into_boxed();
+                apply_having_clause!(post_notes, post_note::post_id, filter)
+                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+            }
+            Token::NoteText => {
+                let post_notes = post_note::table.select(post_note::post_id).into_boxed();
+                let subquery = apply_str_filter!(post_notes, post_note::text, filter);
+                Ok(query.filter(post::id.eq_any(subquery)))
+            }
+            Token::RelationCount => {
+                let post_relations = post::table
+                    .select(post::id)
+                    .left_join(post_relation::table)
+                    .group_by(post::id)
+                    .into_boxed();
+                apply_having_clause!(post_relations, post_relation::parent_id, filter)
+                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+            }
+            Token::FeatureCount => {
+                let post_features = post::table
+                    .select(post::id)
+                    .left_join(post_feature::table)
+                    .group_by(post::id)
+                    .into_boxed();
+                apply_having_clause!(post_features, post_feature::post_id, filter)
+                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+            }
+            Token::CommentTime => {
+                let comments = comment::table.select(comment::post_id).into_boxed();
+                apply_time_filter!(comments, comment::creation_time, filter)
+                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+            }
+            Token::FavTime => {
+                let post_favorites = post_favorite::table.select(post_favorite::post_id).into_boxed();
+                apply_time_filter!(post_favorites, post_favorite::time, filter)
+                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+            }
+            Token::FeatureTime => {
+                let post_features = post_feature::table.select(post_feature::post_id).into_boxed();
+                apply_time_filter!(post_features, post_feature::time, filter)
+                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+            }
         })?;
 
     let query = special_tokens.into_iter().try_fold(query, |query, token| match token {
         SpecialToken::Liked => client.ok_or(Error::NotLoggedIn).map(|client_id| {
-            query
+            let subquery = post_score::table
+                .select(post_score::post_id)
                 .filter(post_score::user_id.eq(client_id))
-                .filter(post_score::score.eq(1))
+                .filter(post_score::score.eq(1));
+            query.filter(post::id.eq_any(subquery))
         }),
         SpecialToken::Disliked => client.ok_or(Error::NotLoggedIn).map(|client_id| {
-            query
+            let subquery = post_score::table
+                .select(post_score::post_id)
                 .filter(post_score::user_id.eq(client_id))
-                .filter(post_score::score.eq(-1))
+                .filter(post_score::score.eq(-1));
+            query.filter(post::id.eq_any(subquery))
         }),
-        SpecialToken::Fav => client
-            .ok_or(Error::NotLoggedIn)
-            .map(|client_id| query.filter(post_favorite::user_id.eq(client_id))),
-        SpecialToken::Tumbleweed => Ok(query.having(
-            dsl::count(post_score::user_id)
-                .eq(0)
-                .and(dsl::count(post_favorite::user_id).eq(0))
-                .and(dsl::count(comment::user_id).eq(0)),
-        )),
+        SpecialToken::Fav => client.ok_or(Error::NotLoggedIn).map(|client_id| {
+            let subquery = post_favorite::table
+                .select(post_favorite::post_id)
+                .filter(post_favorite::user_id.eq(client_id));
+            query.filter(post::id.eq_any(subquery))
+        }),
+        SpecialToken::Tumbleweed => {
+            // I'm not sure why these need to be boxed
+            let score_subquery = post::table
+                .select(post::id)
+                .left_join(post_score::table)
+                .group_by(post::id)
+                .having(dsl::count(post_score::post_id).eq(0))
+                .into_boxed();
+            let favorite_subquery = post::table
+                .select(post::id)
+                .left_join(post_favorite::table)
+                .group_by(post::id)
+                .having(dsl::count(post_favorite::post_id).eq(0))
+                .into_boxed();
+            let comment_subquery = post::table
+                .select(post::id)
+                .left_join(comment::table)
+                .group_by(post::id)
+                .having(dsl::count(comment::post_id).eq(0))
+                .into_boxed();
+
+            Ok(query
+                .filter(post::id.eq_any(score_subquery))
+                .filter(post::id.eq_any(favorite_subquery))
+                .filter(post::id.eq_any(comment_subquery)))
+        }
     })?;
 
     if random_sort {
@@ -166,19 +226,19 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
         Token::CreationTime => apply_sort!(query, post::creation_time, sort),
         Token::LastEditTime => apply_sort!(query, post::last_edit_time, sort),
 
-        Token::Tag => apply_sort!(query, tag_name::name, sort),
-        Token::Uploader => apply_sort!(query, user::name, sort),
-        Token::Pool => apply_sort!(query, pool_post::pool_id, sort),
-        Token::TagCount => apply_sort!(query, dsl::count(post_tag::tag_id), sort),
-        Token::CommentCount => apply_sort!(query, dsl::count(comment::id), sort),
-        Token::FavCount => apply_sort!(query, dsl::count(post_favorite::user_id), sort),
-        Token::NoteCount => apply_sort!(query, dsl::count(post_note::id), sort),
-        Token::NoteText => apply_sort!(query, post_note::text, sort),
-        Token::RelationCount => apply_sort!(query, dsl::count(post_relation::child_id), sort),
-        Token::FeatureCount => apply_sort!(query, dsl::count(post_feature::id), sort),
-        Token::CommentTime => apply_sort!(query, comment::creation_time, sort),
-        Token::FavTime => apply_sort!(query, post_favorite::time, sort),
-        Token::FeatureTime => apply_sort!(query, post_feature::time, sort),
+        Token::Tag => unimplemented!(),
+        Token::Uploader => unimplemented!(),
+        Token::Pool => unimplemented!(),
+        Token::TagCount => unimplemented!(),
+        Token::CommentCount => unimplemented!(),
+        Token::FavCount => unimplemented!(),
+        Token::NoteCount => unimplemented!(),
+        Token::NoteText => unimplemented!(),
+        Token::RelationCount => unimplemented!(),
+        Token::FeatureCount => unimplemented!(),
+        Token::CommentTime => unimplemented!(),
+        Token::FavTime => unimplemented!(),
+        Token::FeatureTime => unimplemented!(),
     }))
 }
 
