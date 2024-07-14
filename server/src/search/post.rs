@@ -77,7 +77,12 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
         }
     }
 
-    // Performing all potentially necessary joins here and hope that the optimizer eliminates the unnecessary ones
+    /*
+        Performing all potentially necessary joins here because diesel makes dynamically joining very difficult.
+        Preemptively joining all these tables can make for some pretty inefficient queries...
+        If Postgres had DISTINCT left join elimination the query planner could remove the unneeded ones automatically.
+        TODO: Get rid of the unnecessary joins somehow.
+    */
     let joined_tables = post::table
         .select(Post::as_select())
         .group_by(post::id)
@@ -144,7 +149,8 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
     })?;
 
     if random_sort {
-        unimplemented!()
+        define_sql_function!(fn random() -> Integer);
+        return Ok(query.order_by(random()));
     }
 
     Ok(sorts.into_iter().fold(query, |query, sort| match sort.kind {
