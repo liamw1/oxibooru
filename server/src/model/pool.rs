@@ -154,6 +154,14 @@ impl PoolName {
 
 pub type NewPoolPost = PoolPost;
 
+#[derive(Associations, Queryable, Selectable)]
+#[diesel(belongs_to(Post))]
+#[diesel(table_name = pool_post)]
+#[diesel(check_for_backend(Pg))]
+pub struct PoolPostPostId {
+    pub post_id: i32,
+}
+
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Pool), belongs_to(Post))]
 #[diesel(table_name = pool_post)]

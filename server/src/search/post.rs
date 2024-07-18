@@ -74,9 +74,7 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
             Token::Uploader => {
                 let users = user::table.select(user::id).into_boxed();
                 let subquery = apply_str_filter!(users, user::name, filter);
-                Ok(query
-                    .filter(post::user_id.is_not_null())
-                    .filter(post::user_id.assume_not_null().eq_any(subquery)))
+                Ok(query.filter(post::user_id.eq_any(subquery.nullable())))
             }
             Token::Pool => {
                 let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();

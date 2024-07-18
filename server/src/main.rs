@@ -17,8 +17,8 @@ use once_cell::sync::Lazy;
 
 const DEFAULT_PORT: u16 = 6666;
 static DATABASE_URL: Lazy<&'static str> = Lazy::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
-    Ok(_) => "postgres://postgres:admin@host.docker.internal/booru",
-    Err(_) => "postgres://postgres:admin@localhost/booru",
+    Ok(_) => "postgres://postgres:postgres@host.docker.internal/booru",
+    Err(_) => "postgres://postgres:postgres@localhost/booru",
 });
 
 fn establish_connection() -> ConnectionResult<PgConnection> {

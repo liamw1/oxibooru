@@ -27,6 +27,14 @@ pub struct NewPost<'a> {
     pub source: Option<&'a str>,
 }
 
+#[derive(Associations, Queryable, Selectable)]
+#[diesel(belongs_to(Post, foreign_key = id))]
+#[diesel(table_name = post)]
+#[diesel(check_for_backend(Pg))]
+pub struct PostId {
+    pub id: i32,
+}
+
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = post)]
@@ -121,6 +129,14 @@ impl Post {
 
 pub type NewPostRelation = PostRelation;
 
+#[derive(Associations, Queryable, Selectable)]
+#[diesel(belongs_to(Post, foreign_key = parent_id))]
+#[diesel(table_name = post_relation)]
+#[diesel(check_for_backend(Pg))]
+pub struct PostRelationPostId {
+    pub parent_id: i32,
+}
+
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post, foreign_key = parent_id))]
 #[diesel(table_name = post_relation)]
@@ -141,6 +157,14 @@ impl PostRelation {
 
 pub type NewPostTag = PostTag;
 
+#[derive(Associations, Queryable, Selectable)]
+#[diesel(belongs_to(Post))]
+#[diesel(table_name = post_tag)]
+#[diesel(check_for_backend(Pg))]
+pub struct PostTagPostId {
+    pub post_id: i32,
+}
+
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(Tag))]
 #[diesel(table_name = post_tag)]
@@ -158,6 +182,14 @@ impl PostTag {
 }
 
 pub type NewPostFavorite = PostFavorite;
+
+#[derive(Associations, Queryable, Selectable)]
+#[diesel(belongs_to(Post))]
+#[diesel(table_name = post_favorite)]
+#[diesel(check_for_backend(Pg))]
+pub struct PostFavoritePostId {
+    pub post_id: i32,
+}
 
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]
@@ -182,6 +214,14 @@ pub struct NewPostFeature {
     pub post_id: i32,
     pub user_id: i32,
     pub time: DateTime,
+}
+
+#[derive(Associations, Queryable, Selectable)]
+#[diesel(belongs_to(Post))]
+#[diesel(table_name = post_feature)]
+#[diesel(check_for_backend(Pg))]
+pub struct PostFeaturePostId {
+    pub post_id: i32,
 }
 
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
@@ -209,6 +249,14 @@ pub struct NewPostNote<'a> {
     pub text: String,
 }
 
+#[derive(Associations, Queryable, Selectable)]
+#[diesel(belongs_to(Post))]
+#[diesel(table_name = post_note)]
+#[diesel(check_for_backend(Pg))]
+pub struct PostNotePostId {
+    pub post_id: i32,
+}
+
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Post))]
 #[diesel(table_name = post_note)]
@@ -227,6 +275,14 @@ impl PostNote {
 }
 
 pub type NewPostScore = PostScore;
+
+#[derive(Associations, Queryable, Selectable)]
+#[diesel(belongs_to(Post))]
+#[diesel(table_name = post_score)]
+#[diesel(check_for_backend(Pg))]
+pub struct PostScorePostId {
+    pub post_id: i32,
+}
 
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]

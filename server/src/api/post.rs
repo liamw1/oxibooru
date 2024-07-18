@@ -3,20 +3,24 @@ use crate::api::micro::{MicroPool, MicroPost, MicroTag, MicroUser};
 use crate::api::AuthResult;
 use crate::auth::content;
 use crate::image::signature;
-use crate::model::comment::Comment;
-use crate::model::enums::MimeType;
-use crate::model::enums::{PostSafety, PostType};
+use crate::model::comment::{Comment, CommentPostId};
+use crate::model::enums::{AvatarStyle, MimeType, PostSafety, PostType};
+use crate::model::pool::{Pool, PoolPost, PoolPostPostId};
 use crate::model::post::{
-    NewPost, NewPostRelation, NewPostSignature, Post, PostFavorite, PostFeature, PostNote, PostSignature, PostTag,
+    NewPost, NewPostRelation, NewPostSignature, Post, PostFavorite, PostFavoritePostId, PostFeature, PostFeaturePostId,
+    PostId, PostNote, PostNotePostId, PostRelation, PostRelationPostId, PostScore, PostScorePostId, PostSignature,
+    PostTag, PostTagPostId,
 };
 use crate::model::tag::Tag;
 use crate::model::user::User;
 use crate::schema::{
-    post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag, tag, user,
+    comment, pool, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
+    tag, user,
 };
 use crate::search;
 use crate::util::DateTime;
 use crate::{api, config, filesystem};
+use diesel::dsl;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use warp::{Filter, Rejection, Reply};
@@ -234,6 +238,289 @@ impl PostInfo {
     }
 }
 
+// TODO: Make Value serialize as T, Null serialize as "null"
+// TODO: Implement Default so that .unwrap_or_default() can be used
+#[derive(Clone, Serialize)]
+enum Nullable<T> {
+    Value(T),
+    Null,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct PostInfo2 {
+    version: DateTime,
+    id: i32,
+    user: Option<Nullable<MicroUser>>,
+    file_size: Option<i64>,
+    canvas_width: Option<i32>,
+    canvas_height: Option<i32>,
+    safety: Option<PostSafety>,
+    type_: Option<PostType>,
+    mime_type: Option<MimeType>,
+    checksum: Option<String>,
+    #[serde(rename = "checksumMD5")]
+    checksum_md5: Option<Nullable<String>>,
+    flags: Option<Nullable<String>>,
+    source: Option<Nullable<String>>,
+    creation_time: Option<DateTime>,
+    last_edit_time: Option<DateTime>,
+    content_url: Option<String>,
+    thumbnail_url: Option<String>,
+    tags: Option<Vec<MicroTag>>,
+    comments: Option<Vec<CommentInfo>>,
+    relations: Option<Vec<MicroPost>>,
+    pools: Option<Vec<MicroPool>>,
+    notes: Option<Vec<PostNoteInfo>>,
+    score: Option<i64>,
+    own_score: Option<i32>,
+    own_favorite: Option<bool>,
+    tag_count: Option<i64>,
+    comment_count: Option<i64>,
+    relation_count: Option<i64>,
+    note_count: Option<i64>,
+    favorite_count: Option<i64>,
+    feature_count: Option<i64>,
+    last_feature_time: Option<Nullable<DateTime>>,
+    favorited_by: Option<Vec<MicroUser>>,
+    has_custom_thumbnail: Option<bool>,
+}
+
+impl PostInfo2 {
+    fn get(conn: &mut PgConnection, client: Option<i32>, mut posts: Vec<Post>) -> QueryResult<Vec<PostInfo2>> {
+        let post_ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
+        // TODO: Remove .clone()
+        let mut owners: Vec<Nullable<MicroUser>> = post::table
+            .filter(post::id.eq_any(&post_ids))
+            .inner_join(user::table)
+            .select((PostId::as_select(), user::name, user::avatar_style))
+            .load::<(PostId, String, AvatarStyle)>(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|post_owners| {
+                post_owners
+                    .first()
+                    .map(|(_, username, avatar_style)| MicroUser::new2(username.clone(), *avatar_style))
+                    .map(Nullable::Value)
+                    .unwrap_or(Nullable::Null)
+            })
+            .collect();
+        let mut content_urls = posts
+            .iter()
+            .map(|post| content::post_content_url(post.id, post.mime_type))
+            .collect::<Vec<_>>();
+        let mut thumbnail_urls = posts
+            .iter()
+            .map(|post| post.id)
+            .map(content::post_thumbnail_url)
+            .collect::<Vec<_>>();
+        let mut tags: Vec<Vec<MicroTag>> = PostTag::belonging_to(&posts)
+            .inner_join(tag::table.on(post_tag::tag_id.eq(tag::id)))
+            .select((PostTagPostId::as_select(), Tag::as_select()))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|post_tags| post_tags.into_iter().map(|(_, tag)| MicroTag::new(conn, tag)).collect())
+            .collect::<QueryResult<_>>()?;
+        let mut comments: Vec<Vec<CommentInfo>> = Comment::belonging_to(&posts)
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|post_comments| {
+                post_comments
+                    .into_iter()
+                    .map(|comment| CommentInfo::new(conn, comment, client))
+                    .collect()
+            })
+            .collect::<QueryResult<_>>()?;
+        let mut relations: Vec<Vec<MicroPost>> = PostRelation::belonging_to(&posts)
+            .inner_join(post::table.on(post::id.eq(post_relation::child_id)))
+            .select((PostRelationPostId::as_select(), Post::as_select()))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|post_relations| {
+                post_relations
+                    .into_iter()
+                    .map(|(_, relation)| MicroPost::new(&relation))
+                    .collect()
+            })
+            .collect();
+        let mut pools: Vec<Vec<MicroPool>> = PoolPost::belonging_to(&posts)
+            .inner_join(pool::table)
+            .select((PoolPostPostId::as_select(), Pool::as_select()))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|pools| pools.into_iter().map(|(_, pool)| MicroPool::new(conn, pool)).collect())
+            .collect::<QueryResult<_>>()?;
+        let mut notes: Vec<Vec<PostNoteInfo>> = PostNote::belonging_to(&posts)
+            .select(PostNote::as_select())
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|post_notes| post_notes.into_iter().map(PostNoteInfo::new).collect())
+            .collect();
+        let mut scores: Vec<i64> = PostScore::belonging_to(&posts)
+            .group_by(post_score::post_id)
+            .select((PostScorePostId::as_select(), dsl::sum(post_score::score)))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|post_scores| {
+                post_scores
+                    .first()
+                    .map(|(_, score)| *score)
+                    .flatten()
+                    .unwrap_or_default()
+            })
+            .collect();
+        let mut client_scores: Vec<i32> = client
+            .map(|id| {
+                PostScore::belonging_to(&posts)
+                    .filter(post_score::user_id.eq(id))
+                    .load::<PostScore>(conn)
+            })
+            .transpose()?
+            .map(|results| {
+                results
+                    .grouped_by(&posts)
+                    .into_iter()
+                    .map(|scores| scores.first().map(|post_score| post_score.score).unwrap_or_default())
+                    .collect()
+            })
+            .unwrap_or(vec![0; posts.len()]);
+        let mut client_favorites: Vec<bool> = client
+            .map(|id| {
+                PostFavorite::belonging_to(&posts)
+                    .filter(post_favorite::user_id.eq(id))
+                    .load::<PostFavorite>(conn)
+            })
+            .transpose()?
+            .map(|results| {
+                results
+                    .grouped_by(&posts)
+                    .into_iter()
+                    .map(|fav| fav.first().is_some())
+                    .collect()
+            })
+            .unwrap_or(vec![false; posts.len()]);
+        let mut tag_counts: Vec<i64> = PostTag::belonging_to(&posts)
+            .group_by(post_tag::post_id)
+            .select((PostTagPostId::as_select(), dsl::count(post_tag::tag_id)))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
+            .collect();
+        let mut comment_counts: Vec<i64> = Comment::belonging_to(&posts)
+            .group_by(comment::post_id)
+            .select((CommentPostId::as_select(), dsl::count(comment::post_id)))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
+            .collect();
+        let mut relation_counts: Vec<i64> = PostRelation::belonging_to(&posts)
+            .group_by(post_relation::parent_id)
+            .select((PostRelationPostId::as_select(), dsl::count(post_relation::child_id)))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
+            .collect();
+        let mut note_counts: Vec<i64> = PostNote::belonging_to(&posts)
+            .group_by(post_note::post_id)
+            .select((PostNotePostId::as_select(), dsl::count(post_note::id)))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
+            .collect();
+        let mut favorite_counts: Vec<i64> = PostFavorite::belonging_to(&posts)
+            .group_by(post_favorite::post_id)
+            .select((PostFavoritePostId::as_select(), dsl::count(post_favorite::user_id)))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
+            .collect();
+        let mut feature_counts: Vec<i64> = PostFeature::belonging_to(&posts)
+            .group_by(post_feature::post_id)
+            .select((PostFeaturePostId::as_select(), dsl::count(post_feature::id)))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
+            .collect();
+        let mut last_feature_times: Vec<Nullable<DateTime>> = PostFeature::belonging_to(&posts)
+            .group_by(post_feature::post_id)
+            .select((PostFeaturePostId::as_select(), dsl::max(post_feature::time)))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|feature_times| {
+                feature_times
+                    .first()
+                    .map(|(_, time)| *time)
+                    .flatten()
+                    .map(Nullable::Value)
+                    .unwrap_or(Nullable::Null)
+            })
+            .collect();
+        let mut users_who_favorited: Vec<Vec<MicroUser>> = PostFavorite::belonging_to(&posts)
+            .inner_join(user::table)
+            .select((PostFavoritePostId::as_select(), User::as_select()))
+            .load(conn)?
+            .grouped_by(&posts)
+            .into_iter()
+            .map(|users| users.into_iter().map(|(_, user)| MicroUser::new(user)).collect())
+            .collect();
+
+        let results: Vec<PostInfo2> = Vec::new();
+        while let Some(post) = posts.pop() {
+            PostInfo2 {
+                version: post.last_edit_time,
+                id: post.id,
+                user: owners.pop(),
+                file_size: Some(post.file_size),
+                canvas_width: Some(post.width),
+                canvas_height: Some(post.height),
+                safety: Some(post.safety),
+                type_: Some(post.type_),
+                mime_type: Some(post.mime_type),
+                checksum: Some(post.checksum),
+                checksum_md5: Some(post.checksum_md5.map(Nullable::Value).unwrap_or(Nullable::Null)),
+                flags: Some(post.flags.map(Nullable::Value).unwrap_or(Nullable::Null)),
+                source: Some(post.source.map(Nullable::Value).unwrap_or(Nullable::Null)),
+                creation_time: Some(post.creation_time),
+                last_edit_time: Some(post.last_edit_time),
+                content_url: content_urls.pop(),
+                thumbnail_url: thumbnail_urls.pop(),
+                tags: tags.pop(),
+                relations: relations.pop(),
+                notes: notes.pop(),
+                score: scores.pop(),
+                own_score: client_scores.pop(),
+                own_favorite: client_favorites.pop(),
+                tag_count: tag_counts.pop(),
+                favorite_count: favorite_counts.pop(),
+                comment_count: comment_counts.pop(),
+                note_count: note_counts.pop(),
+                feature_count: feature_counts.pop(),
+                relation_count: relation_counts.pop(),
+                last_feature_time: last_feature_times.pop(),
+                favorited_by: users_who_favorited.pop(),
+                has_custom_thumbnail: Some(false), // TODO
+                comments: comments.pop(),
+                pools: pools.pop(),
+            };
+        }
+
+        Ok(results)
+    }
+}
+
 fn list_posts(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<PagedPostInfo, api::Error> {
     println!("Query: {}", query_info.query.as_deref().unwrap_or(""));
 
@@ -244,7 +531,7 @@ fn list_posts(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<Pa
     let offset = query_info.offset.unwrap_or(0);
     let limit = std::cmp::min(query_info.limit, MAX_POSTS_PER_PAGE);
     let query = search::post::build_query(client_id, query_info.query.as_deref().unwrap_or(""))?;
-    println!("{}", diesel::debug_query::<diesel::pg::Pg, _>(&query).to_string());
+    println!("SQL Query: {}\n", diesel::debug_query::<diesel::pg::Pg, _>(&query).to_string());
 
     let mut conn = crate::establish_connection()?;
     let posts: Vec<Post> = query.load(&mut conn)?;

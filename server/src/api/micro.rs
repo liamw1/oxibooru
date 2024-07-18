@@ -1,4 +1,5 @@
 use crate::auth::content;
+use crate::model::enums::AvatarStyle;
 use crate::model::pool::Pool;
 use crate::model::post::Post;
 use crate::model::tag::Tag;
@@ -21,6 +22,14 @@ impl MicroUser {
             name: user.name,
             avatar_url,
         }
+    }
+
+    pub fn new2(name: String, avatar_style: AvatarStyle) -> Self {
+        let avatar_url = match avatar_style {
+            AvatarStyle::Gravatar => content::gravatar_url(&name),
+            AvatarStyle::Manual => content::custom_avatar_url(&name),
+        };
+        Self { name, avatar_url }
     }
 }
 

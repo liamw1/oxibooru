@@ -15,6 +15,14 @@ pub struct NewComment<'a> {
     pub text: &'a str,
 }
 
+#[derive(Associations, Queryable, Selectable)]
+#[diesel(belongs_to(Post))]
+#[diesel(table_name = comment)]
+#[diesel(check_for_backend(Pg))]
+pub struct CommentPostId {
+    pub post_id: i32,
+}
+
 #[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User), belongs_to(Post))]
 #[diesel(table_name = comment)]
