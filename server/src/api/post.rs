@@ -1,26 +1,13 @@
-use crate::api::comment::CommentInfo;
-use crate::api::micro::{MicroPool, MicroPost, MicroTag, MicroUser};
 use crate::api::AuthResult;
 use crate::auth::content;
 use crate::image::signature;
-use crate::model::comment::{Comment, CommentPostId};
-use crate::model::enums::{AvatarStyle, MimeType, PostSafety, PostType};
-use crate::model::pool::{Pool, PoolPost, PoolPostPostId};
-use crate::model::post::{
-    NewPost, NewPostRelation, NewPostSignature, Post, PostFavorite, PostFavoritePostId, PostFeature, PostFeaturePostId,
-    PostId, PostNote, PostNotePostId, PostRelation, PostRelationPostId, PostScore, PostScorePostId, PostSignature,
-    PostTag, PostTagPostId,
-};
-use crate::model::tag::Tag;
-use crate::model::user::User;
-use crate::schema::{
-    comment, pool, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
-    tag, user,
-};
+use crate::model::enums::{MimeType, PostSafety, PostType};
+use crate::model::post::{NewPost, NewPostRelation, NewPostSignature, Post, PostId, PostSignature};
+use crate::resource;
+use crate::resource::post::{FieldTable, PostInfo};
+use crate::schema::{post, post_relation, post_signature};
 use crate::search;
-use crate::util::DateTime;
 use crate::{api, config, filesystem};
-use diesel::dsl;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use warp::{Filter, Rejection, Reply};
@@ -69,484 +56,50 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete_post)
 }
 
+type PagedPostInfo = api::PagedResponse<PostInfo>;
+
 const MAX_POSTS_PER_PAGE: i64 = 50;
 const POST_SIMILARITY_THRESHOLD: f64 = 0.4;
 
-#[derive(Serialize)]
-struct PostNoteInfo {
-    polygon: Vec<u8>, // Probably not correct type, TODO
-    text: String,
-}
-
-impl PostNoteInfo {
-    fn new(note: PostNote) -> Self {
-        PostNoteInfo {
-            polygon: note.polygon,
-            text: note.text,
-        }
-    }
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PostInfo {
-    version: DateTime,
-    id: i32,
-    creation_time: DateTime,
-    last_edit_time: DateTime,
-    safety: PostSafety,
-    source: Option<String>,
-    type_: PostType,
-    checksum: String,
-    #[serde(rename = "checksumMD5")]
-    checksum_md5: Option<String>,
-    file_size: i64,
-    canvas_width: i32,
-    canvas_height: i32,
-    content_url: String,
-    thumbnail_url: String,
-    flags: Option<String>,
-    tags: Vec<MicroTag>,
-    relations: Vec<MicroPost>,
-    notes: Vec<PostNoteInfo>,
-    user: Option<MicroUser>,
-    score: i64,
-    own_score: Option<i32>,
-    own_favorite: bool,
-    tag_count: i64,
-    favorite_count: i64,
-    comment_count: i64,
-    note_count: i64,
-    feature_count: i64,
-    relation_count: i64,
-    last_feature_time: Option<DateTime>,
-    favorited_by: Vec<MicroUser>,
-    has_custom_thumbnail: bool,
-    mime_type: MimeType,
-    comments: Vec<CommentInfo>,
-    pools: Vec<MicroPool>,
-}
-type PagedPostInfo = api::PagedResponse<PostInfo>;
-
-impl PostInfo {
-    // Retrieving all information for now, but will need to add support for partial post queries, TODO
-    fn new(conn: &mut PgConnection, post: Post, client: Option<i32>) -> QueryResult<PostInfo> {
-        let content_url = content::post_content_url(post.id, post.mime_type);
-        let thumbnail_url = content::post_thumbnail_url(post.id);
-        let tags = PostTag::belonging_to(&post)
-            .inner_join(tag::table.on(post_tag::tag_id.eq(tag::id)))
-            .select(Tag::as_select())
-            .load(conn)?
-            .into_iter()
-            .map(|tag| MicroTag::new(conn, tag))
-            .collect::<QueryResult<_>>()?;
-        let relations = post.related_posts(conn)?.iter().map(MicroPost::new).collect::<Vec<_>>();
-        let notes = PostNote::belonging_to(&post)
-            .select(PostNote::as_select())
-            .load(conn)?
-            .into_iter()
-            .map(PostNoteInfo::new)
-            .collect::<Vec<_>>();
-        let score = post.score(conn)?;
-        let owner = post
-            .user_id
-            .map(|id| user::table.find(id).select(User::as_select()).first(conn))
-            .transpose()?;
-        let client_score = client
-            .map(|id| {
-                post_score::table
-                    .find((post.id, id))
-                    .select(post_score::score)
-                    .first(conn)
-                    .optional()
-            })
-            .transpose()?;
-        let client_favorited = client
-            .map(|id| {
-                post_favorite::table
-                    .find((post.id, id))
-                    .count()
-                    .first(conn)
-                    .map(|n: i64| n > 0)
-            })
-            .transpose()?;
-        let tag_count = post.tag_count(conn)?;
-        let favorite_count = post.favorite_count(conn)?;
-        let note_count = notes.len() as i64;
-        let feature_count = post.feature_count(conn)?;
-        let relation_count = relations.len() as i64;
-        let last_feature_time = PostFeature::belonging_to(&post)
-            .select(post_feature::time)
-            .order_by(post_feature::time.desc())
-            .first(conn)
-            .optional()?;
-        let comments = Comment::belonging_to(&post)
-            .select(Comment::as_select())
-            .load(conn)?
-            .into_iter()
-            .map(|comment| CommentInfo::new(conn, comment, client))
-            .collect::<QueryResult<Vec<_>>>()?;
-        let favorited_by = PostFavorite::belonging_to(&post)
-            .inner_join(user::table.on(post_favorite::user_id.eq(user::id)))
-            .select(User::as_select())
-            .load(conn)?
-            .into_iter()
-            .map(MicroUser::new)
-            .collect::<Vec<_>>();
-        let pools = post
-            .pools_in(conn)?
-            .into_iter()
-            .map(|pool| MicroPool::new(conn, pool))
-            .collect::<QueryResult<_>>()?;
-
-        Ok(PostInfo {
-            version: post.last_edit_time,
-            id: post.id,
-            creation_time: post.creation_time,
-            last_edit_time: post.last_edit_time,
-            safety: post.safety,
-            source: post.source,
-            type_: post.type_,
-            checksum: post.checksum,
-            checksum_md5: post.checksum_md5,
-            file_size: post.file_size,
-            canvas_width: post.width,
-            canvas_height: post.height,
-            content_url,
-            thumbnail_url,
-            flags: post.flags,
-            tags,
-            relations,
-            notes,
-            user: owner.map(MicroUser::new),
-            score,
-            own_score: client_score.flatten(),
-            own_favorite: client_favorited.unwrap_or(false),
-            tag_count,
-            favorite_count,
-            comment_count: comments.len() as i64,
-            note_count,
-            feature_count,
-            relation_count,
-            last_feature_time,
-            favorited_by,
-            has_custom_thumbnail: false, // TODO
-            mime_type: post.mime_type,
-            comments,
-            pools,
-        })
-    }
-}
-
-// TODO: Make Value serialize as T, Null serialize as "null"
-// TODO: Implement Default so that .unwrap_or_default() can be used
-#[derive(Clone, Serialize)]
-enum Nullable<T> {
-    Value(T),
-    Null,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct PostInfo2 {
-    version: DateTime,
-    id: i32,
-    user: Option<Nullable<MicroUser>>,
-    file_size: Option<i64>,
-    canvas_width: Option<i32>,
-    canvas_height: Option<i32>,
-    safety: Option<PostSafety>,
-    type_: Option<PostType>,
-    mime_type: Option<MimeType>,
-    checksum: Option<String>,
-    #[serde(rename = "checksumMD5")]
-    checksum_md5: Option<Nullable<String>>,
-    flags: Option<Nullable<String>>,
-    source: Option<Nullable<String>>,
-    creation_time: Option<DateTime>,
-    last_edit_time: Option<DateTime>,
-    content_url: Option<String>,
-    thumbnail_url: Option<String>,
-    tags: Option<Vec<MicroTag>>,
-    comments: Option<Vec<CommentInfo>>,
-    relations: Option<Vec<MicroPost>>,
-    pools: Option<Vec<MicroPool>>,
-    notes: Option<Vec<PostNoteInfo>>,
-    score: Option<i64>,
-    own_score: Option<i32>,
-    own_favorite: Option<bool>,
-    tag_count: Option<i64>,
-    comment_count: Option<i64>,
-    relation_count: Option<i64>,
-    note_count: Option<i64>,
-    favorite_count: Option<i64>,
-    feature_count: Option<i64>,
-    last_feature_time: Option<Nullable<DateTime>>,
-    favorited_by: Option<Vec<MicroUser>>,
-    has_custom_thumbnail: Option<bool>,
-}
-
-impl PostInfo2 {
-    fn get(conn: &mut PgConnection, client: Option<i32>, mut posts: Vec<Post>) -> QueryResult<Vec<PostInfo2>> {
-        let post_ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
-        // TODO: Remove .clone()
-        let mut owners: Vec<Nullable<MicroUser>> = post::table
-            .filter(post::id.eq_any(&post_ids))
-            .inner_join(user::table)
-            .select((PostId::as_select(), user::name, user::avatar_style))
-            .load::<(PostId, String, AvatarStyle)>(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|post_owners| {
-                post_owners
-                    .first()
-                    .map(|(_, username, avatar_style)| MicroUser::new2(username.clone(), *avatar_style))
-                    .map(Nullable::Value)
-                    .unwrap_or(Nullable::Null)
-            })
-            .collect();
-        let mut content_urls = posts
-            .iter()
-            .map(|post| content::post_content_url(post.id, post.mime_type))
-            .collect::<Vec<_>>();
-        let mut thumbnail_urls = posts
-            .iter()
-            .map(|post| post.id)
-            .map(content::post_thumbnail_url)
-            .collect::<Vec<_>>();
-        let mut tags: Vec<Vec<MicroTag>> = PostTag::belonging_to(&posts)
-            .inner_join(tag::table.on(post_tag::tag_id.eq(tag::id)))
-            .select((PostTagPostId::as_select(), Tag::as_select()))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|post_tags| post_tags.into_iter().map(|(_, tag)| MicroTag::new(conn, tag)).collect())
-            .collect::<QueryResult<_>>()?;
-        let mut comments: Vec<Vec<CommentInfo>> = Comment::belonging_to(&posts)
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|post_comments| {
-                post_comments
-                    .into_iter()
-                    .map(|comment| CommentInfo::new(conn, comment, client))
-                    .collect()
-            })
-            .collect::<QueryResult<_>>()?;
-        let mut relations: Vec<Vec<MicroPost>> = PostRelation::belonging_to(&posts)
-            .inner_join(post::table.on(post::id.eq(post_relation::child_id)))
-            .select((PostRelationPostId::as_select(), Post::as_select()))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|post_relations| {
-                post_relations
-                    .into_iter()
-                    .map(|(_, relation)| MicroPost::new(&relation))
-                    .collect()
-            })
-            .collect();
-        let mut pools: Vec<Vec<MicroPool>> = PoolPost::belonging_to(&posts)
-            .inner_join(pool::table)
-            .select((PoolPostPostId::as_select(), Pool::as_select()))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|pools| pools.into_iter().map(|(_, pool)| MicroPool::new(conn, pool)).collect())
-            .collect::<QueryResult<_>>()?;
-        let mut notes: Vec<Vec<PostNoteInfo>> = PostNote::belonging_to(&posts)
-            .select(PostNote::as_select())
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|post_notes| post_notes.into_iter().map(PostNoteInfo::new).collect())
-            .collect();
-        let mut scores: Vec<i64> = PostScore::belonging_to(&posts)
-            .group_by(post_score::post_id)
-            .select((PostScorePostId::as_select(), dsl::sum(post_score::score)))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|post_scores| {
-                post_scores
-                    .first()
-                    .map(|(_, score)| *score)
-                    .flatten()
-                    .unwrap_or_default()
-            })
-            .collect();
-        let mut client_scores: Vec<i32> = client
-            .map(|id| {
-                PostScore::belonging_to(&posts)
-                    .filter(post_score::user_id.eq(id))
-                    .load::<PostScore>(conn)
-            })
-            .transpose()?
-            .map(|results| {
-                results
-                    .grouped_by(&posts)
-                    .into_iter()
-                    .map(|scores| scores.first().map(|post_score| post_score.score).unwrap_or_default())
-                    .collect()
-            })
-            .unwrap_or(vec![0; posts.len()]);
-        let mut client_favorites: Vec<bool> = client
-            .map(|id| {
-                PostFavorite::belonging_to(&posts)
-                    .filter(post_favorite::user_id.eq(id))
-                    .load::<PostFavorite>(conn)
-            })
-            .transpose()?
-            .map(|results| {
-                results
-                    .grouped_by(&posts)
-                    .into_iter()
-                    .map(|fav| fav.first().is_some())
-                    .collect()
-            })
-            .unwrap_or(vec![false; posts.len()]);
-        let mut tag_counts: Vec<i64> = PostTag::belonging_to(&posts)
-            .group_by(post_tag::post_id)
-            .select((PostTagPostId::as_select(), dsl::count(post_tag::tag_id)))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
-            .collect();
-        let mut comment_counts: Vec<i64> = Comment::belonging_to(&posts)
-            .group_by(comment::post_id)
-            .select((CommentPostId::as_select(), dsl::count(comment::post_id)))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
-            .collect();
-        let mut relation_counts: Vec<i64> = PostRelation::belonging_to(&posts)
-            .group_by(post_relation::parent_id)
-            .select((PostRelationPostId::as_select(), dsl::count(post_relation::child_id)))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
-            .collect();
-        let mut note_counts: Vec<i64> = PostNote::belonging_to(&posts)
-            .group_by(post_note::post_id)
-            .select((PostNotePostId::as_select(), dsl::count(post_note::id)))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
-            .collect();
-        let mut favorite_counts: Vec<i64> = PostFavorite::belonging_to(&posts)
-            .group_by(post_favorite::post_id)
-            .select((PostFavoritePostId::as_select(), dsl::count(post_favorite::user_id)))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
-            .collect();
-        let mut feature_counts: Vec<i64> = PostFeature::belonging_to(&posts)
-            .group_by(post_feature::post_id)
-            .select((PostFeaturePostId::as_select(), dsl::count(post_feature::id)))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or_default())
-            .collect();
-        let mut last_feature_times: Vec<Nullable<DateTime>> = PostFeature::belonging_to(&posts)
-            .group_by(post_feature::post_id)
-            .select((PostFeaturePostId::as_select(), dsl::max(post_feature::time)))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|feature_times| {
-                feature_times
-                    .first()
-                    .map(|(_, time)| *time)
-                    .flatten()
-                    .map(Nullable::Value)
-                    .unwrap_or(Nullable::Null)
-            })
-            .collect();
-        let mut users_who_favorited: Vec<Vec<MicroUser>> = PostFavorite::belonging_to(&posts)
-            .inner_join(user::table)
-            .select((PostFavoritePostId::as_select(), User::as_select()))
-            .load(conn)?
-            .grouped_by(&posts)
-            .into_iter()
-            .map(|users| users.into_iter().map(|(_, user)| MicroUser::new(user)).collect())
-            .collect();
-
-        let results: Vec<PostInfo2> = Vec::new();
-        while let Some(post) = posts.pop() {
-            PostInfo2 {
-                version: post.last_edit_time,
-                id: post.id,
-                user: owners.pop(),
-                file_size: Some(post.file_size),
-                canvas_width: Some(post.width),
-                canvas_height: Some(post.height),
-                safety: Some(post.safety),
-                type_: Some(post.type_),
-                mime_type: Some(post.mime_type),
-                checksum: Some(post.checksum),
-                checksum_md5: Some(post.checksum_md5.map(Nullable::Value).unwrap_or(Nullable::Null)),
-                flags: Some(post.flags.map(Nullable::Value).unwrap_or(Nullable::Null)),
-                source: Some(post.source.map(Nullable::Value).unwrap_or(Nullable::Null)),
-                creation_time: Some(post.creation_time),
-                last_edit_time: Some(post.last_edit_time),
-                content_url: content_urls.pop(),
-                thumbnail_url: thumbnail_urls.pop(),
-                tags: tags.pop(),
-                relations: relations.pop(),
-                notes: notes.pop(),
-                score: scores.pop(),
-                own_score: client_scores.pop(),
-                own_favorite: client_favorites.pop(),
-                tag_count: tag_counts.pop(),
-                favorite_count: favorite_counts.pop(),
-                comment_count: comment_counts.pop(),
-                note_count: note_counts.pop(),
-                feature_count: feature_counts.pop(),
-                relation_count: relation_counts.pop(),
-                last_feature_time: last_feature_times.pop(),
-                favorited_by: users_who_favorited.pop(),
-                has_custom_thumbnail: Some(false), // TODO
-                comments: comments.pop(),
-                pools: pools.pop(),
-            };
-        }
-
-        Ok(results)
-    }
-}
-
-fn list_posts(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<PagedPostInfo, api::Error> {
-    println!("Query: {}", query_info.query.as_deref().unwrap_or(""));
+fn list_posts(auth_result: AuthResult, paged_query: api::PagedQuery) -> Result<PagedPostInfo, api::Error> {
+    let _timer = crate::util::Timer::new("list_posts");
 
     let client = auth_result?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
-    let offset = query_info.offset.unwrap_or(0);
-    let limit = std::cmp::min(query_info.limit, MAX_POSTS_PER_PAGE);
-    let query = search::post::build_query(client_id, query_info.query.as_deref().unwrap_or(""))?;
+    let offset = paged_query.offset.unwrap_or(0);
+    let limit = std::cmp::min(paged_query.limit, MAX_POSTS_PER_PAGE);
+    let fields = paged_query
+        .fields
+        .as_deref()
+        .map(resource::post::Field::create_table)
+        .transpose()
+        .map_err(Box::from)?
+        .unwrap_or(FieldTable::filled(true));
+
+    let query = search::post::build_query(client_id, paged_query.query.as_deref().unwrap_or(""))?;
     println!("SQL Query: {}\n", diesel::debug_query::<diesel::pg::Pg, _>(&query).to_string());
 
     let mut conn = crate::establish_connection()?;
-    let posts: Vec<Post> = query.load(&mut conn)?;
+    let post_ids: Vec<PostId> = query.load(&mut conn)?;
+    let selected_post_ids: Vec<i32> = post_ids
+        .iter()
+        .skip(offset as usize)
+        .take(limit as usize)
+        .map(|post| post.id)
+        .collect();
+    let selected_posts: Vec<Post> = post::table
+        .select(Post::as_select())
+        .filter(post::id.eq_any(&selected_post_ids))
+        .load(&mut conn)?;
 
     Ok(PagedPostInfo {
-        query: query_info.query,
+        query: paged_query.query,
         offset,
         limit,
-        total: posts.len() as i64,
-        results: posts
-            .into_iter()
-            .skip(offset as usize)
-            .take(limit as usize)
-            .map(|post| PostInfo::new(&mut conn, post, client_id))
-            .collect::<QueryResult<_>>()?,
+        total: post_ids.len() as i64,
+        results: PostInfo::new_batch(&mut conn, client_id, selected_posts, fields)?,
     })
 }
 
@@ -557,7 +110,7 @@ fn get_post(post_id: i32, auth_result: AuthResult) -> Result<PostInfo, api::Erro
     let mut conn = crate::establish_connection()?;
     let post = post::table.find(post_id).select(Post::as_select()).first(&mut conn)?;
     let client_id = client.map(|user| user.id);
-    PostInfo::new(&mut conn, post, client_id).map_err(api::Error::from)
+    PostInfo::new(&mut conn, client_id, post).map_err(api::Error::from)
 }
 
 #[derive(Serialize)]
@@ -580,7 +133,7 @@ fn get_post_neighbors(post_id: i32, auth_result: AuthResult) -> Result<PostNeigh
         .first(&mut conn)
         .optional()?;
     let prev = previous_post
-        .map(|post| PostInfo::new(&mut conn, post, client_id))
+        .map(|post| PostInfo::new(&mut conn, client_id, post))
         .transpose()?;
 
     let next_post = post::table
@@ -590,7 +143,7 @@ fn get_post_neighbors(post_id: i32, auth_result: AuthResult) -> Result<PostNeigh
         .first(&mut conn)
         .optional()?;
     let next = next_post
-        .map(|post| PostInfo::new(&mut conn, post, client_id))
+        .map(|post| PostInfo::new(&mut conn, client_id, post))
         .transpose()?;
 
     Ok(PostNeighbors { prev, next })
@@ -643,7 +196,7 @@ fn reverse_search(auth_result: AuthResult, token: ContentToken) -> Result<Revers
     if exact_post.is_some() {
         return Ok(ReverseSearchInfo {
             exact_post: exact_post
-                .map(|post| PostInfo::new(&mut conn, post, client_id))
+                .map(|post| PostInfo::new(&mut conn, client_id, post))
                 .transpose()?,
             similar_posts: Vec::new(),
         });
@@ -665,7 +218,7 @@ fn reverse_search(auth_result: AuthResult, token: ContentToken) -> Result<Revers
             .first(&mut conn)?;
         similar_posts.push(SimilarPostInfo {
             distance,
-            post: PostInfo::new(&mut conn, post, client_id)?,
+            post: PostInfo::new(&mut conn, client_id, post)?,
         });
     }
 
@@ -774,7 +327,7 @@ fn create_post(auth_result: AuthResult, post_info: NewPostInfo) -> Result<PostIn
     );
     thumbnail.to_rgb8().save(content::post_thumbnail_path(post.id))?;
 
-    PostInfo::new(&mut conn, post, client_id).map_err(api::Error::from)
+    PostInfo::new(&mut conn, client_id, post).map_err(api::Error::from)
 }
 
 fn delete_post(post_id: i32, auth_result: AuthResult, client_version: api::ResourceVersion) -> Result<(), api::Error> {

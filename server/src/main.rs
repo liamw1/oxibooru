@@ -6,6 +6,7 @@ pub mod filesystem;
 pub mod image;
 pub mod math;
 pub mod model;
+pub mod resource;
 pub mod schema;
 pub mod search;
 #[cfg(test)]

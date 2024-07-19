@@ -1,5 +1,5 @@
 use crate::model::enums::{PostSafety, PostType};
-use crate::model::post::Post;
+use crate::model::post::PostId;
 use crate::schema::{
     comment, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_tag, tag_name,
     user,
@@ -13,7 +13,7 @@ use diesel::prelude::*;
 use std::str::FromStr;
 use strum::EnumString;
 
-pub type BoxedQuery<'a> = IntoBoxed<'a, Select<post::table, AsSelect<Post, Pg>>, Pg>;
+pub type BoxedQuery<'a> = IntoBoxed<'a, Select<post::table, AsSelect<PostId, Pg>>, Pg>;
 
 pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery, Error> {
     let mut filters: Vec<UnparsedFilter<Token>> = Vec::new();
@@ -49,9 +49,9 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
         }
     }
 
-    let query = filters
-        .into_iter()
-        .try_fold(post::table.select(Post::as_select()).into_boxed(), |query, filter| match filter.kind {
+    let query = filters.into_iter().try_fold(
+        post::table.select(PostId::as_select()).into_boxed(),
+        |query, filter| match filter.kind {
             Token::Id => apply_filter!(query, post::id, filter, i32),
             Token::FileSize => apply_filter!(query, post::file_size, filter, i64),
             Token::ImageWidth => apply_filter!(query, post::width, filter, i32),
@@ -155,7 +155,8 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
                 apply_time_filter!(post_features, post_feature::time, filter)
                     .map(|subquery| query.filter(post::id.eq_any(subquery)))
             }
-        })?;
+        },
+    )?;
 
     let query = special_tokens.into_iter().try_fold(query, |query, token| match token {
         SpecialToken::Liked => client.ok_or(Error::NotLoggedIn).map(|client_id| {

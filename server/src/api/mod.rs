@@ -177,6 +177,7 @@ struct PagedQuery {
     offset: Option<i64>,
     limit: i64,
     query: Option<String>,
+    fields: Option<String>,
 }
 
 #[derive(Serialize)]

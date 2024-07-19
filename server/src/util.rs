@@ -15,6 +15,27 @@ use time::error::ComponentRange;
 use time::serde::rfc3339;
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime};
 
+pub struct Timer<'a> {
+    name: &'a str,
+    start: std::time::Instant,
+}
+
+impl<'a> Timer<'a> {
+    pub fn new(name: &'a str) -> Self {
+        Self {
+            name,
+            start: std::time::Instant::now(),
+        }
+    }
+}
+
+impl<'a> Drop for Timer<'a> {
+    fn drop(&mut self) {
+        let elapsed_time = self.start.elapsed();
+        println!("{} took {}ms", self.name, elapsed_time.as_millis());
+    }
+}
+
 // A wrapper for time::OffsetDateTime that serializes/deserializes according to RFC 3339.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Timestamptz)]
