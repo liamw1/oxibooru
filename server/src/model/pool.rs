@@ -5,6 +5,8 @@ use crate::util;
 use crate::util::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
+use serde::Serialize;
+use std::cmp::Ordering;
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -63,7 +65,7 @@ pub struct NewPool {
 pub struct Pool {
     pub id: i32,
     pub category_id: i32,
-    pub description: Option<String>,
+    pub description: String,
     pub creation_time: DateTime,
 }
 
@@ -135,13 +137,17 @@ pub struct NewPoolName<'a> {
     pub name: &'a str,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Serialize, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Pool))]
 #[diesel(table_name = pool_name)]
 #[diesel(check_for_backend(Pg))]
+#[serde(transparent)]
 pub struct PoolName {
+    #[serde(skip)]
     pub id: i32,
+    #[serde(skip)]
     pub pool_id: i32,
+    #[serde(skip)]
     pub order: i32,
     pub name: String,
 }
@@ -149,6 +155,26 @@ pub struct PoolName {
 impl PoolName {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         pool_name::table.count().first(conn)
+    }
+}
+
+impl PartialEq for PoolName {
+    fn eq(&self, other: &Self) -> bool {
+        self.order == other.order
+    }
+}
+
+impl Eq for PoolName {}
+
+impl PartialOrd for PoolName {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.order.cmp(&other.order))
+    }
+}
+
+impl Ord for PoolName {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.order.cmp(&other.order)
     }
 }
 

@@ -1,6 +1,4 @@
-pub mod comment;
 pub mod info;
-pub mod micro;
 pub mod pool_category;
 pub mod post;
 pub mod tag;

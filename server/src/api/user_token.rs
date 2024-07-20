@@ -1,6 +1,6 @@
-use crate::api::micro::MicroUser;
 use crate::api::AuthResult;
 use crate::model::user::{NewUserToken, User, UserToken};
+use crate::resource::user::MicroUser;
 use crate::schema::user_token;
 use crate::util::DateTime;
 use crate::{api, config};

@@ -1,6 +1,6 @@
 use crate::model::enums::{MimeType, PostSafety, PostType};
 use crate::model::pool::{Pool, PoolPost};
-use crate::model::tag::{Tag, TagId};
+use crate::model::tag::Tag;
 use crate::model::user::User;
 use crate::model::TableName;
 use crate::schema::{
@@ -180,7 +180,7 @@ pub struct PostTagTagId {
 }
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
-#[diesel(belongs_to(Post), belongs_to(Tag), belongs_to(TagId, foreign_key = tag_id))]
+#[diesel(belongs_to(Post), belongs_to(Tag))]
 #[diesel(table_name = post_tag)]
 #[diesel(primary_key(post_id, tag_id))]
 #[diesel(check_for_backend(Pg))]
