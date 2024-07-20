@@ -15,15 +15,7 @@ pub struct NewComment<'a> {
     pub text: &'a str,
 }
 
-#[derive(Associations, Queryable, Selectable)]
-#[diesel(belongs_to(Post))]
-#[diesel(table_name = comment)]
-#[diesel(check_for_backend(Pg))]
-pub struct CommentPostId {
-    pub post_id: i32,
-}
-
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User), belongs_to(Post))]
 #[diesel(table_name = comment)]
 #[diesel(check_for_backend(Pg))]
@@ -67,7 +59,7 @@ impl Comment {
 
 pub type NewCommentScore = CommentScore;
 
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Comment), belongs_to(User))]
 #[diesel(table_name = comment_score)]
 #[diesel(primary_key(comment_id, user_id))]

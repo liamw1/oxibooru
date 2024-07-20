@@ -14,7 +14,7 @@ pub struct NewPoolCategory<'a> {
     pub color: &'a str,
 }
 
-#[derive(Debug, PartialEq, Eq, Identifiable, Queryable, Selectable)]
+#[derive(Identifiable, Queryable, Selectable)]
 #[diesel(table_name = pool_category)]
 #[diesel(check_for_backend(Pg))]
 pub struct PoolCategory {
@@ -56,7 +56,7 @@ pub struct NewPool {
     pub category_id: i32,
 }
 
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(PoolCategory, foreign_key = category_id))]
 #[diesel(table_name = pool)]
 #[diesel(check_for_backend(Pg))]
@@ -135,7 +135,7 @@ pub struct NewPoolName<'a> {
     pub name: &'a str,
 }
 
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Pool))]
 #[diesel(table_name = pool_name)]
 #[diesel(check_for_backend(Pg))]
@@ -154,15 +154,7 @@ impl PoolName {
 
 pub type NewPoolPost = PoolPost;
 
-#[derive(Associations, Queryable, Selectable)]
-#[diesel(belongs_to(Post))]
-#[diesel(table_name = pool_post)]
-#[diesel(check_for_backend(Pg))]
-pub struct PoolPostPostId {
-    pub post_id: i32,
-}
-
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Pool), belongs_to(Post))]
 #[diesel(table_name = pool_post)]
 #[diesel(primary_key(pool_id, post_id))]

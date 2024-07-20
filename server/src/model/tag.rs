@@ -3,8 +3,12 @@ use crate::model::TableName;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::util;
 use crate::util::DateTime;
+use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::pg::Pg;
 use diesel::prelude::*;
+use diesel::serialize::{self, Output, ToSql};
+use diesel::sql_types::Integer;
+use diesel::AsExpression;
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -15,7 +19,7 @@ pub struct NewTagCategory<'a> {
     pub color: &'a str,
 }
 
-#[derive(Debug, PartialEq, Eq, Identifiable, Queryable, Selectable)]
+#[derive(Identifiable, Queryable, Selectable)]
 #[diesel(table_name = tag_category)]
 #[diesel(check_for_backend(Pg))]
 pub struct TagCategory {
@@ -38,7 +42,33 @@ pub struct NewTag {
     pub category_id: i32,
 }
 
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
+#[derive(Debug, Identifiable, Selectable, AsExpression, FromSqlRow)]
+#[diesel(sql_type = Integer)]
+#[diesel(table_name = tag)]
+#[diesel(check_for_backend(Pg))]
+pub struct TagId {
+    pub id: i32,
+}
+
+impl ToSql<Integer, Pg> for TagId
+where
+    i32: ToSql<Integer, Pg>,
+{
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        <i32 as ToSql<Integer, Pg>>::to_sql(&self.id, &mut out.reborrow())
+    }
+}
+
+impl FromSql<Integer, Pg> for TagId
+where
+    i32: FromSql<Integer, Pg>,
+{
+    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
+        i32::from_sql(bytes).map(|id| TagId { id })
+    }
+}
+
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(TagCategory, foreign_key = category_id))]
 #[diesel(table_name = tag)]
 #[diesel(check_for_backend(Pg))]
@@ -145,8 +175,8 @@ pub struct NewTagName<'a> {
     pub name: &'a str,
 }
 
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
-#[diesel(belongs_to(Tag))]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[diesel(belongs_to(Tag), belongs_to(TagId, foreign_key = tag_id))]
 #[diesel(table_name = tag_name)]
 #[diesel(check_for_backend(Pg))]
 pub struct TagName {
@@ -164,7 +194,7 @@ impl TagName {
 
 pub type NewTagImplication = TagImplication;
 
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag, foreign_key = parent_id))]
 #[diesel(table_name = tag_implication)]
 #[diesel(primary_key(parent_id, child_id))]
@@ -182,7 +212,7 @@ impl TagImplication {
 
 pub type NewTagSuggestion = TagSuggestion;
 
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag, foreign_key = parent_id))]
 #[diesel(table_name = tag_suggestion)]
 #[diesel(primary_key(parent_id, child_id))]

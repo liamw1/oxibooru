@@ -2,9 +2,8 @@ use crate::auth::content;
 use crate::model::enums::AvatarStyle;
 use crate::model::pool::Pool;
 use crate::model::post::Post;
-use crate::model::tag::Tag;
 use crate::model::user::User;
-use crate::schema::{pool_category, tag_category};
+use crate::schema::pool_category;
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -36,22 +35,9 @@ impl MicroUser {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroTag {
-    names: Vec<String>,
-    category: String,
-    usages: i64,
-}
-
-impl MicroTag {
-    pub fn new(conn: &mut PgConnection, tag: Tag) -> QueryResult<Self> {
-        Ok(MicroTag {
-            names: tag.names(conn)?,
-            category: tag_category::table
-                .find(tag.category_id)
-                .select(tag_category::name)
-                .first(conn)?,
-            usages: tag.usages(conn)?,
-        })
-    }
+    pub names: Vec<String>,
+    pub category: String,
+    pub usages: i64,
 }
 
 #[derive(Serialize)]

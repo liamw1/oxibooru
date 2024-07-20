@@ -2,7 +2,7 @@ use crate::api::AuthResult;
 use crate::auth::content;
 use crate::image::signature;
 use crate::model::enums::{MimeType, PostSafety, PostType};
-use crate::model::post::{NewPost, NewPostRelation, NewPostSignature, Post, PostId, PostSignature};
+use crate::model::post::{NewPost, NewPostRelation, NewPostSignature, Post, PostSignature};
 use crate::resource;
 use crate::resource::post::{FieldTable, PostInfo};
 use crate::schema::{post, post_relation, post_signature};
@@ -22,22 +22,26 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     let get_post = warp::get()
         .and(warp::path!("post" / i32))
         .and(api::auth())
+        .and(warp::query())
         .map(get_post)
         .map(api::Reply::from);
     let get_post_neighbors = warp::get()
         .and(warp::path!("post" / i32 / "around"))
         .and(api::auth())
+        .and(warp::query())
         .map(get_post_neighbors)
         .map(api::Reply::from);
     let reverse_search = warp::post()
         .and(warp::path!("posts" / "reverse-search"))
         .and(api::auth())
+        .and(warp::query())
         .and(warp::body::json())
         .map(reverse_search)
         .map(api::Reply::from);
     let post_post = warp::post()
         .and(warp::path!("posts"))
         .and(api::auth())
+        .and(warp::query())
         .and(warp::body::json())
         .map(create_post)
         .map(api::Reply::from);
@@ -61,33 +65,35 @@ type PagedPostInfo = api::PagedResponse<PostInfo>;
 const MAX_POSTS_PER_PAGE: i64 = 50;
 const POST_SIMILARITY_THRESHOLD: f64 = 0.4;
 
-fn list_posts(auth_result: AuthResult, paged_query: api::PagedQuery) -> Result<PagedPostInfo, api::Error> {
+fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
+    fields
+        .map(resource::post::Field::create_table)
+        .transpose()
+        .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
+        .map_err(Box::from)
+}
+
+fn list_posts(auth: AuthResult, paged_query: api::PagedQuery) -> Result<PagedPostInfo, api::Error> {
     let _timer = crate::util::Timer::new("list_posts");
 
-    let client = auth_result?;
+    let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
     let offset = paged_query.offset.unwrap_or(0);
     let limit = std::cmp::min(paged_query.limit, MAX_POSTS_PER_PAGE);
-    let fields = paged_query
-        .fields
-        .as_deref()
-        .map(resource::post::Field::create_table)
-        .transpose()
-        .map_err(Box::from)?
-        .unwrap_or(FieldTable::filled(true));
+    let fields = create_field_table(paged_query.fields.as_deref())?;
 
     let query = search::post::build_query(client_id, paged_query.query.as_deref().unwrap_or(""))?;
     println!("SQL Query: {}\n", diesel::debug_query::<diesel::pg::Pg, _>(&query).to_string());
 
     let mut conn = crate::establish_connection()?;
-    let post_ids: Vec<PostId> = query.load(&mut conn)?;
+    let post_ids: Vec<i32> = query.load(&mut conn)?;
+    let total = post_ids.len() as i64;
     let selected_post_ids: Vec<i32> = post_ids
-        .iter()
+        .into_iter()
         .skip(offset as usize)
         .take(limit as usize)
-        .map(|post| post.id)
         .collect();
     let selected_posts: Vec<Post> = post::table
         .select(Post::as_select())
@@ -98,19 +104,21 @@ fn list_posts(auth_result: AuthResult, paged_query: api::PagedQuery) -> Result<P
         query: paged_query.query,
         offset,
         limit,
-        total: post_ids.len() as i64,
-        results: PostInfo::new_batch(&mut conn, client_id, selected_posts, fields)?,
+        total,
+        results: PostInfo::new_batch(&mut conn, client_id, selected_posts, &fields)?,
     })
 }
 
-fn get_post(post_id: i32, auth_result: AuthResult) -> Result<PostInfo, api::Error> {
-    let client = auth_result?;
+fn get_post(post_id: i32, auth: AuthResult, fields: Option<String>) -> Result<PostInfo, api::Error> {
+    let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_view)?;
+
+    let fields = create_field_table(fields.as_deref())?;
 
     let mut conn = crate::establish_connection()?;
     let post = post::table.find(post_id).select(Post::as_select()).first(&mut conn)?;
     let client_id = client.map(|user| user.id);
-    PostInfo::new(&mut conn, client_id, post).map_err(api::Error::from)
+    PostInfo::new(&mut conn, client_id, post, &fields).map_err(api::Error::from)
 }
 
 #[derive(Serialize)]
@@ -119,11 +127,12 @@ struct PostNeighbors {
     next: Option<PostInfo>,
 }
 
-fn get_post_neighbors(post_id: i32, auth_result: AuthResult) -> Result<PostNeighbors, api::Error> {
-    let client = auth_result?;
+fn get_post_neighbors(post_id: i32, auth: AuthResult, fields: Option<String>) -> Result<PostNeighbors, api::Error> {
+    let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
+    let fields = create_field_table(fields.as_deref())?;
     let mut conn = crate::establish_connection()?;
 
     let previous_post = post::table
@@ -133,7 +142,7 @@ fn get_post_neighbors(post_id: i32, auth_result: AuthResult) -> Result<PostNeigh
         .first(&mut conn)
         .optional()?;
     let prev = previous_post
-        .map(|post| PostInfo::new(&mut conn, client_id, post))
+        .map(|post| PostInfo::new(&mut conn, client_id, post, &fields))
         .transpose()?;
 
     let next_post = post::table
@@ -143,7 +152,7 @@ fn get_post_neighbors(post_id: i32, auth_result: AuthResult) -> Result<PostNeigh
         .first(&mut conn)
         .optional()?;
     let next = next_post
-        .map(|post| PostInfo::new(&mut conn, client_id, post))
+        .map(|post| PostInfo::new(&mut conn, client_id, post, &fields))
         .transpose()?;
 
     Ok(PostNeighbors { prev, next })
@@ -168,9 +177,15 @@ struct ReverseSearchInfo {
     similar_posts: Vec<SimilarPostInfo>,
 }
 
-fn reverse_search(auth_result: AuthResult, token: ContentToken) -> Result<ReverseSearchInfo, api::Error> {
-    let client = auth_result?;
+fn reverse_search(
+    auth: AuthResult,
+    fields: Option<String>,
+    token: ContentToken,
+) -> Result<ReverseSearchInfo, api::Error> {
+    let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_reverse_search)?;
+
+    let fields = create_field_table(fields.as_deref())?;
 
     let (_uuid, extension) = token.content_token.split_once('.').unwrap();
     let content_type = MimeType::from_extension(extension)?;
@@ -196,7 +211,7 @@ fn reverse_search(auth_result: AuthResult, token: ContentToken) -> Result<Revers
     if exact_post.is_some() {
         return Ok(ReverseSearchInfo {
             exact_post: exact_post
-                .map(|post| PostInfo::new(&mut conn, client_id, post))
+                .map(|post| PostInfo::new(&mut conn, client_id, post, &fields))
                 .transpose()?,
             similar_posts: Vec::new(),
         });
@@ -218,7 +233,7 @@ fn reverse_search(auth_result: AuthResult, token: ContentToken) -> Result<Revers
             .first(&mut conn)?;
         similar_posts.push(SimilarPostInfo {
             distance,
-            post: PostInfo::new(&mut conn, client_id, post)?,
+            post: PostInfo::new(&mut conn, client_id, post, &fields)?,
         });
     }
 
@@ -240,13 +255,15 @@ struct NewPostInfo {
     content_token: String,
 }
 
-fn create_post(auth_result: AuthResult, post_info: NewPostInfo) -> Result<PostInfo, api::Error> {
+fn create_post(auth: AuthResult, fields: Option<String>, post_info: NewPostInfo) -> Result<PostInfo, api::Error> {
     let required_rank = match post_info.anonymous.unwrap_or(false) {
         true => config::privileges().post_create_anonymous,
         false => config::privileges().post_create_identified,
     };
-    let client = auth_result?;
+    let client = auth?;
     api::verify_privilege(client.as_ref(), required_rank)?;
+
+    let fields = create_field_table(fields.as_deref())?;
 
     let (_uuid, extension) = post_info.content_token.split_once('.').unwrap();
     let content_type = MimeType::from_extension(extension)?;
@@ -327,11 +344,11 @@ fn create_post(auth_result: AuthResult, post_info: NewPostInfo) -> Result<PostIn
     );
     thumbnail.to_rgb8().save(content::post_thumbnail_path(post.id))?;
 
-    PostInfo::new(&mut conn, client_id, post).map_err(api::Error::from)
+    PostInfo::new(&mut conn, client_id, post, &fields).map_err(api::Error::from)
 }
 
-fn delete_post(post_id: i32, auth_result: AuthResult, client_version: api::ResourceVersion) -> Result<(), api::Error> {
-    let client = auth_result?;
+fn delete_post(post_id: i32, auth: AuthResult, client_version: api::ResourceVersion) -> Result<(), api::Error> {
+    let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 
     let mut conn = crate::establish_connection()?;

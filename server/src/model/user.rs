@@ -22,7 +22,7 @@ pub struct NewUser<'a> {
     pub avatar_style: AvatarStyle,
 }
 
-#[derive(Debug, PartialEq, Eq, Identifiable, Queryable, Selectable)]
+#[derive(Identifiable, Queryable, Selectable)]
 #[diesel(table_name = user)]
 #[diesel(check_for_backend(Pg))]
 pub struct User {
@@ -184,7 +184,7 @@ pub struct NewUserToken<'a> {
     pub expiration_time: Option<DateTime>,
 }
 
-#[derive(Debug, PartialEq, Eq, Associations, Identifiable, Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = user_token)]
 #[diesel(primary_key(user_id))]
