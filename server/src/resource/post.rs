@@ -324,10 +324,14 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
         let usages_and_category = tag_info.first().map(|(post_tag, category_id, _)| {
             (usages.get(&post_tag.tag_id).map(|x| *x).unwrap_or(0), category_names[category_id].clone())
         });
-        usages_and_category.map(|(usages, category)| MicroTag {
-            names: tag_info.into_iter().map(|(_, _, tag_name)| tag_name.name).collect(),
-            category,
-            usages,
+        usages_and_category.map(|(usages, category)| {
+            let mut names: Vec<TagName> = tag_info.into_iter().map(|(_, _, tag_name)| tag_name).collect();
+            names.sort();
+            MicroTag {
+                names,
+                category,
+                usages,
+            }
         })
     };
     Ok(post_tags

@@ -2,6 +2,7 @@ use crate::auth::content;
 use crate::model::enums::AvatarStyle;
 use crate::model::pool::Pool;
 use crate::model::post::Post;
+use crate::model::tag::TagName;
 use crate::model::user::User;
 use crate::schema::pool_category;
 use diesel::prelude::*;
@@ -35,7 +36,7 @@ impl MicroUser {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroTag {
-    pub names: Vec<String>,
+    pub names: Vec<TagName>,
     pub category: String,
     pub usages: i64,
 }

@@ -9,6 +9,8 @@ use diesel::prelude::*;
 use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Integer;
 use diesel::AsExpression;
+use serde::Serialize;
+use std::cmp::Ordering;
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -175,13 +177,17 @@ pub struct NewTagName<'a> {
     pub name: &'a str,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Serialize, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag), belongs_to(TagId, foreign_key = tag_id))]
 #[diesel(table_name = tag_name)]
 #[diesel(check_for_backend(Pg))]
+#[serde(transparent)]
 pub struct TagName {
+    #[serde(skip)]
     pub id: i32,
+    #[serde(skip)]
     pub tag_id: i32,
+    #[serde(skip)]
     pub order: i32,
     pub name: String,
 }
@@ -189,6 +195,26 @@ pub struct TagName {
 impl TagName {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         tag_name::table.count().first(conn)
+    }
+}
+
+impl PartialEq for TagName {
+    fn eq(&self, other: &Self) -> bool {
+        self.order == other.order
+    }
+}
+
+impl Eq for TagName {}
+
+impl PartialOrd for TagName {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.order.cmp(&other.order))
+    }
+}
+
+impl Ord for TagName {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.order.cmp(&other.order)
     }
 }
 
