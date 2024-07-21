@@ -413,7 +413,7 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
     let comment_ids: Vec<i32> = comments.iter().map(|(comment, _)| comment.id).collect();
     let scores: HashMap<i32, Option<i64>> = comment_score::table
         .group_by(comment_score::comment_id)
-        .select((comment_score::comment_id, dsl::sum(comment_score::comment_id)))
+        .select((comment_score::comment_id, dsl::sum(comment_score::score)))
         .filter(comment_score::comment_id.eq_any(comment_ids))
         .load(conn)?
         .into_iter()

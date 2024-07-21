@@ -1,14 +1,14 @@
-use crate::api::{ApiResult, AuthResult, PagedQuery};
+use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse};
 use crate::auth::password;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::user::{NewUser, User};
+use crate::resource::user::UserInfo;
 use crate::schema::user;
-use crate::util::DateTime;
 use crate::{api, config};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -33,90 +33,14 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     list_users.or(get_user).or(post_user)
 }
 
+type PagedUserInfo = PagedResponse<UserInfo>;
+
 #[derive(Deserialize)]
 struct NewUserInfo {
     name: String,
     password: String,
     email: Option<String>,
     rank: Option<UserRank>,
-}
-
-#[derive(Serialize)]
-#[serde(untagged)]
-enum PrivateData<T> {
-    Expose(T),
-    Visible(bool), // Set to false to indicate hidden
-}
-
-// TODO: Remove renames by changing references to these names in client
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct UserInfo {
-    version: DateTime,
-    name: String,
-    email: PrivateData<Option<String>>,
-    rank: UserRank,
-    last_login_time: DateTime,
-    creation_time: DateTime,
-    avatar_style: AvatarStyle,
-    avatar_url: String,
-    comment_count: i64,
-    uploaded_post_count: i64,
-    liked_post_count: PrivateData<i64>,
-    disliked_post_count: PrivateData<i64>,
-    favorite_post_count: i64,
-}
-type PagedUserInfo = api::PagedResponse<UserInfo>;
-
-impl UserInfo {
-    fn full(conn: &mut PgConnection, user: User) -> QueryResult<Self> {
-        let avatar_url = user.avatar_url();
-        let comment_count = user.comment_count(conn)?;
-        let uploaded_post_count = user.post_count(conn)?;
-        let liked_post_count = user.liked_post_count(conn)?;
-        let disliked_post_count = user.disliked_post_count(conn)?;
-        let favorite_post_count = user.favorite_post_count(conn)?;
-
-        Ok(Self {
-            version: user.last_edit_time,
-            name: user.name,
-            email: PrivateData::Expose(user.email),
-            rank: user.rank,
-            last_login_time: user.last_login_time,
-            creation_time: user.creation_time,
-            avatar_url,
-            avatar_style: user.avatar_style,
-            comment_count,
-            uploaded_post_count,
-            liked_post_count: PrivateData::Expose(liked_post_count),
-            disliked_post_count: PrivateData::Expose(disliked_post_count),
-            favorite_post_count,
-        })
-    }
-
-    // Returns a subset of the information available about a user
-    fn public_only(conn: &mut PgConnection, user: User) -> QueryResult<Self> {
-        let avatar_url = user.avatar_url();
-        let comment_count = user.comment_count(conn)?;
-        let uploaded_post_count = user.post_count(conn)?;
-        let favorite_post_count = user.favorite_post_count(conn)?;
-
-        Ok(Self {
-            version: user.last_edit_time,
-            name: user.name,
-            email: PrivateData::Visible(false),
-            rank: user.rank,
-            last_login_time: user.last_login_time,
-            creation_time: user.creation_time,
-            avatar_url,
-            avatar_style: user.avatar_style,
-            comment_count,
-            uploaded_post_count,
-            liked_post_count: PrivateData::Visible(false),
-            disliked_post_count: PrivateData::Visible(false),
-            favorite_post_count,
-        })
-    }
 }
 
 fn create_user(auth: AuthResult, user_info: NewUserInfo) -> ApiResult<UserInfo> {

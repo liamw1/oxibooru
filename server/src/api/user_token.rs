@@ -1,11 +1,12 @@
 use crate::api::{ApiResult, AuthResult};
 use crate::model::user::{NewUserToken, User, UserToken};
 use crate::resource::user::MicroUser;
+use crate::resource::user_token::UserTokenInfo;
 use crate::schema::user_token;
 use crate::util::DateTime;
 use crate::{api, config};
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 use warp::{Filter, Rejection, Reply};
 
@@ -31,37 +32,6 @@ struct PostUserTokenInfo {
     enabled: bool,
     note: Option<String>,
     expiration_time: Option<DateTime>,
-}
-
-// TODO: Remove renames by changing references to these names in client
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct UserTokenInfo {
-    version: DateTime, // TODO: Remove last_edit_time as it fills the same role as version here
-    user: MicroUser,
-    token: Uuid,
-    note: Option<String>,
-    enabled: bool,
-    expiration_time: Option<DateTime>,
-    creation_time: DateTime,
-    last_edit_time: DateTime,
-    last_usage_time: DateTime,
-}
-
-impl UserTokenInfo {
-    fn new(user: MicroUser, user_token: UserToken) -> ApiResult<Self> {
-        Ok(UserTokenInfo {
-            version: user_token.last_edit_time,
-            user,
-            token: user_token.token,
-            note: user_token.note,
-            enabled: user_token.enabled,
-            expiration_time: user_token.expiration_time,
-            creation_time: user_token.creation_time,
-            last_edit_time: user_token.last_edit_time,
-            last_usage_time: user_token.last_usage_time,
-        })
-    }
 }
 
 fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTokenInfo) -> ApiResult<UserTokenInfo> {
@@ -90,7 +60,7 @@ fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTok
         .values(&new_user_token)
         .returning(UserToken::as_returning())
         .get_result(&mut conn)?;
-    UserTokenInfo::new(MicroUser::new(user), user_token)
+    Ok(UserTokenInfo::new(MicroUser::new(user), user_token))
 }
 
 fn delete_user_token(username: String, token: Uuid, auth: AuthResult) -> ApiResult<()> {
