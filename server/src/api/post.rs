@@ -121,6 +121,8 @@ struct PostNeighbors {
 }
 
 fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostNeighbors> {
+    let _timer = crate::util::Timer::new("get_post_neighbors");
+
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
@@ -185,6 +187,8 @@ struct ReverseSearchInfo {
 }
 
 fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -> ApiResult<ReverseSearchInfo> {
+    let _timer = crate::util::Timer::new("reverse_search");
+
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_reverse_search)?;
 
@@ -221,28 +225,26 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     }
 
     // Search for similar images
-    let mut similar_posts = Vec::new();
     let similar_signatures = PostSignature::find_similar(&mut conn, signature::generate_indexes(&image_signature))?;
     println!("Found {} similar signatures", similar_signatures.len());
-    for post_signature in similar_signatures.into_iter() {
-        let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
-        if distance > POST_SIMILARITY_THRESHOLD {
-            continue;
-        }
-
-        let post = post::table
-            .find(post_signature.post_id)
-            .select(Post::as_select())
-            .first(&mut conn)?;
-        similar_posts.push(SimilarPostInfo {
-            distance,
-            post: PostInfo::new(&mut conn, client_id, post, &fields)?,
-        });
-    }
-
+    let similar_post_ids: Vec<_> = similar_signatures
+        .into_iter()
+        .filter_map(|post_signature| {
+            let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
+            (distance < POST_SIMILARITY_THRESHOLD).then_some((post_signature.post_id, distance))
+        })
+        .collect();
+    let similar_posts: Vec<_> = similar_post_ids
+        .iter()
+        .map(|(post_id, _)| post::table.find(post_id).select(Post::as_select()).first(&mut conn))
+        .collect::<QueryResult<_>>()?;
     Ok(ReverseSearchInfo {
         exact_post: None,
-        similar_posts,
+        similar_posts: PostInfo::new_batch(&mut conn, client_id, similar_posts, &fields)?
+            .into_iter()
+            .zip(similar_post_ids.into_iter().map(|(_, distance)| distance))
+            .map(|(post, distance)| SimilarPostInfo { distance, post })
+            .collect(),
     })
 }
 
