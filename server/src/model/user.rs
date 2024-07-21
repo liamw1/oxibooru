@@ -6,8 +6,12 @@ use crate::model::TableName;
 use crate::schema::{comment, comment_score, post, post_favorite, post_feature, post_score, user, user_token};
 use crate::util;
 use crate::util::DateTime;
+use diesel::deserialize::{self, FromSql, FromSqlRow};
+use diesel::expression::AsExpression;
 use diesel::pg::Pg;
 use diesel::prelude::*;
+use diesel::serialize::{self, Output, ToSql};
+use diesel::sql_types::Integer;
 use std::option::Option;
 use uuid::Uuid;
 
@@ -20,6 +24,33 @@ pub struct NewUser<'a> {
     pub email: Option<&'a str>,
     pub rank: UserRank,
     pub avatar_style: AvatarStyle,
+}
+
+#[derive(Debug, Clone, Copy, Associations, Selectable, AsExpression, FromSqlRow)]
+#[diesel(sql_type = Integer)]
+#[diesel(belongs_to(User, foreign_key = id))]
+#[diesel(table_name = user)]
+#[diesel(check_for_backend(Pg))]
+pub struct UserId {
+    pub id: i32,
+}
+
+impl ToSql<Integer, Pg> for UserId
+where
+    i32: ToSql<Integer, Pg>,
+{
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        <i32 as ToSql<Integer, Pg>>::to_sql(&self.id, &mut out.reborrow())
+    }
+}
+
+impl FromSql<Integer, Pg> for UserId
+where
+    i32: FromSql<Integer, Pg>,
+{
+    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
+        i32::from_sql(bytes).map(|id| UserId { id })
+    }
 }
 
 #[derive(Identifiable, Queryable, Selectable)]

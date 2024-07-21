@@ -5,6 +5,7 @@ use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::model::post::{Post, PostFavorite, PostFeature, PostId, PostNote, PostRelation, PostScore, PostTag};
 use crate::model::tag::{Tag, TagName};
 use crate::model::user::User;
+use crate::resource;
 use crate::resource::comment::CommentInfo;
 use crate::resource::pool::MicroPool;
 use crate::resource::tag::MicroTag;
@@ -14,7 +15,7 @@ use crate::schema::{
     post_relation, post_score, post_tag, tag, tag_category, tag_name, user,
 };
 use crate::util::DateTime;
-use diesel::dsl;
+use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
@@ -141,7 +142,7 @@ impl PostInfo {
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
         let mut post_info = Self::new_batch(conn, client, vec![post], fields)?;
-        debug_assert_eq!(post_info.len(), 1);
+        assert_eq!(post_info.len(), 1);
         Ok(post_info.pop().unwrap())
     }
 
@@ -157,113 +158,113 @@ impl PostInfo {
             .then_some(get_post_owners(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(owners.len(), batch_size);
+        resource::check_batch_results(owners.len(), batch_size);
 
         let mut content_urls = fields[Field::ContentUrl]
             .then_some(get_content_urls(&posts))
             .unwrap_or_default();
-        check_batch_results(content_urls.len(), batch_size);
+        resource::check_batch_results(content_urls.len(), batch_size);
 
         let mut thumbnail_urls = fields[Field::ThumbnailUrl]
             .then_some(get_thumbnail_urls(&posts))
             .unwrap_or_default();
-        check_batch_results(thumbnail_urls.len(), batch_size);
+        resource::check_batch_results(thumbnail_urls.len(), batch_size);
 
         let mut tags = fields[Field::Tags]
             .then_some(get_tags(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(tags.len(), batch_size);
+        resource::check_batch_results(tags.len(), batch_size);
 
         let mut comments = fields[Field::Comments]
             .then_some(get_comments(conn, client, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(comments.len(), batch_size);
+        resource::check_batch_results(comments.len(), batch_size);
 
         let mut relations = fields[Field::Relations]
             .then_some(get_relations(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(relations.len(), batch_size);
+        resource::check_batch_results(relations.len(), batch_size);
 
         let mut pools = fields[Field::Pools]
             .then_some(get_pools(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(pools.len(), batch_size);
+        resource::check_batch_results(pools.len(), batch_size);
 
         let mut notes = fields[Field::Notes]
             .then_some(get_notes(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(notes.len(), batch_size);
+        resource::check_batch_results(notes.len(), batch_size);
 
         let mut scores = fields[Field::Score]
             .then_some(get_scores(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(scores.len(), batch_size);
+        resource::check_batch_results(scores.len(), batch_size);
 
         let mut client_scores = fields[Field::OwnScore]
             .then_some(get_client_scores(conn, client, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(client_scores.len(), batch_size);
+        resource::check_batch_results(client_scores.len(), batch_size);
 
         let mut client_favorites = fields[Field::OwnFavorite]
             .then_some(get_client_favorites(conn, client, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(client_favorites.len(), batch_size);
+        resource::check_batch_results(client_favorites.len(), batch_size);
 
         let mut tag_counts = fields[Field::TagCount]
             .then_some(get_tag_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(tag_counts.len(), batch_size);
+        resource::check_batch_results(tag_counts.len(), batch_size);
 
         let mut comment_counts = fields[Field::CommentCount]
             .then_some(get_comment_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(comment_counts.len(), batch_size);
+        resource::check_batch_results(comment_counts.len(), batch_size);
 
         let mut relation_counts = fields[Field::RelationCount]
             .then_some(get_relation_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(relation_counts.len(), batch_size);
+        resource::check_batch_results(relation_counts.len(), batch_size);
 
         let mut note_counts = fields[Field::NoteCount]
             .then_some(get_note_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(note_counts.len(), batch_size);
+        resource::check_batch_results(note_counts.len(), batch_size);
 
         let mut favorite_counts = fields[Field::FavoriteCount]
             .then_some(get_favorite_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(favorite_counts.len(), batch_size);
+        resource::check_batch_results(favorite_counts.len(), batch_size);
 
         let mut feature_counts = fields[Field::FeatureCount]
             .then_some(get_feature_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(feature_counts.len(), batch_size);
+        resource::check_batch_results(feature_counts.len(), batch_size);
 
         let mut last_feature_times = fields[Field::LastFeatureTime]
             .then_some(get_last_feature_times(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(last_feature_times.len(), batch_size);
+        resource::check_batch_results(last_feature_times.len(), batch_size);
 
         let mut users_who_favorited = fields[Field::FavoritedBy]
             .then_some(get_users_who_favorited(conn, &posts))
             .transpose()?
             .unwrap_or_default();
-        check_batch_results(users_who_favorited.len(), batch_size);
+        resource::check_batch_results(users_who_favorited.len(), batch_size);
 
         let mut results: Vec<Self> = Vec::new();
         while let Some(post) = posts.pop() {
@@ -323,10 +324,6 @@ impl PostNoteInfo {
     }
 }
 
-fn check_batch_results(batch_size: usize, post_count: usize) {
-    assert!(batch_size == 0 || batch_size == post_count);
-}
-
 fn get_post_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option<MicroUser>>> {
     let post_ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
     Ok(post::table
@@ -367,7 +364,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
         .load(conn)?;
     let usages: HashMap<i32, i64> = PostTag::belonging_to(&tags)
         .group_by(post_tag::tag_id)
-        .select((post_tag::tag_id, dsl::count(post_tag::tag_id)))
+        .select((post_tag::tag_id, count(post_tag::tag_id)))
         .load(conn)?
         .into_iter()
         .collect();
@@ -413,7 +410,7 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
     let comment_ids: Vec<i32> = comments.iter().map(|(comment, _)| comment.id).collect();
     let scores: HashMap<i32, Option<i64>> = comment_score::table
         .group_by(comment_score::comment_id)
-        .select((comment_score::comment_id, dsl::sum(comment_score::score)))
+        .select((comment_score::comment_id, sum(comment_score::score)))
         .filter(comment_score::comment_id.eq_any(comment_ids))
         .load(conn)?
         .into_iter()
@@ -481,7 +478,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
         .load(conn)?;
     let usages: HashMap<i32, i64> = PoolPost::belonging_to(&pools)
         .group_by(pool_post::pool_id)
-        .select((pool_post::pool_id, dsl::count(pool_post::pool_id)))
+        .select((pool_post::pool_id, count(pool_post::pool_id)))
         .load(conn)?
         .into_iter()
         .collect();
@@ -535,7 +532,7 @@ fn get_notes(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Pos
 fn get_scores(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
     let post_scores: Vec<(PostId, Option<i64>)> = PostScore::belonging_to(posts)
         .group_by(post_score::post_id)
-        .select((post_score::post_id, dsl::sum(post_score::score)))
+        .select((post_score::post_id, sum(post_score::score)))
         .load(conn)?;
     Ok(post_scores
         .grouped_by(posts)
@@ -583,7 +580,7 @@ fn get_client_favorites(conn: &mut PgConnection, client: Option<i32>, posts: &[P
 fn get_tag_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
     let tag_counts: Vec<(PostId, i64)> = PostTag::belonging_to(posts)
         .group_by(post_tag::post_id)
-        .select((post_tag::post_id, dsl::count(post_tag::tag_id)))
+        .select((post_tag::post_id, count(post_tag::tag_id)))
         .load(conn)?;
     Ok(tag_counts
         .grouped_by(posts)
@@ -595,7 +592,7 @@ fn get_tag_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i6
 fn get_comment_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
     let comment_counts: Vec<(PostId, i64)> = Comment::belonging_to(posts)
         .group_by(comment::post_id)
-        .select((comment::post_id, dsl::count(comment::post_id)))
+        .select((comment::post_id, count(comment::post_id)))
         .load(conn)?;
     Ok(comment_counts
         .grouped_by(posts)
@@ -607,7 +604,7 @@ fn get_comment_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Ve
 fn get_relation_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
     let relation_counts: Vec<(PostId, i64)> = PostRelation::belonging_to(posts)
         .group_by(post_relation::parent_id)
-        .select((post_relation::parent_id, dsl::count(post_relation::child_id)))
+        .select((post_relation::parent_id, count(post_relation::child_id)))
         .load(conn)?;
     Ok(relation_counts
         .grouped_by(posts)
@@ -619,7 +616,7 @@ fn get_relation_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<V
 fn get_note_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
     let note_counts: Vec<(PostId, i64)> = PostNote::belonging_to(posts)
         .group_by(post_note::post_id)
-        .select((post_note::post_id, dsl::count(post_note::id)))
+        .select((post_note::post_id, count(post_note::id)))
         .load(conn)?;
     Ok(note_counts
         .grouped_by(posts)
@@ -631,7 +628,7 @@ fn get_note_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i
 fn get_favorite_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
     let favorite_counts: Vec<(PostId, i64)> = PostFavorite::belonging_to(posts)
         .group_by(post_favorite::post_id)
-        .select((post_favorite::post_id, dsl::count(post_favorite::user_id)))
+        .select((post_favorite::post_id, count(post_favorite::user_id)))
         .load(conn)?;
     Ok(favorite_counts
         .grouped_by(posts)
@@ -643,7 +640,7 @@ fn get_favorite_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<V
 fn get_feature_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
     let feature_counts: Vec<(PostId, i64)> = PostFeature::belonging_to(posts)
         .group_by(post_feature::post_id)
-        .select((post_feature::post_id, dsl::count(post_feature::id)))
+        .select((post_feature::post_id, count(post_feature::id)))
         .load(conn)?;
     Ok(feature_counts
         .grouped_by(posts)
@@ -655,7 +652,7 @@ fn get_feature_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Ve
 fn get_last_feature_times(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option<DateTime>>> {
     let last_feature_times: Vec<(PostId, Option<DateTime>)> = PostFeature::belonging_to(posts)
         .group_by(post_feature::post_id)
-        .select((post_feature::post_id, dsl::max(post_feature::time)))
+        .select((post_feature::post_id, max(post_feature::time)))
         .load(conn)?;
     Ok(last_feature_times
         .grouped_by(posts)

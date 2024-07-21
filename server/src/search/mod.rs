@@ -1,6 +1,7 @@
 mod macros;
 mod parse;
 pub mod post;
+pub mod user;
 
 use std::ops::{Not, Range};
 
