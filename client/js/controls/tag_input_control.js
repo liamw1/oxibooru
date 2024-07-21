@@ -247,7 +247,7 @@ class TagInputControl extends events.EventTarget {
             ? window.clipboardData.getData("Text")
             : (e.originalEvent || e).clipboardData.getData("text/plain");
 
-        if (pastedText.length > 2000) {
+        if (pastedText.length > 20000) {
             window.alert("Pasted text is too long.");
             return;
         }
