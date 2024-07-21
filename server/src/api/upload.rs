@@ -1,4 +1,4 @@
-use crate::api::AuthResult;
+use crate::api::{ApiResult, AuthResult};
 use crate::model::enums::MimeType;
 use crate::{api, config, filesystem};
 use futures::{StreamExt, TryStreamExt};
@@ -25,13 +25,13 @@ struct UploadResponse {
     token: String,
 }
 
-async fn upload_endpoint(auth_result: AuthResult, form: FormData) -> Result<api::Reply, Infallible> {
-    Ok(upload(auth_result, form).await.into())
+async fn upload_endpoint(auth: AuthResult, form: FormData) -> Result<api::Reply, Infallible> {
+    Ok(upload(auth, form).await.into())
 }
 
 // TODO: Cleanup on failure
-async fn upload(auth_result: AuthResult, form: FormData) -> Result<UploadResponse, api::Error> {
-    let client = auth_result?;
+async fn upload(auth: AuthResult, form: FormData) -> ApiResult<UploadResponse> {
+    let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().upload_create)?;
 
     // Set up temp directory if necessary

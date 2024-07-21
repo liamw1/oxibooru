@@ -1,4 +1,4 @@
-use crate::api::AuthResult;
+use crate::api::{ApiResult, AuthResult};
 use crate::model::pool::PoolCategory;
 use crate::schema::pool;
 use crate::schema::pool_category;
@@ -33,8 +33,8 @@ struct PoolCategoryList {
     results: Vec<PoolCategoryInfo>,
 }
 
-fn list_pool_categories(auth_result: AuthResult) -> Result<PoolCategoryList, api::Error> {
-    let client = auth_result?;
+fn list_pool_categories(auth: AuthResult) -> ApiResult<PoolCategoryList> {
+    let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_list)?;
 
     let mut conn = crate::establish_connection()?;

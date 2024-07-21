@@ -1,4 +1,4 @@
-use crate::api::AuthResult;
+use crate::api::{ApiResult, AuthResult, PagedQuery};
 use crate::auth::password;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::user::{NewUser, User};
@@ -119,8 +119,8 @@ impl UserInfo {
     }
 }
 
-fn create_user(auth_result: AuthResult, user_info: NewUserInfo) -> Result<UserInfo, api::Error> {
-    let client = auth_result?;
+fn create_user(auth: AuthResult, user_info: NewUserInfo) -> ApiResult<UserInfo> {
+    let client = auth?;
     let client_rank = api::client_access_level(client.as_ref());
 
     let creation_rank = user_info.rank.unwrap_or(UserRank::Regular);
@@ -151,11 +151,11 @@ fn create_user(auth_result: AuthResult, user_info: NewUserInfo) -> Result<UserIn
     UserInfo::full(&mut conn, user).map_err(api::Error::from)
 }
 
-fn get_user(username: String, auth_result: AuthResult) -> Result<UserInfo, api::Error> {
+fn get_user(username: String, auth: AuthResult) -> ApiResult<UserInfo> {
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
 
-    let client = auth_result?;
+    let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
     if client_id != Some(user.id) {
         api::verify_privilege(client.as_ref(), config::privileges().user_view)?;
@@ -164,12 +164,12 @@ fn get_user(username: String, auth_result: AuthResult) -> Result<UserInfo, api::
     UserInfo::full(&mut conn, user).map_err(api::Error::from)
 }
 
-fn list_users(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<PagedUserInfo, api::Error> {
-    let client = auth_result?;
+fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedUserInfo> {
+    let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().user_list)?;
 
-    let offset = query_info.offset.unwrap_or(0);
-    let limit = query_info.limit;
+    let offset = query.offset.unwrap_or(0);
+    let limit = query.limit;
 
     let mut conn = crate::establish_connection()?;
     let users = user::table
@@ -179,7 +179,7 @@ fn list_users(auth_result: AuthResult, query_info: api::PagedQuery) -> Result<Pa
         .load(&mut conn)?;
 
     Ok(PagedUserInfo {
-        query: query_info.query,
+        query: query.query.query,
         offset,
         limit,
         total: User::count(&mut conn)?,

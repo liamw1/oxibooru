@@ -3,8 +3,7 @@ use crate::schema::{
     comment, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_tag, tag_name,
     user,
 };
-use crate::search::Error;
-use crate::search::{ParsedSort, UnparsedFilter};
+use crate::search::{Error, Order, ParsedSort, UnparsedFilter};
 use crate::{apply_filter, apply_having_clause, apply_sort, apply_str_filter, apply_time_filter};
 use diesel::dsl::{self, IntoBoxed, Select};
 use diesel::pg::Pg;
@@ -14,13 +13,13 @@ use strum::EnumString;
 
 pub type BoxedQuery<'a> = IntoBoxed<'a, Select<post::table, post::id>, Pg>;
 
-pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery, Error> {
+pub fn build_query(client: Option<i32>, search_criteria: &str) -> Result<BoxedQuery, Error> {
     let mut filters: Vec<UnparsedFilter<Token>> = Vec::new();
     let mut sorts: Vec<ParsedSort<Token>> = Vec::new();
     let mut special_tokens: Vec<SpecialToken> = Vec::new();
     let mut random_sort = false;
 
-    for mut term in client_query.split_whitespace() {
+    for mut term in search_criteria.split_whitespace() {
         let negated = term.chars().nth(0) == Some('-');
         if negated {
             term = term.strip_prefix('-').unwrap();
@@ -31,7 +30,8 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
             Some(("sort", "random")) => random_sort = true,
             Some(("sort", value)) => {
                 let kind = Token::from_str(value).map_err(Box::from)?;
-                sorts.push(ParsedSort { kind, negated });
+                let order = if negated { !Order::default() } else { Order::default() };
+                sorts.push(ParsedSort { kind, order });
             }
             Some((key, criteria)) => {
                 filters.push(UnparsedFilter {
@@ -206,9 +206,17 @@ pub fn build_query(client: Option<i32>, client_query: &str) -> Result<BoxedQuery
         }
     })?;
 
+    // If random sort specified, no other sorts matter
     if random_sort {
         define_sql_function!(fn random() -> Integer);
         return Ok(query.order_by(random()));
+    }
+    // Add default sort if none specified
+    if sorts.is_empty() {
+        sorts.push(ParsedSort {
+            kind: Token::Id,
+            order: Order::default(),
+        })
     }
 
     Ok(sorts.into_iter().fold(query, |query, sort| match sort.kind {

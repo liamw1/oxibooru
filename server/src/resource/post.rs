@@ -151,80 +151,119 @@ impl PostInfo {
         mut posts: Vec<Post>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
+        let batch_size = posts.len();
+
         let mut owners = fields[Field::User]
             .then_some(get_post_owners(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(owners.len(), batch_size);
+
         let mut content_urls = fields[Field::ContentUrl]
             .then_some(get_content_urls(&posts))
             .unwrap_or_default();
+        check_batch_results(content_urls.len(), batch_size);
+
         let mut thumbnail_urls = fields[Field::ThumbnailUrl]
             .then_some(get_thumbnail_urls(&posts))
             .unwrap_or_default();
+        check_batch_results(thumbnail_urls.len(), batch_size);
+
         let mut tags = fields[Field::Tags]
             .then_some(get_tags(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(tags.len(), batch_size);
+
         let mut comments = fields[Field::Comments]
             .then_some(get_comments(conn, client, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(comments.len(), batch_size);
+
         let mut relations = fields[Field::Relations]
             .then_some(get_relations(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(relations.len(), batch_size);
+
         let mut pools = fields[Field::Pools]
             .then_some(get_pools(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(pools.len(), batch_size);
+
         let mut notes = fields[Field::Notes]
             .then_some(get_notes(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(notes.len(), batch_size);
+
         let mut scores = fields[Field::Score]
             .then_some(get_scores(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(scores.len(), batch_size);
+
         let mut client_scores = fields[Field::OwnScore]
             .then_some(get_client_scores(conn, client, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(client_scores.len(), batch_size);
+
         let mut client_favorites = fields[Field::OwnFavorite]
             .then_some(get_client_favorites(conn, client, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(client_favorites.len(), batch_size);
+
         let mut tag_counts = fields[Field::TagCount]
             .then_some(get_tag_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(tag_counts.len(), batch_size);
+
         let mut comment_counts = fields[Field::CommentCount]
             .then_some(get_comment_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(comment_counts.len(), batch_size);
+
         let mut relation_counts = fields[Field::RelationCount]
             .then_some(get_relation_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(relation_counts.len(), batch_size);
+
         let mut note_counts = fields[Field::NoteCount]
             .then_some(get_note_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(note_counts.len(), batch_size);
+
         let mut favorite_counts = fields[Field::FavoriteCount]
             .then_some(get_favorite_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(favorite_counts.len(), batch_size);
+
         let mut feature_counts = fields[Field::FeatureCount]
             .then_some(get_feature_counts(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(feature_counts.len(), batch_size);
+
         let mut last_feature_times = fields[Field::LastFeatureTime]
             .then_some(get_last_feature_times(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(last_feature_times.len(), batch_size);
+
         let mut users_who_favorited = fields[Field::FavoritedBy]
             .then_some(get_users_who_favorited(conn, &posts))
             .transpose()?
             .unwrap_or_default();
+        check_batch_results(users_who_favorited.len(), batch_size);
 
         let mut results: Vec<Self> = Vec::new();
         while let Some(post) = posts.pop() {
@@ -260,12 +299,12 @@ impl PostInfo {
                 relation_count: relation_counts.pop(),
                 last_feature_time: last_feature_times.pop(),
                 favorited_by: users_who_favorited.pop(),
-                has_custom_thumbnail: Some(false), // TODO
+                has_custom_thumbnail: fields[Field::HasCustomThumbnail].then_some(false), // TODO
                 comments: comments.pop(),
                 pools: pools.pop(),
             });
         }
-        Ok(results)
+        Ok(results.into_iter().rev().collect())
     }
 }
 
@@ -282,6 +321,10 @@ impl PostNoteInfo {
             text: note.text,
         }
     }
+}
+
+fn check_batch_results(batch_size: usize, post_count: usize) {
+    assert!(batch_size == 0 || batch_size == post_count);
 }
 
 fn get_post_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option<MicroUser>>> {

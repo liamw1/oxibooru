@@ -1,4 +1,4 @@
-use crate::api::AuthResult;
+use crate::api::{ApiResult, AuthResult};
 use crate::model::tag::TagCategory;
 use crate::schema::tag;
 use crate::schema::tag_category;
@@ -34,8 +34,8 @@ struct TagCategoryList {
     results: Vec<TagCategoryInfo>,
 }
 
-fn list_tag_categories(auth_result: AuthResult) -> Result<TagCategoryList, api::Error> {
-    let client = auth_result?;
+fn list_tag_categories(auth: AuthResult) -> ApiResult<TagCategoryList> {
+    let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_list)?;
 
     let mut conn = crate::establish_connection()?;

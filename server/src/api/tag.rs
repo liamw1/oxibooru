@@ -1,5 +1,4 @@
-use crate::api;
-use crate::api::AuthResult;
+use crate::api::{self, ApiResult, AuthResult, PagedQuery};
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -13,6 +12,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     list_tags
 }
 
-fn list_tags(_auth_result: AuthResult, _query_info: api::PagedQuery) -> Result<(), api::Error> {
+fn list_tags(_auth: AuthResult, _query_info: PagedQuery) -> ApiResult<()> {
     unimplemented!()
 }

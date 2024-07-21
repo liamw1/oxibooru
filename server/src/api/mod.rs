@@ -164,6 +164,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
 }
 
 type AuthResult = Result<Option<User>, AuthenticationError>;
+type ApiResult<T> = Result<T, Error>;
 
 #[derive(Deserialize)]
 struct ResourceVersion {
@@ -171,11 +172,37 @@ struct ResourceVersion {
 }
 
 #[derive(Deserialize)]
+struct ResourceQuery {
+    query: Option<String>,
+    fields: Option<String>,
+}
+
+impl ResourceQuery {
+    fn criteria(&self) -> &str {
+        self.query.as_deref().unwrap_or("")
+    }
+
+    fn fields(&self) -> Option<&str> {
+        self.fields.as_deref()
+    }
+}
+
+#[derive(Deserialize)]
 struct PagedQuery {
     offset: Option<i64>,
     limit: i64,
-    query: Option<String>,
-    fields: Option<String>,
+    #[serde(flatten)]
+    query: ResourceQuery,
+}
+
+impl PagedQuery {
+    fn criteria(&self) -> &str {
+        self.query.criteria()
+    }
+
+    fn fields(&self) -> Option<&str> {
+        self.query.fields()
+    }
 }
 
 #[derive(Serialize)]
@@ -212,4 +239,15 @@ fn verify_version(current_version: DateTime, client_version: ResourceVersion) ->
 
 fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {
     warp::header::optional("authorization").map(|auth: Option<_>| auth.map(header::authenticate_user).transpose())
+}
+
+async fn empty_query(_err: Rejection) -> Result<(ResourceQuery,), Infallible> {
+    Ok((ResourceQuery {
+        query: None,
+        fields: None,
+    },))
+}
+
+fn optional_query() -> impl Filter<Extract = (ResourceQuery,), Error = Infallible> + Clone {
+    warp::query::<ResourceQuery>().or_else(empty_query)
 }

@@ -6,10 +6,9 @@
 #[macro_export]
 macro_rules! apply_sort {
     ($query:expr, $expression:expr, $sort:expr) => {
-        if $sort.negated {
-            $query.then_order_by($expression.desc())
-        } else {
-            $query.then_order_by($expression.asc())
+        match $sort.order {
+            $crate::search::Order::Asc => $query.then_order_by($expression.asc()),
+            $crate::search::Order::Desc => $query.then_order_by($expression.desc()),
         }
     };
 }

@@ -2,7 +2,7 @@ mod macros;
 mod parse;
 pub mod post;
 
-use std::ops::Range;
+use std::ops::{Not, Range};
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -24,6 +24,28 @@ pub enum Error {
     NotLoggedIn,
 }
 
+#[derive(Clone, Copy)]
+enum Order {
+    Asc,
+    Desc,
+}
+
+impl Default for Order {
+    fn default() -> Self {
+        Self::Desc
+    }
+}
+
+impl Not for Order {
+    type Output = Self;
+    fn not(self) -> Self::Output {
+        match self {
+            Self::Asc => Self::Desc,
+            Self::Desc => Self::Asc,
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq)]
 enum Criteria<V> {
     Values(Vec<V>),
@@ -40,5 +62,5 @@ struct UnparsedFilter<'a, T> {
 
 struct ParsedSort<T> {
     kind: T,
-    negated: bool,
+    order: Order,
 }

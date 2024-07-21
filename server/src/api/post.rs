@@ -1,4 +1,4 @@
-use crate::api::AuthResult;
+use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::content;
 use crate::image::signature;
 use crate::model::enums::{MimeType, PostSafety, PostType};
@@ -6,8 +6,7 @@ use crate::model::post::{NewPost, NewPostRelation, NewPostSignature, Post, PostS
 use crate::resource;
 use crate::resource::post::{FieldTable, PostInfo};
 use crate::schema::{post, post_relation, post_signature};
-use crate::search;
-use crate::{api, config, filesystem};
+use crate::{api, config, filesystem, search};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use warp::{Filter, Rejection, Reply};
@@ -22,26 +21,26 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     let get_post = warp::get()
         .and(warp::path!("post" / i32))
         .and(api::auth())
-        .and(warp::query())
+        .and(api::optional_query())
         .map(get_post)
         .map(api::Reply::from);
     let get_post_neighbors = warp::get()
         .and(warp::path!("post" / i32 / "around"))
         .and(api::auth())
-        .and(warp::query())
+        .and(api::optional_query())
         .map(get_post_neighbors)
         .map(api::Reply::from);
     let reverse_search = warp::post()
         .and(warp::path!("posts" / "reverse-search"))
         .and(api::auth())
-        .and(warp::query())
+        .and(api::optional_query())
         .and(warp::body::json())
         .map(reverse_search)
         .map(api::Reply::from);
     let post_post = warp::post()
         .and(warp::path!("posts"))
         .and(api::auth())
-        .and(warp::query())
+        .and(api::optional_query())
         .and(warp::body::json())
         .map(create_post)
         .map(api::Reply::from);
@@ -60,7 +59,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete_post)
 }
 
-type PagedPostInfo = api::PagedResponse<PostInfo>;
+type PagedPostInfo = PagedResponse<PostInfo>;
 
 const MAX_POSTS_PER_PAGE: i64 = 50;
 const POST_SIMILARITY_THRESHOLD: f64 = 0.4;
@@ -73,35 +72,29 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_posts(auth: AuthResult, paged_query: api::PagedQuery) -> Result<PagedPostInfo, api::Error> {
+fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPostInfo> {
     let _timer = crate::util::Timer::new("list_posts");
 
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
-    let offset = paged_query.offset.unwrap_or(0);
-    let limit = std::cmp::min(paged_query.limit, MAX_POSTS_PER_PAGE);
-    let fields = create_field_table(paged_query.fields.as_deref())?;
+    let offset = query.offset.unwrap_or(0);
+    let limit = std::cmp::min(query.limit, MAX_POSTS_PER_PAGE);
+    let fields = create_field_table(query.fields())?;
 
-    let query = search::post::build_query(client_id, paged_query.query.as_deref().unwrap_or(""))?;
-    println!("SQL Query: {}\n", diesel::debug_query::<diesel::pg::Pg, _>(&query).to_string());
+    let sql_query = search::post::build_query(client_id, query.criteria())?;
+    println!("SQL Query: {}\n", diesel::debug_query::<diesel::pg::Pg, _>(&sql_query).to_string());
 
     let mut conn = crate::establish_connection()?;
-    let post_ids: Vec<i32> = query.load(&mut conn)?;
-    let total = post_ids.len() as i64;
-    let selected_post_ids: Vec<i32> = post_ids
-        .into_iter()
-        .skip(offset as usize)
-        .take(limit as usize)
-        .collect();
-    let selected_posts: Vec<Post> = post::table
-        .select(Post::as_select())
-        .filter(post::id.eq_any(&selected_post_ids))
-        .load(&mut conn)?;
+
+    // Selecting by Post for now, but would be more efficient to select by ids for large databases
+    let posts: Vec<Post> = sql_query.select(Post::as_select()).load(&mut conn)?;
+    let total = posts.len() as i64;
+    let selected_posts: Vec<Post> = posts.into_iter().skip(offset as usize).take(limit as usize).collect();
 
     Ok(PagedPostInfo {
-        query: paged_query.query,
+        query: query.query.query,
         offset,
         limit,
         total,
@@ -109,11 +102,11 @@ fn list_posts(auth: AuthResult, paged_query: api::PagedQuery) -> Result<PagedPos
     })
 }
 
-fn get_post(post_id: i32, auth: AuthResult, fields: Option<String>) -> Result<PostInfo, api::Error> {
+fn get_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_view)?;
 
-    let fields = create_field_table(fields.as_deref())?;
+    let fields = create_field_table(query.fields())?;
 
     let mut conn = crate::establish_connection()?;
     let post = post::table.find(post_id).select(Post::as_select()).first(&mut conn)?;
@@ -127,30 +120,44 @@ struct PostNeighbors {
     next: Option<PostInfo>,
 }
 
-fn get_post_neighbors(post_id: i32, auth: AuthResult, fields: Option<String>) -> Result<PostNeighbors, api::Error> {
+fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostNeighbors> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
-    let fields = create_field_table(fields.as_deref())?;
+    let fields = create_field_table(query.fields())?;
+    let sql_query = search::post::build_query(client_id, query.criteria())?;
     let mut conn = crate::establish_connection()?;
 
-    let previous_post = post::table
-        .select(Post::as_select())
-        .filter(post::id.lt(post_id))
-        .order_by(post::id.desc())
-        .first(&mut conn)
-        .optional()?;
-    let prev = previous_post
+    let post_ids: Vec<i32> = sql_query.load(&mut conn)?;
+    let post_index = post_ids.iter().position(|&id| id == post_id);
+
+    let prev_post = post_index
+        .and_then(|index| post_ids.get(index - 1))
+        .map(|prev_post_id| {
+            post::table
+                .find(prev_post_id)
+                .select(Post::as_select())
+                .first(&mut conn)
+                .optional()
+        })
+        .transpose()?
+        .flatten();
+    let prev = prev_post
         .map(|post| PostInfo::new(&mut conn, client_id, post, &fields))
         .transpose()?;
 
-    let next_post = post::table
-        .select(Post::as_select())
-        .filter(post::id.gt(post_id))
-        .order_by(post::id.asc())
-        .first(&mut conn)
-        .optional()?;
+    let next_post = post_index
+        .and_then(|index| post_ids.get(index + 1))
+        .map(|next_post_id| {
+            post::table
+                .find(next_post_id)
+                .select(Post::as_select())
+                .first(&mut conn)
+                .optional()
+        })
+        .transpose()?
+        .flatten();
     let next = next_post
         .map(|post| PostInfo::new(&mut conn, client_id, post, &fields))
         .transpose()?;
@@ -177,15 +184,11 @@ struct ReverseSearchInfo {
     similar_posts: Vec<SimilarPostInfo>,
 }
 
-fn reverse_search(
-    auth: AuthResult,
-    fields: Option<String>,
-    token: ContentToken,
-) -> Result<ReverseSearchInfo, api::Error> {
+fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -> ApiResult<ReverseSearchInfo> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_reverse_search)?;
 
-    let fields = create_field_table(fields.as_deref())?;
+    let fields = create_field_table(query.fields())?;
 
     let (_uuid, extension) = token.content_token.split_once('.').unwrap();
     let content_type = MimeType::from_extension(extension)?;
@@ -255,7 +258,7 @@ struct NewPostInfo {
     content_token: String,
 }
 
-fn create_post(auth: AuthResult, fields: Option<String>, post_info: NewPostInfo) -> Result<PostInfo, api::Error> {
+fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {
     let required_rank = match post_info.anonymous.unwrap_or(false) {
         true => config::privileges().post_create_anonymous,
         false => config::privileges().post_create_identified,
@@ -263,7 +266,7 @@ fn create_post(auth: AuthResult, fields: Option<String>, post_info: NewPostInfo)
     let client = auth?;
     api::verify_privilege(client.as_ref(), required_rank)?;
 
-    let fields = create_field_table(fields.as_deref())?;
+    let fields = create_field_table(query.fields())?;
 
     let (_uuid, extension) = post_info.content_token.split_once('.').unwrap();
     let content_type = MimeType::from_extension(extension)?;
@@ -347,7 +350,7 @@ fn create_post(auth: AuthResult, fields: Option<String>, post_info: NewPostInfo)
     PostInfo::new(&mut conn, client_id, post, &fields).map_err(api::Error::from)
 }
 
-fn delete_post(post_id: i32, auth: AuthResult, client_version: api::ResourceVersion) -> Result<(), api::Error> {
+fn delete_post(post_id: i32, auth: AuthResult, client_version: api::ResourceVersion) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 

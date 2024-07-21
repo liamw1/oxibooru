@@ -1,4 +1,4 @@
-use crate::api::AuthResult;
+use crate::api::{ApiResult, AuthResult};
 use crate::model::user::{NewUserToken, User, UserToken};
 use crate::resource::user::MicroUser;
 use crate::schema::user_token;
@@ -49,7 +49,7 @@ struct UserTokenInfo {
 }
 
 impl UserTokenInfo {
-    fn new(user: MicroUser, user_token: UserToken) -> Result<Self, api::Error> {
+    fn new(user: MicroUser, user_token: UserToken) -> ApiResult<Self> {
         Ok(UserTokenInfo {
             version: user_token.last_edit_time,
             user,
@@ -64,15 +64,11 @@ impl UserTokenInfo {
     }
 }
 
-fn create_user_token(
-    username: String,
-    auth_result: AuthResult,
-    token_info: PostUserTokenInfo,
-) -> Result<UserTokenInfo, api::Error> {
+fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTokenInfo) -> ApiResult<UserTokenInfo> {
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
 
-    let client = auth_result?;
+    let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
     let required_rank = match client_id == Some(user.id) {
         true => config::privileges().user_token_create_self,
@@ -97,11 +93,11 @@ fn create_user_token(
     UserTokenInfo::new(MicroUser::new(user), user_token)
 }
 
-fn delete_user_token(username: String, token: Uuid, auth_result: AuthResult) -> Result<(), api::Error> {
+fn delete_user_token(username: String, token: Uuid, auth: AuthResult) -> ApiResult<()> {
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
 
-    let client = auth_result?;
+    let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
     let required_rank = match client_id == Some(user.id) {
         true => config::privileges().user_token_delete_self,

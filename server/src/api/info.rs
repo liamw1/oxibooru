@@ -1,3 +1,4 @@
+use crate::api::ApiResult;
 use crate::model::post::Post;
 use crate::util::DateTime;
 use crate::{api, config};
@@ -29,7 +30,7 @@ async fn get_info_endpoint() -> Result<api::Reply, Infallible> {
     Ok(get_info().into())
 }
 
-fn get_info() -> Result<Info, api::Error> {
+fn get_info() -> ApiResult<Info> {
     let disk_usage = calculate_directory_size(Path::new(&config::get().data_dir))?;
 
     let mut conn = crate::establish_connection()?;
