@@ -20,7 +20,7 @@ impl TagCategoryInfo {
     pub fn all(conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
         let tag_categories = tag_category::table
             .select(TagCategory::as_select())
-            .order_by(tag_category::order.asc())
+            .order(tag_category::order.asc())
             .load(conn)?;
         let tag_category_usages: HashMap<i32, i64> = tag_category::table
             .inner_join(tag::table)

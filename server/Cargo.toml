@@ -7,25 +7,25 @@ edition = "2021"
 
 [dependencies]
 # Disable default-features to limit columns to 16
-diesel = { version = "2.1", default-features = false, features = ["with-deprecated", "postgres", "time", "uuid"] }
-tokio = { version = "1.38", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-strum = { version = "0.26", features = ["derive", "phf"] }
-time = { version = "0.3", features = ["serde-human-readable"] }
-uuid = { version = "1.8", features = ["v4", "serde"] }
-blake3 = { version = "1.5", features = ["std", "traits-preview"] }
-argon2 = { version = "0.5", features = ["std"] }
-rand_core = { version = "0.6", features = ["std"] }   # Necessary for argon2
-pbkdf2 = { version = "0.12", features = ["simple"] }  # Necessary for argon2
-warp = "0.3"
-toml = "0.8"
-image = "0.25"
-hmac = "0.12"
-base64 = "0.22"
-hex = "0.4"
-futures = "0.3"
-thiserror = "1.0"
-itertools = "0.13"
-once_cell = "1.19"
-num-traits = "0.2"
-serde_with = "3.9"
+diesel = { version = "2.2.2", default-features = false, features = ["with-deprecated", "postgres", "time", "uuid"] }
+tokio = { version = "1.38.1", features = ["full"] }
+serde = { version = "1.0.204", features = ["derive"] }
+strum = { version = "0.26.3", features = ["derive", "phf"] }
+time = { version = "0.3.36", features = ["serde-human-readable"] }
+uuid = { version = "1.10.0", features = ["v4", "serde"] }
+blake3 = { version = "1.5.3", features = ["std", "traits-preview"] }
+argon2 = { version = "0.5.3", features = ["std"] }
+rand_core = { version = "0.6.4", features = ["std"] }   # Necessary for argon2
+pbkdf2 = { version = "0.12.2", features = ["simple"] }  # Necessary for argon2
+warp = "0.3.7"
+toml = "0.8.15"
+image = "0.25.2"
+hmac = "0.12.1"
+base64 = "0.22.1"
+hex = "0.4.3"
+futures = "0.3.30"
+thiserror = "1.0.63"
+itertools = "0.13.0"
+once_cell = "1.19.0"
+num-traits = "0.2.19"
+serde_with = "3.9.0"

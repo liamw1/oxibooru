@@ -200,6 +200,8 @@ pub struct TagImplication {
     pub child_id: i32,
 }
 
+diesel::joinable!(tag_implication -> tag (parent_id));
+
 impl TagImplication {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         tag_implication::table.count().first(conn)
@@ -217,6 +219,8 @@ pub struct TagSuggestion {
     pub parent_id: i32,
     pub child_id: i32,
 }
+
+diesel::joinable!(tag_suggestion -> tag (parent_id));
 
 impl TagSuggestion {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {

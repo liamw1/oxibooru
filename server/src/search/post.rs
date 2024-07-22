@@ -5,7 +5,7 @@ use crate::schema::{
 };
 use crate::search::{Error, Order, ParsedSort, UnparsedFilter};
 use crate::{apply_filter, apply_having_clause, apply_sort, apply_str_filter, apply_time_filter};
-use diesel::dsl::{self, IntoBoxed, Select};
+use diesel::dsl::*;
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use std::str::FromStr;
@@ -87,7 +87,7 @@ pub fn build_query(client: Option<i32>, search_criteria: &str) -> Result<BoxedQu
                         .left_join(post_tag::table)
                         .group_by(post::id)
                         .into_boxed();
-                    apply_having_clause!(post_tags, post_tag::post_id, filter)
+                    apply_having_clause!(post_tags, post_tag::tag_id, filter)
                         .map(|subquery| query.filter(post::id.eq_any(subquery)))
                 }
                 Token::CommentCount => {
@@ -96,7 +96,7 @@ pub fn build_query(client: Option<i32>, search_criteria: &str) -> Result<BoxedQu
                         .left_join(comment::table)
                         .group_by(post::id)
                         .into_boxed();
-                    apply_having_clause!(comments, comment::post_id, filter)
+                    apply_having_clause!(comments, comment::id, filter)
                         .map(|subquery| query.filter(post::id.eq_any(subquery)))
                 }
                 Token::FavCount => {
@@ -105,7 +105,7 @@ pub fn build_query(client: Option<i32>, search_criteria: &str) -> Result<BoxedQu
                         .left_join(post_favorite::table)
                         .group_by(post::id)
                         .into_boxed();
-                    apply_having_clause!(post_favorites, post_favorite::post_id, filter)
+                    apply_having_clause!(post_favorites, post_favorite::user_id, filter)
                         .map(|subquery| query.filter(post::id.eq_any(subquery)))
                 }
                 Token::NoteCount => {
@@ -114,7 +114,7 @@ pub fn build_query(client: Option<i32>, search_criteria: &str) -> Result<BoxedQu
                         .left_join(post_note::table)
                         .group_by(post::id)
                         .into_boxed();
-                    apply_having_clause!(post_notes, post_note::post_id, filter)
+                    apply_having_clause!(post_notes, post_note::id, filter)
                         .map(|subquery| query.filter(post::id.eq_any(subquery)))
                 }
                 Token::NoteText => {
@@ -128,7 +128,7 @@ pub fn build_query(client: Option<i32>, search_criteria: &str) -> Result<BoxedQu
                         .left_join(post_relation::table)
                         .group_by(post::id)
                         .into_boxed();
-                    apply_having_clause!(post_relations, post_relation::parent_id, filter)
+                    apply_having_clause!(post_relations, post_relation::child_id, filter)
                         .map(|subquery| query.filter(post::id.eq_any(subquery)))
                 }
                 Token::FeatureCount => {
@@ -137,7 +137,7 @@ pub fn build_query(client: Option<i32>, search_criteria: &str) -> Result<BoxedQu
                         .left_join(post_feature::table)
                         .group_by(post::id)
                         .into_boxed();
-                    apply_having_clause!(post_features, post_feature::post_id, filter)
+                    apply_having_clause!(post_features, post_feature::id, filter)
                         .map(|subquery| query.filter(post::id.eq_any(subquery)))
                 }
                 Token::CommentTime => {
@@ -184,19 +184,19 @@ pub fn build_query(client: Option<i32>, search_criteria: &str) -> Result<BoxedQu
                 .select(post::id)
                 .left_join(post_score::table)
                 .group_by(post::id)
-                .having(dsl::count(post_score::post_id).eq(0))
+                .having(count(post_score::post_id).eq(0))
                 .into_boxed();
             let favorite_subquery = post::table
                 .select(post::id)
                 .left_join(post_favorite::table)
                 .group_by(post::id)
-                .having(dsl::count(post_favorite::post_id).eq(0))
+                .having(count(post_favorite::post_id).eq(0))
                 .into_boxed();
             let comment_subquery = post::table
                 .select(post::id)
                 .left_join(comment::table)
                 .group_by(post::id)
-                .having(dsl::count(comment::post_id).eq(0))
+                .having(count(comment::post_id).eq(0))
                 .into_boxed();
 
             Ok(query
@@ -209,7 +209,7 @@ pub fn build_query(client: Option<i32>, search_criteria: &str) -> Result<BoxedQu
     // If random sort specified, no other sorts matter
     if random_sort {
         define_sql_function!(fn random() -> Integer);
-        return Ok(query.order_by(random()));
+        return Ok(query.order(random()));
     }
     // Add default sort if none specified
     if sorts.is_empty() {

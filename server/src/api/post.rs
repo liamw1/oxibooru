@@ -83,7 +83,7 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPostInfo> {
     let fields = create_field_table(query.fields())?;
 
     let sql_query = search::post::build_query(client_id, query.criteria())?;
-    println!("SQL Query: {}\n", diesel::debug_query::<diesel::pg::Pg, _>(&sql_query).to_string());
+    println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
 
     let mut conn = crate::establish_connection()?;
 
@@ -226,13 +226,14 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     // Search for similar images
     let similar_signatures = PostSignature::find_similar(&mut conn, signature::generate_indexes(&image_signature))?;
     println!("Found {} similar signatures", similar_signatures.len());
-    let similar_post_ids: Vec<_> = similar_signatures
+    let mut similar_post_ids: Vec<_> = similar_signatures
         .into_iter()
         .filter_map(|post_signature| {
             let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
             (distance < POST_SIMILARITY_THRESHOLD).then_some((post_signature.post_id, distance))
         })
         .collect();
+    similar_post_ids.sort_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
     let similar_posts: Vec<_> = similar_post_ids
         .iter()
         .map(|(post_id, _)| post::table.find(post_id).select(Post::as_select()).first(&mut conn))

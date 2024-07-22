@@ -2,7 +2,7 @@ use crate::schema::user;
 use crate::search::{Error, Order, ParsedSort, UnparsedFilter};
 use crate::{apply_sort, apply_str_filter, apply_time_filter};
 use diesel::define_sql_function;
-use diesel::dsl::{IntoBoxed, Select};
+use diesel::dsl::*;
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use std::str::FromStr;
@@ -55,7 +55,7 @@ pub fn build_query(search_criteria: &str) -> Result<BoxedQuery, Error> {
     // If random sort specified, no other sorts matter
     if random_sort {
         define_sql_function!(fn random() -> Integer);
-        return Ok(query.order_by(random()));
+        return Ok(query.order(random()));
     }
     // Add default sort if none specified
     if sorts.is_empty() {

@@ -113,7 +113,7 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedUserInfo> {
     let fields = create_field_table(query.fields())?;
 
     let sql_query = search::user::build_query(query.criteria())?;
-    println!("SQL Query: {}\n", diesel::debug_query::<diesel::pg::Pg, _>(&sql_query).to_string());
+    println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
 
     let mut conn = crate::establish_connection()?;
 
