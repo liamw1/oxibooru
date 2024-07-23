@@ -23,7 +23,6 @@ pub enum Token {
     LastEditTime,
 
     // Requires join
-    #[strum(serialize = "name")]
     Name,
     Category,
     #[strum(serialize = "usages", serialize = "post-count", serialize = "usage-count")]

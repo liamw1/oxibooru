@@ -1,4 +1,5 @@
 pub mod info;
+pub mod pool;
 pub mod pool_category;
 pub mod post;
 pub mod tag;
@@ -154,6 +155,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
 
     info::routes()
         .or(pool_category::routes())
+        .or(pool::routes())
         .or(post::routes())
         .or(tag_category::routes())
         .or(tag::routes())

@@ -26,17 +26,8 @@ use strum::{EnumString, EnumTable};
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroPost {
-    id: i32,
-    thumbnail_url: String,
-}
-
-impl MicroPost {
-    pub fn new(post: &Post) -> Self {
-        MicroPost {
-            id: post.id,
-            thumbnail_url: content::post_thumbnail_url(post.id),
-        }
-    }
+    pub id: i32,
+    pub thumbnail_url: String,
 }
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
@@ -485,9 +476,8 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
 }
 
 fn get_relations(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroPost>>> {
-    let related_posts: Vec<(PostId, Post)> = PostRelation::belonging_to(posts)
-        .inner_join(post::table.on(post::id.eq(post_relation::child_id)))
-        .select((post_relation::parent_id, Post::as_select()))
+    let related_posts: Vec<PostRelation> = PostRelation::belonging_to(posts)
+        .select(PostRelation::as_select())
         .load(conn)?;
     Ok(related_posts
         .grouped_by(posts)
@@ -495,7 +485,10 @@ fn get_relations(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec
         .map(|post_relations| {
             post_relations
                 .into_iter()
-                .map(|(_, relation)| MicroPost::new(&relation))
+                .map(|relation| MicroPost {
+                    id: relation.child_id,
+                    thumbnail_url: content::post_thumbnail_url(relation.child_id),
+                })
                 .collect()
         })
         .collect())
