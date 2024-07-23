@@ -1,0 +1,21 @@
+This is a brief list of improvements I've made to the functionality of the backend as I'm doing my rewrite:
+
+    1. Better reverse search
+        The image signature generation paper has a significant flaw. The main idea of the algorithm
+        is that you select a grid of image regions, take an average pixel intensity over those regions,
+        and compute the differences between adjacent grid points. These differences form a 'signature'
+        of the image. 
+
+        Not all grid points have a full set of neighbors though. When a grid point doesn't have a
+        neighbor in some direction, the paper says to treat that difference as 0. This is perfectly
+        fine for computing distances as these components won't contribute anything to the distances 
+        between signatures. However, these 0'd components matter when performing an indexed search
+        in a database of signatures. Since all signatures share these 0'd components, 'words' of the
+        signature are much more likely to match random signatures. This results in many more false 
+        positives than necessary. 
+
+        By simply not including these 'neighborless' components in the image signatures, we can
+        improve the accuracy of the indexed search significantly. This means we spend less time
+        comparing obviously dissimilar images when performing a reverse search.
+
+    2. Getting around posts now respects sorting
