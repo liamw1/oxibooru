@@ -9,6 +9,7 @@ use crate::util::DateTime;
 use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;
+use serde_with::skip_serializing_none;
 use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
@@ -20,15 +21,7 @@ pub struct MicroUser {
 }
 
 impl MicroUser {
-    pub fn new(user: User) -> Self {
-        let avatar_url = user.avatar_url();
-        Self {
-            name: user.name,
-            avatar_url,
-        }
-    }
-
-    pub fn new2(name: String, avatar_style: AvatarStyle) -> Self {
+    pub fn new(name: String, avatar_style: AvatarStyle) -> Self {
         let avatar_url = match avatar_style {
             AvatarStyle::Gravatar => content::gravatar_url(&name),
             AvatarStyle::Manual => content::custom_avatar_url(&name),
@@ -77,6 +70,7 @@ impl Field {
 }
 
 // TODO: Remove renames by changing references to these names in client
+#[skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {

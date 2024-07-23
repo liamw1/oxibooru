@@ -7,6 +7,7 @@ use crate::util::DateTime;
 use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;
+use serde_with::skip_serializing_none;
 use std::collections::HashMap;
 use std::str::FromStr;
 use strum::{EnumString, EnumTable};
@@ -51,6 +52,7 @@ impl Field {
 }
 
 // TODO: Remove renames by changing references to these names in client
+#[skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PoolInfo {

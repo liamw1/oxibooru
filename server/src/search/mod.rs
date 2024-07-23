@@ -1,3 +1,4 @@
+pub mod comment;
 mod macros;
 mod parse;
 pub mod pool;

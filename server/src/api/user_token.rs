@@ -60,7 +60,7 @@ fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTok
         .values(&new_user_token)
         .returning(UserToken::as_returning())
         .get_result(&mut conn)?;
-    Ok(UserTokenInfo::new(MicroUser::new(user), user_token))
+    Ok(UserTokenInfo::new(MicroUser::new(user.name, user.avatar_style), user_token))
 }
 
 fn delete_user_token(username: String, token: Uuid, auth: AuthResult) -> ApiResult<()> {
