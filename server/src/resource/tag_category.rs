@@ -22,10 +22,10 @@ impl TagCategoryInfo {
             .select(TagCategory::as_select())
             .order(tag_category::order.asc())
             .load(conn)?;
-        let tag_category_usages: HashMap<i32, i64> = tag_category::table
-            .inner_join(tag::table)
+        let tag_category_usages: HashMap<i32, Option<i64>> = tag_category::table
+            .left_join(tag::table)
             .group_by(tag_category::id)
-            .select((tag_category::id, dsl::count(tag::id)))
+            .select((tag_category::id, dsl::count(tag::id).nullable()))
             .load(conn)?
             .into_iter()
             .collect();
@@ -36,7 +36,7 @@ impl TagCategoryInfo {
                 version: category.last_edit_time,
                 name: category.name,
                 color: category.color,
-                usages: tag_category_usages[&category.id],
+                usages: tag_category_usages[&category.id].unwrap_or(0),
                 order: category.order,
                 default: category.id == 0,
             })

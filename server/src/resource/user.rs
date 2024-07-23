@@ -4,7 +4,7 @@ use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::post::{Post, PostFavorite, PostScore};
 use crate::model::user::{User, UserId};
 use crate::resource;
-use crate::schema::{comment, post, post_favorite, post_score};
+use crate::schema::{comment, post, post_favorite, post_score, user};
 use crate::util::DateTime;
 use diesel::dsl::*;
 use diesel::prelude::*;
@@ -107,6 +107,17 @@ impl UserInfo {
         Ok(user_info.pop().unwrap())
     }
 
+    pub fn new_from_id(
+        conn: &mut PgConnection,
+        user_id: i32,
+        fields: &FieldTable<bool>,
+        visibility: Visibility,
+    ) -> QueryResult<Self> {
+        let mut user_info = Self::new_batch_from_ids(conn, vec![user_id], fields, visibility)?;
+        assert_eq!(user_info.len(), 1);
+        Ok(user_info.pop().unwrap())
+    }
+
     pub fn new_batch(
         conn: &mut PgConnection,
         mut users: Vec<User>,
@@ -163,6 +174,16 @@ impl UserInfo {
         }
         Ok(results.into_iter().rev().collect())
     }
+
+    pub fn new_batch_from_ids(
+        conn: &mut PgConnection,
+        user_ids: Vec<i32>,
+        fields: &FieldTable<bool>,
+        visibility: Visibility,
+    ) -> QueryResult<Vec<Self>> {
+        let users = get_users(conn, &user_ids)?;
+        Self::new_batch(conn, users, fields, visibility)
+    }
 }
 
 #[derive(Clone, Serialize)]
@@ -170,6 +191,32 @@ impl UserInfo {
 enum PrivateData<T> {
     Expose(T),
     Visible(bool), // Set to false to indicate hidden
+}
+
+fn get_users(conn: &mut PgConnection, user_ids: &[i32]) -> QueryResult<Vec<User>> {
+    // We get users here, but this query doesn't preserve order
+    let mut users = user::table
+        .select(User::as_select())
+        .filter(user::id.eq_any(user_ids))
+        .load(conn)?;
+
+    /*
+        This algorithm is O(n^2) in user_ids.len(), which could be made O(n) with a HashMap implementation.
+        However, for small n this Vec-based implementation is probably much faster. Since we retrieve
+        40-50 users at a time, I'm leaving it like this for the time being until it proves to be slow.
+    */
+    let mut index = 0;
+    while index < user_ids.len() {
+        let user_id = users[index].id;
+        let correct_index = user_ids.iter().position(|&id| id == user_id).unwrap();
+        if index != correct_index {
+            users.swap(index, correct_index);
+        } else {
+            index += 1;
+        }
+    }
+
+    Ok(users)
 }
 
 fn get_comment_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<i64>> {

@@ -17,10 +17,10 @@ pub struct PoolCategoryInfo {
 impl PoolCategoryInfo {
     pub fn all(conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
         let pool_categories = pool_category::table.select(PoolCategory::as_select()).load(conn)?;
-        let pool_category_usages: HashMap<i32, i64> = pool_category::table
-            .inner_join(pool::table)
+        let pool_category_usages: HashMap<i32, Option<i64>> = pool_category::table
+            .left_join(pool::table)
             .group_by(pool_category::id)
-            .select((pool_category::id, dsl::count(pool::id)))
+            .select((pool_category::id, dsl::count(pool::id).nullable()))
             .load(conn)?
             .into_iter()
             .collect();
@@ -31,7 +31,7 @@ impl PoolCategoryInfo {
                 version: category.last_edit_time,
                 name: category.name,
                 color: category.color,
-                usages: pool_category_usages[&category.id],
+                usages: pool_category_usages[&category.id].unwrap_or(0),
                 default: category.id == 0,
             })
             .collect())

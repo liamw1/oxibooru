@@ -156,6 +156,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
         .or(pool_category::routes())
         .or(post::routes())
         .or(tag_category::routes())
+        .or(tag::routes())
         .or(upload::routes())
         .or(user_token::routes())
         .or(user::routes())

@@ -112,21 +112,22 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedUserInfo> {
     let limit = std::cmp::min(query.limit, MAX_USERS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    let sql_query = search::user::build_query(query.criteria())?;
+    let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
+    search_criteria.add_offset_and_limit(offset, limit);
+    let count_query = search::user::build_query(&search_criteria)?;
+    let sql_query = search::user::build_query(&search_criteria)?;
+
     println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
 
     let mut conn = crate::establish_connection()?;
-
-    // Selecting by User for now, but would be more efficient to select by ids for large databases
-    let users: Vec<User> = sql_query.select(User::as_select()).load(&mut conn)?;
-    let total = users.len() as i64;
-    let selected_posts: Vec<User> = users.into_iter().skip(offset as usize).take(limit as usize).collect();
+    let total = count_query.count().first(&mut conn)?;
+    let selected_users: Vec<i32> = search::user::get_ordered_ids(&mut conn, sql_query, &search_criteria)?;
 
     Ok(PagedUserInfo {
         query: query.query.query,
         offset,
         limit,
         total,
-        results: UserInfo::new_batch(&mut conn, selected_posts, &fields, Visibility::PublicOnly)?,
+        results: UserInfo::new_batch_from_ids(&mut conn, selected_users, &fields, Visibility::PublicOnly)?,
     })
 }

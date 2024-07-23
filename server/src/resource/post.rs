@@ -146,7 +146,18 @@ impl PostInfo {
         Ok(post_info.pop().unwrap())
     }
 
-    pub fn new_batch(
+    pub fn new_from_id(
+        conn: &mut PgConnection,
+        client: Option<i32>,
+        post_id: i32,
+        fields: &FieldTable<bool>,
+    ) -> QueryResult<Self> {
+        let mut post_info = Self::new_batch_from_ids(conn, client, vec![post_id], fields)?;
+        assert_eq!(post_info.len(), 1);
+        Ok(post_info.pop().unwrap())
+    }
+
+    fn new_batch(
         conn: &mut PgConnection,
         client: Option<i32>,
         mut posts: Vec<Post>,
@@ -290,6 +301,16 @@ impl PostInfo {
         }
         Ok(results.into_iter().rev().collect())
     }
+
+    pub fn new_batch_from_ids(
+        conn: &mut PgConnection,
+        client: Option<i32>,
+        post_ids: Vec<i32>,
+        fields: &FieldTable<bool>,
+    ) -> QueryResult<Vec<Self>> {
+        let posts = get_posts(conn, &post_ids)?;
+        Self::new_batch(conn, client, posts, fields)
+    }
 }
 
 #[derive(Serialize)]
@@ -305,6 +326,32 @@ impl PostNoteInfo {
             text: note.text,
         }
     }
+}
+
+fn get_posts(conn: &mut PgConnection, post_ids: &[i32]) -> QueryResult<Vec<Post>> {
+    // We get posts here, but this query doesn't preserve order
+    let mut posts = post::table
+        .select(Post::as_select())
+        .filter(post::id.eq_any(post_ids))
+        .load(conn)?;
+
+    /*
+        This algorithm is O(n^2) in post_ids.len(), which could be made O(n) with a HashMap implementation.
+        However, for small n this Vec-based implementation is probably much faster. Since we retrieve
+        40-50 posts at a time, I'm leaving it like this for the time being until it proves to be slow.
+    */
+    let mut index = 0;
+    while index < post_ids.len() {
+        let post_id = posts[index].id;
+        let correct_index = post_ids.iter().position(|&id| id == post_id).unwrap();
+        if index != correct_index {
+            posts.swap(index, correct_index);
+        } else {
+            index += 1;
+        }
+    }
+
+    Ok(posts)
 }
 
 fn get_post_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option<MicroUser>>> {
@@ -361,6 +408,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
         .inner_join(tag::table.inner_join(tag_name::table))
         .select((PostTag::as_select(), TagName::as_select()))
         .load(conn)?;
+
     let process_tag = |tag_info: (&Tag, Vec<(PostTag, TagName)>)| -> Option<MicroTag> {
         let (tag, tag_names) = tag_info;
         (!tag_names.is_empty()).then_some({

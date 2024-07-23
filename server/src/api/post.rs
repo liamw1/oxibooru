@@ -82,22 +82,23 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPostInfo> {
     let limit = std::cmp::min(query.limit, MAX_POSTS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    let sql_query = search::post::build_query(client_id, query.criteria())?;
+    let mut search_criteria = search::post::parse_search_criteria(query.criteria())?;
+    search_criteria.add_offset_and_limit(offset, limit);
+    let count_query = search::post::build_query(client_id, &search_criteria)?;
+    let sql_query = search::post::build_query(client_id, &search_criteria)?;
+
     println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
 
     let mut conn = crate::establish_connection()?;
-
-    // Selecting by Post for now, but would be more efficient to select by ids for large databases
-    let posts: Vec<Post> = sql_query.select(Post::as_select()).load(&mut conn)?;
-    let total = posts.len() as i64;
-    let selected_posts: Vec<Post> = posts.into_iter().skip(offset as usize).take(limit as usize).collect();
+    let total = count_query.count().first(&mut conn)?;
+    let selected_posts: Vec<i32> = search::post::get_ordered_ids(&mut conn, sql_query, &search_criteria)?;
 
     Ok(PagedPostInfo {
         query: query.query.query,
         offset,
         limit,
         total,
-        results: PostInfo::new_batch(&mut conn, client_id, selected_posts, &fields)?,
+        results: PostInfo::new_batch_from_ids(&mut conn, client_id, selected_posts, &fields)?,
     })
 }
 
@@ -108,9 +109,8 @@ fn get_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<P
     let fields = create_field_table(query.fields())?;
 
     let mut conn = crate::establish_connection()?;
-    let post = post::table.find(post_id).select(Post::as_select()).first(&mut conn)?;
     let client_id = client.map(|user| user.id);
-    PostInfo::new(&mut conn, client_id, post, &fields).map_err(api::Error::from)
+    PostInfo::new_from_id(&mut conn, client_id, post_id, &fields).map_err(api::Error::from)
 }
 
 #[derive(Serialize)]
@@ -127,40 +127,21 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
 
     let client_id = client.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
-    let sql_query = search::post::build_query(client_id, query.criteria())?;
+    let search_criteria = search::post::parse_search_criteria(query.criteria())?;
+    let sql_query = search::post::build_query(client_id, &search_criteria)?;
     let mut conn = crate::establish_connection()?;
 
-    let post_ids: Vec<i32> = sql_query.load(&mut conn)?;
+    let post_ids: Vec<i32> = search::post::get_ordered_ids(&mut conn, sql_query, &search_criteria)?;
     let post_index = post_ids.iter().position(|&id| id == post_id);
 
-    let prev_post = post_index
-        .and_then(|index| post_ids.get(index - 1))
-        .map(|prev_post_id| {
-            post::table
-                .find(prev_post_id)
-                .select(Post::as_select())
-                .first(&mut conn)
-                .optional()
-        })
-        .transpose()?
-        .flatten();
-    let prev = prev_post
-        .map(|post| PostInfo::new(&mut conn, client_id, post, &fields))
+    let prev_post_id = post_index.and_then(|index| post_ids.get(index - 1));
+    let prev = prev_post_id
+        .map(|&post_id| PostInfo::new_from_id(&mut conn, client_id, post_id, &fields))
         .transpose()?;
 
-    let next_post = post_index
-        .and_then(|index| post_ids.get(index + 1))
-        .map(|next_post_id| {
-            post::table
-                .find(next_post_id)
-                .select(Post::as_select())
-                .first(&mut conn)
-                .optional()
-        })
-        .transpose()?
-        .flatten();
-    let next = next_post
-        .map(|post| PostInfo::new(&mut conn, client_id, post, &fields))
+    let next_post_id = post_index.and_then(|index| post_ids.get(index + 1));
+    let next = next_post_id
+        .map(|&post_id| PostInfo::new_from_id(&mut conn, client_id, post_id, &fields))
         .transpose()?;
 
     Ok(PostNeighbors { prev, next })
@@ -217,7 +198,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     if exact_post.is_some() {
         return Ok(ReverseSearchInfo {
             exact_post: exact_post
-                .map(|post| PostInfo::new(&mut conn, client_id, post, &fields))
+                .map(|post_id| PostInfo::new(&mut conn, client_id, post_id, &fields))
                 .transpose()?,
             similar_posts: Vec::new(),
         });
@@ -226,23 +207,22 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     // Search for similar images
     let similar_signatures = PostSignature::find_similar(&mut conn, signature::generate_indexes(&image_signature))?;
     println!("Found {} similar signatures", similar_signatures.len());
-    let mut similar_post_ids: Vec<_> = similar_signatures
+    let mut similar_posts: Vec<_> = similar_signatures
         .into_iter()
         .filter_map(|post_signature| {
             let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
             (distance < POST_SIMILARITY_THRESHOLD).then_some((post_signature.post_id, distance))
         })
         .collect();
-    similar_post_ids.sort_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
-    let similar_posts: Vec<_> = similar_post_ids
-        .iter()
-        .map(|(post_id, _)| post::table.find(post_id).select(Post::as_select()).first(&mut conn))
-        .collect::<QueryResult<_>>()?;
+    similar_posts.sort_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
+
+    let post_ids = similar_posts.iter().map(|(post_id, _)| *post_id).collect();
+    let distances: Vec<f64> = similar_posts.iter().map(|(_, distance)| *distance).collect();
     Ok(ReverseSearchInfo {
         exact_post: None,
-        similar_posts: PostInfo::new_batch(&mut conn, client_id, similar_posts, &fields)?
+        similar_posts: PostInfo::new_batch_from_ids(&mut conn, client_id, post_ids, &fields)?
             .into_iter()
-            .zip(similar_post_ids.into_iter().map(|(_, distance)| distance))
+            .zip(distances.into_iter())
             .map(|(post, distance)| SimilarPostInfo { distance, post })
             .collect(),
     })
