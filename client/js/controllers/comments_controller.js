@@ -36,7 +36,7 @@ class CommentsController {
             },
             requestPage: (offset, limit) => {
                 return PostList.search(
-                    "sort:comment-date comment-count-min:1",
+                    "sort:comment-date comment-count:1..",
                     offset,
                     limit,
                     fields

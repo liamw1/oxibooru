@@ -58,10 +58,6 @@ take following form:</p>
     </tbody>
 </table>
 
-<p>Ranged values can be also supplied by appending <code>-min</code> or
-<code>-max</code> to the key, for example like this:
-<code>score-min:1</code>.</p>
-
 <p>Date/time values can be of following form:</p>
 
 <ul>
