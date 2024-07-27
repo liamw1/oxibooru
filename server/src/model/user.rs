@@ -132,7 +132,7 @@ impl User {
             text,
         };
         diesel::insert_into(comment::table)
-            .values(&new_comment)
+            .values(new_comment)
             .returning(Comment::as_returning())
             .get_result(conn)
     }
@@ -145,7 +145,7 @@ impl User {
             time: DateTime::now(),
         };
         diesel::insert_into(comment_score::table)
-            .values(&new_comment_score)
+            .values(new_comment_score)
             .returning(CommentScore::as_returning())
             .get_result(conn)
     }
@@ -158,7 +158,7 @@ impl User {
             time: DateTime::now(),
         };
         diesel::insert_into(comment_score::table)
-            .values(&new_comment_score)
+            .values(new_comment_score)
             .returning(CommentScore::as_returning())
             .get_result(conn)
     }
@@ -171,7 +171,7 @@ impl User {
             time: DateTime::now(),
         };
         diesel::insert_into(post_score::table)
-            .values(&new_post_score)
+            .values(new_post_score)
             .returning(PostScore::as_returning())
             .get_result(conn)
     }
@@ -183,7 +183,7 @@ impl User {
             time: DateTime::now(),
         };
         diesel::insert_into(post_favorite::table)
-            .values(&new_post_favorite)
+            .values(new_post_favorite)
             .returning(PostFavorite::as_returning())
             .get_result(conn)
     }
@@ -195,7 +195,7 @@ impl User {
             time: DateTime::now(),
         };
         diesel::insert_into(post_feature::table)
-            .values(&new_post_feature)
+            .values(new_post_feature)
             .returning(PostFeature::as_returning())
             .get_result(conn)
     }

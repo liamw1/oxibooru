@@ -1,13 +1,16 @@
-use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery};
+use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery, ResourceVersion};
 use crate::auth::content;
 use crate::image::signature;
 use crate::model::enums::{MimeType, PostSafety, PostType};
-use crate::model::post::{NewPost, NewPostRelation, NewPostSignature, Post, PostSignature};
+use crate::model::post::{NewPost, NewPostRelation, NewPostSignature, NewPostTag, Post, PostSignature};
+use crate::model::tag::{NewTag, NewTagName};
 use crate::resource::post::{FieldTable, PostInfo};
-use crate::schema::{post, post_relation, post_signature};
+use crate::schema::{post, post_relation, post_signature, post_tag, tag, tag_name};
+use crate::util::DateTime;
 use crate::{api, config, filesystem, resource, search};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -20,28 +23,35 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     let get_post = warp::get()
         .and(warp::path!("post" / i32))
         .and(api::auth())
-        .and(api::optional_query())
+        .and(api::resource_query())
         .map(get_post)
         .map(api::Reply::from);
     let get_post_neighbors = warp::get()
         .and(warp::path!("post" / i32 / "around"))
         .and(api::auth())
-        .and(api::optional_query())
+        .and(api::resource_query())
         .map(get_post_neighbors)
         .map(api::Reply::from);
     let reverse_search = warp::post()
         .and(warp::path!("posts" / "reverse-search"))
         .and(api::auth())
-        .and(api::optional_query())
+        .and(api::resource_query())
         .and(warp::body::json())
         .map(reverse_search)
         .map(api::Reply::from);
     let post_post = warp::post()
         .and(warp::path!("posts"))
         .and(api::auth())
-        .and(api::optional_query())
+        .and(api::resource_query())
         .and(warp::body::json())
         .map(create_post)
+        .map(api::Reply::from);
+    let put_post = warp::put()
+        .and(warp::path!("post" / i32))
+        .and(api::auth())
+        .and(api::resource_query())
+        .and(warp::body::json())
+        .map(update_post)
         .map(api::Reply::from);
     let delete_post = warp::delete()
         .and(warp::path!("post" / i32))
@@ -55,6 +65,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(get_post_neighbors)
         .or(reverse_search)
         .or(post_post)
+        .or(put_post)
         .or(delete_post)
 }
 
@@ -277,26 +288,25 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
 
     let mut conn = crate::establish_connection()?;
     let post = diesel::insert_into(post::table)
-        .values(&new_post)
+        .values(new_post)
         .returning(Post::as_returning())
         .get_result(&mut conn)?;
 
     // Add tags: TODO
 
     // Add relations
-    let mut new_relations = Vec::new();
-    for related_post_id in post_info.relations.unwrap_or_default().into_iter() {
-        new_relations.push(NewPostRelation {
-            parent_id: post.id,
-            child_id: related_post_id,
-        });
-        new_relations.push(NewPostRelation {
-            parent_id: related_post_id,
-            child_id: post.id,
-        })
-    }
+    let relations = post_info.relations.unwrap_or_default();
+    let new_on_existing = relations.iter().map(|&parent_id| NewPostRelation {
+        parent_id,
+        child_id: post.id,
+    });
+    let existing_on_new = relations.iter().map(|&child_id| NewPostRelation {
+        parent_id: post.id,
+        child_id,
+    });
+    let new_post_relations = new_on_existing.chain(existing_on_new).collect::<Vec<_>>();
     diesel::insert_into(post_relation::table)
-        .values(&new_relations)
+        .values(new_post_relations)
         .execute(&mut conn)?;
 
     // Generate image signature
@@ -307,7 +317,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         words: &signature::generate_indexes(&image_signature),
     };
     diesel::insert_into(post_signature::table)
-        .values(&new_post_signature)
+        .values(new_post_signature)
         .execute(&mut conn)?;
 
     // Move content to permanent location
@@ -332,15 +342,159 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     PostInfo::new(&mut conn, client_id, post, &fields).map_err(api::Error::from)
 }
 
-fn delete_post(post_id: i32, auth: AuthResult, client_version: api::ResourceVersion) -> ApiResult<()> {
+#[derive(Deserialize)]
+struct PostUpdateInfo {
+    version: DateTime,
+    safety: Option<PostSafety>,
+    source: Option<String>,
+    relations: Option<Vec<i32>>,
+    tags: Option<Vec<String>>,
+    // notes: TODO
+    // flags: TODO
+}
+
+fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: PostUpdateInfo) -> ApiResult<PostInfo> {
+    let _timer = crate::util::Timer::new("update_post");
+
+    let client = auth?;
+    if update.safety.is_some() {
+        api::verify_privilege(client.as_ref(), config::privileges().post_edit_safety)?;
+    }
+    if update.source.is_some() {
+        api::verify_privilege(client.as_ref(), config::privileges().post_edit_source)?;
+    }
+    if update.relations.is_some() {
+        api::verify_privilege(client.as_ref(), config::privileges().post_edit_relation)?;
+    }
+    if update.tags.is_some() {
+        api::verify_privilege(client.as_ref(), config::privileges().post_edit_tag)?;
+    }
+
+    let fields = create_field_table(query.fields())?;
+    crate::establish_connection()?.transaction(|conn| {
+        let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
+        api::verify_version(post_version, update.version)?;
+
+        // Update safety
+        update
+            .safety
+            .map(|safety| {
+                diesel::update(post::table.find(post_id))
+                    .set(post::safety.eq(safety))
+                    .execute(conn)
+            })
+            .transpose()?;
+
+        // Update source
+        update
+            .source
+            .map(|source| {
+                diesel::update(post::table.find(post_id))
+                    .set(post::source.eq(source))
+                    .execute(conn)
+            })
+            .transpose()?;
+
+        // Update relations
+        let current_relations: HashSet<i32> = post_relation::table
+            .select(post_relation::child_id)
+            .filter(post_relation::parent_id.eq(post_id))
+            .load(conn)?
+            .into_iter()
+            .collect();
+        let (shared_relations, new_relations): (HashSet<_>, _) = update
+            .relations
+            .unwrap_or_default()
+            .into_iter()
+            .partition(|relation| current_relations.contains(relation));
+        let relations_to_remove: Vec<_> = current_relations
+            .into_iter()
+            .filter(|relation| !shared_relations.contains(relation))
+            .collect();
+        let new_relations: Vec<_> = new_relations
+            .into_iter()
+            .map(|child_id| NewPostRelation {
+                parent_id: post_id,
+                child_id,
+            })
+            .collect();
+        diesel::delete(post_relation::table)
+            .filter(post_relation::parent_id.eq(post_id))
+            .filter(post_relation::child_id.eq_any(&relations_to_remove))
+            .execute(conn)?;
+        diesel::insert_into(post_relation::table)
+            .values(new_relations)
+            .execute(conn)?;
+
+        // Update tags
+        let current_tag_ids: HashSet<i32> = post_tag::table
+            .select(post_tag::tag_id)
+            .filter(post_tag::post_id.eq(post_id))
+            .load(conn)?
+            .into_iter()
+            .collect();
+        let update_tags = update.tags.unwrap_or_default();
+        let all_update_tag_names: Vec<(i32, String)> = tag_name::table
+            .select((tag_name::tag_id, tag_name::name))
+            .filter(tag_name::name.eq_any(&update_tags))
+            .load(conn)?;
+        let mut update_tag_ids: HashSet<_> = all_update_tag_names.iter().map(|(tag_id, _)| *tag_id).collect();
+        let all_update_tag_names: HashSet<_> = all_update_tag_names.into_iter().map(|(_, tag_name)| tag_name).collect();
+        let new_tag_names: Vec<_> = update_tags
+            .into_iter()
+            .filter(|tag_name| !all_update_tag_names.contains(tag_name))
+            .collect();
+        if !new_tag_names.is_empty() {
+            api::verify_privilege(client.as_ref(), config::privileges().tag_create)?;
+            let new_tag_ids: Vec<i32> = diesel::insert_into(tag::table)
+                .values(vec![NewTag::default(); new_tag_names.len()])
+                .returning(tag::id)
+                .get_results(conn)?;
+            let new_tag_names: Vec<_> = new_tag_ids
+                .iter()
+                .zip(new_tag_names.iter())
+                .map(|(&tag_id, name)| NewTagName { tag_id, order: 0, name })
+                .collect();
+            diesel::insert_into(tag_name::table)
+                .values(new_tag_names)
+                .execute(conn)?;
+            update_tag_ids.extend(new_tag_ids.iter());
+        }
+        let post_tags_to_remove: Vec<_> = current_tag_ids
+            .iter()
+            .filter(|&tag_id| !update_tag_ids.contains(tag_id))
+            .cloned()
+            .collect();
+        let new_post_tags: Vec<_> = update_tag_ids
+            .into_iter()
+            .filter(|tag_id| !current_tag_ids.contains(tag_id))
+            .map(|tag_id| NewPostTag { post_id, tag_id })
+            .collect();
+        diesel::delete(post_tag::table)
+            .filter(post_tag::post_id.eq(post_id))
+            .filter(post_tag::post_id.eq_any(post_tags_to_remove))
+            .execute(conn)?;
+        diesel::insert_into(post_tag::table)
+            .values(new_post_tags)
+            .execute(conn)?;
+
+        let client_id = client.map(|user| user.id);
+        PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
+    })
+}
+
+fn delete_post(post_id: i32, auth: AuthResult, client_version: ResourceVersion) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 
     let mut conn = crate::establish_connection()?;
-    let post = post::table.find(post_id).select(Post::as_select()).first(&mut conn)?;
-    api::verify_version(post.last_edit_time, client_version)?;
+    let post_version = post::table
+        .find(post_id)
+        .select(post::last_edit_time)
+        .first(&mut conn)?;
+    api::verify_version(post_version, *client_version)?;
 
-    post.delete(&mut conn)?;
+    diesel::delete(post::table.find(post_id)).execute(&mut conn)?;
 
     Ok(())
 }

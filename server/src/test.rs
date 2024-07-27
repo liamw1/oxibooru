@@ -48,7 +48,7 @@ pub fn create_test_user(conn: &mut PgConnection, name: &str) -> QueryResult<User
         avatar_style: AvatarStyle::Manual,
     };
     diesel::insert_into(user::table)
-        .values(&new_user)
+        .values(new_user)
         .returning(User::as_returning())
         .get_result(conn)
 }
@@ -67,7 +67,7 @@ pub fn create_test_user_token(
         expiration_time,
     };
     diesel::insert_into(user_token::table)
-        .values(&new_user_token)
+        .values(new_user_token)
         .returning(UserToken::as_returning())
         .get_result(conn)
 }
@@ -85,7 +85,7 @@ pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Pos
         source: None,
     };
     diesel::insert_into(post::table)
-        .values(&new_post)
+        .values(new_post)
         .returning(Post::as_returning())
         .get_result(conn)
 }
@@ -97,7 +97,7 @@ pub fn create_test_post_note(conn: &mut PgConnection, post: &Post) -> QueryResul
         text: String::from("This is a test note"),
     };
     diesel::insert_into(post_note::table)
-        .values(&new_post_note)
+        .values(new_post_note)
         .returning(PostNote::as_returning())
         .get_result(conn)
 }
@@ -109,7 +109,7 @@ pub fn create_test_post_signature(conn: &mut PgConnection, post: &Post) -> Query
         words: &[],
     };
     diesel::insert_into(post_signature::table)
-        .values(&new_post_signature)
+        .values(new_post_signature)
         .returning(PostSignature::as_returning())
         .get_result(conn)
 }

@@ -80,11 +80,7 @@ impl PoolInfo {
         Ok(pool_info.pop().unwrap())
     }
 
-    pub fn new_batch(
-        conn: &mut PgConnection,
-        mut pools: Vec<Pool>,
-        fields: &FieldTable<bool>,
-    ) -> QueryResult<Vec<Self>> {
+    pub fn new_batch(conn: &mut PgConnection, pools: Vec<Pool>, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
         let batch_size = pools.len();
 
         let mut categories = fields[Field::Category]
@@ -107,9 +103,10 @@ impl PoolInfo {
             .unwrap_or_default();
         resource::check_batch_results(post_counts.len(), batch_size);
 
-        let mut results: Vec<Self> = Vec::new();
-        while let Some(pool) = pools.pop() {
-            results.push(Self {
+        let results = pools
+            .into_iter()
+            .rev()
+            .map(|pool| Self {
                 version: fields[Field::Version].then_some(pool.last_edit_time),
                 id: fields[Field::Id].then_some(pool.id),
                 description: fields[Field::Description].then_some(pool.description),
@@ -119,8 +116,8 @@ impl PoolInfo {
                 names: names.pop(),
                 posts: posts.pop(),
                 post_count: post_counts.pop(),
-            });
-        }
+            })
+            .collect::<Vec<_>>();
         Ok(results.into_iter().rev().collect())
     }
 

@@ -16,6 +16,7 @@ use crate::model::user::User;
 use crate::util::DateTime;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
+use std::ops::Deref;
 use warp::http::StatusCode;
 use warp::reply::Json;
 use warp::reply::Response;
@@ -164,6 +165,12 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
         .or(upload::routes())
         .or(user_token::routes())
         .or(user::routes())
+        .or(warp::any()
+            .and(warp::body::bytes())
+            .map(|bytes: warp::hyper::body::Bytes| {
+                println!("Request body: {}", std::str::from_utf8(&bytes).expect("error converting bytes to &str"));
+                warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
+            }))
         .or(catch_all)
         .with(log)
 }
@@ -174,6 +181,13 @@ type ApiResult<T> = Result<T, Error>;
 #[derive(Deserialize)]
 struct ResourceVersion {
     version: DateTime,
+}
+
+impl Deref for ResourceVersion {
+    type Target = DateTime;
+    fn deref(&self) -> &Self::Target {
+        &self.version
+    }
 }
 
 #[derive(Deserialize)]
@@ -236,8 +250,8 @@ fn verify_privilege(client: Option<&User>, required_rank: UserRank) -> Result<()
         .ok_or(Error::InsufficientPrivileges)
 }
 
-fn verify_version(current_version: DateTime, client_version: ResourceVersion) -> Result<(), Error> {
-    (current_version == client_version.version)
+fn verify_version(current_version: DateTime, client_version: DateTime) -> Result<(), Error> {
+    (current_version == client_version)
         .then_some(())
         .ok_or(Error::OutOfDate)
 }
@@ -253,6 +267,9 @@ async fn empty_query(_err: Rejection) -> Result<(ResourceQuery,), Infallible> {
     },))
 }
 
-fn optional_query() -> impl Filter<Extract = (ResourceQuery,), Error = Infallible> + Clone {
+/*
+    Optionally serializes a resource query
+*/
+fn resource_query() -> impl Filter<Extract = (ResourceQuery,), Error = Infallible> + Clone {
     warp::query::<ResourceQuery>().or_else(empty_query)
 }

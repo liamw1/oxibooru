@@ -57,7 +57,7 @@ fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTok
         expiration_time: token_info.expiration_time,
     };
     let user_token: UserToken = diesel::insert_into(user_token::table)
-        .values(&new_user_token)
+        .values(new_user_token)
         .returning(UserToken::as_returning())
         .get_result(&mut conn)?;
     Ok(UserTokenInfo::new(MicroUser::new(user.name, user.avatar_style), user_token))

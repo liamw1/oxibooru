@@ -40,7 +40,7 @@ impl PoolCategory {
     pub fn new(conn: &mut PgConnection, name: &str, color: &str) -> QueryResult<Self> {
         let new_pool_category = NewPoolCategory { name, color };
         diesel::insert_into(pool_category::table)
-            .values(&new_pool_category)
+            .values(new_pool_category)
             .returning(Self::as_returning())
             .get_result(conn)
     }
@@ -113,7 +113,7 @@ impl Pool {
             category_id: 0, // Default pool category
         };
         diesel::insert_into(pool::table)
-            .values(&new_pool)
+            .values(new_pool)
             .returning(Self::as_returning())
             .get_result(conn)
     }
@@ -138,7 +138,7 @@ impl Pool {
             name,
         };
         diesel::insert_into(pool_name::table)
-            .values(&new_pool_name)
+            .values(new_pool_name)
             .returning(PoolName::as_returning())
             .get_result(conn)
     }
@@ -151,7 +151,7 @@ impl Pool {
             order: i32::try_from(post_count).unwrap(),
         };
         diesel::insert_into(pool_post::table)
-            .values(&new_pool_post)
+            .values(new_pool_post)
             .returning(PoolPost::as_returning())
             .get_result(conn)
     }

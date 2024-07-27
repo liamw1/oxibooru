@@ -68,6 +68,15 @@ impl<'a, L, R> Iterator for CartesianProductIter<'a, L, R> {
 
         Some(self.cartesian_product.at(current.i, current.j))
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = self
+            .cartesian_product
+            .left
+            .len()
+            .checked_mul(self.cartesian_product.right.len());
+        (size.unwrap_or(usize::MAX), size)
+    }
 }
 
 #[cfg(test)]

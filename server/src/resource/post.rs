@@ -150,7 +150,7 @@ impl PostInfo {
     fn new_batch(
         conn: &mut PgConnection,
         client: Option<i32>,
-        mut posts: Vec<Post>,
+        posts: Vec<Post>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         let batch_size = posts.len();
@@ -250,45 +250,48 @@ impl PostInfo {
             .unwrap_or_default();
         resource::check_batch_results(users_who_favorited.len(), batch_size);
 
-        let mut results: Vec<Self> = Vec::new();
-        while let Some(post) = posts.pop() {
-            results.push(Self {
-                version: fields[Field::Version].then_some(post.last_edit_time),
-                id: fields[Field::Id].then_some(post.id),
-                user: owners.pop(),
-                file_size: fields[Field::FileSize].then_some(post.file_size),
-                canvas_width: fields[Field::CanvasWidth].then_some(post.width),
-                canvas_height: fields[Field::CanvasHeight].then_some(post.height),
-                safety: fields[Field::Safety].then_some(post.safety),
-                type_: fields[Field::Type].then_some(post.type_),
-                mime_type: fields[Field::MimeType].then_some(post.mime_type),
-                checksum: fields[Field::Checksum].then_some(post.checksum),
-                checksum_md5: fields[Field::ChecksumMd5].then_some(post.checksum_md5),
-                flags: fields[Field::Flags].then_some(post.flags),
-                source: fields[Field::Source].then_some(post.source),
-                creation_time: fields[Field::CreationTime].then_some(post.creation_time),
-                last_edit_time: fields[Field::LastEditTime].then_some(post.last_edit_time),
-                content_url: content_urls.pop(),
-                thumbnail_url: thumbnail_urls.pop(),
-                tags: tags.pop(),
-                relations: relations.pop(),
-                notes: notes.pop(),
-                score: scores.pop(),
-                own_score: client_scores.pop(),
-                own_favorite: client_favorites.pop(),
-                tag_count: tag_counts.pop(),
-                favorite_count: favorite_counts.pop(),
-                comment_count: comment_counts.pop(),
-                note_count: note_counts.pop(),
-                feature_count: feature_counts.pop(),
-                relation_count: relation_counts.pop(),
-                last_feature_time: last_feature_times.pop(),
-                favorited_by: users_who_favorited.pop(),
-                has_custom_thumbnail: fields[Field::HasCustomThumbnail].then_some(false), // TODO
-                comments: comments.pop(),
-                pools: pools.pop(),
-            });
-        }
+        let results = posts
+            .into_iter()
+            .rev()
+            .map(|post| {
+                Self {
+                    version: fields[Field::Version].then_some(post.last_edit_time),
+                    id: fields[Field::Id].then_some(post.id),
+                    user: owners.pop(),
+                    file_size: fields[Field::FileSize].then_some(post.file_size),
+                    canvas_width: fields[Field::CanvasWidth].then_some(post.width),
+                    canvas_height: fields[Field::CanvasHeight].then_some(post.height),
+                    safety: fields[Field::Safety].then_some(post.safety),
+                    type_: fields[Field::Type].then_some(post.type_),
+                    mime_type: fields[Field::MimeType].then_some(post.mime_type),
+                    checksum: fields[Field::Checksum].then_some(post.checksum),
+                    checksum_md5: fields[Field::ChecksumMd5].then_some(post.checksum_md5),
+                    flags: fields[Field::Flags].then_some(post.flags),
+                    source: fields[Field::Source].then_some(post.source),
+                    creation_time: fields[Field::CreationTime].then_some(post.creation_time),
+                    last_edit_time: fields[Field::LastEditTime].then_some(post.last_edit_time),
+                    content_url: content_urls.pop(),
+                    thumbnail_url: thumbnail_urls.pop(),
+                    tags: tags.pop(),
+                    relations: relations.pop(),
+                    notes: notes.pop(),
+                    score: scores.pop(),
+                    own_score: client_scores.pop(),
+                    own_favorite: client_favorites.pop(),
+                    tag_count: tag_counts.pop(),
+                    favorite_count: favorite_counts.pop(),
+                    comment_count: comment_counts.pop(),
+                    note_count: note_counts.pop(),
+                    feature_count: feature_counts.pop(),
+                    relation_count: relation_counts.pop(),
+                    last_feature_time: last_feature_times.pop(),
+                    favorited_by: users_who_favorited.pop(),
+                    has_custom_thumbnail: fields[Field::HasCustomThumbnail].then_some(false), // TODO
+                    comments: comments.pop(),
+                    pools: pools.pop(),
+                }
+            })
+            .collect::<Vec<_>>();
         Ok(results.into_iter().rev().collect())
     }
 
@@ -403,11 +406,11 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
         let (tag, tag_names) = tag_info;
         (!tag_names.is_empty()).then_some({
             let mut names: Vec<_> = tag_names.into_iter().map(|(_, tag_name)| tag_name).collect();
-            names.sort();
+            names.sort_by_key(|name| name.order);
             MicroTag {
                 names,
                 category: category_names[&tag.category_id].clone(),
-                usages: usages.get(&tag.id).map(|x| *x).unwrap_or(0),
+                usages: usages.get(&tag.id).cloned().unwrap_or(0),
             }
         })
     };
@@ -465,8 +468,8 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
                         text: comment.text,
                         creation_time: comment.creation_time,
                         last_edit_time: comment.last_edit_time,
-                        score: scores.get(&id).map(|x| *x).flatten().unwrap_or(0),
-                        own_score: client.map(|_| client_scores.get(&id).map(|x| *x).unwrap_or(0)),
+                        score: scores.get(&id).cloned().flatten().unwrap_or(0),
+                        own_score: client.map(|_| client_scores.get(&id).cloned().unwrap_or(0)),
                     }
                 })
                 .collect()
@@ -525,7 +528,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
                 names,
                 category: category_names[&pool.category_id].clone(),
                 description: pool.description.clone(),
-                post_count: usages.get(&pool.id).map(|x| *x).unwrap_or(0),
+                post_count: usages.get(&pool.id).cloned().unwrap_or(0),
             }
         })
     };

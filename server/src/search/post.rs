@@ -258,7 +258,7 @@ pub fn get_ordered_ids(
     }
 
     // Add default sort if none specified
-    let sort = search_criteria.sorts.last().map(|&sort| sort).unwrap_or(ParsedSort {
+    let sort = search_criteria.sorts.last().cloned().unwrap_or(ParsedSort {
         kind: Token::Id,
         order: Order::default(),
     });

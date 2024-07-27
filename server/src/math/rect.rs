@@ -133,6 +133,11 @@ where
 
         Some(result)
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let size = self.rect.total_points().map(usize::try_from).transpose().ok().flatten();
+        (size.unwrap_or(usize::MAX), size)
+    }
 }
 
 pub struct Array2D<T> {

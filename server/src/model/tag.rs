@@ -10,8 +10,6 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Integer;
 use diesel::AsExpression;
 use serde::Serialize;
-use std::cmp::Ordering;
-use std::option::Option;
 
 #[derive(Insertable)]
 #[diesel(table_name = tag_category)]
@@ -38,10 +36,16 @@ impl TagCategory {
     }
 }
 
-#[derive(Insertable)]
+#[derive(Clone, Copy, Insertable)]
 #[diesel(table_name = tag)]
 pub struct NewTag {
     pub category_id: i32,
+}
+
+impl Default for NewTag {
+    fn default() -> Self {
+        Self { category_id: 0 }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Associations, Selectable, AsExpression, FromSqlRow)]
@@ -93,7 +97,7 @@ impl Tag {
     pub fn new(conn: &mut PgConnection) -> QueryResult<Self> {
         let new_tag = NewTag { category_id: 0 };
         diesel::insert_into(tag::table)
-            .values(&new_tag)
+            .values(new_tag)
             .returning(Self::as_returning())
             .get_result(conn)
     }
@@ -139,7 +143,7 @@ impl Tag {
             name,
         };
         diesel::insert_into(tag_name::table)
-            .values(&new_tag_name)
+            .values(new_tag_name)
             .returning(TagName::as_returning())
             .get_result(conn)
     }
@@ -150,7 +154,7 @@ impl Tag {
             child_id: implied_tag.id,
         };
         diesel::insert_into(tag_implication::table)
-            .values(&new_tag_implication)
+            .values(new_tag_implication)
             .returning(TagImplication::as_returning())
             .get_result(conn)
     }
@@ -161,7 +165,7 @@ impl Tag {
             child_id: implied_tag.id,
         };
         diesel::insert_into(tag_suggestion::table)
-            .values(&new_tag_suggestion)
+            .values(new_tag_suggestion)
             .returning(TagSuggestion::as_returning())
             .get_result(conn)
     }
@@ -197,26 +201,6 @@ pub struct TagName {
 impl TagName {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         tag_name::table.count().first(conn)
-    }
-}
-
-impl PartialEq for TagName {
-    fn eq(&self, other: &Self) -> bool {
-        self.order == other.order
-    }
-}
-
-impl Eq for TagName {}
-
-impl PartialOrd for TagName {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.order.cmp(&other.order))
-    }
-}
-
-impl Ord for TagName {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.order.cmp(&other.order)
     }
 }
 

@@ -21,13 +21,13 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     let get_user = warp::get()
         .and(warp::path!("user" / String))
         .and(api::auth())
-        .and(api::optional_query())
+        .and(api::resource_query())
         .map(get_user)
         .map(api::Reply::from);
     let post_user = warp::post()
         .and(warp::path!("users"))
         .and(api::auth())
-        .and(api::optional_query())
+        .and(api::resource_query())
         .and(warp::body::json())
         .map(create_user)
         .map(api::Reply::from);
@@ -83,7 +83,7 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
 
     let mut conn = crate::establish_connection()?;
     let user: User = diesel::insert_into(user::table)
-        .values(&new_user)
+        .values(new_user)
         .returning(User::as_returning())
         .get_result(&mut conn)?;
     UserInfo::new(&mut conn, user, &fields, Visibility::Full).map_err(api::Error::from)

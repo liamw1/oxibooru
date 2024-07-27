@@ -77,7 +77,7 @@ impl TagInfo {
         Ok(tag_info.pop().unwrap())
     }
 
-    pub fn new_batch(conn: &mut PgConnection, mut tags: Vec<Tag>, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
+    pub fn new_batch(conn: &mut PgConnection, tags: Vec<Tag>, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
         let batch_size = tags.len();
 
         let mut categories = fields[Field::Category]
@@ -105,9 +105,10 @@ impl TagInfo {
             .unwrap_or_default();
         resource::check_batch_results(usages.len(), batch_size);
 
-        let mut results: Vec<Self> = Vec::new();
-        while let Some(tag) = tags.pop() {
-            results.push(Self {
+        let results = tags
+            .into_iter()
+            .rev()
+            .map(|tag| Self {
                 version: fields[Field::Version].then_some(tag.last_edit_time),
                 description: fields[Field::Description].then_some(tag.description),
                 creation_time: fields[Field::CreationTime].then_some(tag.creation_time),
@@ -117,8 +118,8 @@ impl TagInfo {
                 implications: implications.pop(),
                 suggestions: suggestions.pop(),
                 usages: usages.pop(),
-            });
-        }
+            })
+            .collect::<Vec<_>>();
         Ok(results.into_iter().rev().collect())
     }
 
@@ -164,7 +165,10 @@ fn get_categories(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Stri
         .load(conn)?
         .into_iter()
         .collect();
-    Ok(tags.iter().map(|tag| category_names[&tag.id].clone()).collect())
+    Ok(tags
+        .iter()
+        .map(|tag| category_names[&tag.category_id].clone())
+        .collect())
 }
 
 fn get_names(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec<String>>> {
@@ -201,11 +205,11 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
         let (implication, tag_names) = tag_info;
         (!tag_names.is_empty()).then_some({
             let mut names: Vec<_> = tag_names.into_iter().collect();
-            names.sort();
+            names.sort_by_key(|name| name.order);
             MicroTag {
                 names,
                 category: category_names[&implication.category_id].clone(),
-                usages: implication_usages.get(&implication.id).map(|x| *x).unwrap_or(0),
+                usages: implication_usages.get(&implication.id).cloned().unwrap_or(0),
             }
         })
     };
@@ -247,11 +251,11 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
         let (suggestion, tag_names) = tag_info;
         (!tag_names.is_empty()).then_some({
             let mut names: Vec<_> = tag_names.into_iter().collect();
-            names.sort();
+            names.sort_by_key(|name| name.order);
             MicroTag {
                 names,
                 category: category_names[&suggestion.category_id].clone(),
-                usages: suggestion_usages.get(&suggestion.id).map(|x| *x).unwrap_or(0),
+                usages: suggestion_usages.get(&suggestion.id).cloned().unwrap_or(0),
             }
         })
     };

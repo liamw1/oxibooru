@@ -222,8 +222,8 @@ fn compute_differentials(mean_matrix: &Array2D<u8>) -> Vec<i16> {
 fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &[i16], filter: F) -> Vec<Option<i16>> {
     let mut filtered_values = differentials
         .iter()
-        .filter(|&&diff| filter(diff))
-        .map(|&diff| diff)
+        .cloned()
+        .filter(|&diff| filter(diff))
         .collect::<Vec<_>>();
     filtered_values.sort();
 
@@ -235,7 +235,7 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &[i16], filter: F) -> Vec<
 
     filtered_values
         .chunks(chunk_size)
-        .map(|chunk| chunk.last().map(|x| *x))
+        .map(|chunk| chunk.last().cloned())
         .collect()
 }
 
@@ -243,9 +243,11 @@ fn normalize(differentials: &[i16]) -> Vec<u8> {
     let dark_cutoffs = compute_cutoffs(differentials, |diff: i16| diff < -IDENTICAL_TOLERANCE);
     let light_cutoffs = compute_cutoffs(differentials, |diff: i16| diff > IDENTICAL_TOLERANCE);
 
-    let mut cutoffs = dark_cutoffs;
-    cutoffs.push(Some(IDENTICAL_TOLERANCE));
-    cutoffs.extend(light_cutoffs);
+    let cutoffs = dark_cutoffs
+        .into_iter()
+        .chain(std::iter::once(Some(IDENTICAL_TOLERANCE)))
+        .chain(light_cutoffs.into_iter())
+        .collect::<Vec<_>>();
     debug_assert_eq!(cutoffs.len(), NUM_SYMBOLS);
 
     differentials

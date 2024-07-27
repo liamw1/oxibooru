@@ -128,7 +128,7 @@ impl Post {
             tag_id: tag.id,
         };
         diesel::insert_into(post_tag::table)
-            .values(&new_post_tag)
+            .values(new_post_tag)
             .returning(PostTag::as_returning())
             .get_result(conn)
     }
@@ -139,7 +139,7 @@ impl Post {
             child_id: related_post.id,
         };
         diesel::insert_into(post_relation::table)
-            .values(&new_post_relation)
+            .values(new_post_relation)
             .returning(PostRelation::as_returning())
             .get_result(conn)
     }
@@ -170,14 +170,6 @@ impl PostRelation {
 }
 
 pub type NewPostTag = PostTag;
-
-#[derive(Associations, Queryable, Selectable)]
-#[diesel(belongs_to(Tag))]
-#[diesel(table_name = post_tag)]
-#[diesel(check_for_backend(Pg))]
-pub struct PostTagTagId {
-    pub tag_id: i32,
-}
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(Tag))]

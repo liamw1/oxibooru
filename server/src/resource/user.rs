@@ -114,7 +114,7 @@ impl UserInfo {
 
     pub fn new_batch(
         conn: &mut PgConnection,
-        mut users: Vec<User>,
+        users: Vec<User>,
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Vec<Self>> {
@@ -145,9 +145,10 @@ impl UserInfo {
             .unwrap_or_default();
         resource::check_batch_results(favorite_counts.len(), batch_size);
 
-        let mut results: Vec<Self> = Vec::new();
-        while let Some(user) = users.pop() {
-            results.push(Self {
+        let results = users
+            .into_iter()
+            .rev()
+            .map(|user| Self {
                 avatar_url: fields[Field::AvatarUrl].then_some(user.avatar_url()),
                 version: fields[Field::Version].then_some(user.last_edit_time),
                 name: fields[Field::Name].then_some(user.name),
@@ -164,8 +165,8 @@ impl UserInfo {
                 liked_post_count: like_counts.pop(),
                 disliked_post_count: dislike_counts.pop(),
                 favorite_post_count: favorite_counts.pop(),
-            });
-        }
+            })
+            .collect::<Vec<_>>();
         Ok(results.into_iter().rev().collect())
     }
 
