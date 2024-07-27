@@ -438,12 +438,23 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
             .select((tag_name::tag_id, tag_name::name))
             .filter(tag_name::name.eq_any(&update_tags))
             .load(conn)?;
-        let mut update_tag_ids: HashSet<_> = all_update_tag_names.iter().map(|(tag_id, _)| *tag_id).collect();
+        let update_tag_ids: HashSet<_> = all_update_tag_names.iter().map(|(tag_id, _)| *tag_id).collect();
+        let post_tags_to_remove: Vec<_> = current_tag_ids
+            .iter()
+            .filter(|&tag_id| !update_tag_ids.contains(tag_id))
+            .cloned()
+            .collect();
+        let mut new_post_tags: Vec<_> = update_tag_ids
+            .into_iter()
+            .filter(|tag_id| !current_tag_ids.contains(tag_id))
+            .map(|tag_id| NewPostTag { post_id, tag_id })
+            .collect();
         let all_update_tag_names: HashSet<_> = all_update_tag_names.into_iter().map(|(_, tag_name)| tag_name).collect();
         let new_tag_names: Vec<_> = update_tags
             .into_iter()
             .filter(|tag_name| !all_update_tag_names.contains(tag_name))
             .collect();
+        // Create new tags if given unique names
         if !new_tag_names.is_empty() {
             api::verify_privilege(client.as_ref(), config::privileges().tag_create)?;
             let new_tag_ids: Vec<i32> = diesel::insert_into(tag::table)
@@ -458,18 +469,8 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
             diesel::insert_into(tag_name::table)
                 .values(new_tag_names)
                 .execute(conn)?;
-            update_tag_ids.extend(new_tag_ids.iter());
+            new_post_tags.extend(new_tag_ids.into_iter().map(|tag_id| NewPostTag { post_id, tag_id }));
         }
-        let post_tags_to_remove: Vec<_> = current_tag_ids
-            .iter()
-            .filter(|&tag_id| !update_tag_ids.contains(tag_id))
-            .cloned()
-            .collect();
-        let new_post_tags: Vec<_> = update_tag_ids
-            .into_iter()
-            .filter(|tag_id| !current_tag_ids.contains(tag_id))
-            .map(|tag_id| NewPostTag { post_id, tag_id })
-            .collect();
         diesel::delete(post_tag::table)
             .filter(post_tag::post_id.eq(post_id))
             .filter(post_tag::post_id.eq_any(post_tags_to_remove))
