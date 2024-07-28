@@ -75,12 +75,6 @@ pub struct Post {
     pub last_edit_time: DateTime,
 }
 
-impl Post {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        post::table.count().first(conn)
-    }
-}
-
 pub type NewPostRelation = PostRelation;
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
@@ -95,12 +89,6 @@ pub struct PostRelation {
 
 diesel::joinable!(post_relation -> post (parent_id));
 
-impl PostRelation {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        post_relation::table.count().first(conn)
-    }
-}
-
 pub type NewPostTag = PostTag;
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
@@ -111,12 +99,6 @@ pub type NewPostTag = PostTag;
 pub struct PostTag {
     pub post_id: i32,
     pub tag_id: i32,
-}
-
-impl PostTag {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        post_tag::table.count().first(conn)
-    }
 }
 
 pub type NewPostFavorite = PostFavorite;
@@ -130,12 +112,6 @@ pub struct PostFavorite {
     pub post_id: i32,
     pub user_id: i32,
     pub time: DateTime,
-}
-
-impl PostFavorite {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        post_favorite::table.count().first(conn)
-    }
 }
 
 #[derive(Insertable)]
@@ -157,12 +133,6 @@ pub struct PostFeature {
     pub time: DateTime,
 }
 
-impl PostFeature {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        post_feature::table.count().first(conn)
-    }
-}
-
 #[derive(Insertable)]
 #[diesel(table_name = post_note)]
 pub struct NewPostNote<'a> {
@@ -182,12 +152,6 @@ pub struct PostNote {
     pub text: String,
 }
 
-impl PostNote {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        post_note::table.count().first(conn)
-    }
-}
-
 pub type NewPostScore = PostScore;
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
@@ -200,12 +164,6 @@ pub struct PostScore {
     pub user_id: i32,
     pub score: i32,
     pub time: DateTime,
-}
-
-impl PostScore {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        post_score::table.count().first(conn)
-    }
 }
 
 #[derive(Insertable)]
@@ -227,10 +185,6 @@ pub struct PostSignature {
 }
 
 impl PostSignature {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        post_signature::table.count().first(conn)
-    }
-
     pub fn find_similar(conn: &mut PgConnection, words: Vec<i32>) -> QueryResult<Vec<Self>> {
         diesel::sql_query(
             "SELECT s.post_id, s.signature

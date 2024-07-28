@@ -27,12 +27,6 @@ pub struct TagCategory {
     pub last_edit_time: DateTime,
 }
 
-impl TagCategory {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        tag_category::table.count().first(conn)
-    }
-}
-
 #[derive(Clone, Copy, Insertable)]
 #[diesel(table_name = tag)]
 pub struct NewTag {
@@ -92,10 +86,6 @@ impl Tag {
             .filter(tag_name::name.eq(name))
             .first(conn)
     }
-
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        tag::table.count().first(conn)
-    }
 }
 
 #[derive(Insertable)]
@@ -121,12 +111,6 @@ pub struct TagName {
     pub name: String,
 }
 
-impl TagName {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        tag_name::table.count().first(conn)
-    }
-}
-
 pub type NewTagImplication = TagImplication;
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
@@ -141,12 +125,6 @@ pub struct TagImplication {
 
 diesel::joinable!(tag_implication -> tag (parent_id));
 
-impl TagImplication {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        tag_implication::table.count().first(conn)
-    }
-}
-
 pub type NewTagSuggestion = TagSuggestion;
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
@@ -160,9 +138,3 @@ pub struct TagSuggestion {
 }
 
 diesel::joinable!(tag_suggestion -> tag (parent_id));
-
-impl TagSuggestion {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        tag_suggestion::table.count().first(conn)
-    }
-}

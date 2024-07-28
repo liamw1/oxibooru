@@ -8,8 +8,6 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Integer;
 use diesel::AsExpression;
 use serde::Serialize;
-use std::cmp::Ordering;
-use std::option::Option;
 
 #[derive(Insertable)]
 #[diesel(table_name = pool_category)]
@@ -26,12 +24,6 @@ pub struct PoolCategory {
     pub name: String,
     pub color: String,
     pub last_edit_time: DateTime,
-}
-
-impl PoolCategory {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        pool_category::table.count().first(conn)
-    }
 }
 
 #[derive(Insertable)]
@@ -79,12 +71,6 @@ pub struct Pool {
     pub last_edit_time: DateTime,
 }
 
-impl Pool {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        pool::table.count().first(conn)
-    }
-}
-
 #[derive(Insertable)]
 #[diesel(table_name = pool_name)]
 pub struct NewPoolName<'a> {
@@ -108,32 +94,6 @@ pub struct PoolName {
     pub name: String,
 }
 
-impl PoolName {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        pool_name::table.count().first(conn)
-    }
-}
-
-impl PartialEq for PoolName {
-    fn eq(&self, other: &Self) -> bool {
-        self.order == other.order
-    }
-}
-
-impl Eq for PoolName {}
-
-impl PartialOrd for PoolName {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.order.cmp(&other.order))
-    }
-}
-
-impl Ord for PoolName {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.order.cmp(&other.order)
-    }
-}
-
 pub type NewPoolPost = PoolPost;
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
@@ -145,10 +105,4 @@ pub struct PoolPost {
     pub pool_id: i32,
     pub post_id: i32,
     pub order: i32,
-}
-
-impl PoolPost {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        pool_post::table.count().first(conn)
-    }
 }

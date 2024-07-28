@@ -29,9 +29,3 @@ pub struct Snapshot {
     pub data: Option<Vec<u8>>,
     pub creation_time: DateTime,
 }
-
-impl Snapshot {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        snapshot::table.count().first(conn)
-    }
-}

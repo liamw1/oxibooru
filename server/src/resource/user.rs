@@ -210,7 +210,6 @@ fn get_users(conn: &mut PgConnection, user_ids: &[i32]) -> QueryResult<Vec<User>
             index += 1;
         }
     }
-
     Ok(users)
 }
 

@@ -153,7 +153,6 @@ fn get_pools(conn: &mut PgConnection, pool_ids: &[i32]) -> QueryResult<Vec<Pool>
             index += 1;
         }
     }
-
     Ok(pools)
 }
 

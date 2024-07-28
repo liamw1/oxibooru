@@ -343,7 +343,6 @@ fn get_posts(conn: &mut PgConnection, post_ids: &[i32]) -> QueryResult<Vec<Post>
             index += 1;
         }
     }
-
     Ok(posts)
 }
 
@@ -406,7 +405,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
         let (tag, tag_names) = tag_info;
         (!tag_names.is_empty()).then_some({
             let mut names: Vec<_> = tag_names.into_iter().map(|(_, tag_name)| tag_name).collect();
-            names.sort_by_key(|name| name.order);
+            names.sort_unstable_by_key(|name| name.order);
             MicroTag {
                 names,
                 category: category_names[&tag.category_id].clone(),
@@ -522,7 +521,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
         let (pool, pool_names) = pool_info;
         (!pool_names.is_empty()).then_some({
             let mut names: Vec<_> = pool_names.into_iter().map(|(_, pool_name)| pool_name).collect();
-            names.sort();
+            names.sort_unstable_by_key(|name| name.order);
             MicroPool {
                 id: pool.id,
                 names,

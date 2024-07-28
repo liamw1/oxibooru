@@ -224,7 +224,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
                 (distance < POST_SIMILARITY_THRESHOLD).then_some((post_signature.post_id, distance))
             })
             .collect();
-        similar_posts.sort_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
+        similar_posts.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
 
         let post_ids = similar_posts.iter().map(|(post_id, _)| *post_id).collect();
         let distances: Vec<f64> = similar_posts.iter().map(|(_, distance)| *distance).collect();

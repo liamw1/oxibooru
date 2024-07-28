@@ -1,7 +1,8 @@
 use crate::api::ApiResult;
-use crate::model::post::Post;
+use crate::schema::post;
 use crate::util::DateTime;
 use crate::{api, config};
+use diesel::prelude::*;
 use serde::Serialize;
 use std::convert::Infallible;
 use std::path::Path;
@@ -35,7 +36,7 @@ fn get_info() -> ApiResult<Info> {
 
     let mut conn = crate::establish_connection()?;
     Ok(Info {
-        post_count: Post::count(&mut conn)?,
+        post_count: post::table.count().first(&mut conn)?,
         disk_usage,
         featured_post: None,
         featuring_time: None,

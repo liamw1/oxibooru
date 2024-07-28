@@ -107,12 +107,6 @@ pub struct UserToken {
     pub last_usage_time: DateTime,
 }
 
-impl UserToken {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        user_token::table.count().first(conn)
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;

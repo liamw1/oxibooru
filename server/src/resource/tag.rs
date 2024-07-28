@@ -155,7 +155,6 @@ fn get_tags(conn: &mut PgConnection, tag_ids: &[i32]) -> QueryResult<Vec<Tag>> {
             index += 1;
         }
     }
-
     Ok(tags)
 }
 
@@ -205,7 +204,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
         let (implication, tag_names) = tag_info;
         (!tag_names.is_empty()).then_some({
             let mut names: Vec<_> = tag_names.into_iter().collect();
-            names.sort_by_key(|name| name.order);
+            names.sort_unstable_by_key(|name| name.order);
             MicroTag {
                 names,
                 category: category_names[&implication.category_id].clone(),
@@ -251,7 +250,7 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
         let (suggestion, tag_names) = tag_info;
         (!tag_names.is_empty()).then_some({
             let mut names: Vec<_> = tag_names.into_iter().collect();
-            names.sort_by_key(|name| name.order);
+            names.sort_unstable_by_key(|name| name.order);
             MicroTag {
                 names,
                 category: category_names[&suggestion.category_id].clone(),

@@ -39,9 +39,3 @@ pub struct CommentScore {
     pub score: i32,
     pub time: DateTime,
 }
-
-impl CommentScore {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        comment_score::table.count().first(conn)
-    }
-}
