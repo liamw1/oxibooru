@@ -1,17 +1,17 @@
-pub mod api;
-pub mod auth;
+mod api;
+mod auth;
 pub mod config;
-pub mod error;
-pub mod filesystem;
-pub mod image;
-pub mod math;
+mod error;
+mod filesystem;
+mod image;
+mod math;
 pub mod model;
-pub mod resource;
-pub mod schema;
-pub mod search;
+mod resource;
+mod schema;
+mod search;
 #[cfg(test)]
 mod test;
-pub mod util;
+mod util;
 
 use diesel::prelude::*;
 use std::sync::LazyLock;

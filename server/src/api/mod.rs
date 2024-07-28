@@ -69,12 +69,7 @@ pub enum Error {
     InsufficientPrivileges,
     ImageError(#[from] image::ImageError),
     IoError(#[from] std::io::Error),
-    #[error("Resource is out-of-date")]
-    OutOfDate,
-    #[error("Resource does not exist")]
-    ResourceDoesNotExist,
-    // Someone else modified this in the meantime. Please try again.
-    #[error("Resouce was modified by someone else")]
+    #[error("Someone else modified this in the meantime. Please try again.")]
     ResourceModified,
     SearchError(#[from] crate::search::Error),
     WarpError(#[from] warp::Error),
@@ -106,8 +101,6 @@ impl Error {
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::ImageError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::OutOfDate => StatusCode::CONFLICT,
-            Self::ResourceDoesNotExist => StatusCode::GONE,
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::SearchError(_) => StatusCode::BAD_REQUEST,
             Self::WarpError(_) => StatusCode::BAD_REQUEST,
@@ -128,8 +121,6 @@ impl Error {
             Self::InsufficientPrivileges => "Insufficient Privileges",
             Self::ImageError(_) => "Image Error",
             Self::IoError(_) => "IO Error",
-            Self::OutOfDate => "Out-of-date",
-            Self::ResourceDoesNotExist => "Resource Does Not Exist",
             Self::ResourceModified => "Resource Modified",
             Self::SearchError(_) => "Search Error",
             Self::WarpError(_) => "Warp Error",
@@ -254,7 +245,7 @@ fn verify_privilege(client: Option<&User>, required_rank: UserRank) -> Result<()
 fn verify_version(current_version: DateTime, client_version: DateTime) -> Result<(), Error> {
     (current_version == client_version)
         .then_some(())
-        .ok_or(Error::OutOfDate)
+        .ok_or(Error::ResourceModified)
 }
 
 fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {

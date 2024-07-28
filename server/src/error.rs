@@ -234,8 +234,6 @@ impl ErrorKind for crate::api::Error {
             Self::InsufficientPrivileges => "InsufficientPrivileges",
             Self::ImageError(err) => err.kind(),
             Self::IoError(_) => "IOError",
-            Self::OutOfDate => "OutOfDate",
-            Self::ResourceDoesNotExist => "ResourceDoesNotExist",
             Self::ResourceModified => "ResourceModified",
             Self::SearchError(err) => err.kind(),
             Self::WarpError(_) => "WarpError",

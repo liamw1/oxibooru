@@ -39,7 +39,7 @@ pub fn generate_indexes(signature: &[u8]) -> Vec<i32> {
     debug_assert!(i64::from(NUM_REDUCED_SYMBOLS).pow(NUM_LETTERS) < i64::from(i32::MAX));
 
     const NUM_LETTERS_USIZE: usize = NUM_LETTERS as usize;
-    let word_positions = func::symmetric_linspace(0, signature.len() - NUM_LETTERS_USIZE, NUM_WORDS);
+    let word_positions = func::linspace(0, signature.len() - NUM_LETTERS_USIZE, NUM_WORDS);
 
     let words: Vec<[u8; NUM_LETTERS_USIZE]> = word_positions
         .iter()
@@ -166,8 +166,8 @@ fn compute_grid_points(image: &GrayImage) -> CartesianProduct<u32, u32> {
     lower_column_index += estimated_grid_square_radius;
     upper_column_index -= estimated_grid_square_radius;
 
-    let x_coords = func::symmetric_linspace(lower_row_index, upper_row_index, NUM_GRID_POINTS);
-    let y_coords = func::symmetric_linspace(lower_column_index, upper_column_index, NUM_GRID_POINTS);
+    let x_coords = func::linspace(lower_row_index, upper_row_index, NUM_GRID_POINTS);
+    let y_coords = func::linspace(lower_column_index, upper_column_index, NUM_GRID_POINTS);
 
     CartesianProduct::new(x_coords, y_coords)
 }
