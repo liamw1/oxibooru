@@ -1,6 +1,7 @@
 use crate::model::enums::{MimeType, PostSafety, PostType};
 use crate::model::tag::Tag;
 use crate::model::user::User;
+use crate::model::IntegerIdentifiable;
 use crate::schema::{
     post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
 };
@@ -73,6 +74,12 @@ pub struct Post {
     pub source: Option<String>,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
+}
+
+impl IntegerIdentifiable for Post {
+    fn id(&self) -> i32 {
+        self.id
+    }
 }
 
 pub type NewPostRelation = PostRelation;

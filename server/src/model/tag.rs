@@ -1,3 +1,4 @@
+use crate::model::IntegerIdentifiable;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::util::DateTime;
 use diesel::deserialize::{self, FromSql, FromSqlRow};
@@ -85,6 +86,12 @@ impl Tag {
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
             .first(conn)
+    }
+}
+
+impl IntegerIdentifiable for Tag {
+    fn id(&self) -> i32 {
+        self.id
     }
 }
 

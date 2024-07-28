@@ -1,4 +1,5 @@
 use crate::model::post::Post;
+use crate::model::IntegerIdentifiable;
 use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::util::DateTime;
 use diesel::deserialize::{self, FromSql, FromSqlRow};
@@ -69,6 +70,12 @@ pub struct Pool {
     pub description: String,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
+}
+
+impl IntegerIdentifiable for Pool {
+    fn id(&self) -> i32 {
+        self.id
+    }
 }
 
 #[derive(Insertable)]

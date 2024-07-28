@@ -1,5 +1,6 @@
 use crate::auth::content;
 use crate::model::enums::{AvatarStyle, UserRank};
+use crate::model::IntegerIdentifiable;
 use crate::schema::{user, user_token};
 use crate::util::DateTime;
 use diesel::deserialize::{self, FromSql, FromSqlRow};
@@ -78,6 +79,12 @@ impl User {
             AvatarStyle::Gravatar => content::gravatar_url(&self.name),
             AvatarStyle::Manual => content::custom_avatar_url(&self.name),
         }
+    }
+}
+
+impl IntegerIdentifiable for User {
+    fn id(&self) -> i32 {
+        self.id
     }
 }
 

@@ -323,27 +323,11 @@ impl PostNoteInfo {
 
 fn get_posts(conn: &mut PgConnection, post_ids: &[i32]) -> QueryResult<Vec<Post>> {
     // We get posts here, but this query doesn't preserve order
-    let mut posts = post::table
+    let posts = post::table
         .select(Post::as_select())
         .filter(post::id.eq_any(post_ids))
         .load(conn)?;
-
-    /*
-        This algorithm is O(n^2) in post_ids.len(), which could be made O(n) with a HashMap implementation.
-        However, for small n this Vec-based implementation is probably much faster. Since we retrieve
-        40-50 posts at a time, I'm leaving it like this for the time being until it proves to be slow.
-    */
-    let mut index = 0;
-    while index < post_ids.len() {
-        let post_id = posts[index].id;
-        let correct_index = post_ids.iter().position(|&id| id == post_id).unwrap();
-        if index != correct_index {
-            posts.swap(index, correct_index);
-        } else {
-            index += 1;
-        }
-    }
-    Ok(posts)
+    Ok(resource::order_by(posts, post_ids))
 }
 
 fn get_post_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option<MicroUser>>> {

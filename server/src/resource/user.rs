@@ -190,27 +190,11 @@ enum PrivateData<T> {
 
 fn get_users(conn: &mut PgConnection, user_ids: &[i32]) -> QueryResult<Vec<User>> {
     // We get users here, but this query doesn't preserve order
-    let mut users = user::table
+    let users = user::table
         .select(User::as_select())
         .filter(user::id.eq_any(user_ids))
         .load(conn)?;
-
-    /*
-        This algorithm is O(n^2) in user_ids.len(), which could be made O(n) with a HashMap implementation.
-        However, for small n this Vec-based implementation is probably much faster. Since we retrieve
-        40-50 users at a time, I'm leaving it like this for the time being until it proves to be slow.
-    */
-    let mut index = 0;
-    while index < user_ids.len() {
-        let user_id = users[index].id;
-        let correct_index = user_ids.iter().position(|&id| id == user_id).unwrap();
-        if index != correct_index {
-            users.swap(index, correct_index);
-        } else {
-            index += 1;
-        }
-    }
-    Ok(users)
+    Ok(resource::order_by(users, user_ids))
 }
 
 fn get_comment_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<i64>> {

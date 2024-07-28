@@ -133,27 +133,11 @@ impl PoolInfo {
 
 fn get_pools(conn: &mut PgConnection, pool_ids: &[i32]) -> QueryResult<Vec<Pool>> {
     // We get pools here, but this query doesn't preserve order
-    let mut pools = pool::table
+    let pools = pool::table
         .select(Pool::as_select())
         .filter(pool::id.eq_any(pool_ids))
         .load(conn)?;
-
-    /*
-        This algorithm is O(n^2) in pool_ids.len(), which could be made O(n) with a HashMap implementation.
-        However, for small n this Vec-based implementation is probably much faster. Since we retrieve
-        40-50 pools at a time, I'm leaving it like this for the time being until it proves to be slow.
-    */
-    let mut index = 0;
-    while index < pool_ids.len() {
-        let pool_id = pools[index].id;
-        let correct_index = pool_ids.iter().position(|&id| id == pool_id).unwrap();
-        if index != correct_index {
-            pools.swap(index, correct_index);
-        } else {
-            index += 1;
-        }
-    }
-    Ok(pools)
+    Ok(resource::order_by(pools, pool_ids))
 }
 
 fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<String>> {

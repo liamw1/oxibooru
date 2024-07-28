@@ -5,3 +5,7 @@ pub mod post;
 pub mod snapshot;
 pub mod tag;
 pub mod user;
+
+pub trait IntegerIdentifiable {
+    fn id(&self) -> i32;
+}

@@ -1,5 +1,7 @@
 use crate::model::comment::Comment;
 use crate::model::enums::AvatarStyle;
+use crate::model::IntegerIdentifiable;
+use crate::resource;
 use crate::resource::user::MicroUser;
 use crate::schema::{comment, comment_score, user};
 use crate::util::DateTime;
@@ -22,6 +24,12 @@ pub struct CommentInfo {
     pub user: MicroUser,
     pub score: i64,
     pub own_score: Option<i32>,
+}
+
+impl IntegerIdentifiable for CommentInfo {
+    fn id(&self) -> i32 {
+        self.id
+    }
 }
 
 impl CommentInfo {
@@ -75,25 +83,6 @@ impl CommentInfo {
                 own_score: client.map(|_| client_scores.get(&comment.id).copied().unwrap_or(0)),
             })
             .collect();
-        Ok(order_comments(&comment_ids, comment_info))
+        Ok(resource::order_by(comment_info, &comment_ids))
     }
-}
-
-fn order_comments(comment_ids: &[i32], mut comments: Vec<CommentInfo>) -> Vec<CommentInfo> {
-    /*
-        This algorithm is O(n^2) in comment_ids.len(), which could be made O(n) with a HashMap implementation.
-        However, for small n this Vec-based implementation is probably much faster. Since we retrieve
-        40-50 comments at a time, I'm leaving it like this for the time being until it proves to be slow.
-    */
-    let mut index = 0;
-    while index < comment_ids.len() {
-        let comment_id = comments[index].id;
-        let correct_index = comment_ids.iter().position(|&id| id == comment_id).unwrap();
-        if index != correct_index {
-            comments.swap(index, correct_index);
-        } else {
-            index += 1;
-        }
-    }
-    comments
 }

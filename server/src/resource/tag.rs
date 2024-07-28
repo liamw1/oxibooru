@@ -135,27 +135,11 @@ impl TagInfo {
 
 fn get_tags(conn: &mut PgConnection, tag_ids: &[i32]) -> QueryResult<Vec<Tag>> {
     // We get tags here, but this query doesn't preserve order
-    let mut tags = tag::table
+    let tags = tag::table
         .select(Tag::as_select())
         .filter(tag::id.eq_any(tag_ids))
         .load(conn)?;
-
-    /*
-        This algorithm is O(n^2) in tag_ids.len(), which could be made O(n) with a HashMap implementation.
-        However, for small n this Vec-based implementation is probably much faster. Since we retrieve
-        40-50 tags at a time, I'm leaving it like this for the time being until it proves to be slow.
-    */
-    let mut index = 0;
-    while index < tag_ids.len() {
-        let tag_id = tags[index].id;
-        let correct_index = tag_ids.iter().position(|&id| id == tag_id).unwrap();
-        if index != correct_index {
-            tags.swap(index, correct_index);
-        } else {
-            index += 1;
-        }
-    }
-    Ok(tags)
+    Ok(resource::order_by(tags, tag_ids))
 }
 
 fn get_categories(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<String>> {
