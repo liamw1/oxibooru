@@ -1,17 +1,14 @@
 use crate::search::Error;
-use crate::search::{Criteria, TimeParsingError};
+use crate::search::{Criteria, StrCritera, TimeParsingError};
 use crate::util::DateTime;
 use std::str::FromStr;
 
-pub fn str_criteria(filter: &str) -> Criteria<&str> {
-    if let Some(split_str) = filter.split_once("..") {
-        return match split_str {
-            (left, "") => Criteria::GreaterEq(left),
-            ("", right) => Criteria::LessEq(right),
-            (left, right) => Criteria::Range(left..right),
-        };
+pub fn str_criteria(filter: &str) -> StrCritera {
+    if filter.contains('*') {
+        StrCritera::WildCard(filter.replace('*', "%"))
+    } else {
+        StrCritera::Regular(parse_regular_str(filter))
     }
-    Criteria::Values(filter.split(',').collect())
 }
 
 pub fn time_criteria(filter: &str) -> Result<Criteria<DateTime>, Error> {
@@ -73,6 +70,17 @@ fn parse_time(time: &str) -> Result<DateTime, TimeParsingError> {
     DateTime::from_date(year, month.unwrap_or(1), day.unwrap_or(1)).map_err(TimeParsingError::from)
 }
 
+fn parse_regular_str(filter: &str) -> Criteria<&str> {
+    if let Some(split_str) = filter.split_once("..") {
+        return match split_str {
+            (left, "") => Criteria::GreaterEq(left),
+            ("", right) => Criteria::LessEq(right),
+            (left, right) => Criteria::Range(left..right),
+        };
+    }
+    Criteria::Values(filter.split(',').collect())
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -106,11 +114,14 @@ mod test {
         assert_eq!(criteria("0..1").unwrap(), Criteria::Range(0..1));
         assert_eq!(criteria("-10..5").unwrap(), Criteria::Range(-10..5));
 
-        assert_eq!(str_criteria("str"), Criteria::Values(vec!["str"]));
-        assert_eq!(str_criteria("a,b,c"), Criteria::Values(vec!["a", "b", "c"]));
-        assert_eq!(str_criteria("a.."), Criteria::GreaterEq("a"));
-        assert_eq!(str_criteria("..z"), Criteria::LessEq("z"));
-        assert_eq!(str_criteria("a..z"), Criteria::Range("a".."z"));
+        assert_eq!(str_criteria("str"), StrCritera::Regular(Criteria::Values(vec!["str"])));
+        assert_eq!(str_criteria("a,b,c"), StrCritera::Regular(Criteria::Values(vec!["a", "b", "c"])));
+        assert_eq!(str_criteria("a.."), StrCritera::Regular(Criteria::GreaterEq("a")));
+        assert_eq!(str_criteria("..z"), StrCritera::Regular(Criteria::LessEq("z")));
+        assert_eq!(str_criteria("a..z"), StrCritera::Regular(Criteria::Range("a".."z")));
+        assert_eq!(str_criteria("*str*"), StrCritera::WildCard(String::from("%str%")));
+        assert_eq!(str_criteria("a*,*b,*c*"), StrCritera::WildCard(String::from("a%,%b,%c%")));
+        assert_eq!(str_criteria("*a..b"), StrCritera::WildCard(String::from("%a..b")));
 
         assert_eq!(criteria("safe").unwrap(), Criteria::Values(vec![PostSafety::Safe]));
         assert_eq!(criteria("safe..unsafe").unwrap(), Criteria::Range(PostSafety::Safe..PostSafety::Unsafe));

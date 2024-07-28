@@ -35,8 +35,6 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedCommentI
         let count_query = search::comment::build_query(&search_criteria)?;
         let sql_query = search::comment::build_query(&search_criteria)?;
 
-        println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
-
         let total = count_query.count().first(conn)?;
         let selected_tags: Vec<i32> = search::comment::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedCommentInfo {

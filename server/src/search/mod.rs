@@ -136,6 +136,16 @@ enum Criteria<V> {
     Range(Range<V>),
 }
 
+/*
+    String filters can also have wildcards.
+    Only one allowed pattern per filter for now.
+*/
+#[derive(Debug, PartialEq, Eq)]
+enum StrCritera<'a> {
+    Regular(Criteria<&'a str>),
+    WildCard(String),
+}
+
 struct UnparsedFilter<'a, T> {
     kind: T,
     criteria: &'a str,

@@ -99,8 +99,6 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPostInfo> {
         let count_query = search::post::build_query(client_id, &search_criteria)?;
         let sql_query = search::post::build_query(client_id, &search_criteria)?;
 
-        println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
-
         let total = count_query.count().first(conn)?;
         let selected_posts: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedPostInfo {

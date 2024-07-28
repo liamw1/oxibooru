@@ -50,8 +50,6 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedTagInfo> {
         let count_query = search::tag::build_query(&search_criteria)?;
         let sql_query = search::tag::build_query(&search_criteria)?;
 
-        println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
-
         let total = count_query.count().first(conn)?;
         let selected_tags: Vec<i32> = search::tag::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedTagInfo {

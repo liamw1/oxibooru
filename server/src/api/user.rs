@@ -120,8 +120,6 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedUserInfo> {
         let count_query = search::user::build_query(&search_criteria)?;
         let sql_query = search::user::build_query(&search_criteria)?;
 
-        println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
-
         let total = count_query.count().first(conn)?;
         let selected_users: Vec<i32> = search::user::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedUserInfo {

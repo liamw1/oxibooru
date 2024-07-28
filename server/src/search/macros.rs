@@ -4,9 +4,10 @@
 */
 
 #[macro_export]
-macro_rules! apply_str_filter {
-    ($query:expr, $expression:expr, $filter:expr) => {
-        $crate::apply_criteria!($query, $expression, $filter, $crate::search::parse::str_criteria($filter.criteria))
+macro_rules! apply_filter {
+    ($query:expr, $expression:expr, $filter:expr, $criteria_type:ty) => {
+        $crate::search::parse::criteria::<$criteria_type>($filter.criteria)
+            .map(|criteria| $crate::apply_criteria!($query, $expression, $filter, criteria))
     };
 }
 
@@ -19,10 +20,20 @@ macro_rules! apply_time_filter {
 }
 
 #[macro_export]
-macro_rules! apply_filter {
-    ($query:expr, $expression:expr, $filter:expr, $criteria_type:ty) => {
-        $crate::search::parse::criteria::<$criteria_type>($filter.criteria)
-            .map(|criteria| $crate::apply_criteria!($query, $expression, $filter, criteria))
+macro_rules! apply_str_filter {
+    ($query:expr, $expression:expr, $filter:expr) => {
+        match $crate::search::parse::str_criteria($filter.criteria) {
+            $crate::search::StrCritera::Regular(criteria) => {
+                $crate::apply_criteria!($query, $expression, $filter, criteria)
+            }
+            $crate::search::StrCritera::WildCard(pattern) => {
+                if $filter.negated {
+                    $query.filter($expression.not_like(pattern))
+                } else {
+                    $query.filter($expression.like(pattern))
+                }
+            }
+        }
     };
 }
 
