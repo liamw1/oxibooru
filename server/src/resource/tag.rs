@@ -1,5 +1,5 @@
 use crate::model::post::PostTag;
-use crate::model::tag::{Tag, TagId, TagImplication, TagName, TagSuggestion};
+use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
 use crate::resource;
 use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_suggestion};
 use crate::util::DateTime;
@@ -256,13 +256,14 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
 }
 
 fn get_usages(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<i64>> {
-    let usages: Vec<(TagId, i64)> = PostTag::belonging_to(tags)
+    PostTag::belonging_to(tags)
         .group_by(post_tag::tag_id)
         .select((post_tag::tag_id, count(post_tag::post_id)))
-        .load(conn)?;
-    Ok(usages
-        .grouped_by(tags)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|usages| {
+            resource::order_as(usages, tags, |(id, _)| *id)
+                .into_iter()
+                .map(|post_count| post_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }

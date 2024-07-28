@@ -31,3 +31,22 @@ fn order_by<T: IntegerIdentifiable>(mut values: Vec<T>, order: &[i32]) -> Vec<T>
     }
     values
 }
+
+fn order_as<V, T, F>(unordered_values: Vec<V>, ordered_values: &[T], get_key: F) -> Vec<Option<V>>
+where
+    T: IntegerIdentifiable,
+    F: Fn(&V) -> i32,
+{
+    assert!(unordered_values.len() <= ordered_values.len());
+
+    let mut results: Vec<Option<V>> = std::iter::repeat_with(|| None).take(ordered_values.len()).collect();
+    for value in unordered_values.into_iter() {
+        let value_id = get_key(&value);
+        let index = ordered_values
+            .iter()
+            .position(|ordered_value| ordered_value.id() == value_id)
+            .unwrap();
+        results[index] = Some(value);
+    }
+    results
+}

@@ -2,12 +2,8 @@ use crate::model::post::Post;
 use crate::model::IntegerIdentifiable;
 use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::util::DateTime;
-use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use diesel::serialize::{self, Output, ToSql};
-use diesel::sql_types::Integer;
-use diesel::AsExpression;
 use serde::Serialize;
 
 #[derive(Insertable)]
@@ -31,33 +27,6 @@ pub struct PoolCategory {
 #[diesel(table_name = pool)]
 pub struct NewPool {
     pub category_id: i32,
-}
-
-#[derive(Debug, Clone, Copy, Associations, Selectable, AsExpression, FromSqlRow)]
-#[diesel(sql_type = Integer)]
-#[diesel(belongs_to(Pool, foreign_key = id))]
-#[diesel(table_name = pool)]
-#[diesel(check_for_backend(Pg))]
-pub struct PoolId {
-    pub id: i32,
-}
-
-impl ToSql<Integer, Pg> for PoolId
-where
-    i32: ToSql<Integer, Pg>,
-{
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        <i32 as ToSql<Integer, Pg>>::to_sql(&self.id, &mut out.reborrow())
-    }
-}
-
-impl FromSql<Integer, Pg> for PoolId
-where
-    i32: FromSql<Integer, Pg>,
-{
-    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
-        i32::from_sql(bytes).map(|id| PoolId { id })
-    }
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]

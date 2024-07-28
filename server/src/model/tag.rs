@@ -1,12 +1,8 @@
 use crate::model::IntegerIdentifiable;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::util::DateTime;
-use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use diesel::serialize::{self, Output, ToSql};
-use diesel::sql_types::Integer;
-use diesel::AsExpression;
 use serde::Serialize;
 
 #[derive(Insertable)]
@@ -37,33 +33,6 @@ pub struct NewTag {
 impl Default for NewTag {
     fn default() -> Self {
         Self { category_id: 0 }
-    }
-}
-
-#[derive(Debug, Clone, Copy, Associations, Selectable, AsExpression, FromSqlRow)]
-#[diesel(sql_type = Integer)]
-#[diesel(belongs_to(Tag, foreign_key = id))]
-#[diesel(table_name = tag)]
-#[diesel(check_for_backend(Pg))]
-pub struct TagId {
-    pub id: i32,
-}
-
-impl ToSql<Integer, Pg> for TagId
-where
-    i32: ToSql<Integer, Pg>,
-{
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        <i32 as ToSql<Integer, Pg>>::to_sql(&self.id, &mut out.reborrow())
-    }
-}
-
-impl FromSql<Integer, Pg> for TagId
-where
-    i32: FromSql<Integer, Pg>,
-{
-    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
-        i32::from_sql(bytes).map(|id| TagId { id })
     }
 }
 

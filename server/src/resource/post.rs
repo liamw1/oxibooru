@@ -2,7 +2,7 @@ use crate::auth::content;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, MimeType, PostSafety, PostType};
 use crate::model::pool::{Pool, PoolName, PoolPost};
-use crate::model::post::{Post, PostFavorite, PostFeature, PostId, PostNote, PostRelation, PostScore, PostTag};
+use crate::model::post::{Post, PostFavorite, PostFeature, PostNote, PostRelation, PostScore, PostTag};
 use crate::model::tag::{Tag, TagName};
 use crate::resource;
 use crate::resource::comment::CommentInfo;
@@ -332,19 +332,17 @@ fn get_posts(conn: &mut PgConnection, post_ids: &[i32]) -> QueryResult<Vec<Post>
 
 fn get_post_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option<MicroUser>>> {
     let post_ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
-    Ok(post::table
+    post::table
         .filter(post::id.eq_any(&post_ids))
         .inner_join(user::table)
         .select((post::id, user::name, user::avatar_style))
-        .load::<(PostId, String, AvatarStyle)>(conn)?
-        .grouped_by(&posts)
-        .into_iter()
-        .map(|mut post_owners| {
-            post_owners
-                .pop()
-                .map(|(_, username, avatar_style)| MicroUser::new(username, avatar_style))
+        .load::<(i32, String, AvatarStyle)>(conn)
+        .map(|post_info| {
+            resource::order_as(post_info, posts, |(id, ..)| *id)
+                .into_iter()
+                .map(|post_owner| post_owner.map(|(_, username, avatar_style)| MicroUser::new(username, avatar_style)))
+                .collect()
         })
-        .collect())
 }
 
 fn get_content_urls(posts: &[Post]) -> Vec<String> {
@@ -414,7 +412,7 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
         .inner_join(user::table)
         .select((Comment::as_select(), user::name, user::avatar_style))
         .load(conn)?;
-    let comment_ids: Vec<i32> = comments.iter().map(|(comment, _, _)| comment.id).collect();
+    let comment_ids: Vec<i32> = comments.iter().map(|(comment, ..)| comment.id).collect();
     let scores: HashMap<i32, Option<i64>> = comment_score::table
         .group_by(comment_score::comment_id)
         .select((comment_score::comment_id, sum(comment_score::score)))
@@ -539,149 +537,161 @@ fn get_notes(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Pos
 }
 
 fn get_scores(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
-    let post_scores: Vec<(PostId, Option<i64>)> = PostScore::belonging_to(posts)
+    PostScore::belonging_to(posts)
         .group_by(post_score::post_id)
         .select((post_score::post_id, sum(post_score::score)))
-        .load(conn)?;
-    Ok(post_scores
-        .grouped_by(posts)
-        .into_iter()
-        .map(|post_scores| post_scores.first().map(|(_, score)| *score).flatten().unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|post_scores| {
+            resource::order_as(post_scores, posts, |(id, _)| *id)
+                .into_iter()
+                .map(|post_score| post_score.map(|(_, score)| score).flatten().unwrap_or(0))
+                .collect()
+        })
 }
 
 fn get_client_scores(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) -> QueryResult<Vec<i32>> {
-    Ok(client
-        .map(|id| {
-            PostScore::belonging_to(posts)
-                .filter(post_score::user_id.eq(id))
-                .load::<PostScore>(conn)
-        })
-        .transpose()?
-        .map(|results| {
-            results
-                .grouped_by(posts)
-                .into_iter()
-                .map(|scores| scores.first().map(|post_score| post_score.score).unwrap_or(0))
-                .collect()
-        })
-        .unwrap_or(vec![0; posts.len()]))
+    if let Some(client_id) = client {
+        PostScore::belonging_to(posts)
+            .filter(post_score::user_id.eq(client_id))
+            .load::<PostScore>(conn)
+            .map(|client_scores| {
+                resource::order_as(client_scores, posts, |score| score.post_id)
+                    .into_iter()
+                    .map(|client_score| client_score.map(|score| score.score).unwrap_or(0))
+                    .collect()
+            })
+    } else {
+        Ok(vec![0; posts.len()])
+    }
 }
 
 fn get_client_favorites(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) -> QueryResult<Vec<bool>> {
-    Ok(client
-        .map(|id| {
-            PostFavorite::belonging_to(posts)
-                .filter(post_favorite::user_id.eq(id))
-                .load::<PostFavorite>(conn)
-        })
-        .transpose()?
-        .map(|results| {
-            results
-                .grouped_by(posts)
-                .into_iter()
-                .map(|fav| fav.first().is_some())
-                .collect()
-        })
-        .unwrap_or(vec![false; posts.len()]))
+    if let Some(client_id) = client {
+        PostFavorite::belonging_to(posts)
+            .filter(post_favorite::user_id.eq(client_id))
+            .load::<PostFavorite>(conn)
+            .map(|client_favorites| {
+                resource::order_as(client_favorites, posts, |favorite| favorite.post_id)
+                    .into_iter()
+                    .map(|client_favorite| client_favorite.is_some())
+                    .collect()
+            })
+    } else {
+        Ok(vec![false; posts.len()])
+    }
 }
 
 fn get_tag_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
-    let tag_counts: Vec<(PostId, i64)> = PostTag::belonging_to(posts)
+    PostTag::belonging_to(posts)
         .group_by(post_tag::post_id)
         .select((post_tag::post_id, count(post_tag::tag_id)))
-        .load(conn)?;
-    Ok(tag_counts
-        .grouped_by(posts)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|tag_counts| {
+            resource::order_as(tag_counts, posts, |(id, _)| *id)
+                .into_iter()
+                .map(|tag_count| tag_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }
 
 fn get_comment_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
-    let comment_counts: Vec<(PostId, i64)> = Comment::belonging_to(posts)
+    Comment::belonging_to(posts)
         .group_by(comment::post_id)
         .select((comment::post_id, count(comment::post_id)))
-        .load(conn)?;
-    Ok(comment_counts
-        .grouped_by(posts)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|comment_counts| {
+            resource::order_as(comment_counts, posts, |(id, _)| *id)
+                .into_iter()
+                .map(|comment_count| comment_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }
 
 fn get_relation_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
-    let relation_counts: Vec<(PostId, i64)> = PostRelation::belonging_to(posts)
+    PostRelation::belonging_to(posts)
         .group_by(post_relation::parent_id)
         .select((post_relation::parent_id, count(post_relation::child_id)))
-        .load(conn)?;
-    Ok(relation_counts
-        .grouped_by(posts)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|relation_counts| {
+            resource::order_as(relation_counts, posts, |(id, _)| *id)
+                .into_iter()
+                .map(|relation_count| relation_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }
 
 fn get_note_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
-    let note_counts: Vec<(PostId, i64)> = PostNote::belonging_to(posts)
+    PostNote::belonging_to(posts)
         .group_by(post_note::post_id)
         .select((post_note::post_id, count(post_note::id)))
-        .load(conn)?;
-    Ok(note_counts
-        .grouped_by(posts)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|note_counts| {
+            resource::order_as(note_counts, posts, |(id, _)| *id)
+                .into_iter()
+                .map(|note_count| note_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }
 
 fn get_favorite_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
-    let favorite_counts: Vec<(PostId, i64)> = PostFavorite::belonging_to(posts)
+    PostFavorite::belonging_to(posts)
         .group_by(post_favorite::post_id)
         .select((post_favorite::post_id, count(post_favorite::user_id)))
-        .load(conn)?;
-    Ok(favorite_counts
-        .grouped_by(posts)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|favorite_counts| {
+            resource::order_as(favorite_counts, posts, |(id, _)| *id)
+                .into_iter()
+                .map(|favorite_count| favorite_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }
 
 fn get_feature_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> {
-    let feature_counts: Vec<(PostId, i64)> = PostFeature::belonging_to(posts)
+    PostFeature::belonging_to(posts)
         .group_by(post_feature::post_id)
         .select((post_feature::post_id, count(post_feature::id)))
-        .load(conn)?;
-    Ok(feature_counts
-        .grouped_by(posts)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|feature_counts| {
+            resource::order_as(feature_counts, posts, |(id, _)| *id)
+                .into_iter()
+                .map(|feature_count| feature_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }
 
 fn get_last_feature_times(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option<DateTime>>> {
-    let last_feature_times: Vec<(PostId, Option<DateTime>)> = PostFeature::belonging_to(posts)
+    PostFeature::belonging_to(posts)
         .group_by(post_feature::post_id)
         .select((post_feature::post_id, max(post_feature::time)))
-        .load(conn)?;
-    Ok(last_feature_times
-        .grouped_by(posts)
-        .into_iter()
-        .map(|feature_times| feature_times.first().map(|(_, time)| *time).flatten())
-        .collect())
+        .load(conn)
+        .map(|last_feature_times| {
+            resource::order_as(last_feature_times, posts, |(id, _)| *id)
+                .into_iter()
+                .map(|last_feature_time| last_feature_time.map(|(_, time)| time).flatten())
+                .collect()
+        })
 }
 
 fn get_users_who_favorited(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroUser>>> {
-    let users_who_favorited: Vec<(PostId, String, AvatarStyle)> = PostFavorite::belonging_to(posts)
+    let users_who_favorited: Vec<(i32, String, AvatarStyle)> = PostFavorite::belonging_to(posts)
         .inner_join(user::table)
         .select((post_favorite::post_id, user::name, user::avatar_style))
         .load(conn)?;
-    Ok(users_who_favorited
-        .grouped_by(posts)
-        .into_iter()
-        .map(|users| {
+
+    let mut users_grouped_by_posts: Vec<Vec<(String, AvatarStyle)>> =
+        std::iter::repeat_with(|| vec![]).take(posts.len()).collect();
+    for (post_id, username, avatar_style) in users_who_favorited.into_iter() {
+        let index = posts.iter().position(|post| post.id == post_id).unwrap();
+        users_grouped_by_posts[index].push((username, avatar_style));
+    }
+
+    Ok(posts
+        .iter()
+        .zip(users_grouped_by_posts.into_iter())
+        .map(|(_, users)| {
             users
                 .into_iter()
-                .map(|(_, username, avatar_style)| MicroUser::new(username, avatar_style))
+                .map(|(username, avatar_style)| MicroUser::new(username, avatar_style))
                 .collect()
         })
         .collect())

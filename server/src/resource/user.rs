@@ -2,7 +2,7 @@ use crate::auth::content;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::post::{Post, PostFavorite, PostScore};
-use crate::model::user::{User, UserId};
+use crate::model::user::User;
 use crate::resource;
 use crate::schema::{comment, post, post_favorite, post_score, user};
 use crate::util::DateTime;
@@ -198,27 +198,29 @@ fn get_users(conn: &mut PgConnection, user_ids: &[i32]) -> QueryResult<Vec<User>
 }
 
 fn get_comment_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<i64>> {
-    let comment_counts: Vec<(UserId, i64)> = Comment::belonging_to(users)
+    Comment::belonging_to(users)
         .group_by(comment::user_id)
         .select((comment::user_id, count(comment::user_id)))
-        .load(conn)?;
-    Ok(comment_counts
-        .grouped_by(users)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|comment_counts| {
+            resource::order_as(comment_counts, users, |(id, _)| *id)
+                .into_iter()
+                .map(|comment_count| comment_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }
 
 fn get_uploaded_post_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<i64>> {
-    let upload_counts: Vec<(UserId, i64)> = Post::belonging_to(users)
+    Post::belonging_to(users)
         .group_by(post::user_id)
         .select((post::user_id.assume_not_null(), count(post::user_id)))
-        .load(conn)?;
-    Ok(upload_counts
-        .grouped_by(users)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|upload_counts| {
+            resource::order_as(upload_counts, users, |(id, _)| *id)
+                .into_iter()
+                .map(|upload_count| upload_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }
 
 fn get_liked_post_counts(
@@ -230,17 +232,18 @@ fn get_liked_post_counts(
         return Ok(vec![PrivateData::Visible(false); users.len()]);
     }
 
-    let like_counts: Vec<(UserId, i64)> = PostScore::belonging_to(users)
+    PostScore::belonging_to(users)
         .group_by(post_score::user_id)
         .select((post_score::user_id, count(post_score::user_id)))
         .filter(post_score::score.eq(1))
-        .load(conn)?;
-    Ok(like_counts
-        .grouped_by(users)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .map(PrivateData::Expose)
-        .collect())
+        .load(conn)
+        .map(|like_counts| {
+            resource::order_as(like_counts, users, |(id, _)| *id)
+                .into_iter()
+                .map(|like_count| like_count.map(|(_, count)| count).unwrap_or(0))
+                .map(PrivateData::Expose)
+                .collect()
+        })
 }
 
 fn get_disliked_post_counts(
@@ -252,27 +255,29 @@ fn get_disliked_post_counts(
         return Ok(vec![PrivateData::Visible(false); users.len()]);
     }
 
-    let dislike_counts: Vec<(UserId, i64)> = PostScore::belonging_to(users)
+    PostScore::belonging_to(users)
         .group_by(post_score::user_id)
         .select((post_score::user_id, count(post_score::user_id)))
         .filter(post_score::score.eq(-1))
-        .load(conn)?;
-    Ok(dislike_counts
-        .grouped_by(users)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .map(PrivateData::Expose)
-        .collect())
+        .load(conn)
+        .map(|dislike_counts| {
+            resource::order_as(dislike_counts, users, |(id, _)| *id)
+                .into_iter()
+                .map(|dislike_count| dislike_count.map(|(_, count)| count).unwrap_or(0))
+                .map(PrivateData::Expose)
+                .collect()
+        })
 }
 
 fn get_favorite_post_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<i64>> {
-    let favorite_counts: Vec<(UserId, i64)> = PostFavorite::belonging_to(users)
+    PostFavorite::belonging_to(users)
         .group_by(post_favorite::user_id)
         .select((post_favorite::user_id, count(post_favorite::user_id)))
-        .load(conn)?;
-    Ok(favorite_counts
-        .grouped_by(users)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|favorite_counts| {
+            resource::order_as(favorite_counts, users, |(id, _)| *id)
+                .into_iter()
+                .map(|favorite_count| favorite_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }

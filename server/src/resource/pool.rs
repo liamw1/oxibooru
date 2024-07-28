@@ -1,5 +1,5 @@
 use crate::auth::content;
-use crate::model::pool::{Pool, PoolId, PoolName, PoolPost};
+use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource;
 use crate::resource::post::MicroPost;
 use crate::schema::{pool, pool_category, pool_post};
@@ -176,13 +176,14 @@ fn get_posts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<Mic
 }
 
 fn get_post_counts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<i64>> {
-    let usages: Vec<(PoolId, i64)> = PoolPost::belonging_to(pools)
+    PoolPost::belonging_to(pools)
         .group_by(pool_post::pool_id)
         .select((pool_post::pool_id, count(pool_post::post_id)))
-        .load(conn)?;
-    Ok(usages
-        .grouped_by(pools)
-        .into_iter()
-        .map(|counts| counts.first().map(|(_, count)| *count).unwrap_or(0))
-        .collect())
+        .load(conn)
+        .map(|usages| {
+            resource::order_as(usages, pools, |(id, _)| *id)
+                .into_iter()
+                .map(|post_count| post_count.map(|(_, count)| count).unwrap_or(0))
+                .collect()
+        })
 }

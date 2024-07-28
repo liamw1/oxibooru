@@ -6,12 +6,9 @@ use crate::schema::{
     post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
 };
 use crate::util::DateTime;
-use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use diesel::serialize::{self, Output, ToSql};
-use diesel::sql_types::{Array, Int4, Integer};
-use diesel::AsExpression;
+use diesel::sql_types::{Array, Int4};
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -26,33 +23,6 @@ pub struct NewPost<'a> {
     pub mime_type: MimeType,
     pub checksum: &'a str,
     pub source: Option<&'a str>,
-}
-
-#[derive(Debug, Clone, Copy, Associations, Selectable, AsExpression, FromSqlRow)]
-#[diesel(sql_type = Integer)]
-#[diesel(belongs_to(Post, foreign_key = id))]
-#[diesel(table_name = post)]
-#[diesel(check_for_backend(Pg))]
-pub struct PostId {
-    pub id: i32,
-}
-
-impl ToSql<Integer, Pg> for PostId
-where
-    i32: ToSql<Integer, Pg>,
-{
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        <i32 as ToSql<Integer, Pg>>::to_sql(&self.id, &mut out.reborrow())
-    }
-}
-
-impl FromSql<Integer, Pg> for PostId
-where
-    i32: FromSql<Integer, Pg>,
-{
-    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
-        i32::from_sql(bytes).map(|id| PostId { id })
-    }
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
