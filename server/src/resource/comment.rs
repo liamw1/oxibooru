@@ -71,8 +71,8 @@ impl CommentInfo {
                 creation_time: comment.creation_time,
                 last_edit_time: comment.last_edit_time,
                 user: MicroUser::new(author, avatar_style),
-                score: scores.get(&comment.id).cloned().flatten().unwrap_or(0),
-                own_score: client.map(|_| client_scores.get(&comment.id).cloned().unwrap_or(0)),
+                score: scores.get(&comment.id).copied().flatten().unwrap_or(0),
+                own_score: client.map(|_| client_scores.get(&comment.id).copied().unwrap_or(0)),
             })
             .collect();
         Ok(order_comments(&comment_ids, comment_info))

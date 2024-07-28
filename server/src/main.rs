@@ -14,10 +14,10 @@ mod test;
 pub mod util;
 
 use diesel::prelude::*;
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 const DEFAULT_PORT: u16 = 6666;
-static DATABASE_URL: Lazy<&'static str> = Lazy::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
+static DATABASE_URL: LazyLock<&'static str> = LazyLock::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
     Ok(_) => "postgres://postgres:postgres@host.docker.internal/booru",
     Err(_) => "postgres://postgres:postgres@localhost/booru",
 });

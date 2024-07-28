@@ -96,7 +96,7 @@ where
         S: FromStr,
         <S as FromStr>::Err: std::error::Error,
     {
-        self.specials.iter().cloned().map(S::from_str).collect()
+        self.specials.iter().copied().map(S::from_str).collect()
     }
 }
 

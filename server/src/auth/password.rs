@@ -4,7 +4,7 @@ use crate::model::user::User;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use argon2::{Algorithm, Params, Version};
-use once_cell::sync::Lazy;
+use std::sync::LazyLock;
 
 pub fn hash_password(password: &str, salt: &str) -> Result<String, HashError> {
     // TODO: Handle hash rotations
@@ -20,7 +20,7 @@ pub fn is_valid_password(user: &User, password: &str) -> bool {
         .is_ok()
 }
 
-static ARGON_CONTEXT: Lazy<Argon2> = Lazy::new(|| {
+static ARGON_CONTEXT: LazyLock<Argon2> = LazyLock::new(|| {
     Argon2::new_with_secret(
         config::get().password_secret.as_bytes(),
         Algorithm::default(),

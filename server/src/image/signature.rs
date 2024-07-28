@@ -222,7 +222,7 @@ fn compute_differentials(mean_matrix: &Array2D<u8>) -> Vec<i16> {
 fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &[i16], filter: F) -> Vec<Option<i16>> {
     let mut filtered_values = differentials
         .iter()
-        .cloned()
+        .copied()
         .filter(|&diff| filter(diff))
         .collect::<Vec<_>>();
     filtered_values.sort();
@@ -235,7 +235,7 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &[i16], filter: F) -> Vec<
 
     filtered_values
         .chunks(chunk_size)
-        .map(|chunk| chunk.last().cloned())
+        .map(|chunk| chunk.last().copied())
         .collect()
 }
 

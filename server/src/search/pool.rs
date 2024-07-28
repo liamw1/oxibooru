@@ -82,7 +82,7 @@ pub fn get_ordered_ids(
         .load(conn);
     }
     // Add default sort if none specified
-    let sort = search_criteria.sorts.last().cloned().unwrap_or(ParsedSort {
+    let sort = search_criteria.sorts.last().copied().unwrap_or(ParsedSort {
         kind: Token::CreationTime,
         order: Order::default(),
     });

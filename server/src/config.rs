@@ -1,7 +1,7 @@
 use crate::model::enums::UserRank;
-use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::LazyLock;
 
 #[derive(Deserialize)]
 pub struct Thumbnails {
@@ -153,8 +153,8 @@ pub fn privileges() -> &'static Privileges {
     &CONFIG.public_info.privileges
 }
 
-static CONFIG: Lazy<Config> =
-    Lazy::new(|| toml::from_str(&std::fs::read_to_string(get_config_path()).unwrap()).unwrap());
+static CONFIG: LazyLock<Config> =
+    LazyLock::new(|| toml::from_str(&std::fs::read_to_string(get_config_path()).unwrap()).unwrap());
 
 fn get_config_path() -> PathBuf {
     // Use config.toml.dist if in development environment, config.toml if in production

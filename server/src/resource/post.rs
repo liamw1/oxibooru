@@ -410,7 +410,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
             MicroTag {
                 names,
                 category: category_names[&tag.category_id].clone(),
-                usages: usages.get(&tag.id).cloned().unwrap_or(0),
+                usages: usages.get(&tag.id).copied().unwrap_or(0),
             }
         })
     };
@@ -468,8 +468,8 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
                         text: comment.text,
                         creation_time: comment.creation_time,
                         last_edit_time: comment.last_edit_time,
-                        score: scores.get(&id).cloned().flatten().unwrap_or(0),
-                        own_score: client.map(|_| client_scores.get(&id).cloned().unwrap_or(0)),
+                        score: scores.get(&id).copied().flatten().unwrap_or(0),
+                        own_score: client.map(|_| client_scores.get(&id).copied().unwrap_or(0)),
                     }
                 })
                 .collect()
@@ -528,7 +528,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
                 names,
                 category: category_names[&pool.category_id].clone(),
                 description: pool.description.clone(),
-                post_count: usages.get(&pool.id).cloned().unwrap_or(0),
+                post_count: usages.get(&pool.id).copied().unwrap_or(0),
             }
         })
     };

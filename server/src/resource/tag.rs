@@ -209,7 +209,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
             MicroTag {
                 names,
                 category: category_names[&implication.category_id].clone(),
-                usages: implication_usages.get(&implication.id).cloned().unwrap_or(0),
+                usages: implication_usages.get(&implication.id).copied().unwrap_or(0),
             }
         })
     };
@@ -255,7 +255,7 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
             MicroTag {
                 names,
                 category: category_names[&suggestion.category_id].clone(),
-                usages: suggestion_usages.get(&suggestion.id).cloned().unwrap_or(0),
+                usages: suggestion_usages.get(&suggestion.id).copied().unwrap_or(0),
             }
         })
     };
