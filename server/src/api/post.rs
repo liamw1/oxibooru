@@ -93,23 +93,23 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPostInfo> {
     let limit = std::cmp::min(query.limit, MAX_POSTS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    let mut search_criteria = search::post::parse_search_criteria(query.criteria())?;
-    search_criteria.add_offset_and_limit(offset, limit);
-    let count_query = search::post::build_query(client_id, &search_criteria)?;
-    let sql_query = search::post::build_query(client_id, &search_criteria)?;
+    crate::establish_connection()?.transaction(|conn| {
+        let mut search_criteria = search::post::parse_search_criteria(query.criteria())?;
+        search_criteria.add_offset_and_limit(offset, limit);
+        let count_query = search::post::build_query(client_id, &search_criteria)?;
+        let sql_query = search::post::build_query(client_id, &search_criteria)?;
 
-    println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
+        println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
 
-    let mut conn = crate::establish_connection()?;
-    let total = count_query.count().first(&mut conn)?;
-    let selected_posts: Vec<i32> = search::post::get_ordered_ids(&mut conn, sql_query, &search_criteria)?;
-
-    Ok(PagedPostInfo {
-        query: query.query.query,
-        offset,
-        limit,
-        total,
-        results: PostInfo::new_batch_from_ids(&mut conn, client_id, selected_posts, &fields)?,
+        let total = count_query.count().first(conn)?;
+        let selected_posts: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        Ok(PagedPostInfo {
+            query: query.query.query,
+            offset,
+            limit,
+            total,
+            results: PostInfo::new_batch_from_ids(conn, client_id, selected_posts, &fields)?,
+        })
     })
 }
 
@@ -119,9 +119,9 @@ fn get_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<P
 
     let fields = create_field_table(query.fields())?;
 
-    let mut conn = crate::establish_connection()?;
     let client_id = client.map(|user| user.id);
-    PostInfo::new_from_id(&mut conn, client_id, post_id, &fields).map_err(api::Error::from)
+    crate::establish_connection()?
+        .transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
 }
 
 #[derive(Serialize)]
@@ -140,22 +140,22 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
     let fields = create_field_table(query.fields())?;
     let search_criteria = search::post::parse_search_criteria(query.criteria())?;
     let sql_query = search::post::build_query(client_id, &search_criteria)?;
-    let mut conn = crate::establish_connection()?;
+    crate::establish_connection()?.transaction(|conn| {
+        let post_ids: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let post_index = post_ids.iter().position(|&id| id == post_id);
 
-    let post_ids: Vec<i32> = search::post::get_ordered_ids(&mut conn, sql_query, &search_criteria)?;
-    let post_index = post_ids.iter().position(|&id| id == post_id);
+        let prev_post_id = post_index.and_then(|index| post_ids.get(index - 1));
+        let prev = prev_post_id
+            .map(|&post_id| PostInfo::new_from_id(conn, client_id, post_id, &fields))
+            .transpose()?;
 
-    let prev_post_id = post_index.and_then(|index| post_ids.get(index - 1));
-    let prev = prev_post_id
-        .map(|&post_id| PostInfo::new_from_id(&mut conn, client_id, post_id, &fields))
-        .transpose()?;
+        let next_post_id = post_index.and_then(|index| post_ids.get(index + 1));
+        let next = next_post_id
+            .map(|&post_id| PostInfo::new_from_id(conn, client_id, post_id, &fields))
+            .transpose()?;
 
-    let next_post_id = post_index.and_then(|index| post_ids.get(index + 1));
-    let next = next_post_id
-        .map(|&post_id| PostInfo::new_from_id(&mut conn, client_id, post_id, &fields))
-        .transpose()?;
-
-    Ok(PostNeighbors { prev, next })
+        Ok(PostNeighbors { prev, next })
+    })
 }
 
 #[derive(Deserialize)]
@@ -197,45 +197,45 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     let image_signature = signature::compute_signature(&image);
     let image_checksum = content::image_checksum(&image);
 
-    let mut conn = crate::establish_connection()?;
-
-    // Check for exact match
     let client_id = client.map(|user| user.id);
-    let exact_post = post::table
-        .select(Post::as_select())
-        .filter(post::checksum.eq(image_checksum))
-        .first(&mut conn)
-        .optional()?;
-    if exact_post.is_some() {
-        return Ok(ReverseSearchInfo {
-            exact_post: exact_post
-                .map(|post_id| PostInfo::new(&mut conn, client_id, post_id, &fields))
-                .transpose()?,
-            similar_posts: Vec::new(),
-        });
-    }
+    crate::establish_connection()?.transaction(|conn| {
+        // Check for exact match
+        let exact_post = post::table
+            .select(Post::as_select())
+            .filter(post::checksum.eq(image_checksum))
+            .first(conn)
+            .optional()?;
+        if exact_post.is_some() {
+            return Ok(ReverseSearchInfo {
+                exact_post: exact_post
+                    .map(|post_id| PostInfo::new(conn, client_id, post_id, &fields))
+                    .transpose()?,
+                similar_posts: Vec::new(),
+            });
+        }
 
-    // Search for similar images
-    let similar_signatures = PostSignature::find_similar(&mut conn, signature::generate_indexes(&image_signature))?;
-    println!("Found {} similar signatures", similar_signatures.len());
-    let mut similar_posts: Vec<_> = similar_signatures
-        .into_iter()
-        .filter_map(|post_signature| {
-            let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
-            (distance < POST_SIMILARITY_THRESHOLD).then_some((post_signature.post_id, distance))
-        })
-        .collect();
-    similar_posts.sort_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
-
-    let post_ids = similar_posts.iter().map(|(post_id, _)| *post_id).collect();
-    let distances: Vec<f64> = similar_posts.iter().map(|(_, distance)| *distance).collect();
-    Ok(ReverseSearchInfo {
-        exact_post: None,
-        similar_posts: PostInfo::new_batch_from_ids(&mut conn, client_id, post_ids, &fields)?
+        // Search for similar images
+        let similar_signatures = PostSignature::find_similar(conn, signature::generate_indexes(&image_signature))?;
+        println!("Found {} similar signatures", similar_signatures.len());
+        let mut similar_posts: Vec<_> = similar_signatures
             .into_iter()
-            .zip(distances.into_iter())
-            .map(|(post, distance)| SimilarPostInfo { distance, post })
-            .collect(),
+            .filter_map(|post_signature| {
+                let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
+                (distance < POST_SIMILARITY_THRESHOLD).then_some((post_signature.post_id, distance))
+            })
+            .collect();
+        similar_posts.sort_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
+
+        let post_ids = similar_posts.iter().map(|(post_id, _)| *post_id).collect();
+        let distances: Vec<f64> = similar_posts.iter().map(|(_, distance)| *distance).collect();
+        Ok(ReverseSearchInfo {
+            exact_post: None,
+            similar_posts: PostInfo::new_batch_from_ids(conn, client_id, post_ids, &fields)?
+                .into_iter()
+                .zip(distances.into_iter())
+                .map(|(post, distance)| SimilarPostInfo { distance, post })
+                .collect(),
+        })
     })
 }
 
@@ -286,60 +286,61 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         source: post_info.source.as_deref(),
     };
 
-    let mut conn = crate::establish_connection()?;
-    let post = diesel::insert_into(post::table)
-        .values(new_post)
-        .returning(Post::as_returning())
-        .get_result(&mut conn)?;
+    crate::establish_connection()?.transaction(|conn| {
+        let post = diesel::insert_into(post::table)
+            .values(new_post)
+            .returning(Post::as_returning())
+            .get_result(conn)?;
 
-    // Add tags: TODO
+        // Add tags: TODO
 
-    // Add relations
-    let relations = post_info.relations.unwrap_or_default();
-    let new_on_existing = relations.iter().map(|&parent_id| NewPostRelation {
-        parent_id,
-        child_id: post.id,
-    });
-    let existing_on_new = relations.iter().map(|&child_id| NewPostRelation {
-        parent_id: post.id,
-        child_id,
-    });
-    let new_post_relations = new_on_existing.chain(existing_on_new).collect::<Vec<_>>();
-    diesel::insert_into(post_relation::table)
-        .values(new_post_relations)
-        .execute(&mut conn)?;
+        // Add relations
+        let relations = post_info.relations.unwrap_or_default();
+        let new_on_existing = relations.iter().map(|&parent_id| NewPostRelation {
+            parent_id,
+            child_id: post.id,
+        });
+        let existing_on_new = relations.iter().map(|&child_id| NewPostRelation {
+            parent_id: post.id,
+            child_id,
+        });
+        let new_post_relations = new_on_existing.chain(existing_on_new).collect::<Vec<_>>();
+        diesel::insert_into(post_relation::table)
+            .values(new_post_relations)
+            .execute(conn)?;
 
-    // Generate image signature
-    let image_signature = signature::compute_signature(&image);
-    let new_post_signature = NewPostSignature {
-        post_id: post.id,
-        signature: &image_signature,
-        words: &signature::generate_indexes(&image_signature),
-    };
-    diesel::insert_into(post_signature::table)
-        .values(new_post_signature)
-        .execute(&mut conn)?;
+        // Generate image signature
+        let image_signature = signature::compute_signature(&image);
+        let new_post_signature = NewPostSignature {
+            post_id: post.id,
+            signature: &image_signature,
+            words: &signature::generate_indexes(&image_signature),
+        };
+        diesel::insert_into(post_signature::table)
+            .values(new_post_signature)
+            .execute(conn)?;
 
-    // Move content to permanent location
-    let posts_folder = filesystem::posts_directory();
-    if !posts_folder.exists() {
-        std::fs::create_dir(&posts_folder)?;
-    }
-    std::fs::rename(temp_path, content::post_content_path(post.id, post.mime_type))?;
+        // Move content to permanent location
+        let posts_folder = filesystem::posts_directory();
+        if !posts_folder.exists() {
+            std::fs::create_dir(&posts_folder)?;
+        }
+        std::fs::rename(temp_path, content::post_content_path(post.id, post.mime_type))?;
 
-    // Generate thumbnail
-    let thumbnail_folder = filesystem::generated_thumbnails_directory();
-    if !thumbnail_folder.exists() {
-        std::fs::create_dir(&thumbnail_folder)?;
-    }
-    let thumbnail = image.resize_to_fill(
-        config::get().thumbnails.post_width,
-        config::get().thumbnails.post_height,
-        image::imageops::FilterType::Nearest,
-    );
-    thumbnail.to_rgb8().save(content::post_thumbnail_path(post.id))?;
+        // Generate thumbnail
+        let thumbnail_folder = filesystem::generated_thumbnails_directory();
+        if !thumbnail_folder.exists() {
+            std::fs::create_dir(&thumbnail_folder)?;
+        }
+        let thumbnail = image.resize_to_fill(
+            config::get().thumbnails.post_width,
+            config::get().thumbnails.post_height,
+            image::imageops::FilterType::Nearest,
+        );
+        thumbnail.to_rgb8().save(content::post_thumbnail_path(post.id))?;
 
-    PostInfo::new(&mut conn, client_id, post, &fields).map_err(api::Error::from)
+        PostInfo::new(conn, client_id, post, &fields).map_err(api::Error::from)
+    })
 }
 
 #[derive(Deserialize)]
@@ -475,14 +476,11 @@ fn delete_post(post_id: i32, auth: AuthResult, client_version: ResourceVersion) 
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 
-    let mut conn = crate::establish_connection()?;
-    let post_version = post::table
-        .find(post_id)
-        .select(post::last_edit_time)
-        .first(&mut conn)?;
-    api::verify_version(post_version, *client_version)?;
+    crate::establish_connection()?.transaction(|conn| {
+        let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
+        api::verify_version(post_version, *client_version)?;
 
-    diesel::delete(post::table.find(post_id)).execute(&mut conn)?;
-
-    Ok(())
+        diesel::delete(post::table.find(post_id)).execute(conn)?;
+        Ok(())
+    })
 }

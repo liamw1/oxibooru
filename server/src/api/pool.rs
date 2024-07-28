@@ -37,22 +37,22 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPoolInfo> {
     let limit = std::cmp::min(query.limit, MAX_POOLS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    let mut search_criteria = search::pool::parse_search_criteria(query.criteria())?;
-    search_criteria.add_offset_and_limit(offset, limit);
-    let count_query = search::pool::build_query(&search_criteria)?;
-    let sql_query = search::pool::build_query(&search_criteria)?;
+    crate::establish_connection()?.transaction(|conn| {
+        let mut search_criteria = search::pool::parse_search_criteria(query.criteria())?;
+        search_criteria.add_offset_and_limit(offset, limit);
+        let count_query = search::pool::build_query(&search_criteria)?;
+        let sql_query = search::pool::build_query(&search_criteria)?;
 
-    println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
+        println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
 
-    let mut conn = crate::establish_connection()?;
-    let total = count_query.count().first(&mut conn)?;
-    let selected_tags: Vec<i32> = search::pool::get_ordered_ids(&mut conn, sql_query, &search_criteria)?;
-
-    Ok(PagedPoolInfo {
-        query: query.query.query,
-        offset,
-        limit,
-        total,
-        results: PoolInfo::new_batch_from_ids(&mut conn, selected_tags, &fields)?,
+        let total = count_query.count().first(conn)?;
+        let selected_tags: Vec<i32> = search::pool::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        Ok(PagedPoolInfo {
+            query: query.query.query,
+            offset,
+            limit,
+            total,
+            results: PoolInfo::new_batch_from_ids(conn, selected_tags, &fields)?,
+        })
     })
 }

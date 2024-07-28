@@ -81,27 +81,29 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
         avatar_style: AvatarStyle::Gravatar,
     };
 
-    let mut conn = crate::establish_connection()?;
-    let user: User = diesel::insert_into(user::table)
-        .values(new_user)
-        .returning(User::as_returning())
-        .get_result(&mut conn)?;
-    UserInfo::new(&mut conn, user, &fields, Visibility::Full).map_err(api::Error::from)
+    crate::establish_connection()?.transaction(|conn| {
+        let user: User = diesel::insert_into(user::table)
+            .values(new_user)
+            .returning(User::as_returning())
+            .get_result(conn)?;
+        UserInfo::new(conn, user, &fields, Visibility::Full).map_err(api::Error::from)
+    })
 }
 
 fn get_user(username: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<UserInfo> {
-    let fields = create_field_table(query.fields())?;
-
-    let mut conn = crate::establish_connection()?;
-    let user = User::from_name(&mut conn, &username)?;
-
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
-    if client_id != Some(user.id) {
-        api::verify_privilege(client.as_ref(), config::privileges().user_view)?;
-        return UserInfo::new(&mut conn, user, &fields, Visibility::PublicOnly).map_err(api::Error::from);
-    }
-    UserInfo::new(&mut conn, user, &fields, Visibility::Full).map_err(api::Error::from)
+    let fields = create_field_table(query.fields())?;
+
+    crate::establish_connection()?.transaction(|conn| {
+        let user = User::from_name(conn, &username)?;
+
+        if client_id != Some(user.id) {
+            api::verify_privilege(client.as_ref(), config::privileges().user_view)?;
+            return UserInfo::new(conn, user, &fields, Visibility::PublicOnly).map_err(api::Error::from);
+        }
+        UserInfo::new(conn, user, &fields, Visibility::Full).map_err(api::Error::from)
+    })
 }
 
 fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedUserInfo> {
@@ -112,22 +114,22 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedUserInfo> {
     let limit = std::cmp::min(query.limit, MAX_USERS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
-    search_criteria.add_offset_and_limit(offset, limit);
-    let count_query = search::user::build_query(&search_criteria)?;
-    let sql_query = search::user::build_query(&search_criteria)?;
+    crate::establish_connection()?.transaction(|conn| {
+        let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
+        search_criteria.add_offset_and_limit(offset, limit);
+        let count_query = search::user::build_query(&search_criteria)?;
+        let sql_query = search::user::build_query(&search_criteria)?;
 
-    println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
+        println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
 
-    let mut conn = crate::establish_connection()?;
-    let total = count_query.count().first(&mut conn)?;
-    let selected_users: Vec<i32> = search::user::get_ordered_ids(&mut conn, sql_query, &search_criteria)?;
-
-    Ok(PagedUserInfo {
-        query: query.query.query,
-        offset,
-        limit,
-        total,
-        results: UserInfo::new_batch_from_ids(&mut conn, selected_users, &fields, Visibility::PublicOnly)?,
+        let total = count_query.count().first(conn)?;
+        let selected_users: Vec<i32> = search::user::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        Ok(PagedUserInfo {
+            query: query.query.query,
+            offset,
+            limit,
+            total,
+            results: UserInfo::new_batch_from_ids(conn, selected_users, &fields, Visibility::PublicOnly)?,
+        })
     })
 }

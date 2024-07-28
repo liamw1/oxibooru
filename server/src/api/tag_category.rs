@@ -1,6 +1,7 @@
 use crate::api::{ApiResult, AuthResult};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::{api, config};
+use diesel::prelude::*;
 use serde::Serialize;
 use warp::{Filter, Rejection, Reply};
 
@@ -23,8 +24,9 @@ fn list_tag_categories(auth: AuthResult) -> ApiResult<TagCategoryList> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_list)?;
 
-    let mut conn = crate::establish_connection()?;
-    Ok(TagCategoryList {
-        results: TagCategoryInfo::all(&mut conn)?,
+    crate::establish_connection()?.transaction(|conn| {
+        TagCategoryInfo::all(conn)
+            .map(|results| TagCategoryList { results })
+            .map_err(api::Error::from)
     })
 }

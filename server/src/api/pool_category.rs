@@ -1,6 +1,7 @@
 use crate::api::{ApiResult, AuthResult};
 use crate::resource::pool_category::PoolCategoryInfo;
 use crate::{api, config};
+use diesel::prelude::*;
 use serde::Serialize;
 use warp::{Filter, Rejection, Reply};
 
@@ -23,8 +24,9 @@ fn list_pool_categories(auth: AuthResult) -> ApiResult<PoolCategoryList> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_list)?;
 
-    let mut conn = crate::establish_connection()?;
-    Ok(PoolCategoryList {
-        results: PoolCategoryInfo::all(&mut conn)?,
+    crate::establish_connection()?.transaction(|conn| {
+        PoolCategoryInfo::all(conn)
+            .map(|results| PoolCategoryList { results })
+            .map_err(api::Error::from)
     })
 }

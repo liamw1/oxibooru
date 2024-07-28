@@ -44,23 +44,23 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedTagInfo> {
     let limit = std::cmp::min(query.limit, MAX_TAGS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    let mut search_criteria = search::tag::parse_search_criteria(query.criteria())?;
-    search_criteria.add_offset_and_limit(offset, limit);
-    let count_query = search::tag::build_query(&search_criteria)?;
-    let sql_query = search::tag::build_query(&search_criteria)?;
+    crate::establish_connection()?.transaction(|conn| {
+        let mut search_criteria = search::tag::parse_search_criteria(query.criteria())?;
+        search_criteria.add_offset_and_limit(offset, limit);
+        let count_query = search::tag::build_query(&search_criteria)?;
+        let sql_query = search::tag::build_query(&search_criteria)?;
 
-    println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
+        println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
 
-    let mut conn = crate::establish_connection()?;
-    let total = count_query.count().first(&mut conn)?;
-    let selected_tags: Vec<i32> = search::tag::get_ordered_ids(&mut conn, sql_query, &search_criteria)?;
-
-    Ok(PagedTagInfo {
-        query: query.query.query,
-        offset,
-        limit,
-        total,
-        results: TagInfo::new_batch_from_ids(&mut conn, selected_tags, &fields)?,
+        let total = count_query.count().first(conn)?;
+        let selected_tags: Vec<i32> = search::tag::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        Ok(PagedTagInfo {
+            query: query.query.query,
+            offset,
+            limit,
+            total,
+            results: TagInfo::new_batch_from_ids(conn, selected_tags, &fields)?,
+        })
     })
 }
 
@@ -70,10 +70,11 @@ fn get_tag(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<Ta
 
     let fields = create_field_table(query.fields())?;
 
-    let mut conn = crate::establish_connection()?;
-    let tag_id = tag_name::table
-        .select(tag_name::tag_id)
-        .filter(tag_name::name.eq(name))
-        .first(&mut conn)?;
-    TagInfo::new_from_id(&mut conn, tag_id, &fields).map_err(api::Error::from)
+    crate::establish_connection()?.transaction(|conn| {
+        let tag_id = tag_name::table
+            .select(tag_name::tag_id)
+            .filter(tag_name::name.eq(name))
+            .first(conn)?;
+        TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from)
+    })
 }

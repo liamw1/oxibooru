@@ -29,22 +29,22 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedCommentI
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit, MAX_COMMENTS_PER_PAGE);
 
-    let mut search_criteria = search::comment::parse_search_criteria(query.criteria())?;
-    search_criteria.add_offset_and_limit(offset, limit);
-    let count_query = search::comment::build_query(&search_criteria)?;
-    let sql_query = search::comment::build_query(&search_criteria)?;
+    crate::establish_connection()?.transaction(|conn| {
+        let mut search_criteria = search::comment::parse_search_criteria(query.criteria())?;
+        search_criteria.add_offset_and_limit(offset, limit);
+        let count_query = search::comment::build_query(&search_criteria)?;
+        let sql_query = search::comment::build_query(&search_criteria)?;
 
-    println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
+        println!("SQL Query: {}\n", diesel::debug_query(&sql_query).to_string());
 
-    let mut conn = crate::establish_connection()?;
-    let total = count_query.count().first(&mut conn)?;
-    let selected_tags: Vec<i32> = search::comment::get_ordered_ids(&mut conn, sql_query, &search_criteria)?;
-
-    Ok(PagedCommentInfo {
-        query: query.query.query,
-        offset,
-        limit,
-        total,
-        results: CommentInfo::new_batch_from_ids(&mut conn, client_id, selected_tags)?,
+        let total = count_query.count().first(conn)?;
+        let selected_tags: Vec<i32> = search::comment::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        Ok(PagedCommentInfo {
+            query: query.query.query,
+            offset,
+            limit,
+            total,
+            results: CommentInfo::new_batch_from_ids(conn, client_id, selected_tags)?,
+        })
     })
 }

@@ -35,49 +35,53 @@ struct PostUserTokenInfo {
 }
 
 fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTokenInfo) -> ApiResult<UserTokenInfo> {
-    let mut conn = crate::establish_connection()?;
-    let user = User::from_name(&mut conn, &username)?;
-
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
-    let required_rank = match client_id == Some(user.id) {
-        true => config::privileges().user_token_create_self,
-        false => config::privileges().user_token_create_any,
-    };
-    api::verify_privilege(client.as_ref(), required_rank)?;
 
-    // Delete previous token, if it exists
-    diesel::delete(user_token::table.find(user.id)).execute(&mut conn)?;
+    crate::establish_connection()?.transaction(|conn| {
+        let user = User::from_name(conn, &username)?;
 
-    let new_user_token = NewUserToken {
-        user_id: user.id,
-        token: Uuid::new_v4(),
-        note: token_info.note.as_deref(),
-        enabled: token_info.enabled,
-        expiration_time: token_info.expiration_time,
-    };
-    let user_token: UserToken = diesel::insert_into(user_token::table)
-        .values(new_user_token)
-        .returning(UserToken::as_returning())
-        .get_result(&mut conn)?;
-    Ok(UserTokenInfo::new(MicroUser::new(user.name, user.avatar_style), user_token))
+        let required_rank = match client_id == Some(user.id) {
+            true => config::privileges().user_token_create_self,
+            false => config::privileges().user_token_create_any,
+        };
+        api::verify_privilege(client.as_ref(), required_rank)?;
+
+        // Delete previous token, if it exists
+        diesel::delete(user_token::table.find(user.id)).execute(conn)?;
+
+        let new_user_token = NewUserToken {
+            user_id: user.id,
+            token: Uuid::new_v4(),
+            note: token_info.note.as_deref(),
+            enabled: token_info.enabled,
+            expiration_time: token_info.expiration_time,
+        };
+        let user_token: UserToken = diesel::insert_into(user_token::table)
+            .values(new_user_token)
+            .returning(UserToken::as_returning())
+            .get_result(conn)?;
+        Ok(UserTokenInfo::new(MicroUser::new(user.name, user.avatar_style), user_token))
+    })
 }
 
 fn delete_user_token(username: String, token: Uuid, auth: AuthResult) -> ApiResult<()> {
-    let mut conn = crate::establish_connection()?;
-    let user = User::from_name(&mut conn, &username)?;
-
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
-    let required_rank = match client_id == Some(user.id) {
-        true => config::privileges().user_token_delete_self,
-        false => config::privileges().user_token_delete_any,
-    };
-    api::verify_privilege(client.as_ref(), required_rank)?;
 
-    let user_token = UserToken::belonging_to(&user)
-        .select(UserToken::as_select())
-        .filter(user_token::token.eq(token))
-        .first(&mut conn)?;
-    user_token.delete(&mut conn).map_err(api::Error::from)
+    crate::establish_connection()?.transaction(|conn| {
+        let user = User::from_name(conn, &username)?;
+
+        let required_rank = match client_id == Some(user.id) {
+            true => config::privileges().user_token_delete_self,
+            false => config::privileges().user_token_delete_any,
+        };
+        api::verify_privilege(client.as_ref(), required_rank)?;
+
+        let user_token = UserToken::belonging_to(&user)
+            .select(UserToken::as_select())
+            .filter(user_token::token.eq(token))
+            .first(conn)?;
+        user_token.delete(conn).map_err(api::Error::from)
+    })
 }

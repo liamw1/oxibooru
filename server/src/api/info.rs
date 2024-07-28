@@ -34,7 +34,7 @@ fn get_info() -> ApiResult<Info> {
     let disk_usage = calculate_directory_size(Path::new(&config::get().data_dir))?;
 
     let mut conn = crate::establish_connection()?;
-    let info = Info {
+    Ok(Info {
         post_count: Post::count(&mut conn)?,
         disk_usage,
         featured_post: None,
@@ -42,9 +42,7 @@ fn get_info() -> ApiResult<Info> {
         featuring_user: None,
         server_time: DateTime::now(),
         config: &config::get().public_info,
-    };
-
-    Ok(info)
+    })
 }
 
 fn calculate_directory_size(path: &Path) -> std::io::Result<u64> {
