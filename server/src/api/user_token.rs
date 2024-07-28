@@ -79,10 +79,11 @@ fn delete_user_token(username: String, token: Uuid, auth: AuthResult) -> ApiResu
         };
         api::verify_privilege(client.as_ref(), required_rank)?;
 
-        let user_token = UserToken::belonging_to(&user)
-            .select(UserToken::as_select())
+        let user_id: i32 = UserToken::belonging_to(&user)
+            .select(user_token::user_id)
             .filter(user_token::token.eq(token))
             .first(conn)?;
-        user_token.delete(conn).map_err(api::Error::from)
+        diesel::delete(user_token::table.find(user_id)).execute(conn)?;
+        Ok(())
     })
 }

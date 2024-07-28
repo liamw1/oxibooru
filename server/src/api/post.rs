@@ -243,13 +243,13 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct NewPostInfo {
-    _tags: Option<Vec<String>>, // TODO
     safety: PostSafety,
     source: Option<String>,
     relations: Option<Vec<i32>>,
-    _flags: Option<Vec<String>>, // TODO
     anonymous: Option<bool>,
     content_token: String,
+    // tags: TODO
+    // flags: TODO
 }
 
 fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {

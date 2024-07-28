@@ -1,10 +1,6 @@
 use crate::auth::content;
-use crate::model::comment::{Comment, CommentScore, NewComment, NewCommentScore};
 use crate::model::enums::{AvatarStyle, UserRank};
-use crate::model::post::{NewPostFavorite, NewPostFeature, NewPostScore, Post, PostFavorite, PostFeature, PostScore};
-use crate::model::TableName;
-use crate::schema::{comment, comment_score, post, post_favorite, post_feature, post_score, user, user_token};
-use crate::util;
+use crate::schema::{user, user_token};
 use crate::util::DateTime;
 use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::expression::AsExpression;
@@ -69,17 +65,7 @@ pub struct User {
     pub last_edit_time: DateTime,
 }
 
-impl TableName for User {
-    fn table_name() -> &'static str {
-        "user"
-    }
-}
-
 impl User {
-    pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
-        user::table.count().first(conn)
-    }
-
     pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<Self> {
         user::table
             .select(Self::as_select())
@@ -92,116 +78,6 @@ impl User {
             AvatarStyle::Gravatar => content::gravatar_url(&self.name),
             AvatarStyle::Manual => content::custom_avatar_url(&self.name),
         }
-    }
-
-    pub fn post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
-        post::table.filter(post::user_id.eq(self.id)).count().first(conn)
-    }
-
-    pub fn comment_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
-        comment::table.filter(comment::user_id.eq(self.id)).count().first(conn)
-    }
-
-    pub fn favorite_post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
-        post_favorite::table
-            .filter(post_favorite::user_id.eq(self.id))
-            .count()
-            .first(conn)
-    }
-
-    pub fn liked_post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
-        post_score::table
-            .filter(post_score::user_id.eq(self.id))
-            .filter(post_score::score.eq(1))
-            .count()
-            .first(conn)
-    }
-
-    pub fn disliked_post_count(&self, conn: &mut PgConnection) -> QueryResult<i64> {
-        post_score::table
-            .filter(post_score::user_id.eq(self.id))
-            .filter(post_score::score.eq(-1))
-            .count()
-            .first(conn)
-    }
-
-    pub fn add_comment(&self, conn: &mut PgConnection, post: &Post, text: &str) -> QueryResult<Comment> {
-        let new_comment = NewComment {
-            user_id: self.id,
-            post_id: post.id,
-            text,
-        };
-        diesel::insert_into(comment::table)
-            .values(new_comment)
-            .returning(Comment::as_returning())
-            .get_result(conn)
-    }
-
-    pub fn like_comment(&self, conn: &mut PgConnection, comment: &Comment) -> QueryResult<CommentScore> {
-        let new_comment_score = NewCommentScore {
-            comment_id: comment.id,
-            user_id: self.id,
-            score: 1,
-            time: DateTime::now(),
-        };
-        diesel::insert_into(comment_score::table)
-            .values(new_comment_score)
-            .returning(CommentScore::as_returning())
-            .get_result(conn)
-    }
-
-    pub fn dislike_comment(&self, conn: &mut PgConnection, comment: &Comment) -> QueryResult<CommentScore> {
-        let new_comment_score = NewCommentScore {
-            comment_id: comment.id,
-            user_id: self.id,
-            score: -1,
-            time: DateTime::now(),
-        };
-        diesel::insert_into(comment_score::table)
-            .values(new_comment_score)
-            .returning(CommentScore::as_returning())
-            .get_result(conn)
-    }
-
-    pub fn like_post(&self, conn: &mut PgConnection, post: &Post) -> QueryResult<PostScore> {
-        let new_post_score = NewPostScore {
-            post_id: post.id,
-            user_id: self.id,
-            score: 1,
-            time: DateTime::now(),
-        };
-        diesel::insert_into(post_score::table)
-            .values(new_post_score)
-            .returning(PostScore::as_returning())
-            .get_result(conn)
-    }
-
-    pub fn favorite_post(&self, conn: &mut PgConnection, post: &Post) -> QueryResult<PostFavorite> {
-        let new_post_favorite = NewPostFavorite {
-            post_id: post.id,
-            user_id: self.id,
-            time: DateTime::now(),
-        };
-        diesel::insert_into(post_favorite::table)
-            .values(new_post_favorite)
-            .returning(PostFavorite::as_returning())
-            .get_result(conn)
-    }
-
-    pub fn feature_post(&self, conn: &mut PgConnection, post: &Post) -> QueryResult<PostFeature> {
-        let new_post_feature = NewPostFeature {
-            post_id: post.id,
-            user_id: self.id,
-            time: DateTime::now(),
-        };
-        diesel::insert_into(post_feature::table)
-            .values(new_post_feature)
-            .returning(PostFeature::as_returning())
-            .get_result(conn)
-    }
-
-    pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        util::delete(conn, &self)
     }
 }
 
@@ -231,27 +107,15 @@ pub struct UserToken {
     pub last_usage_time: DateTime,
 }
 
-impl TableName for UserToken {
-    fn table_name() -> &'static str {
-        "user_token"
-    }
-}
-
 impl UserToken {
     pub fn count(conn: &mut PgConnection) -> QueryResult<i64> {
         user_token::table.count().first(conn)
-    }
-
-    pub fn delete(self, conn: &mut PgConnection) -> QueryResult<()> {
-        util::delete(conn, &self)
     }
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::model::comment::{Comment, CommentScore};
-    use crate::model::post::{Post, PostFavorite, PostFeature, PostScore};
     use crate::test::*;
 
     #[test]
@@ -274,71 +138,5 @@ mod test {
         assert_eq!(user_token.note, None);
         assert!(!user_token.enabled);
         assert_eq!(user_token.expiration_time, None);
-    }
-
-    #[test]
-    fn user_statistics() {
-        test_transaction(|conn: &mut PgConnection| {
-            let user = create_test_user(conn, "test_user")?;
-
-            assert_eq!(user.post_count(conn)?, 0);
-            assert_eq!(user.comment_count(conn)?, 0);
-            assert_eq!(user.liked_post_count(conn)?, 0);
-            assert_eq!(user.favorite_post_count(conn)?, 0);
-
-            let post = create_test_post(conn, &user)?;
-            user.add_comment(conn, &post, "test comment")?;
-            user.like_post(conn, &post)?;
-            user.favorite_post(conn, &post)?;
-
-            assert_eq!(user.post_count(conn)?, 1);
-            assert_eq!(user.comment_count(conn)?, 1);
-            assert_eq!(user.liked_post_count(conn)?, 1);
-            assert_eq!(user.favorite_post_count(conn)?, 1);
-
-            Ok(())
-        });
-    }
-
-    #[test]
-    fn cascade_deletions() {
-        test_transaction(|conn: &mut PgConnection| {
-            let user_count = User::count(conn)?;
-            let post_count = Post::count(conn)?;
-            let post_score_count = PostScore::count(conn)?;
-            let post_favorite_count = PostFavorite::count(conn)?;
-            let post_feature_count = PostFeature::count(conn)?;
-            let comment_count = Comment::count(conn)?;
-            let comment_score_count = CommentScore::count(conn)?;
-
-            let user = create_test_user(conn, "test_user")?;
-            let post = create_test_post(conn, &user)?;
-            let comment = user.add_comment(conn, &post, "test comment")?;
-
-            user.like_post(conn, &post)?;
-            user.favorite_post(conn, &post)?;
-            user.feature_post(conn, &post)?;
-            user.like_comment(conn, &comment)?;
-
-            assert_eq!(User::count(conn)?, user_count + 1);
-            assert_eq!(Post::count(conn)?, post_count + 1);
-            assert_eq!(PostScore::count(conn)?, post_score_count + 1);
-            assert_eq!(PostFavorite::count(conn)?, post_favorite_count + 1);
-            assert_eq!(PostFeature::count(conn)?, post_feature_count + 1);
-            assert_eq!(Comment::count(conn)?, comment_count + 1);
-            assert_eq!(CommentScore::count(conn)?, comment_score_count + 1);
-
-            user.delete(conn)?;
-
-            assert_eq!(User::count(conn)?, user_count);
-            assert_eq!(Post::count(conn)?, post_count + 1);
-            assert_eq!(PostScore::count(conn)?, post_score_count);
-            assert_eq!(PostFavorite::count(conn)?, post_favorite_count);
-            assert_eq!(PostFeature::count(conn)?, post_feature_count);
-            assert_eq!(Comment::count(conn)?, comment_count);
-            assert_eq!(CommentScore::count(conn)?, comment_score_count);
-
-            Ok(())
-        });
     }
 }

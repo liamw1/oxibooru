@@ -1,8 +1,8 @@
 use crate::model::enums::{AvatarStyle, MimeType, UserRank};
 use crate::model::enums::{PostSafety, PostType};
-use crate::model::post::{NewPost, NewPostNote, NewPostSignature, Post, PostNote, PostSignature};
+use crate::model::post::{NewPost, Post};
 use crate::model::user::{NewUser, NewUserToken, User, UserToken};
-use crate::schema::{post, post_note, post_signature, user, user_token};
+use crate::schema::{post, user, user_token};
 use crate::util::DateTime;
 use diesel::prelude::*;
 use diesel::result::Error;
@@ -87,29 +87,5 @@ pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Pos
     diesel::insert_into(post::table)
         .values(new_post)
         .returning(Post::as_returning())
-        .get_result(conn)
-}
-
-pub fn create_test_post_note(conn: &mut PgConnection, post: &Post) -> QueryResult<PostNote> {
-    let new_post_note = NewPostNote {
-        post_id: post.id,
-        polygon: &[],
-        text: String::from("This is a test note"),
-    };
-    diesel::insert_into(post_note::table)
-        .values(new_post_note)
-        .returning(PostNote::as_returning())
-        .get_result(conn)
-}
-
-pub fn create_test_post_signature(conn: &mut PgConnection, post: &Post) -> QueryResult<PostSignature> {
-    let new_post_signature = NewPostSignature {
-        post_id: post.id,
-        signature: &[],
-        words: &[],
-    };
-    diesel::insert_into(post_signature::table)
-        .values(new_post_signature)
-        .returning(PostSignature::as_returning())
         .get_result(conn)
 }

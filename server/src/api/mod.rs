@@ -192,7 +192,6 @@ impl Deref for ResourceVersion {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct ResourceQuery {
     query: Option<String>,
     fields: Option<String>,
@@ -209,7 +208,6 @@ impl ResourceQuery {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct PagedQuery {
     offset: Option<i64>,
     limit: i64,

@@ -1,8 +1,11 @@
 use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery};
+use crate::model::tag::Tag;
 use crate::resource::tag::{FieldTable, TagInfo};
 use crate::schema::tag_name;
+use crate::util::DateTime;
 use crate::{api, config, resource, search};
 use diesel::prelude::*;
+use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -18,8 +21,15 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(api::resource_query())
         .map(get_tag)
         .map(api::Reply::from);
+    let update_tag = warp::put()
+        .and(warp::path!("tag" / String))
+        .and(api::auth())
+        .and(api::resource_query())
+        .and(warp::body::json())
+        .map(update_tag)
+        .map(api::Reply::from);
 
-    list_tags.or(get_tag)
+    list_tags.or(get_tag).or(update_tag)
 }
 
 type PagedTagInfo = PagedResponse<TagInfo>;
@@ -73,5 +83,30 @@ fn get_tag(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<Ta
             .filter(tag_name::name.eq(name))
             .first(conn)?;
         TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from)
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TagUpdateInfo {
+    version: DateTime,
+    // category: Option<String>,
+    // description: Option<String>,
+    // names: Option<Vec<String>>,
+    // implications: Option<Vec<String>>,
+    // suggestions: Option<Vec<String>>,
+}
+
+fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagUpdateInfo) -> ApiResult<TagInfo> {
+    let _timer = crate::util::Timer::new("update_tag");
+
+    let _client = auth?;
+    let _fields = create_field_table(query.fields())?;
+
+    crate::establish_connection()?.transaction(|conn| {
+        let tag = Tag::from_name(conn, &name)?;
+        api::verify_version(tag.last_edit_time, update.version)?;
+
+        unimplemented!()
     })
 }
