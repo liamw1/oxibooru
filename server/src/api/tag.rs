@@ -67,7 +67,6 @@ fn get_tag(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<Ta
     api::verify_privilege(client.as_ref(), config::privileges().tag_view)?;
 
     let fields = create_field_table(query.fields())?;
-
     crate::establish_connection()?.transaction(|conn| {
         let tag_id = tag_name::table
             .select(tag_name::tag_id)

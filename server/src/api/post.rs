@@ -116,8 +116,8 @@ fn get_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<P
     api::verify_privilege(client.as_ref(), config::privileges().post_view)?;
 
     let fields = create_field_table(query.fields())?;
-
     let client_id = client.map(|user| user.id);
+
     crate::establish_connection()?
         .transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
 }
@@ -138,6 +138,7 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
     let fields = create_field_table(query.fields())?;
     let search_criteria = search::post::parse_search_criteria(query.criteria())?;
     let sql_query = search::post::build_query(client_id, &search_criteria)?;
+
     crate::establish_connection()?.transaction(|conn| {
         let post_ids: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
         let post_index = post_ids.iter().position(|&id| id == post_id);
@@ -157,6 +158,7 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct ContentToken {
     content_token: String,
@@ -238,6 +240,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct NewPostInfo {
     _tags: Option<Vec<String>>, // TODO
@@ -342,6 +345,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PostUpdateInfo {
     version: DateTime,
     safety: Option<PostSafety>,
@@ -357,6 +361,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
 
     let client = auth?;
     let fields = create_field_table(query.fields())?;
+
     crate::establish_connection()?.transaction(|conn| {
         let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
         api::verify_version(post_version, update.version)?;

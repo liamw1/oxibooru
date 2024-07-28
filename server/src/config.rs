@@ -116,6 +116,7 @@ pub struct Privileges {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 #[serde(rename_all(serialize = "camelCase"))]
 pub struct PublicInfo {
     pub name: String,
@@ -133,6 +134,7 @@ pub struct PublicInfo {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     pub password_secret: String,
     pub content_secret: String,

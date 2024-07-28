@@ -179,6 +179,7 @@ type AuthResult = Result<Option<User>, AuthenticationError>;
 type ApiResult<T> = Result<T, Error>;
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ResourceVersion {
     version: DateTime,
 }
@@ -191,6 +192,7 @@ impl Deref for ResourceVersion {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct ResourceQuery {
     query: Option<String>,
     fields: Option<String>,
@@ -207,6 +209,7 @@ impl ResourceQuery {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PagedQuery {
     offset: Option<i64>,
     limit: i64,

@@ -48,6 +48,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct NewUserInfo {
     name: String,
     password: String,
