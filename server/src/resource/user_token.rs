@@ -11,7 +11,7 @@ pub struct UserTokenInfo {
     version: DateTime, // TODO: Remove last_edit_time as it fills the same role as version here
     user: MicroUser,
     token: Uuid,
-    note: Option<String>,
+    note: String,
     enabled: bool,
     expiration_time: Option<DateTime>,
     creation_time: DateTime,

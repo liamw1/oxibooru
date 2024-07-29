@@ -58,11 +58,10 @@ pub struct NewPoolName<'a> {
 #[derive(Serialize, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Pool))]
 #[diesel(table_name = pool_name)]
+#[diesel(primary_key(pool_id, order))]
 #[diesel(check_for_backend(Pg))]
 #[serde(transparent)]
 pub struct PoolName {
-    #[serde(skip)]
-    pub id: i32,
     #[serde(skip)]
     pub pool_id: i32,
     #[serde(skip)]

@@ -18,10 +18,10 @@ CREATE TABLE "pool" (
 SELECT diesel_manage_last_edit_time('pool');
 
 CREATE TABLE "pool_name" (
-    "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     "pool_id" INTEGER NOT NULL REFERENCES "pool" ON DELETE CASCADE,
     "order" INTEGER NOT NULL,
     "name" VARCHAR(256) NOT NULL,
+    PRIMARY KEY ("pool_id", "order"),
     UNIQUE ("name")
 );
 

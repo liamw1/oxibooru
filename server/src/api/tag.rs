@@ -1,7 +1,7 @@
 use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery};
 use crate::model::tag::Tag;
 use crate::resource::tag::{FieldTable, TagInfo};
-use crate::schema::tag_name;
+use crate::schema::{tag, tag_category, tag_name};
 use crate::util::DateTime;
 use crate::{api, config, resource, search};
 use diesel::prelude::*;
@@ -90,23 +90,58 @@ fn get_tag(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<Ta
 #[serde(deny_unknown_fields)]
 struct TagUpdateInfo {
     version: DateTime,
-    // category: Option<String>,
-    // description: Option<String>,
-    // names: Option<Vec<String>>,
-    // implications: Option<Vec<String>>,
-    // suggestions: Option<Vec<String>>,
+    category: Option<String>,
+    description: Option<String>,
+    names: Option<Vec<String>>,
+    implications: Option<Vec<String>>,
+    suggestions: Option<Vec<String>>,
 }
 
 fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagUpdateInfo) -> ApiResult<TagInfo> {
     let _timer = crate::util::Timer::new("update_tag");
 
-    let _client = auth?;
-    let _fields = create_field_table(query.fields())?;
+    let client = auth?;
+    let fields = create_field_table(query.fields())?;
 
     crate::establish_connection()?.transaction(|conn| {
         let tag = Tag::from_name(conn, &name)?;
         api::verify_version(tag.last_edit_time, update.version)?;
 
-        unimplemented!()
+        // Update category
+        if let Some(category) = update.category {
+            api::verify_privilege(client.as_ref(), config::privileges().tag_edit_category)?;
+            let category_id: i32 = tag_category::table
+                .select(tag_category::id)
+                .filter(tag_category::name.eq(category))
+                .first(conn)?;
+            diesel::update(tag::table.find(tag.id))
+                .set(tag::category_id.eq(category_id))
+                .execute(conn)?;
+        }
+
+        // Update description
+        if let Some(description) = update.description {
+            api::verify_privilege(client.as_ref(), config::privileges().tag_edit_description)?;
+            diesel::update(tag::table.find(tag.id))
+                .set(tag::description.eq(description))
+                .execute(conn)?;
+        }
+
+        // Update names
+        if let Some(names) = update.names {
+            api::verify_privilege(client.as_ref(), config::privileges().tag_edit_name)?;
+        }
+
+        // Update Implications
+        if let Some(implications) = update.implications {
+            api::verify_privilege(client.as_ref(), config::privileges().tag_edit_implication)?;
+        }
+
+        // Update Suggestions
+        if let Some(suggestions) = update.suggestions {
+            api::verify_privilege(client.as_ref(), config::privileges().tag_edit_suggestion)?;
+        }
+
+        TagInfo::new_from_id(conn, tag.id, &fields).map_err(api::Error::from)
     })
 }

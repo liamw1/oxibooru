@@ -75,7 +75,7 @@ pub struct NewUserToken<'a> {
 pub struct UserToken {
     pub user_id: i32,
     pub token: Uuid,
-    pub note: Option<String>,
+    pub note: String,
     pub enabled: bool,
     pub expiration_time: Option<DateTime>,
     pub creation_time: DateTime,
@@ -105,7 +105,7 @@ mod test {
         });
 
         assert_eq!(user_token.token, TEST_TOKEN);
-        assert_eq!(user_token.note, None);
+        assert_eq!(user_token.note, "");
         assert!(!user_token.enabled);
         assert_eq!(user_token.expiration_time, None);
     }

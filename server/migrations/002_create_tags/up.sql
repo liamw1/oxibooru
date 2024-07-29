@@ -19,10 +19,10 @@ CREATE TABLE "tag" (
 SELECT diesel_manage_last_edit_time('tag');
 
 CREATE TABLE "tag_name" (
-    "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     "tag_id" INTEGER NOT NULL REFERENCES "tag" ON DELETE CASCADE,
     "order" INTEGER NOT NULL,
     "name" VARCHAR(128) NOT NULL,
+    PRIMARY KEY ("tag_id", "order"),
     UNIQUE ("name")
 );
 

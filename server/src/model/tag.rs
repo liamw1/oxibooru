@@ -75,11 +75,10 @@ pub struct NewTagName<'a> {
 #[derive(Serialize, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag))]
 #[diesel(table_name = tag_name)]
+#[diesel(primary_key(tag_id, order))]
 #[diesel(check_for_backend(Pg))]
 #[serde(transparent)]
 pub struct TagName {
-    #[serde(skip)]
-    pub id: i32,
     #[serde(skip)]
     pub tag_id: i32,
     #[serde(skip)]
