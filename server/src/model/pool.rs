@@ -4,7 +4,6 @@ use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::util::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use serde::Serialize;
 
 #[derive(Insertable)]
 #[diesel(table_name = pool_category)]
@@ -55,16 +54,13 @@ pub struct NewPoolName<'a> {
     pub name: &'a str,
 }
 
-#[derive(Serialize, Associations, Identifiable, Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Pool))]
 #[diesel(table_name = pool_name)]
 #[diesel(primary_key(pool_id, order))]
 #[diesel(check_for_backend(Pg))]
-#[serde(transparent)]
 pub struct PoolName {
-    #[serde(skip)]
     pub pool_id: i32,
-    #[serde(skip)]
     pub order: i32,
     pub name: String,
 }

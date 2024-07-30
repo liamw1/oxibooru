@@ -3,7 +3,6 @@ use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion
 use crate::util::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use serde::Serialize;
 
 #[derive(Insertable)]
 #[diesel(table_name = tag_category)]
@@ -72,16 +71,13 @@ pub struct NewTagName<'a> {
     pub name: &'a str,
 }
 
-#[derive(Serialize, Associations, Identifiable, Queryable, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag))]
 #[diesel(table_name = tag_name)]
 #[diesel(primary_key(tag_id, order))]
 #[diesel(check_for_backend(Pg))]
-#[serde(transparent)]
 pub struct TagName {
-    #[serde(skip)]
     pub tag_id: i32,
-    #[serde(skip)]
     pub order: i32,
     pub name: String,
 }

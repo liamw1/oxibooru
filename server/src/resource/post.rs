@@ -1,9 +1,8 @@
 use crate::auth::content;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, MimeType, PostSafety, PostType};
-use crate::model::pool::{Pool, PoolName, PoolPost};
+use crate::model::pool::{Pool, PoolPost};
 use crate::model::post::{Post, PostFavorite, PostFeature, PostNote, PostRelation, PostScore, PostTag};
-use crate::model::tag::{Tag, TagName};
 use crate::resource;
 use crate::resource::comment::CommentInfo;
 use crate::resource::pool::MicroPool;
@@ -18,7 +17,7 @@ use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
@@ -361,14 +360,17 @@ fn get_thumbnail_urls(posts: &[Post]) -> Vec<String> {
 }
 
 fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroTag>>> {
-    let tags: Vec<Tag> = PostTag::belonging_to(posts)
-        .inner_join(tag::table)
-        .select(Tag::as_select())
-        .distinct()
+    let post_tags: Vec<(PostTag, i32, String)> = PostTag::belonging_to(posts)
+        .inner_join(tag::table.inner_join(tag_name::table))
+        .select((PostTag::as_select(), tag::category_id, tag_name::name))
+        .order((tag_name::order, tag_name::name))
         .load(conn)?;
-    let usages: HashMap<i32, i64> = PostTag::belonging_to(&tags)
+    let all_tag_ids: HashSet<i32> = post_tags.iter().map(|(post_tag, ..)| post_tag.tag_id).collect();
+
+    let usages: HashMap<i32, i64> = post_tag::table
         .group_by(post_tag::tag_id)
         .select((post_tag::tag_id, count(post_tag::tag_id)))
+        .filter(post_tag::tag_id.eq_any(all_tag_ids))
         .load(conn)?
         .into_iter()
         .collect();
@@ -378,30 +380,17 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
         .into_iter()
         .collect();
 
-    let post_tags = PostTag::belonging_to(posts)
-        .inner_join(tag::table.inner_join(tag_name::table))
-        .select((PostTag::as_select(), TagName::as_select()))
-        .load(conn)?;
-
-    let process_tag = |tag_info: (&Tag, Vec<(PostTag, TagName)>)| -> Option<MicroTag> {
-        let (tag, tag_names) = tag_info;
-        (!tag_names.is_empty()).then_some({
-            let mut names: Vec<_> = tag_names.into_iter().map(|(_, tag_name)| tag_name).collect();
-            names.sort_unstable_by_key(|name| name.order);
-            MicroTag {
-                names,
-                category: category_names[&tag.category_id].clone(),
-                usages: usages.get(&tag.id).copied().unwrap_or(0),
-            }
-        })
-    };
     Ok(post_tags
         .grouped_by(posts)
         .into_iter()
         .map(|tags_on_post| {
-            tags.iter()
-                .zip(tags_on_post.grouped_by(&tags).into_iter())
-                .filter_map(process_tag)
+            resource::collect_tag_data(tags_on_post, |post_tag| post_tag.tag_id)
+                .into_iter()
+                .map(|tag| MicroTag {
+                    names: tag.names,
+                    category: category_names[&tag.category_id].clone(),
+                    usages: usages.get(&tag.id).copied().unwrap_or(0),
+                })
                 .collect()
         })
         .collect())
@@ -411,6 +400,7 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
     let comments: Vec<(Comment, String, AvatarStyle)> = Comment::belonging_to(posts)
         .inner_join(user::table)
         .select((Comment::as_select(), user::name, user::avatar_style))
+        .order(comment::creation_time)
         .load(conn)?;
     let comment_ids: Vec<i32> = comments.iter().map(|(comment, ..)| comment.id).collect();
     let scores: HashMap<i32, Option<i64>> = comment_score::table
@@ -461,6 +451,7 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
 fn get_relations(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroPost>>> {
     let related_posts: Vec<PostRelation> = PostRelation::belonging_to(posts)
         .select(PostRelation::as_select())
+        .order(post_relation::child_id)
         .load(conn)?;
     Ok(related_posts
         .grouped_by(posts)
@@ -497,16 +488,15 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
 
     let pool_posts = PoolPost::belonging_to(posts)
         .inner_join(pool::table.inner_join(pool_name::table))
-        .select((PoolPost::as_select(), PoolName::as_select()))
+        .select((PoolPost::as_select(), pool_name::name))
+        .order(pool_name::order)
         .load(conn)?;
-    let process_pool = |pool_info: (&Pool, Vec<(PoolPost, PoolName)>)| -> Option<MicroPool> {
+    let process_pool = |pool_info: (&Pool, Vec<(PoolPost, String)>)| -> Option<MicroPool> {
         let (pool, pool_names) = pool_info;
         (!pool_names.is_empty()).then_some({
-            let mut names: Vec<_> = pool_names.into_iter().map(|(_, pool_name)| pool_name).collect();
-            names.sort_unstable_by_key(|name| name.order);
             MicroPool {
                 id: pool.id,
-                names,
+                names: pool_names.into_iter().map(|(_, pool_name)| pool_name).collect(),
                 category: category_names[&pool.category_id].clone(),
                 description: pool.description.clone(),
                 post_count: usages.get(&pool.id).copied().unwrap_or(0),

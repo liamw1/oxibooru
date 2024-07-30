@@ -9,6 +9,30 @@ pub mod user_token;
 
 use crate::model::IntegerIdentifiable;
 
+/*
+    NOTE: The more complicated queries in this module rely on the behavior of diesel's
+    grouped_by function preserving the relative order between elements. This seems to be the
+    case, and the most straightforward way of implementing the function would have this behavior,
+    but I don't see this as a guarantee anywhere in the documentation. If this changes, I'll need
+    to reimplement a similar function with this behavior.
+*/
+
+struct TagData {
+    id: i32,
+    category_id: i32,
+    names: Vec<String>,
+}
+
+impl TagData {
+    fn new(id: i32, category_id: i32, name: String) -> Self {
+        Self {
+            id,
+            category_id,
+            names: vec![name],
+        }
+    }
+}
+
 fn check_batch_results(batch_size: usize, post_count: usize) {
     assert!(batch_size == 0 || batch_size == post_count);
 }
@@ -49,7 +73,7 @@ where
 
     The note in the above comment applies here as well.
 */
-fn order_as<V, T, F>(unordered_values: Vec<V>, ordered_values: &[T], get_key: F) -> Vec<Option<V>>
+fn order_as<V, T, F>(unordered_values: Vec<V>, ordered_values: &[T], get_id: F) -> Vec<Option<V>>
 where
     T: IntegerIdentifiable,
     F: Fn(&V) -> i32,
@@ -58,7 +82,7 @@ where
 
     let mut results: Vec<Option<V>> = std::iter::repeat_with(|| None).take(ordered_values.len()).collect();
     for value in unordered_values.into_iter() {
-        let value_id = get_key(&value);
+        let value_id = get_id(&value);
         let index = ordered_values
             .iter()
             .position(|ordered_value| ordered_value.id() == value_id)
@@ -66,4 +90,28 @@ where
         results[index] = Some(value);
     }
     results
+}
+
+/*
+    Takes a set of tag names which have an associated id and category_id and groups
+    names which share an id together. Preserves relative order between names.
+
+    NOTE: Here we also take a O(n^2) Vec-based approach to this function, as I assume
+    tags will have a small number of children (implications or suggestions). This approach
+    is also easier for preserving relative order between names.
+*/
+fn collect_tag_data<T, F>(tag_names: Vec<(T, i32, String)>, get_id: F) -> Vec<TagData>
+where
+    F: Fn(&T) -> i32,
+{
+    let mut tags: Vec<TagData> = Vec::new();
+    for (value, category_id, name) in tag_names {
+        let tag_id = get_id(&value);
+        let index = tags.iter().position(|tag| tag.id == tag_id);
+        match index {
+            Some(i) => tags[i].names.push(name),
+            None => tags.push(TagData::new(tag_id, category_id, name)),
+        };
+    }
+    tags
 }
