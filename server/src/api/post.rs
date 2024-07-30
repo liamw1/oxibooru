@@ -2,15 +2,13 @@ use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery
 use crate::auth::content;
 use crate::image::signature;
 use crate::model::enums::{MimeType, PostSafety, PostType};
-use crate::model::post::{NewPost, NewPostRelation, NewPostSignature, NewPostTag, Post, PostSignature};
-use crate::model::tag::{NewTag, NewTagName};
+use crate::model::post::{NewPost, NewPostSignature, NewPostTag, Post, PostSignature};
 use crate::resource::post::{FieldTable, PostInfo};
-use crate::schema::{post, post_relation, post_signature, post_tag, tag, tag_name};
+use crate::schema::{post, post_relation, post_signature, post_tag};
 use crate::util::DateTime;
-use crate::{api, config, filesystem, resource, search};
+use crate::{api, config, filesystem, resource, search, update};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -297,18 +295,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
 
         // Add relations
         let relations = post_info.relations.unwrap_or_default();
-        let new_on_existing = relations.iter().map(|&parent_id| NewPostRelation {
-            parent_id,
-            child_id: post.id,
-        });
-        let existing_on_new = relations.iter().map(|&child_id| NewPostRelation {
-            parent_id: post.id,
-            child_id,
-        });
-        let new_post_relations = new_on_existing.chain(existing_on_new).collect::<Vec<_>>();
-        diesel::insert_into(post_relation::table)
-            .values(new_post_relations)
-            .execute(conn)?;
+        update::post::create_relations(conn, post.id, &relations)?;
 
         // Generate image signature
         let image_signature = signature::compute_signature(&image);
@@ -369,6 +356,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
         // Update safety
         if let Some(safety) = update.safety {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_safety)?;
+
             diesel::update(post::table.find(post_id))
                 .set(post::safety.eq(safety))
                 .execute(conn)?;
@@ -377,96 +365,38 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
         // Update source
         if let Some(source) = update.source {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_source)?;
+
             diesel::update(post::table.find(post_id))
                 .set(post::source.eq(source))
                 .execute(conn)?;
         }
 
         // Update relations
-        if let Some(update_relations) = update.relations {
+        if let Some(relations) = update.relations {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_relation)?;
-            let current_relations: HashSet<i32> = post_relation::table
-                .select(post_relation::child_id)
-                .filter(post_relation::parent_id.eq(post_id))
-                .load(conn)?
-                .into_iter()
-                .collect();
-            let (shared_relations, new_relations): (HashSet<_>, _) = update_relations
-                .into_iter()
-                .partition(|relation| current_relations.contains(relation));
-            let relations_to_remove: Vec<_> = current_relations
-                .into_iter()
-                .filter(|relation| !shared_relations.contains(relation))
-                .collect();
-            let new_relations: Vec<_> = new_relations
-                .into_iter()
-                .map(|child_id| NewPostRelation {
-                    parent_id: post_id,
-                    child_id,
-                })
-                .collect();
+
             diesel::delete(post_relation::table)
                 .filter(post_relation::parent_id.eq(post_id))
-                .filter(post_relation::child_id.eq_any(&relations_to_remove))
+                .or_filter(post_relation::child_id.eq(post_id))
                 .execute(conn)?;
-            diesel::insert_into(post_relation::table)
-                .values(new_relations)
-                .execute(conn)?;
+            update::post::create_relations(conn, post_id, &relations)?;
         }
 
         // Update tags
-        if let Some(update_tags) = update.tags {
+        if let Some(tags) = update.tags {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_tag)?;
-            let current_tag_ids: HashSet<i32> = post_tag::table
-                .select(post_tag::tag_id)
-                .filter(post_tag::post_id.eq(post_id))
-                .load(conn)?
-                .into_iter()
-                .collect();
-            let (update_tag_ids, all_update_tag_names): (HashSet<_>, HashSet<_>) = tag_name::table
-                .select((tag_name::tag_id, tag_name::name))
-                .filter(tag_name::name.eq_any(&update_tags))
-                .load::<(i32, String)>(conn)?
-                .into_iter()
-                .unzip();
-            let post_tags_to_remove: Vec<_> = current_tag_ids
-                .iter()
-                .filter(|&tag_id| !update_tag_ids.contains(tag_id))
-                .copied()
-                .collect();
-            let mut new_post_tags: Vec<_> = update_tag_ids
-                .into_iter()
-                .filter(|tag_id| !current_tag_ids.contains(tag_id))
-                .map(|tag_id| NewPostTag { post_id, tag_id })
-                .collect();
-            let new_tag_names: Vec<_> = update_tags
-                .into_iter()
-                .filter(|tag_name| !all_update_tag_names.contains(tag_name))
-                .collect();
-            // Create new tags if given unique names
-            if !new_tag_names.is_empty() {
-                api::verify_privilege(client.as_ref(), config::privileges().tag_create)?;
-                let new_tag_ids: Vec<i32> = diesel::insert_into(tag::table)
-                    .values(vec![NewTag::default(); new_tag_names.len()])
-                    .returning(tag::id)
-                    .get_results(conn)?;
-                let new_tag_names: Vec<_> = new_tag_ids
-                    .iter()
-                    .zip(new_tag_names.iter())
-                    .map(|(&tag_id, name)| NewTagName { tag_id, order: 0, name })
-                    .collect();
-                diesel::insert_into(tag_name::table)
-                    .values(new_tag_names)
-                    .execute(conn)?;
-                new_post_tags.extend(new_tag_ids.into_iter().map(|tag_id| NewPostTag { post_id, tag_id }));
-            }
-            // TODO: Handle implications
+
             diesel::delete(post_tag::table)
                 .filter(post_tag::post_id.eq(post_id))
-                .filter(post_tag::post_id.eq_any(post_tags_to_remove))
                 .execute(conn)?;
+
+            let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), tags)?;
+            let updated_post_tags: Vec<_> = updated_tag_ids
+                .into_iter()
+                .map(|tag_id| NewPostTag { post_id, tag_id })
+                .collect();
             diesel::insert_into(post_tag::table)
-                .values(new_post_tags)
+                .values(updated_post_tags)
                 .execute(conn)?;
         }
 

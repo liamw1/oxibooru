@@ -1,9 +1,9 @@
 use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery};
-use crate::model::tag::Tag;
+use crate::model::tag::{NewTagImplication, NewTagName, NewTagSuggestion, Tag};
 use crate::resource::tag::{FieldTable, TagInfo};
-use crate::schema::{tag, tag_category, tag_name};
+use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::util::DateTime;
-use crate::{api, config, resource, search};
+use crate::{api, config, resource, search, update};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -110,6 +110,7 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
         // Update category
         if let Some(category) = update.category {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_category)?;
+
             let category_id: i32 = tag_category::table
                 .select(tag_category::id)
                 .filter(tag_category::name.eq(category))
@@ -122,6 +123,7 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
         // Update description
         if let Some(description) = update.description {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_description)?;
+
             diesel::update(tag::table.find(tag.id))
                 .set(tag::description.eq(description))
                 .execute(conn)?;
@@ -130,16 +132,63 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
         // Update names
         if let Some(names) = update.names {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_name)?;
+
+            diesel::delete(tag_name::table)
+                .filter(tag_name::tag_id.eq(tag.id))
+                .execute(conn)?;
+
+            let tag_id = tag.id;
+            let updated_names: Vec<_> = names
+                .iter()
+                .enumerate()
+                .map(|(order, name)| (order as i32, name))
+                .map(|(order, name)| NewTagName { tag_id, order, name })
+                .collect();
+            diesel::insert_into(tag_name::table)
+                .values(updated_names)
+                .execute(conn)?;
         }
 
         // Update Implications
         if let Some(implications) = update.implications {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_implication)?;
+
+            diesel::delete(tag_implication::table)
+                .filter(tag_implication::parent_id.eq(tag.id))
+                .execute(conn)?;
+
+            let updated_implication_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), implications)?;
+            let updated_implications: Vec<_> = updated_implication_ids
+                .into_iter()
+                .map(|child_id| NewTagImplication {
+                    parent_id: tag.id,
+                    child_id,
+                })
+                .collect();
+            diesel::insert_into(tag_implication::table)
+                .values(updated_implications)
+                .execute(conn)?;
         }
 
         // Update Suggestions
         if let Some(suggestions) = update.suggestions {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_suggestion)?;
+
+            diesel::delete(tag_suggestion::table)
+                .filter(tag_suggestion::parent_id.eq(tag.id))
+                .execute(conn)?;
+
+            let updated_suggestion_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), suggestions)?;
+            let updated_suggestions: Vec<_> = updated_suggestion_ids
+                .into_iter()
+                .map(|child_id| NewTagSuggestion {
+                    parent_id: tag.id,
+                    child_id,
+                })
+                .collect();
+            diesel::insert_into(tag_suggestion::table)
+                .values(updated_suggestions)
+                .execute(conn)?;
         }
 
         TagInfo::new_from_id(conn, tag.id, &fields).map_err(api::Error::from)

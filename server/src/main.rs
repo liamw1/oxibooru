@@ -11,6 +11,7 @@ mod schema;
 mod search;
 #[cfg(test)]
 mod test;
+mod update;
 mod util;
 
 use diesel::prelude::*;

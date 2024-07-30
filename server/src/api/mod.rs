@@ -24,6 +24,8 @@ use warp::reply::WithStatus;
 use warp::Filter;
 use warp::Rejection;
 
+pub type ApiResult<T> = Result<T, Error>;
+
 pub enum Reply {
     Json(Json),
     WithStatus(WithStatus<Json>),
@@ -136,6 +138,12 @@ impl Error {
     }
 }
 
+pub fn verify_privilege(client: Option<&User>, required_rank: UserRank) -> Result<(), Error> {
+    (client_access_level(client) >= required_rank)
+        .then_some(())
+        .ok_or(Error::InsufficientPrivileges)
+}
+
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> + Clone {
     let catch_all = warp::any().map(|| {
         println!("Unimplemented request!");
@@ -167,7 +175,6 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
 }
 
 type AuthResult = Result<Option<User>, AuthenticationError>;
-type ApiResult<T> = Result<T, Error>;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -234,12 +241,6 @@ struct ErrorResponse {
 
 fn client_access_level(client: Option<&User>) -> UserRank {
     client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
-}
-
-fn verify_privilege(client: Option<&User>, required_rank: UserRank) -> Result<(), Error> {
-    (client_access_level(client) >= required_rank)
-        .then_some(())
-        .ok_or(Error::InsufficientPrivileges)
 }
 
 fn verify_version(current_version: DateTime, client_version: DateTime) -> Result<(), Error> {
