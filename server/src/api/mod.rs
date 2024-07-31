@@ -71,6 +71,7 @@ pub enum Error {
     InsufficientPrivileges,
     ImageError(#[from] image::ImageError),
     IoError(#[from] std::io::Error),
+    NotAnInteger(#[from] std::num::ParseIntError),
     #[error("Someone else modified this in the meantime. Please try again.")]
     ResourceModified,
     SearchError(#[from] crate::search::Error),
@@ -104,6 +105,7 @@ impl Error {
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::ImageError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::SearchError(_) => StatusCode::BAD_REQUEST,
             Self::Utf8Conversion(_) => StatusCode::BAD_REQUEST,
@@ -125,6 +127,7 @@ impl Error {
             Self::InsufficientPrivileges => "Insufficient Privileges",
             Self::ImageError(_) => "Image Error",
             Self::IoError(_) => "IO Error",
+            Self::NotAnInteger(_) => "Parse Int Error",
             Self::ResourceModified => "Resource Modified",
             Self::SearchError(_) => "Search Error",
             Self::Utf8Conversion(_) => "Utf8 Conversion Error",

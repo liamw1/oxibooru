@@ -17,11 +17,29 @@ pub struct TagCategoryInfo {
 }
 
 impl TagCategoryInfo {
+    pub fn new(conn: &mut PgConnection, category: TagCategory) -> QueryResult<Self> {
+        let usages = tag::table
+            .filter(tag::category_id.eq(category.id))
+            .count()
+            .first(conn)?;
+
+        Ok(TagCategoryInfo {
+            version: category.last_edit_time,
+            name: category.name,
+            color: category.color,
+            usages,
+            order: category.order,
+            default: category.id == 0,
+        })
+    }
+
+    pub fn new_from_id(conn: &mut PgConnection, category_id: i32) -> QueryResult<Self> {
+        let category = tag_category::table.find(category_id).first(conn)?;
+        Self::new(conn, category)
+    }
+
     pub fn all(conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
-        let tag_categories = tag_category::table
-            .select(TagCategory::as_select())
-            .order(tag_category::order.asc())
-            .load(conn)?;
+        let tag_categories: Vec<TagCategory> = tag_category::table.order(tag_category::order).load(conn)?;
         let tag_category_usages: HashMap<i32, Option<i64>> = tag_category::table
             .left_join(tag::table)
             .group_by(tag_category::id)

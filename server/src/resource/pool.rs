@@ -133,10 +133,7 @@ impl PoolInfo {
 
 fn get_pools(conn: &mut PgConnection, pool_ids: &[i32]) -> QueryResult<Vec<Pool>> {
     // We get pools here, but this query doesn't preserve order
-    let pools = pool::table
-        .select(Pool::as_select())
-        .filter(pool::id.eq_any(pool_ids))
-        .load(conn)?;
+    let pools = pool::table.filter(pool::id.eq_any(pool_ids)).load(conn)?;
     Ok(resource::order_by(pools, pool_ids))
 }
 
@@ -150,7 +147,7 @@ fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<St
 }
 
 fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<String>>> {
-    let names = PoolName::belonging_to(pools).select(PoolName::as_select()).load(conn)?;
+    let names: Vec<PoolName> = PoolName::belonging_to(pools).load(conn)?;
     Ok(names
         .grouped_by(pools)
         .into_iter()
@@ -159,7 +156,7 @@ fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<Str
 }
 
 fn get_posts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<MicroPost>>> {
-    let pool_posts: Vec<PoolPost> = PoolPost::belonging_to(pools).select(PoolPost::as_select()).load(conn)?;
+    let pool_posts: Vec<PoolPost> = PoolPost::belonging_to(pools).load(conn)?;
     Ok(pool_posts
         .grouped_by(pools)
         .into_iter()

@@ -135,10 +135,7 @@ impl TagInfo {
 
 fn get_tags(conn: &mut PgConnection, tag_ids: &[i32]) -> QueryResult<Vec<Tag>> {
     // We get tags here, but this query doesn't preserve order
-    let tags = tag::table
-        .select(Tag::as_select())
-        .filter(tag::id.eq_any(tag_ids))
-        .load(conn)?;
+    let tags = tag::table.filter(tag::id.eq_any(tag_ids)).load(conn)?;
     Ok(resource::order_by(tags, tag_ids))
 }
 
@@ -156,9 +153,8 @@ fn get_categories(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Stri
 
 fn get_names(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec<String>>> {
     Ok(TagName::belonging_to(tags)
-        .select(TagName::as_select())
         .order(tag_name::order)
-        .load(conn)?
+        .load::<TagName>(conn)?
         .grouped_by(tags)
         .into_iter()
         .map(|tag_names| tag_names.into_iter().map(|tag_name| tag_name.name).collect())

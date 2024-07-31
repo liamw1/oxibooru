@@ -23,6 +23,12 @@ pub struct TagCategory {
     pub last_edit_time: DateTime,
 }
 
+impl TagCategory {
+    pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<Self> {
+        tag_category::table.filter(tag_category::name.eq(name)).first(conn)
+    }
+}
+
 #[derive(Clone, Copy, Insertable)]
 #[diesel(table_name = tag)]
 pub struct NewTag {
@@ -50,7 +56,7 @@ pub struct Tag {
 impl Tag {
     pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<Self> {
         tag::table
-            .select(Tag::as_select())
+            .select(Self::as_select())
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
             .first(conn)

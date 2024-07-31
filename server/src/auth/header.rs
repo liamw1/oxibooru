@@ -66,7 +66,6 @@ fn token_authentication(credentials: &str) -> Result<User, AuthenticationError> 
     let mut conn = crate::establish_connection()?;
     let user = User::from_name(&mut conn, &username)?;
     let user_token = UserToken::belonging_to(&user)
-        .select(UserToken::as_select())
         .filter(user_token::token.eq(token))
         .first(&mut conn)?;
     auth::token::is_valid_token(&user_token)

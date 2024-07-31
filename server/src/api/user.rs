@@ -53,8 +53,6 @@ fn get_user(username: String, auth: AuthResult, query: ResourceQuery) -> ApiResu
     let fields = create_field_table(query.fields())?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    print!("Client: {client_id:?}, Username: {username}");
-
     crate::establish_connection()?.transaction(|conn| {
         let user = User::from_name(conn, &username)?;
 
@@ -76,9 +74,6 @@ struct NewUserInfo {
 }
 
 fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
-    println!("Name: {}", user_info.name);
-    println!("Password: {}", user_info.password);
-
     let client = auth?;
     let client_rank = api::client_access_level(client.as_ref());
 

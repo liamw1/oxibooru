@@ -233,6 +233,7 @@ impl ErrorKind for crate::api::Error {
             Self::InsufficientPrivileges => "InsufficientPrivileges",
             Self::ImageError(err) => err.kind(),
             Self::IoError(_) => "IOError",
+            Self::NotAnInteger(err) => err.kind().kind(),
             Self::ResourceModified => "ResourceModified",
             Self::SearchError(err) => err.kind(),
             Self::Utf8Conversion(_) => "Utf8ConversionError",

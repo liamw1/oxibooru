@@ -199,7 +199,6 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     crate::establish_connection()?.transaction(|conn| {
         // Check for exact match
         let exact_post = post::table
-            .select(Post::as_select())
             .filter(post::checksum.eq(image_checksum))
             .first(conn)
             .optional()?;

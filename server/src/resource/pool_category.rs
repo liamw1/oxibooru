@@ -16,7 +16,7 @@ pub struct PoolCategoryInfo {
 
 impl PoolCategoryInfo {
     pub fn all(conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
-        let pool_categories = pool_category::table.select(PoolCategory::as_select()).load(conn)?;
+        let pool_categories: Vec<PoolCategory> = pool_category::table.load(conn)?;
         let pool_category_usages: HashMap<i32, Option<i64>> = pool_category::table
             .left_join(pool::table)
             .group_by(pool_category::id)

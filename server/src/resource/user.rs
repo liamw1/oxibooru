@@ -190,10 +190,7 @@ enum PrivateData<T> {
 
 fn get_users(conn: &mut PgConnection, user_ids: &[i32]) -> QueryResult<Vec<User>> {
     // We get users here, but this query doesn't preserve order
-    let users = user::table
-        .select(User::as_select())
-        .filter(user::id.eq_any(user_ids))
-        .load(conn)?;
+    let users = user::table.filter(user::id.eq_any(user_ids)).load(conn)?;
     Ok(resource::order_by(users, user_ids))
 }
 

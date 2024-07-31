@@ -28,8 +28,8 @@ pub struct User {
     pub password_hash: String,
     pub password_salt: String,
     pub email: Option<String>,
-    pub avatar_style: AvatarStyle,
     pub rank: UserRank,
+    pub avatar_style: AvatarStyle,
     pub creation_time: DateTime,
     pub last_login_time: DateTime,
     pub last_edit_time: DateTime,
@@ -37,10 +37,7 @@ pub struct User {
 
 impl User {
     pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<Self> {
-        user::table
-            .select(Self::as_select())
-            .filter(user::name.eq(name))
-            .first(conn)
+        user::table.filter(user::name.eq(name)).first(conn)
     }
 
     pub fn avatar_url(&self) -> String {

@@ -322,10 +322,7 @@ impl PostNoteInfo {
 
 fn get_posts(conn: &mut PgConnection, post_ids: &[i32]) -> QueryResult<Vec<Post>> {
     // We get posts here, but this query doesn't preserve order
-    let posts = post::table
-        .select(Post::as_select())
-        .filter(post::id.eq_any(post_ids))
-        .load(conn)?;
+    let posts = post::table.filter(post::id.eq_any(post_ids)).load(conn)?;
     Ok(resource::order_by(posts, post_ids))
 }
 
@@ -450,7 +447,6 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
 
 fn get_relations(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroPost>>> {
     let related_posts: Vec<PostRelation> = PostRelation::belonging_to(posts)
-        .select(PostRelation::as_select())
         .order(post_relation::child_id)
         .load(conn)?;
     Ok(related_posts
@@ -518,7 +514,6 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
 
 fn get_notes(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<PostNoteInfo>>> {
     Ok(PostNote::belonging_to(posts)
-        .select(PostNote::as_select())
         .load(conn)?
         .grouped_by(posts)
         .into_iter()
