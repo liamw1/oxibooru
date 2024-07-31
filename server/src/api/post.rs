@@ -37,14 +37,14 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .map(reverse_search)
         .map(api::Reply::from);
-    let post_post = warp::post()
+    let create_post = warp::post()
         .and(warp::path!("posts"))
         .and(api::auth())
         .and(api::resource_query())
         .and(warp::body::json())
         .map(create_post)
         .map(api::Reply::from);
-    let put_post = warp::put()
+    let update_post = warp::put()
         .and(warp::path!("post" / i32))
         .and(api::auth())
         .and(api::resource_query())
@@ -62,8 +62,8 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(get_post)
         .or(get_post_neighbors)
         .or(reverse_search)
-        .or(post_post)
-        .or(put_post)
+        .or(create_post)
+        .or(update_post)
         .or(delete_post)
 }
 

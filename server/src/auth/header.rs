@@ -24,8 +24,6 @@ pub enum AuthenticationError {
     #[error("Authentication credentials are malformed")]
     MalformedCredentials,
     MalformedToken(#[from] uuid::Error),
-    #[error("Authentication credentials contain non-ASCII characters")]
-    NonAsciiCredentials,
     Utf8Conversion(#[from] Utf8Error),
 }
 
@@ -39,12 +37,7 @@ pub fn authenticate_user(auth: String) -> Result<User, AuthenticationError> {
 }
 
 fn decode_credentials(credentials: &str) -> Result<(String, String), AuthenticationError> {
-    let ascii_encoded_b64 = credentials
-        .chars()
-        .map(|c| c.is_ascii().then_some(c as u8))
-        .collect::<Option<Vec<_>>>()
-        .ok_or(AuthenticationError::NonAsciiCredentials)?;
-    let decoded_credentials = BASE64_STANDARD.decode(ascii_encoded_b64)?;
+    let decoded_credentials = BASE64_STANDARD.decode(credentials)?;
     let utf8_encoded_credentials = decoded_credentials
         .split(|&c| c == b':')
         .map(std::str::from_utf8)

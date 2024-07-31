@@ -74,6 +74,7 @@ pub enum Error {
     #[error("Someone else modified this in the meantime. Please try again.")]
     ResourceModified,
     SearchError(#[from] crate::search::Error),
+    Utf8Conversion(#[from] std::str::Utf8Error),
     WarpError(#[from] warp::Error),
 }
 
@@ -105,6 +106,7 @@ impl Error {
             Self::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::SearchError(_) => StatusCode::BAD_REQUEST,
+            Self::Utf8Conversion(_) => StatusCode::BAD_REQUEST,
             Self::WarpError(_) => StatusCode::BAD_REQUEST,
         }
     }
@@ -125,6 +127,7 @@ impl Error {
             Self::IoError(_) => "IO Error",
             Self::ResourceModified => "Resource Modified",
             Self::SearchError(_) => "Search Error",
+            Self::Utf8Conversion(_) => "Utf8 Conversion Error",
             Self::WarpError(_) => "Warp Error",
         }
     }

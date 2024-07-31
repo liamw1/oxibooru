@@ -132,7 +132,6 @@ impl ErrorKind for crate::auth::header::AuthenticationError {
             Self::InvalidToken => "InvalidToken",
             Self::MalformedCredentials => "MalformedCredentials",
             Self::MalformedToken(_) => "MalformedToken",
-            Self::NonAsciiCredentials => "NonAsciiCredentials",
             Self::Utf8Conversion(_) => "Utf8ConversionError",
         }
     }
@@ -236,6 +235,7 @@ impl ErrorKind for crate::api::Error {
             Self::IoError(_) => "IOError",
             Self::ResourceModified => "ResourceModified",
             Self::SearchError(err) => err.kind(),
+            Self::Utf8Conversion(_) => "Utf8ConversionError",
             Self::WarpError(_) => "WarpError",
         }
     }

@@ -77,6 +77,7 @@ fn get_tag(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<Ta
     api::verify_privilege(client.as_ref(), config::privileges().tag_view)?;
 
     let fields = create_field_table(query.fields())?;
+    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     crate::establish_connection()?.transaction(|conn| {
         let tag_id = tag_name::table
             .select(tag_name::tag_id)
@@ -102,7 +103,7 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
 
     let client = auth?;
     let fields = create_field_table(query.fields())?;
-
+    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     crate::establish_connection()?.transaction(|conn| {
         let tag = Tag::from_name(conn, &name)?;
         api::verify_version(tag.last_edit_time, update.version)?;

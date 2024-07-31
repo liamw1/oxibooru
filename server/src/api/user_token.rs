@@ -38,6 +38,7 @@ struct PostUserTokenInfo {
 fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTokenInfo) -> ApiResult<UserTokenInfo> {
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
+    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
     crate::establish_connection()?.transaction(|conn| {
         let user = User::from_name(conn, &username)?;
@@ -69,6 +70,7 @@ fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTok
 fn delete_user_token(username: String, token: Uuid, auth: AuthResult) -> ApiResult<()> {
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
+    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
     crate::establish_connection()?.transaction(|conn| {
         let user = User::from_name(conn, &username)?;

@@ -24,7 +24,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(api::resource_query())
         .map(get_user)
         .map(api::Reply::from);
-    let post_user = warp::post()
+    let create_user = warp::post()
         .and(warp::path!("users"))
         .and(api::auth())
         .and(api::resource_query())
@@ -32,7 +32,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(create_user)
         .map(api::Reply::from);
 
-    list_users.or(get_user).or(post_user)
+    list_users.or(get_user).or(create_user)
 }
 
 type PagedUserInfo = PagedResponse<UserInfo>;
@@ -47,6 +47,25 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
+fn get_user(username: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<UserInfo> {
+    let client = auth?;
+    let client_id = client.as_ref().map(|user| user.id);
+    let fields = create_field_table(query.fields())?;
+    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
+
+    print!("Client: {client_id:?}, Username: {username}");
+
+    crate::establish_connection()?.transaction(|conn| {
+        let user = User::from_name(conn, &username)?;
+
+        if client_id != Some(user.id) {
+            api::verify_privilege(client.as_ref(), config::privileges().user_view)?;
+            return UserInfo::new(conn, user, &fields, Visibility::PublicOnly).map_err(api::Error::from);
+        }
+        UserInfo::new(conn, user, &fields, Visibility::Full).map_err(api::Error::from)
+    })
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct NewUserInfo {
@@ -57,6 +76,9 @@ struct NewUserInfo {
 }
 
 fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
+    println!("Name: {}", user_info.name);
+    println!("Password: {}", user_info.password);
+
     let client = auth?;
     let client_rank = api::client_access_level(client.as_ref());
 
@@ -87,22 +109,6 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
             .values(new_user)
             .returning(User::as_returning())
             .get_result(conn)?;
-        UserInfo::new(conn, user, &fields, Visibility::Full).map_err(api::Error::from)
-    })
-}
-
-fn get_user(username: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<UserInfo> {
-    let client = auth?;
-    let client_id = client.as_ref().map(|user| user.id);
-    let fields = create_field_table(query.fields())?;
-
-    crate::establish_connection()?.transaction(|conn| {
-        let user = User::from_name(conn, &username)?;
-
-        if client_id != Some(user.id) {
-            api::verify_privilege(client.as_ref(), config::privileges().user_view)?;
-            return UserInfo::new(conn, user, &fields, Visibility::PublicOnly).map_err(api::Error::from);
-        }
         UserInfo::new(conn, user, &fields, Visibility::Full).map_err(api::Error::from)
     })
 }
