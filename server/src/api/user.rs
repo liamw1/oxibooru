@@ -1,5 +1,6 @@
 use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::password;
+use crate::config::RegexType;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
@@ -84,9 +85,11 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
     };
 
     api::verify_privilege(client.as_ref(), required_rank)?;
-    let rank = creation_rank.clamp(UserRank::Regular, std::cmp::max(client_rank, UserRank::Regular));
+    api::verify_matches_regex(&user_info.name, RegexType::Username)?;
+    api::verify_matches_regex(&user_info.password, RegexType::Password)?;
 
     let fields = create_field_table(query.fields())?;
+    let rank = creation_rank.clamp(UserRank::Regular, std::cmp::max(client_rank, UserRank::Regular));
 
     let salt = SaltString::generate(&mut OsRng);
     let hash = password::hash_password(&user_info.password, salt.as_str())?;

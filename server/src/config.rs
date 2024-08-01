@@ -1,7 +1,17 @@
 use crate::model::enums::UserRank;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::LazyLock;
+
+pub enum RegexType {
+    Pool,
+    PoolCategory,
+    Tag,
+    TagCategory,
+    Username,
+    Password,
+}
 
 #[derive(Deserialize)]
 pub struct Thumbnails {
@@ -125,11 +135,15 @@ pub struct PublicInfo {
     pub contact_email: Option<String>,
     #[serde(rename(serialize = "canSendMails"))]
     pub can_send_mail: bool,
+    #[serde(with = "serde_regex")]
     #[serde(rename(serialize = "userNameRegex"))]
-    pub username_regex: String,
-    pub password_regex: String,
-    pub tag_name_regex: String,
-    pub tag_category_name_regex: String,
+    pub username_regex: Regex,
+    #[serde(with = "serde_regex")]
+    pub password_regex: Regex,
+    #[serde(with = "serde_regex")]
+    pub tag_name_regex: Regex,
+    #[serde(with = "serde_regex")]
+    pub tag_category_name_regex: Regex,
     pub privileges: Privileges,
 }
 
@@ -141,8 +155,10 @@ pub struct Config {
     pub data_url: String,
     pub data_dir: String,
     pub delete_source_files: bool,
-    pub pool_name_regex: String,
-    pub pool_category_regex: String,
+    #[serde(with = "serde_regex")]
+    pub pool_name_regex: Regex,
+    #[serde(with = "serde_regex")]
+    pub pool_category_regex: Regex,
     pub thumbnails: Thumbnails,
     pub public_info: PublicInfo,
 }
@@ -153,6 +169,17 @@ pub fn get() -> &'static Config {
 
 pub fn privileges() -> &'static Privileges {
     &CONFIG.public_info.privileges
+}
+
+pub fn regex(regex_type: RegexType) -> &'static Regex {
+    match regex_type {
+        RegexType::Pool => &CONFIG.pool_name_regex,
+        RegexType::PoolCategory => &CONFIG.pool_category_regex,
+        RegexType::Tag => &CONFIG.public_info.tag_name_regex,
+        RegexType::TagCategory => &CONFIG.public_info.tag_category_name_regex,
+        RegexType::Username => &CONFIG.public_info.username_regex,
+        RegexType::Password => &CONFIG.public_info.password_regex,
+    }
 }
 
 static CONFIG: LazyLock<Config> =

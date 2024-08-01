@@ -1,4 +1,5 @@
 use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery};
+use crate::config::RegexType;
 use crate::model::tag::{NewTagImplication, NewTagName, NewTagSuggestion, Tag};
 use crate::resource::tag::{FieldTable, TagInfo};
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
@@ -133,6 +134,10 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
         // Update names
         if let Some(names) = update.names {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_name)?;
+            names
+                .iter()
+                .map(|name| api::verify_matches_regex(name, RegexType::Tag))
+                .collect::<Result<_, _>>()?;
 
             diesel::delete(tag_name::table)
                 .filter(tag_name::tag_id.eq(tag.id))

@@ -1,4 +1,5 @@
 use crate::api::{ApiResult, AuthResult, ResourceVersion};
+use crate::config::RegexType;
 use crate::model::tag::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
@@ -89,6 +90,7 @@ struct NewTagCategoryInfo {
 fn create_tag_category(auth: AuthResult, category_info: NewTagCategoryInfo) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_create)?;
+    api::verify_matches_regex(&category_info.name, RegexType::TagCategory)?;
 
     crate::establish_connection()?.transaction(|conn| {
         let new_category = NewTagCategory {
@@ -117,6 +119,8 @@ struct TagCategoryUpdateInfo {
 fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdateInfo) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
+    api::verify_matches_regex(&name, RegexType::TagCategory)?;
+
     crate::establish_connection()?.transaction(|conn| {
         let category = TagCategory::from_name(conn, &name)?;
         api::verify_version(category.last_edit_time, update.version)?;

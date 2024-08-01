@@ -1,4 +1,5 @@
 use crate::api::ApiResult;
+use crate::config::RegexType;
 use crate::model::tag::{NewTag, NewTagName};
 use crate::model::user::User;
 use crate::schema::{tag, tag_implication, tag_name};
@@ -46,6 +47,10 @@ pub fn get_or_create_tag_ids(
         .into_iter()
         .filter(|name| !existing_names.contains(name))
         .collect();
+    new_tag_names
+        .iter()
+        .map(|name| api::verify_matches_regex(name, RegexType::Tag))
+        .collect::<Result<_, _>>()?;
 
     // Create new tags if given unique names
     if !new_tag_names.is_empty() {

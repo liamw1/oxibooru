@@ -10,6 +10,7 @@ pub mod user;
 pub mod user_token;
 
 use crate::auth::header::{self, AuthenticationError};
+use crate::config::{self, RegexType};
 use crate::error::ErrorKind;
 use crate::model::enums::UserRank;
 use crate::model::user::User;
@@ -63,6 +64,8 @@ pub enum Error {
     BadMultiPartForm,
     #[error("Request content-type did not match file extension")]
     ContentTypeMismatch,
+    #[error("Expression does not match on regex")]
+    ExpressionFailsRegex,
     FailedAuthentication(#[from] AuthenticationError),
     FailedConnection(#[from] diesel::ConnectionError),
     FailedQuery(#[from] diesel::result::Error),
@@ -96,6 +99,7 @@ impl Error {
             Self::BadHeader(_) => StatusCode::BAD_REQUEST,
             Self::BadMultiPartForm => StatusCode::BAD_REQUEST,
             Self::ContentTypeMismatch => StatusCode::BAD_REQUEST,
+            Self::ExpressionFailsRegex => StatusCode::BAD_GATEWAY,
             Self::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
                 AuthenticationError::FailedQuery(err) => query_error_status_code(err),
@@ -123,6 +127,7 @@ impl Error {
             Self::BadHeader(_) => "Bad Header",
             Self::BadMultiPartForm => "Bad Multi-Part Form",
             Self::ContentTypeMismatch => "Content Type Mismatch",
+            Self::ExpressionFailsRegex => "Expression Fails Regex",
             Self::FailedAuthentication(_) => "Failed Authentication",
             Self::FailedConnection(_) => "Failed Connection",
             Self::FailedQuery(_) => "Failed Query",
@@ -148,10 +153,17 @@ impl Error {
     }
 }
 
-pub fn verify_privilege(client: Option<&User>, required_rank: UserRank) -> Result<(), Error> {
+pub fn verify_privilege(client: Option<&User>, required_rank: UserRank) -> ApiResult<()> {
     (client_access_level(client) >= required_rank)
         .then_some(())
         .ok_or(Error::InsufficientPrivileges)
+}
+
+pub fn verify_matches_regex(haystack: &str, regex_type: RegexType) -> ApiResult<()> {
+    config::regex(regex_type)
+        .is_match(haystack)
+        .then_some(())
+        .ok_or(Error::ExpressionFailsRegex)
 }
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> + Clone {
@@ -253,7 +265,7 @@ fn client_access_level(client: Option<&User>) -> UserRank {
     client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
 }
 
-fn verify_version(current_version: DateTime, client_version: DateTime) -> Result<(), Error> {
+fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiResult<()> {
     (current_version == client_version)
         .then_some(())
         .ok_or(Error::ResourceModified)
