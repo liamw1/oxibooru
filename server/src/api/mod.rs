@@ -69,6 +69,8 @@ pub enum Error {
     FromStrError(#[from] Box<dyn std::error::Error>),
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
+    #[error("Cannot delete default category")]
+    InvalidRequest, // TODO: Right now this is only used for deleting default category, but should generalize err message
     ImageError(#[from] image::ImageError),
     IoError(#[from] std::io::Error),
     NotAnInteger(#[from] std::num::ParseIntError),
@@ -103,6 +105,7 @@ impl Error {
             Self::FailedQuery(err) => query_error_status_code(err),
             Self::FromStrError(_) => StatusCode::BAD_REQUEST,
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
+            Self::InvalidRequest => StatusCode::BAD_REQUEST,
             Self::ImageError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
@@ -125,6 +128,7 @@ impl Error {
             Self::FailedQuery(_) => "Failed Query",
             Self::FromStrError(_) => "FromStr Error",
             Self::InsufficientPrivileges => "Insufficient Privileges",
+            Self::InvalidRequest => "Invalid Request",
             Self::ImageError(_) => "Image Error",
             Self::IoError(_) => "IO Error",
             Self::NotAnInteger(_) => "Parse Int Error",

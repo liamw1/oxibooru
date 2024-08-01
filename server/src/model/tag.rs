@@ -12,7 +12,7 @@ pub struct NewTagCategory<'a> {
     pub color: &'a str,
 }
 
-#[derive(Identifiable, Queryable, Selectable)]
+#[derive(AsChangeset, Identifiable, Queryable, Selectable)]
 #[diesel(table_name = tag_category)]
 #[diesel(check_for_backend(Pg))]
 pub struct TagCategory {

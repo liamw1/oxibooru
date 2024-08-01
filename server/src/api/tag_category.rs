@@ -1,7 +1,7 @@
 use crate::api::{ApiResult, AuthResult, ResourceVersion};
 use crate::model::tag::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
-use crate::schema::tag_category;
+use crate::schema::{tag, tag_category};
 use crate::util::DateTime;
 use crate::{api, config};
 use diesel::prelude::*;
@@ -31,6 +31,11 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .map(update_tag_category)
         .map(api::Reply::from);
+    let set_default_category = warp::put()
+        .and(warp::path!("tag-category" / String / "default"))
+        .and(api::auth())
+        .map(set_default_category)
+        .map(api::Reply::from);
     let delete_tag_category = warp::delete()
         .and(warp::path!("tag-category" / String))
         .and(api::auth())
@@ -42,6 +47,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(get_tag_category)
         .or(create_tag_category)
         .or(update_tag_category)
+        .or(set_default_category)
         .or(delete_tag_category)
 }
 
@@ -144,6 +150,47 @@ fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdate
     })
 }
 
+fn set_default_category(name: String, auth: AuthResult) -> ApiResult<TagCategoryInfo> {
+    let _timer = crate::util::Timer::new("set_default_category");
+
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().tag_category_set_default)?;
+
+    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
+    crate::establish_connection()?.transaction(|conn| {
+        let mut category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        let mut old_default_category: TagCategory = tag_category::table.filter(tag_category::id.eq(0)).first(conn)?;
+
+        let defaulted_tags: Vec<i32> = diesel::update(tag::table)
+            .filter(tag::category_id.eq(category.id))
+            .set(tag::category_id.eq(0))
+            .returning(tag::id)
+            .get_results(conn)?;
+        diesel::update(tag::table)
+            .filter(tag::category_id.eq(0))
+            .filter(tag::id.ne_all(defaulted_tags))
+            .set(tag::category_id.eq(category.id))
+            .execute(conn)?;
+
+        // Make category default
+        std::mem::swap(&mut category.id, &mut old_default_category.id);
+
+        // Give new default category an empty name so it doesn't violate uniqueness
+        let mut temporary_category_name = String::from("");
+        std::mem::swap(&mut category.name, &mut temporary_category_name);
+        let mut new_default_category: TagCategory = category.save_changes(conn)?;
+
+        // Update what used to be default category
+        let _: TagCategory = old_default_category.save_changes(conn)?;
+
+        // Give new default category back it's name
+        new_default_category.name = temporary_category_name;
+        let new_default_category: TagCategory = new_default_category.save_changes(conn)?;
+
+        TagCategoryInfo::new(conn, new_default_category).map_err(api::Error::from)
+    })
+}
+
 fn delete_tag_category(name: String, auth: AuthResult, client_version: ResourceVersion) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_delete)?;
@@ -155,6 +202,9 @@ fn delete_tag_category(name: String, auth: AuthResult, client_version: ResourceV
             .filter(tag_category::name.eq(name))
             .first(conn)?;
         api::verify_version(category_version, *client_version)?;
+        if category_id == 0 {
+            return Err(api::Error::InvalidRequest);
+        }
 
         diesel::delete(tag_category::table.find(category_id)).execute(conn)?;
         Ok(())

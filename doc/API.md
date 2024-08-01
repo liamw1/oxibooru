@@ -341,8 +341,7 @@ data.
 - **Description**
 
     Creates a new tag category using specified parameters. Name must match
-    `tag_category_name_regex` from server's configuration. First category
-    created becomes the default category.
+    `tag_category_name_regex` from server's configuration.
 
 ## Updating tag category
 - **Request**
@@ -421,14 +420,13 @@ data.
 
     - the version is outdated
     - the tag category does not exist
-    - the tag category is used by some tags
-    - the tag category is the last tag category available
+    - the tag category is the default category
     - privileges are too low
 
 - **Description**
 
-    Deletes existing tag category. The tag category to be deleted must have no
-    usages.
+    Deletes an existing non-default tag category. Tags belonging to this 
+    category will be moved to the default category.
 
 ## Setting default tag category
 - **Request**

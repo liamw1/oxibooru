@@ -7,7 +7,7 @@ CREATE TABLE "tag_category" (
     UNIQUE ("name")
 );
 SELECT diesel_manage_last_edit_time('tag_category');
-INSERT INTO "tag_category" ("id", "order", "name", "color") OVERRIDING SYSTEM VALUE VALUES (0, 0, 'default', 'blue');
+INSERT INTO "tag_category" ("id", "order", "name", "color") OVERRIDING SYSTEM VALUE VALUES (0, 0, 'default', 'default');
 
 CREATE TABLE "tag" (
     "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,

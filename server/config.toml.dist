@@ -19,8 +19,6 @@ avatar_height = 300
 post_width    = 300
 post_height   = 300
 
-# TODO: Making naming conventions consistent with code.
-#       Use snake_case and remove plurals from privilege keys.
 [public_info]
 # Shown in the website title and on the front page
 name = "oxibooru"

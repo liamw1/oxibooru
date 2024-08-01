@@ -231,6 +231,7 @@ impl ErrorKind for crate::api::Error {
             Self::FailedQuery(err) => err.kind(),
             Self::FromStrError(_) => "FromStrError",
             Self::InsufficientPrivileges => "InsufficientPrivileges",
+            Self::InvalidRequest => "InvalidRequest",
             Self::ImageError(err) => err.kind(),
             Self::IoError(_) => "IOError",
             Self::NotAnInteger(err) => err.kind().kind(),
