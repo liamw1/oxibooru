@@ -186,12 +186,6 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
         .or(upload::routes())
         .or(user_token::routes())
         .or(user::routes())
-        .or(warp::any()
-            .and(warp::body::bytes())
-            .map(|bytes: warp::hyper::body::Bytes| {
-                println!("Request body: {}", std::str::from_utf8(&bytes).expect("error converting bytes to &str"));
-                warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
-            }))
         .or(catch_all)
         .with(log)
 }

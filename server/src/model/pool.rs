@@ -32,6 +32,7 @@ impl PoolCategory {
 #[diesel(table_name = pool)]
 pub struct NewPool {
     pub category_id: i32,
+    pub description: String,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]

@@ -1,7 +1,12 @@
-use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse};
+use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery, ResourceVersion};
+use crate::config::RegexType;
+use crate::model::pool::{NewPool, NewPoolName, NewPoolPost, Pool};
 use crate::resource::pool::{FieldTable, PoolInfo};
+use crate::schema::{pool, pool_category, pool_name, pool_post};
+use crate::util::DateTime;
 use crate::{api, config, resource, search};
 use diesel::prelude::*;
+use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -11,8 +16,34 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::query())
         .map(list_pools)
         .map(api::Reply::from);
+    let get_pool = warp::get()
+        .and(warp::path!("pool" / i32))
+        .and(api::auth())
+        .and(api::resource_query())
+        .map(get_pool)
+        .map(api::Reply::from);
+    let create_pool = warp::post()
+        .and(warp::path!("pool"))
+        .and(api::auth())
+        .and(api::resource_query())
+        .and(warp::body::json())
+        .map(create_pool)
+        .map(api::Reply::from);
+    let update_pool = warp::put()
+        .and(warp::path!("pool" / i32))
+        .and(api::auth())
+        .and(api::resource_query())
+        .and(warp::body::json())
+        .map(update_pool)
+        .map(api::Reply::from);
+    let delete_pool = warp::delete()
+        .and(warp::path!("pool" / String))
+        .and(api::auth())
+        .and(warp::body::json())
+        .map(delete_pool)
+        .map(api::Reply::from);
 
-    list_pools
+    list_pools.or(get_pool).or(create_pool).or(update_pool).or(delete_pool)
 }
 
 type PagedPoolInfo = PagedResponse<PoolInfo>;
@@ -52,5 +83,181 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPoolInfo> {
             total,
             results: PoolInfo::new_batch_from_ids(conn, selected_tags, &fields)?,
         })
+    })
+}
+
+fn get_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PoolInfo> {
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().pool_view)?;
+
+    let fields = create_field_table(query.fields())?;
+    crate::establish_connection()?
+        .transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct NewPoolInfo {
+    names: Vec<String>,
+    category: String,
+    description: Option<String>,
+    posts: Option<Vec<i32>>,
+}
+
+fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -> ApiResult<PoolInfo> {
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().pool_create)?;
+    pool_info
+        .names
+        .iter()
+        .map(|name| api::verify_matches_regex(name, RegexType::Pool))
+        .collect::<Result<_, _>>()?;
+
+    let fields = create_field_table(query.fields())?;
+    crate::establish_connection()?.transaction(|conn| {
+        let category_id: i32 = pool_category::table
+            .select(pool_category::id)
+            .filter(pool_category::name.eq(pool_info.category))
+            .first(conn)?;
+        let new_pool = NewPool {
+            category_id,
+            description: pool_info.description.unwrap_or_default(),
+        };
+        let pool = diesel::insert_into(pool::table)
+            .values(new_pool)
+            .returning(Pool::as_returning())
+            .get_result(conn)?;
+
+        let pool_id = pool.id;
+        let new_pool_names: Vec<_> = pool_info
+            .names
+            .iter()
+            .enumerate()
+            .map(|(order, name)| NewPoolName {
+                pool_id,
+                order: order as i32,
+                name,
+            })
+            .collect();
+        diesel::insert_into(pool_name::table)
+            .values(new_pool_names)
+            .execute(conn)?;
+
+        let pool_posts: Vec<_> = pool_info
+            .posts
+            .unwrap_or_default()
+            .into_iter()
+            .enumerate()
+            .map(|(order, post_id)| NewPoolPost {
+                pool_id,
+                post_id,
+                order: order as i32,
+            })
+            .collect();
+        diesel::insert_into(pool_post::table).values(pool_posts).execute(conn)?;
+
+        PoolInfo::new(conn, pool, &fields).map_err(api::Error::from)
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PoolUpdateInfo {
+    version: DateTime,
+    category: Option<String>,
+    description: Option<String>,
+    names: Option<Vec<String>>,
+    posts: Option<Vec<i32>>,
+}
+
+fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: PoolUpdateInfo) -> ApiResult<PoolInfo> {
+    let client = auth?;
+    let fields = create_field_table(query.fields())?;
+
+    crate::establish_connection()?.transaction(|conn| {
+        let pool_version: DateTime = pool::table.find(pool_id).select(pool::last_edit_time).first(conn)?;
+        api::verify_version(pool_version, update.version)?;
+
+        if let Some(category) = update.category {
+            api::verify_privilege(client.as_ref(), config::privileges().pool_edit_category)?;
+
+            let category_id: i32 = pool_category::table
+                .select(pool_category::id)
+                .filter(pool_category::name.eq(category))
+                .first(conn)?;
+            diesel::update(pool::table.find(pool_id))
+                .set(pool::category_id.eq(category_id))
+                .execute(conn)?;
+        }
+
+        if let Some(description) = update.description {
+            api::verify_privilege(client.as_ref(), config::privileges().pool_edit_description)?;
+
+            diesel::update(pool::table.find(pool_id))
+                .set(pool::description.eq(description))
+                .execute(conn)?;
+        }
+
+        if let Some(names) = update.names {
+            api::verify_privilege(client.as_ref(), config::privileges().pool_edit_name)?;
+            names
+                .iter()
+                .map(|name| api::verify_matches_regex(name, RegexType::Pool))
+                .collect::<Result<_, _>>()?;
+
+            diesel::delete(pool_name::table)
+                .filter(pool_name::pool_id.eq(pool_id))
+                .execute(conn)?;
+            let updated_names: Vec<_> = names
+                .iter()
+                .enumerate()
+                .map(|(order, name)| (order as i32, name))
+                .map(|(order, name)| NewPoolName { pool_id, order, name })
+                .collect();
+            diesel::insert_into(pool_name::table)
+                .values(updated_names)
+                .execute(conn)?;
+        }
+
+        // TODO: Optimize
+        if let Some(posts) = update.posts {
+            api::verify_privilege(client.as_ref(), config::privileges().pool_edit_post)?;
+
+            diesel::delete(pool_post::table)
+                .filter(pool_post::pool_id.eq(pool_id))
+                .execute(conn)?;
+            let updated_pool_posts: Vec<_> = posts
+                .into_iter()
+                .enumerate()
+                .map(|(order, post_id)| NewPoolPost {
+                    pool_id,
+                    post_id,
+                    order: order as i32,
+                })
+                .collect();
+            diesel::insert_into(pool_post::table)
+                .values(updated_pool_posts)
+                .execute(conn)?;
+        }
+
+        PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from)
+    })
+}
+
+fn delete_pool(name: String, auth: AuthResult, client_version: ResourceVersion) -> ApiResult<()> {
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().pool_delete)?;
+
+    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
+    crate::establish_connection()?.transaction(|conn| {
+        let (pool_id, pool_version): (i32, DateTime) = pool::table
+            .select((pool::id, pool::last_edit_time))
+            .inner_join(pool_name::table)
+            .filter(pool_name::name.eq(name))
+            .first(conn)?;
+        api::verify_version(pool_version, *client_version)?;
+
+        diesel::delete(pool::table.find(pool_id)).execute(conn)?;
+        Ok(())
     })
 }

@@ -1214,8 +1214,7 @@ data.
 - **Description**
 
     Creates a new pool category using specified parameters. Name must match
-    `pool_category_name_regex` from server's configuration. First category
-    created becomes the default category.
+    `pool_category_name_regex` from server's configuration.
 
 ## Updating pool category
 - **Request**
@@ -1293,14 +1292,13 @@ data.
 
     - the version is outdated
     - the pool category does not exist
-    - the pool category is used by some pools
-    - the pool category is the last pool category available
+    - the tag category is the default category
     - privileges are too low
 
 - **Description**
 
-    Deletes existing pool category. The pool category to be deleted must have no
-    usages.
+    Deletes an existing non-default pool category. Pools belonging to this 
+    category will be moved to the default category.
 
 ## Setting default pool category
 - **Request**

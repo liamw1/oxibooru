@@ -2,7 +2,7 @@ use crate::auth::content;
 use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource;
 use crate::resource::post::MicroPost;
-use crate::schema::{pool, pool_category, pool_post};
+use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::util::DateTime;
 use diesel::dsl::*;
 use diesel::prelude::*;
@@ -143,12 +143,16 @@ fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<St
         .load(conn)?
         .into_iter()
         .collect();
-    Ok(pools.iter().map(|pool| category_names[&pool.id].clone()).collect())
+    Ok(pools
+        .iter()
+        .map(|pool| category_names[&pool.category_id].clone())
+        .collect())
 }
 
 fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<String>>> {
-    let names: Vec<PoolName> = PoolName::belonging_to(pools).load(conn)?;
-    Ok(names
+    Ok(PoolName::belonging_to(pools)
+        .order_by(pool_name::order)
+        .load::<PoolName>(conn)?
         .grouped_by(pools)
         .into_iter()
         .map(|pool_names| pool_names.into_iter().map(|pool_name| pool_name.name).collect())
@@ -156,8 +160,9 @@ fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<Str
 }
 
 fn get_posts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<MicroPost>>> {
-    let pool_posts: Vec<PoolPost> = PoolPost::belonging_to(pools).load(conn)?;
-    Ok(pool_posts
+    Ok(PoolPost::belonging_to(pools)
+        .order_by(pool_post::order)
+        .load::<PoolPost>(conn)?
         .grouped_by(pools)
         .into_iter()
         .map(|posts_in_pool| {

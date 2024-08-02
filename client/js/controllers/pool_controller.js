@@ -48,7 +48,7 @@ class PoolController {
                     canEditDescription: api.hasPrivilege(
                         "pool_edit_description"
                     ),
-                    canEditPosts: api.hasPrivilege("pool_edit_posts"),
+                    canEditPosts: api.hasPrivilege("pool_edit_post"),
                     canMerge: api.hasPrivilege("pool_merge"),
                     canDelete: api.hasPrivilege("pool_delete"),
                     categories: categories,

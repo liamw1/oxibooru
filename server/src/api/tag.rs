@@ -139,11 +139,10 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
                 .map(|name| api::verify_matches_regex(name, RegexType::Tag))
                 .collect::<Result<_, _>>()?;
 
-            diesel::delete(tag_name::table)
-                .filter(tag_name::tag_id.eq(tag.id))
-                .execute(conn)?;
-
             let tag_id = tag.id;
+            diesel::delete(tag_name::table)
+                .filter(tag_name::tag_id.eq(tag_id))
+                .execute(conn)?;
             let updated_names: Vec<_> = names
                 .iter()
                 .enumerate()
