@@ -17,6 +17,7 @@ use crate::model::user::User;
 use crate::util::DateTime;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
+use std::num::NonZero;
 use std::ops::Deref;
 use warp::http::StatusCode;
 use warp::reply::Json;
@@ -224,7 +225,7 @@ impl ResourceQuery {
 #[derive(Deserialize)]
 struct PagedQuery {
     offset: Option<i64>,
-    limit: i64,
+    limit: NonZero<i64>,
     #[serde(flatten)]
     query: ResourceQuery,
 }

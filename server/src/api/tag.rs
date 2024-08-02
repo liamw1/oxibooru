@@ -52,7 +52,7 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedTagInfo> {
     api::verify_privilege(client.as_ref(), config::privileges().tag_list)?;
 
     let offset = query.offset.unwrap_or(0);
-    let limit = std::cmp::min(query.limit, MAX_TAGS_PER_PAGE);
+    let limit = std::cmp::min(query.limit.get(), MAX_TAGS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
     crate::establish_connection()?.transaction(|conn| {

@@ -88,7 +88,7 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPostInfo> {
 
     let client_id = client.map(|user| user.id);
     let offset = query.offset.unwrap_or(0);
-    let limit = std::cmp::min(query.limit, MAX_POSTS_PER_PAGE);
+    let limit = std::cmp::min(query.limit.get(), MAX_POSTS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
     crate::establish_connection()?.transaction(|conn| {

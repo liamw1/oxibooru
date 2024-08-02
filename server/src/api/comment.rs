@@ -27,7 +27,7 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedCommentI
 
     let client_id = client.map(|user| user.id);
     let offset = query.offset.unwrap_or(0);
-    let limit = std::cmp::min(query.limit, MAX_COMMENTS_PER_PAGE);
+    let limit = std::cmp::min(query.limit.get(), MAX_COMMENTS_PER_PAGE);
 
     crate::establish_connection()?.transaction(|conn| {
         let mut search_criteria = search::comment::parse_search_criteria(query.criteria())?;

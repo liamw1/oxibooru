@@ -116,7 +116,7 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedUserInfo> {
     api::verify_privilege(client.as_ref(), config::privileges().user_list)?;
 
     let offset = query.offset.unwrap_or(0);
-    let limit = std::cmp::min(query.limit, MAX_USERS_PER_PAGE);
+    let limit = std::cmp::min(query.limit.get(), MAX_USERS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
     crate::establish_connection()?.transaction(|conn| {
