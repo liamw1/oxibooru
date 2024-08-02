@@ -15,6 +15,26 @@ pub struct PoolCategoryInfo {
 }
 
 impl PoolCategoryInfo {
+    pub fn new(conn: &mut PgConnection, category: PoolCategory) -> QueryResult<Self> {
+        let usages = pool::table
+            .filter(pool::category_id.eq(category.id))
+            .count()
+            .first(conn)?;
+
+        Ok(Self {
+            version: category.last_edit_time,
+            name: category.name,
+            color: category.color,
+            usages,
+            default: category.id == 0,
+        })
+    }
+
+    pub fn new_from_id(conn: &mut PgConnection, category_id: i32) -> QueryResult<Self> {
+        let category = pool_category::table.find(category_id).first(conn)?;
+        Self::new(conn, category)
+    }
+
     pub fn all(conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
         let pool_categories: Vec<PoolCategory> = pool_category::table.load(conn)?;
         let pool_category_usages: HashMap<i32, Option<i64>> = pool_category::table
@@ -27,7 +47,7 @@ impl PoolCategoryInfo {
 
         Ok(pool_categories
             .into_iter()
-            .map(|category| PoolCategoryInfo {
+            .map(|category| Self {
                 version: category.last_edit_time,
                 name: category.name,
                 color: category.color,

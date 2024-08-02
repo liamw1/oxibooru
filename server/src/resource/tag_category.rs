@@ -23,7 +23,7 @@ impl TagCategoryInfo {
             .count()
             .first(conn)?;
 
-        Ok(TagCategoryInfo {
+        Ok(Self {
             version: category.last_edit_time,
             name: category.name,
             color: category.color,
@@ -50,7 +50,7 @@ impl TagCategoryInfo {
 
         Ok(tag_categories
             .into_iter()
-            .map(|category| TagCategoryInfo {
+            .map(|category| Self {
                 version: category.last_edit_time,
                 name: category.name,
                 color: category.color,

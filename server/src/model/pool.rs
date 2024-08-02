@@ -12,7 +12,7 @@ pub struct NewPoolCategory<'a> {
     pub color: &'a str,
 }
 
-#[derive(Identifiable, Queryable, Selectable)]
+#[derive(AsChangeset, Identifiable, Queryable, Selectable)]
 #[diesel(table_name = pool_category)]
 #[diesel(check_for_backend(Pg))]
 pub struct PoolCategory {
@@ -20,6 +20,12 @@ pub struct PoolCategory {
     pub name: String,
     pub color: String,
     pub last_edit_time: DateTime,
+}
+
+impl PoolCategory {
+    pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<Self> {
+        pool_category::table.filter(pool_category::name.eq(name)).first(conn)
+    }
 }
 
 #[derive(Insertable)]

@@ -408,11 +408,20 @@ fn delete_post(post_id: i32, auth: AuthResult, client_version: ResourceVersion) 
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 
-    crate::establish_connection()?.transaction(|conn| {
-        let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
+    let mime_type = crate::establish_connection()?.transaction::<_, api::Error, _>(|conn| {
+        let (mime_type, post_version) = post::table
+            .find(post_id)
+            .select((post::mime_type, post::last_edit_time))
+            .first(conn)?;
         api::verify_version(post_version, *client_version)?;
 
         diesel::delete(post::table.find(post_id)).execute(conn)?;
-        Ok(())
-    })
+        Ok(mime_type)
+    })?;
+
+    if config::get().delete_source_files {
+        std::fs::remove_file(content::post_thumbnail_path(post_id))?;
+        std::fs::remove_file(content::post_content_path(post_id, mime_type))?;
+    }
+    Ok(())
 }

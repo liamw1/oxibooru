@@ -32,10 +32,10 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .map(update_tag_category)
         .map(api::Reply::from);
-    let set_default_category = warp::put()
+    let set_default_tag_category = warp::put()
         .and(warp::path!("tag-category" / String / "default"))
         .and(api::auth())
-        .map(set_default_category)
+        .map(set_default_tag_category)
         .map(api::Reply::from);
     let delete_tag_category = warp::delete()
         .and(warp::path!("tag-category" / String))
@@ -48,7 +48,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(get_tag_category)
         .or(create_tag_category)
         .or(update_tag_category)
-        .or(set_default_category)
+        .or(set_default_tag_category)
         .or(delete_tag_category)
 }
 
@@ -111,9 +111,9 @@ fn create_tag_category(auth: AuthResult, category_info: NewTagCategoryInfo) -> A
 #[serde(deny_unknown_fields)]
 struct TagCategoryUpdateInfo {
     version: DateTime,
+    order: Option<String>, // TODO: Client sends order out as string so we convert on server, would be better to do this on client
     name: Option<String>,
     color: Option<String>,
-    order: Option<String>, // TODO: Client sends order out as string so we convert on server, would be better to do this on client
 }
 
 fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdateInfo) -> ApiResult<TagCategoryInfo> {
@@ -124,6 +124,15 @@ fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdate
     crate::establish_connection()?.transaction(|conn| {
         let category = TagCategory::from_name(conn, &name)?;
         api::verify_version(category.last_edit_time, update.version)?;
+
+        if let Some(order) = update.order {
+            api::verify_privilege(client.as_ref(), config::privileges().tag_category_edit_order)?;
+
+            let order: i32 = order.parse()?;
+            diesel::update(tag_category::table.find(category.id))
+                .set(tag_category::order.eq(order))
+                .execute(conn)?;
+        }
 
         if let Some(name) = update.name {
             api::verify_privilege(client.as_ref(), config::privileges().tag_category_edit_name)?;
@@ -141,21 +150,12 @@ fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdate
                 .execute(conn)?;
         }
 
-        if let Some(order) = update.order {
-            api::verify_privilege(client.as_ref(), config::privileges().tag_category_edit_order)?;
-
-            let order: i32 = order.parse()?;
-            diesel::update(tag_category::table.find(category.id))
-                .set(tag_category::order.eq(order))
-                .execute(conn)?;
-        }
-
         TagCategoryInfo::new_from_id(conn, category.id).map_err(api::Error::from)
     })
 }
 
-fn set_default_category(name: String, auth: AuthResult) -> ApiResult<TagCategoryInfo> {
-    let _timer = crate::util::Timer::new("set_default_category");
+fn set_default_tag_category(name: String, auth: AuthResult) -> ApiResult<TagCategoryInfo> {
+    let _timer = crate::util::Timer::new("set_default_tag_category");
 
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_set_default)?;

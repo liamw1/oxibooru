@@ -6,7 +6,7 @@ CREATE TABLE "pool_category" (
     UNIQUE ("name")
 );
 SELECT diesel_manage_last_edit_time('pool_category');
-INSERT INTO "pool_category" ("id", "name", "color") OVERRIDING SYSTEM VALUE VALUES (0, 'default', 'blue');
+INSERT INTO "pool_category" ("id", "name", "color") OVERRIDING SYSTEM VALUE VALUES (0, 'default', 'default');
 
 CREATE TABLE "pool" (
     "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
