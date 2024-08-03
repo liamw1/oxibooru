@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery, ResourceVersion};
+use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::content;
 use crate::image::signature;
 use crate::model::enums::{MimeType, PostSafety, PostType};
@@ -404,7 +404,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
     })
 }
 
-fn delete_post(post_id: i32, auth: AuthResult, client_version: ResourceVersion) -> ApiResult<()> {
+fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 

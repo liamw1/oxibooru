@@ -1,11 +1,10 @@
-use crate::api::{ApiResult, AuthResult, PagedQuery, PagedResponse, ResourceQuery, ResourceVersion};
+use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::config::RegexType;
-use crate::model::pool::{NewPool, NewPoolName, NewPoolPost, Pool};
+use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::{FieldTable, PoolInfo};
 use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::util::DateTime;
-use crate::{api, config, resource, search};
-use diesel::dsl::*;
+use crate::{api, config, resource, search, update};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -120,6 +119,10 @@ struct NewPoolInfo {
 fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -> ApiResult<PoolInfo> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_create)?;
+
+    if pool_info.names.is_empty() {
+        return Err(api::Error::NoNamesGiven);
+    }
     pool_info
         .names
         .iter()
@@ -141,54 +144,23 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
             .returning(Pool::as_returning())
             .get_result(conn)?;
 
-        let pool_id = pool.id;
-        let new_pool_names: Vec<_> = pool_info
-            .names
-            .iter()
-            .enumerate()
-            .map(|(order, name)| NewPoolName {
-                pool_id,
-                order: order as i32,
-                name,
-            })
-            .collect();
-        diesel::insert_into(pool_name::table)
-            .values(new_pool_names)
-            .execute(conn)?;
-
-        let pool_posts: Vec<_> = pool_info
-            .posts
-            .unwrap_or_default()
-            .into_iter()
-            .enumerate()
-            .map(|(order, post_id)| NewPoolPost {
-                pool_id,
-                post_id,
-                order: order as i32,
-            })
-            .collect();
-        diesel::insert_into(pool_post::table).values(pool_posts).execute(conn)?;
+        update::pool::add_names(conn, pool.id, 0, pool_info.names)?;
+        update::pool::add_posts(conn, pool.id, 0, pool_info.posts.unwrap_or_default())?;
 
         PoolInfo::new(conn, pool, &fields).map_err(api::Error::from)
     })
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-struct PoolMergeInfo {
-    remove: i32,
-    merge_to: i32,
-    remove_version: DateTime,
-    merge_to_version: DateTime,
-}
-
-fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: PoolMergeInfo) -> ApiResult<PoolInfo> {
+fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i32>) -> ApiResult<PoolInfo> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_merge)?;
 
     let remove_id: i32 = merge_info.remove;
     let merge_to_id: i32 = merge_info.merge_to;
+    if remove_id == merge_to_id {
+        return Err(api::Error::SelfMerge);
+    }
+
     let fields = create_field_table(query.fields())?;
     crate::establish_connection()?.transaction(|conn| {
         let remove_version = pool::table.find(remove_id).select(pool::last_edit_time).first(conn)?;
@@ -196,51 +168,16 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: PoolMergeInfo
         api::verify_version(remove_version, merge_info.remove_version)?;
         api::verify_version(merge_to_version, merge_info.merge_to_version)?;
 
-        // Merge names
-        let removed_names: Vec<String> = diesel::delete(pool_name::table)
-            .filter(pool_name::pool_id.eq(remove_id))
-            .returning(pool_name::name)
-            .get_results(conn)?;
-        let starting_order: Option<i32> = pool_name::table
-            .select(max(pool_name::order))
-            .group_by(pool_name::pool_id)
-            .filter(pool_name::pool_id.eq(merge_to_id))
-            .first(conn)?;
-        let starting_order = starting_order.unwrap_or(-1) + 1;
-        let new_names: Vec<_> = removed_names
-            .iter()
-            .enumerate()
-            .map(|(i, name)| NewPoolName {
-                pool_id: merge_to_id,
-                order: starting_order + i as i32,
-                name,
-            })
-            .collect();
-        diesel::insert_into(pool_name::table).values(new_names).execute(conn)?;
-
         // Merge posts
         let removed_pool_posts: Vec<i32> = diesel::delete(pool_post::table)
             .filter(pool_post::pool_id.eq(remove_id))
             .returning(pool_post::post_id)
             .get_results(conn)?;
-        let starting_order: Option<i32> = pool_post::table
-            .select(max(pool_post::order))
-            .group_by(pool_post::pool_id)
+        let post_count: i64 = pool_post::table
             .filter(pool_post::pool_id.eq(merge_to_id))
+            .count()
             .first(conn)?;
-        let starting_order = starting_order.unwrap_or(-1) + 1;
-        let new_pool_posts: Vec<_> = removed_pool_posts
-            .into_iter()
-            .enumerate()
-            .map(|(i, post_id)| NewPoolPost {
-                pool_id: merge_to_id,
-                post_id,
-                order: starting_order + i as i32,
-            })
-            .collect();
-        diesel::insert_into(pool_post::table)
-            .values(new_pool_posts)
-            .execute(conn)?;
+        update::pool::add_posts(conn, merge_to_id, post_count as i32, removed_pool_posts)?;
 
         diesel::delete(pool::table.find(remove_id)).execute(conn)?;
         PoolInfo::new_from_id(conn, merge_to_id, &fields).map_err(api::Error::from)
@@ -287,51 +224,22 @@ fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: Poo
 
         if let Some(names) = update.names {
             api::verify_privilege(client.as_ref(), config::privileges().pool_edit_name)?;
-            names
-                .iter()
-                .map(|name| api::verify_matches_regex(name, RegexType::Pool))
-                .collect::<Result<_, _>>()?;
-
-            diesel::delete(pool_name::table)
-                .filter(pool_name::pool_id.eq(pool_id))
-                .execute(conn)?;
-            let updated_names: Vec<_> = names
-                .iter()
-                .enumerate()
-                .map(|(order, name)| (order as i32, name))
-                .map(|(order, name)| NewPoolName { pool_id, order, name })
-                .collect();
-            diesel::insert_into(pool_name::table)
-                .values(updated_names)
-                .execute(conn)?;
+            update::pool::delete_names(conn, pool_id)?;
+            update::pool::add_names(conn, pool_id, 0, names)?;
         }
 
         // TODO: Optimize
         if let Some(posts) = update.posts {
             api::verify_privilege(client.as_ref(), config::privileges().pool_edit_post)?;
-
-            diesel::delete(pool_post::table)
-                .filter(pool_post::pool_id.eq(pool_id))
-                .execute(conn)?;
-            let updated_pool_posts: Vec<_> = posts
-                .into_iter()
-                .enumerate()
-                .map(|(order, post_id)| NewPoolPost {
-                    pool_id,
-                    post_id,
-                    order: order as i32,
-                })
-                .collect();
-            diesel::insert_into(pool_post::table)
-                .values(updated_pool_posts)
-                .execute(conn)?;
+            update::pool::delete_posts(conn, pool_id)?;
+            update::pool::add_posts(conn, pool_id, 0, posts)?;
         }
 
         PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from)
     })
 }
 
-fn delete_pool(name: String, auth: AuthResult, client_version: ResourceVersion) -> ApiResult<()> {
+fn delete_pool(name: String, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_delete)?;
 

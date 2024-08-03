@@ -53,16 +53,6 @@ pub struct Tag {
     pub last_edit_time: DateTime,
 }
 
-impl Tag {
-    pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<Self> {
-        tag::table
-            .select(Self::as_select())
-            .inner_join(tag_name::table)
-            .filter(tag_name::name.eq(name))
-            .first(conn)
-    }
-}
-
 impl IntegerIdentifiable for Tag {
     fn id(&self) -> i32 {
         self.id

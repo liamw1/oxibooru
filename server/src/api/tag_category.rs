@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, ResourceVersion};
+use crate::api::{ApiResult, AuthResult, DeleteRequest};
 use crate::config::RegexType;
 use crate::model::tag::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
@@ -195,7 +195,7 @@ fn set_default_tag_category(name: String, auth: AuthResult) -> ApiResult<TagCate
     })
 }
 
-fn delete_tag_category(name: String, auth: AuthResult, client_version: ResourceVersion) -> ApiResult<()> {
+fn delete_tag_category(name: String, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_delete)?;
 
@@ -207,7 +207,7 @@ fn delete_tag_category(name: String, auth: AuthResult, client_version: ResourceV
             .first(conn)?;
         api::verify_version(category_version, *client_version)?;
         if category_id == 0 {
-            return Err(api::Error::InvalidRequest);
+            return Err(api::Error::DeleteDefault);
         }
 
         diesel::delete(tag_category::table.find(category_id)).execute(conn)?;

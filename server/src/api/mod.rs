@@ -65,6 +65,8 @@ pub enum Error {
     BadMultiPartForm,
     #[error("Request content-type did not match file extension")]
     ContentTypeMismatch,
+    #[error("Cannot delete default category")]
+    DeleteDefault,
     #[error("Expression does not match on regex")]
     ExpressionFailsRegex,
     FailedAuthentication(#[from] AuthenticationError),
@@ -73,14 +75,16 @@ pub enum Error {
     FromStrError(#[from] Box<dyn std::error::Error>),
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
-    #[error("Cannot delete default category")]
-    InvalidRequest, // TODO: Right now this is only used for deleting default category, but should generalize err message
     ImageError(#[from] image::ImageError),
     IoError(#[from] std::io::Error),
+    #[error("Resource needs at least one name")]
+    NoNamesGiven,
     NotAnInteger(#[from] std::num::ParseIntError),
     #[error("Someone else modified this in the meantime. Please try again.")]
     ResourceModified,
     SearchError(#[from] crate::search::Error),
+    #[error("Cannot merge resource with itself")]
+    SelfMerge,
     Utf8Conversion(#[from] std::str::Utf8Error),
     WarpError(#[from] warp::Error),
 }
@@ -100,6 +104,7 @@ impl Error {
             Self::BadHeader(_) => StatusCode::BAD_REQUEST,
             Self::BadMultiPartForm => StatusCode::BAD_REQUEST,
             Self::ContentTypeMismatch => StatusCode::BAD_REQUEST,
+            Self::DeleteDefault => StatusCode::BAD_REQUEST,
             Self::ExpressionFailsRegex => StatusCode::BAD_GATEWAY,
             Self::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
@@ -110,12 +115,13 @@ impl Error {
             Self::FailedQuery(err) => query_error_status_code(err),
             Self::FromStrError(_) => StatusCode::BAD_REQUEST,
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
-            Self::InvalidRequest => StatusCode::BAD_REQUEST,
             Self::ImageError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::NoNamesGiven => StatusCode::BAD_REQUEST,
             Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::SearchError(_) => StatusCode::BAD_REQUEST,
+            Self::SelfMerge => StatusCode::BAD_REQUEST,
             Self::Utf8Conversion(_) => StatusCode::BAD_REQUEST,
             Self::WarpError(_) => StatusCode::BAD_REQUEST,
         }
@@ -128,18 +134,20 @@ impl Error {
             Self::BadHeader(_) => "Bad Header",
             Self::BadMultiPartForm => "Bad Multi-Part Form",
             Self::ContentTypeMismatch => "Content Type Mismatch",
+            Self::DeleteDefault => "Delete Default",
             Self::ExpressionFailsRegex => "Expression Fails Regex",
             Self::FailedAuthentication(_) => "Failed Authentication",
             Self::FailedConnection(_) => "Failed Connection",
             Self::FailedQuery(_) => "Failed Query",
             Self::FromStrError(_) => "FromStr Error",
             Self::InsufficientPrivileges => "Insufficient Privileges",
-            Self::InvalidRequest => "Invalid Request",
             Self::ImageError(_) => "Image Error",
             Self::IoError(_) => "IO Error",
+            Self::NoNamesGiven => "No Names Given",
             Self::NotAnInteger(_) => "Parse Int Error",
             Self::ResourceModified => "Resource Modified",
             Self::SearchError(_) => "Search Error",
+            Self::SelfMerge => "Self Merge",
             Self::Utf8Conversion(_) => "Utf8 Conversion Error",
             Self::WarpError(_) => "Warp Error",
         }
@@ -195,15 +203,25 @@ type AuthResult = Result<Option<User>, AuthenticationError>;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct ResourceVersion {
+struct DeleteRequest {
     version: DateTime,
 }
 
-impl Deref for ResourceVersion {
+impl Deref for DeleteRequest {
     type Target = DateTime;
     fn deref(&self) -> &Self::Target {
         &self.version
     }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
+struct MergeRequest<T> {
+    remove: T,
+    merge_to: T,
+    remove_version: DateTime,
+    merge_to_version: DateTime,
 }
 
 #[derive(Deserialize)]

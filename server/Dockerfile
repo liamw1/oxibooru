@@ -23,6 +23,7 @@ RUN cargo build --release
 FROM debian:$DEBIAN_VERSION AS release
 WORKDIR /opt/app
 
+ENV RUST_BACKTRACE=1
 ENV DOCKER_DEPLOYMENT=1
 
 COPY --from=builder /opt/app/target/release/server server

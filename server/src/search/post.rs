@@ -71,7 +71,7 @@ pub enum Token {
 }
 
 pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Token>, Error> {
-    SearchCriteria::new(search_criteria, Token::Id)
+    SearchCriteria::new(search_criteria, Token::Tag)
         .map_err(Box::from)
         .map_err(Error::from)
 }

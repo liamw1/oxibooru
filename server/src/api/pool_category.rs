@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, ResourceVersion};
+use crate::api::{ApiResult, AuthResult, DeleteRequest};
 use crate::config::RegexType;
 use crate::model::pool::{NewPoolCategory, PoolCategory};
 use crate::resource::pool_category::PoolCategoryInfo;
@@ -184,7 +184,7 @@ fn set_default_pool_category(name: String, auth: AuthResult) -> ApiResult<PoolCa
     })
 }
 
-fn delete_pool_category(name: String, auth: AuthResult, client_version: ResourceVersion) -> ApiResult<()> {
+fn delete_pool_category(name: String, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_delete)?;
 
@@ -196,7 +196,7 @@ fn delete_pool_category(name: String, auth: AuthResult, client_version: Resource
             .first(conn)?;
         api::verify_version(category_version, *client_version)?;
         if category_id == 0 {
-            return Err(api::Error::InvalidRequest);
+            return Err(api::Error::DeleteDefault);
         }
 
         diesel::delete(pool_category::table.find(category_id)).execute(conn)?;

@@ -1,15 +1,87 @@
 use crate::api::ApiResult;
 use crate::config::RegexType;
-use crate::model::tag::{NewTag, NewTagName};
+use crate::model::tag::{NewTag, NewTagImplication, NewTagName, NewTagSuggestion};
 use crate::model::user::User;
-use crate::schema::{tag, tag_implication, tag_name};
+use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
 use crate::{api, config};
 use diesel::prelude::*;
 use std::collections::HashSet;
 
+pub fn description(conn: &mut PgConnection, tag_id: i32, description: String) -> QueryResult<()> {
+    diesel::update(tag::table.find(tag_id))
+        .set(tag::description.eq(description))
+        .execute(conn)?;
+    Ok(())
+}
+
+pub fn add_names(conn: &mut PgConnection, tag_id: i32, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
+    names
+        .iter()
+        .map(|name| api::verify_matches_regex(name, RegexType::Tag))
+        .collect::<Result<_, _>>()?;
+
+    let new_names: Vec<_> = names
+        .iter()
+        .enumerate()
+        .map(|(i, name)| (current_name_count + i as i32, name))
+        .map(|(order, name)| NewTagName { tag_id, order, name })
+        .collect();
+    diesel::insert_into(tag_name::table).values(new_names).execute(conn)?;
+    Ok(())
+}
+
+pub fn delete_names(conn: &mut PgConnection, tag_id: i32) -> QueryResult<usize> {
+    diesel::delete(tag_name::table)
+        .filter(tag_name::tag_id.eq(tag_id))
+        .execute(conn)
+}
+
+pub fn add_implications(conn: &mut PgConnection, tag_id: i32, implied_ids: Vec<i32>) -> QueryResult<()> {
+    let new_implications: Vec<_> = implied_ids
+        .into_iter()
+        .map(|child_id| NewTagImplication {
+            parent_id: tag_id,
+            child_id,
+        })
+        .collect();
+    diesel::insert_into(tag_implication::table)
+        .values(new_implications)
+        .execute(conn)?;
+    Ok(())
+}
+
+pub fn delete_implications(conn: &mut PgConnection, tag_id: i32) -> QueryResult<usize> {
+    diesel::delete(tag_implication::table)
+        .filter(tag_implication::parent_id.eq(tag_id))
+        .execute(conn)
+}
+
+pub fn add_suggestions(conn: &mut PgConnection, tag_id: i32, suggested_ids: Vec<i32>) -> QueryResult<()> {
+    let new_suggestions: Vec<_> = suggested_ids
+        .into_iter()
+        .map(|child_id| NewTagSuggestion {
+            parent_id: tag_id,
+            child_id,
+        })
+        .collect();
+    diesel::insert_into(tag_suggestion::table)
+        .values(new_suggestions)
+        .execute(conn)?;
+    Ok(())
+}
+
+pub fn delete_suggestions(conn: &mut PgConnection, tag_id: i32) -> QueryResult<usize> {
+    diesel::delete(tag_suggestion::table)
+        .filter(tag_suggestion::parent_id.eq(tag_id))
+        .execute(conn)
+}
+
 /*
     Returns all tag ids implied from the given set of names.
     Returned ids will be distinct.
+
+    Requires tag creation privileges if new names are given.
+    Checks that each new name matches on the Tag regex.
 */
 pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
