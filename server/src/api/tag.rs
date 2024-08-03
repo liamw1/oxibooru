@@ -138,6 +138,7 @@ fn get_tag_siblings(name: String, auth: AuthResult, query: ResourceQuery) -> Api
     api::verify_privilege(client.as_ref(), config::privileges().tag_view)?;
 
     let fields = create_field_table(query.fields())?;
+    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     crate::establish_connection()?.transaction(|conn| {
         let tag_id: i32 = tag::table
             .select(tag::id)
