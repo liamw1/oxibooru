@@ -543,8 +543,7 @@ data.
     - any name, implication or is invalid
     - category is invalid
     - no name was specified
-    - implications or suggestions contain any item from names (e.g. there's a
-      shallow cyclic dependency)
+    - implications or suggestions create a cyclic dependency
     - privileges are too low
 
 - **Description**
@@ -588,8 +587,7 @@ data.
     - any name is used by an existing tag (names are case insensitive)
     - any name, implication or suggestion name is invalid
     - category is invalid
-    - implications or suggestions contain any item from names (e.g. there's a
-      shallow cyclic dependency)
+    - implications or suggestions create a cyclic dependency
     - privileges are too low
 
 - **Description**

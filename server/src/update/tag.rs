@@ -36,14 +36,18 @@ pub fn delete_names(conn: &mut PgConnection, tag_id: i32) -> QueryResult<usize> 
         .execute(conn)
 }
 
-pub fn add_implications(conn: &mut PgConnection, tag_id: i32, implied_ids: Vec<i32>) -> QueryResult<()> {
+pub fn add_implications(conn: &mut PgConnection, tag_id: i32, implied_ids: Vec<i32>) -> ApiResult<()> {
     let new_implications: Vec<_> = implied_ids
         .into_iter()
-        .map(|child_id| TagImplication {
-            parent_id: tag_id,
-            child_id,
+        .map(|child_id| {
+            (tag_id != child_id)
+                .then_some(TagImplication {
+                    parent_id: tag_id,
+                    child_id,
+                })
+                .ok_or(api::Error::CyclicDependency)
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
     diesel::insert_into(tag_implication::table)
         .values(new_implications)
         .execute(conn)?;
@@ -56,14 +60,18 @@ pub fn delete_implications(conn: &mut PgConnection, tag_id: i32) -> QueryResult<
         .execute(conn)
 }
 
-pub fn add_suggestions(conn: &mut PgConnection, tag_id: i32, suggested_ids: Vec<i32>) -> QueryResult<()> {
+pub fn add_suggestions(conn: &mut PgConnection, tag_id: i32, suggested_ids: Vec<i32>) -> ApiResult<()> {
     let new_suggestions: Vec<_> = suggested_ids
         .into_iter()
-        .map(|child_id| TagSuggestion {
-            parent_id: tag_id,
-            child_id,
+        .map(|child_id| {
+            (tag_id != child_id)
+                .then_some(TagSuggestion {
+                    parent_id: tag_id,
+                    child_id,
+                })
+                .ok_or(api::Error::CyclicDependency)
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
     diesel::insert_into(tag_suggestion::table)
         .values(new_suggestions)
         .execute(conn)?;
@@ -104,7 +112,7 @@ pub fn get_or_create_tag_ids(
         all_implied_tag_ids.extend(implied_ids.iter().copied());
     }
     if !implied_ids.is_empty() {
-        println!("WARNING: Tag implication cycle detected");
+        return Err(api::Error::CyclicDependency);
     }
 
     let existing_names: HashSet<String> = tag_name::table

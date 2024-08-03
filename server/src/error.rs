@@ -226,6 +226,7 @@ impl ErrorKind for crate::api::Error {
             Self::BadHeader(_) => "BadHeader",
             Self::BadMultiPartForm => "BadMultiPartForm",
             Self::ContentTypeMismatch => "ContentTypeMismatch",
+            Self::CyclicDependency => "CyclicDependency",
             Self::DeleteDefault => "DeleteDefault",
             Self::ExpressionFailsRegex => "ExpressionFailsRegex",
             Self::FailedAuthentication(err) => err.kind(),

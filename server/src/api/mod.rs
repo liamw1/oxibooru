@@ -65,6 +65,8 @@ pub enum Error {
     BadMultiPartForm,
     #[error("Request content-type did not match file extension")]
     ContentTypeMismatch,
+    #[error("Cyclic dependency detected")]
+    CyclicDependency,
     #[error("Cannot delete default category")]
     DeleteDefault,
     #[error("Expression does not match on regex")]
@@ -104,6 +106,7 @@ impl Error {
             Self::BadHeader(_) => StatusCode::BAD_REQUEST,
             Self::BadMultiPartForm => StatusCode::BAD_REQUEST,
             Self::ContentTypeMismatch => StatusCode::BAD_REQUEST,
+            Self::CyclicDependency => StatusCode::BAD_REQUEST,
             Self::DeleteDefault => StatusCode::BAD_REQUEST,
             Self::ExpressionFailsRegex => StatusCode::BAD_GATEWAY,
             Self::FailedAuthentication(err) => match err {
@@ -134,6 +137,7 @@ impl Error {
             Self::BadHeader(_) => "Bad Header",
             Self::BadMultiPartForm => "Bad Multi-Part Form",
             Self::ContentTypeMismatch => "Content Type Mismatch",
+            Self::CyclicDependency => "Cyclic Dependency",
             Self::DeleteDefault => "Delete Default",
             Self::ExpressionFailsRegex => "Expression Fails Regex",
             Self::FailedAuthentication(_) => "Failed Authentication",

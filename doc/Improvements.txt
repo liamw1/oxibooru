@@ -19,3 +19,7 @@ This is a brief list of improvements I've made to the functionality of the backe
         comparing obviously dissimilar images when performing a reverse search.
 
     2. Getting around posts now respects sorting
+
+    3. Improved cyclic dependcy detection
+        The tag creation and update api will detect if an implication or suggestion creates any cyclic
+        dependency, not just shallow ones.
