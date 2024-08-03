@@ -72,8 +72,6 @@ pub struct PoolName {
     pub name: String,
 }
 
-pub type NewPoolPost = PoolPost;
-
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Pool), belongs_to(Post))]
 #[diesel(table_name = pool_post)]

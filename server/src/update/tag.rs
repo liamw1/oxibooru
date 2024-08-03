@@ -1,6 +1,6 @@
 use crate::api::ApiResult;
 use crate::config::RegexType;
-use crate::model::tag::{NewTag, NewTagImplication, NewTagName, NewTagSuggestion};
+use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
 use crate::model::user::User;
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
 use crate::{api, config};
@@ -39,7 +39,7 @@ pub fn delete_names(conn: &mut PgConnection, tag_id: i32) -> QueryResult<usize> 
 pub fn add_implications(conn: &mut PgConnection, tag_id: i32, implied_ids: Vec<i32>) -> QueryResult<()> {
     let new_implications: Vec<_> = implied_ids
         .into_iter()
-        .map(|child_id| NewTagImplication {
+        .map(|child_id| TagImplication {
             parent_id: tag_id,
             child_id,
         })
@@ -59,7 +59,7 @@ pub fn delete_implications(conn: &mut PgConnection, tag_id: i32) -> QueryResult<
 pub fn add_suggestions(conn: &mut PgConnection, tag_id: i32, suggested_ids: Vec<i32>) -> QueryResult<()> {
     let new_suggestions: Vec<_> = suggested_ids
         .into_iter()
-        .map(|child_id| NewTagSuggestion {
+        .map(|child_id| TagSuggestion {
             parent_id: tag_id,
             child_id,
         })

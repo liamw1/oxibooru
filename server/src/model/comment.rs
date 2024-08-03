@@ -26,8 +26,6 @@ pub struct Comment {
     pub last_edit_time: DateTime,
 }
 
-pub type NewCommentScore = CommentScore;
-
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Comment), belongs_to(User))]
 #[diesel(table_name = comment_score)]

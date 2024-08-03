@@ -1,7 +1,7 @@
 use crate::api;
 use crate::api::ApiResult;
 use crate::config::RegexType;
-use crate::model::pool::{NewPoolName, NewPoolPost};
+use crate::model::pool::{NewPoolName, PoolPost};
 use crate::schema::{pool_name, pool_post};
 use diesel::prelude::*;
 
@@ -34,7 +34,7 @@ pub fn add_posts(conn: &mut PgConnection, pool_id: i32, current_post_count: i32,
         .into_iter()
         .enumerate()
         .map(|(i, post_id)| (current_post_count + i as i32, post_id))
-        .map(|(order, post_id)| NewPoolPost {
+        .map(|(order, post_id)| PoolPost {
             pool_id,
             post_id,
             order,

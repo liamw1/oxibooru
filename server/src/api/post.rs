@@ -1,10 +1,10 @@
-use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, ResourceQuery};
+use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::content;
 use crate::image::signature;
 use crate::model::enums::{MimeType, PostSafety, PostType};
-use crate::model::post::{NewPost, NewPostSignature, NewPostTag, Post, PostSignature};
+use crate::model::post::{NewPost, NewPostSignature, PostSignature};
 use crate::resource::post::{FieldTable, PostInfo};
-use crate::schema::{post, post_relation, post_signature, post_tag};
+use crate::schema::{comment, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag};
 use crate::util::DateTime;
 use crate::{api, config, filesystem, resource, search, update};
 use diesel::prelude::*;
@@ -44,6 +44,13 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .map(create_post)
         .map(api::Reply::from);
+    let merge_posts = warp::post()
+        .and(warp::path!("post-merge"))
+        .and(api::auth())
+        .and(api::resource_query())
+        .and(warp::body::json())
+        .map(merge_posts)
+        .map(api::Reply::from);
     let update_post = warp::put()
         .and(warp::path!("post" / i32))
         .and(api::auth())
@@ -63,6 +70,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(get_post_neighbors)
         .or(reverse_search)
         .or(create_post)
+        .or(merge_posts)
         .or(update_post)
         .or(delete_post)
 }
@@ -245,11 +253,13 @@ struct NewPostInfo {
     relations: Option<Vec<i32>>,
     anonymous: Option<bool>,
     content_token: String,
-    // tags: TODO
+    tags: Option<Vec<String>>,
     // flags: TODO
 }
 
 fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {
+    let _timer = crate::util::Timer::new("create_post");
+
     let required_rank = match post_info.anonymous.unwrap_or(false) {
         true => config::privileges().post_create_anonymous,
         false => config::privileges().post_create_identified,
@@ -271,7 +281,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     let image = image::open(&temp_path)?;
     let image_checksum = content::image_checksum(&image);
 
-    let client_id = client.map(|user| user.id);
+    let client_id = client.as_ref().map(|user| user.id);
     let new_post = NewPost {
         user_id: client_id,
         file_size: image_size as i64,
@@ -285,21 +295,23 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     };
 
     crate::establish_connection()?.transaction(|conn| {
-        let post = diesel::insert_into(post::table)
+        let (post_id, mime_type) = diesel::insert_into(post::table)
             .values(new_post)
-            .returning(Post::as_returning())
+            .returning((post::id, post::mime_type))
             .get_result(conn)?;
 
-        // Add tags: TODO
+        // Add tags
+        let tags = update::tag::get_or_create_tag_ids(conn, client.as_ref(), post_info.tags.unwrap_or_default())?;
+        update::post::add_tags(conn, post_id, tags)?;
 
         // Add relations
         let relations = post_info.relations.unwrap_or_default();
-        update::post::create_relations(conn, post.id, &relations)?;
+        update::post::create_relations(conn, post_id, relations)?;
 
         // Generate image signature
         let image_signature = signature::compute_signature(&image);
         let new_post_signature = NewPostSignature {
-            post_id: post.id,
+            post_id,
             signature: &image_signature,
             words: &signature::generate_indexes(&image_signature),
         };
@@ -312,7 +324,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         if !posts_folder.exists() {
             std::fs::create_dir(&posts_folder)?;
         }
-        std::fs::rename(temp_path, content::post_content_path(post.id, post.mime_type))?;
+        std::fs::rename(temp_path, content::post_content_path(post_id, mime_type))?;
 
         // Generate thumbnail
         let thumbnail_folder = filesystem::generated_thumbnails_directory();
@@ -324,10 +336,118 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
             config::get().thumbnails.post_height,
             image::imageops::FilterType::Nearest,
         );
-        thumbnail.to_rgb8().save(content::post_thumbnail_path(post.id))?;
+        thumbnail.to_rgb8().save(content::post_thumbnail_path(post_id))?;
 
-        PostInfo::new(conn, client_id, post, &fields).map_err(api::Error::from)
+        PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
     })
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PostMergeRequest {
+    #[serde(flatten)]
+    post_info: MergeRequest<i32>,
+    replace_content: bool,
+}
+
+fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequest) -> ApiResult<PostInfo> {
+    let _timer = crate::util::Timer::new("merge_posts");
+
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_merge)?;
+
+    let client_id = client.as_ref().map(|user| user.id);
+    let remove_id = merge_info.post_info.remove;
+    let merge_to_id = merge_info.post_info.merge_to;
+    if remove_id == merge_to_id {
+        return Err(api::Error::SelfMerge);
+    }
+
+    let fields = create_field_table(query.fields())?;
+    let merged_post = crate::establish_connection()?.transaction(|conn| {
+        let remove_version = post::table.find(remove_id).select(post::last_edit_time).first(conn)?;
+        let merge_to_version = post::table.find(merge_to_id).select(post::last_edit_time).first(conn)?;
+        api::verify_version(remove_version, merge_info.post_info.remove_version)?;
+        api::verify_version(merge_to_version, merge_info.post_info.merge_to_version)?;
+
+        // Merge tags
+        let merge_to_tags = post_tag::table
+            .select(post_tag::tag_id)
+            .filter(post_tag::post_id.eq(merge_to_id))
+            .into_boxed();
+        diesel::update(post_tag::table)
+            .filter(post_tag::post_id.eq(remove_id))
+            .filter(post_tag::tag_id.ne_all(merge_to_tags))
+            .set(post_tag::post_id.eq(merge_to_id))
+            .execute(conn)?;
+
+        // Merge relations
+        let merge_to_relations = post_relation::table
+            .select(post_relation::child_id)
+            .filter(post_relation::parent_id.eq(merge_to_id))
+            .into_boxed();
+        diesel::update(post_relation::table)
+            .filter(post_relation::parent_id.eq(remove_id))
+            .filter(post_relation::child_id.ne_all(merge_to_relations))
+            .set(post_relation::parent_id.eq(merge_to_id))
+            .execute(conn)?;
+
+        // Merge scores
+        let merge_to_scores = post_score::table
+            .select(post_score::user_id)
+            .filter(post_score::post_id.eq(merge_to_id))
+            .into_boxed();
+        diesel::update(post_score::table)
+            .filter(post_score::post_id.eq(remove_id))
+            .filter(post_score::user_id.ne_all(merge_to_scores))
+            .set(post_score::post_id.eq(merge_to_id))
+            .execute(conn)?;
+
+        // Merge favorites
+        let merge_to_favorites = post_favorite::table
+            .select(post_favorite::user_id)
+            .filter(post_favorite::post_id.eq(merge_to_id))
+            .into_boxed();
+        diesel::update(post_favorite::table)
+            .filter(post_favorite::post_id.eq(remove_id))
+            .filter(post_favorite::user_id.ne_all(merge_to_favorites))
+            .set(post_favorite::post_id.eq(merge_to_id))
+            .execute(conn)?;
+
+        // Merge features
+        let merge_to_features = post_feature::table
+            .select(post_feature::id)
+            .filter(post_feature::post_id.eq(merge_to_id))
+            .into_boxed();
+        diesel::update(post_feature::table)
+            .filter(post_feature::post_id.eq(remove_id))
+            .filter(post_feature::id.ne_all(merge_to_features))
+            .set(post_feature::post_id.eq(merge_to_id))
+            .execute(conn)?;
+
+        // Merge comments
+        let merge_to_comments = comment::table
+            .select(comment::id)
+            .filter(comment::post_id.eq(merge_to_id))
+            .into_boxed();
+        diesel::update(comment::table)
+            .filter(comment::post_id.eq(remove_id))
+            .filter(comment::id.ne_all(merge_to_comments))
+            .set(comment::post_id.eq(merge_to_id))
+            .execute(conn)?;
+
+        diesel::delete(post::table.find(remove_id)).execute(conn)?;
+        PostInfo::new_from_id(conn, client_id, merge_to_id, &fields).map_err(api::Error::from)
+    })?;
+
+    if merge_info.replace_content {
+        // TODO
+    }
+    if config::get().delete_source_files {
+        // TODO
+    }
+
+    Ok(merged_post)
 }
 
 #[derive(Deserialize)]
@@ -352,7 +472,6 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
         let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
         api::verify_version(post_version, update.version)?;
 
-        // Update safety
         if let Some(safety) = update.safety {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_safety)?;
 
@@ -360,8 +479,6 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
                 .set(post::safety.eq(safety))
                 .execute(conn)?;
         }
-
-        // Update source
         if let Some(source) = update.source {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_source)?;
 
@@ -369,34 +486,18 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
                 .set(post::source.eq(source))
                 .execute(conn)?;
         }
-
-        // Update relations
         if let Some(relations) = update.relations {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_relation)?;
 
-            diesel::delete(post_relation::table)
-                .filter(post_relation::parent_id.eq(post_id))
-                .or_filter(post_relation::child_id.eq(post_id))
-                .execute(conn)?;
-            update::post::create_relations(conn, post_id, &relations)?;
+            update::post::delete_relations(conn, post_id)?;
+            update::post::create_relations(conn, post_id, relations)?;
         }
-
-        // Update tags
         if let Some(tags) = update.tags {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_tag)?;
 
-            diesel::delete(post_tag::table)
-                .filter(post_tag::post_id.eq(post_id))
-                .execute(conn)?;
-
             let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), tags)?;
-            let updated_post_tags: Vec<_> = updated_tag_ids
-                .into_iter()
-                .map(|tag_id| NewPostTag { post_id, tag_id })
-                .collect();
-            diesel::insert_into(post_tag::table)
-                .values(updated_post_tags)
-                .execute(conn)?;
+            update::post::delete_tags(conn, post_id)?;
+            update::post::add_tags(conn, post_id, updated_tag_ids)?;
         }
 
         let client_id = client.map(|user| user.id);

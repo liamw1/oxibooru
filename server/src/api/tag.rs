@@ -1,5 +1,4 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
-use crate::model::post::NewPostTag;
 use crate::model::tag::NewTag;
 use crate::resource::tag::{FieldTable, TagInfo};
 use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
@@ -218,6 +217,8 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
 }
 
 fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String>) -> ApiResult<TagInfo> {
+    let _timer = crate::util::Timer::new("merge_tags");
+
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_merge)?;
 
@@ -240,41 +241,32 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
         api::verify_version(merge_to_version, merge_info.merge_to_version)?;
 
         // Merge implications
-        let implied_ids: Vec<i32> = tag_implication::table
+        let merged_implications: Vec<i32> = tag_implication::table
             .select(tag_implication::child_id)
             .filter(tag_implication::parent_id.eq(remove_id))
             .or_filter(tag_implication::parent_id.eq(merge_to_id))
             .load(conn)?;
         update::tag::delete_implications(conn, merge_to_id)?;
-        update::tag::add_implications(conn, merge_to_id, implied_ids)?;
+        update::tag::add_implications(conn, merge_to_id, merged_implications)?;
 
         // Merge suggestions
-        let suggested_ids: Vec<i32> = tag_suggestion::table
+        let merged_suggestions: Vec<i32> = tag_suggestion::table
             .select(tag_suggestion::child_id)
             .filter(tag_suggestion::parent_id.eq(remove_id))
             .or_filter(tag_suggestion::parent_id.eq(merge_to_id))
             .load(conn)?;
         update::tag::delete_suggestions(conn, merge_to_id)?;
-        update::tag::add_suggestions(conn, merge_to_id, suggested_ids)?;
+        update::tag::add_suggestions(conn, merge_to_id, merged_suggestions)?;
 
         // Merge usages
         let merge_to_posts = post_tag::table
             .select(post_tag::post_id)
             .filter(post_tag::tag_id.eq(merge_to_id))
             .into_boxed();
-        let new_post_tags: Vec<_> = post_tag::table
-            .select(post_tag::post_id)
+        diesel::update(post_tag::table)
             .filter(post_tag::tag_id.eq(remove_id))
             .filter(post_tag::post_id.ne_all(merge_to_posts))
-            .load(conn)?
-            .into_iter()
-            .map(|post_id| NewPostTag {
-                post_id,
-                tag_id: merge_to_id,
-            })
-            .collect();
-        diesel::insert_into(post_tag::table)
-            .values(new_post_tags)
+            .set(post_tag::tag_id.eq(merge_to_id))
             .execute(conn)?;
 
         diesel::delete(tag::table.find(remove_id)).execute(conn)?;

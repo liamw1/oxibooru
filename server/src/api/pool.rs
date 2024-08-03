@@ -152,11 +152,13 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
 }
 
 fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i32>) -> ApiResult<PoolInfo> {
+    let _timer = crate::util::Timer::new("merge_pools");
+
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_merge)?;
 
-    let remove_id: i32 = merge_info.remove;
-    let merge_to_id: i32 = merge_info.merge_to;
+    let remove_id = merge_info.remove;
+    let merge_to_id = merge_info.merge_to;
     if remove_id == merge_to_id {
         return Err(api::Error::SelfMerge);
     }
@@ -169,15 +171,21 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
         api::verify_version(merge_to_version, merge_info.merge_to_version)?;
 
         // Merge posts
-        let removed_pool_posts: Vec<i32> = diesel::delete(pool_post::table)
+        let merge_to_pool_posts = pool_post::table
+            .select(pool_post::post_id)
+            .filter(pool_post::pool_id.eq(merge_to_id))
+            .into_boxed();
+        let new_pool_posts: Vec<i32> = pool_post::table
+            .select(pool_post::post_id)
             .filter(pool_post::pool_id.eq(remove_id))
-            .returning(pool_post::post_id)
-            .get_results(conn)?;
+            .filter(pool_post::post_id.ne_all(merge_to_pool_posts))
+            .order_by(pool_post::order)
+            .load(conn)?;
         let post_count: i64 = pool_post::table
             .filter(pool_post::pool_id.eq(merge_to_id))
             .count()
             .first(conn)?;
-        update::pool::add_posts(conn, merge_to_id, post_count as i32, removed_pool_posts)?;
+        update::pool::add_posts(conn, merge_to_id, post_count as i32, new_pool_posts)?;
 
         diesel::delete(pool::table.find(remove_id)).execute(conn)?;
         PoolInfo::new_from_id(conn, merge_to_id, &fields).map_err(api::Error::from)

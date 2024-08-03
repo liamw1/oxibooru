@@ -5,7 +5,7 @@ mod error;
 mod filesystem;
 mod image;
 mod math;
-pub mod model;
+mod model;
 mod resource;
 mod schema;
 mod search;

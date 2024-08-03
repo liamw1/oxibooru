@@ -52,8 +52,6 @@ impl IntegerIdentifiable for Post {
     }
 }
 
-pub type NewPostRelation = PostRelation;
-
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post, foreign_key = parent_id))]
 #[diesel(table_name = post_relation)]
@@ -66,8 +64,6 @@ pub struct PostRelation {
 
 diesel::joinable!(post_relation -> post (parent_id));
 
-pub type NewPostTag = PostTag;
-
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(Tag))]
 #[diesel(table_name = post_tag)]
@@ -77,8 +73,6 @@ pub struct PostTag {
     pub post_id: i32,
     pub tag_id: i32,
 }
-
-pub type NewPostFavorite = PostFavorite;
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]
@@ -128,8 +122,6 @@ pub struct PostNote {
     pub polygon: Vec<u8>,
     pub text: String,
 }
-
-pub type NewPostScore = PostScore;
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]
