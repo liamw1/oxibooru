@@ -1,4 +1,4 @@
-use crate::model::enums::{DatabaseScore, MimeType, PostSafety, PostType};
+use crate::model::enums::{MimeType, PostSafety, PostType, Score};
 use crate::model::tag::Tag;
 use crate::model::user::User;
 use crate::model::IntegerIdentifiable;
@@ -139,7 +139,7 @@ pub struct PostNote {
 pub struct NewPostScore {
     pub post_id: i32,
     pub user_id: i32,
-    pub score: DatabaseScore,
+    pub score: Score,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
@@ -150,7 +150,7 @@ pub struct NewPostScore {
 pub struct PostScore {
     pub post_id: i32,
     pub user_id: i32,
-    pub score: DatabaseScore,
+    pub score: Score,
     pub time: DateTime,
 }
 

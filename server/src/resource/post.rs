@@ -1,6 +1,6 @@
 use crate::auth::content;
 use crate::model::comment::Comment;
-use crate::model::enums::{AvatarStyle, DatabaseScore, MimeType, PostSafety, PostType, Score};
+use crate::model::enums::{AvatarStyle, MimeType, PostSafety, PostType, Rating, Score};
 use crate::model::pool::{Pool, PoolPost};
 use crate::model::post::{Post, PostFavorite, PostFeature, PostNote, PostRelation, PostScore, PostTag};
 use crate::resource;
@@ -110,7 +110,7 @@ pub struct PostInfo {
     pools: Option<Vec<MicroPool>>,
     notes: Option<Vec<PostNoteInfo>>,
     score: Option<i64>,
-    own_score: Option<Score>,
+    own_score: Option<Rating>,
     own_favorite: Option<bool>,
     tag_count: Option<i64>,
     comment_count: Option<i64>,
@@ -407,7 +407,7 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
         .load(conn)?
         .into_iter()
         .collect();
-    let client_scores: HashMap<i32, DatabaseScore> = client
+    let client_scores: HashMap<i32, Score> = client
         .map(|user_id| {
             comment_score::table
                 .select((comment_score::comment_id, comment_score::score))
@@ -437,7 +437,7 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
                         creation_time: comment.creation_time,
                         last_edit_time: comment.last_edit_time,
                         score: scores.get(&id).copied().flatten().unwrap_or(0),
-                        own_score: client_scores.get(&id).copied().map(Score::from).unwrap_or_default(),
+                        own_score: client_scores.get(&id).copied().map(Rating::from).unwrap_or_default(),
                     }
                 })
                 .collect()
@@ -534,7 +534,7 @@ fn get_scores(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> 
         })
 }
 
-fn get_client_scores(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) -> QueryResult<Vec<Score>> {
+fn get_client_scores(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) -> QueryResult<Vec<Rating>> {
     if let Some(client_id) = client {
         PostScore::belonging_to(posts)
             .filter(post_score::user_id.eq(client_id))
@@ -542,11 +542,11 @@ fn get_client_scores(conn: &mut PgConnection, client: Option<i32>, posts: &[Post
             .map(|client_scores| {
                 resource::order_as(client_scores, posts, |score| score.post_id)
                     .into_iter()
-                    .map(|client_score| client_score.map(|score| Score::from(score.score)).unwrap_or_default())
+                    .map(|client_score| client_score.map(|score| Rating::from(score.score)).unwrap_or_default())
                     .collect()
             })
     } else {
-        Ok(vec![Score::default(); posts.len()])
+        Ok(vec![Rating::default(); posts.len()])
     }
 }
 

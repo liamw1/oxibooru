@@ -15,8 +15,8 @@ pub struct ParseExtensionError {
 }
 
 #[derive(Debug, Error)]
-#[error("Cannot convert None to DatabaseScore")]
-pub struct FromScoreError;
+#[error("Cannot convert None to Score")]
+pub struct FromRatingError;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[diesel(sql_type = SmallInt)]
@@ -265,23 +265,23 @@ where
 
 #[derive(Debug, Copy, Clone, Serialize_repr, Deserialize_repr)]
 #[repr(i16)]
-pub enum Score {
+pub enum Rating {
     Dislike = -1,
     None = 0,
     Like = 1,
 }
 
-impl Default for Score {
+impl Default for Rating {
     fn default() -> Self {
         Self::None
     }
 }
 
-impl From<DatabaseScore> for Score {
-    fn from(value: DatabaseScore) -> Self {
+impl From<Score> for Rating {
+    fn from(value: Score) -> Self {
         match value {
-            DatabaseScore::Dislike => Self::Dislike,
-            DatabaseScore::Like => Self::Like,
+            Score::Dislike => Self::Dislike,
+            Score::Like => Self::Like,
         }
     }
 }
@@ -289,23 +289,23 @@ impl From<DatabaseScore> for Score {
 #[derive(Debug, Copy, Clone, FromRepr, AsExpression, FromSqlRow)]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
-pub enum DatabaseScore {
+pub enum Score {
     Dislike = -1,
     Like = 1,
 }
 
-impl TryFrom<Score> for DatabaseScore {
-    type Error = FromScoreError;
-    fn try_from(value: Score) -> Result<Self, Self::Error> {
+impl TryFrom<Rating> for Score {
+    type Error = FromRatingError;
+    fn try_from(value: Rating) -> Result<Self, Self::Error> {
         match value {
-            Score::None => Err(FromScoreError),
-            Score::Dislike => Ok(Self::Dislike),
-            Score::Like => Ok(Self::Like),
+            Rating::None => Err(FromRatingError),
+            Rating::Dislike => Ok(Self::Dislike),
+            Rating::Like => Ok(Self::Like),
         }
     }
 }
 
-impl ToSql<SmallInt, Pg> for DatabaseScore
+impl ToSql<SmallInt, Pg> for Score
 where
     i16: ToSql<SmallInt, Pg>,
 {
@@ -315,13 +315,13 @@ where
     }
 }
 
-impl FromSql<SmallInt, Pg> for DatabaseScore
+impl FromSql<SmallInt, Pg> for Score
 where
     i16: FromSql<SmallInt, Pg>,
 {
     fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
-        DatabaseScore::from_repr(database_value).ok_or(DeserializeDatabaseScoreError.into())
+        Score::from_repr(database_value).ok_or(DeserializeScoreError.into())
     }
 }
 
@@ -347,7 +347,7 @@ struct DeserializeUserPrivilegeError;
 
 #[derive(Debug, Error)]
 #[error("Failed to deserialize score")]
-struct DeserializeDatabaseScoreError;
+struct DeserializeScoreError;
 
 #[cfg(test)]
 mod test {

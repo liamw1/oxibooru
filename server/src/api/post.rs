@@ -1,7 +1,9 @@
-use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
+use crate::api::{
+    ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, RatingRequest, ResourceQuery,
+};
 use crate::auth::content;
 use crate::image::signature;
-use crate::model::enums::{DatabaseScore, MimeType, PostSafety, PostType, Score};
+use crate::model::enums::{MimeType, PostSafety, PostType, Score};
 use crate::model::post::{NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, PostSignature};
 use crate::resource::post::{FieldTable, PostInfo};
 use crate::schema::{comment, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag};
@@ -112,8 +114,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(unfavorite_post)
 }
 
-type PagedPostInfo = PagedResponse<PostInfo>;
-
 const MAX_POSTS_PER_PAGE: i64 = 50;
 const POST_SIMILARITY_THRESHOLD: f64 = 0.4;
 
@@ -125,7 +125,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPostInfo> {
+fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PostInfo>> {
     let _timer = crate::util::Timer::new("list_posts");
 
     let client = auth?;
@@ -144,7 +144,7 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPostInfo> {
 
         let total = count_query.count().first(conn)?;
         let selected_posts: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
-        Ok(PagedPostInfo {
+        Ok(PagedResponse {
             query: query.query.query,
             offset,
             limit,
@@ -550,13 +550,7 @@ fn favorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiRes
     })
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct PostScoreInfo {
-    score: Score,
-}
-
-fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, score: PostScoreInfo) -> ApiResult<PostInfo> {
+fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, rating: RatingRequest) -> ApiResult<PostInfo> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_score)?;
 
@@ -566,7 +560,7 @@ fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, score: PostSc
     crate::establish_connection()?.transaction(|conn| {
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
-        if let Ok(score) = DatabaseScore::try_from(score.score) {
+        if let Ok(score) = Score::try_from(*rating) {
             let new_post_score = NewPostScore {
                 post_id,
                 user_id,

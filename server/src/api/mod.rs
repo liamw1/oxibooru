@@ -12,7 +12,7 @@ pub mod user_token;
 use crate::auth::header::{self, AuthenticationError};
 use crate::config::{self, RegexType};
 use crate::error::ErrorKind;
-use crate::model::enums::UserRank;
+use crate::model::enums::{Rating, UserRank};
 use crate::model::user::User;
 use crate::util::DateTime;
 use serde::{Deserialize, Serialize};
@@ -208,6 +208,19 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
 }
 
 type AuthResult = Result<Option<User>, AuthenticationError>;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RatingRequest {
+    score: Rating,
+}
+
+impl Deref for RatingRequest {
+    type Target = Rating;
+    fn deref(&self) -> &Self::Target {
+        &self.score
+    }
+}
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

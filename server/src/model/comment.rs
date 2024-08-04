@@ -1,4 +1,4 @@
-use crate::model::enums::DatabaseScore;
+use crate::model::enums::Score;
 use crate::model::post::Post;
 use crate::model::user::User;
 use crate::schema::{comment, comment_score};
@@ -34,7 +34,7 @@ pub struct Comment {
 pub struct NewCommentScore {
     pub comment_id: i32,
     pub user_id: i32,
-    pub score: DatabaseScore,
+    pub score: Score,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
@@ -45,6 +45,6 @@ pub struct NewCommentScore {
 pub struct CommentScore {
     pub comment_id: i32,
     pub user_id: i32,
-    pub score: DatabaseScore,
+    pub score: Score,
     pub time: DateTime,
 }

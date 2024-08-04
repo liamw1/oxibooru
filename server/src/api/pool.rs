@@ -58,8 +58,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete_pool)
 }
 
-type PagedPoolInfo = PagedResponse<PoolInfo>;
-
 const MAX_POOLS_PER_PAGE: i64 = 50;
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
@@ -70,7 +68,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPoolInfo> {
+fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PoolInfo>> {
     let _timer = crate::util::Timer::new("list_pools");
 
     let client = auth?;
@@ -88,7 +86,7 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedPoolInfo> {
 
         let total = count_query.count().first(conn)?;
         let selected_tags: Vec<i32> = search::pool::get_ordered_ids(conn, sql_query, &search_criteria)?;
-        Ok(PagedPoolInfo {
+        Ok(PagedResponse {
             query: query.query.query,
             offset,
             limit,

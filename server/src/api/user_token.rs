@@ -2,7 +2,7 @@ use crate::api::{ApiResult, AuthResult};
 use crate::model::user::{NewUserToken, User, UserToken};
 use crate::resource::user::MicroUser;
 use crate::resource::user_token::UserTokenInfo;
-use crate::schema::user_token;
+use crate::schema::{user, user_token};
 use crate::util::DateTime;
 use crate::{api, config};
 use diesel::prelude::*;
@@ -73,19 +73,20 @@ fn delete_user_token(username: String, token: Uuid, auth: AuthResult) -> ApiResu
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
     crate::establish_connection()?.transaction(|conn| {
-        let user = User::from_name(conn, &username)?;
+        let user_token_owner: i32 = user::table
+            .inner_join(user_token::table)
+            .select(user_token::user_id)
+            .filter(user::name.eq(username))
+            .filter(user_token::token.eq(token))
+            .first(conn)?;
 
-        let required_rank = match client_id == Some(user.id) {
+        let required_rank = match client_id == Some(user_token_owner) {
             true => config::privileges().user_token_delete_self,
             false => config::privileges().user_token_delete_any,
         };
         api::verify_privilege(client.as_ref(), required_rank)?;
 
-        let user_id: i32 = UserToken::belonging_to(&user)
-            .select(user_token::user_id)
-            .filter(user_token::token.eq(token))
-            .first(conn)?;
-        diesel::delete(user_token::table.find(user_id)).execute(conn)?;
+        diesel::delete(user_token::table.find(user_token_owner)).execute(conn)?;
         Ok(())
     })
 }

@@ -36,8 +36,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     list_users.or(get_user).or(create_user)
 }
 
-type PagedUserInfo = PagedResponse<UserInfo>;
-
 const MAX_USERS_PER_PAGE: i64 = 50;
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
@@ -46,6 +44,32 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .transpose()
         .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
         .map_err(Box::from)
+}
+
+fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().user_list)?;
+
+    let offset = query.offset.unwrap_or(0);
+    let limit = std::cmp::min(query.limit.get(), MAX_USERS_PER_PAGE);
+    let fields = create_field_table(query.fields())?;
+
+    crate::establish_connection()?.transaction(|conn| {
+        let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
+        search_criteria.add_offset_and_limit(offset, limit);
+        let count_query = search::user::build_query(&search_criteria)?;
+        let sql_query = search::user::build_query(&search_criteria)?;
+
+        let total = count_query.count().first(conn)?;
+        let selected_users: Vec<i32> = search::user::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        Ok(PagedResponse {
+            query: query.query.query,
+            offset,
+            limit,
+            total,
+            results: UserInfo::new_batch_from_ids(conn, selected_users, &fields, Visibility::PublicOnly)?,
+        })
+    })
 }
 
 fn get_user(username: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<UserInfo> {
@@ -108,31 +132,5 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
             .returning(User::as_returning())
             .get_result(conn)?;
         UserInfo::new(conn, user, &fields, Visibility::Full).map_err(api::Error::from)
-    })
-}
-
-fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedUserInfo> {
-    let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().user_list)?;
-
-    let offset = query.offset.unwrap_or(0);
-    let limit = std::cmp::min(query.limit.get(), MAX_USERS_PER_PAGE);
-    let fields = create_field_table(query.fields())?;
-
-    crate::establish_connection()?.transaction(|conn| {
-        let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
-        search_criteria.add_offset_and_limit(offset, limit);
-        let count_query = search::user::build_query(&search_criteria)?;
-        let sql_query = search::user::build_query(&search_criteria)?;
-
-        let total = count_query.count().first(conn)?;
-        let selected_users: Vec<i32> = search::user::get_ordered_ids(conn, sql_query, &search_criteria)?;
-        Ok(PagedUserInfo {
-            query: query.query.query,
-            offset,
-            limit,
-            total,
-            results: UserInfo::new_batch_from_ids(conn, selected_users, &fields, Visibility::PublicOnly)?,
-        })
     })
 }

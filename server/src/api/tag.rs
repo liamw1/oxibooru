@@ -65,8 +65,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete_tag)
 }
 
-type PagedTagInfo = PagedResponse<TagInfo>;
-
 const MAX_TAGS_PER_PAGE: i64 = 50;
 const MAX_TAG_SIBLINGS: i64 = 50;
 
@@ -78,7 +76,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedTagInfo> {
+fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>> {
     let _timer = crate::util::Timer::new("list_tags");
 
     let client = auth?;
@@ -96,7 +94,7 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedTagInfo> {
 
         let total = count_query.count().first(conn)?;
         let selected_tags: Vec<i32> = search::tag::get_ordered_ids(conn, sql_query, &search_criteria)?;
-        Ok(PagedTagInfo {
+        Ok(PagedResponse {
             query: query.query.query,
             offset,
             limit,
