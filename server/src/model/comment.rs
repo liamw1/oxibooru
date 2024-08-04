@@ -1,3 +1,4 @@
+use crate::model::enums::DatabaseScore;
 use crate::model::post::Post;
 use crate::model::user::User;
 use crate::schema::{comment, comment_score};
@@ -7,6 +8,7 @@ use diesel::prelude::*;
 
 #[derive(Insertable)]
 #[diesel(table_name = comment)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewComment<'a> {
     pub user_id: i32,
     pub post_id: i32,
@@ -26,7 +28,16 @@ pub struct Comment {
     pub last_edit_time: DateTime,
 }
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Insertable)]
+#[diesel(table_name = comment_score)]
+#[diesel(check_for_backend(Pg))]
+pub struct NewCommentScore {
+    pub comment_id: i32,
+    pub user_id: i32,
+    pub score: DatabaseScore,
+}
+
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Comment), belongs_to(User))]
 #[diesel(table_name = comment_score)]
 #[diesel(primary_key(comment_id, user_id))]
@@ -34,6 +45,6 @@ pub struct Comment {
 pub struct CommentScore {
     pub comment_id: i32,
     pub user_id: i32,
-    pub score: i32,
+    pub score: DatabaseScore,
     pub time: DateTime,
 }

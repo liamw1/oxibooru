@@ -7,6 +7,7 @@ use std::option::Option;
 
 #[derive(Insertable)]
 #[diesel(table_name = snapshot)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewSnapshot<'a> {
     pub user_id: i32,
     pub resource_id: i32,

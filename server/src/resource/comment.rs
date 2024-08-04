@@ -1,5 +1,5 @@
 use crate::model::comment::Comment;
-use crate::model::enums::AvatarStyle;
+use crate::model::enums::{AvatarStyle, DatabaseScore, Score};
 use crate::model::IntegerIdentifiable;
 use crate::resource;
 use crate::resource::user::MicroUser;
@@ -23,7 +23,7 @@ pub struct CommentInfo {
     pub last_edit_time: DateTime,
     pub user: MicroUser,
     pub score: i64,
-    pub own_score: Option<i32>,
+    pub own_score: Score,
 }
 
 impl IntegerIdentifiable for CommentInfo {
@@ -56,7 +56,7 @@ impl CommentInfo {
             .load(conn)?
             .into_iter()
             .collect();
-        let client_scores: HashMap<i32, i32> = client
+        let client_scores: HashMap<i32, DatabaseScore> = client
             .map(|user_id| {
                 comment_score::table
                     .select((comment_score::comment_id, comment_score::score))
@@ -80,7 +80,11 @@ impl CommentInfo {
                 last_edit_time: comment.last_edit_time,
                 user: MicroUser::new(author, avatar_style),
                 score: scores.get(&comment.id).copied().flatten().unwrap_or(0),
-                own_score: client.map(|_| client_scores.get(&comment.id).copied().unwrap_or(0)),
+                own_score: client_scores
+                    .get(&comment.id)
+                    .copied()
+                    .map(Score::from)
+                    .unwrap_or_default(),
             })
             .collect();
         Ok(resource::order_by(comment_info, &comment_ids))

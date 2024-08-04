@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 #[derive(Insertable)]
 #[diesel(table_name = user)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewUser<'a> {
     pub name: &'a str,
     pub password_hash: &'a str,
@@ -56,6 +57,7 @@ impl IntegerIdentifiable for User {
 
 #[derive(Insertable)]
 #[diesel(table_name = user_token)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewUserToken<'a> {
     pub user_id: i32,
     pub token: Uuid,

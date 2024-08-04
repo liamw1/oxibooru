@@ -238,6 +238,7 @@ impl ErrorKind for crate::api::Error {
             Self::IoError(_) => "IOError",
             Self::NoNamesGiven => "NoNamesGiven",
             Self::NotAnInteger(err) => err.kind().kind(),
+            Self::NotLoggedIn => "NotLoggedIn",
             Self::ResourceModified => "ResourceModified",
             Self::SearchError(err) => err.kind(),
             Self::SelfMerge => "SelfMerge",

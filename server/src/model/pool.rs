@@ -7,6 +7,7 @@ use diesel::prelude::*;
 
 #[derive(Insertable)]
 #[diesel(table_name = pool_category)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewPoolCategory<'a> {
     pub name: &'a str,
     pub color: &'a str,
@@ -30,6 +31,7 @@ impl PoolCategory {
 
 #[derive(Insertable)]
 #[diesel(table_name = pool)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewPool {
     pub category_id: i32,
     pub description: String,
@@ -55,6 +57,7 @@ impl IntegerIdentifiable for Pool {
 
 #[derive(Insertable)]
 #[diesel(table_name = pool_name)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewPoolName<'a> {
     pub pool_id: i32,
     pub order: i32,

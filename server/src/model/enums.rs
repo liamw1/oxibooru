@@ -4,6 +4,7 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::SmallInt;
 use diesel::{AsExpression, FromSqlRow};
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use strum::{EnumIter, EnumString, FromRepr, IntoEnumIterator};
 use thiserror::Error;
 
@@ -12,6 +13,10 @@ use thiserror::Error;
 pub struct ParseExtensionError {
     extenstion: String,
 }
+
+#[derive(Debug, Error)]
+#[error("Cannot convert None to DatabaseScore")]
+pub struct FromScoreError;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[diesel(sql_type = SmallInt)]
@@ -258,6 +263,68 @@ where
     }
 }
 
+#[derive(Debug, Copy, Clone, Serialize_repr, Deserialize_repr)]
+#[repr(i16)]
+pub enum Score {
+    Dislike = -1,
+    None = 0,
+    Like = 1,
+}
+
+impl Default for Score {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+impl From<DatabaseScore> for Score {
+    fn from(value: DatabaseScore) -> Self {
+        match value {
+            DatabaseScore::Dislike => Self::Dislike,
+            DatabaseScore::Like => Self::Like,
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, FromRepr, AsExpression, FromSqlRow)]
+#[diesel(sql_type = SmallInt)]
+#[repr(i16)]
+pub enum DatabaseScore {
+    Dislike = -1,
+    Like = 1,
+}
+
+impl TryFrom<Score> for DatabaseScore {
+    type Error = FromScoreError;
+    fn try_from(value: Score) -> Result<Self, Self::Error> {
+        match value {
+            Score::None => Err(FromScoreError),
+            Score::Dislike => Ok(Self::Dislike),
+            Score::Like => Ok(Self::Like),
+        }
+    }
+}
+
+impl ToSql<SmallInt, Pg> for DatabaseScore
+where
+    i16: ToSql<SmallInt, Pg>,
+{
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        let value = *self as i16;
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
+    }
+}
+
+impl FromSql<SmallInt, Pg> for DatabaseScore
+where
+    i16: FromSql<SmallInt, Pg>,
+{
+    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
+        let database_value = i16::from_sql(bytes)?;
+        DatabaseScore::from_repr(database_value).ok_or(DeserializeDatabaseScoreError.into())
+    }
+}
+
 #[derive(Debug, Error)]
 #[error("Failed to deserialize avatar style")]
 struct DeserializeAvatarStyleError;
@@ -277,6 +344,10 @@ struct DeserializePostSafetyError;
 #[derive(Debug, Error)]
 #[error("Failed to deserialize user privilege")]
 struct DeserializeUserPrivilegeError;
+
+#[derive(Debug, Error)]
+#[error("Failed to deserialize score")]
+struct DeserializeDatabaseScoreError;
 
 #[cfg(test)]
 mod test {

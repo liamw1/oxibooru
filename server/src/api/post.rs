@@ -1,8 +1,8 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::content;
 use crate::image::signature;
-use crate::model::enums::{MimeType, PostSafety, PostType};
-use crate::model::post::{NewPost, NewPostSignature, PostSignature};
+use crate::model::enums::{DatabaseScore, MimeType, PostSafety, PostType, Score};
+use crate::model::post::{NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, PostSignature};
 use crate::resource::post::{FieldTable, PostInfo};
 use crate::schema::{comment, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag};
 use crate::util::DateTime;
@@ -30,6 +30,19 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(api::resource_query())
         .map(get_post_neighbors)
         .map(api::Reply::from);
+    let get_featured_post = warp::get()
+        .and(warp::path!("featured-post"))
+        .and(api::auth())
+        .and(api::resource_query())
+        .map(get_featured_post)
+        .map(api::Reply::from);
+    let feature_post = warp::post()
+        .and(warp::path!("featured-post"))
+        .and(api::auth())
+        .and(api::resource_query())
+        .and(warp::body::json())
+        .map(feature_post)
+        .map(api::Reply::from);
     let reverse_search = warp::post()
         .and(warp::path!("posts" / "reverse-search"))
         .and(api::auth())
@@ -51,6 +64,19 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .map(merge_posts)
         .map(api::Reply::from);
+    let favorite_post = warp::post()
+        .and(warp::path!("post" / i32 / "favorite"))
+        .and(api::auth())
+        .and(api::resource_query())
+        .map(favorite_post)
+        .map(api::Reply::from);
+    let rate_post = warp::put()
+        .and(warp::path!("post" / i32 / "score"))
+        .and(api::auth())
+        .and(api::resource_query())
+        .and(warp::body::json())
+        .map(rate_post)
+        .map(api::Reply::from);
     let update_post = warp::put()
         .and(warp::path!("post" / i32))
         .and(api::auth())
@@ -64,15 +90,26 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .map(delete_post)
         .map(api::Reply::from);
+    let unfavorite_post = warp::delete()
+        .and(warp::path!("post" / i32 / "favorite"))
+        .and(api::auth())
+        .and(api::resource_query())
+        .map(unfavorite_post)
+        .map(api::Reply::from);
 
     list_posts
         .or(get_post)
         .or(get_post_neighbors)
+        .or(get_featured_post)
+        .or(feature_post)
         .or(reverse_search)
         .or(create_post)
         .or(merge_posts)
+        .or(favorite_post)
+        .or(rate_post)
         .or(update_post)
         .or(delete_post)
+        .or(unfavorite_post)
 }
 
 type PagedPostInfo = PagedResponse<PostInfo>;
@@ -160,6 +197,51 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
             .transpose()?;
 
         Ok(PostNeighbors { prev, next })
+    })
+}
+
+fn get_featured_post(auth: AuthResult, query: ResourceQuery) -> ApiResult<Option<PostInfo>> {
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_view_featured)?;
+
+    let client_id = client.map(|user| user.id);
+    let fields = create_field_table(query.fields())?;
+
+    crate::establish_connection()?.transaction(|conn| {
+        let featured_post_id: Option<i32> = post_feature::table
+            .select(post_feature::post_id)
+            .order_by(post_feature::time.desc())
+            .first(conn)
+            .optional()?;
+
+        featured_post_id
+            .map(|post_id| PostInfo::new_from_id(conn, client_id, post_id, &fields))
+            .transpose()
+            .map_err(api::Error::from)
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PostFeature {
+    id: i32,
+}
+
+fn feature_post(auth: AuthResult, query: ResourceQuery, post_feature: PostFeature) -> ApiResult<PostInfo> {
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_feature)?;
+
+    let fields = create_field_table(query.fields())?;
+    let post_id = post_feature.id;
+    let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
+    let new_post_feature = NewPostFeature { post_id, user_id };
+
+    crate::establish_connection()?.transaction(|conn| {
+        diesel::insert_into(post_feature::table)
+            .values(new_post_feature)
+            .execute(conn)?;
+
+        PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from)
     })
 }
 
@@ -450,6 +532,55 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     Ok(merged_post)
 }
 
+fn favorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostInfo> {
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_favorite)?;
+
+    let fields = create_field_table(query.fields())?;
+    let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
+    let new_post_favorite = NewPostFavorite { post_id, user_id };
+
+    crate::establish_connection()?.transaction(|conn| {
+        diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
+        diesel::insert_into(post_favorite::table)
+            .values(new_post_favorite)
+            .execute(conn)?;
+
+        PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from)
+    })
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PostScoreInfo {
+    score: Score,
+}
+
+fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, score: PostScoreInfo) -> ApiResult<PostInfo> {
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_score)?;
+
+    let fields = create_field_table(query.fields())?;
+    let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
+
+    crate::establish_connection()?.transaction(|conn| {
+        diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
+
+        if let Ok(score) = DatabaseScore::try_from(score.score) {
+            let new_post_score = NewPostScore {
+                post_id,
+                user_id,
+                score,
+            };
+            diesel::insert_into(post_score::table)
+                .values(new_post_score)
+                .execute(conn)?;
+        }
+
+        PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from)
+    })
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PostUpdateInfo {
@@ -525,4 +656,17 @@ fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) ->
         std::fs::remove_file(content::post_content_path(post_id, mime_type))?;
     }
     Ok(())
+}
+
+fn unfavorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostInfo> {
+    let client = auth?;
+    api::verify_privilege(client.as_ref(), config::privileges().post_favorite)?;
+
+    let fields = create_field_table(query.fields())?;
+    let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
+
+    crate::establish_connection()?.transaction(|conn| {
+        diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
+        PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from)
+    })
 }

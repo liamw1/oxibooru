@@ -6,6 +6,7 @@ use diesel::prelude::*;
 
 #[derive(Insertable)]
 #[diesel(table_name = tag_category)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewTagCategory<'a> {
     pub order: i32,
     pub name: &'a str,
@@ -31,6 +32,7 @@ impl TagCategory {
 
 #[derive(Clone, Copy, Insertable)]
 #[diesel(table_name = tag)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewTag {
     pub category_id: i32,
 }
@@ -61,6 +63,7 @@ impl IntegerIdentifiable for Tag {
 
 #[derive(Insertable)]
 #[diesel(table_name = tag_name)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewTagName<'a> {
     pub tag_id: i32,
     pub order: i32,

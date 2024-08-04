@@ -82,6 +82,8 @@ pub enum Error {
     #[error("Resource needs at least one name")]
     NoNamesGiven,
     NotAnInteger(#[from] std::num::ParseIntError),
+    #[error("This action requires you to be logged in")]
+    NotLoggedIn,
     #[error("Someone else modified this in the meantime. Please try again.")]
     ResourceModified,
     SearchError(#[from] crate::search::Error),
@@ -122,6 +124,7 @@ impl Error {
             Self::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NoNamesGiven => StatusCode::BAD_REQUEST,
             Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
+            Self::NotLoggedIn => StatusCode::FORBIDDEN,
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::SearchError(_) => StatusCode::BAD_REQUEST,
             Self::SelfMerge => StatusCode::BAD_REQUEST,
@@ -149,6 +152,7 @@ impl Error {
             Self::IoError(_) => "IO Error",
             Self::NoNamesGiven => "No Names Given",
             Self::NotAnInteger(_) => "Parse Int Error",
+            Self::NotLoggedIn => "Not Logged In",
             Self::ResourceModified => "Resource Modified",
             Self::SearchError(_) => "Search Error",
             Self::SelfMerge => "Self Merge",

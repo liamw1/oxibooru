@@ -1,4 +1,4 @@
-use crate::model::enums::{MimeType, PostSafety, PostType};
+use crate::model::enums::{DatabaseScore, MimeType, PostSafety, PostType};
 use crate::model::tag::Tag;
 use crate::model::user::User;
 use crate::model::IntegerIdentifiable;
@@ -13,6 +13,7 @@ use std::option::Option;
 
 #[derive(Insertable)]
 #[diesel(table_name = post)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewPost<'a> {
     pub user_id: Option<i32>,
     pub file_size: i64,
@@ -74,7 +75,15 @@ pub struct PostTag {
     pub tag_id: i32,
 }
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Insertable)]
+#[diesel(table_name = post_favorite)]
+#[diesel(check_for_backend(Pg))]
+pub struct NewPostFavorite {
+    pub post_id: i32,
+    pub user_id: i32,
+}
+
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_favorite)]
 #[diesel(primary_key(post_id, user_id))]
@@ -87,10 +96,10 @@ pub struct PostFavorite {
 
 #[derive(Insertable)]
 #[diesel(table_name = post_feature)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewPostFeature {
     pub post_id: i32,
     pub user_id: i32,
-    pub time: DateTime,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
@@ -106,6 +115,7 @@ pub struct PostFeature {
 
 #[derive(Insertable)]
 #[diesel(table_name = post_note)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewPostNote<'a> {
     pub post_id: i32,
     pub polygon: &'a [u8],
@@ -123,7 +133,16 @@ pub struct PostNote {
     pub text: String,
 }
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Insertable)]
+#[diesel(table_name = post_score)]
+#[diesel(check_for_backend(Pg))]
+pub struct NewPostScore {
+    pub post_id: i32,
+    pub user_id: i32,
+    pub score: DatabaseScore,
+}
+
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_score)]
 #[diesel(primary_key(post_id, user_id))]
@@ -131,12 +150,13 @@ pub struct PostNote {
 pub struct PostScore {
     pub post_id: i32,
     pub user_id: i32,
-    pub score: i32,
+    pub score: DatabaseScore,
     pub time: DateTime,
 }
 
 #[derive(Insertable)]
 #[diesel(table_name = post_signature)]
+#[diesel(check_for_backend(Pg))]
 pub struct NewPostSignature<'a> {
     pub post_id: i32,
     pub signature: &'a [u8],

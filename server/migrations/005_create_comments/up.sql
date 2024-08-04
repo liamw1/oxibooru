@@ -11,7 +11,7 @@ SELECT diesel_manage_last_edit_time('comment');
 CREATE TABLE "comment_score" (
     "comment_id" INTEGER NOT NULL REFERENCES "comment" ON DELETE CASCADE,
     "user_id" INTEGER NOT NULL REFERENCES "user" ON DELETE CASCADE,
-    "score" INTEGER NOT NULL,
-    "time" TIMESTAMP WITH TIME ZONE NOT NULL,
+    "score" SMALLINT NOT NULL,
+    "time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY ("comment_id", "user_id")
 );
