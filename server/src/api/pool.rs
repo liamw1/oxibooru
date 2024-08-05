@@ -192,7 +192,7 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct PoolUpdateInfo {
+struct PoolUpdate {
     version: DateTime,
     category: Option<String>,
     description: Option<String>,
@@ -200,7 +200,7 @@ struct PoolUpdateInfo {
     posts: Option<Vec<i32>>,
 }
 
-fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: PoolUpdateInfo) -> ApiResult<PoolInfo> {
+fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: PoolUpdate) -> ApiResult<PoolInfo> {
     let client = auth?;
     let fields = create_field_table(query.fields())?;
 

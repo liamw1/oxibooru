@@ -274,7 +274,7 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct TagUpdateInfo {
+struct TagUpdate {
     version: DateTime,
     category: Option<String>,
     description: Option<String>,
@@ -283,7 +283,7 @@ struct TagUpdateInfo {
     suggestions: Option<Vec<String>>,
 }
 
-fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagUpdateInfo) -> ApiResult<TagInfo> {
+fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagUpdate) -> ApiResult<TagInfo> {
     let _timer = crate::util::Timer::new("update_tag");
 
     let client = auth?;

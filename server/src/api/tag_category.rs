@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, DeleteRequest};
+use crate::api::{ApiResult, AuthResult, DeleteRequest, UnpagedResponse};
 use crate::config::RegexType;
 use crate::model::tag::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
@@ -6,7 +6,7 @@ use crate::schema::{tag, tag_category};
 use crate::util::DateTime;
 use crate::{api, config};
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -52,18 +52,13 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete_tag_category)
 }
 
-#[derive(Serialize)]
-struct TagCategoryList {
-    results: Vec<TagCategoryInfo>,
-}
-
-fn list_tag_categories(auth: AuthResult) -> ApiResult<TagCategoryList> {
+fn list_tag_categories(auth: AuthResult) -> ApiResult<UnpagedResponse<TagCategoryInfo>> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_list)?;
 
     crate::establish_connection()?.transaction(|conn| {
         TagCategoryInfo::all(conn)
-            .map(|results| TagCategoryList { results })
+            .map(|results| UnpagedResponse { results })
             .map_err(api::Error::from)
     })
 }
@@ -109,14 +104,14 @@ fn create_tag_category(auth: AuthResult, category_info: NewTagCategoryInfo) -> A
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct TagCategoryUpdateInfo {
+struct TagCategoryUpdate {
     version: DateTime,
     order: Option<String>, // TODO: Client sends order out as string so we convert on server, would be better to do this on client
     name: Option<String>,
     color: Option<String>,
 }
 
-fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdateInfo) -> ApiResult<TagCategoryInfo> {
+fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdate) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     api::verify_matches_regex(&name, RegexType::TagCategory)?;

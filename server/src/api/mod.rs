@@ -279,7 +279,12 @@ impl PagedQuery {
 }
 
 #[derive(Serialize)]
-struct PagedResponse<T: Serialize> {
+struct UnpagedResponse<T> {
+    results: Vec<T>,
+}
+
+#[derive(Serialize)]
+struct PagedResponse<T> {
     query: Option<String>,
     offset: i64,
     limit: i64,

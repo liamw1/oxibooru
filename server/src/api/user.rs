@@ -157,7 +157,7 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct UserUpdateInfo {
+struct UserUpdate {
     version: DateTime,
     name: Option<String>,
     password: Option<String>,
@@ -166,12 +166,7 @@ struct UserUpdateInfo {
     avatar_style: Option<AvatarStyle>,
 }
 
-fn update_user(
-    username: String,
-    auth: AuthResult,
-    query: ResourceQuery,
-    update: UserUpdateInfo,
-) -> ApiResult<UserInfo> {
+fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
     let fields = create_field_table(query.fields())?;

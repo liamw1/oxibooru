@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, DeleteRequest};
+use crate::api::{ApiResult, AuthResult, DeleteRequest, UnpagedResponse};
 use crate::config::RegexType;
 use crate::model::pool::{NewPoolCategory, PoolCategory};
 use crate::resource::pool_category::PoolCategoryInfo;
@@ -6,7 +6,7 @@ use crate::schema::{pool, pool_category};
 use crate::util::DateTime;
 use crate::{api, config};
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -52,18 +52,13 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete_pool_category)
 }
 
-#[derive(Serialize)]
-struct PoolCategoryList {
-    results: Vec<PoolCategoryInfo>,
-}
-
-fn list_pool_categories(auth: AuthResult) -> ApiResult<PoolCategoryList> {
+fn list_pool_categories(auth: AuthResult) -> ApiResult<UnpagedResponse<PoolCategoryInfo>> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_list)?;
 
     crate::establish_connection()?.transaction(|conn| {
         PoolCategoryInfo::all(conn)
-            .map(|results| PoolCategoryList { results })
+            .map(|results| UnpagedResponse { results })
             .map_err(api::Error::from)
     })
 }
@@ -107,13 +102,13 @@ fn create_pool_category(auth: AuthResult, category_info: NewPoolCategoryInfo) ->
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct PoolCategoryUpdateInfo {
+struct PoolCategoryUpdate {
     version: DateTime,
     name: Option<String>,
     color: Option<String>,
 }
 
-fn update_pool_category(name: String, auth: AuthResult, update: PoolCategoryUpdateInfo) -> ApiResult<PoolCategoryInfo> {
+fn update_pool_category(name: String, auth: AuthResult, update: PoolCategoryUpdate) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     api::verify_matches_regex(&name, RegexType::PoolCategory)?;

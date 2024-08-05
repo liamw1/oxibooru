@@ -577,7 +577,7 @@ fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, rating: Ratin
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct PostUpdateInfo {
+struct PostUpdate {
     version: DateTime,
     safety: Option<PostSafety>,
     source: Option<String>,
@@ -587,7 +587,7 @@ struct PostUpdateInfo {
     // flags: TODO
 }
 
-fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: PostUpdateInfo) -> ApiResult<PostInfo> {
+fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
     let _timer = crate::util::Timer::new("update_post");
 
     let client = auth?;

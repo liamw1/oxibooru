@@ -123,12 +123,12 @@ fn create_comment(auth: AuthResult, comment_info: NewCommentInfo) -> ApiResult<C
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct CommentUpdateInfo {
+struct CommentUpdate {
     version: DateTime,
     text: String,
 }
 
-fn update_comment(comment_id: i32, auth: AuthResult, update: CommentUpdateInfo) -> ApiResult<CommentInfo> {
+fn update_comment(comment_id: i32, auth: AuthResult, update: CommentUpdate) -> ApiResult<CommentInfo> {
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
 
