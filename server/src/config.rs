@@ -182,6 +182,10 @@ pub fn regex(regex_type: RegexType) -> &'static Regex {
     }
 }
 
+pub fn default_rank() -> UserRank {
+    CONFIG.public_info.default_user_rank
+}
+
 static CONFIG: LazyLock<Config> =
     LazyLock::new(|| toml::from_str(&std::fs::read_to_string(get_config_path()).unwrap()).unwrap());
 
