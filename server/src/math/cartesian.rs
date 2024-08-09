@@ -38,11 +38,6 @@ impl<L, R> CartesianProduct<L, R> {
         // This is a bit wasteful, since CartesianProductIter already contains an index
         self.bounds().iter().zip(self.iter())
     }
-
-    pub fn signed_enumerate(&self) -> std::iter::Zip<IRectIter<isize>, CartesianProductIter<L, R>> {
-        let signed_bounds = self.bounds().to_signed().unwrap();
-        signed_bounds.iter().zip(self.iter())
-    }
 }
 
 pub struct CartesianProductIter<'a, L, R> {

@@ -11,6 +11,7 @@ services:
       - "./server/config.toml:/opt/app/config.toml"
     ports:
       - 6666:6666
+    stop_signal: SIGINT
 
   client:
     build: client
