@@ -136,7 +136,7 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     let limit = std::cmp::min(query.limit.get(), MAX_POSTS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::post::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let count_query = search::post::build_query(client_id, &search_criteria)?;
@@ -161,7 +161,7 @@ fn get_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<P
     let fields = create_field_table(query.fields())?;
     let client_id = client.map(|user| user.id);
 
-    crate::establish_connection()?
+    crate::get_connection()?
         .transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
 }
 
@@ -182,7 +182,7 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
     let search_criteria = search::post::parse_search_criteria(query.criteria())?;
     let sql_query = search::post::build_query(client_id, &search_criteria)?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let post_ids: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
         let post_index = post_ids.iter().position(|&id| id == post_id);
 
@@ -207,7 +207,7 @@ fn get_featured_post(auth: AuthResult, query: ResourceQuery) -> ApiResult<Option
     let client_id = client.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let featured_post_id: Option<i32> = post_feature::table
             .select(post_feature::post_id)
             .order_by(post_feature::time.desc())
@@ -236,7 +236,7 @@ fn feature_post(auth: AuthResult, query: ResourceQuery, post_feature: PostFeatur
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
     let new_post_feature = NewPostFeature { post_id, user_id };
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         diesel::insert_into(post_feature::table)
             .values(new_post_feature)
             .execute(conn)?;
@@ -286,7 +286,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     let image_checksum = content::image_checksum(&image);
 
     let client_id = client.map(|user| user.id);
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         // Check for exact match
         let exact_post = post::table
             .filter(post::checksum.eq(image_checksum))
@@ -376,7 +376,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         source: post_info.source.as_deref(),
     };
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let (post_id, mime_type) = diesel::insert_into(post::table)
             .values(new_post)
             .returning((post::id, post::mime_type))
@@ -446,7 +446,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     }
 
     let fields = create_field_table(query.fields())?;
-    let merged_post = crate::establish_connection()?.transaction(|conn| {
+    let merged_post = crate::get_connection()?.transaction(|conn| {
         let remove_version = post::table.find(remove_id).select(post::last_edit_time).first(conn)?;
         let merge_to_version = post::table.find(merge_to_id).select(post::last_edit_time).first(conn)?;
         api::verify_version(remove_version, merge_info.post_info.remove_version)?;
@@ -540,7 +540,7 @@ fn favorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiRes
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
     let new_post_favorite = NewPostFavorite { post_id, user_id };
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
         diesel::insert_into(post_favorite::table)
             .values(new_post_favorite)
@@ -557,7 +557,7 @@ fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, rating: Ratin
     let fields = create_field_table(query.fields())?;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*rating) {
@@ -593,7 +593,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
     let client = auth?;
     let fields = create_field_table(query.fields())?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
         api::verify_version(post_version, update.version)?;
 
@@ -634,7 +634,7 @@ fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) ->
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 
-    let mime_type = crate::establish_connection()?.transaction::<_, api::Error, _>(|conn| {
+    let mime_type = crate::get_connection()?.transaction::<_, api::Error, _>(|conn| {
         let (mime_type, post_version) = post::table
             .find(post_id)
             .select((post::mime_type, post::last_edit_time))
@@ -659,7 +659,7 @@ fn unfavorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiR
     let fields = create_field_table(query.fields())?;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
         PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from)
     })

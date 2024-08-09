@@ -33,7 +33,7 @@ pub fn test_transaction<F, R>(function: F) -> R
 where
     F: FnOnce(&mut PgConnection) -> QueryResult<R>,
 {
-    crate::establish_connection()
+    crate::get_connection()
         .unwrap()
         .test_transaction::<_, Error, _>(|conn| Ok(function(conn).unwrap()))
 }

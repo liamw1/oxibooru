@@ -44,7 +44,7 @@ fn get_info(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
     let fields = create_field_table(query.fields())?;
     let disk_usage = calculate_directory_size(Path::new(&config::get().data_dir))?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let latest_feature: Option<PostFeature> = post_feature::table
             .order_by(post_feature::time.desc())
             .first(conn)

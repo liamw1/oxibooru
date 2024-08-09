@@ -12,7 +12,7 @@ use uuid::Uuid;
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub enum AuthenticationError {
-    FailedConnection(#[from] diesel::ConnectionError),
+    FailedConnection(#[from] diesel::r2d2::PoolError),
     FailedQuery(#[from] diesel::result::Error),
     #[error("Invalid authentication type")]
     InvalidAuthType,
@@ -52,7 +52,7 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
 fn basic_access_authentication(credentials: &str) -> Result<User, AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
 
-    let mut conn = crate::establish_connection()?;
+    let mut conn = crate::get_connection()?;
     let user = User::from_name(&mut conn, &username)?;
     auth::password::is_valid_password(&user, &password)
         .then_some(user)
@@ -63,7 +63,7 @@ fn token_authentication(credentials: &str) -> Result<User, AuthenticationError> 
     let (username, unparsed_token) = decode_credentials(credentials)?;
     let token = Uuid::parse_str(&unparsed_token)?;
 
-    let mut conn = crate::establish_connection()?;
+    let mut conn = crate::get_connection()?;
     let user = User::from_name(&mut conn, &username)?;
     let user_token = UserToken::belonging_to(&user)
         .filter(user_token::token.eq(token))

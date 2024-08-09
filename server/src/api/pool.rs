@@ -78,7 +78,7 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     let limit = std::cmp::min(query.limit.get(), MAX_POOLS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::pool::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let count_query = search::pool::build_query(&search_criteria)?;
@@ -101,8 +101,7 @@ fn get_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<P
     api::verify_privilege(client.as_ref(), config::privileges().pool_view)?;
 
     let fields = create_field_table(query.fields())?;
-    crate::establish_connection()?
-        .transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
+    crate::get_connection()?.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -128,7 +127,7 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
         .collect::<Result<_, _>>()?;
 
     let fields = create_field_table(query.fields())?;
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let category_id: i32 = pool_category::table
             .select(pool_category::id)
             .filter(pool_category::name.eq(pool_info.category))
@@ -162,7 +161,7 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
     }
 
     let fields = create_field_table(query.fields())?;
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let remove_version = pool::table.find(remove_id).select(pool::last_edit_time).first(conn)?;
         let merge_to_version = pool::table.find(merge_to_id).select(pool::last_edit_time).first(conn)?;
         api::verify_version(remove_version, merge_info.remove_version)?;
@@ -204,7 +203,7 @@ fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: Poo
     let client = auth?;
     let fields = create_field_table(query.fields())?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let pool_version: DateTime = pool::table.find(pool_id).select(pool::last_edit_time).first(conn)?;
         api::verify_version(pool_version, update.version)?;
 
@@ -250,7 +249,7 @@ fn delete_pool(name: String, auth: AuthResult, client_version: DeleteRequest) ->
     api::verify_privilege(client.as_ref(), config::privileges().pool_delete)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let (pool_id, pool_version): (i32, DateTime) = pool::table
             .select((pool::id, pool::last_edit_time))
             .inner_join(pool_name::table)

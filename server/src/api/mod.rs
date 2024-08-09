@@ -72,7 +72,7 @@ pub enum Error {
     #[error("Expression does not match on regex")]
     ExpressionFailsRegex,
     FailedAuthentication(#[from] AuthenticationError),
-    FailedConnection(#[from] diesel::ConnectionError),
+    FailedConnection(#[from] diesel::r2d2::PoolError),
     FailedQuery(#[from] diesel::result::Error),
     FromStrError(#[from] Box<dyn std::error::Error>),
     #[error("Insufficient privileges")]

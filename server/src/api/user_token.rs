@@ -46,7 +46,7 @@ fn list_user_tokens(username: String, auth: AuthResult) -> ApiResult<UnpagedResp
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -82,7 +82,7 @@ fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTok
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -132,7 +132,7 @@ fn update_user_token(
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -182,7 +182,7 @@ fn delete_user_token(username: String, token: Uuid, auth: AuthResult) -> ApiResu
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let user_token_owner: i32 = user::table
             .inner_join(user_token::table)
             .select(user_token::user_id)

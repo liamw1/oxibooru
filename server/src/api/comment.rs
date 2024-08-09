@@ -66,7 +66,7 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_COMMENTS_PER_PAGE);
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::comment::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let count_query = search::comment::build_query(&search_criteria)?;
@@ -89,7 +89,7 @@ fn get_comment(comment_id: i32, auth: AuthResult) -> ApiResult<CommentInfo> {
     api::verify_privilege(client.as_ref(), config::privileges().comment_view)?;
 
     let client_id = client.map(|user| user.id);
-    crate::establish_connection()?
+    crate::get_connection()?
         .transaction(|conn| CommentInfo::new_from_id(conn, client_id, comment_id).map_err(api::Error::from))
 }
 
@@ -112,7 +112,7 @@ fn create_comment(auth: AuthResult, comment_info: NewCommentInfo) -> ApiResult<C
         text: &comment_info.text,
     };
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let comment_id: i32 = diesel::insert_into(comment::table)
             .values(new_comment)
             .returning(comment::id)
@@ -132,7 +132,7 @@ fn update_comment(comment_id: i32, auth: AuthResult, update: CommentUpdate) -> A
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let (comment_owner, comment_version): (i32, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))
@@ -157,7 +157,7 @@ fn rate_comment(comment_id: i32, auth: AuthResult, rating: RatingRequest) -> Api
     api::verify_privilege(client.as_ref(), config::privileges().comment_score)?;
 
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*rating) {
@@ -179,7 +179,7 @@ fn delete_comment(comment_id: i32, auth: AuthResult, client_version: DeleteReque
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
 
-    crate::establish_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let (comment_owner, comment_version): (i32, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))

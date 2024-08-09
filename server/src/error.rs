@@ -124,7 +124,7 @@ impl ErrorKind for base64::DecodeError {
 impl ErrorKind for crate::auth::header::AuthenticationError {
     fn kind(&self) -> &'static str {
         match self {
-            Self::FailedConnection(err) => err.kind(),
+            Self::FailedConnection(_) => "FailedConnection",
             Self::FailedQuery(err) => err.kind(),
             Self::InvalidAuthType => "InvalidAuthType",
             Self::InvalidEncoding(err) => err.kind(),
@@ -230,7 +230,7 @@ impl ErrorKind for crate::api::Error {
             Self::DeleteDefault => "DeleteDefault",
             Self::ExpressionFailsRegex => "ExpressionFailsRegex",
             Self::FailedAuthentication(err) => err.kind(),
-            Self::FailedConnection(err) => err.kind(),
+            Self::FailedConnection(_) => "FailedConnection",
             Self::FailedQuery(err) => err.kind(),
             Self::FromStrError(_) => "FromStrError",
             Self::InsufficientPrivileges => "InsufficientPrivileges",
