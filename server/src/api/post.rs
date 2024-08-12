@@ -8,7 +8,7 @@ use crate::model::post::{NewPost, NewPostFavorite, NewPostFeature, NewPostScore,
 use crate::resource::post::{FieldTable, PostInfo};
 use crate::schema::{comment, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag};
 use crate::util::DateTime;
-use crate::{api, config, filesystem, resource, search, update};
+use crate::{api, config, filesystem, resource, search, update, util};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use warp::{Filter, Rejection, Reply};
@@ -630,11 +630,17 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
     })
 }
 
+/*
+    Deletes the post with the specified ID. Uses deadlock_prone_transaction because
+    post relation cascade deletion causes deadlocks when deleting related posts
+    in quick succession.
+*/
 fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 
-    let mime_type = crate::get_connection()?.transaction::<_, api::Error, _>(|conn| {
+    let mut conn = crate::get_connection()?;
+    let mime_type = util::deadlock_prone_transaction::<_, api::Error, _>(&mut conn, 3, |conn| {
         let (mime_type, post_version) = post::table
             .find(post_id)
             .select((post::mime_type, post::last_edit_time))

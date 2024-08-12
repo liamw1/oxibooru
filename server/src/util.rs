@@ -1,6 +1,8 @@
 use diesel::backend::Backend;
 use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::expression::AsExpression;
+use diesel::prelude::*;
+use diesel::result::Error;
 use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Timestamptz;
 use serde::{Deserialize, Serialize};
@@ -98,4 +100,30 @@ where
     fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
         OffsetDateTime::from_sql(bytes).map(DateTime)
     }
+}
+
+/*
+    Executes function in a transaction and retries if it fails due to a deadlock.
+*/
+pub fn deadlock_prone_transaction<T, E, F>(conn: &mut PgConnection, max_retries: u32, function: F) -> Result<T, E>
+where
+    F: Fn(&mut PgConnection) -> Result<T, E>,
+    E: From<Error> + std::error::Error,
+{
+    let print_info = |num_retries: u32, result: Result<T, E>| {
+        if num_retries > 0 {
+            println!("{num_retries} deadlocks detected!");
+        }
+        result
+    };
+
+    let mut result = conn.transaction(&function);
+    for retry in 0..max_retries {
+        result = match result {
+            Ok(_) => return print_info(retry, result),
+            Err(err) if err.to_string().contains("deadlock") => conn.transaction(&function),
+            Err(_) => return print_info(retry, result),
+        };
+    }
+    print_info(max_retries, result)
 }
