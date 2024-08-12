@@ -122,15 +122,10 @@ impl TagInfo {
         tag_ids: Vec<i32>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let tags = get_tags(conn, &tag_ids)?;
+        let unordered_tags = tag::table.filter(tag::id.eq_any(&tag_ids)).load(conn)?;
+        let tags = resource::order_by(unordered_tags, &tag_ids);
         Self::new_batch(conn, tags, fields)
     }
-}
-
-fn get_tags(conn: &mut PgConnection, tag_ids: &[i32]) -> QueryResult<Vec<Tag>> {
-    // We get tags here, but this query doesn't preserve order
-    let tags = tag::table.filter(tag::id.eq_any(tag_ids)).load(conn)?;
-    Ok(resource::order_by(tags, tag_ids))
 }
 
 fn get_categories(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<String>> {

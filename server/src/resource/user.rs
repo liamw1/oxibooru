@@ -176,7 +176,8 @@ impl UserInfo {
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Vec<Self>> {
-        let users = get_users(conn, &user_ids)?;
+        let unordered_users = user::table.filter(user::id.eq_any(&user_ids)).load(conn)?;
+        let users = resource::order_by(unordered_users, &user_ids);
         Self::new_batch(conn, users, fields, visibility)
     }
 }
@@ -186,12 +187,6 @@ impl UserInfo {
 enum PrivateData<T> {
     Expose(T),
     Visible(bool), // Set to false to indicate hidden
-}
-
-fn get_users(conn: &mut PgConnection, user_ids: &[i32]) -> QueryResult<Vec<User>> {
-    // We get users here, but this query doesn't preserve order
-    let users = user::table.filter(user::id.eq_any(user_ids)).load(conn)?;
-    Ok(resource::order_by(users, user_ids))
 }
 
 fn get_comment_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<i64>> {

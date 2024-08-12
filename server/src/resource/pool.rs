@@ -126,15 +126,10 @@ impl PoolInfo {
         pool_ids: Vec<i32>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let pools = get_pools(conn, &pool_ids)?;
+        let unordered_pools = pool::table.filter(pool::id.eq_any(&pool_ids)).load(conn)?;
+        let pools = resource::order_by(unordered_pools, &pool_ids);
         Self::new_batch(conn, pools, fields)
     }
-}
-
-fn get_pools(conn: &mut PgConnection, pool_ids: &[i32]) -> QueryResult<Vec<Pool>> {
-    // We get pools here, but this query doesn't preserve order
-    let pools = pool::table.filter(pool::id.eq_any(pool_ids)).load(conn)?;
-    Ok(resource::order_by(pools, pool_ids))
 }
 
 fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<String>> {

@@ -323,20 +323,20 @@ mod test {
         let starry_night_signature = compute_signature(&starry_night);
         let starry_night_indexes = generate_indexes(&starry_night_signature);
 
-        // println!("");
-        // println!("Distances:");
-        // println!("{}", normalized_distance(&lisa_signature, &lisa_border_signature));
-        // println!("{}", normalized_distance(&lisa_signature, &lisa_large_border_signature));
-        // println!("{}", normalized_distance(&lisa_signature, &lisa_wide_signature));
-        // println!("{}", normalized_distance(&lisa_signature, &lisa_cat_signature));
-        // println!("{}", normalized_distance(&lisa_signature, &starry_night_signature));
-        // println!("Matches:");
-        // println!("{}", matching_indexes(&lisa_indexes, &lisa_border_indexes));
-        // println!("{}", matching_indexes(&lisa_indexes, &lisa_large_border_indexes));
-        // println!("{}", matching_indexes(&lisa_indexes, &lisa_wide_indexes));
-        // println!("{}", matching_indexes(&lisa_indexes, &lisa_cat_indexes));
-        // println!("{}", matching_indexes(&lisa_indexes, &starry_night_indexes));
-        // println!("");
+        println!("");
+        println!("Distances:");
+        println!("{}", normalized_distance(&lisa_signature, &lisa_border_signature));
+        println!("{}", normalized_distance(&lisa_signature, &lisa_large_border_signature));
+        println!("{}", normalized_distance(&lisa_signature, &lisa_wide_signature));
+        println!("{}", normalized_distance(&lisa_signature, &lisa_cat_signature));
+        println!("{}", normalized_distance(&lisa_signature, &starry_night_signature));
+        println!("Matches:");
+        println!("{}", matching_indexes(&lisa_indexes, &lisa_border_indexes));
+        println!("{}", matching_indexes(&lisa_indexes, &lisa_large_border_indexes));
+        println!("{}", matching_indexes(&lisa_indexes, &lisa_wide_indexes));
+        println!("{}", matching_indexes(&lisa_indexes, &lisa_cat_indexes));
+        println!("{}", matching_indexes(&lisa_indexes, &starry_night_indexes));
+        println!("");
 
         assert!(normalized_distance(&lisa_signature, &lisa_border_signature) < 0.2);
         assert!(normalized_distance(&lisa_signature, &lisa_large_border_signature) < 0.2);

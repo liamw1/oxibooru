@@ -115,7 +115,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 }
 
 const MAX_POSTS_PER_PAGE: i64 = 50;
-const POST_SIMILARITY_THRESHOLD: f64 = 0.4;
+const POST_SIMILARITY_THRESHOLD: f64 = 0.55;
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
     fields
@@ -416,7 +416,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         let thumbnail = image.resize_to_fill(
             config::get().thumbnails.post_width,
             config::get().thumbnails.post_height,
-            image::imageops::FilterType::Nearest,
+            image::imageops::FilterType::Gaussian,
         );
         thumbnail.to_rgb8().save(content::post_thumbnail_path(post_id))?;
 

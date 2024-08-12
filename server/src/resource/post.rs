@@ -300,7 +300,8 @@ impl PostInfo {
         post_ids: Vec<i32>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let posts = get_posts(conn, &post_ids)?;
+        let unordered_posts = post::table.filter(post::id.eq_any(&post_ids)).load(conn)?;
+        let posts = resource::order_by(unordered_posts, &post_ids);
         Self::new_batch(conn, client, posts, fields)
     }
 }
@@ -318,12 +319,6 @@ impl PostNoteInfo {
             text: note.text,
         }
     }
-}
-
-fn get_posts(conn: &mut PgConnection, post_ids: &[i32]) -> QueryResult<Vec<Post>> {
-    // We get posts here, but this query doesn't preserve order
-    let posts = post::table.filter(post::id.eq_any(post_ids)).load(conn)?;
-    Ok(resource::order_by(posts, post_ids))
 }
 
 fn get_post_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option<MicroUser>>> {
