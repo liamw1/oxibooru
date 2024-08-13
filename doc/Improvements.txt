@@ -25,8 +25,8 @@ This is a brief list of improvements I've made to the functionality of the backe
 
         Signature comparison is fast enough that I've removed the limit on the similar signature
         queries. Comparing indexes returns about 10-15% of the images within the database, so 
-        reduces the search space by about an order of magnitude. On a database of 30k images,
-        a complete reverse search takes about 60-100ms.
+        reduces the search space by about an order of magnitude. On a database of 50k images,
+        a complete reverse search takes about 80-120ms.
 
     3. Faster startup time
         For whatever reason, my local szuru instance (about 100k images) takes a bit of time to

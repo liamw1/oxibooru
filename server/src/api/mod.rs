@@ -17,7 +17,6 @@ use crate::model::user::User;
 use crate::util::DateTime;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
-use std::error::Error as ErrorTrait;
 use std::num::NonZero;
 use std::ops::Deref;
 use warp::http::StatusCode;
@@ -48,7 +47,7 @@ impl<T: Serialize> From<ApiResult<T>> for Reply {
         match value {
             Ok(response) => Self::Json(warp::reply::json(&response)),
             Err(err) => {
-                println!("{}: {err}. Source: {:?}", err.kind(), err.source());
+                println!("{}: {err}", err.kind());
                 let response = warp::reply::json(&err.response());
                 Self::WithStatus(warp::reply::with_status(response, err.status_code()))
             }
