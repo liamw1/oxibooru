@@ -34,9 +34,20 @@ pub fn normalized_distance(signature_a: &[u8], signature_b: &[u8]) -> f64 {
     }
 }
 
+/*
+    Creates a set of indices from an image signature.
+    The signature is divided into a set intervals called words, which are allowed to overlap.
+    The "letters" of each word are values in the image signature, clamped between [-1, 1].
+    Therefore, each word can be represented by a number in base-3, which we encode into an u32
+    (which we then convert to an i32). The highest N bits of the u32 are reserved for storing
+    the word index, where N is the number of base-3 digits required to store NUM_WORDS.
+*/
 pub fn generate_indexes(signature: &[u8]) -> Vec<i32> {
-    const NUM_REDUCED_SYMBOLS: i32 = 3;
-    debug_assert!(i64::from(NUM_REDUCED_SYMBOLS).pow(NUM_LETTERS) < i64::from(i32::MAX));
+    const NUM_REDUCED_SYMBOLS: u32 = 3;
+    assert!(NUM_REDUCED_SYMBOLS % 2 == 1);
+    const NUM_WORD_DIGITS: u32 = NUM_WORDS.ilog(NUM_REDUCED_SYMBOLS) + 1;
+    const AVAILABLE_DIGITS: u32 = u32::MAX.ilog(NUM_REDUCED_SYMBOLS);
+    assert!(NUM_LETTERS + NUM_WORD_DIGITS <= AVAILABLE_DIGITS);
 
     const NUM_LETTERS_USIZE: usize = NUM_LETTERS as usize;
     let word_positions = func::linspace(0, signature.len() - NUM_LETTERS_USIZE, NUM_WORDS);
@@ -48,13 +59,19 @@ pub fn generate_indexes(signature: &[u8]) -> Vec<i32> {
 
     words
         .iter()
-        .map(|word| {
-            word.iter()
+        .enumerate()
+        .map(|(word_index, word)| {
+            const CLAMP_VALUE: i8 = NUM_REDUCED_SYMBOLS as i8 / 2;
+            let encoded_letters: u32 = word
+                .iter()
                 .map(|&letter| letter as i8)
-                .map(|letter| letter.clamp(-1, 1))
+                .map(|letter| letter.clamp(-CLAMP_VALUE, CLAMP_VALUE))
                 .enumerate()
-                .map(|(i, letter)| i32::from(letter + 1) * NUM_REDUCED_SYMBOLS.pow(i as u32))
-                .sum()
+                .map(|(letter_index, letter)| {
+                    (letter + CLAMP_VALUE) as u32 * NUM_REDUCED_SYMBOLS.pow(letter_index as u32)
+                })
+                .sum();
+            (word_index as u32 + NUM_REDUCED_SYMBOLS.pow(NUM_WORD_DIGITS) * encoded_letters) as i32
         })
         .collect()
 }
@@ -68,7 +85,7 @@ const NUM_GRID_POINTS: u32 = 9;
 const IDENTICAL_TOLERANCE: i16 = 1;
 const LUMINANCE_LEVELS: u32 = 2;
 const NUM_WORDS: u32 = 100;
-const NUM_LETTERS: u32 = 16;
+const NUM_LETTERS: u32 = 12;
 const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS as usize + 1;
 
 fn grid_square_radius(width: u32, height: u32) -> u32 {

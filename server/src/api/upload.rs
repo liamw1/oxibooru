@@ -44,7 +44,9 @@ async fn upload(auth: AuthResult, form: FormData) -> ApiResult<UploadResponse> {
     let part = form.into_stream().next().await.ok_or(api::Error::BadMultiPartForm)??;
     let content_type = MimeType::from_str(part.content_type().unwrap_or("")).map_err(Box::from)?;
     let filename = Path::new(part.filename().unwrap_or(""));
-    if filename.extension().map(|ext| ext.to_str().unwrap_or("")) != Some(content_type.extension()) {
+    if MimeType::from_extension(filename.extension().map(|ext| ext.to_str()).flatten().unwrap_or(""))
+        != Ok(content_type)
+    {
         return Err(api::Error::ContentTypeMismatch);
     }
 

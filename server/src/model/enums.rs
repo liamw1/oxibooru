@@ -5,10 +5,10 @@ use diesel::sql_types::SmallInt;
 use diesel::{AsExpression, FromSqlRow};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use strum::{EnumIter, EnumString, FromRepr, IntoEnumIterator};
+use strum::{EnumIter, EnumString, FromRepr};
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 #[error("{extenstion} is not a supported file extension")]
 pub struct ParseExtensionError {
     extenstion: String,
@@ -129,11 +129,19 @@ pub enum MimeType {
 
 impl MimeType {
     pub fn from_extension(extension: &str) -> Result<Self, ParseExtensionError> {
-        MimeType::iter()
-            .find(|mime_type| extension == mime_type.extension())
-            .ok_or(ParseExtensionError {
-                extenstion: extension.to_owned(),
-            })
+        match extension {
+            "bmp" | "BMP" => Ok(Self::BMP),
+            "gif" | "GIF" => Ok(Self::GIF),
+            "jpg" | "jpeg" | "JPG" | "JPEG" => Ok(Self::JPEG),
+            "png" | "PNG" => Ok(Self::PNG),
+            "webp" | "WEBP" => Ok(Self::WEBP),
+            "mp4" | "MP4" => Ok(Self::MP4),
+            "mov" | "MOV" => Ok(Self::MOV),
+            "webm" | "WEBM" => Ok(Self::WEBM),
+            _ => Err(ParseExtensionError {
+                extenstion: String::from(extension),
+            }),
+        }
     }
 
     pub fn extension(self) -> &'static str {

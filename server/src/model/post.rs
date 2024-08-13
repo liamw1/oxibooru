@@ -8,7 +8,6 @@ use crate::schema::{
 use crate::util::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use diesel::sql_types::{Array, Int4};
 use std::option::Option;
 
 #[derive(Insertable)]
@@ -163,7 +162,7 @@ pub struct NewPostSignature<'a> {
     pub words: &'a [i32],
 }
 
-#[derive(Associations, Identifiable, Queryable, QueryableByName, Selectable)]
+#[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(Post))]
 #[diesel(table_name = post_signature)]
 #[diesel(primary_key(post_id))]
@@ -175,15 +174,10 @@ pub struct PostSignature {
 
 impl PostSignature {
     pub fn find_similar(conn: &mut PgConnection, words: Vec<i32>) -> QueryResult<Vec<Self>> {
-        diesel::sql_query(
-            "SELECT s.post_id, s.signature
-             FROM post_signature AS s, unnest(s.words, $1) AS a(word, query)
-             WHERE a.word = a.query
-             GROUP BY s.post_id
-             ORDER BY count(a.query) DESC;",
-        )
-        .bind::<Array<Int4>, _>(words)
-        .load(conn)
+        post_signature::table
+            .select(PostSignature::as_select())
+            .filter(post_signature::words.overlaps_with(words))
+            .load(conn)
     }
 }
 
