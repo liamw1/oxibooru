@@ -112,7 +112,7 @@ where
 {
     let print_info = |num_retries: u32, result: Result<T, E>| {
         if num_retries > 0 {
-            println!("{num_retries} deadlocks detected!");
+            eprintln!("{num_retries} deadlocks detected!");
         }
         result
     };

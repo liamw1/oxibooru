@@ -41,7 +41,7 @@ RUN mkdir -p /opt/app /data \
  && chown -R app:app /opt/app /data
 
 USER app
-CMD ["/opt/app/docker-start.sh"]
+CMD ["/opt/app/server"]
 
 ARG PORT=6666
 ENV PORT=${PORT}

@@ -47,7 +47,7 @@ impl<T: Serialize> From<ApiResult<T>> for Reply {
         match value {
             Ok(response) => Self::Json(warp::reply::json(&response)),
             Err(err) => {
-                println!("{}: {err}", err.kind());
+                eprintln!("{}: {err}", err.kind());
                 let response = warp::reply::json(&err.response());
                 Self::WithStatus(warp::reply::with_status(response, err.status_code()))
             }
@@ -185,7 +185,7 @@ pub fn verify_matches_regex(haystack: &str, regex_type: RegexType) -> ApiResult<
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> + Clone {
     let catch_all = warp::any().map(|| {
-        println!("Unimplemented request!");
+        eprintln!("Unimplemented request!");
         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
     });
     let log = warp::filters::log::custom(|info| {
