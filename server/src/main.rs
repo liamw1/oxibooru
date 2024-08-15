@@ -19,11 +19,11 @@ use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
 use std::sync::LazyLock;
 
 const DEFAULT_PORT: u16 = 6666;
-const DATABASE_URL: LazyLock<&'static str> = LazyLock::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
+static DATABASE_URL: LazyLock<&'static str> = LazyLock::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
     Ok(_) => "postgres://postgres:postgres@host.docker.internal/booru",
     Err(_) => "postgres://postgres:postgres@localhost/booru",
 }); // TODO: Make this an env variable
-const CONNECTION_POOL: LazyLock<Pool<ConnectionManager<PgConnection>>> = LazyLock::new(|| {
+static CONNECTION_POOL: LazyLock<Pool<ConnectionManager<PgConnection>>> = LazyLock::new(|| {
     let manager = ConnectionManager::new(*DATABASE_URL);
     Pool::builder()
         .test_on_check_out(true)

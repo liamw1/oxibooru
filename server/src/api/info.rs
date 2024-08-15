@@ -40,6 +40,8 @@ struct Info {
 }
 
 fn get_info(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
+    let _timer = crate::util::Timer::new("get_info");
+
     let client_id = auth?.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
     let disk_usage = calculate_directory_size(Path::new(&config::get().data_dir))?;

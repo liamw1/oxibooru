@@ -28,7 +28,6 @@ ENV DOCKER_DEPLOYMENT=1
 
 COPY --from=builder /opt/app/target/release/server server
 COPY --from=builder /opt/app/config.toml config.toml
-COPY --from=builder /opt/app/docker-start.sh docker-start.sh
 
 ARG PUID=1000
 ARG PGID=1000
