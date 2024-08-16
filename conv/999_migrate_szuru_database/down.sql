@@ -1,0 +1,9 @@
+DROP TABLE "szuru_post_tag";
+DROP TABLE "szuru_post_relation";
+DROP TABLE "szuru_post";
+DROP TABLE "szuru_tag_suggestion";
+DROP TABLE "szuru_tag_implication";
+DROP TABLE "szuru_tag_name";
+DROP TABLE "szuru_tag";
+DROP TABLE "szuru_tag_category";
+DROP TABLE "szuru_user";

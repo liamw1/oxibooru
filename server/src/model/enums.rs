@@ -5,6 +5,7 @@ use diesel::sql_types::SmallInt;
 use diesel::{AsExpression, FromSqlRow};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::path::Path;
 use strum::{EnumIter, EnumString, FromRepr};
 use thiserror::Error;
 
@@ -142,6 +143,11 @@ impl MimeType {
                 extenstion: String::from(extension),
             }),
         }
+    }
+
+    pub fn from_path(path: &Path) -> Option<Self> {
+        let extension = path.extension()?.to_string_lossy();
+        Self::from_extension(&extension).ok()
     }
 
     pub fn extension(self) -> &'static str {

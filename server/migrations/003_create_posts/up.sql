@@ -7,7 +7,7 @@ CREATE TABLE "post" (
     "safety" SMALLINT NOT NULL,
     "type" SMALLINT NOT NULL,
     "mime_type" SMALLINT NOT NULL,   -- MIME stands for Multipurpose Internet Mail Extensions
-    "checksum" VARCHAR(48) NOT NULL,
+    "checksum" VARCHAR(64) NOT NULL,
     "checksum_md5" VARCHAR(32),
     "flags" VARCHAR(32),
     "source" VARCHAR(2048),

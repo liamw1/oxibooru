@@ -44,9 +44,15 @@ pub fn post_thumbnail_path(post_id: i32) -> PathBuf {
     format!("{}/generated-thumbnails/{post_id}_{}.jpg", config::get().data_dir, post_security_hash(post_id)).into()
 }
 
-pub fn image_checksum(image: &DynamicImage) -> String {
+/*
+    Computes a checksum for duplicate detection. Uses both hash of pixel data and the file size of compressed image.
+    The size is used because the same image can be compressed in multiple ways, leading to different compressed
+    sizes. These should not count as duplicates.
+*/
+pub fn image_checksum(image: &DynamicImage, file_size: u64) -> String {
     let hash = hmac_hash(image.as_bytes());
-    STANDARD_NO_PAD.encode(hash.into_bytes())
+    let encoded_hash = STANDARD_NO_PAD.encode(hash.into_bytes());
+    format!("{encoded_hash}{file_size}")
 }
 
 type Hmac = SimpleHmac<blake3::Hasher>;

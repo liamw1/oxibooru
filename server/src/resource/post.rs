@@ -354,8 +354,9 @@ fn get_thumbnail_urls(posts: &[Post]) -> Vec<String> {
 fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroTag>>> {
     let post_tags: Vec<(PostTag, i32, String)> = PostTag::belonging_to(posts)
         .inner_join(tag::table.inner_join(tag_name::table))
+        .inner_join(tag_category::table.on(tag_category::id.eq(tag::category_id)))
         .select((PostTag::as_select(), tag::category_id, tag_name::name))
-        .order((tag_name::order, tag_name::name))
+        .order((tag_name::order, tag_category::order, tag_name::name))
         .load(conn)?;
     let all_tag_ids: HashSet<i32> = post_tags.iter().map(|(post_tag, ..)| post_tag.tag_id).collect();
 
