@@ -7,7 +7,9 @@ edition = "2021"
 
 [dependencies]
 # Disable default-features to limit columns to 16
-diesel = { version = "2.2.2", default-features = false, features = ["with-deprecated", "postgres", "r2d2", "time", "uuid"] }
+#diesel = { version = "2.2.2", default-features = false, features = ["with-deprecated", "postgres", "r2d2", "time", "uuid"] }
+# Using fork until changes are merged in
+diesel = { git = "https://github.com/liamw1/diesel-CitextFix", default-features = false, features = ["with-deprecated", "postgres", "r2d2", "time", "uuid"] }
 tokio = { version = "1.38.1", features = ["full"] }
 serde = { version = "1.0.204", features = ["derive"] }
 strum = { version = "0.26.3", features = ["derive", "phf"] }

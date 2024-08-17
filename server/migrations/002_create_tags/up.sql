@@ -1,10 +1,9 @@
 CREATE TABLE "tag_category" (
     "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     "order" INTEGER NOT NULL,
-    "name" VARCHAR(32) NOT NULL,
+    "name" CITEXT NOT NULL UNIQUE,
     "color" VARCHAR(32) NOT NULL,
-    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE ("name")
+    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 SELECT diesel_manage_last_edit_time('tag_category');
 INSERT INTO "tag_category" ("id", "order", "name", "color") OVERRIDING SYSTEM VALUE VALUES (0, 0, 'default', 'default');
@@ -21,9 +20,8 @@ SELECT diesel_manage_last_edit_time('tag');
 CREATE TABLE "tag_name" (
     "tag_id" INTEGER NOT NULL REFERENCES "tag" ON DELETE CASCADE,
     "order" INTEGER NOT NULL,
-    "name" VARCHAR(128) NOT NULL,
-    PRIMARY KEY ("tag_id", "order"),
-    UNIQUE ("name")
+    "name" CITEXT NOT NULL UNIQUE,
+    PRIMARY KEY ("tag_id", "order")
 );
 
 CREATE TABLE "tag_implication" (

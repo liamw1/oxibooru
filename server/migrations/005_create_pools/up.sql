@@ -1,9 +1,8 @@
 CREATE TABLE "pool_category" (
     "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    "name" VARCHAR(32) NOT NULL,
+    "name" CITEXT NOT NULL UNIQUE,
     "color" VARCHAR(32) NOT NULL,
-    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE ("name")
+    "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 SELECT diesel_manage_last_edit_time('pool_category');
 INSERT INTO "pool_category" ("id", "name", "color") OVERRIDING SYSTEM VALUE VALUES (0, 'default', 'default');
@@ -20,9 +19,8 @@ SELECT diesel_manage_last_edit_time('pool');
 CREATE TABLE "pool_name" (
     "pool_id" INTEGER NOT NULL REFERENCES "pool" ON DELETE CASCADE,
     "order" INTEGER NOT NULL,
-    "name" VARCHAR(256) NOT NULL,
-    PRIMARY KEY ("pool_id", "order"),
-    UNIQUE ("name")
+    "name" CITEXT NOT NULL UNIQUE,
+    PRIMARY KEY ("pool_id", "order")
 );
 
 CREATE TABLE "pool_post" (

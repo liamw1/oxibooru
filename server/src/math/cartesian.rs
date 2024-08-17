@@ -1,5 +1,5 @@
 use crate::math::point::IPoint2;
-use crate::math::rect::{IRect, IRectIter};
+use crate::math::rect::IRect;
 
 pub struct CartesianProduct<L, R> {
     left: Vec<L>,
@@ -34,7 +34,7 @@ impl<L, R> CartesianProduct<L, R> {
         }
     }
 
-    pub fn enumerate(&self) -> std::iter::Zip<IRectIter<usize>, CartesianProductIter<L, R>> {
+    pub fn indexed_iter(&self) -> impl Iterator<Item = (IPoint2<usize>, (&L, &R))> {
         // This is a bit wasteful, since CartesianProductIter already contains an index
         self.bounds().iter().zip(self.iter())
     }

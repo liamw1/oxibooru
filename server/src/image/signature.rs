@@ -198,7 +198,7 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
         .unwrap();
 
     let mut mean_matrix = Array2D::new_square(NUM_GRID_POINTS, 0);
-    for (matrix_index, (&pixel_i, &pixel_j)) in grid_points.enumerate() {
+    for (matrix_index, (&pixel_i, &pixel_j)) in grid_points.indexed_iter() {
         let grid_square_center = IPoint2::new(pixel_i, pixel_j).to_signed().unwrap();
         let grid_square = IRect::new_centered_square(grid_square_center, grid_square_radius);
         let sum = IRect::intersection(grid_square, image_bounds)
