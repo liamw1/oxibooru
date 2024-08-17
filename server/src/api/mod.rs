@@ -74,6 +74,8 @@ pub enum Error {
     FailedAuthentication(#[from] AuthenticationError),
     FailedConnection(#[from] diesel::r2d2::PoolError),
     FailedQuery(#[from] diesel::result::Error),
+    #[error("Upload failed")]
+    FailedUpload,
     FromStrError(#[from] Box<dyn std::error::Error>),
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
@@ -118,6 +120,7 @@ impl Error {
             },
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedQuery(err) => query_error_status_code(err),
+            Self::FailedUpload => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FromStrError(_) => StatusCode::BAD_REQUEST,
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::ImageError(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -146,6 +149,7 @@ impl Error {
             Self::FailedAuthentication(_) => "Failed Authentication",
             Self::FailedConnection(_) => "Failed Connection",
             Self::FailedQuery(_) => "Failed Query",
+            Self::FailedUpload => "Failed Upload",
             Self::FromStrError(_) => "FromStr Error",
             Self::InsufficientPrivileges => "Insufficient Privileges",
             Self::ImageError(_) => "Image Error",

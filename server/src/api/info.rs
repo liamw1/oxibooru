@@ -3,10 +3,9 @@ use crate::model::post::PostFeature;
 use crate::resource::post::{FieldTable, PostInfo};
 use crate::schema::{post, post_feature, user};
 use crate::util::DateTime;
-use crate::{api, config, resource};
+use crate::{api, config, filesystem, resource};
 use diesel::prelude::*;
 use serde::Serialize;
-use std::path::Path;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -40,11 +39,9 @@ struct Info {
 }
 
 fn get_info(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
-    let _timer = crate::util::Timer::new("get_info");
-
     let client_id = auth?.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
-    let disk_usage = calculate_directory_size(Path::new(&config::get().data_dir))?;
+    let disk_usage = filesystem::data_size()?;
 
     crate::get_connection()?.transaction(|conn| {
         let latest_feature: Option<PostFeature> = post_feature::table
@@ -77,17 +74,4 @@ fn get_info(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
             config: &config::get().public_info,
         })
     })
-}
-
-fn calculate_directory_size(path: &Path) -> std::io::Result<u64> {
-    let mut total_size = 0;
-    if path.is_dir() {
-        for entry in std::fs::read_dir(path)? {
-            let path = entry?.path();
-            total_size += calculate_directory_size(&path)?;
-        }
-    } else {
-        total_size += std::fs::metadata(path)?.len();
-    }
-    Ok(total_size)
 }

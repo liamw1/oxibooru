@@ -6,7 +6,6 @@ use serde::Serialize;
 use std::convert::Infallible;
 use std::path::Path;
 use std::str::FromStr;
-use uuid::Uuid;
 use warp::multipart::FormData;
 use warp::{Buf, Filter, Rejection, Reply};
 
@@ -37,7 +36,7 @@ async fn upload(auth: AuthResult, form: FormData) -> ApiResult<UploadResponse> {
     // Set up temp directory if necessary
     let temp_path = filesystem::temporary_upload_directory();
     if !temp_path.exists() {
-        std::fs::create_dir(&temp_path)?;
+        std::fs::create_dir(temp_path)?;
     }
 
     // Parse first part and ensure file extension matches content type
@@ -51,8 +50,6 @@ async fn upload(auth: AuthResult, form: FormData) -> ApiResult<UploadResponse> {
     }
 
     // Give content a temporary handle and write it to disk
-    let upload_token = format!("{}.{}", Uuid::new_v4(), content_type.extension());
-    let upload_path = filesystem::temporary_upload_filepath(&upload_token);
     let data = part
         .stream()
         .try_fold(Vec::new(), |mut acc, buf| async move {
@@ -60,8 +57,8 @@ async fn upload(auth: AuthResult, form: FormData) -> ApiResult<UploadResponse> {
             Ok(acc)
         })
         .await
-        .expect("Folding error");
-    std::fs::write(&upload_path, &data)?;
+        .map_err(|_| api::Error::FailedUpload)?;
+    let upload_token = filesystem::upload(&data, content_type)?;
 
     Ok(UploadResponse { token: upload_token })
 }

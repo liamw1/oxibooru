@@ -407,14 +407,14 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         // Move content to permanent location
         let posts_folder = filesystem::posts_directory();
         if !posts_folder.exists() {
-            std::fs::create_dir(&posts_folder)?;
+            std::fs::create_dir(posts_folder)?;
         }
         std::fs::rename(temp_path, content::post_content_path(post_id, mime_type))?;
 
         // Generate thumbnail
         let thumbnail_folder = filesystem::generated_thumbnails_directory();
         if !thumbnail_folder.exists() {
-            std::fs::create_dir(&thumbnail_folder)?;
+            std::fs::create_dir(thumbnail_folder)?;
         }
         let thumbnail = image.resize_to_fill(
             config::get().thumbnails.post_width,
@@ -655,8 +655,7 @@ fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) ->
     })?;
 
     if config::get().delete_source_files {
-        std::fs::remove_file(content::post_thumbnail_path(post_id))?;
-        std::fs::remove_file(content::post_content_path(post_id, mime_type))?;
+        filesystem::remove_post(post_id, mime_type)?;
     }
     Ok(())
 }

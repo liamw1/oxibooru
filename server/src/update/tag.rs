@@ -102,8 +102,10 @@ pub fn get_or_create_tag_ids(
         .load(conn)?;
     let mut all_implied_tag_ids: HashSet<i32> = implied_ids.iter().copied().collect();
 
+    let mut iteration = 0;
     let mut previous_len = 0;
     while all_implied_tag_ids.len() != previous_len {
+        iteration += 1;
         previous_len = all_implied_tag_ids.len();
         implied_ids = tag_implication::table
             .select(tag_implication::child_id)
@@ -111,7 +113,7 @@ pub fn get_or_create_tag_ids(
             .load(conn)?;
         all_implied_tag_ids.extend(implied_ids.iter().copied());
     }
-    if !implied_ids.is_empty() {
+    if !implied_ids.is_empty() && iteration > 1 {
         return Err(api::Error::CyclicDependency);
     }
 

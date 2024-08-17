@@ -129,8 +129,10 @@ impl TagInfo {
 }
 
 fn get_categories(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<String>> {
+    let categories: Vec<_> = tags.iter().map(|tag| tag.category_id).collect();
     let category_names: HashMap<i32, String> = tag_category::table
         .select((tag_category::id, tag_category::name))
+        .filter(tag_category::id.eq_any(categories))
         .load(conn)?
         .into_iter()
         .collect();
@@ -232,7 +234,7 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
 fn get_usages(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<i64>> {
     PostTag::belonging_to(tags)
         .group_by(post_tag::tag_id)
-        .select((post_tag::tag_id, count(post_tag::post_id)))
+        .select((post_tag::tag_id, count(post_tag::tag_id)))
         .load(conn)
         .map(|usages| {
             resource::order_as(usages, tags, |(id, _)| *id)
