@@ -5,7 +5,7 @@ use std::str::FromStr;
 
 pub fn str_criteria(filter: &str) -> StrCritera {
     if filter.contains('*') {
-        StrCritera::WildCard(filter.replace('*', "%"))
+        StrCritera::WildCard(filter.replace('*', "%").replace('_', "\\_"))
     } else {
         StrCritera::Regular(parse_regular_str(filter))
     }
