@@ -40,6 +40,17 @@ pub fn remove_post(post_id: i32, mime_type: MimeType) -> std::io::Result<()> {
     Ok(())
 }
 
+/*
+    Creates a directory or does nothing if one already exists.
+    If no error occured, returns whether a directory was created.
+*/
+pub fn create_dir(path: &Path) -> std::io::Result<bool> {
+    match path.exists() {
+        true => Ok(false),
+        false => std::fs::create_dir(path).map(|_| true),
+    }
+}
+
 pub fn purge_temporary_uploads() -> std::io::Result<()> {
     let temp_path = temporary_upload_directory();
     if !temp_path.exists() {
@@ -79,6 +90,10 @@ fn remove_file(path: &Path) -> std::io::Result<()> {
 }
 
 fn calculate_directory_size(path: &Path) -> std::io::Result<u64> {
+    if !path.exists() {
+        return Ok(0);
+    }
+
     let mut total_size = 0;
     if path.is_dir() {
         for entry in std::fs::read_dir(path)? {

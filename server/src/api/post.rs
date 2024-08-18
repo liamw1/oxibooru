@@ -405,17 +405,11 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
             .execute(conn)?;
 
         // Move content to permanent location
-        let posts_folder = filesystem::posts_directory();
-        if !posts_folder.exists() {
-            std::fs::create_dir(posts_folder)?;
-        }
+        filesystem::create_dir(filesystem::posts_directory())?;
         std::fs::rename(temp_path, content::post_content_path(post_id, mime_type))?;
 
         // Generate thumbnail
-        let thumbnail_folder = filesystem::generated_thumbnails_directory();
-        if !thumbnail_folder.exists() {
-            std::fs::create_dir(thumbnail_folder)?;
-        }
+        filesystem::create_dir(filesystem::generated_thumbnails_directory())?;
         let thumbnail = image.resize_to_fill(
             config::get().thumbnails.post_width,
             config::get().thumbnails.post_height,

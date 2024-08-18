@@ -34,10 +34,7 @@ async fn upload(auth: AuthResult, form: FormData) -> ApiResult<UploadResponse> {
     api::verify_privilege(client.as_ref(), config::privileges().upload_create)?;
 
     // Set up temp directory if necessary
-    let temp_path = filesystem::temporary_upload_directory();
-    if !temp_path.exists() {
-        std::fs::create_dir(temp_path)?;
-    }
+    filesystem::create_dir(filesystem::temporary_upload_directory())?;
 
     // Parse first part and ensure file extension matches content type
     let part = form.into_stream().next().await.ok_or(api::Error::BadMultiPartForm)??;
