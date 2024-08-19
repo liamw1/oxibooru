@@ -150,6 +150,9 @@ pub struct PublicInfo {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    pub postgres_user: String,
+    pub postgres_password: String,
+    pub postgres_database: String,
     pub password_secret: String,
     pub content_secret: String,
     pub data_url: String,
@@ -184,6 +187,26 @@ pub fn regex(regex_type: RegexType) -> &'static Regex {
 
 pub fn default_rank() -> UserRank {
     CONFIG.public_info.default_user_rank
+}
+
+pub fn database_url() -> String {
+    let user = &CONFIG.postgres_user;
+    let password = &CONFIG.postgres_password;
+    let database = &CONFIG.postgres_database;
+    let hostname = match std::env::var("DOCKER_DEPLOYMENT") {
+        Ok(_) => "host.docker.internal",
+        Err(_) => "localhost",
+    };
+
+    format!("postgres://{user}:{password}@{hostname}/{database}")
+}
+
+pub fn port() -> u16 {
+    const DEFAULT_PORT: u16 = 6666;
+    std::env::var("PORT")
+        .ok()
+        .and_then(|var| var.parse().ok())
+        .unwrap_or(DEFAULT_PORT)
 }
 
 static CONFIG: LazyLock<Config> =

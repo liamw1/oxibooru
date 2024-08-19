@@ -1,3 +1,8 @@
+# Database credentials
+postgres_user = "postgres"
+postgres_password = "postgres"
+postgres_database = "oxi"
+
 # Used to salt the users' password hashes
 password_secret = "change"
 # Used to generate filenames for static content

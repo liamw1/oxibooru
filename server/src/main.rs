@@ -19,13 +19,8 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
 use std::sync::LazyLock;
 
-const DEFAULT_PORT: u16 = 6666;
-static DATABASE_URL: LazyLock<&'static str> = LazyLock::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
-    Ok(_) => "postgres://postgres:postgres@host.docker.internal/booru",
-    Err(_) => "postgres://postgres:postgres@localhost/booru",
-}); // TODO: Make this an env variable
 static CONNECTION_POOL: LazyLock<Pool<ConnectionManager<PgConnection>>> = LazyLock::new(|| {
-    let manager = ConnectionManager::new(*DATABASE_URL);
+    let manager = ConnectionManager::new(config::database_url());
     Pool::builder()
         .test_on_check_out(true)
         .build(manager)
@@ -43,17 +38,14 @@ async fn main() {
     }
     filesystem::purge_temporary_uploads().unwrap();
 
-    // Define the server address and run the warp server
-    let port: u16 = std::env::var("PORT")
-        .ok()
-        .and_then(|var| var.parse().ok())
-        .unwrap_or(DEFAULT_PORT);
-    let (_addr, server) = warp::serve(api::routes()).bind_with_graceful_shutdown(([0, 0, 0, 0], port), async {
-        match tokio::signal::ctrl_c().await {
-            Ok(()) => println!("Stopping server..."),
-            Err(err) => eprintln!("Unable to listen for shutdown signal: {err}"),
-        };
-    });
+    // Run the warp server
+    let (_addr, server) =
+        warp::serve(api::routes()).bind_with_graceful_shutdown(([0, 0, 0, 0], config::port()), async {
+            match tokio::signal::ctrl_c().await {
+                Ok(()) => println!("Stopping server..."),
+                Err(err) => eprintln!("Unable to listen for shutdown signal: {err}"),
+            };
+        });
 
     server.await;
 }
