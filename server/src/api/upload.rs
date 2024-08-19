@@ -10,13 +10,11 @@ use warp::multipart::FormData;
 use warp::{Buf, Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let upload = warp::post()
+    warp::post()
         .and(warp::path!("uploads"))
         .and(api::auth())
         .and(warp::filters::multipart::form().max_length(None)) // TODO
-        .and_then(upload_endpoint);
-
-    upload
+        .and_then(upload_endpoint)
 }
 
 #[derive(Serialize)]
@@ -40,9 +38,7 @@ async fn upload(auth: AuthResult, form: FormData) -> ApiResult<UploadResponse> {
     let part = form.into_stream().next().await.ok_or(api::Error::BadMultiPartForm)??;
     let content_type = MimeType::from_str(part.content_type().unwrap_or("")).map_err(Box::from)?;
     let filename = Path::new(part.filename().unwrap_or(""));
-    if MimeType::from_extension(filename.extension().map(|ext| ext.to_str()).flatten().unwrap_or(""))
-        != Ok(content_type)
-    {
+    if MimeType::from_extension(filename.extension().and_then(|ext| ext.to_str()).unwrap_or("")) != Ok(content_type) {
         return Err(api::Error::ContentTypeMismatch);
     }
 

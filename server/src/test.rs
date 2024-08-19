@@ -80,7 +80,7 @@ pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Pos
         height: 64,
         safety: PostSafety::Safe,
         type_: PostType::Image,
-        mime_type: MimeType::PNG,
+        mime_type: MimeType::Png,
         checksum: "",
         source: None,
     };

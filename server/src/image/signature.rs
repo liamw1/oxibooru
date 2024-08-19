@@ -44,10 +44,9 @@ pub fn normalized_distance(signature_a: &[u8], signature_b: &[u8]) -> f64 {
 */
 pub fn generate_indexes(signature: &[u8]) -> Vec<i32> {
     const NUM_REDUCED_SYMBOLS: u32 = 3;
-    assert!(NUM_REDUCED_SYMBOLS % 2 == 1);
+    const _: () = assert!(NUM_REDUCED_SYMBOLS % 2 == 1);
     const NUM_WORD_DIGITS: u32 = NUM_WORDS.ilog(NUM_REDUCED_SYMBOLS) + 1;
-    const AVAILABLE_DIGITS: u32 = u32::MAX.ilog(NUM_REDUCED_SYMBOLS);
-    assert!(NUM_LETTERS + NUM_WORD_DIGITS <= AVAILABLE_DIGITS);
+    const _: () = assert!(NUM_LETTERS + NUM_WORD_DIGITS <= u32::MAX.ilog(NUM_REDUCED_SYMBOLS));
 
     const NUM_LETTERS_USIZE: usize = NUM_LETTERS as usize;
     let word_positions = func::linspace(0, signature.len() - NUM_LETTERS_USIZE, NUM_WORDS);
@@ -110,7 +109,6 @@ fn compute_grid_points(image: &GrayImage) -> CartesianProduct<u32, u32> {
 
     let calc_row_delta = |i: u32| -> u64 {
         (0..image.height())
-            .into_iter()
             .map(|j| {
                 let pixel_value = image.get_pixel(i, j).0[0];
                 let row_adjacent_value = image.get_pixel(i + 1, j).0[0];
@@ -120,7 +118,6 @@ fn compute_grid_points(image: &GrayImage) -> CartesianProduct<u32, u32> {
     };
     let calc_column_delta = |j: u32| -> u64 {
         (0..image.width())
-            .into_iter()
             .map(|i| {
                 let pixel_value = image.get_pixel(i, j).0[0];
                 let column_adjacent_value = image.get_pixel(i, j + 1).0[0];
@@ -263,7 +260,7 @@ fn normalize(differentials: &[i16]) -> Vec<u8> {
     let cutoffs = dark_cutoffs
         .into_iter()
         .chain(std::iter::once(Some(IDENTICAL_TOLERANCE)))
-        .chain(light_cutoffs.into_iter())
+        .chain(light_cutoffs)
         .collect::<Vec<_>>();
     debug_assert_eq!(cutoffs.len(), NUM_SYMBOLS);
 

@@ -76,11 +76,10 @@ pub enum Error {
     FailedQuery(#[from] diesel::result::Error),
     #[error("Upload failed")]
     FailedUpload,
-    FromStrError(#[from] Box<dyn std::error::Error>),
+    FromStr(#[from] Box<dyn std::error::Error>),
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
-    ImageError(#[from] image::ImageError),
-    IoError(#[from] std::io::Error),
+    Image(#[from] image::ImageError),
     #[error("Resource needs at least one name")]
     NoNamesGiven,
     NotAnInteger(#[from] std::num::ParseIntError),
@@ -88,11 +87,12 @@ pub enum Error {
     NotLoggedIn,
     #[error("Someone else modified this in the meantime. Please try again.")]
     ResourceModified,
-    SearchError(#[from] crate::search::Error),
+    Search(#[from] crate::search::Error),
     #[error("Cannot merge resource with itself")]
     SelfMerge,
+    StdIo(#[from] std::io::Error),
     Utf8Conversion(#[from] std::str::Utf8Error),
-    WarpError(#[from] warp::Error),
+    Warp(#[from] warp::Error),
 }
 
 impl Error {
@@ -121,18 +121,18 @@ impl Error {
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedQuery(err) => query_error_status_code(err),
             Self::FailedUpload => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::FromStrError(_) => StatusCode::BAD_REQUEST,
+            Self::FromStr(_) => StatusCode::BAD_REQUEST,
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
-            Self::ImageError(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::IoError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Image(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NoNamesGiven => StatusCode::BAD_REQUEST,
             Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
             Self::NotLoggedIn => StatusCode::FORBIDDEN,
             Self::ResourceModified => StatusCode::CONFLICT,
-            Self::SearchError(_) => StatusCode::BAD_REQUEST,
+            Self::Search(_) => StatusCode::BAD_REQUEST,
             Self::SelfMerge => StatusCode::BAD_REQUEST,
+            Self::StdIo(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Utf8Conversion(_) => StatusCode::BAD_REQUEST,
-            Self::WarpError(_) => StatusCode::BAD_REQUEST,
+            Self::Warp(_) => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -150,18 +150,18 @@ impl Error {
             Self::FailedConnection(_) => "Failed Connection",
             Self::FailedQuery(_) => "Failed Query",
             Self::FailedUpload => "Failed Upload",
-            Self::FromStrError(_) => "FromStr Error",
+            Self::FromStr(_) => "FromStr Error",
             Self::InsufficientPrivileges => "Insufficient Privileges",
-            Self::ImageError(_) => "Image Error",
-            Self::IoError(_) => "IO Error",
+            Self::Image(_) => "Image Error",
             Self::NoNamesGiven => "No Names Given",
             Self::NotAnInteger(_) => "Parse Int Error",
             Self::NotLoggedIn => "Not Logged In",
             Self::ResourceModified => "Resource Modified",
-            Self::SearchError(_) => "Search Error",
+            Self::Search(_) => "Search Error",
             Self::SelfMerge => "Self Merge",
+            Self::StdIo(_) => "IO Error",
             Self::Utf8Conversion(_) => "Utf8 Conversion Error",
-            Self::WarpError(_) => "Warp Error",
+            Self::Warp(_) => "Warp Error",
         }
     }
 

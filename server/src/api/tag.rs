@@ -159,7 +159,7 @@ fn get_tag_siblings(name: String, auth: AuthResult, query: ResourceQuery) -> Api
 
         let siblings = TagInfo::new_batch_from_ids(conn, sibling_ids, &fields)?
             .into_iter()
-            .zip(common_post_counts.into_iter())
+            .zip(common_post_counts)
             .map(|(tag, occurrences)| TagSibling { tag, occurrences })
             .collect();
         Ok(TagSiblings { results: siblings })

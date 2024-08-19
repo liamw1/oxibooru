@@ -5,7 +5,6 @@ use strum::EnumString;
 
 pub fn run_tasks() -> usize {
     let parsed_arguments: Vec<_> = std::env::args()
-        .into_iter()
         .filter_map(|arg| AdminTask::from_str(&arg).ok())
         .collect();
 

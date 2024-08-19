@@ -30,17 +30,11 @@ impl TagCategory {
     }
 }
 
-#[derive(Clone, Copy, Insertable)]
+#[derive(Clone, Copy, Default, Insertable)]
 #[diesel(table_name = tag)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewTag {
     pub category_id: i32,
-}
-
-impl Default for NewTag {
-    fn default() -> Self {
-        Self { category_id: 0 }
-    }
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]

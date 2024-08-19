@@ -233,18 +233,18 @@ impl ErrorKind for crate::api::Error {
             Self::FailedConnection(_) => "FailedConnection",
             Self::FailedQuery(err) => err.kind(),
             Self::FailedUpload => "FailedUpload",
-            Self::FromStrError(_) => "FromStrError",
+            Self::FromStr(_) => "FromStrError",
             Self::InsufficientPrivileges => "InsufficientPrivileges",
-            Self::ImageError(err) => err.kind(),
-            Self::IoError(_) => "IOError",
+            Self::Image(err) => err.kind(),
             Self::NoNamesGiven => "NoNamesGiven",
             Self::NotAnInteger(err) => err.kind().kind(),
             Self::NotLoggedIn => "NotLoggedIn",
             Self::ResourceModified => "ResourceModified",
-            Self::SearchError(err) => err.kind(),
+            Self::Search(err) => err.kind(),
             Self::SelfMerge => "SelfMerge",
+            Self::StdIo(_) => "IOError",
             Self::Utf8Conversion(_) => "Utf8ConversionError",
-            Self::WarpError(_) => "WarpError",
+            Self::Warp(_) => "WarpError",
         }
     }
 }

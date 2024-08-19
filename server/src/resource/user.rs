@@ -59,7 +59,6 @@ impl Field {
         let mut table = FieldTable::filled(false);
         let fields = fields_str
             .split(',')
-            .into_iter()
             .map(Self::from_str)
             .collect::<Result<Vec<_>, _>>()?;
         for field in fields.into_iter() {

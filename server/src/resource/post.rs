@@ -72,7 +72,6 @@ impl Field {
         let mut table = FieldTable::filled(false);
         let fields = fields_str
             .split(',')
-            .into_iter()
             .map(Self::from_str)
             .collect::<Result<Vec<_>, _>>()?;
         for field in fields.into_iter() {
@@ -418,7 +417,7 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
 
     Ok(posts
         .iter()
-        .zip(comments.grouped_by(posts).into_iter())
+        .zip(comments.grouped_by(posts))
         .map(|(post, comments_on_post)| {
             comments_on_post
                 .into_iter()
@@ -501,7 +500,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
         .map(|pools_on_post| {
             pools
                 .iter()
-                .zip(pools_on_post.grouped_by(&pools).into_iter())
+                .zip(pools_on_post.grouped_by(&pools))
                 .filter_map(process_pool)
                 .collect()
         })
@@ -525,7 +524,7 @@ fn get_scores(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> 
         .map(|post_scores| {
             resource::order_as(post_scores, posts, |(id, _)| *id)
                 .into_iter()
-                .map(|post_score| post_score.map(|(_, score)| score).flatten().unwrap_or(0))
+                .map(|post_score| post_score.and_then(|(_, score)| score).unwrap_or(0))
                 .collect()
         })
 }
@@ -648,7 +647,7 @@ fn get_last_feature_times(conn: &mut PgConnection, posts: &[Post]) -> QueryResul
         .map(|last_feature_times| {
             resource::order_as(last_feature_times, posts, |(id, _)| *id)
                 .into_iter()
-                .map(|last_feature_time| last_feature_time.map(|(_, time)| time).flatten())
+                .map(|last_feature_time| last_feature_time.and_then(|(_, time)| time))
                 .collect()
         })
 }
@@ -660,7 +659,7 @@ fn get_users_who_favorited(conn: &mut PgConnection, posts: &[Post]) -> QueryResu
         .load(conn)?;
 
     let mut users_grouped_by_posts: Vec<Vec<(String, AvatarStyle)>> =
-        std::iter::repeat_with(|| vec![]).take(posts.len()).collect();
+        std::iter::repeat_with(Vec::new).take(posts.len()).collect();
     for (post_id, username, avatar_style) in users_who_favorited.into_iter() {
         let index = posts.iter().position(|post| post.id == post_id).unwrap();
         users_grouped_by_posts[index].push((username, avatar_style));
@@ -668,7 +667,7 @@ fn get_users_who_favorited(conn: &mut PgConnection, posts: &[Post]) -> QueryResu
 
     Ok(posts
         .iter()
-        .zip(users_grouped_by_posts.into_iter())
+        .zip(users_grouped_by_posts)
         .map(|(_, users)| {
             users
                 .into_iter()

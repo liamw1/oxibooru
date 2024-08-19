@@ -17,8 +17,7 @@ pub fn description(conn: &mut PgConnection, tag_id: i32, description: String) ->
 pub fn add_names(conn: &mut PgConnection, tag_id: i32, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
     names
         .iter()
-        .map(|name| api::verify_matches_regex(name, RegexType::Tag))
-        .collect::<Result<_, _>>()?;
+        .try_for_each(|name| api::verify_matches_regex(name, RegexType::Tag))?;
 
     let new_names: Vec<_> = names
         .iter()
@@ -131,8 +130,7 @@ pub fn get_or_create_tag_ids(
         .collect();
     new_tag_names
         .iter()
-        .map(|name| api::verify_matches_regex(name, RegexType::Tag))
-        .collect::<Result<_, _>>()?;
+        .try_for_each(|name| api::verify_matches_regex(name, RegexType::Tag))?;
 
     // Create new tags if given unique names
     if !new_tag_names.is_empty() {
@@ -150,7 +148,7 @@ pub fn get_or_create_tag_ids(
         diesel::insert_into(tag_name::table)
             .values(new_tag_names)
             .execute(conn)?;
-        tag_ids.extend(new_tag_ids.into_iter());
+        tag_ids.extend(new_tag_ids);
     }
     Ok(tag_ids)
 }

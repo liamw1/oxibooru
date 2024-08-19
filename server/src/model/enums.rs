@@ -64,14 +64,14 @@ pub enum PostType {
 impl From<MimeType> for PostType {
     fn from(value: MimeType) -> Self {
         match value {
-            MimeType::BMP => Self::Image,
-            MimeType::GIF => Self::Image,
-            MimeType::JPEG => Self::Image,
-            MimeType::PNG => Self::Image,
-            MimeType::WEBP => Self::Image,
-            MimeType::MP4 => Self::Video,
-            MimeType::MOV => Self::Video,
-            MimeType::WEBM => Self::Video,
+            MimeType::Bmp => Self::Image,
+            MimeType::Gif => Self::Image,
+            MimeType::Jpeg => Self::Image,
+            MimeType::Png => Self::Image,
+            MimeType::Webp => Self::Image,
+            MimeType::Mp4 => Self::Video,
+            MimeType::Mov => Self::Video,
+            MimeType::Webm => Self::Video,
         }
     }
 }
@@ -104,41 +104,41 @@ where
 pub enum MimeType {
     #[serde(rename = "image/bmp")]
     #[strum(serialize = "image/bmp")]
-    BMP,
+    Bmp,
     #[serde(rename = "image/gif")]
     #[strum(serialize = "image/gif")]
-    GIF,
+    Gif,
     #[serde(rename = "image/jpeg")]
     #[strum(serialize = "image/jpeg")]
-    JPEG,
+    Jpeg,
     #[serde(rename = "image/png")]
     #[strum(serialize = "image/png")]
-    PNG,
+    Png,
     #[serde(rename = "image/webp")]
     #[strum(serialize = "image/webp")]
-    WEBP,
+    Webp,
     #[serde(rename = "video/mp4")]
     #[strum(serialize = "video/mp4")]
-    MP4,
+    Mp4,
     #[serde(rename = "video/mov")]
     #[strum(serialize = "video/mov")]
-    MOV,
+    Mov,
     #[serde(rename = "video/webm")]
     #[strum(serialize = "video/webm")]
-    WEBM,
+    Webm,
 }
 
 impl MimeType {
     pub fn from_extension(extension: &str) -> Result<Self, ParseExtensionError> {
         match extension {
-            "bmp" | "BMP" => Ok(Self::BMP),
-            "gif" | "GIF" => Ok(Self::GIF),
-            "jpg" | "jpeg" | "JPG" | "JPEG" => Ok(Self::JPEG),
-            "png" | "PNG" => Ok(Self::PNG),
-            "webp" | "WEBP" => Ok(Self::WEBP),
-            "mp4" | "MP4" => Ok(Self::MP4),
-            "mov" | "MOV" => Ok(Self::MOV),
-            "webm" | "WEBM" => Ok(Self::WEBM),
+            "bmp" | "BMP" => Ok(Self::Bmp),
+            "gif" | "GIF" => Ok(Self::Gif),
+            "jpg" | "jpeg" | "JPG" | "JPEG" => Ok(Self::Jpeg),
+            "png" | "PNG" => Ok(Self::Png),
+            "webp" | "WEBP" => Ok(Self::Webp),
+            "mp4" | "MP4" => Ok(Self::Mp4),
+            "mov" | "MOV" => Ok(Self::Mov),
+            "webm" | "WEBM" => Ok(Self::Webm),
             _ => Err(ParseExtensionError {
                 extenstion: String::from(extension),
             }),
@@ -152,14 +152,14 @@ impl MimeType {
 
     pub fn extension(self) -> &'static str {
         match self {
-            Self::BMP => "bmp",
-            Self::GIF => "gif",
-            Self::JPEG => "jpg",
-            Self::PNG => "png",
-            Self::WEBP => "webp",
-            Self::MP4 => "mp4",
-            Self::MOV => "mov",
-            Self::WEBM => "webm",
+            Self::Bmp => "bmp",
+            Self::Gif => "gif",
+            Self::Jpeg => "jpg",
+            Self::Png => "png",
+            Self::Webp => "webp",
+            Self::Mp4 => "mp4",
+            Self::Mov => "mov",
+            Self::Webm => "webm",
         }
     }
 }

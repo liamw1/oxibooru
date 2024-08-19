@@ -8,8 +8,7 @@ use diesel::prelude::*;
 pub fn add_names(conn: &mut PgConnection, pool_id: i32, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
     names
         .iter()
-        .map(|name| api::verify_matches_regex(name, RegexType::Pool))
-        .collect::<Result<_, _>>()?;
+        .try_for_each(|name| api::verify_matches_regex(name, RegexType::Pool))?;
 
     let updated_names: Vec<_> = names
         .iter()

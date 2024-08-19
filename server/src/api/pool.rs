@@ -123,8 +123,7 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
     pool_info
         .names
         .iter()
-        .map(|name| api::verify_matches_regex(name, RegexType::Pool))
-        .collect::<Result<_, _>>()?;
+        .try_for_each(|name| api::verify_matches_regex(name, RegexType::Pool))?;
 
     let fields = create_field_table(query.fields())?;
     crate::get_connection()?.transaction(|conn| {

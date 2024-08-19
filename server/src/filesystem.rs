@@ -24,7 +24,7 @@ pub fn temporary_upload_filepath(filename: &str) -> PathBuf {
 pub fn upload(data: &[u8], content_type: MimeType) -> std::io::Result<String> {
     let upload_token = format!("{}.{}", Uuid::new_v4(), content_type.extension());
     let upload_path = temporary_upload_filepath(&upload_token);
-    std::fs::write(upload_path, &data)?;
+    std::fs::write(upload_path, data)?;
 
     let mut data_size = DATA_SIZE.lock().unwrap();
     *data_size += data.len() as u64;

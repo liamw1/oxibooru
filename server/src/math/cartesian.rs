@@ -27,7 +27,7 @@ impl<L, R> CartesianProduct<L, R> {
         IRect::new_zero_based(self.left.len() - 1, self.right.len() - 1)
     }
 
-    pub fn iter<'a>(&'a self) -> CartesianProductIter<'a, L, R> {
+    pub fn iter(&self) -> CartesianProductIter<L, R> {
         CartesianProductIter {
             cartesian_product: self,
             current: IPoint2::new(0, 0),

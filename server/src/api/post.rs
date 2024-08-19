@@ -321,7 +321,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
             exact_post: None,
             similar_posts: PostInfo::new_batch_from_ids(conn, client_id, post_ids, &fields)?
                 .into_iter()
-                .zip(distances.into_iter())
+                .zip(distances)
                 .map(|(post, distance)| SimilarPostInfo { distance, post })
                 .collect(),
         })
