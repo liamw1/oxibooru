@@ -63,15 +63,14 @@ pub fn purge_temporary_uploads() -> std::io::Result<()> {
 }
 
 pub fn data_size() -> std::io::Result<u64> {
-    if DATA_SIZE
-        .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst)
-        .is_ok()
-    {
-        DATA_SIZE.fetch_add(calculate_directory_size(posts_directory())?, Ordering::SeqCst);
-        DATA_SIZE.fetch_add(calculate_directory_size(generated_thumbnails_directory())?, Ordering::SeqCst);
-        DATA_SIZE.fetch_add(calculate_directory_size(temporary_upload_directory())?, Ordering::SeqCst);
-    }
-    Ok(DATA_SIZE.load(Ordering::SeqCst))
+    Ok(match DATA_SIZE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst) {
+        Ok(_) => {
+            DATA_SIZE.fetch_add(calculate_directory_size(posts_directory())?, Ordering::SeqCst);
+            DATA_SIZE.fetch_add(calculate_directory_size(generated_thumbnails_directory())?, Ordering::SeqCst);
+            DATA_SIZE.fetch_add(calculate_directory_size(temporary_upload_directory())?, Ordering::SeqCst)
+        }
+        Err(current_value) => current_value,
+    })
 }
 
 static DATA_SIZE: AtomicU64 = AtomicU64::new(0);
