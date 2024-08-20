@@ -13,9 +13,11 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     warp::post()
         .and(warp::path!("uploads"))
         .and(api::auth())
-        .and(warp::filters::multipart::form().max_length(None)) // TODO
+        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
         .and_then(upload_endpoint)
 }
+
+const MAX_UPLOAD_SIZE: u64 = 4 * 1024 * 1024 * 1024;
 
 #[derive(Serialize)]
 struct UploadResponse {
@@ -26,7 +28,6 @@ async fn upload_endpoint(auth: AuthResult, form: FormData) -> Result<api::Reply,
     Ok(upload(auth, form).await.into())
 }
 
-// TODO: Cleanup on failure
 async fn upload(auth: AuthResult, form: FormData) -> ApiResult<UploadResponse> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().upload_create)?;

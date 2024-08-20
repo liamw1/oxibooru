@@ -2,7 +2,8 @@ use crate::auth::content;
 use crate::config;
 use crate::model::enums::MimeType;
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::LazyLock;
 use uuid::Uuid;
 
 pub fn posts_directory() -> &'static Path {
@@ -26,9 +27,7 @@ pub fn upload(data: &[u8], content_type: MimeType) -> std::io::Result<String> {
     let upload_path = temporary_upload_filepath(&upload_token);
     std::fs::write(upload_path, data)?;
 
-    let mut data_size = DATA_SIZE.lock().unwrap();
-    *data_size += data.len() as u64;
-
+    DATA_SIZE.fetch_add(data.len() as u64, Ordering::SeqCst);
     Ok(upload_token)
 }
 
@@ -64,16 +63,18 @@ pub fn purge_temporary_uploads() -> std::io::Result<()> {
 }
 
 pub fn data_size() -> std::io::Result<u64> {
-    let mut data_size = DATA_SIZE.lock().unwrap();
-    if *data_size == 0 {
-        *data_size += calculate_directory_size(posts_directory())?;
-        *data_size += calculate_directory_size(generated_thumbnails_directory())?;
-        *data_size += calculate_directory_size(temporary_upload_directory())?;
+    if DATA_SIZE
+        .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+    {
+        DATA_SIZE.fetch_add(calculate_directory_size(posts_directory())?, Ordering::SeqCst);
+        DATA_SIZE.fetch_add(calculate_directory_size(generated_thumbnails_directory())?, Ordering::SeqCst);
+        DATA_SIZE.fetch_add(calculate_directory_size(temporary_upload_directory())?, Ordering::SeqCst);
     }
-    Ok(*data_size)
+    Ok(DATA_SIZE.load(Ordering::SeqCst))
 }
 
-static DATA_SIZE: Mutex<u64> = Mutex::new(0);
+static DATA_SIZE: AtomicU64 = AtomicU64::new(0);
 static POSTS_DIRECTORY: LazyLock<PathBuf> = LazyLock::new(|| format!("{}/posts", config::get().data_dir).into());
 static THUMBNAILS_DIRECTORY: LazyLock<PathBuf> =
     LazyLock::new(|| format!("{}/generated-thumbnails", config::get().data_dir).into());
@@ -84,8 +85,7 @@ fn remove_file(path: &Path) -> std::io::Result<()> {
     let file_size = std::fs::metadata(path)?.len();
     std::fs::remove_file(path)?;
 
-    let mut data_size = DATA_SIZE.lock().unwrap();
-    *data_size = data_size.saturating_sub(file_size);
+    DATA_SIZE.fetch_sub(file_size, Ordering::SeqCst);
     Ok(())
 }
 
