@@ -4,7 +4,9 @@ use crate::api::{
 use crate::auth::content;
 use crate::image::{read, signature};
 use crate::model::enums::{MimeType, PostSafety, PostType, Score};
-use crate::model::post::{NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, PostSignature};
+use crate::model::post::{
+    NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostSignature,
+};
 use crate::resource::post::{FieldTable, PostInfo};
 use crate::schema::{comment, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag};
 use crate::util::DateTime;
@@ -443,11 +445,11 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     }
 
     let fields = create_field_table(query.fields())?;
-    let merged_post = crate::get_connection()?.transaction(|conn| {
-        let remove_version = post::table.find(remove_id).select(post::last_edit_time).first(conn)?;
-        let merge_to_version = post::table.find(merge_to_id).select(post::last_edit_time).first(conn)?;
-        api::verify_version(remove_version, merge_info.post_info.remove_version)?;
-        api::verify_version(merge_to_version, merge_info.post_info.merge_to_version)?;
+    let (remove_mime_type, merge_to_mime_type, merged_post) = crate::get_connection()?.transaction(|conn| {
+        let mut remove_post: Post = post::table.find(remove_id).first(conn)?;
+        let mut merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
+        api::verify_version(remove_post.last_edit_time, merge_info.post_info.remove_version)?;
+        api::verify_version(merge_to_post.last_edit_time, merge_info.post_info.merge_to_version)?;
 
         // Merge tags
         let merge_to_tags = post_tag::table
@@ -515,15 +517,54 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
             .set(comment::post_id.eq(merge_to_id))
             .execute(conn)?;
 
+        // If replacing content, update post signature. This needs to be done before deletion because post signatures cascade
+        if merge_info.replace_content {
+            let (signature, indexes): (Vec<u8>, Vec<Option<i32>>) = post_signature::table
+                .find(remove_id)
+                .select((post_signature::signature, post_signature::words))
+                .first(conn)?;
+            diesel::update(post_signature::table.find(merge_to_id))
+                .set(post_signature::signature.eq(signature))
+                .execute(conn)?;
+            diesel::update(post_signature::table.find(merge_to_id))
+                .set(post_signature::words.eq(indexes))
+                .execute(conn)?;
+        }
+
         diesel::delete(post::table.find(remove_id)).execute(conn)?;
-        PostInfo::new_from_id(conn, client_id, merge_to_id, &fields).map_err(api::Error::from)
+
+        // If replacing content, update metadata. This needs to be done after deletion because metadata has UNIQUE constraint
+        if merge_info.replace_content {
+            std::mem::swap(&mut remove_post.user_id, &mut merge_to_post.user_id);
+            std::mem::swap(&mut remove_post.file_size, &mut merge_to_post.file_size);
+            std::mem::swap(&mut remove_post.width, &mut merge_to_post.width);
+            std::mem::swap(&mut remove_post.height, &mut merge_to_post.height);
+            std::mem::swap(&mut remove_post.type_, &mut merge_to_post.type_);
+            std::mem::swap(&mut remove_post.mime_type, &mut merge_to_post.mime_type);
+            std::mem::swap(&mut remove_post.checksum, &mut merge_to_post.checksum);
+            std::mem::swap(&mut remove_post.checksum_md5, &mut merge_to_post.checksum_md5);
+            std::mem::swap(&mut remove_post.flags, &mut merge_to_post.flags);
+            std::mem::swap(&mut remove_post.source, &mut merge_to_post.source);
+
+            merge_to_post = merge_to_post.save_changes(conn)?;
+        }
+
+        let merge_to_mime_type = merge_to_post.mime_type;
+        PostInfo::new(conn, client_id, merge_to_post, &fields)
+            .map(|post_info| (remove_post.mime_type, merge_to_mime_type, post_info))
+            .map_err(api::Error::from)
     })?;
 
     if merge_info.replace_content {
-        // TODO
+        filesystem::swap_posts(remove_id, remove_mime_type, merge_to_id, merge_to_mime_type)?;
     }
     if config::get().delete_source_files {
-        // TODO
+        let mime_type = if merge_info.replace_content {
+            merge_to_mime_type
+        } else {
+            remove_mime_type
+        };
+        filesystem::delete_post(remove_id, mime_type)?;
     }
 
     Ok(merged_post)
@@ -649,7 +690,7 @@ fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) ->
     })?;
 
     if config::get().delete_source_files {
-        filesystem::remove_post(post_id, mime_type)?;
+        filesystem::delete_post(post_id, mime_type)?;
     }
     Ok(())
 }

@@ -25,7 +25,7 @@ pub struct NewPost<'a> {
     pub source: Option<&'a str>,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(AsChangeset, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = post)]
 #[diesel(check_for_backend(Pg))]
