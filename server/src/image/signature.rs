@@ -219,7 +219,7 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
 */
 fn compute_differentials(mean_matrix: &Array2D<u8>) -> Vec<i16> {
     mean_matrix
-        .signed_enumerate()
+        .signed_indexed_iter()
         .flat_map(|(matrix_index, &center_value)| {
             IRect::new_centered_square(matrix_index, 1)
                 .iter()

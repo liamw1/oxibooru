@@ -7,7 +7,7 @@ pub mod config;
 mod error;
 mod filesystem;
 mod image;
-pub mod math;
+mod math;
 mod model;
 mod resource;
 mod schema;

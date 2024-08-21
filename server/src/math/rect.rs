@@ -80,7 +80,7 @@ where
     U: PrimInt + SignedCast,
     <U as SignedCast>::Signed: PrimInt,
 {
-    pub fn to_signed(&self) -> Result<IRect<U::Signed>, TryFromIntError> {
+    pub fn to_signed(self) -> Result<IRect<U::Signed>, TryFromIntError> {
         let i_bounds = self.i_bounds.to_signed()?;
         let j_bounds = self.j_bounds.to_signed()?;
         Ok(IRect::new(i_bounds, j_bounds))
@@ -92,7 +92,7 @@ where
     S: PrimInt + UnsignedCast,
     <S as UnsignedCast>::Unsigned: PrimInt,
 {
-    pub fn to_unsigned(&self) -> Result<IRect<S::Unsigned>, TryFromIntError> {
+    pub fn to_unsigned(self) -> Result<IRect<S::Unsigned>, TryFromIntError> {
         let i_bounds = self.i_bounds.to_unsigned()?;
         let j_bounds = self.j_bounds.to_unsigned()?;
         Ok(IRect::new(i_bounds, j_bounds))
@@ -184,11 +184,11 @@ where
         self.data.iter()
     }
 
-    pub fn enumerate(&self) -> std::iter::Zip<IRectIter<u32>, std::slice::Iter<T>> {
+    pub fn indexed_iter(&self) -> impl Iterator<Item = (IPoint2<u32>, &T)> {
         self.bounds().iter().zip(self.iter())
     }
 
-    pub fn signed_enumerate(&self) -> std::iter::Zip<IRectIter<i32>, std::slice::Iter<T>> {
+    pub fn signed_indexed_iter(&self) -> impl Iterator<Item = (IPoint2<i32>, &T)> {
         let signed_bounds = self.bounds().to_signed().unwrap();
         signed_bounds.iter().zip(self.iter())
     }
@@ -197,7 +197,7 @@ where
         self.data.iter_mut()
     }
 
-    pub fn enumerate_mut(&mut self) -> std::iter::Zip<IRectIter<u32>, std::slice::IterMut<T>> {
+    pub fn indexed_iter_mut(&mut self) -> impl Iterator<Item = (IPoint2<u32>, &mut T)> {
         self.bounds().iter().zip(self.iter_mut())
     }
 
