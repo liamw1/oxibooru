@@ -258,7 +258,7 @@ pub struct PostFlags {
 impl PostFlags {
     pub fn new(post_flags: &[PostFlag]) -> Self {
         Self {
-            flags: post_flags.into_iter().fold(0, |flags, &flag| flags | 1 << flag as u16),
+            flags: post_flags.iter().fold(0, |flags, &flag| flags | 1 << flag as u16),
         }
     }
 }
@@ -292,7 +292,6 @@ impl Serialize for PostFlags {
         const _: () = assert!(PostFlag::COUNT <= 16);
 
         let flags: Vec<&'static str> = (0..PostFlag::COUNT)
-            .into_iter()
             .filter(|f| self.flags & (1 << f) != 0) // Check if flag is set
             .map(|f| PostFlag::from_repr(f).unwrap().into())
             .collect();

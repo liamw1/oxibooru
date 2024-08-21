@@ -232,7 +232,6 @@ fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: Poo
             update::pool::add_names(conn, pool_id, 0, names)?;
         }
 
-        // TODO: Optimize
         if let Some(posts) = update.posts {
             api::verify_privilege(client.as_ref(), config::privileges().pool_edit_post)?;
             update::pool::delete_posts(conn, pool_id)?;

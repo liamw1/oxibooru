@@ -1,3 +1,5 @@
+#![allow(clippy::too_many_arguments)]
+
 mod admin;
 mod api;
 mod auth;
