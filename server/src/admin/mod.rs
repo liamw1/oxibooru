@@ -15,7 +15,6 @@ pub fn run_tasks() -> usize {
             AdminTask::RecomputePostSignatures => post::recompute_signatures(&mut conn).unwrap(),
             AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(&mut conn).unwrap(),
             AdminTask::RecomputePostChecksums => post::recompute_checksums(&mut conn).unwrap(),
-            AdminTask::ResetPasswords => post::reset_passwords(&mut conn).unwrap(),
         }
     }
     parsed_arguments.len()
@@ -28,5 +27,4 @@ enum AdminTask {
     RecomputePostSignatures,
     RecomputePostSignatureIndexes,
     RecomputePostChecksums,
-    ResetPasswords,
 }

@@ -1,16 +1,13 @@
 use crate::api::ApiResult;
-use crate::auth::{content, password};
+use crate::auth::content;
 use crate::filesystem;
 use crate::image::{read, signature};
-use crate::model::enums::{MimeType, UserRank};
+use crate::model::enums::MimeType;
 use crate::model::post::{NewPostSignature, PostSignature};
-use crate::model::user::User;
-use crate::schema::{post, post_signature, user};
+use crate::schema::{post, post_signature};
 use crate::util::Timer;
-use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use image::DynamicImage;
-use rand_core::OsRng;
 use std::path::Path;
 
 pub fn rename_post_content() -> std::io::Result<()> {
@@ -135,28 +132,6 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
     }
 
     Ok(())
-}
-
-pub fn reset_passwords(conn: &mut PgConnection) -> ApiResult<()> {
-    conn.transaction(|conn| {
-        let users: Vec<User> = user::table.load(conn)?;
-        for user in users.into_iter() {
-            diesel::update(user::table.find(user.id))
-                .set(user::rank.eq(UserRank::Administrator))
-                .execute(conn)?;
-
-            let salt = SaltString::generate(&mut OsRng);
-            let hash = password::hash_password("fractoid", salt.as_str())?;
-            diesel::update(user::table.find(user.id))
-                .set(user::password_salt.eq(salt.as_str()))
-                .execute(conn)?;
-            diesel::update(user::table.find(user.id))
-                .set(user::password_hash.eq(hash))
-                .execute(conn)?;
-        }
-
-        Ok(())
-    })
 }
 
 const PRINT_INTERVAL: usize = 1000;
