@@ -1,6 +1,6 @@
 use crate::auth::content;
 use crate::model::comment::Comment;
-use crate::model::enums::{AvatarStyle, MimeType, PostSafety, PostType, Rating, Score};
+use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType, Rating, Score};
 use crate::model::pool::{Pool, PoolPost};
 use crate::model::post::{Post, PostFavorite, PostFeature, PostNote, PostRelation, PostScore, PostTag};
 use crate::resource;
@@ -97,7 +97,7 @@ pub struct PostInfo {
     checksum: Option<String>,
     #[serde(rename = "checksumMD5")]
     checksum_md5: Option<Option<String>>,
-    flags: Option<Option<String>>,
+    flags: Option<PostFlags>,
     source: Option<Option<String>>,
     creation_time: Option<DateTime>,
     last_edit_time: Option<DateTime>,

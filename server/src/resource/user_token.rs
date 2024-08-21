@@ -4,11 +4,10 @@ use crate::util::DateTime;
 use serde::Serialize;
 use uuid::Uuid;
 
-// TODO: Remove renames by changing references to these names in client
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserTokenInfo {
-    version: DateTime, // TODO: Remove last_edit_time as it fills the same role as version here
+    version: DateTime,
     user: MicroUser,
     token: Uuid,
     note: String,

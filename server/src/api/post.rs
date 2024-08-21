@@ -3,7 +3,7 @@ use crate::api::{
 };
 use crate::auth::content;
 use crate::image::{read, signature};
-use crate::model::enums::{MimeType, PostSafety, PostType, Score};
+use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType, Score};
 use crate::model::post::{
     NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostSignature,
 };
@@ -334,13 +334,13 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct NewPostInfo {
+    content_token: String,
     safety: PostSafety,
     source: Option<String>,
     relations: Option<Vec<i32>>,
     anonymous: Option<bool>,
-    content_token: String,
     tags: Option<Vec<String>>,
-    // flags: TODO
+    flags: Option<Vec<PostFlag>>,
 }
 
 fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {
@@ -378,6 +378,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         type_: post_type,
         mime_type: content_type,
         checksum: &image_checksum,
+        flags: post_info.flags.as_deref().map(PostFlags::new).unwrap_or_default(),
         source: post_info.source.as_deref(),
     };
 
@@ -533,7 +534,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
 
         diesel::delete(post::table.find(remove_id)).execute(conn)?;
 
-        // If replacing content, update metadata. This needs to be done after deletion because metadata has UNIQUE constraint
+        // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
         if merge_info.replace_content {
             std::mem::swap(&mut remove_post.user_id, &mut merge_to_post.user_id);
             std::mem::swap(&mut remove_post.file_size, &mut merge_to_post.file_size);
@@ -622,7 +623,7 @@ struct PostUpdate {
     relations: Option<Vec<i32>>,
     tags: Option<Vec<String>>,
     // notes: TODO
-    // flags: TODO
+    flags: Option<Vec<PostFlag>>,
 }
 
 fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
@@ -661,6 +662,14 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
             let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), tags)?;
             update::post::delete_tags(conn, post_id)?;
             update::post::add_tags(conn, post_id, updated_tag_ids)?;
+        }
+        if let Some(flags) = update.flags {
+            api::verify_privilege(client.as_ref(), config::privileges().post_edit_flag)?;
+
+            let updated_flags = PostFlags::new(&flags);
+            diesel::update(post::table.find(post_id))
+                .set(post::flags.eq(updated_flags))
+                .execute(conn)?;
         }
 
         let client_id = client.map(|user| user.id);

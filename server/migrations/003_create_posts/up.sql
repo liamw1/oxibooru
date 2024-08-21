@@ -9,7 +9,7 @@ CREATE TABLE "post" (
     "mime_type" SMALLINT NOT NULL,   -- MIME stands for Multipurpose Internet Mail Extensions
     "checksum" VARCHAR(64) NOT NULL UNIQUE,
     "checksum_md5" VARCHAR(32),
-    "flags" VARCHAR(32),
+    "flags" SMALLINT NOT NULL,
     "source" VARCHAR(2048),
     "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "last_edit_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP

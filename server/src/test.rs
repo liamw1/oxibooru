@@ -1,4 +1,4 @@
-use crate::model::enums::{AvatarStyle, MimeType, UserRank};
+use crate::model::enums::{AvatarStyle, MimeType, PostFlags, UserRank};
 use crate::model::enums::{PostSafety, PostType};
 use crate::model::post::{NewPost, Post};
 use crate::model::user::{NewUser, NewUserToken, User, UserToken};
@@ -82,6 +82,7 @@ pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Pos
         type_: PostType::Image,
         mime_type: MimeType::Png,
         checksum: "",
+        flags: PostFlags::default(),
         source: None,
     };
     diesel::insert_into(post::table)

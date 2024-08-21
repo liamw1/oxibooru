@@ -68,7 +68,6 @@ impl Field {
     }
 }
 
-// TODO: Remove renames by changing references to these names in client
 #[skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

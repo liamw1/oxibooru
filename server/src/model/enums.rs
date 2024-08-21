@@ -6,7 +6,7 @@ use diesel::{AsExpression, FromSqlRow};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::path::Path;
-use strum::{EnumIter, EnumString, FromRepr};
+use strum::{EnumCount, EnumIter, EnumString, FromRepr, IntoStaticStr};
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -97,7 +97,19 @@ where
 }
 
 #[derive(
-    Debug, Copy, Clone, PartialEq, Eq, EnumIter, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize,
+    Debug,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    EnumIter,
+    EnumString,
+    FromRepr,
+    IntoStaticStr,
+    AsExpression,
+    FromSqlRow,
+    Serialize,
+    Deserialize,
 )]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
@@ -226,6 +238,65 @@ where
     fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(bytes)?;
         PostSafety::from_repr(database_value).ok_or(DeserializePostSafetyError.into())
+    }
+}
+
+#[derive(Copy, Clone, EnumCount, FromRepr, IntoStaticStr, Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[strum(serialize_all = "lowercase")]
+pub enum PostFlag {
+    Loop,
+    Sound,
+}
+
+#[derive(Debug, Copy, Clone, Default, AsExpression, FromSqlRow)]
+#[diesel(sql_type = SmallInt)]
+pub struct PostFlags {
+    flags: u16, // Bit mask of possible flags
+}
+
+impl PostFlags {
+    pub fn new(post_flags: &[PostFlag]) -> Self {
+        Self {
+            flags: post_flags.into_iter().fold(0, |flags, &flag| flags | 1 << flag as u16),
+        }
+    }
+}
+
+impl ToSql<SmallInt, Pg> for PostFlags
+where
+    i16: ToSql<SmallInt, Pg>,
+{
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        let value = self.flags as i16;
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
+    }
+}
+
+impl FromSql<SmallInt, Pg> for PostFlags
+where
+    i16: FromSql<SmallInt, Pg>,
+{
+    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
+        i16::from_sql(bytes).map(|database_value| Self {
+            flags: database_value as u16,
+        })
+    }
+}
+
+impl Serialize for PostFlags {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        const _: () = assert!(PostFlag::COUNT <= 16);
+
+        let flags: Vec<&'static str> = (0..PostFlag::COUNT)
+            .into_iter()
+            .filter(|f| self.flags & (1 << f) != 0) // Check if flag is set
+            .map(|f| PostFlag::from_repr(f).unwrap().into())
+            .collect();
+        flags.serialize(serializer)
     }
 }
 

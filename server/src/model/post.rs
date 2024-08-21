@@ -1,4 +1,4 @@
-use crate::model::enums::{MimeType, PostSafety, PostType, Score};
+use crate::model::enums::{MimeType, PostFlags, PostSafety, PostType, Score};
 use crate::model::tag::Tag;
 use crate::model::user::User;
 use crate::model::IntegerIdentifiable;
@@ -22,6 +22,7 @@ pub struct NewPost<'a> {
     pub type_: PostType,
     pub mime_type: MimeType,
     pub checksum: &'a str,
+    pub flags: PostFlags,
     pub source: Option<&'a str>,
 }
 
@@ -40,7 +41,7 @@ pub struct Post {
     pub mime_type: MimeType,
     pub checksum: String,
     pub checksum_md5: Option<String>,
-    pub flags: Option<String>,
+    pub flags: PostFlags,
     pub source: Option<String>,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
