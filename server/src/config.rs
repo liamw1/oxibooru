@@ -1,6 +1,7 @@
 use crate::model::enums::UserRank;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
@@ -150,11 +151,12 @@ pub struct PublicInfo {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    data_dir: String,
+    pub data_url: String,
     pub password_secret: String,
     pub content_secret: String,
-    pub data_url: String,
-    pub data_dir: String,
     pub delete_source_files: bool,
+    pub post_similarity_threshold: f64,
     #[serde(with = "serde_regex")]
     pub pool_name_regex: Regex,
     #[serde(with = "serde_regex")]
@@ -186,6 +188,10 @@ pub fn default_rank() -> UserRank {
     CONFIG.public_info.default_user_rank
 }
 
+pub fn data_dir() -> &'static str {
+    &DATA_DIR
+}
+
 pub fn database_url() -> &'static str {
     &DATABASE_URL
 }
@@ -200,6 +206,14 @@ pub fn port() -> u16 {
 
 static CONFIG: LazyLock<Config> =
     LazyLock::new(|| toml::from_str(&std::fs::read_to_string(get_config_path()).unwrap()).unwrap());
+
+static DATA_DIR: LazyLock<Cow<str>> = LazyLock::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
+    Ok(_) => Cow::Borrowed(&CONFIG.data_dir),
+    Err(_) => {
+        dotenvy::from_filename("../.env").unwrap();
+        Cow::Owned(std::env::var("MOUNT_DATA").unwrap())
+    }
+});
 
 static DATABASE_URL: LazyLock<String> = LazyLock::new(|| {
     if std::env::var("DOCKER_DEPLOYMENT").is_err() {

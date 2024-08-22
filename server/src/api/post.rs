@@ -117,7 +117,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 }
 
 const MAX_POSTS_PER_PAGE: i64 = 50;
-const POST_SIMILARITY_THRESHOLD: f64 = 0.45;
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
     fields
@@ -312,7 +311,8 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
             .into_iter()
             .filter_map(|post_signature| {
                 let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
-                (distance < POST_SIMILARITY_THRESHOLD).then_some((post_signature.post_id, distance))
+                let distance_threshold = 1.0 - config::get().post_similarity_threshold;
+                (distance < distance_threshold).then_some((post_signature.post_id, distance))
             })
             .collect();
         similar_posts.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());

@@ -10,6 +10,10 @@ data_dir = "/data"
 # Original functionality is false, to mitigate the impacts of admins going on unchecked post purges
 delete_source_files = false
 
+# Threshold used for reverse search
+# Must be a number between 0 and 1
+post_similarity_threshold = 0.55
+
 pool_name_regex     = "^\\S+$"
 pool_category_regex = "^[^\\s%+#/]+$"
 
@@ -52,7 +56,7 @@ user_edit_self_name        = "regular"
 user_edit_self_pass        = "regular"
 user_edit_self_email       = "regular"
 user_edit_self_avatar      = "regular"
-user_edit_self_rank        = "moderator" # one can't promote themselves or anyone to upper rank than their own.
+user_edit_self_rank        = "moderator" # one can't promote themselves or anyone to upper rank than their own
 user_delete_any            = "administrator"
 user_delete_self           = "regular"
 

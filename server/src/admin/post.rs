@@ -49,27 +49,39 @@ pub fn rename_post_content() -> std::io::Result<()> {
 pub fn recompute_indexes(conn: &mut PgConnection) -> QueryResult<()> {
     let _time = Timer::new("recompute_indexes");
 
-    let post_signatures: Vec<PostSignature> = post_signature::table.select(PostSignature::as_select()).load(conn)?;
-    let indexes: Vec<_> = post_signatures
-        .iter()
-        .map(|sig| signature::generate_indexes(&sig.signature))
-        .collect();
-    let new_post_signatures: Vec<_> = post_signatures
-        .iter()
-        .zip(indexes.iter())
-        .map(|(sig, words)| NewPostSignature {
-            post_id: sig.post_id,
-            signature: &sig.signature,
-            words,
-        })
-        .collect();
+    conn.transaction(|conn| {
+        let post_signatures: Vec<PostSignature> =
+            post_signature::table.select(PostSignature::as_select()).load(conn)?;
+        let indexes: Vec<_> = post_signatures
+            .iter()
+            .map(|sig| signature::generate_indexes(&sig.signature))
+            .collect();
+        let new_post_signatures: Vec<_> = post_signatures
+            .iter()
+            .zip(indexes.iter())
+            .map(|(sig, words)| NewPostSignature {
+                post_id: sig.post_id,
+                signature: &sig.signature,
+                words,
+            })
+            .collect();
 
-    diesel::delete(post_signature::table).execute(conn)?;
-    diesel::insert_into(post_signature::table)
-        .values(new_post_signatures)
-        .execute(conn)?;
+        diesel::delete(post_signature::table).execute(conn)?;
 
-    Ok(())
+        /*
+            Postgres has a limit on the number of parameters that can be in a query, so
+            we batch the insertion of post signatures in chunks.
+        */
+        const SIGNATURE_BATCH_SIZE: usize = 10000;
+        for (chunk_index, post_signature_chunk) in new_post_signatures.chunks(SIGNATURE_BATCH_SIZE).enumerate() {
+            diesel::insert_into(post_signature::table)
+                .values(post_signature_chunk)
+                .execute(conn)?;
+            println!("Indexes computed: {}", (chunk_index + 1) * SIGNATURE_BATCH_SIZE);
+        }
+
+        Ok(())
+    })
 }
 
 pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {

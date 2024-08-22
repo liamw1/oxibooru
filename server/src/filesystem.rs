@@ -20,7 +20,7 @@ pub fn temporary_upload_directory() -> &'static Path {
 }
 
 pub fn temporary_upload_filepath(filename: &str) -> PathBuf {
-    format!("{}/temporary-uploads/{}", config::get().data_dir, filename).into()
+    format!("{}/temporary-uploads/{}", config::data_dir(), filename).into()
 }
 
 pub fn upload(data: &[u8], content_type: MimeType) -> std::io::Result<String> {
@@ -93,11 +93,11 @@ pub fn data_size() -> std::io::Result<u64> {
 }
 
 static DATA_SIZE: AtomicU64 = AtomicU64::new(0);
-static POSTS_DIRECTORY: LazyLock<PathBuf> = LazyLock::new(|| format!("{}/posts", config::get().data_dir).into());
+static POSTS_DIRECTORY: LazyLock<PathBuf> = LazyLock::new(|| format!("{}/posts", config::data_dir()).into());
 static THUMBNAILS_DIRECTORY: LazyLock<PathBuf> =
-    LazyLock::new(|| format!("{}/generated-thumbnails", config::get().data_dir).into());
+    LazyLock::new(|| format!("{}/generated-thumbnails", config::data_dir()).into());
 static TEMPORARY_UPLOADS_DIRECTORY: LazyLock<PathBuf> =
-    LazyLock::new(|| format!("{}/temporary-uploads", config::get().data_dir).into());
+    LazyLock::new(|| format!("{}/temporary-uploads", config::data_dir()).into());
 
 fn remove_file(path: &Path) -> std::io::Result<()> {
     let file_size = std::fs::metadata(path)?.len();

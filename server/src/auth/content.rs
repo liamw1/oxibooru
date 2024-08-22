@@ -34,14 +34,14 @@ pub fn post_thumbnail_url(post_id: i32) -> String {
 pub fn post_content_path(post_id: i32, content_type: MimeType) -> PathBuf {
     format!(
         "{}/posts/{post_id}_{}.{}",
-        config::get().data_dir,
+        config::data_dir(),
         post_security_hash(post_id),
         content_type.extension()
     )
     .into()
 }
 pub fn post_thumbnail_path(post_id: i32) -> PathBuf {
-    format!("{}/generated-thumbnails/{post_id}_{}.jpg", config::get().data_dir, post_security_hash(post_id)).into()
+    format!("{}/generated-thumbnails/{post_id}_{}.jpg", config::data_dir(), post_security_hash(post_id)).into()
 }
 
 /*
