@@ -150,9 +150,6 @@ pub struct PublicInfo {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    pub postgres_user: String,
-    pub postgres_password: String,
-    pub postgres_database: String,
     pub password_secret: String,
     pub content_secret: String,
     pub data_url: String,
@@ -189,16 +186,8 @@ pub fn default_rank() -> UserRank {
     CONFIG.public_info.default_user_rank
 }
 
-pub fn database_url() -> String {
-    let user = &CONFIG.postgres_user;
-    let password = &CONFIG.postgres_password;
-    let database = &CONFIG.postgres_database;
-    let hostname = match std::env::var("DOCKER_DEPLOYMENT") {
-        Ok(_) => "host.docker.internal",
-        Err(_) => "localhost",
-    };
-
-    format!("postgres://{user}:{password}@{hostname}/{database}")
+pub fn database_url() -> &'static str {
+    &DATABASE_URL
 }
 
 pub fn port() -> u16 {
@@ -211,6 +200,22 @@ pub fn port() -> u16 {
 
 static CONFIG: LazyLock<Config> =
     LazyLock::new(|| toml::from_str(&std::fs::read_to_string(get_config_path()).unwrap()).unwrap());
+
+static DATABASE_URL: LazyLock<String> = LazyLock::new(|| {
+    if std::env::var("DOCKER_DEPLOYMENT").is_err() {
+        dotenvy::from_filename("../.env").unwrap();
+    }
+
+    let user = std::env::var("POSTGRES_USER").unwrap();
+    let password = std::env::var("POSTGRES_PASSWORD").unwrap();
+    let database = std::env::var("POSTGRES_DB").unwrap();
+    let hostname = match std::env::var("DOCKER_DEPLOYMENT") {
+        Ok(_) => "host.docker.internal",
+        Err(_) => "localhost",
+    };
+
+    format!("postgres://{user}:{password}@{hostname}/{database}")
+});
 
 fn get_config_path() -> PathBuf {
     // Use config.toml.dist if in development environment, config.toml if in production
