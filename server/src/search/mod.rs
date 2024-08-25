@@ -91,6 +91,10 @@ where
         self.extra_args = Some(QueryArgs { offset, limit });
     }
 
+    pub fn has_no_sort(&self) -> bool {
+        self.sorts.is_empty()
+    }
+
     fn parse_special_tokens<S>(&self) -> Result<Vec<S>, <S as FromStr>::Err>
     where
         S: FromStr,
