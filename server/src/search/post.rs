@@ -3,7 +3,7 @@ use crate::schema::{
     comment, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_tag, tag_name,
     user,
 };
-use crate::search::{Error, Order, ParsedSort, QueryArgs, SearchCriteria};
+use crate::search::{Error, Order, ParsedSort, QueryArgs, SearchCriteria, UnparsedFilter};
 use crate::{apply_filter, apply_having_clause, apply_str_filter, apply_time_filter, finalize};
 use diesel::dsl::*;
 use diesel::pg::Pg;
@@ -97,12 +97,24 @@ pub fn build_query<'a>(
             Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
             Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
             Token::Tag => {
+                // TODO: Apply this fix to other filters
+                let unnegated_filter = UnparsedFilter {
+                    kind: filter.kind,
+                    criteria: filter.criteria,
+                    negated: false,
+                };
+
                 let tags = post_tag::table
                     .select(post_tag::post_id)
                     .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
                     .into_boxed();
-                let subquery = apply_str_filter!(tags, tag_name::name, filter);
-                Ok(query.filter(post::id.eq_any(subquery)))
+                let subquery = apply_str_filter!(tags, tag_name::name, unnegated_filter);
+
+                Ok(if filter.negated {
+                    query.filter(post::id.ne_all(subquery))
+                } else {
+                    query.filter(post::id.eq_any(subquery))
+                })
             }
             Token::Uploader => {
                 let users = user::table.select(user::id).into_boxed();

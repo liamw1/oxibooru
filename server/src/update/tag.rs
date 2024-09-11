@@ -53,12 +53,6 @@ pub fn add_implications(conn: &mut PgConnection, tag_id: i32, implied_ids: Vec<i
     Ok(())
 }
 
-pub fn delete_implications(conn: &mut PgConnection, tag_id: i32) -> QueryResult<usize> {
-    diesel::delete(tag_implication::table)
-        .filter(tag_implication::parent_id.eq(tag_id))
-        .execute(conn)
-}
-
 pub fn add_suggestions(conn: &mut PgConnection, tag_id: i32, suggested_ids: Vec<i32>) -> ApiResult<()> {
     let new_suggestions: Vec<_> = suggested_ids
         .into_iter()
@@ -77,12 +71,6 @@ pub fn add_suggestions(conn: &mut PgConnection, tag_id: i32, suggested_ids: Vec<
     Ok(())
 }
 
-pub fn delete_suggestions(conn: &mut PgConnection, tag_id: i32) -> QueryResult<usize> {
-    diesel::delete(tag_suggestion::table)
-        .filter(tag_suggestion::parent_id.eq(tag_id))
-        .execute(conn)
-}
-
 /*
     Returns all tag ids implied from the given set of names.
     Returned ids will be distinct.
@@ -94,6 +82,7 @@ pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
     client: Option<&User>,
     names: Vec<String>,
+    detect_cyclic_dependencies: bool,
 ) -> ApiResult<Vec<i32>> {
     let mut implied_ids: Vec<i32> = tag_name::table
         .select(tag_name::tag_id)
@@ -112,7 +101,7 @@ pub fn get_or_create_tag_ids(
             .load(conn)?;
         all_implied_tag_ids.extend(implied_ids.iter().copied());
     }
-    if !implied_ids.is_empty() && iteration > 1 {
+    if detect_cyclic_dependencies && !implied_ids.is_empty() && iteration > 1 {
         return Err(api::Error::CyclicDependency);
     }
 

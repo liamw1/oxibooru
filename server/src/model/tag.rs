@@ -75,7 +75,7 @@ pub struct TagName {
     pub name: String,
 }
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag, foreign_key = parent_id))]
 #[diesel(table_name = tag_implication)]
 #[diesel(primary_key(parent_id, child_id))]
@@ -87,7 +87,7 @@ pub struct TagImplication {
 
 diesel::joinable!(tag_implication -> tag (parent_id));
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Tag, foreign_key = parent_id))]
 #[diesel(table_name = tag_suggestion)]
 #[diesel(primary_key(parent_id, child_id))]

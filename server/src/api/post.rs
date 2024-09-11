@@ -414,7 +414,8 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
             .get_result(conn)?;
 
         // Add tags
-        let tags = update::tag::get_or_create_tag_ids(conn, client.as_ref(), post_info.tags.unwrap_or_default())?;
+        let tags =
+            update::tag::get_or_create_tag_ids(conn, client.as_ref(), post_info.tags.unwrap_or_default(), false)?;
         update::post::add_tags(conn, post_id, tags)?;
 
         // Add relations
@@ -684,7 +685,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
         if let Some(tags) = update.tags {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_tag)?;
 
-            let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), tags)?;
+            let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), tags, false)?;
             update::post::delete_tags(conn, post_id)?;
             update::post::add_tags(conn, post_id, updated_tag_ids)?;
         }

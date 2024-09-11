@@ -1,5 +1,5 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
-use crate::model::tag::NewTag;
+use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
 use crate::resource::tag::{FieldTable, TagInfo};
 use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::util::DateTime;
@@ -7,6 +7,7 @@ use crate::{api, config, resource, search, update};
 use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -202,11 +203,11 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
 
         update::tag::add_names(conn, tag_id, 0, tag_info.names)?;
         if let Some(implications) = tag_info.implications {
-            let implied_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), implications)?;
+            let implied_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), implications, true)?;
             update::tag::add_implications(conn, tag_id, implied_ids)?;
         }
         if let Some(suggestions) = tag_info.suggestions {
-            let suggested_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), suggestions)?;
+            let suggested_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), suggestions, true)?;
             update::tag::add_suggestions(conn, tag_id, suggested_ids)?;
         }
 
@@ -238,23 +239,61 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
         api::verify_version(remove_version, merge_info.remove_version)?;
         api::verify_version(merge_to_version, merge_info.merge_to_version)?;
 
+        // TODO: Fix post relation merging too
+
         // Merge implications
-        let merged_implications: Vec<i32> = tag_implication::table
-            .select(tag_implication::child_id)
+        let involved_implications: Vec<TagImplication> = tag_implication::table
             .filter(tag_implication::parent_id.eq(remove_id))
+            .or_filter(tag_implication::child_id.eq(remove_id))
             .or_filter(tag_implication::parent_id.eq(merge_to_id))
+            .or_filter(tag_implication::child_id.eq(merge_to_id))
             .load(conn)?;
-        update::tag::delete_implications(conn, merge_to_id)?;
-        update::tag::add_implications(conn, merge_to_id, merged_implications)?;
+        let merged_implications: HashSet<_> = involved_implications
+            .iter()
+            .copied()
+            .map(|mut implication| {
+                if implication.parent_id == remove_id {
+                    implication.parent_id = merge_to_id
+                } else if implication.child_id == remove_id {
+                    implication.child_id = merge_to_id
+                }
+                implication
+            })
+            .collect();
+        diesel::delete(tag_implication::table)
+            .filter(tag_implication::parent_id.eq(merge_to_id))
+            .or_filter(tag_implication::child_id.eq(merge_to_id))
+            .execute(conn)?;
+        diesel::insert_into(tag_implication::table)
+            .values(merged_implications.into_iter().collect::<Vec<_>>())
+            .execute(conn)?;
 
         // Merge suggestions
-        let merged_suggestions: Vec<i32> = tag_suggestion::table
-            .select(tag_suggestion::child_id)
+        let involved_suggestions: Vec<TagSuggestion> = tag_suggestion::table
             .filter(tag_suggestion::parent_id.eq(remove_id))
+            .or_filter(tag_suggestion::child_id.eq(remove_id))
             .or_filter(tag_suggestion::parent_id.eq(merge_to_id))
+            .or_filter(tag_suggestion::child_id.eq(merge_to_id))
             .load(conn)?;
-        update::tag::delete_suggestions(conn, merge_to_id)?;
-        update::tag::add_suggestions(conn, merge_to_id, merged_suggestions)?;
+        let merged_suggestions: HashSet<_> = involved_suggestions
+            .iter()
+            .copied()
+            .map(|mut suggestion| {
+                if suggestion.parent_id == remove_id {
+                    suggestion.parent_id = merge_to_id
+                } else if suggestion.child_id == remove_id {
+                    suggestion.child_id = merge_to_id
+                }
+                suggestion
+            })
+            .collect();
+        diesel::delete(tag_suggestion::table)
+            .filter(tag_suggestion::parent_id.eq(merge_to_id))
+            .or_filter(tag_suggestion::child_id.eq(merge_to_id))
+            .execute(conn)?;
+        diesel::insert_into(tag_suggestion::table)
+            .values(merged_suggestions.into_iter().collect::<Vec<_>>())
+            .execute(conn)?;
 
         // Merge usages
         let merge_to_posts = post_tag::table
@@ -320,15 +359,19 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
         if let Some(implications) = update.implications {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_implication)?;
 
-            let implied_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), implications)?;
-            update::tag::delete_implications(conn, tag_id)?;
+            let implied_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), implications, true)?;
+            diesel::delete(tag_implication::table)
+                .filter(tag_implication::parent_id.eq(tag_id))
+                .execute(conn)?;
             update::tag::add_implications(conn, tag_id, implied_ids)?;
         }
         if let Some(suggestions) = update.suggestions {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_suggestion)?;
 
-            let suggested_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), suggestions)?;
-            update::tag::delete_suggestions(conn, tag_id)?;
+            let suggested_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), suggestions, true)?;
+            diesel::delete(tag_suggestion::table)
+                .filter(tag_suggestion::parent_id.eq(tag_id))
+                .execute(conn)?;
             update::tag::add_suggestions(conn, tag_id, suggested_ids)?;
         }
 
