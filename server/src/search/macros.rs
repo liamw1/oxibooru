@@ -37,6 +37,21 @@ macro_rules! apply_str_filter {
     };
 }
 
+/*
+    This is used for filtering based on subqueries which establish
+    a one-to-many relationship.
+*/
+#[macro_export]
+macro_rules! apply_subquery_filter {
+    ($query:expr, $expression:expr, $filter:expr, $subquery:expr) => {
+        if $filter.negated {
+            $query.filter($expression.ne_all($subquery))
+        } else {
+            $query.filter($expression.eq_any($subquery))
+        }
+    };
+}
+
 #[doc(hidden)]
 #[macro_export]
 macro_rules! apply_criteria {

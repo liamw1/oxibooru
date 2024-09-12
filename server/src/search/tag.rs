@@ -1,6 +1,6 @@
 use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::search::{Error, Order, ParsedSort, QueryArgs, SearchCriteria};
-use crate::{apply_having_clause, apply_str_filter, apply_time_filter, finalize};
+use crate::{apply_having_clause, apply_str_filter, apply_subquery_filter, apply_time_filter, finalize};
 use diesel::define_sql_function;
 use diesel::dsl::*;
 use diesel::pg::Pg;
@@ -47,8 +47,8 @@ pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<Box
             Token::LastEditTime => apply_time_filter!(query, tag::last_edit_time, filter),
             Token::Name => {
                 let names = tag_name::table.select(tag_name::tag_id).into_boxed();
-                let subquery = apply_str_filter!(names, tag_name::name, filter);
-                Ok(query.filter(tag::id.eq_any(subquery)))
+                let subquery = apply_str_filter!(names, tag_name::name, filter.unnegated());
+                Ok(apply_subquery_filter!(query, tag::id, filter, subquery))
             }
             Token::Category => {
                 let category_names = tag::table.select(tag::id).inner_join(tag_category::table).into_boxed();

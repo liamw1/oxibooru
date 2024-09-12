@@ -4,10 +4,11 @@ use crate::schema::{
     user,
 };
 use crate::search::{Error, Order, ParsedSort, QueryArgs, SearchCriteria, UnparsedFilter};
-use crate::{apply_filter, apply_having_clause, apply_str_filter, apply_time_filter, finalize};
+use crate::{apply_filter, apply_having_clause, apply_str_filter, apply_subquery_filter, apply_time_filter, finalize};
 use diesel::dsl::*;
 use diesel::pg::Pg;
 use diesel::prelude::*;
+use std::str::FromStr;
 use strum::EnumString;
 
 pub type BoxedQuery<'a> = IntoBoxed<'a, Select<post::table, post::id>, Pg>;
@@ -68,6 +69,7 @@ pub enum Token {
     FavTime,
     #[strum(serialize = "feature-date", serialize = "feature-time")]
     FeatureTime,
+    Special,
 }
 
 pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Token>, Error> {
@@ -81,7 +83,7 @@ pub fn build_query<'a>(
     search_criteria: &'a SearchCriteria<Token>,
 ) -> Result<BoxedQuery<'a>, Error> {
     let base_query = post::table.select(post::id).into_boxed();
-    let query = search_criteria
+    search_criteria
         .filters
         .iter()
         .try_fold(base_query, |query, filter| match filter.kind {
@@ -97,24 +99,12 @@ pub fn build_query<'a>(
             Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
             Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
             Token::Tag => {
-                // TODO: Apply this fix to other filters
-                let unnegated_filter = UnparsedFilter {
-                    kind: filter.kind,
-                    criteria: filter.criteria,
-                    negated: false,
-                };
-
                 let tags = post_tag::table
                     .select(post_tag::post_id)
                     .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
                     .into_boxed();
-                let subquery = apply_str_filter!(tags, tag_name::name, unnegated_filter);
-
-                Ok(if filter.negated {
-                    query.filter(post::id.ne_all(subquery))
-                } else {
-                    query.filter(post::id.eq_any(subquery))
-                })
+                let subquery = apply_str_filter!(tags, tag_name::name, filter.unnegated());
+                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
             Token::Uploader => {
                 let users = user::table.select(user::id).into_boxed();
@@ -123,13 +113,13 @@ pub fn build_query<'a>(
             }
             Token::Pool => {
                 let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
-                apply_filter!(pool_posts, pool_post::pool_id, filter, i32)
-                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+                let subquery = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i32)?;
+                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
             Token::NoteText => {
                 let post_notes = post_note::table.select(post_note::post_id).into_boxed();
-                let subquery = apply_str_filter!(post_notes, post_note::text, filter);
-                Ok(query.filter(post::id.eq_any(subquery)))
+                let subquery = apply_str_filter!(post_notes, post_note::text, filter.unnegated());
+                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
             Token::TagCount => {
                 let post_tags = post::table
@@ -187,70 +177,21 @@ pub fn build_query<'a>(
             }
             Token::CommentTime => {
                 let comments = comment::table.select(comment::post_id).into_boxed();
-                apply_time_filter!(comments, comment::creation_time, filter)
-                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+                let subquery = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
+                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
             Token::FavTime => {
                 let post_favorites = post_favorite::table.select(post_favorite::post_id).into_boxed();
-                apply_time_filter!(post_favorites, post_favorite::time, filter)
-                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+                let subquery = apply_time_filter!(post_favorites, post_favorite::time, filter.unnegated())?;
+                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
             Token::FeatureTime => {
                 let post_features = post_feature::table.select(post_feature::post_id).into_boxed();
-                apply_time_filter!(post_features, post_feature::time, filter)
-                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
+                let subquery = apply_time_filter!(post_features, post_feature::time, filter.unnegated())?;
+                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
-        })?;
-
-    let special_tokens = search_criteria.parse_special_tokens().map_err(Box::from)?;
-    special_tokens.iter().try_fold(query, |query, token| match token {
-        SpecialToken::Liked => client.ok_or(Error::NotLoggedIn).map(|client_id| {
-            let subquery = post_score::table
-                .select(post_score::post_id)
-                .filter(post_score::user_id.eq(client_id))
-                .filter(post_score::score.eq(1));
-            query.filter(post::id.eq_any(subquery))
-        }),
-        SpecialToken::Disliked => client.ok_or(Error::NotLoggedIn).map(|client_id| {
-            let subquery = post_score::table
-                .select(post_score::post_id)
-                .filter(post_score::user_id.eq(client_id))
-                .filter(post_score::score.eq(-1));
-            query.filter(post::id.eq_any(subquery))
-        }),
-        SpecialToken::Fav => client.ok_or(Error::NotLoggedIn).map(|client_id| {
-            let subquery = post_favorite::table
-                .select(post_favorite::post_id)
-                .filter(post_favorite::user_id.eq(client_id));
-            query.filter(post::id.eq_any(subquery))
-        }),
-        SpecialToken::Tumbleweed => {
-            // I'm not sure why these need to be boxed
-            let score_subquery = post::table
-                .select(post::id)
-                .left_join(post_score::table)
-                .group_by(post::id)
-                .having(count(post_score::post_id).eq(0))
-                .into_boxed();
-            let favorite_subquery = post::table
-                .select(post::id)
-                .left_join(post_favorite::table)
-                .group_by(post::id)
-                .having(count(post_favorite::post_id).eq(0))
-                .into_boxed();
-            let comment_subquery = post::table
-                .select(post::id)
-                .left_join(comment::table)
-                .group_by(post::id)
-                .having(count(comment::post_id).eq(0))
-                .into_boxed();
-
-            Ok(query
-                .filter(post::id.eq_any(score_subquery))
-                .filter(post::id.eq_any(favorite_subquery))
-                .filter(post::id.eq_any(comment_subquery)))
-        }
-    })
+            Token::Special => apply_special_filter(query, *filter, client),
+        })
 }
 
 pub fn get_ordered_ids(
@@ -306,6 +247,7 @@ pub fn get_ordered_ids(
         Token::CommentTime => comment_time_sorted(conn, query, sort, extra_args),
         Token::FavTime => favorite_time_sorted(conn, query, sort, extra_args),
         Token::FeatureTime => feature_time_sorted(conn, query, sort, extra_args),
+        Token::Special => unimplemented!(), // TODO
     }
 }
 
@@ -316,6 +258,50 @@ enum SpecialToken {
     Disliked,
     Fav,
     Tumbleweed,
+}
+
+fn apply_special_filter<'a>(
+    query: BoxedQuery<'a>,
+    filter: UnparsedFilter<'a, Token>,
+    client: Option<i32>,
+) -> Result<BoxedQuery<'a>, Error> {
+    let special_token = SpecialToken::from_str(filter.criteria).map_err(Box::from)?;
+    match special_token {
+        SpecialToken::Liked => client.ok_or(Error::NotLoggedIn).map(|client_id| {
+            let subquery = post_score::table
+                .select(post_score::post_id)
+                .filter(post_score::user_id.eq(client_id))
+                .filter(post_score::score.eq(1));
+            apply_subquery_filter!(query, post::id, filter, subquery)
+        }),
+        SpecialToken::Disliked => client.ok_or(Error::NotLoggedIn).map(|client_id| {
+            let subquery = post_score::table
+                .select(post_score::post_id)
+                .filter(post_score::user_id.eq(client_id))
+                .filter(post_score::score.eq(-1));
+            apply_subquery_filter!(query, post::id, filter, subquery)
+        }),
+        SpecialToken::Fav => client.ok_or(Error::NotLoggedIn).map(|client_id| {
+            let subquery = post_favorite::table
+                .select(post_favorite::post_id)
+                .filter(post_favorite::user_id.eq(client_id));
+            apply_subquery_filter!(query, post::id, filter, subquery)
+        }),
+        SpecialToken::Tumbleweed => {
+            let no_scores = count(post_score::post_id).eq(0);
+            let no_favorites = count(post_favorite::post_id).eq(0);
+            let no_comments = count(comment::post_id).eq(0);
+            let subquery = post::table
+                .select(post::id)
+                .left_join(post_score::table)
+                .left_join(post_favorite::table)
+                .left_join(comment::table)
+                .group_by(post::id)
+                .having(no_scores.and(no_favorites).and(no_comments))
+                .into_boxed();
+            Ok(apply_subquery_filter!(query, post::id, filter, subquery))
+        }
+    }
 }
 
 fn uploader_sorted(

@@ -1,6 +1,6 @@
 use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::search::{Error, Order, ParsedSort, QueryArgs, SearchCriteria};
-use crate::{apply_having_clause, apply_str_filter, apply_time_filter, finalize};
+use crate::{apply_having_clause, apply_str_filter, apply_subquery_filter, apply_time_filter, finalize};
 use diesel::dsl::*;
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -43,8 +43,8 @@ pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<Box
             Token::LastEditTime => apply_time_filter!(query, pool::last_edit_time, filter),
             Token::Name => {
                 let names = pool_name::table.select(pool_name::pool_id).into_boxed();
-                let subquery = apply_str_filter!(names, pool_name::name, filter);
-                Ok(query.filter(pool::id.eq_any(subquery)))
+                let subquery = apply_str_filter!(names, pool_name::name, filter.unnegated());
+                Ok(apply_subquery_filter!(query, pool::id, filter, subquery))
             }
             Token::Category => {
                 let category_names = pool::table

@@ -32,7 +32,6 @@ pub enum Error {
 pub struct SearchCriteria<'a, T> {
     filters: Vec<UnparsedFilter<'a, T>>,
     sorts: Vec<ParsedSort<T>>,
-    specials: Vec<&'a str>, // Leaving this as unparsed since it makes things more difficult otherwise
     random_sort: bool,
     extra_args: Option<QueryArgs>,
 }
@@ -46,7 +45,6 @@ where
     pub fn new(search_criteria: &'a str, anonymous_token: T) -> Result<Self, <T as FromStr>::Err> {
         let mut filters: Vec<UnparsedFilter<T>> = Vec::new();
         let mut sorts: Vec<ParsedSort<T>> = Vec::new();
-        let mut specials: Vec<&'a str> = Vec::new();
         let mut random_sort = false;
 
         for mut term in search_criteria.split_whitespace() {
@@ -56,7 +54,6 @@ where
             }
 
             match term.split_once(':') {
-                Some(("special", value)) => specials.push(value),
                 Some(("sort", "random")) => random_sort = true,
                 Some(("sort", value)) => {
                     let kind = T::from_str(value)?;
@@ -81,7 +78,6 @@ where
         Ok(Self {
             filters,
             sorts,
-            specials,
             random_sort,
             extra_args: None,
         })
@@ -93,14 +89,6 @@ where
 
     pub fn has_no_sort(&self) -> bool {
         self.sorts.is_empty()
-    }
-
-    fn parse_special_tokens<S>(&self) -> Result<Vec<S>, <S as FromStr>::Err>
-    where
-        S: FromStr,
-        <S as FromStr>::Err: std::error::Error,
-    {
-        self.specials.iter().copied().map(S::from_str).collect()
     }
 }
 
@@ -150,10 +138,21 @@ enum StrCritera<'a> {
     WildCard(String),
 }
 
+#[derive(Clone, Copy)]
 struct UnparsedFilter<'a, T> {
     kind: T,
     criteria: &'a str,
     negated: bool,
+}
+
+impl<'a, T> UnparsedFilter<'a, T> {
+    fn unnegated(self) -> Self {
+        Self {
+            kind: self.kind,
+            criteria: self.criteria,
+            negated: false,
+        }
+    }
 }
 
 #[derive(Clone, Copy)]
