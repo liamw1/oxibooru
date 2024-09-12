@@ -6,8 +6,8 @@
 services:
   server:
     build: server
-    # depends_on:
-    #   - sql
+    depends_on:
+      - sql
     environment:
       ## These should be the names of the dependent containers listed below,
       ## or FQDNs/IP addresses if these services are running outside of Docker
@@ -34,14 +34,14 @@ services:
     ports:
       - "${PORT}:80"
 
-  # sql:
-  #   image: postgres:12-alpine
-  #   restart: unless-stopped
-  #   environment:
-  #     POSTGRES_USER:
-  #     POSTGRES_PASSWORD:
-  #     POSTGRES_DB:
-  #   volumes:
-  #     - "${MOUNT_SQL}:/var/lib/postgresql/data"
-  #   ports: 
-  #     - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+  sql:
+    image: postgres:12-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:
+      POSTGRES_PASSWORD:
+      POSTGRES_DB:
+    volumes:
+      - "${MOUNT_SQL}:/var/lib/postgresql/data"
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
