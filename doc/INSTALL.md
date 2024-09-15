@@ -3,78 +3,70 @@ and Docker Compose (version 1.6.0 or greater) already installed.
 
 ### Prepare things
 
-1. Download the `oxibooru` source:
+1. Install the diesel cli
+    ```console
+    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/diesel-rs/diesel/releases/latest/download/diesel_cli-installer.sh | sh
+    ```
+    Restart your terminal.
 
+2. Download the `oxibooru` source
     ```console
     user@host:~$ git clone https://github.com/liamw1/oxibooru
     user@host:~$ cd oxibooru
     ```
-2. Configure the application:
 
+3. Configure the application
     ```console
-    user@host:szuru$ cp server/config.toml.dist server/config.toml
-    user@host:szuru$ edit server/config.toml
+    user@host:oxibooru$ cp server/config.toml.dist server/config.toml
+    user@host:oxibooru$ edit server/config.toml
     ```
-
     Pay extra attention to these fields:
 
     - password_secret
     - content_secret
 
-3. Configure Docker Compose:
-
+4. Configure Docker Compose
     ```console
-    user@host:szuru$ cp doc/example.env .env
-    user@host:szuru$ edit .env
+    user@host:oxibooru$ cp doc/example.env .env
+    user@host:oxibooru$ edit .env
     ```
-
     Change the values of the variables in `.env` as needed.
     Read the comments to guide you. Note that `.env` should be in the root
     directory of this repository.
 
-4. Build the containers:
+5. Give mount directories permissions
 
+    Set owner of mount directories (MOUNT_DATA and MOUNT_SQL in the .env) to the user with id 1000:
     ```console
-    user@host:szuru$ docker-compose build
+    user@host:oxibooru$ sudo chown -R 1000:1000 <MOUNT_DATA>
+    user@host:oxibooru$ sudo chown -R 1000:1000 <MOUNT_SQL>
     ```
 
-5. Run it!
+6. Setup database
 
-    For first run, it is recommended to start the database separately:
+    First, start database container:
     ```console
-    user@host:szuru$ docker-compose up -d sql
+    user@host:oxibooru$ docker-compose up -d sql
     ```
+    Then, run migration scripts:
+    ```console
+    user@host:oxibooru$ cd server
+    user@host:oxibooru/server$ diesel migration run --database-url=postgres://<POSTGRES_USER>:<POSTGRES_PASSWORD>@localhost:<POSTGRES_PORT>/<POSTGRES_DB>
+    ```
+
+7. Build the containers:
+    ```console
+    user@host:oxibooru$ docker-compose build
+    ```
+
+8. Run it!
 
     To start all containers:
     ```console
-    user@host:szuru$ docker-compose up -d
+    user@host:oxibooru$ docker-compose up -d
     ```
-
     To view/monitor the application logs:
     ```console
-    user@host:szuru$ docker-compose logs -f
+    user@host:oxibooru$ docker-compose logs -f
     # (CTRL+C to exit)
     ```
-
-### Additional Features
-
-1. **CLI-level administrative tools**
-
-    You can use the included `szuru-admin` script to perform various
-    administrative tasks such as changing or resetting a user password. To
-    run from docker:
-
-    ```console
-    user@host:szuru$ docker-compose run server ./szuru-admin --help
-    ```
-
-    will give you a breakdown on all available commands.
-
-2. **Using a seperate domain to host static files (image content)**
-
-    If you want to host your website on, (`http://example.com/`) but want
-    to serve the images on a different domain, (`http://static.example.com/`)
-    then you can run the backend container with an additional environment
-    variable `DATA_URL=http://static.example.com/`. Make sure that this
-    additional host has access contents to the `/data` volume mounted in the
-    backend.
