@@ -213,6 +213,7 @@ impl ErrorKind for crate::search::Error {
         match self {
             Self::ParseFailed(_) => "SearchParseFailed",
             Self::InvalidTime(err) => err.kind(),
+            Self::InvalidSort => "InvalidSort",
             Self::NotLoggedIn => "NotLoggedIn",
         }
     }

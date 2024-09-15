@@ -73,9 +73,16 @@ pub enum Token {
 }
 
 pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Token>, Error> {
-    SearchCriteria::new(search_criteria, Token::Tag)
-        .map_err(Box::from)
-        .map_err(Error::from)
+    let criteria = SearchCriteria::new(search_criteria, Token::Tag).map_err(Box::from)?;
+    for sort in criteria.sorts.iter() {
+        match sort.kind {
+            Token::ContentChecksum => return Err(Error::InvalidSort),
+            Token::NoteText => return Err(Error::InvalidSort),
+            Token::Special => return Err(Error::InvalidSort),
+            _ => (),
+        }
+    }
+    Ok(criteria)
 }
 
 pub fn build_query<'a>(
@@ -216,6 +223,7 @@ pub fn get_ordered_ids(
         order: Order::default(),
     });
 
+    const INVALID_SORT_ERROR: &str = "Invalid sort-style token!";
     match sort.kind {
         Token::Id => finalize!(query, post::id, sort, extra_args).load(conn),
         Token::FileSize => finalize!(query, post::file_size, sort, extra_args).load(conn),
@@ -225,7 +233,7 @@ pub fn get_ordered_ids(
         Token::ImageAspectRatio => finalize!(query, post::width / post::height, sort, extra_args).load(conn),
         Token::Safety => finalize!(query, post::safety, sort, extra_args).load(conn),
         Token::Type => finalize!(query, post::type_, sort, extra_args).load(conn),
-        Token::ContentChecksum => finalize!(query, post::checksum, sort, extra_args).load(conn),
+        Token::ContentChecksum => panic!("{INVALID_SORT_ERROR}"),
         Token::CreationTime => finalize!(query, post::creation_time, sort, extra_args).load(conn),
         Token::LastEditTime => finalize!(query, post::last_edit_time, sort, extra_args).load(conn),
 
@@ -237,7 +245,7 @@ pub fn get_ordered_ids(
         Token::Tag => tag_count_sorted(conn, query, sort, extra_args),
         Token::Uploader => uploader_sorted(conn, query, sort, extra_args),
         Token::Pool => pool_sorted(conn, query, sort, extra_args),
-        Token::NoteText => note_text_sorted(conn, query, sort, extra_args),
+        Token::NoteText => panic!("{INVALID_SORT_ERROR}"),
         Token::TagCount => tag_count_sorted(conn, query, sort, extra_args),
         Token::CommentCount => comment_count_sorted(conn, query, sort, extra_args),
         Token::RelationCount => relation_count_sorted(conn, query, sort, extra_args),
@@ -247,7 +255,7 @@ pub fn get_ordered_ids(
         Token::CommentTime => comment_time_sorted(conn, query, sort, extra_args),
         Token::FavTime => favorite_time_sorted(conn, query, sort, extra_args),
         Token::FeatureTime => feature_time_sorted(conn, query, sort, extra_args),
-        Token::Special => unimplemented!(), // TODO
+        Token::Special => panic!("{INVALID_SORT_ERROR}"),
     }
 }
 
@@ -334,22 +342,6 @@ fn pool_sorted(
         .filter(post::id.eq_any(&filtered_posts))
         .into_boxed();
     finalize!(final_query, count(pool_post::pool_id), sort, extra_args).load(conn)
-}
-
-fn note_text_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(post_note::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, min(post_note::text), sort, extra_args).load(conn)
 }
 
 fn tag_count_sorted(

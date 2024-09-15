@@ -1,11 +1,23 @@
 use crate::search::Error;
 use crate::search::{Criteria, StrCritera, TimeParsingError};
 use crate::util::DateTime;
+use itertools::Itertools;
+use std::borrow::Cow;
 use std::str::FromStr;
+
+// Make generic on Pattern when stabilized so that char pattern can be used
+pub fn split_escaped<'a>(text: &'a str, pat: &'a str) -> impl Iterator<Item = &'a str> {
+    text.split(pat)
+        .filter(|slice| slice.chars().rev().take_while(|&c| c == '\\').count() % 2 == 0)
+}
+
+pub fn split_once_escaped<'a>(text: &'a str, pat: &'a str) -> Option<(&'a str, &'a str)> {
+    split_escaped(text, pat).collect_tuple()
+}
 
 pub fn str_criteria(filter: &str) -> StrCritera {
     if filter.contains('*') {
-        StrCritera::WildCard(filter.replace('*', "%").replace('_', "\\_"))
+        StrCritera::WildCard(unescape(filter).replace('*', "%").replace('_', "\\_"))
     } else {
         StrCritera::Regular(parse_regular_str(filter))
     }
@@ -49,6 +61,25 @@ where
         .map_err(Error::from)
 }
 
+fn unescape(text: &str) -> Cow<str> {
+    if text.contains('\\') {
+        Cow::Owned(text.replace("\\.", ".").replace("\\,", ",").replace("\\:", ":"))
+    } else {
+        Cow::Borrowed(text)
+    }
+}
+
+fn parse_regular_str(filter: &str) -> Criteria<Cow<str>> {
+    if let Some(split_str) = split_once_escaped(filter, "..") {
+        return match split_str {
+            (left, "") => Criteria::GreaterEq(unescape(left)),
+            ("", right) => Criteria::LessEq(unescape(right)),
+            (left, right) => Criteria::Range(unescape(left)..unescape(right)),
+        };
+    }
+    Criteria::Values(split_escaped(filter, ",").map(unescape).collect())
+}
+
 fn parse_time(time: &str) -> Result<DateTime, TimeParsingError> {
     if time == "today" {
         return Ok(DateTime::today());
@@ -68,17 +99,6 @@ fn parse_time(time: &str) -> Result<DateTime, TimeParsingError> {
     }
 
     DateTime::from_date(year, month.unwrap_or(1), day.unwrap_or(1)).map_err(TimeParsingError::from)
-}
-
-fn parse_regular_str(filter: &str) -> Criteria<&str> {
-    if let Some(split_str) = filter.split_once("..") {
-        return match split_str {
-            (left, "") => Criteria::GreaterEq(left),
-            ("", right) => Criteria::LessEq(right),
-            (left, right) => Criteria::Range(left..right),
-        };
-    }
-    Criteria::Values(filter.split(',').collect())
 }
 
 #[cfg(test)]
@@ -114,11 +134,14 @@ mod test {
         assert_eq!(criteria("0..1").unwrap(), Criteria::Range(0..1));
         assert_eq!(criteria("-10..5").unwrap(), Criteria::Range(-10..5));
 
-        assert_eq!(str_criteria("str"), StrCritera::Regular(Criteria::Values(vec!["str"])));
-        assert_eq!(str_criteria("a,b,c"), StrCritera::Regular(Criteria::Values(vec!["a", "b", "c"])));
-        assert_eq!(str_criteria("a.."), StrCritera::Regular(Criteria::GreaterEq("a")));
-        assert_eq!(str_criteria("..z"), StrCritera::Regular(Criteria::LessEq("z")));
-        assert_eq!(str_criteria("a..z"), StrCritera::Regular(Criteria::Range("a".."z")));
+        assert_eq!(str_criteria("str"), StrCritera::Regular(Criteria::Values(vec![Cow::Borrowed("str")])));
+        assert_eq!(
+            str_criteria("a,b,c"),
+            StrCritera::Regular(Criteria::Values(vec![Cow::Borrowed("a"), Cow::Borrowed("b"), Cow::Borrowed("c")]))
+        );
+        assert_eq!(str_criteria("a.."), StrCritera::Regular(Criteria::GreaterEq(Cow::Borrowed("a"))));
+        assert_eq!(str_criteria("..z"), StrCritera::Regular(Criteria::LessEq(Cow::Borrowed("z"))));
+        assert_eq!(str_criteria("a..z"), StrCritera::Regular(Criteria::Range(Cow::Borrowed("a")..Cow::Borrowed("z"))));
         assert_eq!(str_criteria("*str*"), StrCritera::WildCard(String::from("%str%")));
         assert_eq!(str_criteria("a*,*b,*c*"), StrCritera::WildCard(String::from("a%,%b,%c%")));
         assert_eq!(str_criteria("*a..b"), StrCritera::WildCard(String::from("%a..b")));

@@ -19,68 +19,65 @@
 
     - Tag categories
         - [Listing tag categories](#listing-tag-categories)
+        - [Getting tag category](#getting-tag-category)
         - [Creating tag category](#creating-tag-category)
         - [Updating tag category](#updating-tag-category)
-        - [Getting tag category](#getting-tag-category)
-        - [Deleting tag category](#deleting-tag-category)
         - [Setting default tag category](#setting-default-tag-category)
+        - [Deleting tag category](#deleting-tag-category)
     - Tags
         - [Listing tags](#listing-tags)
-        - [Creating tag](#creating-tag)
-        - [Updating tag](#updating-tag)
         - [Getting tag](#getting-tag)
-        - [Deleting tag](#deleting-tag)
+        - [Getting tag siblings](#getting-tag-siblings)
+        - [Creating tag](#creating-tag)
         - [Merging tags](#merging-tags)
-        - [Listing tag siblings](#listing-tag-siblings)
+        - [Updating tag](#updating-tag)
+        - [Deleting tag](#deleting-tag)
     - Posts
         - [Listing posts](#listing-posts)
-        - [Creating post](#creating-post)
-        - [Updating post](#updating-post)
         - [Getting post](#getting-post)
         - [Getting around post](#getting-around-post)
-        - [Deleting post](#deleting-post)
-        - [Merging posts](#merging-posts)
-        - [Rating post](#rating-post)
-        - [Adding post to favorites](#adding-post-to-favorites)
-        - [Removing post from favorites](#removing-post-from-favorites)
         - [Getting featured post](#getting-featured-post)
         - [Featuring post](#featuring-post)
         - [Reverse image search](#reverse-image-search)
+        - [Creating post](#creating-post)
+        - [Merging posts](#merging-posts)
+        - [Adding post to favorites](#adding-post-to-favorites)
+        - [Rating post](#rating-post)
+        - [Updating post](#updating-post)
+        - [Deleting post](#deleting-post)
+        - [Removing post from favorites](#removing-post-from-favorites)
     - Pool categories
         - [Listing pool categories](#listing-pool-categories)
+        - [Getting pool category](#getting-pool-category)
         - [Creating pool category](#creating-pool-category)
         - [Updating pool category](#updating-pool-category)
-        - [Getting pool category](#getting-pool-category)
-        - [Deleting pool category](#deleting-pool-category)
         - [Setting default pool category](#setting-default-pool-category)
+        - [Deleting pool category](#deleting-pool-category)
     - Pools
         - [Listing pools](#listing-pools)
-        - [Creating pool](#creating-pool)
-        - [Updating pool](#updating-pool)
         - [Getting pool](#getting-pool)
-        - [Deleting pool](#deleting-pool)
+        - [Creating pool](#creating-pool)
         - [Merging pools](#merging-pools)
+        - [Updating pool](#updating-pool)
+        - [Deleting pool](#deleting-pool)
     - Comments
         - [Listing comments](#listing-comments)
+        - [Getting comment](#getting-comment)
         - [Creating comment](#creating-comment)
         - [Updating comment](#updating-comment)
-        - [Getting comment](#getting-comment)
-        - [Deleting comment](#deleting-comment)
         - [Rating comment](#rating-comment)
+        - [Deleting comment](#deleting-comment)
     - Users
         - [Listing users](#listing-users)
+        - [Getting user](#getting-user)
         - [Creating user](#creating-user)
         - [Updating user](#updating-user)
-        - [Getting user](#getting-user)
         - [Deleting user](#deleting-user)
     - User Tokens
         - [Listing user tokens](#listing-user-tokens)
         - [Creating user token](#creating-user-token)
         - [Updating user token](#updating-user-token)
         - [Deleting user token](#deleting-user-token)
-    - Password reset
-        - [Password reset - step 1: mail request](#password-reset---step-2-confirmation)
-        - [Password reset - step 2: confirmation](#password-reset---step-2-confirmation)
     - Global info
         - [Getting global info](#getting-global-info)
     - File uploads
@@ -189,53 +186,6 @@ code together with JSON of following structure:
 }
 ```
 
-List of possible error names:
-
-- `MissingRequiredFileError`
-- `MissingRequiredParameterError`
-- `InvalidParameterError` (when trying to pass text when integer is expected etc.)
-- `IntegrityError` (race conditions when editing the same resource)
-- `SearchError`
-- `AuthError`
-- `PostNotFoundError`
-- `PostAlreadyFeaturedError`
-- `PostAlreadyUploadedError`
-- `InvalidPostIdError`
-- `InvalidPostSafetyError`
-- `InvalidPostSourceError`
-- `InvalidPostContentError`
-- `InvalidPostRelationError`
-- `InvalidPostNoteError`
-- `InvalidPostFlagError`
-- `InvalidFavoriteTargetError`
-- `InvalidCommentIdError`
-- `CommentNotFoundError`
-- `EmptyCommentTextError`
-- `InvalidScoreTargetError`
-- `InvalidScoreValueError`
-- `TagCategoryNotFoundError`
-- `TagCategoryAlreadyExistsError`
-- `TagCategoryIsInUseError`
-- `InvalidTagCategoryNameError`
-- `InvalidTagCategoryColorError`
-- `TagNotFoundError`
-- `TagAlreadyExistsError`
-- `TagIsInUseError`
-- `InvalidTagNameError`
-- `InvalidTagRelationError`
-- `InvalidTagCategoryError`
-- `InvalidTagDescriptionError`
-- `UserNotFoundError`
-- `UserAlreadyExistsError`
-- `InvalidUserNameError`
-- `InvalidEmailError`
-- `InvalidPasswordError`
-- `InvalidRankError`
-- `InvalidAvatarError`
-- `ProcessingError` (failed to generate thumbnail or download remote file)
-- `ValidationError` (catch all for odd validation errors)
-
-
 ## Field selecting
 
 For performance considerations, sometimes the client might want to choose the
@@ -265,16 +215,15 @@ For example, given `GET /post/1`, the server responds like this:
 ```
 {
     ...,
-    "version": 2
+    "version": 2024-09-14T19:06:56.979184564Z
 }
 ```
 
-This means the client must then send `{"version": 2}` back too. If the client
-fails to do so, the server will reject the request notifying about missing
-parameter. If someone has edited the post in the mean time, the server will
-reject the request as well, in which case the client is encouraged to notify
-the user about the situation.
-
+This means the client must then send `{"version": 2024-09-14T19:06:56.979184564Z}`
+back too. If the client fails to do so, the server will reject the request notifying
+about missing parameter. If someone has edited the post in the mean time, the server
+will reject the request as well, in which case the client is encouraged to notify the
+user about the situation.
 
 # API reference
 
@@ -299,6 +248,24 @@ data.
 - **Description**
 
     Lists all tag categories. Doesn't use paging.
+
+## Getting tag category
+- **Request**
+
+    `GET /tag-category/<name>`
+
+- **Output**
+
+    A [tag category resource](#tag-category).
+
+- **Errors**
+
+    - the tag category does not exist
+    - privileges are too low
+
+- **Description**
+
+    Retrieves information about an existing tag category.
 
 ## Creating tag category
 - **Request**
@@ -367,10 +334,16 @@ data.
     except the [`version`](#versioning) are optional - update concerns only
     provided fields.
 
-## Getting tag category
+## Setting default tag category
 - **Request**
 
-    `GET /tag-category/<name>`
+    `PUT /tag-category/<name>/default`
+
+- **Input**
+
+    ```json5
+    {}
+    ```
 
 - **Output**
 
@@ -383,7 +356,8 @@ data.
 
 - **Description**
 
-    Retrieves information about an existing tag category.
+    Sets given tag category as default. All new tags created manually or
+    automatically will have this category.
 
 ## Deleting tag category
 - **Request**
@@ -415,31 +389,6 @@ data.
 
     Deletes an existing non-default tag category. Tags belonging to this 
     category will be moved to the default category.
-
-## Setting default tag category
-- **Request**
-
-    `PUT /tag-category/<name>/default`
-
-- **Input**
-
-    ```json5
-    {}
-    ```
-
-- **Output**
-
-    A [tag category resource](#tag-category).
-
-- **Errors**
-
-    - the tag category does not exist
-    - privileges are too low
-
-- **Description**
-
-    Sets given tag category as default. All new tags created manually or
-    automatically will have this category.
 
 ## Listing tags
 - **Request**
@@ -504,6 +453,58 @@ data.
 
     None.
 
+## Getting tag
+- **Request**
+
+    `GET /tag/<name>`
+
+- **Output**
+
+    A [tag resource](#tag).
+
+- **Errors**
+
+    - the tag does not exist
+    - privileges are too low
+
+- **Description**
+
+    Retrieves information about an existing tag.
+
+## Getting tag siblings
+- **Request**
+
+    `GET /tag-siblings/<name>`
+
+- **Output**
+
+    ```json5
+    {
+        "results": [
+            {
+                "tag": <tag>,
+                "occurrences": <occurrence-count>
+            },
+            {
+                "tag": <tag>,
+                "occurrences": <occurrence-count>
+            }
+        ]
+    }
+    ```
+    ...where `<tag>` is a [tag resource](#tag).
+
+- **Errors**
+
+    - privileges are too low
+
+- **Description**
+
+    Lists siblings of given tag, e.g. tags that were used in the same posts as
+    the given tag. `occurrences` field signifies how many times a given sibling
+    appears with given tag. Results are sorted by occurrences count and the
+    list is truncated to the first 50 elements. Doesn't use paging.
+
 ## Creating tag
 - **Request**
 
@@ -545,6 +546,39 @@ data.
     implications, no suggestions, one name and their category is set to the
     first tag category found. If there are no tag categories established yet,
     an error will be thrown.
+
+## Merging tags
+- **Request**
+
+    `POST /tag-merge/`
+
+- **Input**
+
+    ```json5
+    {
+        "removeVersion":  <source-tag-version>,
+        "remove":         <source-tag-name>,
+        "mergeToVersion": <target-tag-version>,
+        "mergeTo":        <target-tag-name>
+    }
+    ```
+
+- **Output**
+
+    A [tag resource](#tag) containing the merged tag.
+
+- **Errors**
+
+    - the version of either tag is outdated
+    - the source or target tag does not exist
+    - the source tag is the same as the target tag
+    - privileges are too low
+
+- **Description**
+
+    Removes source tag and merges all of its usages, suggestions and
+    implications to the target tag. Other tag properties such as category and
+    aliases do not get transferred and are discarded.
 
 ## Updating tag
 - **Request**
@@ -590,24 +624,6 @@ data.
     the [`version`](#versioning) are optional - update concerns only provided
     fields.
 
-## Getting tag
-- **Request**
-
-    `GET /tag/<name>`
-
-- **Output**
-
-    A [tag resource](#tag).
-
-- **Errors**
-
-    - the tag does not exist
-    - privileges are too low
-
-- **Description**
-
-    Retrieves information about an existing tag.
-
 ## Deleting tag
 - **Request**
 
@@ -636,73 +652,6 @@ data.
 - **Description**
 
     Deletes existing tag. The tag to be deleted must have no usages.
-
-## Merging tags
-- **Request**
-
-    `POST /tag-merge/`
-
-- **Input**
-
-    ```json5
-    {
-        "removeVersion":  <source-tag-version>,
-        "remove":         <source-tag-name>,
-        "mergeToVersion": <target-tag-version>,
-        "mergeTo":        <target-tag-name>
-    }
-    ```
-
-- **Output**
-
-    A [tag resource](#tag) containing the merged tag.
-
-- **Errors**
-
-    - the version of either tag is outdated
-    - the source or target tag does not exist
-    - the source tag is the same as the target tag
-    - privileges are too low
-
-- **Description**
-
-    Removes source tag and merges all of its usages, suggestions and
-    implications to the target tag. Other tag properties such as category and
-    aliases do not get transferred and are discarded.
-
-## Listing tag siblings
-- **Request**
-
-    `GET /tag-siblings/<name>`
-
-- **Output**
-
-    ```json5
-    {
-        "results": [
-            {
-                "tag": <tag>,
-                "occurrences": <occurrence-count>
-            },
-            {
-                "tag": <tag>,
-                "occurrences": <occurrence-count>
-            }
-        ]
-    }
-    ```
-    ...where `<tag>` is a [tag resource](#tag).
-
-- **Errors**
-
-    - privileges are too low
-
-- **Description**
-
-    Lists siblings of given tag, e.g. tags that were used in the same posts as
-    the given tag. `occurrences` field signifies how many times a given sibling
-    appears with given tag. Results are sorted by occurrences count and the
-    list is truncated to the first 50 elements. Doesn't use paging.
 
 ## Listing posts
 - **Request**
@@ -776,38 +725,50 @@ data.
 
     **Sort style tokens**
 
-    | `<value>`        | Description                                      |
-    | ---------------- | ------------------------------------------------ |
-    | `random`         | as random as it can get                          |
-    | `id`             | highest to lowest post number                    |
-    | `score`          | highest scored                                   |
-    | `tag-count`      | with most tags                                   |
-    | `comment-count`  | most commented first                             |
-    | `fav-count`      | loved by most                                    |
-    | `note-count`     | with most annotations                            |
-    | `relation-count` | with most relations                              |
-    | `feature-count`  | most often featured                              |
-    | `file-size`      | largest files first                              |
-    | `image-width`    | widest images first                              |
-    | `image-height`   | tallest images first                             |
-    | `image-area`     | largest images first                             |
-    | `width`          | alias of `image-width`                           |
-    | `height`         | alias of `image-height`                          |
-    | `area`           | alias of `image-area`                            |
-    | `creation-date`  | newest to oldest (pretty much same as id)        |
-    | `creation-time`  | alias of `creation-date`                         |
-    | `date`           | alias of `creation-date`                         |
-    | `time`           | alias of `creation-date`                         |
-    | `last-edit-date` | like creation-date, only looks at last edit time |
-    | `last-edit-time` | alias of `last-edit-date`                        |
-    | `edit-date`      | alias of `last-edit-date`                        |
-    | `edit-time`      | alias of `last-edit-date`                        |
-    | `comment-date`   | recently commented by anyone                     |
-    | `comment-time`   | alias of `comment-date`                          |
-    | `fav-date`       | recently added to favorites by anyone            |
-    | `fav-time`       | alias of `fav-date`                              |
-    | `feature-date`   | recently featured                                |
-    | `feature-time`   | alias of `feature-time`                          |
+    | `<value>`            | Description                                      |
+    | -------------------- | ------------------------------------------------ |
+    | `random`             | as random as it can get                          |
+    | `id`                 | highest to lowest post number                    |
+    | `score`              | highest scored                                   |
+    | `uploader`           | uploader name alphabetically                     |
+    | `upload`             | alias of upload                                  |
+    | `submit`             | alias of upload                                  |
+    | `pool`               | in most pools                                    |
+    | `tag-count`          | with most tags                                   |
+    | `tag`                | alias of `tag-count`                             |
+    | `comment-count`      | most commented first                             |
+    | `fav-count`          | loved by most                                    |
+    | `note-count`         | with most annotations                            |
+    | `relation-count`     | with most relations                              |
+    | `feature-count`      | most often featured                              |
+    | `type`               | grouped by content type                          |
+    | `file-size`          | largest files first                              |
+    | `image-width`        | widest images first                              |
+    | `image-height`       | tallest images first                             |
+    | `image-area`         | largest images first                             |
+    | `image-aspect-ratio` | highest aspect ratio first                       |
+    | `image-ar`           | alias of `image-aspect-ratio`                    |
+    | `width`              | alias of `image-width`                           |
+    | `height`             | alias of `image-height`                          |
+    | `area`               | alias of `image-area`                            |
+    | `ar`                 | alias of `image-aspect-ratio`                    |
+    | `aspect-ratio`       | alias of `image-aspect-ratio`                    |
+    | `creation-date`      | newest to oldest (pretty much same as id)        |
+    | `creation-time`      | alias of `creation-date`                         |
+    | `date`               | alias of `creation-date`                         |
+    | `time`               | alias of `creation-date`                         |
+    | `last-edit-date`     | like creation-date, only looks at last edit time |
+    | `last-edit-time`     | alias of `last-edit-date`                        |
+    | `edit-date`          | alias of `last-edit-date`                        |
+    | `edit-time`          | alias of `last-edit-date`                        |
+    | `comment-date`       | recently commented by anyone                     |
+    | `comment-time`       | alias of `comment-date`                          |
+    | `fav-date`           | recently added to favorites by anyone            |
+    | `fav-time`           | alias of `fav-date`                              |
+    | `feature-date`       | recently featured                                |
+    | `feature-time`       | alias of `feature-time`                          |
+    | `safety`             | most unsafe first                                |
+    | `rating`             | alias of `safety`                                |
 
     **Special tokens**
 
@@ -817,104 +778,6 @@ data.
     | `disliked`   | posts disliked by currently logged in user                    |
     | `fav`        | posts added to favorites by currently logged in user          |
     | `tumbleweed` | posts with score of 0, without comments and without favorites |
-
-## Creating post
-- **Request**
-
-    `POST /posts/`
-
-- **Input**
-
-    ```json5
-    {
-        "tags":      [<tag1>, <tag2>, <tag3>],
-        "safety":    <safety>,
-        "source":    <source>,                    // optional
-        "relations": [<post1>, <post2>, <post3>], // optional
-        "notes":     [<note1>, <note2>, <note3>], // optional
-        "flags":     [<flag1>, <flag2>],          // optional
-        "anonymous": <anonymous>                  // optional
-    }
-    ```
-
-- **Files**
-
-    - `content` - the content of the post.
-    - `thumbnail` - the content of custom thumbnail (optional).
-
-- **Output**
-
-    A [post resource](#post).
-
-- **Errors**
-
-    - tags have invalid names
-    - safety, notes or flags are invalid
-    - relations refer to non-existing posts
-    - privileges are too low
-
-- **Description**
-
-    Creates a new post. If specified tags do not exist yet, they will be
-    automatically created. Tags created automatically have no implications, no
-    suggestions, one name and their category is set to the first tag category
-    found. Safety must be any of `"safe"`, `"sketchy"` or `"unsafe"`. Relations
-    must contain valid post IDs. If `<flag>` is omitted, they will be defined
-    by default (`"loop"` will be set for all video posts, and `"sound"` will be
-    auto-detected). Sending empty `thumbnail` will cause the post to use default
-    thumbnail. If `anonymous` is set to truthy value, the uploader name won't be
-    recorded (privilege verification still applies; it's possible to disallow
-    anonymous uploads completely from config.) For details on how to pass `content`
-    and `thumbnail`, see [file uploads](#file-uploads).
-
-## Updating post
-- **Request**
-
-    `PUT /post/<id>`
-
-- **Input**
-
-    ```json5
-    {
-        "version":   <version>,
-        "tags":      [<tag1>, <tag2>, <tag3>],    // optional
-        "safety":    <safety>,                    // optional
-        "source":    <source>,                    // optional
-        "relations": [<post1>, <post2>, <post3>], // optional
-        "notes":     [<note1>, <note2>, <note3>], // optional
-        "flags":     [<flag1>, <flag2>]           // optional
-    }
-    ```
-
-- **Files**
-
-    - `content` - the content of the post (optional).
-    - `thumbnail` - the content of custom thumbnail (optional).
-
-- **Output**
-
-    A [post resource](#post).
-
-- **Errors**
-
-    - the version is outdated
-    - tags have invalid names
-    - safety, notes or flags are invalid
-    - relations refer to non-existing posts
-    - privileges are too low
-
-- **Description**
-
-    Updates existing post. If specified tags do not exist yet, they will be
-    automatically created. Tags created automatically have no implications, no
-    suggestions, one name and their category is set to the first tag category
-    found. Safety must be any of `"safe"`, `"sketchy"` or `"unsafe"`. Relations
-    must contain valid post IDs. `<flag>` can be either `"loop"` to enable looping
-    for video posts or `"sound"` to indicate sound. Sending empty `thumbnail` will
-    reset the post thumbnail to default. For details how to pass `content` and
-    `thumbnail`, see [file uploads](#file-uploads). All fields except the
-    [`version`](#versioning) are optional - update concerns only provided
-    fields.
 
 ## Getting post
 - **Request**
@@ -956,136 +819,6 @@ data.
 - **Description**
 
     Retrieves information about posts that are before or after an existing post.
-
-## Deleting post
-- **Request**
-
-    `DELETE /post/<id>`
-
-- **Input**
-
-    ```json5
-    {
-        "version": <version>
-    }
-    ```
-
-- **Output**
-
-    ```json5
-    {}
-    ```
-
-- **Errors**
-
-    - the version is outdated
-    - the post does not exist
-    - privileges are too low
-
-- **Description**
-
-    Deletes existing post. Related posts and tags are kept.
-
-## Merging posts
-- **Request**
-
-    `POST /post-merge/`
-
-- **Input**
-
-    ```json5
-    {
-        "removeVersion":  <source-post-version>,
-        "remove":         <source-post-id>,
-        "mergeToVersion": <target-post-version>,
-        "mergeTo":        <target-post-id>,
-        "replaceContent": <true-or-false>
-    }
-    ```
-
-- **Output**
-
-    A [post resource](#post) containing the merged post.
-
-- **Errors**
-
-    - the version of either post is outdated
-    - the source or target post does not exist
-    - the source post is the same as the target post
-    - privileges are too low
-
-- **Description**
-
-    Removes source post and merges all of its tags, relations, scores,
-    favorites and comments to the target post. If `replaceContent` is set to
-    true, content of the target post is replaced using the content of the
-    source post; otherwise it remains unchanged. Source post properties such as
-    its safety, source, whether to loop the video and other scalar values do
-    not get transferred and are discarded.
-
-## Rating post
-- **Request**
-
-    `PUT /post/<id>/score`
-
-- **Input**
-
-    ```json5
-    {
-        "score": <score>
-    }
-    ```
-
-- **Output**
-
-    A [post resource](#post).
-
-- **Errors**
-
-    - post does not exist
-    - score is invalid
-    - privileges are too low
-
-- **Description**
-
-    Updates score of authenticated user for given post. Valid scores are -1, 0
-    and 1.
-
-## Adding post to favorites
-- **Request**
-
-    `POST /post/<id>/favorite`
-
-- **Output**
-
-    A [post resource](#post).
-
-- **Errors**
-
-    - post does not exist
-    - privileges are too low
-
-- **Description**
-
-    Marks the post as favorite for authenticated user.
-
-## Removing post from favorites
-- **Request**
-
-    `DELETE /post/<id>/favorite`
-
-- **Output**
-
-    A [post resource](#post).
-
-- **Errors**
-
-    - post does not exist
-    - privileges are too low
-
-- **Description**
-
-    Unmarks the post as favorite for authenticated user.
 
 ## Getting featured post
 - **Request**
@@ -1154,6 +887,234 @@ data.
 
     Retrieves posts that look like the input image.
 
+## Creating post
+- **Request**
+
+    `POST /posts/`
+
+- **Input**
+
+    ```json5
+    {
+        "tags":      [<tag1>, <tag2>, <tag3>],
+        "safety":    <safety>,
+        "source":    <source>,                    // optional
+        "relations": [<post1>, <post2>, <post3>], // optional
+        "notes":     [<note1>, <note2>, <note3>], // optional
+        "flags":     [<flag1>, <flag2>],          // optional
+        "anonymous": <anonymous>                  // optional
+    }
+    ```
+
+- **Files**
+
+    - `content` - the content of the post.
+    - `thumbnail` - the content of custom thumbnail (optional).
+
+- **Output**
+
+    A [post resource](#post).
+
+- **Errors**
+
+    - tags have invalid names
+    - safety, notes or flags are invalid
+    - relations refer to non-existing posts
+    - privileges are too low
+
+- **Description**
+
+    Creates a new post. If specified tags do not exist yet, they will be
+    automatically created. Tags created automatically have no implications, no
+    suggestions, one name and their category is set to the first tag category
+    found. Safety must be any of `"safe"`, `"sketchy"` or `"unsafe"`. Relations
+    must contain valid post IDs. If `<flag>` is omitted, they will be defined
+    by default (`"loop"` will be set for all video posts, and `"sound"` will be
+    auto-detected). Sending empty `thumbnail` will cause the post to use default
+    thumbnail. If `anonymous` is set to truthy value, the uploader name won't be
+    recorded (privilege verification still applies; it's possible to disallow
+    anonymous uploads completely from config.) For details on how to pass `content`
+    and `thumbnail`, see [file uploads](#file-uploads).
+
+## Merging posts
+- **Request**
+
+    `POST /post-merge/`
+
+- **Input**
+
+    ```json5
+    {
+        "removeVersion":  <source-post-version>,
+        "remove":         <source-post-id>,
+        "mergeToVersion": <target-post-version>,
+        "mergeTo":        <target-post-id>,
+        "replaceContent": <true-or-false>
+    }
+    ```
+
+- **Output**
+
+    A [post resource](#post) containing the merged post.
+
+- **Errors**
+
+    - the version of either post is outdated
+    - the source or target post does not exist
+    - the source post is the same as the target post
+    - privileges are too low
+
+- **Description**
+
+    Removes source post and merges all of its tags, relations, scores,
+    favorites and comments to the target post. If `replaceContent` is set to
+    true, content of the target post is replaced using the content of the
+    source post; otherwise it remains unchanged. Source post properties such as
+    its safety, source, whether to loop the video and other scalar values do
+    not get transferred and are discarded.
+
+## Adding post to favorites
+- **Request**
+
+    `POST /post/<id>/favorite`
+
+- **Output**
+
+    A [post resource](#post).
+
+- **Errors**
+
+    - post does not exist
+    - privileges are too low
+
+- **Description**
+
+    Marks the post as favorite for authenticated user.
+
+## Rating post
+- **Request**
+
+    `PUT /post/<id>/score`
+
+- **Input**
+
+    ```json5
+    {
+        "score": <score>
+    }
+    ```
+
+- **Output**
+
+    A [post resource](#post).
+
+- **Errors**
+
+    - post does not exist
+    - score is invalid
+    - privileges are too low
+
+- **Description**
+
+    Updates score of authenticated user for given post. Valid scores are -1, 0
+    and 1.
+
+## Updating post
+- **Request**
+
+    `PUT /post/<id>`
+
+- **Input**
+
+    ```json5
+    {
+        "version":   <version>,
+        "tags":      [<tag1>, <tag2>, <tag3>],    // optional
+        "safety":    <safety>,                    // optional
+        "source":    <source>,                    // optional
+        "relations": [<post1>, <post2>, <post3>], // optional
+        "notes":     [<note1>, <note2>, <note3>], // optional
+        "flags":     [<flag1>, <flag2>]           // optional
+    }
+    ```
+
+- **Files**
+
+    - `content` - the content of the post (optional).
+    - `thumbnail` - the content of custom thumbnail (optional).
+
+- **Output**
+
+    A [post resource](#post).
+
+- **Errors**
+
+    - the version is outdated
+    - tags have invalid names
+    - safety, notes or flags are invalid
+    - relations refer to non-existing posts
+    - privileges are too low
+
+- **Description**
+
+    Updates existing post. If specified tags do not exist yet, they will be
+    automatically created. Tags created automatically have no implications, no
+    suggestions, one name and their category is set to the first tag category
+    found. Safety must be any of `"safe"`, `"sketchy"` or `"unsafe"`. Relations
+    must contain valid post IDs. `<flag>` can be either `"loop"` to enable looping
+    for video posts or `"sound"` to indicate sound. Sending empty `thumbnail` will
+    reset the post thumbnail to default. For details how to pass `content` and
+    `thumbnail`, see [file uploads](#file-uploads). All fields except the
+    [`version`](#versioning) are optional - update concerns only provided
+    fields.
+
+## Deleting post
+- **Request**
+
+    `DELETE /post/<id>`
+
+- **Input**
+
+    ```json5
+    {
+        "version": <version>
+    }
+    ```
+
+- **Output**
+
+    ```json5
+    {}
+    ```
+
+- **Errors**
+
+    - the version is outdated
+    - the post does not exist
+    - privileges are too low
+
+- **Description**
+
+    Deletes existing post. Related posts and tags are kept.
+
+## Removing post from favorites
+- **Request**
+
+    `DELETE /post/<id>/favorite`
+
+- **Output**
+
+    A [post resource](#post).
+
+- **Errors**
+
+    - post does not exist
+    - privileges are too low
+
+- **Description**
+
+    Unmarks the post as favorite for authenticated user.
+
 ## Listing pool categories
 - **Request**
 
@@ -1171,6 +1132,24 @@ data.
 - **Description**
 
     Lists all pool categories. Doesn't use paging.
+
+## Getting pool category
+- **Request**
+
+    `GET /pool-category/<name>`
+
+- **Output**
+
+    A [pool category resource](#pool-category).
+
+- **Errors**
+
+    - the pool category does not exist
+    - privileges are too low
+
+- **Description**
+
+    Retrieves information about an existing pool category.
 
 ## Creating pool category
 - **Request**
@@ -1237,10 +1216,16 @@ data.
     except the [`version`](#versioning) are optional - update concerns only
     provided fields.
 
-## Getting pool category
+## Setting default pool category
 - **Request**
 
-    `GET /pool-category/<name>`
+    `PUT /pool-category/<name>/default`
+
+- **Input**
+
+    ```json5
+    {}
+    ```
 
 - **Output**
 
@@ -1253,7 +1238,8 @@ data.
 
 - **Description**
 
-    Retrieves information about an existing pool category.
+    Sets given pool category as default. All new pools created manually or
+    automatically will have this category.
 
 ## Deleting pool category
 - **Request**
@@ -1285,31 +1271,6 @@ data.
 
     Deletes an existing non-default pool category. Pools belonging to this 
     category will be moved to the default category.
-
-## Setting default pool category
-- **Request**
-
-    `PUT /pool-category/<name>/default`
-
-- **Input**
-
-    ```json5
-    {}
-    ```
-
-- **Output**
-
-    A [pool category resource](#pool-category).
-
-- **Errors**
-
-    - the pool category does not exist
-    - privileges are too low
-
-- **Description**
-
-    Sets given pool category as default. All new pools created manually or
-    automatically will have this category.
 
 ## Listing pools
 - **Request**
@@ -1366,6 +1327,24 @@ data.
 
     None.
 
+## Getting pool
+- **Request**
+
+    `GET /pool/<id>`
+
+- **Output**
+
+    A [pool resource](#pool).
+
+- **Errors**
+
+    - the pool does not exist
+    - privileges are too low
+
+- **Description**
+
+    Retrieves information about an existing pool.
+
 ## Creating pool
 - **Request**
 
@@ -1403,6 +1382,39 @@ data.
     [`<pool-category>` resource](#pool-category). `posts` is an optional list of
     integer post IDs. If the specified posts do not exist, an error will be
     thrown.
+
+## Merging pools
+- **Request**
+
+    `POST /pool-merge/`
+
+- **Input**
+
+    ```json5
+    {
+        "removeVersion":  <source-pool-version>,
+        "remove":         <source-pool-id>,
+        "mergeToVersion": <target-pool-version>,
+        "mergeTo":        <target-pool-id>
+    }
+    ```
+
+- **Output**
+
+    A [pool resource](#pool) containing the merged pool.
+
+- **Errors**
+
+    - the version of either pool is outdated
+    - the source or target pool does not exist
+    - the source pool is the same as the target pool
+    - privileges are too low
+
+- **Description**
+
+    Removes source pool and merges all of its posts with the target pool. Other
+    pool properties such as category and aliases do not get transferred and are
+    discarded.
 
 ## Updating pool
 - **Request**
@@ -1448,24 +1460,6 @@ data.
     All fields except the [`version`](#versioning) are optional - update
     concerns only provided fields.
 
-## Getting pool
-- **Request**
-
-    `GET /pool/<id>`
-
-- **Output**
-
-    A [pool resource](#pool).
-
-- **Errors**
-
-    - the pool does not exist
-    - privileges are too low
-
-- **Description**
-
-    Retrieves information about an existing pool.
-
 ## Deleting pool
 - **Request**
 
@@ -1495,39 +1489,6 @@ data.
 
     Deletes existing pool. All posts in the pool will only have their relation
     to the pool removed.
-
-## Merging pools
-- **Request**
-
-    `POST /pool-merge/`
-
-- **Input**
-
-    ```json5
-    {
-        "removeVersion":  <source-pool-version>,
-        "remove":         <source-pool-id>,
-        "mergeToVersion": <target-pool-version>,
-        "mergeTo":        <target-pool-id>
-    }
-    ```
-
-- **Output**
-
-    A [pool resource](#pool) containing the merged pool.
-
-- **Errors**
-
-    - the version of either pool is outdated
-    - the source or target pool does not exist
-    - the source pool is the same as the target pool
-    - privileges are too low
-
-- **Description**
-
-    Removes source pool and merges all of its posts with the target pool. Other
-    pool properties such as category and aliases do not get transferred and are
-    discarded.
 
 ## Listing comments
 - **Request**
@@ -1586,6 +1547,24 @@ data.
 
     None.
 
+## Getting comment
+- **Request**
+
+    `GET /comment/<id>`
+
+- **Output**
+
+    A [comment resource](#comment).
+
+- **Errors**
+
+    - the comment does not exist
+    - privileges are too low
+
+- **Description**
+
+    Retrieves information about an existing comment.
+
 ## Creating comment
 - **Request**
 
@@ -1643,10 +1622,18 @@ data.
 
     Updates an existing comment text.
 
-## Getting comment
+## Rating comment
 - **Request**
 
-    `GET /comment/<id>`
+    `PUT /comment/<id>/score`
+
+- **Input**
+
+    ```json5
+    {
+        "score": <score>
+    }
+    ```
 
 - **Output**
 
@@ -1654,12 +1641,14 @@ data.
 
 - **Errors**
 
-    - the comment does not exist
+    - comment does not exist
+    - score is invalid
     - privileges are too low
 
 - **Description**
 
-    Retrieves information about an existing comment.
+    Updates score of authenticated user for given comment. Valid scores are -1,
+    0 and 1.
 
 ## Deleting comment
 - **Request**
@@ -1689,34 +1678,6 @@ data.
 - **Description**
 
     Deletes existing comment.
-
-## Rating comment
-- **Request**
-
-    `PUT /comment/<id>/score`
-
-- **Input**
-
-    ```json5
-    {
-        "score": <score>
-    }
-    ```
-
-- **Output**
-
-    A [comment resource](#comment).
-
-- **Errors**
-
-    - comment does not exist
-    - score is invalid
-    - privileges are too low
-
-- **Description**
-
-    Updates score of authenticated user for given comment. Valid scores are -1,
-    0 and 1.
 
 ## Listing users
 - **Request**
@@ -1768,6 +1729,24 @@ data.
     **Special tokens**
 
     None.
+
+## Getting user
+- **Request**
+
+    `GET /user/<name>`
+
+- **Output**
+
+    A [user resource](#user).
+
+- **Errors**
+
+    - the user does not exist
+    - privileges are too low
+
+- **Description**
+
+    Retrieves information about an existing user.
 
 ## Creating user
 - **Request**
@@ -1862,24 +1841,6 @@ data.
     file - see [file uploads](#file-uploads) for details. All fields except the
     [`version`](#versioning) are optional - update concerns only provided
     fields.
-
-## Getting user
-- **Request**
-
-    `GET /user/<name>`
-
-- **Output**
-
-    A [user resource](#user).
-
-- **Errors**
-
-    - the user does not exist
-    - privileges are too low
-
-- **Description**
-
-    Retrieves information about an existing user.
 
 ## Deleting user
 - **Request**
@@ -2013,62 +1974,6 @@ data.
 - **Description**
 
     Deletes existing user token.
-
-## Password reset - step 1: mail request
-- **Request**
-
-    `GET /password-reset/<email-or-name>`
-
-- **Output**
-
-    ```
-    {}
-    ```
-
-- **Errors**
-
-    - the user does not exist
-    - the user hasn't provided an email address
-
-- **Description**
-
-    Sends a confirmation email to given user. The email contains link
-    containing a token. The token cannot be guessed, thus using such link
-    proves that the person who requested to reset the password also owns the
-    mailbox, which is a strong indication they are the rightful owner of the
-    account.
-
-## Password reset - step 2: confirmation
-- **Request**
-
-    `POST /password-reset/<email-or-name>`
-
-- **Input**
-
-    ```json5
-    {
-        "token": <token-from-email>
-    }
-    ```
-
-- **Output**
-
-    ```json5
-    {
-        "password": <new-password>
-    }
-    ```
-
-- **Errors**
-
-    - the token is missing
-    - the token is invalid
-    - the user does not exist
-
-- **Description**
-
-    Generates a new password for given user. Password is sent as plain-text, so
-    it is recommended to connect through HTTPS.
 
 ## Getting global info
 - **Request**
@@ -2657,7 +2562,7 @@ be of following form:
 | `sort:<style>`    | sort style tokens | sort the results                           |
 | `special:<value>` | special tokens    | filters usually tied to the logged in user |
 
-Most of anonymous and named tokens support ranged and composite values that
+Anonymous and named tokens support ranged and composite values that
 take following form:
 
 | `<value>` | Description                                           |
@@ -2677,17 +2582,17 @@ Date/time values can be of following form:
 
 Some fields, such as user names, can take wildcards (`*`).
 
-You can escape special characters such as `:` and `-` by prepending them with a
+You can escape special characters such as `:`, `*`, and `,` by prepending them with a
 backslash: `\\`.
 
 **Example**
 
 Searching for posts with following query:
 
-    sea -fav-count:8.. type:swf uploader:Pirate
+    sea -fav-count:8.. type:png uploader:Pirate,Davy
 
-will show flash files tagged as sea, that were liked by seven people at most,
-uploaded by user Pirate.
+will show png files tagged as sea, that were liked by seven people at most,
+uploaded by user Pirate or Davy.
 
 Searching for posts with `re:zero` will show an error message about unknown
 named token.

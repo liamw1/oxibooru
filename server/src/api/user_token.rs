@@ -17,7 +17,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(api::auth())
         .map(list_user_tokens)
         .map(api::Reply::from);
-    let post_user_token = warp::post()
+    let create_user_token = warp::post()
         .and(warp::path!("user-token" / String))
         .and(api::auth())
         .and(warp::body::json())
@@ -36,7 +36,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(api::Reply::from);
 
     list_user_tokens
-        .or(post_user_token)
+        .or(create_user_token)
         .or(update_user_token)
         .or(delete_user_token)
 }

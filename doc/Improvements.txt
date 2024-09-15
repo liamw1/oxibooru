@@ -28,12 +28,10 @@ This is a brief list of improvements I've made to the functionality of the backe
         reduces the search space by about an order of magnitude. On a test database of 50k images,
         a complete reverse search takes about 80-120ms.
 
-    3. Faster startup time
-        For whatever reason, my local szuru instance (about 100k images) takes a quite bit of time to
-        spin up. I'm unsure the exact cause of this, but this seems to be absent in my implementation.
-
-    4. Improved cyclic dependency detection
+    3. Improved cyclic dependency detection
         The tag creation and update api will detect if an implication or suggestion creates any cyclic
         dependency, not just shallow ones.
 
-    5. Getting around posts now respects sorting
+    4. Getting around posts now respects sorting
+
+    5. Expanded set of post sort-style tokens

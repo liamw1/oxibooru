@@ -6,6 +6,7 @@ pub mod post;
 pub mod tag;
 pub mod user;
 
+use std::borrow::Cow;
 use std::ops::{Not, Range};
 use std::str::FromStr;
 
@@ -25,6 +26,8 @@ pub enum TimeParsingError {
 pub enum Error {
     ParseFailed(#[from] Box<dyn std::error::Error>),
     InvalidTime(#[from] TimeParsingError),
+    #[error("Invalid sort token")]
+    InvalidSort,
     #[error("This operation requires you to be logged in")]
     NotLoggedIn,
 }
@@ -53,7 +56,7 @@ where
                 term = term.strip_prefix('-').unwrap();
             }
 
-            match term.split_once(':') {
+            match parse::split_once_escaped(term, ":") {
                 Some(("sort", "random")) => random_sort = true,
                 Some(("sort", value)) => {
                     let kind = T::from_str(value)?;
@@ -134,7 +137,7 @@ enum Criteria<V> {
 */
 #[derive(Debug, PartialEq, Eq)]
 enum StrCritera<'a> {
-    Regular(Criteria<&'a str>),
+    Regular(Criteria<Cow<'a, str>>),
     WildCard(String),
 }
 
