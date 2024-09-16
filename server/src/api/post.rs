@@ -291,6 +291,16 @@ struct ReverseSearchInfo {
     similar_posts: Vec<SimilarPostInfo>,
 }
 
+pub fn compute_signature_if_applicable(bytes: &[u8], mime_type: MimeType) -> ApiResult<Option<Vec<u8>>> {
+    Ok(match PostType::from(mime_type) {
+        PostType::Image | PostType::Animation => {
+            let image = read::decode_image(&bytes, mime_type)?;
+            Some(signature::compute_signature(&image))
+        }
+        PostType::Flash | PostType::Video | PostType::Youtube => None,
+    })
+}
+
 fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -> ApiResult<ReverseSearchInfo> {
     let _timer = crate::util::Timer::new("reverse_search");
 
@@ -301,25 +311,16 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
 
     let (_uuid, extension) = token.content_token.split_once('.').unwrap();
     let content_type = MimeType::from_extension(extension)?;
-    let post_type = PostType::from(content_type);
-    if post_type != PostType::Image {
-        panic!("Unsupported post type!") // TODO
-    }
 
     let temp_path = filesystem::temporary_upload_filepath(&token.content_token);
-    let content = std::fs::read(&temp_path)?;
-
-    let image = read::decode_image(&content, content_type)?;
-    let image_signature = signature::compute_signature(&image);
-    let image_checksum = content::compute_checksum(&content);
+    let file_contents = std::fs::read(&temp_path)?;
+    let checksum = content::compute_checksum(&file_contents);
+    let content_signature = compute_signature_if_applicable(&file_contents, content_type)?;
 
     let client_id = client.map(|user| user.id);
     crate::get_connection()?.transaction(|conn| {
         // Check for exact match
-        let exact_post = post::table
-            .filter(post::checksum.eq(image_checksum))
-            .first(conn)
-            .optional()?;
+        let exact_post = post::table.filter(post::checksum.eq(checksum)).first(conn).optional()?;
         if exact_post.is_some() {
             return Ok(ReverseSearchInfo {
                 exact_post: exact_post
@@ -330,20 +331,25 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
         }
 
         // Search for similar images
-        let similar_signatures = PostSignature::find_similar(conn, signature::generate_indexes(&image_signature))?;
-        println!("Found {} similar signatures", similar_signatures.len());
-        let mut similar_posts: Vec<_> = similar_signatures
-            .into_iter()
-            .filter_map(|post_signature| {
-                let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
-                let distance_threshold = 1.0 - config::get().post_similarity_threshold;
-                (distance < distance_threshold).then_some((post_signature.post_id, distance))
-            })
-            .collect();
-        similar_posts.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
+        let similar_posts = match content_signature {
+            Some(signature) => {
+                let similar_signatures = PostSignature::find_similar(conn, signature::generate_indexes(&signature))?;
+                println!("Found {} similar signatures", similar_signatures.len());
+                let mut similar_posts: Vec<_> = similar_signatures
+                    .into_iter()
+                    .filter_map(|post_signature| {
+                        let distance = signature::normalized_distance(&post_signature.signature, &signature);
+                        let distance_threshold = 1.0 - config::get().post_similarity_threshold;
+                        (distance < distance_threshold).then_some((post_signature.post_id, distance))
+                    })
+                    .collect();
+                similar_posts.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
+                similar_posts
+            }
+            None => Vec::new(),
+        };
 
-        let post_ids = similar_posts.iter().map(|(post_id, _)| *post_id).collect();
-        let distances: Vec<f64> = similar_posts.iter().map(|(_, distance)| *distance).collect();
+        let (post_ids, distances): (Vec<_>, Vec<_>) = similar_posts.into_iter().unzip();
         Ok(ReverseSearchInfo {
             exact_post: None,
             similar_posts: PostInfo::new_batch_from_ids(conn, client_id, post_ids, &fields)?
@@ -383,27 +389,27 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     let (_uuid, extension) = post_info.content_token.split_once('.').unwrap();
     let content_type = MimeType::from_extension(extension)?;
     let post_type = PostType::from(content_type);
-    if post_type != PostType::Image {
-        panic!("Unsupported post type!") // TODO
+    if post_type != PostType::Image && post_type != PostType::Animation {
+        unimplemented!() // TODO
     }
 
     let temp_path = filesystem::temporary_upload_filepath(&post_info.content_token);
-    let content = std::fs::read(&temp_path)?;
+    let file_contents = std::fs::read(&temp_path)?;
 
-    let image_size = std::fs::metadata(&temp_path)?.len();
-    let image = read::decode_image(&content, content_type)?;
-    let image_checksum = content::compute_checksum(&content);
+    let file_size = std::fs::metadata(&temp_path)?.len();
+    let image = read::decode_image(&file_contents, content_type)?;
+    let checksum = content::compute_checksum(&file_contents);
 
     let client_id = client.as_ref().map(|user| user.id);
     let new_post = NewPost {
         user_id: client_id,
-        file_size: image_size as i64,
+        file_size: file_size as i64,
         width: image.width() as i32,
         height: image.height() as i32,
         safety: post_info.safety,
         type_: post_type,
         mime_type: content_type,
-        checksum: &image_checksum,
+        checksum: &checksum,
         flags: post_info.flags.as_deref().map(PostFlags::new).unwrap_or_default(),
         source: post_info.source.as_deref(),
     };
@@ -424,15 +430,17 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         update::post::create_relations(conn, post_id, relations)?;
 
         // Generate image signature
-        let image_signature = signature::compute_signature(&image);
-        let new_post_signature = NewPostSignature {
-            post_id,
-            signature: &image_signature,
-            words: &signature::generate_indexes(&image_signature),
-        };
-        diesel::insert_into(post_signature::table)
-            .values(new_post_signature)
-            .execute(conn)?;
+        if post_type == PostType::Image || post_type == PostType::Animation {
+            let image_signature = signature::compute_signature(&image);
+            let new_post_signature = NewPostSignature {
+                post_id,
+                signature: &image_signature,
+                words: &signature::generate_indexes(&image_signature),
+            };
+            diesel::insert_into(post_signature::table)
+                .values(new_post_signature)
+                .execute(conn)?;
+        }
 
         // Move content to permanent location
         filesystem::create_dir(filesystem::posts_directory())?;
