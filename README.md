@@ -1,6 +1,6 @@
 # oxibooru
 
-Oxibooru is a WIP image board engine based on Szurubooru.
+Oxibooru is an image board engine based on Szurubooru.
 The backend has been entirely rewritten in Rust with a focus on performance.
 
 ## Features
