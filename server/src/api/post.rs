@@ -291,7 +291,7 @@ struct ReverseSearchInfo {
     similar_posts: Vec<SimilarPostInfo>,
 }
 
-pub fn compute_signature_if_applicable(bytes: &[u8], mime_type: MimeType) -> ApiResult<Option<Vec<u8>>> {
+fn compute_signature_if_applicable(bytes: &[u8], mime_type: MimeType) -> ApiResult<Option<Vec<u8>>> {
     Ok(match PostType::from(mime_type) {
         PostType::Image | PostType::Animation => {
             let image = read::decode_image(&bytes, mime_type)?;
