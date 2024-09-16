@@ -1,12 +1,23 @@
-use image::{ImageReader, Limits};
-use std::fs::File;
-use std::io::BufReader;
-use std::path::Path;
+use crate::model::enums::MimeType;
+use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits};
+use std::io::Cursor;
 
-pub fn new_image_reader(image_path: &Path) -> std::io::Result<ImageReader<BufReader<File>>> {
-    let mut reader = image::ImageReader::open(image_path)?;
+pub fn decode_image(content: &[u8], mime_type: MimeType) -> ImageResult<DynamicImage> {
+    let mut reader = ImageReader::new(Cursor::new(content));
+    reader.set_format(image_reader_format(mime_type));
     reader.limits(image_reader_limits());
-    Ok(reader)
+    reader.decode()
+}
+
+fn image_reader_format(mime_type: MimeType) -> ImageFormat {
+    match mime_type {
+        MimeType::Bmp => ImageFormat::Bmp,
+        MimeType::Gif => ImageFormat::Gif,
+        MimeType::Jpeg => ImageFormat::Jpeg,
+        MimeType::Png => ImageFormat::Png,
+        MimeType::Webp => ImageFormat::WebP,
+        MimeType::Mov | MimeType::Mp4 | MimeType::Webm => panic!("Not an image format"),
+    }
 }
 
 fn image_reader_limits() -> Limits {

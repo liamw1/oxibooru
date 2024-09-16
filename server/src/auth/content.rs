@@ -4,7 +4,6 @@ use base64::engine::general_purpose::{STANDARD_NO_PAD, URL_SAFE_NO_PAD};
 use base64::prelude::*;
 use hmac::digest::CtOutput;
 use hmac::{Mac, SimpleHmac};
-use image::DynamicImage;
 use std::path::PathBuf;
 
 pub fn gravatar_url(username: &str) -> String {
@@ -45,14 +44,13 @@ pub fn post_thumbnail_path(post_id: i32) -> PathBuf {
 }
 
 /*
-    Computes a checksum for duplicate detection. Uses both hash of pixel data and the file size of compressed image.
-    The size is used because the same image can be compressed in multiple ways, leading to different compressed
-    sizes. These should not count as duplicates.
+    Computes a checksum for duplicate detection. Uses raw file data instead of decoded
+    pixel data because different compression schemes can compress identical pixel data
+    in different ways.
 */
-pub fn image_checksum(image: &DynamicImage, file_size: u64) -> String {
-    let hash = hmac_hash(image.as_bytes());
-    let encoded_hash = STANDARD_NO_PAD.encode(hash.into_bytes());
-    format!("{encoded_hash}{file_size}")
+pub fn compute_checksum(content: &[u8]) -> String {
+    let hash = hmac_hash(content);
+    STANDARD_NO_PAD.encode(hash.into_bytes())
 }
 
 type Hmac = SimpleHmac<blake3::Hasher>;

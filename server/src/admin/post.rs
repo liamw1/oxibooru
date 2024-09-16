@@ -1,4 +1,3 @@
-use crate::api::ApiResult;
 use crate::auth::content;
 use crate::filesystem;
 use crate::image::{read, signature};
@@ -7,7 +6,6 @@ use crate::model::post::{NewPostSignature, PostSignature};
 use crate::schema::{post, post_signature};
 use crate::util::Timer;
 use diesel::prelude::*;
-use image::DynamicImage;
 use std::path::Path;
 
 pub fn rename_post_content() -> std::io::Result<()> {
@@ -92,8 +90,16 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
     let posts: Vec<(i32, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
     for (post_index, (post_id, mime_type)) in posts.into_iter().enumerate() {
         let image_path = content::post_content_path(post_id, mime_type);
-        match decode_image(&image_path) {
-            Ok((image, _)) => {
+        let file_content = match std::fs::read(&image_path) {
+            Ok(content) => content,
+            Err(err) => {
+                eprintln!("Unable to read file for post {post_id} for reason: {err}");
+                continue;
+            }
+        };
+
+        match read::decode_image(&file_content, mime_type) {
+            Ok(image) => {
                 let image_signature = signature::compute_signature(&image);
                 let signature_indexes = signature::generate_indexes(&image_signature);
                 let new_post_signature = NewPostSignature {
@@ -120,9 +126,9 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
     let posts: Vec<(i32, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
     for (post_index, (post_id, mime_type)) in posts.into_iter().enumerate() {
         let image_path = content::post_content_path(post_id, mime_type);
-        match decode_image(&image_path) {
-            Ok((image, file_size)) => {
-                let checksum = content::image_checksum(&image, file_size);
+        match std::fs::read(&image_path) {
+            Ok(file_content) => {
+                let checksum = content::compute_checksum(&file_content);
                 let duplicate: Option<i32> = post::table
                     .select(post::id)
                     .filter(post::checksum.eq(&checksum))
@@ -158,12 +164,4 @@ fn print_progress_message(index: usize, msg: &str) {
     if index > 0 && index % PRINT_INTERVAL == 0 {
         println!("{msg}: {index}");
     }
-}
-
-fn decode_image(path: &Path) -> ApiResult<(DynamicImage, u64)> {
-    let image_metadata = std::fs::metadata(path)?;
-    let image_reader = read::new_image_reader(path)?;
-
-    let decoded_image = image_reader.decode()?;
-    Ok((decoded_image, image_metadata.len()))
 }

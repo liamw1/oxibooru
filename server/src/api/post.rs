@@ -307,11 +307,11 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     }
 
     let temp_path = filesystem::temporary_upload_filepath(&token.content_token);
-    let image_size = std::fs::metadata(&temp_path)?.len();
-    let image_reader = read::new_image_reader(&temp_path)?;
-    let image = image_reader.decode()?;
+    let content = std::fs::read(&temp_path)?;
+
+    let image = read::decode_image(&content, content_type)?;
     let image_signature = signature::compute_signature(&image);
-    let image_checksum = content::image_checksum(&image, image_size);
+    let image_checksum = content::compute_checksum(&content);
 
     let client_id = client.map(|user| user.id);
     crate::get_connection()?.transaction(|conn| {
@@ -388,10 +388,11 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     }
 
     let temp_path = filesystem::temporary_upload_filepath(&post_info.content_token);
+    let content = std::fs::read(&temp_path)?;
+
     let image_size = std::fs::metadata(&temp_path)?.len();
-    let image_reader = read::new_image_reader(&temp_path)?;
-    let image = image_reader.decode()?;
-    let image_checksum = content::image_checksum(&image, image_size);
+    let image = read::decode_image(&content, content_type)?;
+    let image_checksum = content::compute_checksum(&content);
 
     let client_id = client.as_ref().map(|user| user.id);
     let new_post = NewPost {

@@ -65,7 +65,7 @@ impl From<MimeType> for PostType {
     fn from(value: MimeType) -> Self {
         match value {
             MimeType::Bmp => Self::Image,
-            MimeType::Gif => Self::Image,
+            MimeType::Gif => Self::Animation,
             MimeType::Jpeg => Self::Image,
             MimeType::Png => Self::Image,
             MimeType::Webp => Self::Image,
