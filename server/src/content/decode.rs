@@ -2,7 +2,7 @@ use crate::model::enums::MimeType;
 use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits};
 use std::io::Cursor;
 
-pub fn decode_image(bytes: &[u8], mime_type: MimeType) -> ImageResult<DynamicImage> {
+pub fn image(bytes: &[u8], mime_type: MimeType) -> ImageResult<DynamicImage> {
     let mut reader = ImageReader::new(Cursor::new(bytes));
     reader.set_format(image_reader_format(mime_type));
     reader.limits(image_reader_limits());

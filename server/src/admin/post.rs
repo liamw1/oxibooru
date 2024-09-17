@@ -1,6 +1,6 @@
 use crate::auth::content;
+use crate::content::{decode, signature};
 use crate::filesystem;
-use crate::image::{read, signature};
 use crate::model::enums::MimeType;
 use crate::model::post::{NewPostSignature, PostSignature};
 use crate::schema::{post, post_signature};
@@ -98,7 +98,7 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
             }
         };
 
-        match read::decode_image(&file_content, mime_type) {
+        match decode::image(&file_content, mime_type) {
             Ok(image) => {
                 let image_signature = signature::compute_signature(&image);
                 let signature_indexes = signature::generate_indexes(&image_signature);
@@ -132,9 +132,10 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
                 let duplicate: Option<i32> = post::table
                     .select(post::id)
                     .filter(post::checksum.eq(&checksum))
+                    .filter(post::id.ne(post_id))
                     .first(conn)
                     .optional()?;
-                if duplicate.is_some() && duplicate != Some(post_id) {
+                if duplicate.is_some() {
                     let dup_id = duplicate.unwrap();
                     eprintln!("Potential duplicate post {dup_id} for post {post_id}");
                 } else {

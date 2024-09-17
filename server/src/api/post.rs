@@ -2,7 +2,7 @@ use crate::api::{
     ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, RatingRequest, ResourceQuery,
 };
 use crate::auth::content;
-use crate::image::{read, signature};
+use crate::content::{decode, signature};
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType, Score};
 use crate::model::post::{
     NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostSignature,
@@ -294,7 +294,7 @@ struct ReverseSearchInfo {
 fn compute_signature_if_applicable(bytes: &[u8], mime_type: MimeType) -> ApiResult<Option<Vec<u8>>> {
     Ok(match PostType::from(mime_type) {
         PostType::Image | PostType::Animation => {
-            let image = read::decode_image(&bytes, mime_type)?;
+            let image = decode::image(&bytes, mime_type)?;
             Some(signature::compute_signature(&image))
         }
         PostType::Flash | PostType::Video | PostType::Youtube => None,
@@ -397,7 +397,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     let file_contents = std::fs::read(&temp_path)?;
 
     let file_size = std::fs::metadata(&temp_path)?.len();
-    let image = read::decode_image(&file_contents, content_type)?;
+    let image = decode::image(&file_contents, content_type)?;
     let checksum = content::compute_checksum(&file_contents);
 
     let client_id = client.as_ref().map(|user| user.id);
