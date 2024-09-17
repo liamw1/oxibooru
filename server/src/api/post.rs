@@ -292,12 +292,13 @@ struct ReverseSearchInfo {
 }
 
 fn compute_signature_if_applicable(bytes: &[u8], mime_type: MimeType) -> ApiResult<Option<Vec<u8>>> {
-    Ok(match PostType::from(mime_type) {
-        PostType::Image | PostType::Animation => {
-            let image = decode::image(bytes, mime_type)?;
+    let image_format = mime_type.to_image_format();
+    Ok(match image_format {
+        Some(format) => {
+            let image = decode::image(bytes, format)?;
             Some(signature::compute_signature(&image))
         }
-        PostType::Flash | PostType::Video | PostType::Youtube => None,
+        None => None,
     })
 }
 
@@ -397,7 +398,8 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     let file_contents = std::fs::read(&temp_path)?;
 
     let file_size = std::fs::metadata(&temp_path)?.len();
-    let image = decode::image(&file_contents, content_type)?;
+    let image_format = content_type.to_image_format().unwrap();
+    let image = decode::image(&file_contents, image_format)?;
     let checksum = content::compute_checksum(&file_contents);
 
     let client_id = client.as_ref().map(|user| user.id);

@@ -6,11 +6,14 @@ use argon2::Argon2;
 use argon2::{Algorithm, Params, Version};
 use std::sync::LazyLock;
 
-pub fn hash_password(password: &str, salt: &str) -> Result<String, HashError> {
+/*
+    Takes a plaintext password and hashes it using a cryptographically secure,
+    memory-hard hash: Argon2id. A randomly generated salt is mixed in with the
+    hash to protect against rainbow table attacks.
+*/
+pub fn hash_password(password: &str, salt: &SaltString) -> Result<String, HashError> {
     // TODO: Handle hash rotations
-    let salt_string = SaltString::encode_b64(salt.as_bytes())?;
-    let password_hash = ARGON_CONTEXT.hash_password(password.as_bytes(), &salt_string)?;
-
+    let password_hash = ARGON_CONTEXT.hash_password(password.as_bytes(), salt)?;
     Ok(password_hash.to_string())
 }
 

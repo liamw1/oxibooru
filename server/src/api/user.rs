@@ -135,7 +135,7 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
     api::verify_matches_regex(&user_info.password, RegexType::Password)?;
 
     let salt = SaltString::generate(&mut OsRng);
-    let hash = password::hash_password(&user_info.password, salt.as_str())?;
+    let hash = password::hash_password(&user_info.password, &salt)?;
     let new_user = NewUser {
         name: &user_info.name,
         password_hash: &hash,
@@ -206,7 +206,7 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
             api::verify_matches_regex(&password, RegexType::Password)?;
 
             let salt = SaltString::generate(&mut OsRng);
-            let hash = password::hash_password(&password, salt.as_str())?;
+            let hash = password::hash_password(&password, &salt)?;
             diesel::update(user::table.find(user_id))
                 .set(user::password_salt.eq(salt.as_str()))
                 .execute(conn)?;

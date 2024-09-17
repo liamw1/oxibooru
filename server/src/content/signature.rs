@@ -6,6 +6,11 @@ use crate::math::rect::{Array2D, IRect};
 use image::{DynamicImage, GrayImage};
 use num_traits::ToPrimitive;
 
+/*
+    Calculates a "signature" for an image that can be used for similarity search.
+
+    Implementation follows H. Chi Wong, Marshall Bern and David Goldberg with a few tweaks
+*/
 pub fn compute_signature(image: &DynamicImage) -> Vec<u8> {
     let gray_image = image.to_luma8();
     let grid_points = compute_grid_points(&gray_image);
@@ -14,6 +19,12 @@ pub fn compute_signature(image: &DynamicImage) -> Vec<u8> {
     normalize(&differentials)
 }
 
+/*
+    Computes a "distance" between two images based on their signatures.
+    Result is a number in the interval [0, 1].
+
+    The lower the number, the more similar the two images are.
+*/
 pub fn normalized_distance(signature_a: &[u8], signature_b: &[u8]) -> f64 {
     let l2_squared_distance = signature_a
         .iter()
@@ -75,16 +86,12 @@ pub fn generate_indexes(signature: &[u8]) -> Vec<i32> {
         .collect()
 }
 
-/*
-    Implementation follows H. Chi Wong, Marshall Bern and David Goldberg with a few tweaks
-*/
-
 const CROP_PERCENTILE: u64 = 5;
-const NUM_GRID_POINTS: u32 = 9;
-const IDENTICAL_TOLERANCE: i16 = 1;
-const LUMINANCE_LEVELS: u32 = 2;
-const NUM_WORDS: u32 = 100;
-const NUM_LETTERS: u32 = 12;
+const NUM_GRID_POINTS: u32 = 9; // Size of the square grid used to compute signature
+const IDENTICAL_TOLERANCE: i16 = 1; // Pixel intensities within this distance will be treated as identical
+const LUMINANCE_LEVELS: u32 = 2; // How many shades of light/dark
+const NUM_WORDS: u32 = 100; // Number indexes to create from signature
+const NUM_LETTERS: u32 = 12; // Length of each index
 const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS as usize + 1;
 
 fn grid_square_radius(width: u32, height: u32) -> u32 {

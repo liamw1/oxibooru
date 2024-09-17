@@ -8,6 +8,10 @@ use crate::util::Timer;
 use diesel::prelude::*;
 use std::path::Path;
 
+/*
+    Renames post files and thumbnails.
+    Useful when the content hash changes.
+*/
 pub fn rename_post_content() -> std::io::Result<()> {
     let _time = Timer::new("rename_post_content");
 
@@ -44,6 +48,13 @@ pub fn rename_post_content() -> std::io::Result<()> {
     Ok(())
 }
 
+/*
+    Recomputes post signature indexes.
+    Useful when the post signature index parameters change.
+
+    This is much faster than recomputing the signatures, as this function doesn't require
+    reading post content from disk.
+*/
 pub fn recompute_indexes(conn: &mut PgConnection) -> QueryResult<()> {
     let _time = Timer::new("recompute_indexes");
 
@@ -82,6 +93,13 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> QueryResult<()> {
     })
 }
 
+/*
+    Recomputes both post signatures and signature indexes.
+    Useful when the post signature parameters change.
+
+    This function is quite slow for large databases.
+    I'll look into parallelizing this in the future.
+*/
 pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
     let _time = Timer::new("recompute_signatures");
 
@@ -89,6 +107,12 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
 
     let posts: Vec<(i32, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
     for (post_index, (post_id, mime_type)) in posts.into_iter().enumerate() {
+        let image_format = if let Some(format) = mime_type.to_image_format() {
+            format
+        } else {
+            continue;
+        };
+
         let image_path = content::post_content_path(post_id, mime_type);
         let file_content = match std::fs::read(&image_path) {
             Ok(content) => content,
@@ -98,7 +122,7 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
             }
         };
 
-        match decode::image(&file_content, mime_type) {
+        match decode::image(&file_content, image_format) {
             Ok(image) => {
                 let image_signature = signature::compute_signature(&image);
                 let signature_indexes = signature::generate_indexes(&image_signature);
@@ -120,6 +144,10 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
     Ok(())
 }
 
+/*
+    Recomputes posts checksums.
+    Useful when the way we compute checksums changes.
+*/
 pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
     let _time = Timer::new("recompute_checksums");
 

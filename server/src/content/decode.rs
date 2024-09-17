@@ -1,23 +1,14 @@
-use crate::model::enums::MimeType;
 use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits};
 use std::io::Cursor;
 
-pub fn image(bytes: &[u8], mime_type: MimeType) -> ImageResult<DynamicImage> {
+/*
+    Decodes a raw array of bytes into pixel data.
+*/
+pub fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
     let mut reader = ImageReader::new(Cursor::new(bytes));
-    reader.set_format(image_reader_format(mime_type));
+    reader.set_format(format);
     reader.limits(image_reader_limits());
     reader.decode()
-}
-
-fn image_reader_format(mime_type: MimeType) -> ImageFormat {
-    match mime_type {
-        MimeType::Bmp => ImageFormat::Bmp,
-        MimeType::Gif => ImageFormat::Gif,
-        MimeType::Jpeg => ImageFormat::Jpeg,
-        MimeType::Png => ImageFormat::Png,
-        MimeType::Webp => ImageFormat::WebP,
-        MimeType::Mov | MimeType::Mp4 | MimeType::Webm => panic!("Not an image format"),
-    }
 }
 
 fn image_reader_limits() -> Limits {

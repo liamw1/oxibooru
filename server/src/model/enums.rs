@@ -3,11 +3,20 @@ use diesel::pg::Pg;
 use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::SmallInt;
 use diesel::{AsExpression, FromSqlRow};
+use image::ImageFormat;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::path::Path;
 use strum::{EnumCount, EnumString, FromRepr, IntoStaticStr};
 use thiserror::Error;
+
+/*
+    In general, the order of these enums should not be changed.
+    They are encoded in the database as an integer, so changing
+    the underlying representation of an enum changes its meaning.
+
+    New enum variants should therefore always be appended at the end.
+*/
 
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("{extenstion} is not a supported file extension")]
@@ -171,6 +180,17 @@ impl MimeType {
             Self::Mp4 => "mp4",
             Self::Mov => "mov",
             Self::Webm => "webm",
+        }
+    }
+
+    pub fn to_image_format(self) -> Option<ImageFormat> {
+        match self {
+            MimeType::Bmp => Some(ImageFormat::Bmp),
+            MimeType::Gif => Some(ImageFormat::Gif),
+            MimeType::Jpeg => Some(ImageFormat::Jpeg),
+            MimeType::Png => Some(ImageFormat::Png),
+            MimeType::Webp => Some(ImageFormat::WebP),
+            MimeType::Mov | MimeType::Mp4 | MimeType::Webm => None,
         }
     }
 }
