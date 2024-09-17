@@ -6,7 +6,7 @@ use diesel::{AsExpression, FromSqlRow};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::path::Path;
-use strum::{EnumCount, EnumIter, EnumString, FromRepr, IntoStaticStr};
+use strum::{EnumCount, EnumString, FromRepr, IntoStaticStr};
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -102,7 +102,6 @@ where
     Clone,
     PartialEq,
     Eq,
-    EnumIter,
     EnumString,
     FromRepr,
     IntoStaticStr,

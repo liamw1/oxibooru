@@ -1,12 +1,14 @@
 mod post;
 
 use std::str::FromStr;
-use strum::EnumString;
+use strum::{EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
 
 pub fn run_tasks() -> usize {
-    let parsed_arguments: Vec<_> = std::env::args()
-        .filter_map(|arg| AdminTask::from_str(&arg).ok())
-        .collect();
+    let parsed_arguments: Vec<AdminTask> = std::env::args()
+        .skip(1)
+        .map(|arg| AdminTask::from_str(&arg))
+        .collect::<Result<_, _>>()
+        .expect(&error_message());
 
     let mut conn = crate::get_connection().unwrap();
     for &arg in parsed_arguments.iter() {
@@ -20,11 +22,16 @@ pub fn run_tasks() -> usize {
     parsed_arguments.len()
 }
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Clone, Copy, EnumString, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 enum AdminTask {
     RenamePostContent,
     RecomputePostSignatures,
     RecomputePostSignatureIndexes,
     RecomputePostChecksums,
+}
+
+fn error_message() -> String {
+    let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
+    format!("Command line arguments should be one of {possible_arguments:?}")
 }

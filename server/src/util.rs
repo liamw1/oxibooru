@@ -28,7 +28,14 @@ impl<'a> Timer<'a> {
 impl<'a> Drop for Timer<'a> {
     fn drop(&mut self) {
         let elapsed_time = self.start.elapsed();
-        println!("{} took {}ms", self.name, elapsed_time.as_millis());
+        let time_in_s = elapsed_time.as_secs_f32();
+        match elapsed_time.as_nanos().ilog10() {
+            0..3 => println!("{} took {:.1}ns", self.name, time_in_s * 1e9),
+            3..6 => println!("{} took {:.1}μs", self.name, time_in_s * 1e6),
+            6..9 => println!("{} took {:.1}ms", self.name, time_in_s * 1e3),
+            9..12 => println!("{} took {:.1}s", self.name, time_in_s),
+            12.. => println!("{} took {:.0}s", self.name, time_in_s),
+        }
     }
 }
 

@@ -294,7 +294,7 @@ struct ReverseSearchInfo {
 fn compute_signature_if_applicable(bytes: &[u8], mime_type: MimeType) -> ApiResult<Option<Vec<u8>>> {
     Ok(match PostType::from(mime_type) {
         PostType::Image | PostType::Animation => {
-            let image = decode::image(&bytes, mime_type)?;
+            let image = decode::image(bytes, mime_type)?;
             Some(signature::compute_signature(&image))
         }
         PostType::Flash | PostType::Video | PostType::Youtube => None,
