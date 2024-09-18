@@ -94,6 +94,7 @@ pub enum Error {
     SelfMerge,
     StdIo(#[from] std::io::Error),
     Utf8Conversion(#[from] std::str::Utf8Error),
+    VideoDecoding(#[from] crate::content::decode::VideoDecodingError),
     Warp(#[from] warp::Error),
 }
 
@@ -134,6 +135,7 @@ impl Error {
             Self::SelfMerge => StatusCode::BAD_REQUEST,
             Self::StdIo(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Utf8Conversion(_) => StatusCode::BAD_REQUEST,
+            Self::VideoDecoding(_) => StatusCode::BAD_REQUEST,
             Self::Warp(_) => StatusCode::BAD_REQUEST,
         }
     }
@@ -163,6 +165,7 @@ impl Error {
             Self::SelfMerge => "Self Merge",
             Self::StdIo(_) => "IO Error",
             Self::Utf8Conversion(_) => "Utf8 Conversion Error",
+            Self::VideoDecoding(_) => "Video Decoding Error",
             Self::Warp(_) => "Warp Error",
         }
     }

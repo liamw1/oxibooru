@@ -219,6 +219,33 @@ impl ErrorKind for crate::search::Error {
     }
 }
 
+impl ErrorKind for mp4::Error {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::IoError(_) => "IOError",
+            Self::InvalidData(err) => err,
+            Self::BoxNotFound(_) => "BoxNotFound",
+            Self::Box2NotFound(..) => "Box2NotFound",
+            Self::TrakNotFound(_) => "TrackNotFound",
+            Self::BoxInTrakNotFound(..) => "BoxInTrakNotFound",
+            Self::BoxInTrafNotFound(..) => "BoxInTrafNotFound",
+            Self::BoxInStblNotFound(..) => "BoxInStblNotFound",
+            Self::EntryInStblNotFound(..) => "EntryInStblNotFound",
+            Self::EntryInTrunNotFound(..) => "EntryInTrunNotFound",
+            Self::UnsupportedBoxVersion(..) => "UnsupportedBoxVersion",
+        }
+    }
+}
+
+impl ErrorKind for crate::content::decode::VideoDecodingError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Mp4(err) => err.kind(),
+            Self::NoVideoTrack => "NoVideoTrack",
+        }
+    }
+}
+
 impl ErrorKind for crate::api::Error {
     fn kind(&self) -> &'static str {
         match self {
@@ -245,6 +272,7 @@ impl ErrorKind for crate::api::Error {
             Self::SelfMerge => "SelfMerge",
             Self::StdIo(_) => "IOError",
             Self::Utf8Conversion(_) => "Utf8ConversionError",
+            Self::VideoDecoding(err) => err.kind(),
             Self::Warp(_) => "WarpError",
         }
     }

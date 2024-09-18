@@ -66,8 +66,6 @@ pub enum PostType {
     Image,
     Animation,
     Video,
-    Flash,
-    Youtube,
 }
 
 impl From<MimeType> for PostType {
@@ -140,8 +138,8 @@ pub enum MimeType {
     #[serde(rename = "video/mp4")]
     #[strum(serialize = "video/mp4")]
     Mp4,
-    #[serde(rename = "video/mov")]
-    #[strum(serialize = "video/mov")]
+    #[serde(rename = "video/quicktime")]
+    #[strum(serialize = "video/quicktime")]
     Mov,
     #[serde(rename = "video/webm")]
     #[strum(serialize = "video/webm")]

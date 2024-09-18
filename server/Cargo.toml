@@ -22,6 +22,7 @@ pbkdf2 = { version = "0.12.2", features = ["simple"] }  # Necessary for argon2
 warp = "0.3.7"
 toml = "0.8.15"
 image = "0.25.2"
+mp4 = "0.14.0"
 hmac = "0.12.1"
 base64 = "0.22.1"
 percent-encoding = "2.3.1"
