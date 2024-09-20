@@ -2295,8 +2295,6 @@ One file together with its metadata posted to the site.
     - `"image"` - plain image.
     - `"animation"` - animated image (GIF).
     - `"video"` - WEBM video.
-    - `"flash"` - Flash animation / game.
-    - `"youtube"` - Youtube embed.
 
 - `<checksum>`: the SHA1 file checksum.
 - `<checksum-MD5>`: the MD5 file checksum.

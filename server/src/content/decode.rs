@@ -21,8 +21,9 @@ pub fn video_frame(path: &Path) -> Result<DynamicImage, video_rs::Error> {
     let frame_data = frame.data(0);
     let width = frame.width();
     let height = frame.height();
+    let stride = frame.stride(0);
     Ok(match frame.format() {
-        Pixel::RGB24 => rgb24_frame(frame_data, width, height),
+        Pixel::RGB24 => rgb24_frame(frame_data, width, height, stride),
         // There's a looooooot of pixel formats, so I'll just implementment them as they come up
         format => panic!("Video frame format {format:?} is unimplemented!"),
     })
@@ -36,9 +37,9 @@ fn image_reader_limits() -> Limits {
     limits
 }
 
-fn rgb24_frame(data: &[u8], width: u32, height: u32) -> DynamicImage {
+fn rgb24_frame(data: &[u8], width: u32, height: u32, stride: usize) -> DynamicImage {
     let rgb_image = RgbImage::from_fn(width, height, |x, y| {
-        let offset = (y * width + x) as usize * 3;
+        let offset = y as usize * stride + x as usize * 3;
         Rgb([data[offset], data[offset + 1], data[offset + 2]])
     });
     DynamicImage::ImageRgb8(rgb_image)
