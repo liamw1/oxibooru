@@ -1,16 +1,8 @@
-use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits};
-use mp4::{Mp4Reader, TrackType};
-use std::fs::File;
-use std::io::{BufReader, Cursor};
+use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, Rgb, RgbImage};
+use std::io::Cursor;
 use std::path::Path;
-
-#[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub enum VideoDecodingError {
-    Mp4(#[from] mp4::Error),
-    #[error("Video file does not have a video track")]
-    NoVideoTrack,
-}
+use video_rs::ffmpeg::format::Pixel;
+use video_rs::Decoder;
 
 /*
     Decodes a raw array of bytes into pixel data.
@@ -22,30 +14,32 @@ pub fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
     reader.decode()
 }
 
-pub fn video_dimensions(path: &Path) -> Result<(u16, u16), VideoDecodingError> {
-    let file = File::open(path).map_err(mp4::Error::IoError)?;
-    let file_size = file.metadata().map_err(mp4::Error::IoError)?.len();
-    let file_reader = BufReader::new(file);
+pub fn video_frame(path: &Path) -> Result<DynamicImage, video_rs::Error> {
+    let mut decoder = Decoder::new(path)?;
+    let frame = decoder.decode_raw()?;
 
-    let mp4 = Mp4Reader::read_header(file_reader, file_size)?;
-    let tracks: Vec<_> = mp4
-        .tracks()
-        .values()
-        .map(|track| track.track_type().map(|track_type| (track, track_type)))
-        .collect::<Result<_, _>>()?;
-    let video_track = tracks
-        .into_iter()
-        .find(|(_, track_type)| *track_type == TrackType::Video)
-        .map(|(track, _)| track)
-        .ok_or(VideoDecodingError::NoVideoTrack)?;
-
-    Ok((video_track.width(), video_track.height()))
+    let frame_data = frame.data(0);
+    let width = frame.width();
+    let height = frame.height();
+    Ok(match frame.format() {
+        Pixel::RGB24 => rgb24_frame(frame_data, width, height),
+        // There's a looooooot of pixel formats, so I'll just implementment them as they come up
+        format => panic!("Video frame format {format:?} is unimplemented!"),
+    })
 }
 
 fn image_reader_limits() -> Limits {
-    const GB: u64 = 1024 * 1024 * 1024;
+    const GB: u64 = 1024_u64.pow(3);
 
     let mut limits = Limits::no_limits();
     limits.max_alloc = Some(4 * GB);
     limits
+}
+
+fn rgb24_frame(data: &[u8], width: u32, height: u32) -> DynamicImage {
+    let rgb_image = RgbImage::from_fn(width, height, |x, y| {
+        let offset = (y * width + x) as usize * 3;
+        Rgb([data[offset], data[offset + 1], data[offset + 2]])
+    });
+    DynamicImage::ImageRgb8(rgb_image)
 }

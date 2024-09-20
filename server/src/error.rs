@@ -219,29 +219,54 @@ impl ErrorKind for crate::search::Error {
     }
 }
 
-impl ErrorKind for mp4::Error {
+impl ErrorKind for video_rs::ffmpeg::Error {
     fn kind(&self) -> &'static str {
         match self {
-            Self::IoError(_) => "IOError",
-            Self::InvalidData(err) => err,
-            Self::BoxNotFound(_) => "BoxNotFound",
-            Self::Box2NotFound(..) => "Box2NotFound",
-            Self::TrakNotFound(_) => "TrackNotFound",
-            Self::BoxInTrakNotFound(..) => "BoxInTrakNotFound",
-            Self::BoxInTrafNotFound(..) => "BoxInTrafNotFound",
-            Self::BoxInStblNotFound(..) => "BoxInStblNotFound",
-            Self::EntryInStblNotFound(..) => "EntryInStblNotFound",
-            Self::EntryInTrunNotFound(..) => "EntryInTrunNotFound",
-            Self::UnsupportedBoxVersion(..) => "UnsupportedBoxVersion",
+            Self::Bug => "FFmpegBug1",
+            Self::Bug2 => "FFmpegBug2",
+            Self::Unknown => "FFmpegUnknown",
+            Self::Experimental => "FFmpegExperimental",
+            Self::BufferTooSmall => "FFmpegBufferTooSmall",
+            Self::Eof => "FFmpegEof",
+            Self::Exit => "FFmpegExit",
+            Self::External => "FFmpegExternal",
+            Self::InvalidData => "FFmpegInvalidData",
+            Self::PatchWelcome => "FFmpegPatchWelcome",
+            Self::InputChanged => "FFmpegInputChanged",
+            Self::OutputChanged => "FFmpegOutputChanged",
+            Self::BsfNotFound => "FFmpegBsfNotFound",
+            Self::DecoderNotFound => "FFmpegDecoderNotFound",
+            Self::DemuxerNotFound => "FFmpegDemuxerNotFound",
+            Self::EncoderNotFound => "FFmpegEncoderNotFound",
+            Self::OptionNotFound => "FFmpegOptionNotFound",
+            Self::MuxerNotFound => "FFmpegMuxerNotFound",
+            Self::FilterNotFound => "FFmpegFilterNotFound",
+            Self::ProtocolNotFound => "FFmpegProtocolNotFound",
+            Self::StreamNotFound => "FFmpegStreamNotFound",
+            Self::HttpBadRequest => "FFmpegHttpBadRequest",
+            Self::HttpUnauthorized => "FFmpegHttpUnauthorized",
+            Self::HttpForbidden => "FFmpegHttpForbidden",
+            Self::HttpNotFound => "FFmpegHttpNotFound",
+            Self::HttpOther4xx => "FFmpegHttpOther4xx",
+            Self::HttpServerError => "FFmpegHttpServerError",
+            Self::Other { .. } => "FFmpegPosixError",
         }
     }
 }
 
-impl ErrorKind for crate::content::decode::VideoDecodingError {
+impl ErrorKind for video_rs::Error {
     fn kind(&self) -> &'static str {
         match self {
-            Self::Mp4(err) => err.kind(),
-            Self::NoVideoTrack => "NoVideoTrack",
+            Self::ReadExhausted => "ReadExhausted",
+            Self::WriteRetryLimitReached => "WriteRetryLimitReached",
+            Self::InvalidFrameFormat => "InvalidFrameFormat",
+            Self::InvalidExtraData => "InvalidExtraData",
+            Self::MissingCodecParameters => "MissingCodecParameters",
+            Self::UnsupportedCodecParameterSets => "UnsupportedCodecParameterSets",
+            Self::InvalidResizeParameters => "InvalidResizeParameters",
+            Self::UninitializedCodec => "UninitializedCodec",
+            Self::UnsupportedCodecHardwareAccelerationDeviceType => "UnsupportedCodecHardwareAccelerationDeviceType",
+            Self::BackendError(err) => err.kind(),
         }
     }
 }

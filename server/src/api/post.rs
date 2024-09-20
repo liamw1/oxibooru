@@ -12,7 +12,6 @@ use crate::schema::{comment, post, post_favorite, post_feature, post_relation, p
 use crate::util::DateTime;
 use crate::{api, config, filesystem, resource, search, update, util};
 use diesel::prelude::*;
-use image::DynamicImage;
 use serde::{Deserialize, Serialize};
 use warp::{Filter, Rejection, Reply};
 
@@ -376,27 +375,6 @@ struct NewPostInfo {
     flags: Option<Vec<PostFlag>>,
 }
 
-enum ContentInfo {
-    Image(DynamicImage),
-    Video((u16, u16)),
-}
-
-impl ContentInfo {
-    fn width(&self) -> i32 {
-        match self {
-            Self::Image(image) => image.width() as i32,
-            Self::Video((width, _)) => i32::from(*width),
-        }
-    }
-
-    fn height(&self) -> i32 {
-        match self {
-            Self::Image(image) => image.height() as i32,
-            Self::Video((_, height)) => i32::from(*height),
-        }
-    }
-}
-
 fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {
     let _timer = crate::util::Timer::new("create_post");
 
@@ -418,26 +396,22 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     let file_size = std::fs::metadata(&temp_path)?.len();
     let checksum = content::compute_checksum(&file_contents);
 
-    let content_info = match post_type {
+    let image = match post_type {
         PostType::Image | PostType::Animation => {
             let image_format = content_type
                 .to_image_format()
                 .expect("Mime type should be convertable to image format");
-            let image = decode::image(&file_contents, image_format)?;
-            ContentInfo::Image(image)
+            decode::image(&file_contents, image_format)?
         }
-        PostType::Video => {
-            let dimensions = decode::video_dimensions(&temp_path)?;
-            ContentInfo::Video(dimensions)
-        }
+        PostType::Video => decode::video_frame(&temp_path)?,
     };
 
     let client_id = client.as_ref().map(|user| user.id);
     let new_post = NewPost {
         user_id: client_id,
         file_size: file_size as i64,
-        width: content_info.width(),
-        height: content_info.height(),
+        width: image.width() as i32,
+        height: image.height() as i32,
         safety: post_info.safety,
         type_: post_type,
         mime_type: content_type,
@@ -463,32 +437,28 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
 
         // TODO: Sound flag detection for videos
 
-        // TODO: Thumbnails and image signatures for videos
-        if let ContentInfo::Image(image) = content_info {
-            // Generate image signature
-            let image_signature = signature::compute_signature(&image);
-            let new_post_signature = NewPostSignature {
-                post_id,
-                signature: &image_signature,
-                words: &signature::generate_indexes(&image_signature),
-            };
-            diesel::insert_into(post_signature::table)
-                .values(new_post_signature)
-                .execute(conn)?;
-
-            // Generate thumbnail
-            filesystem::create_dir(filesystem::generated_thumbnails_directory())?;
-            let thumbnail = image.resize_to_fill(
-                config::get().thumbnails.post_width,
-                config::get().thumbnails.post_height,
-                image::imageops::FilterType::Gaussian,
-            );
-            thumbnail.to_rgb8().save(content::post_thumbnail_path(post_id))?;
-        }
+        let image_signature = signature::compute_signature(&image);
+        let new_post_signature = NewPostSignature {
+            post_id,
+            signature: &image_signature,
+            words: &signature::generate_indexes(&image_signature),
+        };
+        diesel::insert_into(post_signature::table)
+            .values(new_post_signature)
+            .execute(conn)?;
 
         // Move content to permanent location
         filesystem::create_dir(filesystem::posts_directory())?;
         std::fs::rename(temp_path, content::post_content_path(post_id, mime_type))?;
+
+        // Generate thumbnail
+        filesystem::create_dir(filesystem::generated_thumbnails_directory())?;
+        let thumbnail = image.resize_to_fill(
+            config::get().thumbnails.post_width,
+            config::get().thumbnails.post_height,
+            image::imageops::FilterType::Gaussian,
+        );
+        thumbnail.to_rgb8().save(content::post_thumbnail_path(post_id))?;
 
         PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
     })

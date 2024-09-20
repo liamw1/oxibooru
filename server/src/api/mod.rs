@@ -94,7 +94,7 @@ pub enum Error {
     SelfMerge,
     StdIo(#[from] std::io::Error),
     Utf8Conversion(#[from] std::str::Utf8Error),
-    VideoDecoding(#[from] crate::content::decode::VideoDecodingError),
+    VideoDecoding(#[from] video_rs::Error),
     Warp(#[from] warp::Error),
 }
 
