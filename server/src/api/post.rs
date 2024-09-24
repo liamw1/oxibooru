@@ -130,6 +130,7 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     let _timer = crate::util::Timer::new("list_posts");
 
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
@@ -157,6 +158,7 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
 
 fn get_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_view)?;
 
     let fields = create_field_table(query.fields())?;
@@ -176,6 +178,7 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
     let _timer = crate::util::Timer::new("get_post_neighbors");
 
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
@@ -228,6 +231,7 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
 
 fn get_featured_post(auth: AuthResult, query: ResourceQuery) -> ApiResult<Option<PostInfo>> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_view_featured)?;
 
     let client_id = client.map(|user| user.id);
@@ -255,6 +259,7 @@ struct PostFeature {
 
 fn feature_post(auth: AuthResult, query: ResourceQuery, post_feature: PostFeature) -> ApiResult<PostInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_feature)?;
 
     let fields = create_field_table(query.fields())?;
@@ -295,6 +300,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     let _timer = crate::util::Timer::new("reverse_search");
 
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_reverse_search)?;
 
     let fields = create_field_table(query.fields())?;
@@ -376,6 +382,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         false => config::privileges().post_create_identified,
     };
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), required_rank)?;
 
     let fields = create_field_table(query.fields())?;
@@ -482,6 +489,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     let _timer = crate::util::Timer::new("merge_posts");
 
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_merge)?;
 
     let client_id = client.as_ref().map(|user| user.id);
@@ -619,6 +627,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
 
 fn favorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_favorite)?;
 
     let fields = create_field_table(query.fields())?;
@@ -637,6 +646,7 @@ fn favorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiRes
 
 fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, rating: RatingRequest) -> ApiResult<PostInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_score)?;
 
     let fields = create_field_table(query.fields())?;
@@ -676,6 +686,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
     let _timer = crate::util::Timer::new("update_post");
 
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     let fields = create_field_table(query.fields())?;
 
     crate::get_connection()?.transaction(|conn| {

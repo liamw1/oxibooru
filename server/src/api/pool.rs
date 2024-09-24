@@ -72,6 +72,7 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     let _timer = crate::util::Timer::new("list_pools");
 
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_list)?;
 
     let offset = query.offset.unwrap_or(0);
@@ -98,6 +99,7 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
 
 fn get_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PoolInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_view)?;
 
     let fields = create_field_table(query.fields())?;
@@ -115,6 +117,7 @@ struct NewPoolInfo {
 
 fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -> ApiResult<PoolInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_create)?;
 
     if pool_info.names.is_empty() {
@@ -151,6 +154,7 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
     let _timer = crate::util::Timer::new("merge_pools");
 
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_merge)?;
 
     let remove_id = merge_info.remove;
@@ -200,6 +204,7 @@ struct PoolUpdate {
 
 fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: PoolUpdate) -> ApiResult<PoolInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     let fields = create_field_table(query.fields())?;
 
     crate::get_connection()?.transaction(|conn| {

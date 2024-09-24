@@ -39,7 +39,10 @@ struct Info {
 }
 
 fn get_info(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
-    let client_id = auth?.map(|user| user.id);
+    let client = auth?;
+    query.bump_login(client.as_ref())?;
+
+    let client_id = client.as_ref().map(|user| user.id);
     let fields = create_field_table(query.fields())?;
     let disk_usage = filesystem::data_size()?;
 

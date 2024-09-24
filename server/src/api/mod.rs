@@ -14,6 +14,7 @@ use crate::config::{self, RegexType};
 use crate::error::ErrorKind;
 use crate::model::enums::{Rating, UserRank};
 use crate::model::user::User;
+use crate::update;
 use crate::util::DateTime;
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
@@ -25,8 +26,6 @@ use warp::reply::Response;
 use warp::reply::WithStatus;
 use warp::Filter;
 use warp::Rejection;
-
-// TODO: Bump-login
 
 pub type ApiResult<T> = Result<T, Error>;
 
@@ -256,6 +255,8 @@ struct MergeRequest<T> {
 struct ResourceQuery {
     query: Option<String>,
     fields: Option<String>,
+    #[serde(rename = "bump-login")]
+    bump_login: Option<bool>,
 }
 
 impl ResourceQuery {
@@ -265,6 +266,13 @@ impl ResourceQuery {
 
     fn fields(&self) -> Option<&str> {
         self.fields.as_deref()
+    }
+
+    fn bump_login(&self, user: Option<&User>) -> ApiResult<()> {
+        match (user, self.bump_login) {
+            (Some(user), Some(true)) => update::last_login_time(user),
+            _ => Ok(()),
+        }
     }
 }
 
@@ -283,6 +291,10 @@ impl PagedQuery {
 
     fn fields(&self) -> Option<&str> {
         self.query.fields()
+    }
+
+    fn bump_login(&self, user: Option<&User>) -> ApiResult<()> {
+        self.query.bump_login(user)
     }
 }
 
@@ -325,6 +337,7 @@ async fn empty_query(_err: Rejection) -> Result<(ResourceQuery,), Infallible> {
     Ok((ResourceQuery {
         query: None,
         fields: None,
+        bump_login: None,
     },))
 }
 

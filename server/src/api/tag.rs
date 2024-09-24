@@ -81,6 +81,7 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Tag
     let _timer = crate::util::Timer::new("list_tags");
 
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_list)?;
 
     let offset = query.offset.unwrap_or(0);
@@ -107,6 +108,7 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Tag
 
 fn get_tag(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<TagInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_view)?;
 
     let fields = create_field_table(query.fields())?;
@@ -133,6 +135,7 @@ struct TagSiblings {
 
 fn get_tag_siblings(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<TagSiblings> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_view)?;
 
     let fields = create_field_table(query.fields())?;
@@ -179,6 +182,7 @@ struct NewTagInfo {
 
 fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> ApiResult<TagInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_create)?;
 
     if tag_info.names.is_empty() {
@@ -219,6 +223,7 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
     let _timer = crate::util::Timer::new("merge_tags");
 
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_merge)?;
 
     let get_tag_info = |conn: &mut PgConnection, name: String| {
@@ -326,6 +331,8 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
     let _timer = crate::util::Timer::new("update_tag");
 
     let client = auth?;
+    query.bump_login(client.as_ref())?;
+
     let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     crate::get_connection()?.transaction(|conn| {

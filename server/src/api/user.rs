@@ -62,6 +62,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
 
 fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().user_list)?;
 
     let offset = query.offset.unwrap_or(0);
@@ -88,6 +89,8 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Us
 
 fn get_user(username: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<UserInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
+
     let client_id = client.as_ref().map(|user| user.id);
     let fields = create_field_table(query.fields())?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
@@ -119,6 +122,7 @@ struct NewUserInfo {
 
 fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
 
     let creation_rank = user_info.rank.unwrap_or(config::default_rank());
     let required_rank = match client.is_some() {
@@ -168,6 +172,8 @@ struct UserUpdate {
 
 fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
     let client = auth?;
+    query.bump_login(client.as_ref())?;
+
     let client_id = client.as_ref().map(|user| user.id);
     let fields = create_field_table(query.fields())?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
