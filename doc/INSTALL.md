@@ -4,6 +4,7 @@ and Docker Compose (version 1.6.0 or greater) already installed.
 ### Prepare things
 
 1. Install dependencies
+
     Diesel cli:
     ```console
     user@host:~$ curl --proto '=https' --tlsv1.2 -LsSf https://github.com/diesel-rs/diesel/releases/latest/download/diesel_cli-installer.sh | sh

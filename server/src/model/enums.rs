@@ -273,10 +273,18 @@ pub struct PostFlags {
 }
 
 impl PostFlags {
-    pub fn new(post_flags: &[PostFlag]) -> Self {
+    pub fn new() -> Self {
+        Self { flags: 0 }
+    }
+
+    pub fn from_slice(post_flags: &[PostFlag]) -> Self {
         Self {
             flags: post_flags.iter().fold(0, |flags, &flag| flags | 1 << flag as u16),
         }
+    }
+
+    pub fn add(&mut self, flag: PostFlag) {
+        self.flags |= 1 << flag as u16;
     }
 }
 

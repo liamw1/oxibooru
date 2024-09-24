@@ -291,17 +291,6 @@ struct ReverseSearchInfo {
     similar_posts: Vec<SimilarPostInfo>,
 }
 
-fn compute_signature_if_applicable(bytes: &[u8], mime_type: MimeType) -> ApiResult<Option<Vec<u8>>> {
-    let image_format = mime_type.to_image_format();
-    Ok(match image_format {
-        Some(format) => {
-            let image = decode::image(bytes, format)?;
-            Some(signature::compute_signature(&image))
-        }
-        None => None,
-    })
-}
-
 fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -> ApiResult<ReverseSearchInfo> {
     let _timer = crate::util::Timer::new("reverse_search");
 
@@ -316,7 +305,17 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     let temp_path = filesystem::temporary_upload_filepath(&token.content_token);
     let file_contents = std::fs::read(&temp_path)?;
     let checksum = content::compute_checksum(&file_contents);
-    let content_signature = compute_signature_if_applicable(&file_contents, content_type)?;
+
+    let image = match PostType::from(content_type) {
+        PostType::Image | PostType::Animation => {
+            let image_format = content_type
+                .to_image_format()
+                .expect("Mime type should be convertable to image format");
+            decode::image(&file_contents, image_format)?
+        }
+        PostType::Video => decode::video_frame(&temp_path)?,
+    };
+    let image_signature = signature::compute_signature(&image);
 
     let client_id = client.map(|user| user.id);
     crate::get_connection()?.transaction(|conn| {
@@ -332,23 +331,17 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
         }
 
         // Search for similar images
-        let similar_posts = match content_signature {
-            Some(signature) => {
-                let similar_signatures = PostSignature::find_similar(conn, signature::generate_indexes(&signature))?;
-                println!("Found {} similar signatures", similar_signatures.len());
-                let mut similar_posts: Vec<_> = similar_signatures
-                    .into_iter()
-                    .filter_map(|post_signature| {
-                        let distance = signature::normalized_distance(&post_signature.signature, &signature);
-                        let distance_threshold = 1.0 - config::get().post_similarity_threshold;
-                        (distance < distance_threshold).then_some((post_signature.post_id, distance))
-                    })
-                    .collect();
-                similar_posts.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
-                similar_posts
-            }
-            None => Vec::new(),
-        };
+        let similar_signatures = PostSignature::find_similar(conn, signature::generate_indexes(&image_signature))?;
+        println!("Found {} similar signatures", similar_signatures.len());
+        let mut similar_posts: Vec<_> = similar_signatures
+            .into_iter()
+            .filter_map(|post_signature| {
+                let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
+                let distance_threshold = 1.0 - config::get().post_similarity_threshold;
+                (distance < distance_threshold).then_some((post_signature.post_id, distance))
+            })
+            .collect();
+        similar_posts.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
 
         let (post_ids, distances): (Vec<_>, Vec<_>) = similar_posts.into_iter().unzip();
         Ok(ReverseSearchInfo {
@@ -405,6 +398,22 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         }
         PostType::Video => decode::video_frame(&temp_path)?,
     };
+    let image_signature = signature::compute_signature(&image);
+
+    let flags = match post_type {
+        PostType::Image | PostType::Animation => PostFlags::new(),
+        PostType::Video => {
+            let mut flags = post_info
+                .flags
+                .as_deref()
+                .map(PostFlags::from_slice)
+                .unwrap_or_default();
+            if decode::has_audio(&temp_path)? {
+                flags.add(PostFlag::Sound);
+            }
+            flags
+        }
+    };
 
     let client_id = client.as_ref().map(|user| user.id);
     let new_post = NewPost {
@@ -416,7 +425,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         type_: post_type,
         mime_type: content_type,
         checksum: &checksum,
-        flags: post_info.flags.as_deref().map(PostFlags::new).unwrap_or_default(),
+        flags,
         source: post_info.source.as_deref(),
     };
 
@@ -435,9 +444,6 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         let relations = post_info.relations.unwrap_or_default();
         update::post::create_relations(conn, post_id, relations)?;
 
-        // TODO: Sound flag detection for videos
-
-        let image_signature = signature::compute_signature(&image);
         let new_post_signature = NewPostSignature {
             post_id,
             signature: &image_signature,
@@ -706,7 +712,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
         if let Some(flags) = update.flags {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_flag)?;
 
-            let updated_flags = PostFlags::new(&flags);
+            let updated_flags = PostFlags::from_slice(&flags);
             diesel::update(post::table.find(post_id))
                 .set(post::flags.eq(updated_flags))
                 .execute(conn)?;

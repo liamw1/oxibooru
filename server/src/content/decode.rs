@@ -2,6 +2,7 @@ use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, Rgb, Rg
 use std::io::Cursor;
 use std::path::Path;
 use video_rs::ffmpeg::format::Pixel;
+use video_rs::ffmpeg::media::Type;
 use video_rs::Decoder;
 
 /*
@@ -27,6 +28,12 @@ pub fn video_frame(path: &Path) -> Result<DynamicImage, video_rs::Error> {
         // There's a looooooot of pixel formats, so I'll just implementment them as they come up
         format => panic!("Video frame format {format:?} is unimplemented!"),
     })
+}
+
+pub fn has_audio(path: &Path) -> Result<bool, video_rs::Error> {
+    video_rs::ffmpeg::format::input(path)
+        .map(|context| context.streams().best(Type::Audio).is_some())
+        .map_err(video_rs::Error::from)
 }
 
 fn image_reader_limits() -> Limits {

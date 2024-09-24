@@ -8,7 +8,7 @@ WARNING: This project is still in active development and I can't make any
 
 ## Features
 
-- Post content: images (JPG, PNG, BMP, GIF WEBP) and videos (WIP)
+- Post content: images (JPG, PNG, BMP, GIF, WEBP) and videos (MP4, MOV, WEBM)
 - Post comments
 - Post notes / annotations, including arbitrary polygons
 - Rich JSON REST API ([see documentation](doc/API.md))
