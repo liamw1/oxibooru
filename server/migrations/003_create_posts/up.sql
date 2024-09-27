@@ -45,7 +45,7 @@ CREATE TABLE "post_feature" (
 CREATE TABLE "post_note" (
     "id" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
     "post_id" INTEGER NOT NULL REFERENCES "post" ON DELETE CASCADE,
-    "polygon" BYTEA NOT NULL,
+    "polygon" REAL[][2] NOT NULL,
     "text" TEXT NOT NULL
 );
 

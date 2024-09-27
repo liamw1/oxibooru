@@ -22,6 +22,21 @@ use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
 #[derive(Serialize)]
+struct PostNoteInfo {
+    polygon: Vec<Option<f32>>, // Probably not correct type, TODO
+    text: String,
+}
+
+impl PostNoteInfo {
+    pub fn new(note: PostNote) -> Self {
+        PostNoteInfo {
+            polygon: note.polygon,
+            text: note.text,
+        }
+    }
+}
+
+#[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroPost {
     pub id: i32,
@@ -302,21 +317,6 @@ impl PostInfo {
         let unordered_posts = post::table.filter(post::id.eq_any(&post_ids)).load(conn)?;
         let posts = resource::order_by(unordered_posts, &post_ids);
         Self::new_batch(conn, client, posts, fields)
-    }
-}
-
-#[derive(Serialize)]
-struct PostNoteInfo {
-    polygon: Vec<u8>, // Probably not correct type, TODO
-    text: String,
-}
-
-impl PostNoteInfo {
-    pub fn new(note: PostNote) -> Self {
-        PostNoteInfo {
-            polygon: note.polygon,
-            text: note.text,
-        }
     }
 }
 

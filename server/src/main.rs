@@ -35,6 +35,8 @@ fn get_connection() -> Result<PooledConnection<ConnectionManager<PgConnection>>,
 
 #[tokio::main]
 async fn main() {
+    println!("Oxibooru server running on {} threads", tokio::runtime::Handle::current().metrics().num_workers());
+
     if admin::run_tasks() > 0 {
         return;
     }

@@ -129,7 +129,7 @@ pub struct NewPostNote<'a> {
 pub struct PostNote {
     pub id: i32,
     pub post_id: i32,
-    pub polygon: Vec<u8>,
+    pub polygon: Vec<Option<f32>>,
     pub text: String,
 }
 
