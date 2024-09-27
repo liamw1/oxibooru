@@ -168,7 +168,7 @@ are made anonymously, so time to authenticate isn't included.
     | oxibooru          |                         16.27 |
     
     Oxibooru is more than 2x faster here, so it looks like the time I spent on
-    optimizing image search payed off! However, the total runtime doesn't show
+    optimizing image search paid off! However, the total runtime doesn't show
     the full story here.
 
     First of all, oxibooru is actually doing a lot more
