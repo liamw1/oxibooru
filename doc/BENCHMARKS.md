@@ -80,7 +80,7 @@ are made anonymously, so time to authenticate isn't included.
     
 - What about with a huge offset?
 
-    **`GET http://localhost:8080/api/posts/?query=-rating%3Aunsafe&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
+    **`GET http://localhost:8080/api/posts/?query=-rating%3Aunsafe&offset=33726&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      6231 |
