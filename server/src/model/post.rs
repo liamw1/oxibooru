@@ -118,8 +118,8 @@ pub struct PostFeature {
 #[diesel(check_for_backend(Pg))]
 pub struct NewPostNote<'a> {
     pub post_id: i32,
-    pub polygon: &'a [u8],
-    pub text: String,
+    pub polygon: &'a [f32],
+    pub text: &'a str,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]

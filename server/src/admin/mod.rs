@@ -8,7 +8,7 @@ pub fn run_tasks() -> usize {
         .skip(1)
         .map(|arg| AdminTask::from_str(&arg))
         .collect::<Result<_, _>>()
-        .expect(&error_message());
+        .unwrap_or_else(|_| panic!("{}", error_message()));
 
     let mut conn = crate::get_connection().unwrap();
     for &arg in parsed_arguments.iter() {

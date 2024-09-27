@@ -2,7 +2,7 @@ use crate::auth::content;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType, Rating, Score};
 use crate::model::pool::{Pool, PoolPost};
-use crate::model::post::{Post, PostFavorite, PostFeature, PostNote, PostRelation, PostScore, PostTag};
+use crate::model::post::{NewPostNote, Post, PostFavorite, PostFeature, PostNote, PostRelation, PostScore, PostTag};
 use crate::resource;
 use crate::resource::comment::CommentInfo;
 use crate::resource::pool::MicroPool;
@@ -15,23 +15,37 @@ use crate::schema::{
 use crate::util::DateTime;
 use diesel::dsl::*;
 use diesel::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
-#[derive(Serialize)]
-struct PostNoteInfo {
-    polygon: Vec<Option<f32>>, // Probably not correct type, TODO
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Note {
+    polygon: Vec<[f32; 2]>,
     text: String,
 }
 
-impl PostNoteInfo {
+impl Note {
     pub fn new(note: PostNote) -> Self {
-        PostNoteInfo {
-            polygon: note.polygon,
+        let polygon = note
+            .polygon
+            .chunks_exact(2)
+            .map(|vertex| [vertex[0].unwrap(), vertex[1].unwrap()])
+            .collect();
+        Self {
+            polygon,
             text: note.text,
+        }
+    }
+
+    pub fn to_new_post_note(&self, post_id: i32) -> NewPostNote {
+        NewPostNote {
+            post_id,
+            polygon: self.polygon.as_flattened(),
+            text: &self.text,
         }
     }
 }
@@ -122,7 +136,7 @@ pub struct PostInfo {
     comments: Option<Vec<CommentInfo>>,
     relations: Option<Vec<MicroPost>>,
     pools: Option<Vec<MicroPool>>,
-    notes: Option<Vec<PostNoteInfo>>,
+    notes: Option<Vec<Note>>,
     score: Option<i64>,
     own_score: Option<Rating>,
     own_favorite: Option<bool>,
@@ -507,12 +521,12 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
         .collect())
 }
 
-fn get_notes(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<PostNoteInfo>>> {
+fn get_notes(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Note>>> {
     Ok(PostNote::belonging_to(posts)
         .load(conn)?
         .grouped_by(posts)
         .into_iter()
-        .map(|post_notes| post_notes.into_iter().map(PostNoteInfo::new).collect())
+        .map(|post_notes| post_notes.into_iter().map(Note::new).collect())
         .collect())
 }
 

@@ -7,7 +7,7 @@ use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType, S
 use crate::model::post::{
     NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostSignature,
 };
-use crate::resource::post::{FieldTable, PostInfo};
+use crate::resource::post::{FieldTable, Note, PostInfo};
 use crate::schema::{comment, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag};
 use crate::util::DateTime;
 use crate::{api, config, filesystem, resource, search, update, util};
@@ -678,7 +678,7 @@ struct PostUpdate {
     source: Option<String>,
     relations: Option<Vec<i32>>,
     tags: Option<Vec<String>>,
-    // notes: TODO
+    notes: Option<Vec<Note>>,
     flags: Option<Vec<PostFlag>>,
 }
 
@@ -719,6 +719,12 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
             let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), tags, false)?;
             update::post::delete_tags(conn, post_id)?;
             update::post::add_tags(conn, post_id, updated_tag_ids)?;
+        }
+        if let Some(notes) = update.notes {
+            api::verify_privilege(client.as_ref(), config::privileges().post_edit_note)?;
+
+            update::post::delete_notes(conn, post_id)?;
+            update::post::add_notes(conn, post_id, notes)?;
         }
         if let Some(flags) = update.flags {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_flag)?;

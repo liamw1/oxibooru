@@ -1,5 +1,6 @@
 use crate::model::post::{PostRelation, PostTag};
-use crate::schema::{post_relation, post_tag};
+use crate::resource::post::Note;
+use crate::schema::{post_note, post_relation, post_tag};
 use diesel::prelude::*;
 
 /*
@@ -39,5 +40,19 @@ pub fn add_tags(conn: &mut PgConnection, post_id: i32, tags: Vec<i32>) -> QueryR
 pub fn delete_tags(conn: &mut PgConnection, post_id: i32) -> QueryResult<usize> {
     diesel::delete(post_tag::table)
         .filter(post_tag::post_id.eq(post_id))
+        .execute(conn)
+}
+
+pub fn add_notes(conn: &mut PgConnection, post_id: i32, notes: Vec<Note>) -> QueryResult<()> {
+    let new_post_notes: Vec<_> = notes.iter().map(|note| note.to_new_post_note(post_id)).collect();
+    diesel::insert_into(post_note::table)
+        .values(new_post_notes)
+        .execute(conn)?;
+    Ok(())
+}
+
+pub fn delete_notes(conn: &mut PgConnection, post_id: i32) -> QueryResult<usize> {
+    diesel::delete(post_note::table)
+        .filter(post_note::post_id.eq(post_id))
         .execute(conn)
 }
