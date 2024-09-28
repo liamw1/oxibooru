@@ -22,8 +22,12 @@ use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
 use std::sync::LazyLock;
 
 static CONNECTION_POOL: LazyLock<Pool<ConnectionManager<PgConnection>>> = LazyLock::new(|| {
+    let num_threads = tokio::runtime::Handle::current().metrics().num_workers() as u32;
     let manager = ConnectionManager::new(config::database_url());
     Pool::builder()
+        .max_size(num_threads)
+        .max_lifetime(None)
+        .idle_timeout(None)
         .test_on_check_out(true)
         .build(manager)
         .expect("Could not build connection pool")
