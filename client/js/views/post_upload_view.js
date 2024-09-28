@@ -32,7 +32,7 @@ class Uploadable extends events.EventTarget {
         super();
         this.lookalikes = [];
         this.lookalikesConfirmed = false;
-        this.safety = "unsafe";
+        this.safety = "safe";
         this.flags = [];
         this.tags = [];
         this.relations = [];
