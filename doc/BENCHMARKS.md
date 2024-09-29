@@ -219,12 +219,14 @@ are made anonymously, so time to authenticate isn't included.
 
     | Database          | Post Creation Time (s) |
     | ----------------- | ---------------------- |
-    | szurubooru        |                    9.2 |
-    | oxibooru          |                    8.1 |
+    | szurubooru        |                   8.68 |
+    | oxibooru          |                   4.81 |
     
-    These times are for upload, reverse image search, and post creation. 
-    Szurubooru does surprisely well here. There's probably some room for
-    improvement here. Now that I think about it, we calculate the post
-    signature and checkum in both the reverse search and post creation. If we
-    cached these, that might give us an up to 2x speed up for large images. I'll
-    have to try that...
+    These times are for upload, reverse image search, and post creation.
+    The reason oxibooru is about 2x faster here is because it caches the
+    checksum and image signature calculated in the reverse search so that
+    they can be reused in the post creation query. Without this caching,
+    oxibooru would perform about as well as szurubooru. There's probably
+    still some room for improvement here. I may try playing around with
+    vectorizing and/or multithreading the post signature creation at some
+    point.

@@ -2,8 +2,8 @@ use crate::api::{
     ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, RatingRequest, ResourceQuery,
 };
 use crate::auth::content;
-use crate::content::{decode, signature};
-use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType, Score};
+use crate::content::{cache, signature};
+use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, Score};
 use crate::model::post::{
     NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostSignature,
 };
@@ -304,29 +304,15 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     api::verify_privilege(client.as_ref(), config::privileges().post_reverse_search)?;
 
     let fields = create_field_table(query.fields())?;
-
-    let (_uuid, extension) = token.content_token.split_once('.').unwrap();
-    let content_type = MimeType::from_extension(extension)?;
-
-    let temp_path = filesystem::temporary_upload_filepath(&token.content_token);
-    let file_contents = std::fs::read(&temp_path)?;
-    let checksum = content::compute_checksum(&file_contents);
-
-    let image = match PostType::from(content_type) {
-        PostType::Image | PostType::Animation => {
-            let image_format = content_type
-                .to_image_format()
-                .expect("Mime type should be convertable to image format");
-            decode::image(&file_contents, image_format)?
-        }
-        PostType::Video => decode::video_frame(&temp_path)?,
-    };
-    let image_signature = signature::compute_signature(&image);
+    let content_properties = cache::compute_properties(&token.content_token)?;
 
     let client_id = client.map(|user| user.id);
     crate::get_connection()?.transaction(|conn| {
         // Check for exact match
-        let exact_post = post::table.filter(post::checksum.eq(checksum)).first(conn).optional()?;
+        let exact_post = post::table
+            .filter(post::checksum.eq(content_properties.checksum))
+            .first(conn)
+            .optional()?;
         if exact_post.is_some() {
             return Ok(ReverseSearchInfo {
                 exact_post: exact_post
@@ -337,12 +323,13 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
         }
 
         // Search for similar images
-        let similar_signatures = PostSignature::find_similar(conn, signature::generate_indexes(&image_signature))?;
+        let similar_signatures =
+            PostSignature::find_similar(conn, signature::generate_indexes(&content_properties.signature))?;
         println!("Found {} similar signatures", similar_signatures.len());
         let mut similar_posts: Vec<_> = similar_signatures
             .into_iter()
             .filter_map(|post_signature| {
-                let distance = signature::normalized_distance(&post_signature.signature, &image_signature);
+                let distance = signature::normalized_distance(&post_signature.signature, &content_properties.signature);
                 let distance_threshold = 1.0 - config::get().post_similarity_threshold;
                 (distance < distance_threshold).then_some((post_signature.post_id, distance))
             })
@@ -375,8 +362,6 @@ struct NewPostInfo {
 }
 
 fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {
-    let _timer = crate::util::Timer::new("create_post");
-
     let required_rank = match post_info.anonymous.unwrap_or(false) {
         true => config::privileges().post_create_anonymous,
         false => config::privileges().post_create_identified,
@@ -386,52 +371,23 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     api::verify_privilege(client.as_ref(), required_rank)?;
 
     let fields = create_field_table(query.fields())?;
+    let content_properties = cache::get_or_compute_properties(&post_info.content_token)?;
 
-    let (_uuid, extension) = post_info.content_token.split_once('.').unwrap();
-    let content_type = MimeType::from_extension(extension)?;
-    let post_type = PostType::from(content_type);
-
-    let temp_path = filesystem::temporary_upload_filepath(&post_info.content_token);
-    let file_contents = std::fs::read(&temp_path)?;
-    let file_size = std::fs::metadata(&temp_path)?.len();
-    let checksum = content::compute_checksum(&file_contents);
-
-    let image = match post_type {
-        PostType::Image | PostType::Animation => {
-            let image_format = content_type
-                .to_image_format()
-                .expect("Mime type should be convertable to image format");
-            decode::image(&file_contents, image_format)?
-        }
-        PostType::Video => decode::video_frame(&temp_path)?,
-    };
-    let image_signature = signature::compute_signature(&image);
-
-    let flags = match post_type {
-        PostType::Image | PostType::Animation => PostFlags::new(),
-        PostType::Video => {
-            let mut flags = post_info
-                .flags
-                .as_deref()
-                .map(PostFlags::from_slice)
-                .unwrap_or_default();
-            if decode::has_audio(&temp_path)? {
-                flags.add(PostFlag::Sound);
-            }
-            flags
-        }
-    };
+    let mut flags = content_properties.flags;
+    for flag in post_info.flags.unwrap_or_default() {
+        flags.add(flag);
+    }
 
     let client_id = client.as_ref().map(|user| user.id);
     let new_post = NewPost {
         user_id: client_id,
-        file_size: file_size as i64,
-        width: image.width() as i32,
-        height: image.height() as i32,
+        file_size: content_properties.file_size as i64,
+        width: content_properties.width as i32,
+        height: content_properties.height as i32,
         safety: post_info.safety,
-        type_: post_type,
-        mime_type: content_type,
-        checksum: &checksum,
+        type_: PostType::from(content_properties.mime_type),
+        mime_type: content_properties.mime_type,
+        checksum: &content_properties.checksum,
         flags,
         source: post_info.source.as_deref(),
     };
@@ -453,25 +409,24 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
 
         let new_post_signature = NewPostSignature {
             post_id,
-            signature: &image_signature,
-            words: &signature::generate_indexes(&image_signature),
+            signature: &content_properties.signature,
+            words: &signature::generate_indexes(&content_properties.signature),
         };
         diesel::insert_into(post_signature::table)
             .values(new_post_signature)
             .execute(conn)?;
 
         // Move content to permanent location
+        let temp_path = filesystem::temporary_upload_filepath(&post_info.content_token);
         filesystem::create_dir(filesystem::posts_directory())?;
         std::fs::rename(temp_path, content::post_content_path(post_id, mime_type))?;
 
         // Generate thumbnail
         filesystem::create_dir(filesystem::generated_thumbnails_directory())?;
-        let thumbnail = image.resize_to_fill(
-            config::get().thumbnails.post_width,
-            config::get().thumbnails.post_height,
-            image::imageops::FilterType::Gaussian,
-        );
-        thumbnail.to_rgb8().save(content::post_thumbnail_path(post_id))?;
+        content_properties
+            .thumbnail
+            .to_rgb8()
+            .save(content::post_thumbnail_path(post_id))?;
 
         PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
     })
