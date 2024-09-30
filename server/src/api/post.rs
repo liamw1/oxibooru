@@ -455,7 +455,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     }
 
     let fields = create_field_table(query.fields())?;
-    let (remove_mime_type, merge_to_mime_type, merged_post) = crate::get_connection()?.transaction(|conn| {
+    crate::get_connection()?.transaction(|conn| {
         let mut remove_post: Post = post::table.find(remove_id).first(conn)?;
         let mut merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
         api::verify_version(remove_post.last_edit_time, merge_info.post_info.remove_version)?;
@@ -543,8 +543,10 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
 
         diesel::delete(post::table.find(remove_id)).execute(conn)?;
 
-        // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
         if merge_info.replace_content {
+            filesystem::swap_posts(remove_id, remove_post.mime_type, merge_to_id, merge_to_post.mime_type)?;
+
+            // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
             std::mem::swap(&mut remove_post.user_id, &mut merge_to_post.user_id);
             std::mem::swap(&mut remove_post.file_size, &mut merge_to_post.file_size);
             std::mem::swap(&mut remove_post.width, &mut merge_to_post.width);
@@ -555,29 +557,16 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
             std::mem::swap(&mut remove_post.checksum_md5, &mut merge_to_post.checksum_md5);
             std::mem::swap(&mut remove_post.flags, &mut merge_to_post.flags);
             std::mem::swap(&mut remove_post.source, &mut merge_to_post.source);
-
             merge_to_post = merge_to_post.save_changes(conn)?;
         }
 
-        let merge_to_mime_type = merge_to_post.mime_type;
-        PostInfo::new(conn, client_id, merge_to_post, &fields)
-            .map(|post_info| (remove_post.mime_type, merge_to_mime_type, post_info))
-            .map_err(api::Error::from)
-    })?;
+        if config::get().delete_source_files {
+            // This is the correct id and mime_type, even if replacing content :)
+            filesystem::delete_post(remove_id, remove_post.mime_type)?;
+        }
 
-    if merge_info.replace_content {
-        filesystem::swap_posts(remove_id, remove_mime_type, merge_to_id, merge_to_mime_type)?;
-    }
-    if config::get().delete_source_files {
-        let mime_type = if merge_info.replace_content {
-            merge_to_mime_type
-        } else {
-            remove_mime_type
-        };
-        filesystem::delete_post(remove_id, mime_type)?;
-    }
-
-    Ok(merged_post)
+        PostInfo::new(conn, client_id, merge_to_post, &fields).map_err(api::Error::from)
+    })
 }
 
 fn favorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostInfo> {

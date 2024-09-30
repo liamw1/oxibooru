@@ -44,9 +44,7 @@ pub fn delete_post(post_id: i32, mime_type: MimeType) -> std::io::Result<()> {
     Renames the content's of two posts as if they had swapped ids.
 */
 pub fn swap_posts(post_id_a: i32, mime_type_a: MimeType, post_id_b: i32, mime_type_b: MimeType) -> std::io::Result<()> {
-    let old_thumbnail_path_a = content::post_thumbnail_path(post_id_a);
-    let old_thumbnail_path_b = content::post_thumbnail_path(post_id_b);
-    swap_files(&old_thumbnail_path_a, &old_thumbnail_path_b)?;
+    swap_files(&content::post_thumbnail_path(post_id_a), &content::post_thumbnail_path(post_id_b))?;
 
     let old_image_path_a = content::post_content_path(post_id_a, mime_type_a);
     let old_image_path_b = content::post_content_path(post_id_b, mime_type_b);
@@ -108,10 +106,10 @@ fn remove_file(path: &Path) -> std::io::Result<()> {
 }
 
 fn swap_files(file_a: &Path, file_b: &Path) -> std::io::Result<()> {
-    let temp_path = std::env::temp_dir().join(file_a.file_name().unwrap_or(OsStr::new("post.tmp")));
+    let temp_path = TEMPORARY_UPLOADS_DIRECTORY.join(file_a.file_name().unwrap_or(OsStr::new("post.tmp")));
     std::fs::rename(file_a, &temp_path)?;
     std::fs::rename(file_b, file_a)?;
-    std::fs::rename(temp_path, file_a)
+    std::fs::rename(temp_path, file_b)
 }
 
 fn calculate_directory_size(path: &Path) -> std::io::Result<u64> {

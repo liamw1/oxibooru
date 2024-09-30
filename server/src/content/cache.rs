@@ -20,53 +20,7 @@ pub struct CachedProperties {
 }
 
 pub fn compute_properties(content_token: &str) -> ApiResult<CachedProperties> {
-    let temp_path = filesystem::temporary_upload_filepath(content_token);
-    let file_size = std::fs::metadata(&temp_path)?.len();
-    let file_contents = std::fs::read(&temp_path)?;
-    let checksum = content::compute_checksum(&file_contents);
-
-    let (_uuid, extension) = content_token.split_once('.').unwrap();
-    let mime_type = MimeType::from_extension(extension)?;
-    let post_type = PostType::from(mime_type);
-
-    let flags = match post_type {
-        PostType::Image | PostType::Animation => PostFlags::new(),
-        PostType::Video => {
-            if decode::has_audio(&temp_path)? {
-                PostFlags::new_with(PostFlag::Sound)
-            } else {
-                PostFlags::new()
-            }
-        }
-    };
-
-    let image = match PostType::from(mime_type) {
-        PostType::Image | PostType::Animation => {
-            let image_format = mime_type
-                .to_image_format()
-                .expect("Mime type should be convertable to image format");
-            decode::image(&file_contents, image_format)?
-        }
-        PostType::Video => decode::video_frame(&temp_path)?,
-    };
-    let signature = signature::compute_signature(&image);
-
-    let thumbnail = image.resize_to_fill(
-        config::get().thumbnails.post_width,
-        config::get().thumbnails.post_height,
-        image::imageops::FilterType::Gaussian,
-    );
-
-    let properties = CachedProperties {
-        checksum,
-        signature,
-        thumbnail,
-        width: image.width(),
-        height: image.height(),
-        mime_type,
-        file_size,
-        flags,
-    };
+    let properties = compute_properties_no_cache(&content_token)?;
 
     // Clone these here to make sure we aren't holding onto lock for longer than necessary
     let content_token_copy = content_token.to_owned();
@@ -80,7 +34,7 @@ pub fn get_or_compute_properties(content_token: &str) -> ApiResult<CachedPropert
     let maybe_properties = get_cache_guard().remove(content_token);
     match maybe_properties {
         Some(properties) => Ok(properties),
-        None => compute_properties(content_token),
+        None => compute_properties_no_cache(content_token),
     }
 }
 
@@ -129,4 +83,54 @@ fn get_cache_guard() -> MutexGuard<'static, RingCache> {
             guard
         }
     }
+}
+
+fn compute_properties_no_cache(content_token: &str) -> ApiResult<CachedProperties> {
+    let temp_path = filesystem::temporary_upload_filepath(content_token);
+    let file_size = std::fs::metadata(&temp_path)?.len();
+    let file_contents = std::fs::read(&temp_path)?;
+    let checksum = content::compute_checksum(&file_contents);
+
+    let (_uuid, extension) = content_token.split_once('.').unwrap();
+    let mime_type = MimeType::from_extension(extension)?;
+    let post_type = PostType::from(mime_type);
+
+    let flags = match post_type {
+        PostType::Image | PostType::Animation => PostFlags::new(),
+        PostType::Video => {
+            if decode::has_audio(&temp_path)? {
+                PostFlags::new_with(PostFlag::Sound)
+            } else {
+                PostFlags::new()
+            }
+        }
+    };
+
+    let image = match PostType::from(mime_type) {
+        PostType::Image | PostType::Animation => {
+            let image_format = mime_type
+                .to_image_format()
+                .expect("Mime type should be convertable to image format");
+            decode::image(&file_contents, image_format)?
+        }
+        PostType::Video => decode::video_frame(&temp_path)?,
+    };
+    let signature = signature::compute_signature(&image);
+
+    let thumbnail = image.resize_to_fill(
+        config::get().thumbnails.post_width,
+        config::get().thumbnails.post_height,
+        image::imageops::FilterType::Gaussian,
+    );
+
+    Ok(CachedProperties {
+        checksum,
+        signature,
+        thumbnail,
+        width: image.width(),
+        height: image.height(),
+        mime_type,
+        file_size,
+        flags,
+    })
 }
