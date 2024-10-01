@@ -1,6 +1,6 @@
 use crate::search::Error;
 use crate::search::{Criteria, StrCritera, TimeParsingError};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use itertools::Itertools;
 use std::borrow::Cow;
 use std::str::FromStr;

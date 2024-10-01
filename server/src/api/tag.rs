@@ -2,8 +2,8 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery,
 use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
 use crate::resource::tag::{FieldTable, TagInfo};
 use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
-use crate::util::DateTime;
-use crate::{api, config, resource, search, update};
+use crate::time::DateTime;
+use crate::{api, config, db, resource, search, update};
 use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -78,7 +78,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
 }
 
 fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>> {
-    let _timer = crate::util::Timer::new("list_tags");
+    let _timer = crate::time::Timer::new("list_tags");
 
     let client = auth?;
     query.bump_login(client.as_ref())?;
@@ -88,7 +88,7 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Tag
     let limit = std::cmp::min(query.limit.get(), MAX_TAGS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::tag::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let count_query = search::tag::build_query(&search_criteria)?;
@@ -113,7 +113,7 @@ fn get_tag(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<Ta
 
     let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let tag_id = tag_name::table
             .select(tag_name::tag_id)
             .filter(tag_name::name.eq(name))
@@ -140,7 +140,7 @@ fn get_tag_siblings(name: String, auth: AuthResult, query: ResourceQuery) -> Api
 
     let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let tag_id: i32 = tag::table
             .select(tag::id)
             .inner_join(tag_name::table)
@@ -190,7 +190,7 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
     }
 
     let fields = create_field_table(query.fields())?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let category_id: i32 = tag_category::table
             .select(tag_category::id)
             .filter(tag_category::name.eq(tag_info.category))
@@ -220,7 +220,7 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
 }
 
 fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String>) -> ApiResult<TagInfo> {
-    let _timer = crate::util::Timer::new("merge_tags");
+    let _timer = crate::time::Timer::new("merge_tags");
 
     let client = auth?;
     query.bump_login(client.as_ref())?;
@@ -235,7 +235,7 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
     };
 
     let fields = create_field_table(query.fields())?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (remove_id, remove_version) = get_tag_info(conn, merge_info.remove)?;
         let (merge_to_id, merge_to_version) = get_tag_info(conn, merge_info.merge_to)?;
         if remove_id == merge_to_id {
@@ -330,14 +330,14 @@ struct TagUpdate {
 }
 
 fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagUpdate) -> ApiResult<TagInfo> {
-    let _timer = crate::util::Timer::new("update_tag");
+    let _timer = crate::time::Timer::new("update_tag");
 
     let client = auth?;
     query.bump_login(client.as_ref())?;
 
     let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (tag_id, tag_version) = tag::table
             .select((tag::id, tag::last_edit_time))
             .inner_join(tag_name::table)
@@ -393,7 +393,7 @@ fn delete_tag(name: String, auth: AuthResult, client_version: DeleteRequest) -> 
     api::verify_privilege(client.as_ref(), config::privileges().tag_delete)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (tag_id, tag_version): (i32, DateTime) = tag::table
             .select((tag::id, tag::last_edit_time))
             .inner_join(tag_name::table)

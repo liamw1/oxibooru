@@ -4,8 +4,8 @@ use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
 use crate::resource::user_token::UserTokenInfo;
 use crate::schema::{user, user_token};
-use crate::util::DateTime;
-use crate::{api, config};
+use crate::time::DateTime;
+use crate::{api, config, db};
 use diesel::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -46,7 +46,7 @@ fn list_user_tokens(username: String, auth: AuthResult) -> ApiResult<UnpagedResp
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -82,7 +82,7 @@ fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTok
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -132,7 +132,7 @@ fn update_user_token(
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -182,7 +182,7 @@ fn delete_user_token(username: String, token: Uuid, auth: AuthResult) -> ApiResu
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let user_token_owner: i32 = user::table
             .inner_join(user_token::table)
             .select(user_token::user_id)

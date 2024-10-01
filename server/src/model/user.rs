@@ -2,7 +2,7 @@ use crate::auth::content;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::IntegerIdentifiable;
 use crate::schema::{user, user_token};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use std::option::Option;

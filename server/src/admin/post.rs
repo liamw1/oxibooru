@@ -4,7 +4,7 @@ use crate::filesystem;
 use crate::model::enums::MimeType;
 use crate::model::post::{NewPostSignature, PostSignature};
 use crate::schema::{post, post_signature};
-use crate::util::Timer;
+use crate::time::Timer;
 use diesel::prelude::*;
 use std::path::Path;
 

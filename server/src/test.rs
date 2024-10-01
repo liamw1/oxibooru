@@ -1,9 +1,10 @@
+use crate::db;
 use crate::model::enums::{AvatarStyle, MimeType, PostFlags, UserRank};
 use crate::model::enums::{PostSafety, PostType};
 use crate::model::post::{NewPost, Post};
 use crate::model::user::{NewUser, NewUserToken, User, UserToken};
 use crate::schema::{post, user, user_token};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::prelude::*;
 use diesel::result::Error;
 use std::path::{Path, PathBuf};
@@ -33,7 +34,7 @@ pub fn test_transaction<F, R>(function: F) -> R
 where
     F: FnOnce(&mut PgConnection) -> QueryResult<R>,
 {
-    crate::get_connection()
+    db::get_connection()
         .unwrap()
         .test_transaction::<_, Error, _>(|conn| Ok(function(conn).unwrap()))
 }

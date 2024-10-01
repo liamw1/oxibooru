@@ -1,6 +1,6 @@
 use crate::model::pool::PoolCategory;
 use crate::schema::{pool, pool_category};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::{dsl, prelude::*};
 use serde::Serialize;
 use std::collections::HashMap;

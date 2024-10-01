@@ -9,8 +9,8 @@ use crate::model::post::{
 };
 use crate::resource::post::{FieldTable, Note, PostInfo};
 use crate::schema::{comment, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag};
-use crate::util::DateTime;
-use crate::{api, config, filesystem, resource, search, update, util};
+use crate::time::DateTime;
+use crate::{api, config, db, filesystem, resource, search, update};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -128,7 +128,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
 }
 
 fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PostInfo>> {
-    let _timer = crate::util::Timer::new("list_posts");
+    let _timer = crate::time::Timer::new("list_posts");
 
     let client = auth?;
     query.bump_login(client.as_ref())?;
@@ -139,7 +139,7 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     let limit = std::cmp::min(query.limit.get(), MAX_POSTS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::post::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let count_query = search::post::build_query(client_id, &search_criteria)?;
@@ -165,7 +165,7 @@ fn get_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<P
     let fields = create_field_table(query.fields())?;
     let client_id = client.map(|user| user.id);
 
-    crate::get_connection()?
+    db::get_connection()?
         .transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
 }
 
@@ -176,7 +176,7 @@ struct PostNeighbors {
 }
 
 fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostNeighbors> {
-    let _timer = crate::util::Timer::new("get_post_neighbors");
+    let _timer = crate::time::Timer::new("get_post_neighbors");
 
     let client = auth?;
     query.bump_login(client.as_ref())?;
@@ -186,7 +186,7 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
     let fields = create_field_table(query.fields())?;
     let search_criteria = search::post::parse_search_criteria(query.criteria())?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         // Optimized neighbor retrieval for the most common use case
         if search_criteria.has_no_sort() {
             let previous_post = search::post::build_query(client_id, &search_criteria)?
@@ -238,7 +238,7 @@ fn get_featured_post(auth: AuthResult, query: ResourceQuery) -> ApiResult<Option
     let client_id = client.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let featured_post_id: Option<i32> = post_feature::table
             .select(post_feature::post_id)
             .order_by(post_feature::time.desc())
@@ -268,7 +268,7 @@ fn feature_post(auth: AuthResult, query: ResourceQuery, post_feature: PostFeatur
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
     let new_post_feature = NewPostFeature { post_id, user_id };
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         diesel::insert_into(post_feature::table)
             .values(new_post_feature)
             .execute(conn)?;
@@ -298,7 +298,7 @@ struct ReverseSearchInfo {
 }
 
 fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -> ApiResult<ReverseSearchInfo> {
-    let _timer = crate::util::Timer::new("reverse_search");
+    let _timer = crate::time::Timer::new("reverse_search");
 
     let client = auth?;
     query.bump_login(client.as_ref())?;
@@ -308,7 +308,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     let content_properties = cache::compute_properties(&token.content_token)?;
 
     let client_id = client.map(|user| user.id);
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         // Check for exact match
         let exact_post = post::table
             .filter(post::checksum.eq(content_properties.checksum))
@@ -393,7 +393,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         source: post_info.source.as_deref(),
     };
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (post_id, mime_type) = diesel::insert_into(post::table)
             .values(new_post)
             .returning((post::id, post::mime_type))
@@ -442,7 +442,7 @@ struct PostMergeRequest {
 }
 
 fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequest) -> ApiResult<PostInfo> {
-    let _timer = crate::util::Timer::new("merge_posts");
+    let _timer = crate::time::Timer::new("merge_posts");
 
     let client = auth?;
     query.bump_login(client.as_ref())?;
@@ -456,7 +456,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     }
 
     let fields = create_field_table(query.fields())?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let mut remove_post: Post = post::table.find(remove_id).first(conn)?;
         let mut merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
         api::verify_version(remove_post.last_edit_time, merge_info.post_info.remove_version)?;
@@ -596,7 +596,7 @@ fn favorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiRes
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
     let new_post_favorite = NewPostFavorite { post_id, user_id };
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
         diesel::insert_into(post_favorite::table)
             .values(new_post_favorite)
@@ -614,7 +614,7 @@ fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, rating: Ratin
     let fields = create_field_table(query.fields())?;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*rating) {
@@ -645,13 +645,13 @@ struct PostUpdate {
 }
 
 fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
-    let _timer = crate::util::Timer::new("update_post");
+    let _timer = crate::time::Timer::new("update_post");
 
     let client = auth?;
     query.bump_login(client.as_ref())?;
     let fields = create_field_table(query.fields())?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
         api::verify_version(post_version, update.version)?;
 
@@ -711,8 +711,8 @@ fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) ->
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 
-    let mut conn = crate::get_connection()?;
-    let mime_type = util::deadlock_prone_transaction::<_, api::Error, _>(&mut conn, 3, |conn| {
+    let mut conn = db::get_connection()?;
+    let mime_type = db::deadlock_prone_transaction::<_, api::Error, _>(&mut conn, 3, |conn| {
         let (mime_type, post_version) = post::table
             .find(post_id)
             .select((post::mime_type, post::last_edit_time))
@@ -736,7 +736,7 @@ fn unfavorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiR
     let fields = create_field_table(query.fields())?;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
         PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from)
     })

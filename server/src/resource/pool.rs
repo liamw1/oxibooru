@@ -3,7 +3,7 @@ use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource;
 use crate::resource::post::MicroPost;
 use crate::schema::{pool, pool_category, pool_name, pool_post};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;

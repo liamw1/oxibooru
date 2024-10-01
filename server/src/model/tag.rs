@@ -1,6 +1,6 @@
 use crate::model::IntegerIdentifiable;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
 

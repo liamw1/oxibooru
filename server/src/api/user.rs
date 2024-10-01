@@ -5,8 +5,8 @@ use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
 use crate::schema::user;
-use crate::util::DateTime;
-use crate::{api, config, resource, search};
+use crate::time::DateTime;
+use crate::{api, config, db, resource, search};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
@@ -69,7 +69,7 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Us
     let limit = std::cmp::min(query.limit.get(), MAX_USERS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let count_query = search::user::build_query(&search_criteria)?;
@@ -95,7 +95,7 @@ fn get_user(username: String, auth: AuthResult, query: ResourceQuery) -> ApiResu
     let fields = create_field_table(query.fields())?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let user = User::from_name(conn, &username)?;
 
         let viewing_self = client_id == Some(user.id);
@@ -149,7 +149,7 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
         avatar_style: AvatarStyle::Gravatar,
     };
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let user: User = diesel::insert_into(user::table)
             .values(new_user)
             .returning(User::as_returning())
@@ -178,7 +178,7 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
     let fields = create_field_table(query.fields())?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (user_id, user_version): (i32, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(username))
@@ -266,7 +266,7 @@ fn delete_user(username: String, auth: AuthResult, client_version: DeleteRequest
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (user_id, user_version): (i32, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(username))

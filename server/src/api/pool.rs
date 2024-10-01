@@ -3,8 +3,8 @@ use crate::config::RegexType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::{FieldTable, PoolInfo};
 use crate::schema::{pool, pool_category, pool_name, pool_post};
-use crate::util::DateTime;
-use crate::{api, config, resource, search, update};
+use crate::time::DateTime;
+use crate::{api, config, db, resource, search, update};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -69,7 +69,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
 }
 
 fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PoolInfo>> {
-    let _timer = crate::util::Timer::new("list_pools");
+    let _timer = crate::time::Timer::new("list_pools");
 
     let client = auth?;
     query.bump_login(client.as_ref())?;
@@ -79,7 +79,7 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     let limit = std::cmp::min(query.limit.get(), MAX_POOLS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::pool::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let count_query = search::pool::build_query(&search_criteria)?;
@@ -103,7 +103,7 @@ fn get_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<P
     api::verify_privilege(client.as_ref(), config::privileges().pool_view)?;
 
     let fields = create_field_table(query.fields())?;
-    crate::get_connection()?.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
+    db::get_connection()?.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -129,7 +129,7 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
         .try_for_each(|name| api::verify_matches_regex(name, RegexType::Pool))?;
 
     let fields = create_field_table(query.fields())?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let category_id: i32 = pool_category::table
             .select(pool_category::id)
             .filter(pool_category::name.eq(pool_info.category))
@@ -151,7 +151,7 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
 }
 
 fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i32>) -> ApiResult<PoolInfo> {
-    let _timer = crate::util::Timer::new("merge_pools");
+    let _timer = crate::time::Timer::new("merge_pools");
 
     let client = auth?;
     query.bump_login(client.as_ref())?;
@@ -164,7 +164,7 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
     }
 
     let fields = create_field_table(query.fields())?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let remove_version = pool::table.find(remove_id).select(pool::last_edit_time).first(conn)?;
         let merge_to_version = pool::table.find(merge_to_id).select(pool::last_edit_time).first(conn)?;
         api::verify_version(remove_version, merge_info.remove_version)?;
@@ -207,7 +207,7 @@ fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: Poo
     query.bump_login(client.as_ref())?;
     let fields = create_field_table(query.fields())?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let pool_version: DateTime = pool::table.find(pool_id).select(pool::last_edit_time).first(conn)?;
         api::verify_version(pool_version, update.version)?;
 
@@ -252,7 +252,7 @@ fn delete_pool(name: String, auth: AuthResult, client_version: DeleteRequest) ->
     api::verify_privilege(client.as_ref(), config::privileges().pool_delete)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (pool_id, pool_version): (i32, DateTime) = pool::table
             .select((pool::id, pool::last_edit_time))
             .inner_join(pool_name::table)

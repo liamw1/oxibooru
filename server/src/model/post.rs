@@ -5,7 +5,7 @@ use crate::model::IntegerIdentifiable;
 use crate::schema::{
     post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
 };
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use std::option::Option;

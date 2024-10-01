@@ -2,8 +2,8 @@ use crate::api::{ApiResult, AuthResult, ResourceQuery};
 use crate::model::post::PostFeature;
 use crate::resource::post::{FieldTable, PostInfo};
 use crate::schema::{post, post_feature, user};
-use crate::util::DateTime;
-use crate::{api, config, filesystem, resource};
+use crate::time::DateTime;
+use crate::{api, config, db, filesystem, resource};
 use diesel::prelude::*;
 use serde::Serialize;
 use warp::{Filter, Rejection, Reply};
@@ -46,7 +46,7 @@ fn get_info(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
     let fields = create_field_table(query.fields())?;
     let disk_usage = filesystem::data_size()?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let latest_feature: Option<PostFeature> = post_feature::table
             .order_by(post_feature::time.desc())
             .first(conn)

@@ -1,6 +1,6 @@
 use crate::model::user::UserToken;
 use crate::resource::user::MicroUser;
-use crate::util::DateTime;
+use crate::time::DateTime;
 use serde::Serialize;
 use uuid::Uuid;
 

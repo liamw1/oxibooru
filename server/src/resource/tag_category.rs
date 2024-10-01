@@ -1,6 +1,6 @@
 use crate::model::tag::TagCategory;
 use crate::schema::{tag, tag_category};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::dsl;
 use diesel::prelude::*;
 use serde::Serialize;

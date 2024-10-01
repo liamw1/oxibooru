@@ -2,7 +2,7 @@ use crate::model::enums::Score;
 use crate::model::post::Post;
 use crate::model::user::User;
 use crate::schema::{comment, comment_score};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
 

@@ -5,7 +5,7 @@ use crate::model::post::{Post, PostFavorite, PostScore};
 use crate::model::user::User;
 use crate::resource;
 use crate::schema::{comment, post, post_favorite, post_score, user};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;

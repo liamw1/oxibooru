@@ -3,8 +3,8 @@ use crate::config::RegexType;
 use crate::model::tag::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
-use crate::util::DateTime;
-use crate::{api, config};
+use crate::time::DateTime;
+use crate::{api, config, db};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -56,7 +56,7 @@ fn list_tag_categories(auth: AuthResult) -> ApiResult<UnpagedResponse<TagCategor
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_list)?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         TagCategoryInfo::all(conn)
             .map(|results| UnpagedResponse { results })
             .map_err(api::Error::from)
@@ -68,7 +68,7 @@ fn get_tag_category(name: String, auth: AuthResult) -> ApiResult<TagCategoryInfo
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_view)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let category = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
         TagCategoryInfo::new(conn, category).map_err(api::Error::from)
     })
@@ -87,7 +87,7 @@ fn create_tag_category(auth: AuthResult, category_info: NewTagCategoryInfo) -> A
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_create)?;
     api::verify_matches_regex(&category_info.name, RegexType::TagCategory)?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let new_category = NewTagCategory {
             order: category_info.order,
             name: &category_info.name,
@@ -116,7 +116,7 @@ fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdate
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     api::verify_matches_regex(&name, RegexType::TagCategory)?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let category = TagCategory::from_name(conn, &name)?;
         api::verify_version(category.last_edit_time, update.version)?;
 
@@ -150,13 +150,13 @@ fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdate
 }
 
 fn set_default_tag_category(name: String, auth: AuthResult) -> ApiResult<TagCategoryInfo> {
-    let _timer = crate::util::Timer::new("set_default_tag_category");
+    let _timer = crate::time::Timer::new("set_default_tag_category");
 
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_set_default)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let mut category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
         let mut old_default_category: TagCategory = tag_category::table.filter(tag_category::id.eq(0)).first(conn)?;
 
@@ -195,7 +195,7 @@ fn delete_tag_category(name: String, auth: AuthResult, client_version: DeleteReq
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_delete)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (category_id, category_version): (i32, DateTime) = tag_category::table
             .select((tag_category::id, tag_category::last_edit_time))
             .filter(tag_category::name.eq(name))

@@ -12,7 +12,7 @@ use crate::schema::{
     comment, comment_score, pool, pool_category, pool_name, pool_post, post, post_favorite, post_feature, post_note,
     post_relation, post_score, post_tag, tag, tag_category, tag_name, user,
 };
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};

@@ -4,7 +4,7 @@ use crate::model::IntegerIdentifiable;
 use crate::resource;
 use crate::resource::user::MicroUser;
 use crate::schema::{comment, comment_score, user};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;

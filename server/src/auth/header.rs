@@ -1,6 +1,6 @@
-use crate::auth;
 use crate::model::user::{User, UserToken};
 use crate::schema::user_token;
+use crate::{auth, db};
 use base64::prelude::*;
 use base64::DecodeError;
 use diesel::prelude::*;
@@ -63,7 +63,7 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
 fn basic_access_authentication(credentials: &str) -> Result<User, AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
 
-    let mut conn = crate::get_connection()?;
+    let mut conn = db::get_connection()?;
     let user = User::from_name(&mut conn, &username)?;
     auth::password::is_valid_password(&user, &password)
         .then_some(user)
@@ -78,7 +78,7 @@ fn token_authentication(credentials: &str) -> Result<User, AuthenticationError> 
     let (username, unparsed_token) = decode_credentials(credentials)?;
     let token = Uuid::parse_str(&unparsed_token)?;
 
-    let mut conn = crate::get_connection()?;
+    let mut conn = db::get_connection()?;
     let user = User::from_name(&mut conn, &username)?;
     let user_token = UserToken::belonging_to(&user)
         .filter(user_token::token.eq(token))

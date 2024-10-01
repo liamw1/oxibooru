@@ -3,8 +3,8 @@ use crate::config::RegexType;
 use crate::model::pool::{NewPoolCategory, PoolCategory};
 use crate::resource::pool_category::PoolCategoryInfo;
 use crate::schema::{pool, pool_category};
-use crate::util::DateTime;
-use crate::{api, config};
+use crate::time::DateTime;
+use crate::{api, config, db};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -56,7 +56,7 @@ fn list_pool_categories(auth: AuthResult) -> ApiResult<UnpagedResponse<PoolCateg
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_list)?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         PoolCategoryInfo::all(conn)
             .map(|results| UnpagedResponse { results })
             .map_err(api::Error::from)
@@ -68,7 +68,7 @@ fn get_pool_category(name: String, auth: AuthResult) -> ApiResult<PoolCategoryIn
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_view)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let category = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
         PoolCategoryInfo::new(conn, category).map_err(api::Error::from)
     })
@@ -86,7 +86,7 @@ fn create_pool_category(auth: AuthResult, category_info: NewPoolCategoryInfo) ->
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_create)?;
     api::verify_matches_regex(&category_info.name, RegexType::PoolCategory)?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let new_category = NewPoolCategory {
             name: &category_info.name,
             color: &category_info.color,
@@ -113,7 +113,7 @@ fn update_pool_category(name: String, auth: AuthResult, update: PoolCategoryUpda
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     api::verify_matches_regex(&name, RegexType::PoolCategory)?;
 
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let category = PoolCategory::from_name(conn, &name)?;
         api::verify_version(category.last_edit_time, update.version)?;
 
@@ -138,13 +138,13 @@ fn update_pool_category(name: String, auth: AuthResult, update: PoolCategoryUpda
 }
 
 fn set_default_pool_category(name: String, auth: AuthResult) -> ApiResult<PoolCategoryInfo> {
-    let _timer = crate::util::Timer::new("set_default_pool_category");
+    let _timer = crate::time::Timer::new("set_default_pool_category");
 
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_set_default)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let mut category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
         let mut old_default_category: PoolCategory =
             pool_category::table.filter(pool_category::id.eq(0)).first(conn)?;
@@ -184,7 +184,7 @@ fn delete_pool_category(name: String, auth: AuthResult, client_version: DeleteRe
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_delete)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    crate::get_connection()?.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (category_id, category_version): (i32, DateTime) = pool_category::table
             .select((pool_category::id, pool_category::last_edit_time))
             .filter(pool_category::name.eq(name))

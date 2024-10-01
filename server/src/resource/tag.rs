@@ -2,7 +2,7 @@ use crate::model::post::PostTag;
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
 use crate::resource;
 use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
-use crate::util::DateTime;
+use crate::time::DateTime;
 use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;

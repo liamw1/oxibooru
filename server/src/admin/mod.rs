@@ -1,5 +1,6 @@
 mod post;
 
+use crate::db;
 use std::str::FromStr;
 use strum::{EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
 
@@ -10,7 +11,7 @@ pub fn run_tasks() -> usize {
         .collect::<Result<_, _>>()
         .unwrap_or_else(|_| panic!("{}", error_message()));
 
-    let mut conn = crate::get_connection().unwrap();
+    let mut conn = db::get_connection().unwrap();
     for &arg in parsed_arguments.iter() {
         match arg {
             AdminTask::RenamePostContent => post::rename_post_content().unwrap(),
