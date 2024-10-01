@@ -264,6 +264,7 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
                 }
                 implication
             })
+            .filter(|implication| implication.parent_id != implication.child_id)
             .collect();
         diesel::delete(tag_implication::table)
             .filter(tag_implication::parent_id.eq(merge_to_id))
@@ -291,6 +292,7 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
                 }
                 suggestion
             })
+            .filter(|suggestion| suggestion.parent_id != suggestion.child_id)
             .collect();
         diesel::delete(tag_suggestion::table)
             .filter(tag_suggestion::parent_id.eq(merge_to_id))

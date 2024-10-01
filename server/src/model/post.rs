@@ -53,7 +53,7 @@ impl IntegerIdentifiable for Post {
     }
 }
 
-#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post, foreign_key = parent_id))]
 #[diesel(table_name = post_relation)]
 #[diesel(primary_key(parent_id, child_id))]

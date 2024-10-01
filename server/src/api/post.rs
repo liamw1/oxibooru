@@ -5,7 +5,7 @@ use crate::auth::content;
 use crate::content::{cache, signature};
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, Score};
 use crate::model::post::{
-    NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostSignature,
+    NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostRelation, PostSignature,
 };
 use crate::resource::post::{FieldTable, Note, PostInfo};
 use crate::schema::{comment, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag};
@@ -13,6 +13,7 @@ use crate::util::DateTime;
 use crate::{api, config, filesystem, resource, search, update, util};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -461,6 +462,34 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
         api::verify_version(remove_post.last_edit_time, merge_info.post_info.remove_version)?;
         api::verify_version(merge_to_post.last_edit_time, merge_info.post_info.merge_to_version)?;
 
+        // Merge relations
+        let involved_relations: Vec<PostRelation> = post_relation::table
+            .filter(post_relation::parent_id.eq(remove_id))
+            .or_filter(post_relation::child_id.eq(remove_id))
+            .or_filter(post_relation::parent_id.eq(merge_to_id))
+            .or_filter(post_relation::child_id.eq(merge_to_id))
+            .load(conn)?;
+        let merged_relations: HashSet<_> = involved_relations
+            .iter()
+            .copied()
+            .map(|mut relation| {
+                if relation.parent_id == remove_id {
+                    relation.parent_id = merge_to_id
+                } else if relation.child_id == remove_id {
+                    relation.child_id = merge_to_id
+                }
+                relation
+            })
+            .filter(|relation| relation.parent_id != relation.child_id)
+            .collect();
+        diesel::delete(post_relation::table)
+            .filter(post_relation::parent_id.eq(merge_to_id))
+            .or_filter(post_relation::child_id.eq(merge_to_id))
+            .execute(conn)?;
+        diesel::insert_into(post_relation::table)
+            .values(merged_relations.into_iter().collect::<Vec<_>>())
+            .execute(conn)?;
+
         // Merge tags
         let merge_to_tags = post_tag::table
             .select(post_tag::tag_id)
@@ -470,17 +499,6 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
             .filter(post_tag::post_id.eq(remove_id))
             .filter(post_tag::tag_id.ne_all(merge_to_tags))
             .set(post_tag::post_id.eq(merge_to_id))
-            .execute(conn)?;
-
-        // Merge relations
-        let merge_to_relations = post_relation::table
-            .select(post_relation::child_id)
-            .filter(post_relation::parent_id.eq(merge_to_id))
-            .into_boxed();
-        diesel::update(post_relation::table)
-            .filter(post_relation::parent_id.eq(remove_id))
-            .filter(post_relation::child_id.ne_all(merge_to_relations))
-            .set(post_relation::parent_id.eq(merge_to_id))
             .execute(conn)?;
 
         // Merge scores
