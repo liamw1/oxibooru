@@ -82,22 +82,26 @@ impl PoolInfo {
         let batch_size = pools.len();
 
         let mut categories = fields[Field::Category]
-            .then_some(get_categories(conn, &pools)?)
+            .then(|| get_categories(conn, &pools))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(categories.len(), batch_size);
 
         let mut names = fields[Field::Names]
-            .then_some(get_names(conn, &pools)?)
+            .then(|| get_names(conn, &pools))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(names.len(), batch_size);
 
         let mut posts = fields[Field::Posts]
-            .then_some(get_posts(conn, &pools)?)
+            .then(|| get_posts(conn, &pools))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(posts.len(), batch_size);
 
         let mut post_counts = fields[Field::PostCount]
-            .then_some(get_post_counts(conn, &pools)?)
+            .then(|| get_post_counts(conn, &pools))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(post_counts.len(), batch_size);
 

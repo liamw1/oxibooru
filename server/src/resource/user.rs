@@ -119,27 +119,32 @@ impl UserInfo {
         let batch_size = users.len();
 
         let mut comment_counts = fields[Field::CommentCount]
-            .then_some(get_comment_counts(conn, &users)?)
+            .then(|| get_comment_counts(conn, &users))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(comment_counts.len(), batch_size);
 
         let mut upload_counts = fields[Field::UploadedPostCount]
-            .then_some(get_uploaded_post_counts(conn, &users)?)
+            .then(|| get_uploaded_post_counts(conn, &users))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(upload_counts.len(), batch_size);
 
         let mut like_counts = fields[Field::LikedPostCount]
-            .then_some(get_liked_post_counts(conn, &users, visibility)?)
+            .then(|| get_liked_post_counts(conn, &users, visibility))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(like_counts.len(), batch_size);
 
         let mut dislike_counts = fields[Field::DislikedPostCount]
-            .then_some(get_disliked_post_counts(conn, &users, visibility)?)
+            .then(|| get_disliked_post_counts(conn, &users, visibility))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(dislike_counts.len(), batch_size);
 
         let mut favorite_counts = fields[Field::FavoritePostCount]
-            .then_some(get_favorite_post_counts(conn, &users)?)
+            .then(|| get_favorite_post_counts(conn, &users))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(favorite_counts.len(), batch_size);
 
@@ -147,7 +152,7 @@ impl UserInfo {
             .into_iter()
             .rev()
             .map(|user| Self {
-                avatar_url: fields[Field::AvatarUrl].then_some(user.avatar_url()),
+                avatar_url: fields[Field::AvatarUrl].then(|| user.avatar_url()),
                 version: fields[Field::Version].then_some(user.last_edit_time),
                 name: fields[Field::Name].then_some(user.name),
                 email: fields[Field::Email].then_some(match visibility {

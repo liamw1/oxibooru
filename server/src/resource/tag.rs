@@ -73,27 +73,32 @@ impl TagInfo {
         let batch_size = tags.len();
 
         let mut categories = fields[Field::Category]
-            .then_some(get_categories(conn, &tags)?)
+            .then(|| get_categories(conn, &tags))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(categories.len(), batch_size);
 
         let mut names = fields[Field::Names]
-            .then_some(get_names(conn, &tags)?)
+            .then(|| get_names(conn, &tags))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(names.len(), batch_size);
 
         let mut implications = fields[Field::Implications]
-            .then_some(get_implications(conn, &tags)?)
+            .then(|| get_implications(conn, &tags))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(implications.len(), batch_size);
 
         let mut suggestions = fields[Field::Suggestions]
-            .then_some(get_suggestions(conn, &tags)?)
+            .then(|| get_suggestions(conn, &tags))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(suggestions.len(), batch_size);
 
         let mut usages = fields[Field::Usages]
-            .then_some(get_usages(conn, &tags)?)
+            .then(|| get_usages(conn, &tags))
+            .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(usages.len(), batch_size);
 

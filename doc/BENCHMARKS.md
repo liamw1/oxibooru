@@ -23,7 +23,7 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      2287 |
-    | oxibooru          |      2699 |
+    | oxibooru          |      2661 |
 
     Szurubooru seems slightly faster here. This was a pretty surprising result 
     to me, because in practice I find that the szurubooru homepage is quite slow
@@ -41,7 +41,7 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       435 |
-    | oxibooru          |        61 |
+    | oxibooru          |        86 |
     
     Oxibooru is quite a bit faster here, but I admit this is a bit of an 
     unrealistic comparison. This query doesn't perform any field selection, so
@@ -63,31 +63,32 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |        53 |
-    | oxibooru          |        61 |
+    | oxibooru          |        52 |
 
-    So now szurubooru wins out. Why did I even waste my time with this rewrite 
-    again?
+    Nearly identical performance here. Where oxibooru shines is when we apply filters to our queries.
 
 - Let's now add a negative filter for unsafe posts.
 
     **`GET http://localhost:8080/api/posts/?query=-rating%3Aunsafe&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |       178 |
-    | oxibooru          |        72 |
+    | szurubooru        |        93 |
+    | oxibooru          |        56 |
     
-    Now oxibooru is about 2x faster. Neat!
+    Now oxibooru is nearly 2x faster relative to szurubooru. The unsafe filter 
+    barely adds any overhead.
     
 - What about with a huge offset?
 
     **`GET http://localhost:8080/api/posts/?query=-rating%3Aunsafe&offset=33726&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |      6231 |
-    | oxibooru          |      1162 |
+    | szurubooru        |      2490 |
+    | oxibooru          |       580 |
     
-    As expected, large offsets inflate the runtime quite a bit. But it's a bit
-    surprising that the difference between oxi and szuru is so large here.
+    As expected, large offsets inflate the runtime quite a bit. What's
+    surprising is that the relative difference between oxi and szuru grows to
+    nearly 5x.
     
 - One very common use case is to search for posts with a particular tag. Let's
   search for all posts with the tag `tagme`.
@@ -96,7 +97,7 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       594 |
-    | oxibooru          |       133 |
+    | oxibooru          |       171 |
     
     I'm not sure why szurubooru performs so poorly here, as both tag names
     and post tags are indexed. Perhaps SQLAlchemy is generating inefficient SQL?
@@ -106,10 +107,10 @@ are made anonymously, so time to authenticate isn't included.
     **`GET http://localhost:8080/api/posts/?query=sort%3Atag-count&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |      8298 |
-    | oxibooru          |      1623 |
+    | szurubooru        |      5061 |
+    | oxibooru          |       784 |
     
-    Oxibooru clocks in around 5x faster. In general it tends to handle complex 
+    Oxibooru clocks in around 6x faster. In general it tends to handle complex 
     queries much better.
 
 ## Listing Tags
@@ -119,15 +120,15 @@ are made anonymously, so time to authenticate isn't included.
     
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |      2223 |
-    | oxibooru          |        94 |
+    | szurubooru        |       834 |
+    | oxibooru          |       112 |
     
     I expected the performance from szurubooru to be reasonable here, but it
     turned out to be slower than the _autocomplete_ query. My best guess as to
     what's going on is that SQLAlchemy generates bad queries for collecting the
     tag field data like names, suggestions, and implications. It was pretty
     tricky to create efficient queries for these by hand, so I wouldn't be 
-    surprised if ORMs struggle a bit here. Still, a 20x difference is suprising
+    surprised if ORMs struggle a bit here. Still, an 8x difference is suprising
     here.
     
 - Now let's try sorting by usage count:
@@ -136,8 +137,8 @@ are made anonymously, so time to authenticate isn't included.
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |      6517 |
-    | oxibooru          |       772 |
+    | szurubooru        |      5858 |
+    | oxibooru          |       792 |
     
     Again, oxibooru greatly outperforms szurubooru on more challenging queries.
 
@@ -148,11 +149,10 @@ are made anonymously, so time to authenticate isn't included.
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |      1207 |
-    | oxibooru          |       435 |
+    | szurubooru        |       688 |
+    | oxibooru          |       309 |
     
-    Not too dramatic of a difference this time, but large enough to be
-    noticeable.
+    A decent improvement here, which is noticeable when using the search bar.
     
 ## Reverse Image Search
 - First, let's try to batch upload 50 small images each around 40-300kb. This
