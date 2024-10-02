@@ -294,6 +294,12 @@ impl PostFlags {
     }
 }
 
+impl std::ops::BitOrAssign for PostFlags {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.flags |= rhs.flags;
+    }
+}
+
 impl ToSql<SmallInt, Pg> for PostFlags
 where
     i16: ToSql<SmallInt, Pg>,

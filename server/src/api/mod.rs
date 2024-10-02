@@ -21,11 +21,8 @@ use std::convert::Infallible;
 use std::num::NonZero;
 use std::ops::Deref;
 use warp::http::StatusCode;
-use warp::reply::Json;
-use warp::reply::Response;
-use warp::reply::WithStatus;
-use warp::Filter;
-use warp::Rejection;
+use warp::reply::{Json, Response, WithStatus};
+use warp::{Filter, Rejection};
 
 pub type ApiResult<T> = Result<T, Error>;
 
@@ -62,8 +59,6 @@ pub enum Error {
     BadExtension(#[from] crate::model::enums::ParseExtensionError),
     BadHash(#[from] crate::auth::HashError),
     BadHeader(#[from] warp::http::header::ToStrError),
-    #[error("Multi-part form error")]
-    BadMultiPartForm,
     #[error("Request content-type did not match file extension")]
     ContentTypeMismatch,
     #[error("Cyclic dependency detected")]
@@ -81,6 +76,8 @@ pub enum Error {
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
     Image(#[from] image::ImageError),
+    #[error("Missing form data")]
+    MissingFormData,
     #[error("Resource needs at least one name")]
     NoNamesGiven,
     NotAnInteger(#[from] std::num::ParseIntError),
@@ -110,7 +107,6 @@ impl Error {
             Self::BadExtension(_) => StatusCode::BAD_REQUEST,
             Self::BadHash(_) => StatusCode::BAD_REQUEST,
             Self::BadHeader(_) => StatusCode::BAD_REQUEST,
-            Self::BadMultiPartForm => StatusCode::BAD_REQUEST,
             Self::ContentTypeMismatch => StatusCode::BAD_REQUEST,
             Self::CyclicDependency => StatusCode::BAD_REQUEST,
             Self::DeleteDefault => StatusCode::BAD_REQUEST,
@@ -126,6 +122,7 @@ impl Error {
             Self::FromStr(_) => StatusCode::BAD_REQUEST,
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::Image(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::MissingFormData => StatusCode::BAD_REQUEST,
             Self::NoNamesGiven => StatusCode::BAD_REQUEST,
             Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
             Self::NotLoggedIn => StatusCode::FORBIDDEN,
@@ -144,7 +141,6 @@ impl Error {
             Self::BadExtension(_) => "Bad Extension",
             Self::BadHash(_) => "Bad Hash",
             Self::BadHeader(_) => "Bad Header",
-            Self::BadMultiPartForm => "Bad Multi-Part Form",
             Self::ContentTypeMismatch => "Content Type Mismatch",
             Self::CyclicDependency => "Cyclic Dependency",
             Self::DeleteDefault => "Delete Default",
@@ -156,6 +152,7 @@ impl Error {
             Self::FromStr(_) => "FromStr Error",
             Self::InsufficientPrivileges => "Insufficient Privileges",
             Self::Image(_) => "Image Error",
+            Self::MissingFormData => "Missing Form Data",
             Self::NoNamesGiven => "No Names Given",
             Self::NotAnInteger(_) => "Parse Int Error",
             Self::NotLoggedIn => "Not Logged In",
@@ -192,8 +189,17 @@ pub fn verify_matches_regex(haystack: &str, regex_type: RegexType) -> ApiResult<
 }
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> + Clone {
+    // let catch_body = warp::put()
+    //     .and(warp::body::bytes())
+    //     .map(|body: warp::hyper::body::Bytes| {
+    //         eprintln!("Bad request with body");
+    //         if let Ok(body_string) = std::str::from_utf8(&body) {
+    //             eprintln!("{body_string}");
+    //         }
+    //         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
+    //     });
     let catch_all = warp::any().map(|| {
-        eprintln!("Unimplemented request!");
+        eprintln!("No endpoint for request!");
         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
     });
     let log = warp::filters::log::custom(|info| {
@@ -215,6 +221,8 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
 }
 
 type AuthResult = Result<Option<User>, AuthenticationError>;
+
+const MAX_UPLOAD_SIZE: u64 = 4 * 1024 * 1024 * 1024;
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

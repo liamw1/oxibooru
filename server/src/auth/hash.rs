@@ -16,6 +16,8 @@ pub fn custom_avatar_url(username: &str) -> String {
     format!("{}/avatars/{}.png", config::get().data_url, username.to_lowercase())
 }
 
+// TODO: Create wrapper class over hash that can compute file paths
+
 // NOTE: These could be tied together to avoid computing hash twice
 pub fn post_content_url(post_id: i32, content_type: MimeType) -> String {
     format!(
@@ -26,7 +28,11 @@ pub fn post_content_url(post_id: i32, content_type: MimeType) -> String {
     )
 }
 pub fn post_thumbnail_url(post_id: i32) -> String {
-    format!("{}/generated-thumbnails/{post_id}_{}.jpg", config::get().data_url, post_security_hash(post_id))
+    let hash = post_security_hash(post_id);
+    match custom_thumbnail_path(post_id).exists() {
+        true => format!("{}/custom-thumbnails/{post_id}_{}.jpg", config::get().data_url, hash),
+        false => format!("{}/generated-thumbnails/{post_id}_{}.jpg", config::get().data_url, hash),
+    }
 }
 
 // NOTE: These could be tied together to avoid computing hash twice
@@ -39,8 +45,11 @@ pub fn post_content_path(post_id: i32, content_type: MimeType) -> PathBuf {
     )
     .into()
 }
-pub fn post_thumbnail_path(post_id: i32) -> PathBuf {
+pub fn generated_thumbnail_path(post_id: i32) -> PathBuf {
     format!("{}/generated-thumbnails/{post_id}_{}.jpg", config::data_dir(), post_security_hash(post_id)).into()
+}
+pub fn custom_thumbnail_path(post_id: i32) -> PathBuf {
+    format!("{}/custom-thumbnails/{post_id}_{}.jpg", config::data_dir(), post_security_hash(post_id)).into()
 }
 
 /*

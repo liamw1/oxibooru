@@ -1,4 +1,4 @@
-use crate::auth::content;
+use crate::auth::hash;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType, Rating, Score};
 use crate::model::pool::{Pool, PoolPost};
@@ -280,43 +280,42 @@ impl PostInfo {
         let results = posts
             .into_iter()
             .rev()
-            .map(|post| {
-                Self {
-                    version: fields[Field::Version].then_some(post.last_edit_time),
-                    id: fields[Field::Id].then_some(post.id),
-                    user: owners.pop(),
-                    file_size: fields[Field::FileSize].then_some(post.file_size),
-                    canvas_width: fields[Field::CanvasWidth].then_some(post.width),
-                    canvas_height: fields[Field::CanvasHeight].then_some(post.height),
-                    safety: fields[Field::Safety].then_some(post.safety),
-                    type_: fields[Field::Type].then_some(post.type_),
-                    mime_type: fields[Field::MimeType].then_some(post.mime_type),
-                    checksum: fields[Field::Checksum].then_some(post.checksum),
-                    checksum_md5: fields[Field::ChecksumMd5].then_some(post.checksum_md5),
-                    flags: fields[Field::Flags].then_some(post.flags),
-                    source: fields[Field::Source].then_some(post.source),
-                    creation_time: fields[Field::CreationTime].then_some(post.creation_time),
-                    last_edit_time: fields[Field::LastEditTime].then_some(post.last_edit_time),
-                    content_url: content_urls.pop(),
-                    thumbnail_url: thumbnail_urls.pop(),
-                    tags: tags.pop(),
-                    relations: relations.pop(),
-                    notes: notes.pop(),
-                    score: scores.pop(),
-                    own_score: client_scores.pop(),
-                    own_favorite: client_favorites.pop(),
-                    tag_count: tag_counts.pop(),
-                    favorite_count: favorite_counts.pop(),
-                    comment_count: comment_counts.pop(),
-                    note_count: note_counts.pop(),
-                    feature_count: feature_counts.pop(),
-                    relation_count: relation_counts.pop(),
-                    last_feature_time: last_feature_times.pop(),
-                    favorited_by: users_who_favorited.pop(),
-                    has_custom_thumbnail: fields[Field::HasCustomThumbnail].then_some(false), // TODO
-                    comments: comments.pop(),
-                    pools: pools.pop(),
-                }
+            .map(|post| Self {
+                version: fields[Field::Version].then_some(post.last_edit_time),
+                id: fields[Field::Id].then_some(post.id),
+                user: owners.pop(),
+                file_size: fields[Field::FileSize].then_some(post.file_size),
+                canvas_width: fields[Field::CanvasWidth].then_some(post.width),
+                canvas_height: fields[Field::CanvasHeight].then_some(post.height),
+                safety: fields[Field::Safety].then_some(post.safety),
+                type_: fields[Field::Type].then_some(post.type_),
+                mime_type: fields[Field::MimeType].then_some(post.mime_type),
+                checksum: fields[Field::Checksum].then_some(post.checksum),
+                checksum_md5: fields[Field::ChecksumMd5].then_some(post.checksum_md5),
+                flags: fields[Field::Flags].then_some(post.flags),
+                source: fields[Field::Source].then_some(post.source),
+                creation_time: fields[Field::CreationTime].then_some(post.creation_time),
+                last_edit_time: fields[Field::LastEditTime].then_some(post.last_edit_time),
+                content_url: content_urls.pop(),
+                thumbnail_url: thumbnail_urls.pop(),
+                tags: tags.pop(),
+                relations: relations.pop(),
+                notes: notes.pop(),
+                score: scores.pop(),
+                own_score: client_scores.pop(),
+                own_favorite: client_favorites.pop(),
+                tag_count: tag_counts.pop(),
+                favorite_count: favorite_counts.pop(),
+                comment_count: comment_counts.pop(),
+                note_count: note_counts.pop(),
+                feature_count: feature_counts.pop(),
+                relation_count: relation_counts.pop(),
+                last_feature_time: last_feature_times.pop(),
+                favorited_by: users_who_favorited.pop(),
+                comments: comments.pop(),
+                pools: pools.pop(),
+                has_custom_thumbnail: fields[Field::HasCustomThumbnail]
+                    .then_some(hash::custom_thumbnail_path(post.id).exists()),
             })
             .collect::<Vec<_>>();
         Ok(results.into_iter().rev().collect())
@@ -352,16 +351,12 @@ fn get_post_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<O
 fn get_content_urls(posts: &[Post]) -> Vec<String> {
     posts
         .iter()
-        .map(|post| content::post_content_url(post.id, post.mime_type))
+        .map(|post| hash::post_content_url(post.id, post.mime_type))
         .collect()
 }
 
 fn get_thumbnail_urls(posts: &[Post]) -> Vec<String> {
-    posts
-        .iter()
-        .map(|post| post.id)
-        .map(content::post_thumbnail_url)
-        .collect()
+    posts.iter().map(|post| post.id).map(hash::post_thumbnail_url).collect()
 }
 
 fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroTag>>> {
@@ -466,7 +461,7 @@ fn get_relations(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec
                 .into_iter()
                 .map(|relation| MicroPost {
                     id: relation.child_id,
-                    thumbnail_url: content::post_thumbnail_url(relation.child_id),
+                    thumbnail_url: hash::post_thumbnail_url(relation.child_id),
                 })
                 .collect()
         })

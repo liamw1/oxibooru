@@ -1,8 +1,9 @@
 use crate::api::{
     ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, RatingRequest, ResourceQuery,
 };
-use crate::auth::content;
-use crate::content::{cache, signature};
+use crate::auth::hash;
+use crate::content::{cache, signature, thumbnail};
+use crate::filesystem::ThumbnailType;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, Score};
 use crate::model::post::{
     NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostRelation, PostSignature,
@@ -305,7 +306,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     api::verify_privilege(client.as_ref(), config::privileges().post_reverse_search)?;
 
     let fields = create_field_table(query.fields())?;
-    let content_properties = cache::compute_properties(&token.content_token)?;
+    let content_properties = cache::compute_properties(token.content_token)?;
 
     let client_id = client.map(|user| user.id);
     db::get_connection()?.transaction(|conn| {
@@ -354,6 +355,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
 #[serde(rename_all = "camelCase")]
 struct NewPostInfo {
     content_token: String,
+    thumbnail_token: Option<String>,
     safety: PostSafety,
     source: Option<String>,
     relations: Option<Vec<i32>>,
@@ -372,7 +374,11 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     api::verify_privilege(client.as_ref(), required_rank)?;
 
     let fields = create_field_table(query.fields())?;
-    let content_properties = cache::get_or_compute_properties(&post_info.content_token)?;
+    let content_properties = cache::get_or_compute_properties(post_info.content_token)?;
+    let custom_thumbnail = post_info
+        .thumbnail_token
+        .map(|token| thumbnail::create_from_token(&token))
+        .transpose()?;
 
     let mut flags = content_properties.flags;
     for flag in post_info.flags.unwrap_or_default() {
@@ -394,9 +400,9 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     };
 
     db::get_connection()?.transaction(|conn| {
-        let (post_id, mime_type) = diesel::insert_into(post::table)
+        let post_id = diesel::insert_into(post::table)
             .values(new_post)
-            .returning((post::id, post::mime_type))
+            .returning(post::id)
             .get_result(conn)?;
 
         // Add tags
@@ -408,6 +414,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         let relations = post_info.relations.unwrap_or_default();
         update::post::create_relations(conn, post_id, relations)?;
 
+        // Create post signature
         let new_post_signature = NewPostSignature {
             post_id,
             signature: &content_properties.signature,
@@ -418,16 +425,16 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
             .execute(conn)?;
 
         // Move content to permanent location
-        let temp_path = filesystem::temporary_upload_filepath(&post_info.content_token);
+        let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
         filesystem::create_dir(filesystem::posts_directory())?;
-        std::fs::rename(temp_path, content::post_content_path(post_id, mime_type))?;
+        std::fs::rename(temp_path, hash::post_content_path(post_id, content_properties.mime_type))?;
 
-        // Generate thumbnail
-        filesystem::create_dir(filesystem::generated_thumbnails_directory())?;
-        content_properties
-            .thumbnail
-            .to_rgb8()
-            .save(content::post_thumbnail_path(post_id))?;
+        // Create thumbnails
+        if let Some(thumbnail) = custom_thumbnail {
+            api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
+            filesystem::save_thumbnail(post_id, thumbnail, ThumbnailType::Custom)?;
+        }
+        filesystem::save_thumbnail(post_id, content_properties.thumbnail, ThumbnailType::Generated)?;
 
         PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
     })
@@ -634,6 +641,7 @@ fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, rating: Ratin
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct PostUpdate {
     version: DateTime,
     safety: Option<PostSafety>,
@@ -642,6 +650,8 @@ struct PostUpdate {
     tags: Option<Vec<String>>,
     notes: Option<Vec<Note>>,
     flags: Option<Vec<PostFlag>>,
+    content_token: Option<String>,
+    thumbnail_token: Option<String>,
 }
 
 fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
@@ -650,6 +660,14 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
     let client = auth?;
     query.bump_login(client.as_ref())?;
     let fields = create_field_table(query.fields())?;
+    let new_content = update
+        .content_token
+        .map(|token| cache::get_or_compute_properties(token))
+        .transpose()?;
+    let custom_thumbnail = update
+        .thumbnail_token
+        .map(|token| thumbnail::create_from_token(&token))
+        .transpose()?;
 
     db::get_connection()?.transaction(|conn| {
         let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
@@ -695,6 +713,48 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
             diesel::update(post::table.find(post_id))
                 .set(post::flags.eq(updated_flags))
                 .execute(conn)?;
+        }
+        if let Some(content_properties) = new_content {
+            api::verify_privilege(client.as_ref(), config::privileges().post_edit_content)?;
+
+            let mut post: Post = post::table.find(post_id).first(conn)?;
+            let old_mime_type = post.mime_type;
+
+            // Update content metadata
+            post.file_size = content_properties.file_size as i64;
+            post.width = content_properties.width as i32;
+            post.height = content_properties.height as i32;
+            post.type_ = PostType::from(content_properties.mime_type);
+            post.mime_type = content_properties.mime_type;
+            post.checksum = content_properties.checksum;
+            post.flags |= content_properties.flags;
+            post.save_changes::<Post>(conn)?;
+
+            // Update post signature
+            let new_post_signature = NewPostSignature {
+                post_id,
+                signature: &content_properties.signature,
+                words: &signature::generate_indexes(&content_properties.signature),
+            };
+            diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
+            diesel::insert_into(post_signature::table)
+                .values(new_post_signature)
+                .execute(conn)?;
+
+            // Replace content
+            let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
+            filesystem::delete_content(post_id, old_mime_type)?;
+            std::fs::rename(temp_path, hash::post_content_path(post_id, content_properties.mime_type))?;
+
+            // Replace generated thumbnail
+            filesystem::delete_thumbnail(post_id, ThumbnailType::Generated)?;
+            filesystem::save_thumbnail(post_id, content_properties.thumbnail, ThumbnailType::Generated)?;
+        }
+        if let Some(thumbnail) = custom_thumbnail {
+            api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
+
+            filesystem::delete_thumbnail(post_id, ThumbnailType::Custom)?;
+            filesystem::save_thumbnail(post_id, thumbnail, ThumbnailType::Custom)?;
         }
 
         let client_id = client.map(|user| user.id);

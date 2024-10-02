@@ -1,4 +1,4 @@
-use crate::auth::content;
+use crate::auth::hash;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::post::{Post, PostFavorite, PostScore};
@@ -23,8 +23,8 @@ pub struct MicroUser {
 impl MicroUser {
     pub fn new(name: String, avatar_style: AvatarStyle) -> Self {
         let avatar_url = match avatar_style {
-            AvatarStyle::Gravatar => content::gravatar_url(&name),
-            AvatarStyle::Manual => content::custom_avatar_url(&name),
+            AvatarStyle::Gravatar => hash::gravatar_url(&name),
+            AvatarStyle::Manual => hash::custom_avatar_url(&name),
         };
         Self { name, avatar_url }
     }

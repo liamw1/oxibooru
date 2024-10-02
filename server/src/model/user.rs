@@ -1,4 +1,4 @@
-use crate::auth::content;
+use crate::auth::hash;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::IntegerIdentifiable;
 use crate::schema::{user, user_token};
@@ -43,8 +43,8 @@ impl User {
 
     pub fn avatar_url(&self) -> String {
         match self.avatar_style {
-            AvatarStyle::Gravatar => content::gravatar_url(&self.name),
-            AvatarStyle::Manual => content::custom_avatar_url(&self.name),
+            AvatarStyle::Gravatar => hash::gravatar_url(&self.name),
+            AvatarStyle::Manual => hash::custom_avatar_url(&self.name),
         }
     }
 }

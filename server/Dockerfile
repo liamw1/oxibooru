@@ -34,7 +34,7 @@ COPY --from=builder /opt/app/config.toml config.toml
 ARG PUID=1000
 ARG PGID=1000
 
-# Dynamic libs needed at runtime
+# Dynamic libs needed at runtime -- can these be cached somehow?
 RUN apt-get update && apt-get install -y libpq5 libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
 
 RUN mkdir -p /opt/app /data \

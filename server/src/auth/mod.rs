@@ -1,4 +1,4 @@
-pub mod content;
+pub mod hash;
 pub mod header;
 pub mod password;
 pub mod token;

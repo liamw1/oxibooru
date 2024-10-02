@@ -1,14 +1,15 @@
 use crate::api::ApiResult;
-use crate::auth::content;
-use crate::content::{decode, signature};
+use crate::auth::hash;
+use crate::content::{decode, signature, thumbnail};
+use crate::filesystem;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
-use crate::{config, filesystem};
 use image::DynamicImage;
 use std::collections::VecDeque;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
 #[derive(Clone)]
 pub struct CachedProperties {
+    pub token: String,
     pub checksum: String,
     pub signature: Vec<u8>,
     pub thumbnail: DynamicImage,
@@ -19,26 +20,27 @@ pub struct CachedProperties {
     pub flags: PostFlags,
 }
 
-pub fn compute_properties(content_token: &str) -> ApiResult<CachedProperties> {
-    let properties = compute_properties_no_cache(&content_token)?;
+pub fn compute_properties(content_token: String) -> ApiResult<CachedProperties> {
+    let properties = compute_properties_no_cache(content_token.clone())?;
 
-    // Clone these here to make sure we aren't holding onto lock for longer than necessary
-    let content_token_copy = content_token.to_owned();
+    // Clone this here to make sure we aren't holding onto lock for longer than necessary
     let properties_copy = properties.clone();
-    get_cache_guard().insert(content_token_copy, properties_copy);
+    get_cache_guard().insert(content_token, properties_copy);
 
     Ok(properties)
 }
 
-pub fn get_or_compute_properties(content_token: &str) -> ApiResult<CachedProperties> {
-    let maybe_properties = get_cache_guard().remove(content_token);
+pub fn get_or_compute_properties(content_token: String) -> ApiResult<CachedProperties> {
+    let maybe_properties = get_cache_guard().remove(&content_token);
     match maybe_properties {
         Some(properties) => Ok(properties),
         None => compute_properties_no_cache(content_token),
     }
 }
 
-static CONTENT_CACHE: LazyLock<Mutex<RingCache>> = LazyLock::new(|| Mutex::new(RingCache::new(10)));
+// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
+const CONTENT_CACHE_SIZE: usize = 10;
+static CONTENT_CACHE: LazyLock<Mutex<RingCache>> = LazyLock::new(|| Mutex::new(RingCache::new(CONTENT_CACHE_SIZE)));
 
 struct RingCache {
     data: VecDeque<(String, CachedProperties)>,
@@ -85,13 +87,13 @@ fn get_cache_guard() -> MutexGuard<'static, RingCache> {
     }
 }
 
-fn compute_properties_no_cache(content_token: &str) -> ApiResult<CachedProperties> {
-    let temp_path = filesystem::temporary_upload_filepath(content_token);
+fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
+    let temp_path = filesystem::temporary_upload_filepath(&token);
     let file_size = std::fs::metadata(&temp_path)?.len();
     let file_contents = std::fs::read(&temp_path)?;
-    let checksum = content::compute_checksum(&file_contents);
+    let checksum = hash::compute_checksum(&file_contents);
 
-    let (_uuid, extension) = content_token.split_once('.').unwrap();
+    let (_uuid, extension) = token.split_once('.').unwrap();
     let mime_type = MimeType::from_extension(extension)?;
     let post_type = PostType::from(mime_type);
 
@@ -117,16 +119,11 @@ fn compute_properties_no_cache(content_token: &str) -> ApiResult<CachedPropertie
     };
     let signature = signature::compute_signature(&image);
 
-    let thumbnail = image.resize_to_fill(
-        config::get().thumbnails.post_width,
-        config::get().thumbnails.post_height,
-        image::imageops::FilterType::Gaussian,
-    );
-
     Ok(CachedProperties {
+        token,
         checksum,
         signature,
-        thumbnail,
+        thumbnail: thumbnail::create(&image),
         width: image.width(),
         height: image.height(),
         mime_type,

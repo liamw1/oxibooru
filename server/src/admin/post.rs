@@ -1,4 +1,4 @@
-use crate::auth::content;
+use crate::auth::hash;
 use crate::content::{decode, signature};
 use crate::filesystem;
 use crate::model::enums::MimeType;
@@ -18,7 +18,7 @@ pub fn rename_post_content() -> std::io::Result<()> {
     for (entry_index, entry) in std::fs::read_dir(filesystem::generated_thumbnails_directory())?.enumerate() {
         let path = entry?.path();
         if let Some(post_id) = get_post_id(&path) {
-            let new_path = content::post_thumbnail_path(post_id);
+            let new_path = hash::generated_thumbnail_path(post_id);
             if path != new_path {
                 std::fs::rename(path, new_path)?;
             }
@@ -26,7 +26,21 @@ pub fn rename_post_content() -> std::io::Result<()> {
             eprintln!("Could not find post_id of {path:?}");
         }
 
-        print_progress_message(entry_index, "Thumbnails renamed");
+        print_progress_message(entry_index, "Generated thumbnails renamed");
+    }
+
+    for (entry_index, entry) in std::fs::read_dir(filesystem::custom_thumbnails_directory())?.enumerate() {
+        let path = entry?.path();
+        if let Some(post_id) = get_post_id(&path) {
+            let new_path = hash::custom_thumbnail_path(post_id);
+            if path != new_path {
+                std::fs::rename(path, new_path)?;
+            }
+        } else {
+            eprintln!("Could not find post_id of {path:?}");
+        }
+
+        print_progress_message(entry_index, "Custom thumbnails renamed");
     }
 
     for (entry_index, entry) in std::fs::read_dir(filesystem::posts_directory())?.enumerate() {
@@ -34,7 +48,7 @@ pub fn rename_post_content() -> std::io::Result<()> {
         let post_id = get_post_id(&path);
         let content_type = MimeType::from_path(&path);
         if let (Some(id), Some(mime_type)) = (post_id, content_type) {
-            let new_path = content::post_content_path(id, mime_type);
+            let new_path = hash::post_content_path(id, mime_type);
             if path != new_path {
                 std::fs::rename(path, new_path)?;
             }
@@ -113,7 +127,7 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
             continue;
         };
 
-        let image_path = content::post_content_path(post_id, mime_type);
+        let image_path = hash::post_content_path(post_id, mime_type);
         let file_content = match std::fs::read(&image_path) {
             Ok(content) => content,
             Err(err) => {
@@ -153,10 +167,10 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
 
     let posts: Vec<(i32, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
     for (post_index, (post_id, mime_type)) in posts.into_iter().enumerate() {
-        let image_path = content::post_content_path(post_id, mime_type);
+        let image_path = hash::post_content_path(post_id, mime_type);
         match std::fs::read(&image_path) {
             Ok(file_content) => {
-                let checksum = content::compute_checksum(&file_content);
+                let checksum = hash::compute_checksum(&file_content);
                 let duplicate: Option<i32> = post::table
                     .select(post::id)
                     .filter(post::checksum.eq(&checksum))

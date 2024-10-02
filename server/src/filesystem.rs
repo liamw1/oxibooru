@@ -1,18 +1,28 @@
-use crate::auth::content;
+use crate::auth::hash;
 use crate::config;
 use crate::model::enums::MimeType;
+use image::{DynamicImage, ImageResult};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::LazyLock;
 use uuid::Uuid;
 
+pub enum ThumbnailType {
+    Generated,
+    Custom,
+}
+
 pub fn posts_directory() -> &'static Path {
     &POSTS_DIRECTORY
 }
 
 pub fn generated_thumbnails_directory() -> &'static Path {
-    &THUMBNAILS_DIRECTORY
+    &GENERATED_THUMBNAILS_DIRECTORY
+}
+
+pub fn custom_thumbnails_directory() -> &'static Path {
+    &CUSTOM_THUMBNAILS_DIRECTORY
 }
 
 pub fn temporary_upload_directory() -> &'static Path {
@@ -23,36 +33,84 @@ pub fn temporary_upload_filepath(filename: &str) -> PathBuf {
     format!("{}/temporary-uploads/{}", config::data_dir(), filename).into()
 }
 
-pub fn upload(data: &[u8], content_type: MimeType) -> std::io::Result<String> {
-    let upload_token = format!("{}.{}", Uuid::new_v4(), content_type.extension());
+pub fn save_uploaded_file(data: Vec<u8>, mime_type: MimeType) -> std::io::Result<String> {
+    let upload_token = format!("{}.{}", Uuid::new_v4(), mime_type.extension());
     let upload_path = temporary_upload_filepath(&upload_token);
-    std::fs::write(upload_path, data)?;
+    std::fs::write(upload_path, &data)?;
 
-    DATA_SIZE.fetch_add(data.len() as u64, Ordering::SeqCst);
+    let data_size = size_of::<u8>() * data.len();
+    DATA_SIZE.fetch_add(data_size as u64, Ordering::SeqCst);
     Ok(upload_token)
 }
 
-pub fn delete_post(post_id: i32, mime_type: MimeType) -> std::io::Result<()> {
-    let thumbnail_path = content::post_thumbnail_path(post_id);
-    let image_path = content::post_content_path(post_id, mime_type);
-    remove_file(&thumbnail_path)?;
-    remove_file(&image_path)?;
+pub fn save_thumbnail(post_id: i32, thumbnail: DynamicImage, thumbnail_type: ThumbnailType) -> ImageResult<()> {
+    assert_eq!(thumbnail.width(), config::get().thumbnails.post_height);
+    assert_eq!(thumbnail.height(), config::get().thumbnails.post_height);
+
+    let thumbnail_path = match thumbnail_type {
+        ThumbnailType::Generated => {
+            create_dir(generated_thumbnails_directory())?;
+            hash::generated_thumbnail_path(post_id)
+        }
+        ThumbnailType::Custom => {
+            create_dir(custom_thumbnails_directory())?;
+            hash::custom_thumbnail_path(post_id)
+        }
+    };
+
+    thumbnail.to_rgb8().save(&thumbnail_path)?;
+    let file_size = std::fs::metadata(thumbnail_path)?.len();
+
+    DATA_SIZE.fetch_add(file_size, Ordering::SeqCst);
     Ok(())
 }
 
+pub fn delete_thumbnail(post_id: i32, thumbnail_type: ThumbnailType) -> std::io::Result<()> {
+    match thumbnail_type {
+        ThumbnailType::Generated => remove_file(&hash::generated_thumbnail_path(post_id)),
+        ThumbnailType::Custom => {
+            let custom_thumbnail_path = hash::custom_thumbnail_path(post_id);
+            custom_thumbnail_path
+                .exists()
+                .then(|| remove_file(&custom_thumbnail_path))
+                .unwrap_or(Ok(()))
+        }
+    }
+}
+
+pub fn delete_content(post_id: i32, mime_type: MimeType) -> std::io::Result<()> {
+    let content_path = hash::post_content_path(post_id, mime_type);
+    remove_file(&content_path)
+}
+
+pub fn delete_post(post_id: i32, mime_type: MimeType) -> std::io::Result<()> {
+    delete_thumbnail(post_id, ThumbnailType::Generated)?;
+    delete_thumbnail(post_id, ThumbnailType::Custom)?;
+    delete_content(post_id, mime_type)
+}
+
 /*
-    Renames the content's of two posts as if they had swapped ids.
+    Renames the contents and thumbnails of two posts as if they had swapped ids.
 */
 pub fn swap_posts(post_id_a: i32, mime_type_a: MimeType, post_id_b: i32, mime_type_b: MimeType) -> std::io::Result<()> {
-    swap_files(&content::post_thumbnail_path(post_id_a), &content::post_thumbnail_path(post_id_b))?;
+    swap_files(&hash::generated_thumbnail_path(post_id_a), &hash::generated_thumbnail_path(post_id_b))?;
 
-    let old_image_path_a = content::post_content_path(post_id_a, mime_type_a);
-    let old_image_path_b = content::post_content_path(post_id_b, mime_type_b);
+    let custom_thumbnail_path_a = hash::custom_thumbnail_path(post_id_a);
+    let custom_thumbnail_path_b = hash::custom_thumbnail_path(post_id_b);
+    match (custom_thumbnail_path_a.exists(), custom_thumbnail_path_b.exists()) {
+        (true, true) => swap_files(&custom_thumbnail_path_a, &custom_thumbnail_path_b)?,
+        (true, false) => std::fs::rename(custom_thumbnail_path_a, custom_thumbnail_path_b)?,
+        (false, true) => std::fs::rename(custom_thumbnail_path_b, custom_thumbnail_path_a)?,
+        (false, false) => (),
+    }
+
+    let old_image_path_a = hash::post_content_path(post_id_a, mime_type_a);
+    let old_image_path_b = hash::post_content_path(post_id_b, mime_type_b);
     if mime_type_a == mime_type_b {
         swap_files(&old_image_path_a, &old_image_path_b)
     } else {
-        std::fs::rename(old_image_path_a, content::post_content_path(post_id_b, mime_type_a))?;
-        std::fs::rename(old_image_path_b, content::post_content_path(post_id_a, mime_type_b))
+        std::fs::rename(old_image_path_a, hash::post_content_path(post_id_b, mime_type_a))?;
+        std::fs::rename(old_image_path_b, hash::post_content_path(post_id_a, mime_type_b))
     }
 }
 
@@ -92,8 +150,10 @@ pub fn data_size() -> std::io::Result<u64> {
 
 static DATA_SIZE: AtomicU64 = AtomicU64::new(0);
 static POSTS_DIRECTORY: LazyLock<PathBuf> = LazyLock::new(|| format!("{}/posts", config::data_dir()).into());
-static THUMBNAILS_DIRECTORY: LazyLock<PathBuf> =
+static GENERATED_THUMBNAILS_DIRECTORY: LazyLock<PathBuf> =
     LazyLock::new(|| format!("{}/generated-thumbnails", config::data_dir()).into());
+static CUSTOM_THUMBNAILS_DIRECTORY: LazyLock<PathBuf> =
+    LazyLock::new(|| format!("{}/custom-thumbnails", config::data_dir()).into());
 static TEMPORARY_UPLOADS_DIRECTORY: LazyLock<PathBuf> =
     LazyLock::new(|| format!("{}/temporary-uploads", config::data_dir()).into());
 

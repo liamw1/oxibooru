@@ -244,8 +244,6 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
         api::verify_version(remove_version, merge_info.remove_version)?;
         api::verify_version(merge_to_version, merge_info.merge_to_version)?;
 
-        // TODO: Fix post relation merging too
-
         // Merge implications
         let involved_implications: Vec<TagImplication> = tag_implication::table
             .filter(tag_implication::parent_id.eq(remove_id))
