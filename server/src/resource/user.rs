@@ -1,4 +1,4 @@
-use crate::auth::hash;
+use crate::content::hash;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::post::{Post, PostFavorite, PostScore};

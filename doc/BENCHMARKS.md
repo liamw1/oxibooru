@@ -65,7 +65,8 @@ are made anonymously, so time to authenticate isn't included.
     | szurubooru        |        53 |
     | oxibooru          |        52 |
 
-    Nearly identical performance here. Where oxibooru shines is when we apply filters to our queries.
+    Nearly identical performance here. Where oxibooru shines is when we apply 
+    filters to our queries.
 
 - Let's now add a negative filter for unsafe posts.
 
@@ -222,11 +223,13 @@ are made anonymously, so time to authenticate isn't included.
     | szurubooru        |                   8.68 |
     | oxibooru          |                   4.81 |
     
-    These times are for upload, reverse image search, and post creation.
-    The reason oxibooru is about 2x faster here is because it caches the
-    checksum and image signature calculated in the reverse search so that
-    they can be reused in the post creation query. Without this caching,
-    oxibooru would perform about as well as szurubooru. There's probably
-    still some room for improvement here. I may try playing around with
-    vectorizing and/or multithreading the post signature creation at some
-    point.
+    These times are for upload, reverse image search, and post creation. The 
+    reason oxibooru is about 2x faster here is because it caches the checksum 
+    and image signature calculated in the reverse search so that they can be
+    reused in the post creation query. Without this caching, oxibooru would 
+    perform about as well as szurubooru. There's probably still some room for 
+    improvement here. The runtime is a somewhat even split between the png 
+    decoding, the thumbnail creation, and the image signature creation. The 
+    first two are out of my control (unless I switch libraries), but I may try 
+    playing around with vectorizing and/or multithreading the post signature
+    creation at some point.

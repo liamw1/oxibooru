@@ -1,4 +1,4 @@
-use crate::auth::hash;
+use crate::content::hash;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::IntegerIdentifiable;
 use crate::schema::{user, user_token};

@@ -1,6 +1,5 @@
 use crate::api::ApiResult;
-use crate::auth::hash;
-use crate::content::{decode, signature, thumbnail};
+use crate::content::{decode, hash, signature, thumbnail};
 use crate::filesystem;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
 use image::DynamicImage;

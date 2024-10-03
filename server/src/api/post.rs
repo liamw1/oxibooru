@@ -1,7 +1,7 @@
 use crate::api::{
     ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, RatingRequest, ResourceQuery,
 };
-use crate::auth::hash;
+use crate::content::hash::PostHash;
 use crate::content::{cache, signature, thumbnail};
 use crate::filesystem::ThumbnailType;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, Score};
@@ -404,6 +404,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
             .values(new_post)
             .returning(post::id)
             .get_result(conn)?;
+        let post_hash = PostHash::new(post_id);
 
         // Add tags
         let tags =
@@ -427,14 +428,14 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         // Move content to permanent location
         let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
         filesystem::create_dir(filesystem::posts_directory())?;
-        std::fs::rename(temp_path, hash::post_content_path(post_id, content_properties.mime_type))?;
+        std::fs::rename(temp_path, post_hash.content_path(content_properties.mime_type))?;
 
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
-            filesystem::save_thumbnail(post_id, thumbnail, ThumbnailType::Custom)?;
+            filesystem::save_thumbnail(&post_hash, thumbnail, ThumbnailType::Custom)?;
         }
-        filesystem::save_thumbnail(post_id, content_properties.thumbnail, ThumbnailType::Generated)?;
+        filesystem::save_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailType::Generated)?;
 
         PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
     })
@@ -461,6 +462,8 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     if remove_id == merge_to_id {
         return Err(api::Error::SelfMerge);
     }
+    let remove_hash = PostHash::new(remove_id);
+    let merge_to_hash = PostHash::new(merge_to_id);
 
     let fields = create_field_table(query.fields())?;
     db::get_connection()?.transaction(|conn| {
@@ -569,7 +572,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
         diesel::delete(post::table.find(remove_id)).execute(conn)?;
 
         if merge_info.replace_content {
-            filesystem::swap_posts(remove_id, remove_post.mime_type, merge_to_id, merge_to_post.mime_type)?;
+            filesystem::swap_posts(&remove_hash, remove_post.mime_type, &merge_to_hash, merge_to_post.mime_type)?;
 
             // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
             std::mem::swap(&mut remove_post.user_id, &mut merge_to_post.user_id);
@@ -587,7 +590,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
 
         if config::get().delete_source_files {
             // This is the correct id and mime_type, even if replacing content :)
-            filesystem::delete_post(remove_id, remove_post.mime_type)?;
+            filesystem::delete_post(&remove_hash, remove_post.mime_type)?;
         }
 
         PostInfo::new(conn, client_id, merge_to_post, &fields).map_err(api::Error::from)
@@ -669,6 +672,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
         .map(|token| thumbnail::create_from_token(&token))
         .transpose()?;
 
+    let post_hash = PostHash::new(post_id);
     db::get_connection()?.transaction(|conn| {
         let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
         api::verify_version(post_version, update.version)?;
@@ -743,18 +747,18 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
 
             // Replace content
             let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
-            filesystem::delete_content(post_id, old_mime_type)?;
-            std::fs::rename(temp_path, hash::post_content_path(post_id, content_properties.mime_type))?;
+            filesystem::delete_content(&post_hash, old_mime_type)?;
+            std::fs::rename(temp_path, post_hash.content_path(content_properties.mime_type))?;
 
             // Replace generated thumbnail
-            filesystem::delete_thumbnail(post_id, ThumbnailType::Generated)?;
-            filesystem::save_thumbnail(post_id, content_properties.thumbnail, ThumbnailType::Generated)?;
+            filesystem::delete_thumbnail(&post_hash, ThumbnailType::Generated)?;
+            filesystem::save_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailType::Generated)?;
         }
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
 
-            filesystem::delete_thumbnail(post_id, ThumbnailType::Custom)?;
-            filesystem::save_thumbnail(post_id, thumbnail, ThumbnailType::Custom)?;
+            filesystem::delete_thumbnail(&post_hash, ThumbnailType::Custom)?;
+            filesystem::save_thumbnail(&post_hash, thumbnail, ThumbnailType::Custom)?;
         }
 
         let client_id = client.map(|user| user.id);
@@ -784,7 +788,7 @@ fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) ->
     })?;
 
     if config::get().delete_source_files {
-        filesystem::delete_post(post_id, mime_type)?;
+        filesystem::delete_post(&PostHash::new(post_id), mime_type)?;
     }
     Ok(())
 }

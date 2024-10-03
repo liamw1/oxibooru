@@ -1,4 +1,4 @@
-use crate::auth::hash;
+use crate::content::hash::PostHash;
 use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource;
 use crate::resource::post::MicroPost;
@@ -167,7 +167,7 @@ fn get_posts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<Mic
                 .into_iter()
                 .map(|pool_post| MicroPost {
                     id: pool_post.post_id,
-                    thumbnail_url: hash::post_thumbnail_url(pool_post.post_id),
+                    thumbnail_url: PostHash::new(pool_post.post_id).thumbnail_url(),
                 })
                 .collect()
         })

@@ -1,4 +1,4 @@
-use crate::auth::hash;
+use crate::content::hash::PostHash;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType, Rating, Score};
 use crate::model::pool::{Pool, PoolPost};
@@ -332,7 +332,7 @@ impl PostInfo {
                 comments: comments.pop(),
                 pools: pools.pop(),
                 has_custom_thumbnail: fields[Field::HasCustomThumbnail]
-                    .then(|| hash::custom_thumbnail_path(post.id).exists()),
+                    .then(|| PostHash::new(post.id).custom_thumbnail_path().exists()),
             })
             .collect::<Vec<_>>();
         Ok(results.into_iter().rev().collect())
@@ -368,12 +368,15 @@ fn get_post_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<O
 fn get_content_urls(posts: &[Post]) -> Vec<String> {
     posts
         .iter()
-        .map(|post| hash::post_content_url(post.id, post.mime_type))
+        .map(|post| PostHash::new(post.id).content_url(post.mime_type))
         .collect()
 }
 
 fn get_thumbnail_urls(posts: &[Post]) -> Vec<String> {
-    posts.iter().map(|post| post.id).map(hash::post_thumbnail_url).collect()
+    posts
+        .iter()
+        .map(|post| PostHash::new(post.id).thumbnail_url())
+        .collect()
 }
 
 fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroTag>>> {
@@ -478,7 +481,7 @@ fn get_relations(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec
                 .into_iter()
                 .map(|relation| MicroPost {
                     id: relation.child_id,
-                    thumbnail_url: hash::post_thumbnail_url(relation.child_id),
+                    thumbnail_url: PostHash::new(relation.child_id).thumbnail_url(),
                 })
                 .collect()
         })

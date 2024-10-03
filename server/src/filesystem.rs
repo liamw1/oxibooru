@@ -1,5 +1,5 @@
-use crate::auth::hash;
 use crate::config;
+use crate::content::hash::PostHash;
 use crate::model::enums::MimeType;
 use image::{DynamicImage, ImageResult};
 use std::ffi::OsStr;
@@ -43,18 +43,18 @@ pub fn save_uploaded_file(data: Vec<u8>, mime_type: MimeType) -> std::io::Result
     Ok(upload_token)
 }
 
-pub fn save_thumbnail(post_id: i32, thumbnail: DynamicImage, thumbnail_type: ThumbnailType) -> ImageResult<()> {
+pub fn save_thumbnail(post: &PostHash, thumbnail: DynamicImage, thumbnail_type: ThumbnailType) -> ImageResult<()> {
     assert_eq!(thumbnail.width(), config::get().thumbnails.post_height);
     assert_eq!(thumbnail.height(), config::get().thumbnails.post_height);
 
     let thumbnail_path = match thumbnail_type {
         ThumbnailType::Generated => {
             create_dir(generated_thumbnails_directory())?;
-            hash::generated_thumbnail_path(post_id)
+            post.generated_thumbnail_path()
         }
         ThumbnailType::Custom => {
             create_dir(custom_thumbnails_directory())?;
-            hash::custom_thumbnail_path(post_id)
+            post.custom_thumbnail_path()
         }
     };
 
@@ -65,11 +65,11 @@ pub fn save_thumbnail(post_id: i32, thumbnail: DynamicImage, thumbnail_type: Thu
     Ok(())
 }
 
-pub fn delete_thumbnail(post_id: i32, thumbnail_type: ThumbnailType) -> std::io::Result<()> {
+pub fn delete_thumbnail(post: &PostHash, thumbnail_type: ThumbnailType) -> std::io::Result<()> {
     match thumbnail_type {
-        ThumbnailType::Generated => remove_file(&hash::generated_thumbnail_path(post_id)),
+        ThumbnailType::Generated => remove_file(&post.generated_thumbnail_path()),
         ThumbnailType::Custom => {
-            let custom_thumbnail_path = hash::custom_thumbnail_path(post_id);
+            let custom_thumbnail_path = post.custom_thumbnail_path();
             custom_thumbnail_path
                 .exists()
                 .then(|| remove_file(&custom_thumbnail_path))
@@ -78,25 +78,30 @@ pub fn delete_thumbnail(post_id: i32, thumbnail_type: ThumbnailType) -> std::io:
     }
 }
 
-pub fn delete_content(post_id: i32, mime_type: MimeType) -> std::io::Result<()> {
-    let content_path = hash::post_content_path(post_id, mime_type);
+pub fn delete_content(post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
+    let content_path = post.content_path(mime_type);
     remove_file(&content_path)
 }
 
-pub fn delete_post(post_id: i32, mime_type: MimeType) -> std::io::Result<()> {
-    delete_thumbnail(post_id, ThumbnailType::Generated)?;
-    delete_thumbnail(post_id, ThumbnailType::Custom)?;
-    delete_content(post_id, mime_type)
+pub fn delete_post(post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
+    delete_thumbnail(post, ThumbnailType::Generated)?;
+    delete_thumbnail(post, ThumbnailType::Custom)?;
+    delete_content(post, mime_type)
 }
 
 /*
     Renames the contents and thumbnails of two posts as if they had swapped ids.
 */
-pub fn swap_posts(post_id_a: i32, mime_type_a: MimeType, post_id_b: i32, mime_type_b: MimeType) -> std::io::Result<()> {
-    swap_files(&hash::generated_thumbnail_path(post_id_a), &hash::generated_thumbnail_path(post_id_b))?;
+pub fn swap_posts(
+    post_a: &PostHash,
+    mime_type_a: MimeType,
+    post_b: &PostHash,
+    mime_type_b: MimeType,
+) -> std::io::Result<()> {
+    swap_files(&post_a.generated_thumbnail_path(), &post_b.generated_thumbnail_path())?;
 
-    let custom_thumbnail_path_a = hash::custom_thumbnail_path(post_id_a);
-    let custom_thumbnail_path_b = hash::custom_thumbnail_path(post_id_b);
+    let custom_thumbnail_path_a = post_a.custom_thumbnail_path();
+    let custom_thumbnail_path_b = post_b.custom_thumbnail_path();
     match (custom_thumbnail_path_a.exists(), custom_thumbnail_path_b.exists()) {
         (true, true) => swap_files(&custom_thumbnail_path_a, &custom_thumbnail_path_b)?,
         (true, false) => std::fs::rename(custom_thumbnail_path_a, custom_thumbnail_path_b)?,
@@ -104,13 +109,13 @@ pub fn swap_posts(post_id_a: i32, mime_type_a: MimeType, post_id_b: i32, mime_ty
         (false, false) => (),
     }
 
-    let old_image_path_a = hash::post_content_path(post_id_a, mime_type_a);
-    let old_image_path_b = hash::post_content_path(post_id_b, mime_type_b);
+    let old_image_path_a = post_a.content_path(mime_type_a);
+    let old_image_path_b = post_b.content_path(mime_type_b);
     if mime_type_a == mime_type_b {
         swap_files(&old_image_path_a, &old_image_path_b)
     } else {
-        std::fs::rename(old_image_path_a, hash::post_content_path(post_id_b, mime_type_a))?;
-        std::fs::rename(old_image_path_b, hash::post_content_path(post_id_a, mime_type_b))
+        std::fs::rename(old_image_path_a, post_b.content_path(mime_type_a))?;
+        std::fs::rename(old_image_path_b, post_a.content_path(mime_type_b))
     }
 }
 
