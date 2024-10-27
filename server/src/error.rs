@@ -358,6 +358,7 @@ impl ErrorKind for crate::api::Error {
             Self::Search(err) => err.kind(),
             Self::SelfMerge => "SelfMerge",
             Self::StdIo(err) => err.kind().kind(),
+            Self::UnauthorizedPasswordReset => "UnauthorizedPasswordReset",
             Self::Utf8Conversion(_) => "Utf8ConversionError",
             Self::VideoDecoding(err) => err.kind(),
             Self::Warp(_) => "WarpError",

@@ -164,6 +164,7 @@ pub struct Config {
     pub data_url: String,
     pub password_secret: String,
     pub content_secret: String,
+    pub domain: Option<String>,
     pub delete_source_files: bool,
     pub post_similarity_threshold: f64,
     #[serde(with = "serde_regex")]

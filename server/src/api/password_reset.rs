@@ -1,6 +1,9 @@
 use crate::api::ApiResult;
+use crate::auth::password;
+use crate::content::hash;
 use crate::schema::user;
 use crate::{api, config, db};
+use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use lettre::message::header::ContentType;
 use lettre::message::Mailbox;
@@ -24,31 +27,39 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     request_reset.or(reset_password)
 }
 
+fn get_user_info(conn: &mut PgConnection, identifier: &str) -> ApiResult<(i32, String, Option<String>, String)> {
+    user::table
+        .select((user::id, user::name, user::email, user::password_salt))
+        .filter(user::name.eq(identifier).or(user::email.eq(identifier)))
+        .first(conn)
+        .map_err(api::Error::from)
+}
+
 fn request_reset(identifier: String) -> ApiResult<()> {
     let smtp_info = config::smtp().ok_or(api::Error::MissingSmtpInfo)?;
     let identifier = percent_encoding::percent_decode_str(&identifier).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
-    let user_email: Option<String> = user::table
-        .select(user::email)
-        .filter(user::name.eq(identifier))
-        .first(&mut conn)?;
-    let email_address = user_email.ok_or(api::Error::NoEmail)?;
-    let mailbox: Mailbox = format!("User <{email_address}>").parse()?;
+    let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;
+    let user_email_address = user_email.ok_or(api::Error::NoEmail)?;
+    let user_mailbox: Mailbox = format!("User <{user_email_address}>").parse()?;
 
-    let reset_token = OsRng.next_u32() % 1_000_000;
+    let reset_token = hash::compute_url_safe_hash(&password_salt);
+    let domain = config::get().domain.as_deref().unwrap_or("");
+    let url = format!("{domain}/password-reset/{username}/?token={reset_token}");
+
     let email = Message::builder()
         .from(smtp_info.from.clone())
-        .to(mailbox)
+        .to(user_mailbox)
         .subject("Password Reset Request")
         .header(ContentType::TEXT_PLAIN)
         .body(format!(
             "Hello,
         
-        We received a request to change your password.
-        You can use the code {reset_token} to reset your password.
-        If you did not request a password change, you can ignore this message
-        and continue to use your current password."
+             You (or someone else) requested to reset your password on {}.\n
+             If you wish to proceed, click this link: {url}\n
+             Otherwise, please ignore this email.",
+            config::get().public_info.name
         ))?;
     let credentials = Credentials::new(smtp_info.username.clone(), smtp_info.password.clone());
 
@@ -77,5 +88,25 @@ struct NewPassword {
 }
 
 fn reset_password(identifier: String, confirmation: ResetToken) -> ApiResult<NewPassword> {
-    unimplemented!()
+    let identifier = percent_encoding::percent_decode_str(&identifier).decode_utf8()?;
+
+    db::get_connection()?.transaction(|conn| {
+        let (user_id, _name, _email, password_salt) = get_user_info(conn, &identifier)?;
+        if confirmation.token != hash::compute_url_safe_hash(&password_salt) {
+            return Err(api::Error::UnauthorizedPasswordReset);
+        }
+
+        // TODO: Create random alphanumeric password instead of numeric
+        let temporary_password = OsRng.next_u64().to_string();
+
+        let salt = SaltString::generate(&mut OsRng);
+        let hash = password::hash_password(&temporary_password, &salt)?;
+        diesel::update(user::table.find(user_id))
+            .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
+            .execute(conn)?;
+
+        Ok(NewPassword {
+            password: temporary_password,
+        })
+    })
 }

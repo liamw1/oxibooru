@@ -562,10 +562,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
                 .select((post_signature::signature, post_signature::words))
                 .first(conn)?;
             diesel::update(post_signature::table.find(merge_to_id))
-                .set(post_signature::signature.eq(signature))
-                .execute(conn)?;
-            diesel::update(post_signature::table.find(merge_to_id))
-                .set(post_signature::words.eq(indexes))
+                .set((post_signature::signature.eq(signature), post_signature::words.eq(indexes)))
                 .execute(conn)?;
         }
 

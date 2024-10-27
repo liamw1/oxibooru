@@ -3,6 +3,9 @@ password_secret = "change"
 # Used to generate filenames for static content
 content_secret = "change"
 
+# full url to the homepage of this szurubooru site, with no trailing slash
+# domain: # example: http://example.com
+
 data_url = "data"
 data_dir = "/data"
 

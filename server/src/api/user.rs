@@ -215,10 +215,7 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
             let salt = SaltString::generate(&mut OsRng);
             let hash = password::hash_password(&password, &salt)?;
             diesel::update(user::table.find(user_id))
-                .set(user::password_salt.eq(salt.as_str()))
-                .execute(conn)?;
-            diesel::update(user::table.find(user_id))
-                .set(user::password_hash.eq(hash))
+                .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
                 .execute(conn)?;
         }
         if let Some(email) = update.email {

@@ -64,6 +64,11 @@ pub fn compute_checksum(content: &[u8]) -> String {
     STANDARD_NO_PAD.encode(hash.into_bytes())
 }
 
+pub fn compute_url_safe_hash(content: &str) -> String {
+    let hash = hmac_hash(content.as_bytes());
+    URL_SAFE_NO_PAD.encode(hash.into_bytes())
+}
+
 type Hmac = SimpleHmac<blake3::Hasher>;
 
 fn hmac_hash(bytes: &[u8]) -> CtOutput<Hmac> {
