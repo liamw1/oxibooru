@@ -12,7 +12,6 @@ use std::sync::LazyLock;
     hash to protect against rainbow table attacks.
 */
 pub fn hash_password(password: &str, salt: &SaltString) -> Result<String, HashError> {
-    // TODO: Handle hash rotations
     let password_hash = ARGON_CONTEXT.hash_password(password.as_bytes(), salt)?;
     Ok(password_hash.to_string())
 }

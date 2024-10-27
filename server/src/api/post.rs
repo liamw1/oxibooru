@@ -663,10 +663,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
     let client = auth?;
     query.bump_login(client.as_ref())?;
     let fields = create_field_table(query.fields())?;
-    let new_content = update
-        .content_token
-        .map(|token| cache::get_or_compute_properties(token))
-        .transpose()?;
+    let new_content = update.content_token.map(cache::get_or_compute_properties).transpose()?;
     let custom_thumbnail = update
         .thumbnail_token
         .map(|token| thumbnail::create_from_token(&token))

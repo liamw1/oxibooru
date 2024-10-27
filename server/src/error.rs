@@ -11,6 +11,34 @@ impl ErrorKind for std::env::VarError {
     }
 }
 
+impl ErrorKind for std::io::ErrorKind {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::NotFound => "NotFound",
+            Self::PermissionDenied => "PermissionDenied",
+            Self::ConnectionRefused => "ConnectionRefused",
+            Self::ConnectionReset => "ConnectionReset",
+            Self::ConnectionAborted => "ConnectionAborted",
+            Self::NotConnected => "NotConnected",
+            Self::AddrInUse => "AddrInUse",
+            Self::AddrNotAvailable => "AddrNotAvailable",
+            Self::BrokenPipe => "BrokenPipe",
+            Self::AlreadyExists => "AlreadyExists",
+            Self::WouldBlock => "WouldBlock",
+            Self::InvalidInput => "InvalidInput",
+            Self::InvalidData => "InvalidData",
+            Self::TimedOut => "TimedOut",
+            Self::WriteZero => "WriteZero",
+            Self::Interrupted => "Interrupted",
+            Self::Unsupported => "Unsupported",
+            Self::UnexpectedEof => "UnexpectedEof",
+            Self::OutOfMemory => "OutOfMemory",
+            Self::Other => "OtherIOError",
+            _ => "UnknownIOError",
+        }
+    }
+}
+
 impl ErrorKind for argon2::password_hash::errors::B64Error {
     fn kind(&self) -> &'static str {
         match self {
@@ -176,7 +204,7 @@ impl ErrorKind for image::ImageError {
         match self {
             Self::Decoding(_) => "FailedDecoding",
             Self::Encoding(_) => "FailedEncoding",
-            Self::IoError(_) => "IOError",
+            Self::IoError(err) => err.kind().kind(),
             Self::Limits(err) => err.kind().kind(),
             Self::Parameter(err) => err.kind().kind(),
             Self::Unsupported(err) => err.kind().kind(),
@@ -271,6 +299,35 @@ impl ErrorKind for video_rs::Error {
     }
 }
 
+impl ErrorKind for lettre::address::AddressError {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::MissingParts => "EmailAddressMissingParts",
+            Self::Unbalanced => "EmailAddressUnbalanced",
+            Self::InvalidUser => "EmailAddressInvalidUser",
+            Self::InvalidDomain => "EmailAddressInvalidDomain",
+            Self::InvalidInput => "EmailAddressInvalidInput",
+            _ => "UnknownEmailAddressError",
+        }
+    }
+}
+
+impl ErrorKind for lettre::error::Error {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::MissingFrom => "EmailMissingForm",
+            Self::MissingTo => "EmailMissingTo",
+            Self::TooManyFrom => "EmailTooManyFrom",
+            Self::EmailMissingAt => "EmailMissingAt",
+            Self::EmailMissingLocalPart => "EmailMissingLocalPart",
+            Self::EmailMissingDomain => "EmailMissingDomain",
+            Self::CannotParseFilename => "EmailCannotParseFilename",
+            Self::Io(err) => err.kind().kind(),
+            Self::NonAsciiChars => "EmailNonAsciiChars",
+        }
+    }
+}
+
 impl ErrorKind for crate::api::Error {
     fn kind(&self) -> &'static str {
         match self {
@@ -283,19 +340,24 @@ impl ErrorKind for crate::api::Error {
             Self::ExpressionFailsRegex => "ExpressionFailsRegex",
             Self::FailedAuthentication(err) => err.kind(),
             Self::FailedConnection(_) => "FailedConnection",
+            Self::FailedEmailTransport(_) => "FailedEmailTransport",
             Self::FailedQuery(err) => err.kind(),
             Self::FailedUpload => "FailedUpload",
             Self::FromStr(_) => "FromStrError",
             Self::InsufficientPrivileges => "InsufficientPrivileges",
+            Self::InvalidEmailAddress(err) => err.kind(),
+            Self::InvalidEmail(err) => err.kind(),
             Self::Image(err) => err.kind(),
+            Self::NoEmail => "NoEmail",
             Self::MissingFormData => "MissingFormData",
+            Self::MissingSmtpInfo => "MissingSmtpInfo",
             Self::NoNamesGiven => "NoNamesGiven",
             Self::NotAnInteger(err) => err.kind().kind(),
             Self::NotLoggedIn => "NotLoggedIn",
             Self::ResourceModified => "ResourceModified",
             Self::Search(err) => err.kind(),
             Self::SelfMerge => "SelfMerge",
-            Self::StdIo(_) => "IOError",
+            Self::StdIo(err) => err.kind().kind(),
             Self::Utf8Conversion(_) => "Utf8ConversionError",
             Self::VideoDecoding(err) => err.kind(),
             Self::Warp(_) => "WarpError",

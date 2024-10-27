@@ -31,16 +31,20 @@ default_user_rank = "regular"
 
 enable_safety = true
 
-# contact_email = ""
-can_send_mail = false
-
 # Don't make these more restrictive unless you want to annoy people
 # If you do customize them, make sure to update the instructions in the registration form template as well
-username_regex  = "^[a-zA-Z0-9_-]{1,32}$"
-password_regex  = "^.{5,}$"
+username_regex = "^[a-zA-Z0-9_-]{1,32}$"
+password_regex = "^.{5,}$"
 
-tag_name_regex     = "^\\S+$"
+tag_name_regex          = "^\\S+$"
 tag_category_name_regex = "^[^\\s%+#/]+$"
+
+# contact_email = example: bob@example.com. # Meant for manual password reset procedures
+
+# [public_info.smtp]
+# username = # example: bot
+# password = # example: groovy123
+# from     = # example: noreply@example.com
 
 [public_info.privileges]
 user_create_self           = "anonymous" # Registration permission

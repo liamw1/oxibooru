@@ -1,13 +1,14 @@
-pub mod comment;
-pub mod info;
-pub mod pool;
-pub mod pool_category;
-pub mod post;
-pub mod tag;
-pub mod tag_category;
-pub mod upload;
-pub mod user;
-pub mod user_token;
+mod comment;
+mod info;
+mod password_reset;
+mod pool;
+mod pool_category;
+mod post;
+mod tag;
+mod tag_category;
+mod upload;
+mod user;
+mod user_token;
 
 use crate::auth::header::{self, AuthenticationError};
 use crate::config::{self, RegexType};
@@ -69,15 +70,23 @@ pub enum Error {
     ExpressionFailsRegex,
     FailedAuthentication(#[from] AuthenticationError),
     FailedConnection(#[from] diesel::r2d2::PoolError),
+    #[error("Failed to send email. Reason: {0}")]
+    FailedEmailTransport(String),
     FailedQuery(#[from] diesel::result::Error),
     #[error("Upload failed")]
     FailedUpload,
     FromStr(#[from] Box<dyn std::error::Error>),
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
+    InvalidEmailAddress(#[from] lettre::address::AddressError),
+    InvalidEmail(#[from] lettre::error::Error),
     Image(#[from] image::ImageError),
     #[error("Missing form data")]
     MissingFormData,
+    #[error("Missing smtp info")]
+    MissingSmtpInfo,
+    #[error("User has no email")]
+    NoEmail,
     #[error("Resource needs at least one name")]
     NoNamesGiven,
     NotAnInteger(#[from] std::num::ParseIntError),
@@ -117,12 +126,17 @@ impl Error {
                 _ => StatusCode::UNAUTHORIZED,
             },
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
+            Self::FailedEmailTransport(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedQuery(err) => query_error_status_code(err),
             Self::FailedUpload => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FromStr(_) => StatusCode::BAD_REQUEST,
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
+            Self::InvalidEmailAddress(_) => StatusCode::BAD_REQUEST,
+            Self::InvalidEmail(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::Image(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::MissingFormData => StatusCode::BAD_REQUEST,
+            Self::MissingSmtpInfo => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::NoEmail => StatusCode::BAD_REQUEST,
             Self::NoNamesGiven => StatusCode::BAD_REQUEST,
             Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
             Self::NotLoggedIn => StatusCode::FORBIDDEN,
@@ -147,12 +161,17 @@ impl Error {
             Self::ExpressionFailsRegex => "Expression Fails Regex",
             Self::FailedAuthentication(_) => "Failed Authentication",
             Self::FailedConnection(_) => "Failed Connection",
+            Self::FailedEmailTransport(_) => "Failed Email Transport",
             Self::FailedQuery(_) => "Failed Query",
             Self::FailedUpload => "Failed Upload",
             Self::FromStr(_) => "FromStr Error",
             Self::InsufficientPrivileges => "Insufficient Privileges",
+            Self::InvalidEmailAddress(_) => "Invalid Email Address",
+            Self::InvalidEmail(_) => "Invalid Email",
             Self::Image(_) => "Image Error",
             Self::MissingFormData => "Missing Form Data",
+            Self::MissingSmtpInfo => "Missing SMTP Info",
+            Self::NoEmail => "No Email",
             Self::NoNamesGiven => "No Names Given",
             Self::NotAnInteger(_) => "Parse Int Error",
             Self::NotLoggedIn => "Not Logged In",
@@ -188,6 +207,13 @@ pub fn verify_matches_regex(haystack: &str, regex_type: RegexType) -> ApiResult<
         .ok_or(Error::ExpressionFailsRegex)
 }
 
+pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::AddressError> {
+    match email {
+        Some(address) => address.parse::<lettre::Address>().map(|_| ()),
+        None => Ok(()),
+    }
+}
+
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> + Clone {
     // let catch_body = warp::put()
     //     .and(warp::body::bytes())
@@ -208,6 +234,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
 
     info::routes()
         .or(comment::routes())
+        .or(password_reset::routes())
         .or(pool_category::routes())
         .or(pool::routes())
         .or(post::routes())

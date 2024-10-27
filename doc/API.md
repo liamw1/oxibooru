@@ -78,6 +78,9 @@
         - [Creating user token](#creating-user-token)
         - [Updating user token](#updating-user-token)
         - [Deleting user token](#deleting-user-token)
+    - Password reset
+        - [Password reset - step 1: mail request](#password-reset---step-1-mail-request)
+        - [Password reset - step 2: confirmation](#password-reset---step-2-confirmation)
     - Global info
         - [Getting global info](#getting-global-info)
     - File uploads
@@ -1974,6 +1977,62 @@ data.
 - **Description**
 
     Deletes existing user token.
+
+## Password reset - step 1: mail request
+- **Request**
+
+    `GET /password-reset/<email-or-name>`
+
+- **Output**
+
+    ```
+    {}
+    ```
+
+- **Errors**
+
+    - the user does not exist
+    - the user hasn't provided an email address
+
+- **Description**
+
+    Sends a confirmation email to given user. The email contains link
+    containing a token. The token cannot be guessed, thus using such link
+    proves that the person who requested to reset the password also owns the
+    mailbox, which is a strong indication they are the rightful owner of the
+    account.
+
+## Password reset - step 2: confirmation
+- **Request**
+
+    `POST /password-reset/<email-or-name>`
+
+- **Input**
+
+    ```json5
+    {
+        "token": <token-from-email>
+    }
+    ```
+
+- **Output**
+
+    ```json5
+    {
+        "password": <new-password>
+    }
+    ```
+
+- **Errors**
+
+    - the token is missing
+    - the token is invalid
+    - the user does not exist
+
+- **Description**
+
+    Generates a new password for given user. Password is sent as plain-text, so
+    it is recommended to connect through HTTPS.
 
 ## Getting global info
 - **Request**

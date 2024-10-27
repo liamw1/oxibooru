@@ -1,4 +1,5 @@
 use crate::model::enums::UserRank;
+use lettre::message::Mailbox;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
@@ -20,6 +21,13 @@ pub struct Thumbnails {
     pub avatar_height: u32,
     pub post_width: u32,
     pub post_height: u32,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct SmtpInfo {
+    pub username: String,
+    pub password: String,
+    pub from: Mailbox,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -134,8 +142,8 @@ pub struct PublicInfo {
     pub default_user_rank: UserRank,
     pub enable_safety: bool,
     pub contact_email: Option<String>,
-    #[serde(rename(serialize = "canSendMails"))]
-    pub can_send_mail: bool,
+    #[serde(skip_deserializing)]
+    pub can_send_mails: bool,
     #[serde(with = "serde_regex")]
     #[serde(rename(serialize = "userNameRegex"))]
     pub username_regex: Regex,
@@ -145,6 +153,7 @@ pub struct PublicInfo {
     pub tag_name_regex: Regex,
     #[serde(with = "serde_regex")]
     pub tag_category_name_regex: Regex,
+    pub smtp: Option<SmtpInfo>,
     pub privileges: Privileges,
 }
 
@@ -167,6 +176,10 @@ pub struct Config {
 
 pub fn get() -> &'static Config {
     &CONFIG
+}
+
+pub fn smtp() -> Option<&'static SmtpInfo> {
+    CONFIG.public_info.smtp.as_ref()
 }
 
 pub fn privileges() -> &'static Privileges {
@@ -204,8 +217,11 @@ pub fn port() -> u16 {
         .unwrap_or(DEFAULT_PORT)
 }
 
-static CONFIG: LazyLock<Config> =
-    LazyLock::new(|| toml::from_str(&std::fs::read_to_string(get_config_path()).unwrap()).unwrap());
+static CONFIG: LazyLock<Config> = LazyLock::new(|| {
+    let mut config: Config = toml::from_str(&std::fs::read_to_string(get_config_path()).unwrap()).unwrap();
+    config.public_info.can_send_mails = config.public_info.smtp.is_some();
+    config
+});
 
 static DATA_DIR: LazyLock<Cow<str>> = LazyLock::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
     Ok(_) => Cow::Borrowed(&CONFIG.data_dir),

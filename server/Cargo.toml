@@ -11,6 +11,7 @@ edition = "2021"
 # Using fork until changes are merged in
 diesel = { git = "https://github.com/liamw1/diesel-CitextFix", default-features = false, features = ["with-deprecated", "postgres", "r2d2", "time", "uuid"] }
 tokio = { version = "1.38.1", features = ["full"] }
+lettre = { version = "0.11.9", features = ["serde"] }
 serde = { version = "1.0.204", features = ["derive"] }
 strum = { version = "0.26.3", features = ["derive", "phf"] }
 time = { version = "0.3.36", features = ["serde-human-readable"] }

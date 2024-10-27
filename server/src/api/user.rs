@@ -137,6 +137,7 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
     let fields = create_field_table(query.fields())?;
     api::verify_matches_regex(&user_info.name, RegexType::Username)?;
     api::verify_matches_regex(&user_info.password, RegexType::Password)?;
+    api::verify_valid_email(user_info.email.as_deref())?;
 
     let salt = SaltString::generate(&mut OsRng);
     let hash = password::hash_password(&user_info.password, &salt)?;
@@ -226,6 +227,7 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
                 false => config::privileges().user_edit_any_email,
             };
             api::verify_privilege(client.as_ref(), required_rank)?;
+            api::verify_valid_email(Some(&email))?;
 
             diesel::update(user::table.find(user_id))
                 .set(user::email.eq(email))
