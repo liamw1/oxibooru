@@ -35,10 +35,12 @@ where
 }
 
 static CONNECTION_POOL: LazyLock<Pool<ConnectionManager<PgConnection>>> = LazyLock::new(|| {
-    let num_threads = tokio::runtime::Handle::current().metrics().num_workers() as u32;
+    let num_threads = tokio::runtime::Handle::try_current()
+        .map(|handle| handle.metrics().num_workers())
+        .unwrap_or(1);
     let manager = ConnectionManager::new(config::database_url());
     Pool::builder()
-        .max_size(num_threads)
+        .max_size(num_threads as u32)
         .max_lifetime(None)
         .idle_timeout(None)
         .test_on_check_out(true)
