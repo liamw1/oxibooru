@@ -171,6 +171,7 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
         match std::fs::read(&image_path) {
             Ok(file_content) => {
                 let checksum = hash::compute_checksum(&file_content);
+                let md5_checksum = hash::compute_md5_checksum(&file_content);
                 let duplicate: Option<i32> = post::table
                     .select(post::id)
                     .filter(post::checksum.eq(&checksum))
@@ -182,7 +183,7 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
                     eprintln!("Potential duplicate post {dup_id} for post {post_id}");
                 } else {
                     diesel::update(post::table.find(post_id))
-                        .set(post::checksum.eq(checksum))
+                        .set((post::checksum.eq(checksum), post::checksum_md5.eq(md5_checksum)))
                         .execute(conn)?;
                 }
             }

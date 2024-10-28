@@ -22,9 +22,10 @@ pub struct NewPost<'a> {
     pub type_: PostType,
     pub mime_type: MimeType,
     pub checksum: &'a str,
+    pub checksum_md5: &'a str,
     pub flags: PostFlags,
     pub source: Option<&'a str>,
-} // TODO: Calculate checksum_md5?
+}
 
 #[derive(AsChangeset, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User))]

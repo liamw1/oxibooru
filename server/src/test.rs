@@ -83,6 +83,7 @@ pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Pos
         type_: PostType::Image,
         mime_type: MimeType::Png,
         checksum: "",
+        checksum_md5: "",
         flags: PostFlags::default(),
         source: None,
     };

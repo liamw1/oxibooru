@@ -76,6 +76,11 @@ pub fn compute_checksum(content: &[u8]) -> String {
     STANDARD_NO_PAD.encode(hash.into_bytes())
 }
 
+pub fn compute_md5_checksum(content: &[u8]) -> String {
+    let digest = md5::compute(content);
+    String::from_utf8_lossy(&digest.0).into_owned()
+}
+
 pub fn compute_url_safe_hash(content: &str) -> String {
     let hash = hmac_hash(content.as_bytes());
     URL_SAFE_NO_PAD.encode(hash.into_bytes())

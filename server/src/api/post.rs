@@ -395,6 +395,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         type_: PostType::from(content_properties.mime_type),
         mime_type: content_properties.mime_type,
         checksum: &content_properties.checksum,
+        checksum_md5: &content_properties.md5_checksum,
         flags,
         source: post_info.source.as_deref(),
     };

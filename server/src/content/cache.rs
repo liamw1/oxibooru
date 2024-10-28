@@ -10,6 +10,7 @@ use std::sync::{LazyLock, Mutex, MutexGuard};
 pub struct CachedProperties {
     pub token: String,
     pub checksum: String,
+    pub md5_checksum: String,
     pub signature: Vec<u8>,
     pub thumbnail: DynamicImage,
     pub width: u32,
@@ -91,6 +92,7 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
     let file_size = std::fs::metadata(&temp_path)?.len();
     let file_contents = std::fs::read(&temp_path)?;
     let checksum = hash::compute_checksum(&file_contents);
+    let md5_checksum = hash::compute_md5_checksum(&file_contents);
 
     let (_uuid, extension) = token.split_once('.').unwrap();
     let mime_type = MimeType::from_extension(extension)?;
@@ -121,6 +123,7 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
     Ok(CachedProperties {
         token,
         checksum,
+        md5_checksum,
         signature,
         thumbnail: thumbnail::create(&image),
         width: image.width(),
