@@ -1,4 +1,5 @@
 use crate::api::{ApiResult, AuthResult, MAX_UPLOAD_SIZE};
+use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
 use crate::{api, config, filesystem};
 use futures::{StreamExt, TryStreamExt};
@@ -55,7 +56,7 @@ async fn upload(auth: AuthResult, form_data: FormData) -> ApiResult<UploadRespon
     api::verify_privilege(client.as_ref(), config::privileges().upload_create)?;
 
     // Set up temp directory if necessary
-    filesystem::create_dir(filesystem::temporary_upload_directory())?;
+    filesystem::create_dir(Directory::TemporaryUploads)?;
 
     let (data, content_type) = extract_content(form_data).await?;
     let upload_token = filesystem::save_uploaded_file(data, content_type)?;

@@ -1,5 +1,6 @@
-use crate::config;
+use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
+use crate::{config, filesystem};
 use base64::engine::general_purpose::{STANDARD_NO_PAD, URL_SAFE_NO_PAD};
 use base64::prelude::*;
 use hmac::digest::CtOutput;
@@ -32,15 +33,22 @@ impl PostHash {
     }
 
     pub fn content_path(&self, content_type: MimeType) -> PathBuf {
-        format!("{}/posts/{}_{}.{}", config::data_dir(), self.post_id, self.hash, content_type.extension()).into()
+        format!(
+            "{}/{}_{}.{}",
+            filesystem::as_str(Directory::Posts),
+            self.post_id,
+            self.hash,
+            content_type.extension()
+        )
+        .into()
     }
 
     pub fn generated_thumbnail_path(&self) -> PathBuf {
-        format!("{}/generated-thumbnails/{}_{}.jpg", config::data_dir(), self.post_id, self.hash).into()
+        format!("{}/{}_{}.jpg", filesystem::as_str(Directory::GeneratedThumbnails), self.post_id, self.hash).into()
     }
 
     pub fn custom_thumbnail_path(&self) -> PathBuf {
-        format!("{}/custom-thumbnails/{}_{}.jpg", config::data_dir(), self.post_id, self.hash).into()
+        format!("{}/{}_{}.jpg", filesystem::as_str(Directory::CustomThumbnails), self.post_id, self.hash).into()
     }
 }
 
@@ -51,7 +59,11 @@ pub fn gravatar_url(username: &str) -> String {
 }
 
 pub fn custom_avatar_url(username: &str) -> String {
-    format!("{}/avatars/{}.png", config::get().data_url, username.to_lowercase())
+    format!("{}/custom-avatars/{}.png", config::get().data_url, username.to_lowercase())
+}
+
+pub fn custom_avatar_path(username: &str) -> PathBuf {
+    format!("{}/{}.png", filesystem::as_str(Directory::CustomAvatars), username.to_lowercase()).into()
 }
 
 /*

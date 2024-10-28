@@ -1,12 +1,13 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::password;
 use crate::config::RegexType;
+use crate::content::thumbnail;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
 use crate::schema::user;
 use crate::time::DateTime;
-use crate::{api, config, db, resource, search};
+use crate::{api, config, db, filesystem, resource, search};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
@@ -169,6 +170,7 @@ struct UserUpdate {
     email: Option<String>,
     rank: Option<UserRank>,
     avatar_style: Option<AvatarStyle>,
+    avatar_token: Option<String>,
 }
 
 fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
@@ -178,11 +180,15 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
     let client_id = client.as_ref().map(|user| user.id);
     let fields = create_field_table(query.fields())?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
+    let custom_avatar = update
+        .avatar_token
+        .map(|token| thumbnail::create_from_token(&token))
+        .transpose()?;
 
     db::get_connection()?.transaction(|conn| {
         let (user_id, user_version): (i32, DateTime) = user::table
             .select((user::id, user::last_edit_time))
-            .filter(user::name.eq(username))
+            .filter(user::name.eq(&username))
             .first(conn)?;
         api::verify_version(user_version, update.version)?;
 
@@ -254,6 +260,16 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
             diesel::update(user::table.find(user_id))
                 .set(user::avatar_style.eq(avatar_style))
                 .execute(conn)?;
+        }
+        if let Some(avatar) = custom_avatar {
+            let required_rank = match editing_self {
+                true => config::privileges().user_edit_self_avatar,
+                false => config::privileges().user_edit_any_avatar,
+            };
+            api::verify_privilege(client.as_ref(), required_rank)?;
+
+            filesystem::delete_custom_avatar(&username)?;
+            filesystem::save_custom_avatar(&username, avatar)?;
         }
 
         UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from)

@@ -1,6 +1,6 @@
 use crate::content::hash::PostHash;
 use crate::content::{decode, hash, signature};
-use crate::filesystem;
+use crate::filesystem::{self, Directory};
 use crate::model::enums::MimeType;
 use crate::model::post::{NewPostSignature, PostSignature};
 use crate::schema::{post, post_signature};
@@ -15,7 +15,7 @@ use std::path::Path;
 pub fn rename_post_content() -> std::io::Result<()> {
     let _time = Timer::new("rename_post_content");
 
-    for (entry_index, entry) in std::fs::read_dir(filesystem::generated_thumbnails_directory())?.enumerate() {
+    for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))?.enumerate() {
         let path = entry?.path();
         if let Some(post_id) = get_post_id(&path) {
             let new_path = PostHash::new(post_id).generated_thumbnail_path();
@@ -29,7 +29,7 @@ pub fn rename_post_content() -> std::io::Result<()> {
         print_progress_message(entry_index, "Generated thumbnails renamed");
     }
 
-    for (entry_index, entry) in std::fs::read_dir(filesystem::custom_thumbnails_directory())?.enumerate() {
+    for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))?.enumerate() {
         let path = entry?.path();
         if let Some(post_id) = get_post_id(&path) {
             let new_path = PostHash::new(post_id).custom_thumbnail_path();
@@ -43,7 +43,7 @@ pub fn rename_post_content() -> std::io::Result<()> {
         print_progress_message(entry_index, "Custom thumbnails renamed");
     }
 
-    for (entry_index, entry) in std::fs::read_dir(filesystem::posts_directory())?.enumerate() {
+    for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::Posts))?.enumerate() {
         let path = entry?.path();
         let post_id = get_post_id(&path);
         let content_type = MimeType::from_path(&path);

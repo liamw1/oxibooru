@@ -3,7 +3,7 @@ use crate::api::{
 };
 use crate::content::hash::PostHash;
 use crate::content::{cache, signature, thumbnail};
-use crate::filesystem::ThumbnailType;
+use crate::filesystem::{Directory, ThumbnailType};
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, Score};
 use crate::model::post::{
     NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostRelation, PostSignature,
@@ -427,15 +427,15 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
 
         // Move content to permanent location
         let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
-        filesystem::create_dir(filesystem::posts_directory())?;
+        filesystem::create_dir(Directory::Posts)?;
         std::fs::rename(temp_path, post_hash.content_path(content_properties.mime_type))?;
 
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
-            filesystem::save_thumbnail(&post_hash, thumbnail, ThumbnailType::Custom)?;
+            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailType::Custom)?;
         }
-        filesystem::save_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailType::Generated)?;
+        filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailType::Generated)?;
 
         PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
     })
@@ -745,14 +745,14 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
             std::fs::rename(temp_path, post_hash.content_path(content_properties.mime_type))?;
 
             // Replace generated thumbnail
-            filesystem::delete_thumbnail(&post_hash, ThumbnailType::Generated)?;
-            filesystem::save_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailType::Generated)?;
+            filesystem::delete_post_thumbnail(&post_hash, ThumbnailType::Generated)?;
+            filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailType::Generated)?;
         }
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
 
-            filesystem::delete_thumbnail(&post_hash, ThumbnailType::Custom)?;
-            filesystem::save_thumbnail(&post_hash, thumbnail, ThumbnailType::Custom)?;
+            filesystem::delete_post_thumbnail(&post_hash, ThumbnailType::Custom)?;
+            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailType::Custom)?;
         }
 
         let client_id = client.map(|user| user.id);

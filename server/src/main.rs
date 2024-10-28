@@ -3,12 +3,12 @@
 mod admin;
 mod api;
 mod auth;
-pub mod config;
+mod config;
 mod content;
 mod db;
 mod error;
 mod filesystem;
-pub mod math;
+mod math;
 mod model;
 mod resource;
 mod schema;
