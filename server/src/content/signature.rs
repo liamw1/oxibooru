@@ -6,17 +6,20 @@ use crate::math::rect::{Array2D, IRect};
 use image::{DynamicImage, GrayImage};
 use num_traits::ToPrimitive;
 
+pub const NUM_WORDS: usize = 100; // Number indexes to create from signature
+pub const SIGNATURE_SIZE: usize = 8 * (GRID_SIZE - 2).pow(2) + 20 * (GRID_SIZE - 2) + 12;
+
 /*
     Calculates a "signature" for an image that can be used for similarity search.
 
     Implementation follows H. Chi Wong, Marshall Bern and David Goldberg with a few tweaks
 */
-pub fn compute_signature(image: &DynamicImage) -> Vec<u8> {
+pub fn compute_signature(image: &DynamicImage) -> [u8; SIGNATURE_SIZE] {
     let gray_image = image.to_luma8();
     let grid_points = compute_grid_points(&gray_image);
-    let mean_matrix = compute_mean_matrix(&gray_image, &grid_points);
-    let differentials = compute_differentials(&mean_matrix);
-    normalize(&differentials)
+    let mean_matrix = compute_intensity_matrix(&gray_image, &grid_points);
+    let differences = compute_differences(&mean_matrix);
+    normalize(differences)
 }
 
 /*
@@ -53,53 +56,64 @@ pub fn normalized_distance(signature_a: &[u8], signature_b: &[u8]) -> f64 {
     (which we then convert to an i32). The highest N trits of the u32 are reserved for storing
     the word index, where N is the number of trits required to store NUM_WORDS.
 */
-pub fn generate_indexes(signature: &[u8]) -> Vec<i32> {
+pub fn generate_indexes(signature: &[u8]) -> [i32; NUM_WORDS] {
     const NUM_REDUCED_SYMBOLS: u32 = 3;
     const _: () = assert!(NUM_REDUCED_SYMBOLS % 2 == 1); // Number of reduced symbols must be odd
-    const NUM_WORD_DIGITS: u32 = NUM_WORDS.ilog(NUM_REDUCED_SYMBOLS) + 1;
-    const _: () = assert!(NUM_LETTERS + NUM_WORD_DIGITS <= u32::MAX.ilog(NUM_REDUCED_SYMBOLS)); // Make sure that information needed can't exceed u32 trits
+    const NUM_WORD_DIGITS: u32 = NUM_WORDS.ilog(NUM_REDUCED_SYMBOLS as usize) + 1;
+    const _: () = assert!(NUM_LETTERS as u32 + NUM_WORD_DIGITS <= u32::MAX.ilog(NUM_REDUCED_SYMBOLS)); // Make sure that information needed can't exceed u32 trits
 
-    const NUM_LETTERS_USIZE: usize = NUM_LETTERS as usize;
-    let word_positions = func::linspace(0, signature.len() - NUM_LETTERS_USIZE, NUM_WORDS);
+    let word_positions: [usize; NUM_WORDS] = func::linspace(0, signature.len() - NUM_LETTERS);
+    let words: [[u8; NUM_LETTERS]; NUM_WORDS] = core::array::from_fn(|word_index| {
+        let pos = word_positions[word_index];
+        signature[pos..(pos + NUM_LETTERS)].try_into().unwrap()
+    });
 
-    let words: Vec<[u8; NUM_LETTERS_USIZE]> = word_positions
-        .iter()
-        .map(|&pos| signature[pos..(pos + NUM_LETTERS_USIZE)].try_into().unwrap())
-        .collect();
-
-    words
-        .iter()
-        .enumerate()
-        .map(|(word_index, word)| {
-            const CLAMP_VALUE: i8 = NUM_REDUCED_SYMBOLS as i8 / 2;
-            let encoded_letters: u32 = word
-                .iter()
-                .map(|&letter| letter as i8)
-                .map(|letter| letter.clamp(-CLAMP_VALUE, CLAMP_VALUE))
-                .enumerate()
-                .map(|(letter_index, letter)| {
-                    (letter + CLAMP_VALUE) as u32 * NUM_REDUCED_SYMBOLS.pow(letter_index as u32)
-                })
-                .sum();
-            (word_index as u32 + NUM_REDUCED_SYMBOLS.pow(NUM_WORD_DIGITS) * encoded_letters) as i32
-        })
-        .collect()
+    const CLAMP_VALUE: i8 = NUM_REDUCED_SYMBOLS as i8 / 2;
+    core::array::from_fn(|word_index| {
+        let word = words[word_index];
+        let encoded_letters: u32 = word
+            .iter()
+            .map(|&letter| letter as i8)
+            .map(|letter| letter.clamp(-CLAMP_VALUE, CLAMP_VALUE))
+            .enumerate()
+            .map(|(letter_index, letter)| (letter + CLAMP_VALUE) as u32 * NUM_REDUCED_SYMBOLS.pow(letter_index as u32))
+            .sum();
+        (word_index as u32 + NUM_REDUCED_SYMBOLS.pow(NUM_WORD_DIGITS) * encoded_letters) as i32
+    })
 }
 
 const CROP_PERCENTILE: u64 = 5;
-const NUM_GRID_POINTS: u32 = 9; // Size of the square grid used to compute signature
+const GRID_SIZE: usize = 9; // Size of the square grid used to compute signature
 const IDENTICAL_TOLERANCE: i16 = 1; // Pixel intensities within this distance will be treated as identical
-const LUMINANCE_LEVELS: u32 = 2; // How many shades of light/dark
-const NUM_WORDS: u32 = 100; // Number indexes to create from signature
-const NUM_LETTERS: u32 = 12; // Length of each index
-const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS as usize + 1; // Number of possible values letters can take
+const LUMINANCE_LEVELS: usize = 2; // How many shades of light/dark
+const NUM_LETTERS: usize = 12; // Length of each index
+const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS + 1; // Number of possible values letters can take
+
+type GridPoints = CartesianProduct<u32, u32, GRID_SIZE, GRID_SIZE>;
+
+fn array_from_iter<I, T, const N: usize>(iter: I) -> [T; N]
+where
+    I: Iterator<Item = T>,
+    T: Default + Copy,
+{
+    let mut array = [T::default(); N];
+
+    let mut i = 0; // This should be optimized away in release builds
+    for (array_item, iter_item) in array.iter_mut().zip(iter) {
+        *array_item = iter_item;
+        i += 1;
+    }
+    debug_assert_eq!(i, N);
+
+    array
+}
 
 fn grid_square_radius(width: u32, height: u32) -> u32 {
     let grid_square_size = 0.5 + std::cmp::min(width, height) as f64 / 20.0;
     (grid_square_size / 2.0).to_u32().unwrap()
 }
 
-fn compute_grid_points(image: &GrayImage) -> CartesianProduct<u32, u32> {
+fn compute_grid_points(image: &GrayImage) -> GridPoints {
     let bounds = IRect::new_zero_based(image.width() - 2, image.height() - 2);
 
     let mut total_row_delta = 0;
@@ -187,13 +201,12 @@ fn compute_grid_points(image: &GrayImage) -> CartesianProduct<u32, u32> {
     lower_column_index += estimated_grid_square_radius;
     upper_column_index -= estimated_grid_square_radius;
 
-    let x_coords = func::linspace(lower_row_index, upper_row_index, NUM_GRID_POINTS);
-    let y_coords = func::linspace(lower_column_index, upper_column_index, NUM_GRID_POINTS);
-
+    let x_coords: [u32; GRID_SIZE] = func::linspace(lower_row_index, upper_row_index);
+    let y_coords: [u32; GRID_SIZE] = func::linspace(lower_column_index, upper_column_index);
     CartesianProduct::new(x_coords, y_coords)
 }
 
-fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u32>) -> Array2D<u8> {
+fn compute_intensity_matrix(image: &GrayImage, grid_points: &GridPoints) -> Array2D<u8, GRID_SIZE, GRID_SIZE> {
     let cropped_width = grid_points.left_set().last().unwrap() - grid_points.left_set().first().unwrap();
     let cropped_height = grid_points.right_set().last().unwrap() - grid_points.right_set().first().unwrap();
     let grid_square_radius = grid_square_radius(cropped_width, cropped_height) as i32;
@@ -201,7 +214,7 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
         .to_signed()
         .unwrap();
 
-    let mut mean_matrix = Array2D::new_square(NUM_GRID_POINTS, 0);
+    let mut intensity_matrix = Array2D::new(0);
     for (matrix_index, (&pixel_i, &pixel_j)) in grid_points.indexed_iter() {
         let grid_square_center = IPoint2::new(pixel_i, pixel_j).to_signed().unwrap();
         let grid_square = IRect::new_centered_square(grid_square_center, grid_square_radius);
@@ -213,9 +226,9 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
             .map(|luma| u64::from(luma.0[0]))
             .sum::<u64>();
         let average = sum / grid_square.total_points().unwrap();
-        mean_matrix.set_at(matrix_index, average.to_u8().unwrap());
+        intensity_matrix.set_at(matrix_index, average.to_u8().unwrap());
     }
-    mean_matrix
+    intensity_matrix
 }
 
 /*
@@ -224,54 +237,51 @@ fn compute_mean_matrix(image: &GrayImage, grid_points: &CartesianProduct<u32, u3
     are considered 0. However, I would think that this would increase the likelihood of random
     signatures matching on certain words. I've simply excluded these differences from the final signature.
 */
-fn compute_differentials(mean_matrix: &Array2D<u8>) -> Vec<i16> {
-    mean_matrix
+fn compute_differences(intensity_matrix: &Array2D<u8, GRID_SIZE, GRID_SIZE>) -> [i16; SIGNATURE_SIZE] {
+    let difference_iter = intensity_matrix
         .signed_indexed_iter()
         .flat_map(|(matrix_index, &center_value)| {
             IRect::new_centered_square(matrix_index, 1)
                 .iter()
                 .filter(move |&neighbor| neighbor != matrix_index)
                 .filter_map(move |neighbor| {
-                    mean_matrix
+                    intensity_matrix
                         .get(neighbor)
                         .map(|neighbor_value| i16::from(neighbor_value) - i16::from(center_value))
                 })
-        })
-        .collect()
+        });
+    array_from_iter(difference_iter)
 }
 
-fn compute_cutoffs<F: Fn(i16) -> bool>(differentials: &[i16], filter: F) -> Vec<Option<i16>> {
-    let mut filtered_values = differentials
+fn compute_cutoffs<F: Fn(i16) -> bool>(
+    differences: &[i16; SIGNATURE_SIZE],
+    filter: F,
+) -> [Option<i16>; LUMINANCE_LEVELS] {
+    let mut filtered_values = differences
         .iter()
         .copied()
         .filter(|&diff| filter(diff))
         .collect::<Vec<_>>();
     filtered_values.sort();
 
-    const LUMINANCE_LEVELS_USIZE: usize = LUMINANCE_LEVELS as usize;
-    let chunk_size = match filtered_values.len() % LUMINANCE_LEVELS_USIZE {
-        0 => filtered_values.len() / LUMINANCE_LEVELS_USIZE,
-        _ => filtered_values.len() / LUMINANCE_LEVELS_USIZE + 1,
+    let chunk_size = match filtered_values.len() % LUMINANCE_LEVELS {
+        0 => filtered_values.len() / LUMINANCE_LEVELS,
+        _ => filtered_values.len() / LUMINANCE_LEVELS + 1,
     };
-
-    filtered_values
-        .chunks(chunk_size)
-        .map(|chunk| chunk.last().copied())
-        .collect()
+    array_from_iter(filtered_values.chunks(chunk_size).map(|chunk| chunk.last().copied()))
 }
 
-fn normalize(differentials: &[i16]) -> Vec<u8> {
-    let dark_cutoffs = compute_cutoffs(differentials, |diff: i16| diff < -IDENTICAL_TOLERANCE);
-    let light_cutoffs = compute_cutoffs(differentials, |diff: i16| diff > IDENTICAL_TOLERANCE);
+fn normalize(differences: [i16; SIGNATURE_SIZE]) -> [u8; SIGNATURE_SIZE] {
+    let dark_cutoffs = compute_cutoffs(&differences, |diff: i16| diff < -IDENTICAL_TOLERANCE);
+    let light_cutoffs = compute_cutoffs(&differences, |diff: i16| diff > IDENTICAL_TOLERANCE);
+    let cutoffs: [Option<i16>; NUM_SYMBOLS] = array_from_iter(
+        dark_cutoffs
+            .into_iter()
+            .chain(std::iter::once(Some(IDENTICAL_TOLERANCE)))
+            .chain(light_cutoffs),
+    );
 
-    let cutoffs = dark_cutoffs
-        .into_iter()
-        .chain(std::iter::once(Some(IDENTICAL_TOLERANCE)))
-        .chain(light_cutoffs)
-        .collect::<Vec<_>>();
-    debug_assert_eq!(cutoffs.len(), NUM_SYMBOLS);
-
-    differentials
+    let signature_iter = differences
         .iter()
         .map(|&diff| {
             cutoffs
@@ -280,8 +290,8 @@ fn normalize(differentials: &[i16]) -> Vec<u8> {
                 .expect("Expected diff to be under at least one cutoff") as i8
         })
         .map(|level| level - LUMINANCE_LEVELS as i8) // Map to range of [-LUMINANCE_LEVELS, LUMINANCE_LEVELS]
-        .map(|level| level as u8) // Convert to byte. Can convert back by casting back to i8
-        .collect()
+        .map(|level| level as u8); // Convert to byte. Can convert back by casting back to i8
+    array_from_iter(signature_iter)
 }
 
 #[cfg(test)]

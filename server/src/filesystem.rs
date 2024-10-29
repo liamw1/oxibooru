@@ -179,15 +179,14 @@ pub fn data_size() -> std::io::Result<u64> {
 }
 
 static DATA_SIZE: AtomicU64 = AtomicU64::new(0);
-static POSTS_DIRECTORY: LazyLock<String> = LazyLock::new(|| format!("{}/posts", config::data_dir()).into());
+static POSTS_DIRECTORY: LazyLock<String> = LazyLock::new(|| format!("{}/posts", config::data_dir()));
 static GENERATED_THUMBNAILS_DIRECTORY: LazyLock<String> =
-    LazyLock::new(|| format!("{}/generated-thumbnails", config::data_dir()).into());
+    LazyLock::new(|| format!("{}/generated-thumbnails", config::data_dir()));
 static CUSTOM_THUMBNAILS_DIRECTORY: LazyLock<String> =
-    LazyLock::new(|| format!("{}/custom-thumbnails", config::data_dir()).into());
-static CUSTOM_AVATARS_DIRECTORY: LazyLock<String> =
-    LazyLock::new(|| format!("{}/custom-avatars", config::data_dir()).into());
+    LazyLock::new(|| format!("{}/custom-thumbnails", config::data_dir()));
+static CUSTOM_AVATARS_DIRECTORY: LazyLock<String> = LazyLock::new(|| format!("{}/custom-avatars", config::data_dir()));
 static TEMPORARY_UPLOADS_DIRECTORY: LazyLock<String> =
-    LazyLock::new(|| format!("{}/temporary-uploads", config::data_dir()).into());
+    LazyLock::new(|| format!("{}/temporary-uploads", config::data_dir()));
 
 fn remove_file(path: &Path) -> std::io::Result<()> {
     let file_size = std::fs::metadata(path)?.len();

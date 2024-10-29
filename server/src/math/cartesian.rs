@@ -1,13 +1,13 @@
 use crate::math::point::IPoint2;
 use crate::math::rect::IRect;
 
-pub struct CartesianProduct<L, R> {
-    left: Vec<L>,
-    right: Vec<R>,
+pub struct CartesianProduct<L, R, const N: usize, const M: usize> {
+    left: [L; N],
+    right: [R; M],
 }
 
-impl<L, R> CartesianProduct<L, R> {
-    pub fn new(left: Vec<L>, right: Vec<R>) -> CartesianProduct<L, R> {
+impl<L, R, const N: usize, const M: usize> CartesianProduct<L, R, N, M> {
+    pub fn new(left: [L; N], right: [R; M]) -> CartesianProduct<L, R, N, M> {
         CartesianProduct { left, right }
     }
 
@@ -27,7 +27,7 @@ impl<L, R> CartesianProduct<L, R> {
         IRect::new_zero_based(self.left.len() - 1, self.right.len() - 1)
     }
 
-    pub fn iter(&self) -> CartesianProductIter<L, R> {
+    pub fn iter(&self) -> CartesianProductIter<L, R, N, M> {
         CartesianProductIter {
             cartesian_product: self,
             current: IPoint2::new(0, 0),
@@ -40,12 +40,12 @@ impl<L, R> CartesianProduct<L, R> {
     }
 }
 
-pub struct CartesianProductIter<'a, L, R> {
-    cartesian_product: &'a CartesianProduct<L, R>,
+pub struct CartesianProductIter<'a, L, R, const N: usize, const M: usize> {
+    cartesian_product: &'a CartesianProduct<L, R, N, M>,
     current: IPoint2<usize>,
 }
 
-impl<'a, L, R> Iterator for CartesianProductIter<'a, L, R> {
+impl<'a, L, R, const N: usize, const M: usize> Iterator for CartesianProductIter<'a, L, R, N, M> {
     type Item = (&'a L, &'a R);
     fn next(&mut self) -> Option<Self::Item> {
         if self.current > self.cartesian_product.bounds().max_corner() {
@@ -83,15 +83,15 @@ mod test {
         // Sum of all possible products of two arithmetic progressions
         let expected_sum = |n: i32, m: i32| n * (n + 1) * m * (m + 1) / 4;
 
-        let product = CartesianProduct::new(vec![0, 1, 2, 3, 4], vec![0, 1, 2, 3, 4]);
+        let product = CartesianProduct::new([0, 1, 2, 3, 4], [0, 1, 2, 3, 4]);
         let sum = product.iter().map(|(l, r)| l * r).sum::<i32>();
         assert_eq!(sum, expected_sum(4, 4));
 
-        let product = CartesianProduct::new(vec![0, 1, 2, 3, 4, 5], vec![0, 1, 2, 3, 4]);
+        let product = CartesianProduct::new([0, 1, 2, 3, 4, 5], [0, 1, 2, 3, 4]);
         let sum = product.iter().map(|(l, r)| l * r).sum::<i32>();
         assert_eq!(sum, expected_sum(5, 4));
 
-        let product = CartesianProduct::new(vec![0, 1, 2], vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        let product = CartesianProduct::new([0, 1, 2], [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
         let sum = product.iter().map(|(l, r)| l * r).sum::<i32>();
         assert_eq!(sum, expected_sum(2, 10));
     }

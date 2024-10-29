@@ -140,39 +140,31 @@ where
     }
 }
 
-pub struct Array2D<T> {
-    data: Vec<T>,
-    dimensions: (u32, u32),
+pub struct Array2D<T, const N: usize, const M: usize> {
+    data: [[T; M]; N],
 }
 
-impl<T> Array2D<T>
+impl<T, const N: usize, const M: usize> Array2D<T, N, M>
 where
     T: Copy,
 {
-    pub fn new(dimensions: (u32, u32), initial_value: T) -> Self {
-        let array_size = dimensions.0 * dimensions.1;
+    pub fn new(initial_value: T) -> Self {
         Array2D {
-            data: vec![initial_value; array_size as usize],
-            dimensions,
+            data: [[initial_value; M]; N],
         }
     }
 
-    pub fn new_square(dimensions: u32, initial_value: T) -> Self {
-        Self::new((dimensions, dimensions), initial_value)
-    }
-
     pub fn bounds(&self) -> IRect<u32> {
-        IRect::new_zero_based(self.dimensions.0 - 1, self.dimensions.1 - 1)
+        IRect::new_zero_based(N as u32 - 1, M as u32 - 1)
     }
 
     pub fn at(&self, index: IPoint2<u32>) -> T {
-        self.data[self.compute_linear_index(index)]
+        self.data[index.i as usize][index.j as usize]
     }
 
     pub fn set_at<I: PrimInt>(&mut self, index: IPoint2<I>, value: T) {
         let converted_index = <IPoint2<u32> as From<IPoint2<I>>>::from(&index).unwrap();
-        let index = self.compute_linear_index(converted_index);
-        self.data[index] = value;
+        self.data[converted_index.i as usize][converted_index.j as usize] = value;
     }
 
     pub fn get<I: PrimInt>(&self, index: IPoint2<I>) -> Option<T> {
@@ -180,8 +172,8 @@ where
         self.bounds().contains(index).then(|| self.at(converted_index))
     }
 
-    pub fn iter(&self) -> std::slice::Iter<T> {
-        self.data.iter()
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.data.iter().flatten()
     }
 
     pub fn indexed_iter(&self) -> impl Iterator<Item = (IPoint2<u32>, &T)> {
@@ -193,16 +185,12 @@ where
         signed_bounds.iter().zip(self.iter())
     }
 
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<T> {
-        self.data.iter_mut()
+    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
+        self.data.iter_mut().flatten()
     }
 
     pub fn indexed_iter_mut(&mut self) -> impl Iterator<Item = (IPoint2<u32>, &mut T)> {
         self.bounds().iter().zip(self.iter_mut())
-    }
-
-    fn compute_linear_index(&self, index: IPoint2<u32>) -> usize {
-        self.dimensions.1 as usize * index.i as usize + index.j as usize
     }
 }
 
@@ -271,7 +259,7 @@ mod test {
 
     #[test]
     fn array_2d() {
-        let array_rect = Array2D::new_square(3, 5);
+        let array_rect: Array2D<_, 3, 3> = Array2D::new(5);
         assert_eq!(array_rect.at(IPoint2::zero()), 5);
         assert_eq!(array_rect.at(IPoint2::new(2, 2)), 5);
     }

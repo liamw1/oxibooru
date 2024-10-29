@@ -1,3 +1,4 @@
+use crate::content::signature::NUM_WORDS;
 use crate::model::enums::{MimeType, PostFlags, PostSafety, PostType, Score};
 use crate::model::tag::Tag;
 use crate::model::user::User;
@@ -175,10 +176,10 @@ pub struct PostSignature {
 }
 
 impl PostSignature {
-    pub fn find_similar(conn: &mut PgConnection, words: Vec<i32>) -> QueryResult<Vec<Self>> {
+    pub fn find_similar(conn: &mut PgConnection, words: [i32; NUM_WORDS]) -> QueryResult<Vec<Self>> {
         post_signature::table
             .select(PostSignature::as_select())
-            .filter(post_signature::words.overlaps_with(words))
+            .filter(post_signature::words.overlaps_with(words.as_slice()))
             .load(conn)
     }
 }

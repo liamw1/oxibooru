@@ -1,4 +1,5 @@
 use crate::api::ApiResult;
+use crate::content::signature::SIGNATURE_SIZE;
 use crate::content::{decode, hash, signature, thumbnail};
 use crate::filesystem;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
@@ -11,7 +12,7 @@ pub struct CachedProperties {
     pub token: String,
     pub checksum: String,
     pub md5_checksum: String,
-    pub signature: Vec<u8>,
+    pub signature: [u8; SIGNATURE_SIZE],
     pub thumbnail: DynamicImage,
     pub width: u32,
     pub height: u32,
@@ -118,13 +119,12 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
         }
         PostType::Video => decode::video_frame(&temp_path)?,
     };
-    let signature = signature::compute_signature(&image);
 
     Ok(CachedProperties {
         token,
         checksum,
         md5_checksum,
-        signature,
+        signature: signature::compute_signature(&image),
         thumbnail: thumbnail::create(&image),
         width: image.width(),
         height: image.height(),
