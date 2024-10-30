@@ -1,5 +1,5 @@
 use crate::api::ApiResult;
-use crate::content::signature::SIGNATURE_SIZE;
+use crate::content::signature::COMPRESSED_SIGNATURE_SIZE;
 use crate::content::{decode, hash, signature, thumbnail};
 use crate::filesystem;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
@@ -12,7 +12,7 @@ pub struct CachedProperties {
     pub token: String,
     pub checksum: String,
     pub md5_checksum: String,
-    pub signature: [u8; SIGNATURE_SIZE],
+    pub signature: [i64; COMPRESSED_SIGNATURE_SIZE],
     pub thumbnail: DynamicImage,
     pub width: u32,
     pub height: u32,
@@ -109,22 +109,13 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
             }
         }
     };
-
-    let image = match PostType::from(mime_type) {
-        PostType::Image | PostType::Animation => {
-            let image_format = mime_type
-                .to_image_format()
-                .expect("Mime type should be convertable to image format");
-            decode::image(&file_contents, image_format)?
-        }
-        PostType::Video => decode::video_frame(&temp_path)?,
-    };
+    let image = decode::representative_image(&file_contents, &temp_path, mime_type)?;
 
     Ok(CachedProperties {
         token,
         checksum,
         md5_checksum,
-        signature: signature::compute_signature(&image),
+        signature: signature::compute(&image),
         thumbnail: thumbnail::create(&image),
         width: image.width(),
         height: image.height(),

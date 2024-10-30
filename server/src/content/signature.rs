@@ -7,19 +7,20 @@ use image::{DynamicImage, GrayImage};
 use num_traits::ToPrimitive;
 
 pub const NUM_WORDS: usize = 100; // Number indexes to create from signature
-pub const SIGNATURE_SIZE: usize = 8 * (GRID_SIZE - 2).pow(2) + 20 * (GRID_SIZE - 2) + 12;
+pub const COMPRESSED_SIGNATURE_SIZE: usize = SIGNATURE_SIZE.div_ceil(SIGNATURE_DIGITS);
 
 /*
-    Calculates a "signature" for an image that can be used for similarity search.
+    Calculates a compact "signature" for an image that can be used for similarity search.
 
     Implementation follows H. Chi Wong, Marshall Bern and David Goldberg with a few tweaks
 */
-pub fn compute_signature(image: &DynamicImage) -> [u8; SIGNATURE_SIZE] {
+pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
     let gray_image = image.to_luma8();
     let grid_points = compute_grid_points(&gray_image);
     let mean_matrix = compute_intensity_matrix(&gray_image, &grid_points);
     let differences = compute_differences(&mean_matrix);
-    normalize(differences)
+    let signature = normalize(differences);
+    compress(signature)
 }
 
 /*
@@ -28,17 +29,31 @@ pub fn compute_signature(image: &DynamicImage) -> [u8; SIGNATURE_SIZE] {
 
     The lower the number, the more similar the two images are.
 */
-pub fn normalized_distance(signature_a: &[u8], signature_b: &[u8]) -> f64 {
+pub fn distance(
+    compressed_signature_a: [i64; COMPRESSED_SIGNATURE_SIZE],
+    compressed_signature_b: [i64; COMPRESSED_SIGNATURE_SIZE],
+) -> f64 {
+    let signature_a = uncompress(compressed_signature_a);
+    let signature_b = uncompress(compressed_signature_b);
+
     let l2_squared_distance = signature_a
         .iter()
         .zip(signature_b.iter())
-        .map(|(&a, &b)| (i64::from(a as i8), i64::from(b as i8)))
+        .map(|(&a, &b)| (i64::from(a), i64::from(b)))
         .map(|(a, b)| (a - b) * (a - b))
         .sum::<i64>();
     let l2_distance = (l2_squared_distance as f64).sqrt();
 
-    let l2_squared_norm_a: i64 = signature_a.iter().map(|&a| i64::from(a as i8)).map(|a| a * a).sum();
-    let l2_squared_norm_b: i64 = signature_b.iter().map(|&b| i64::from(b as i8)).map(|b| b * b).sum();
+    let norm_squared = |signature: [u8; SIGNATURE_SIZE]| -> i64 {
+        signature
+            .iter()
+            .map(|&a| i64::from(a) - LUMINANCE_LEVELS as i64)
+            .map(|a| a * a)
+            .sum()
+    };
+
+    let l2_squared_norm_a = norm_squared(signature_a);
+    let l2_squared_norm_b = norm_squared(signature_b);
     let denominator = (l2_squared_norm_a as f64).sqrt() + (l2_squared_norm_b as f64).sqrt();
 
     if denominator == 0.0 {
@@ -56,12 +71,13 @@ pub fn normalized_distance(signature_a: &[u8], signature_b: &[u8]) -> f64 {
     (which we then convert to an i32). The highest N trits of the u32 are reserved for storing
     the word index, where N is the number of trits required to store NUM_WORDS.
 */
-pub fn generate_indexes(signature: &[u8]) -> [i32; NUM_WORDS] {
+pub fn generate_indexes(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) -> [i32; NUM_WORDS] {
     const NUM_REDUCED_SYMBOLS: u32 = 3;
     const _: () = assert!(NUM_REDUCED_SYMBOLS % 2 == 1); // Number of reduced symbols must be odd
-    const NUM_WORD_DIGITS: u32 = NUM_WORDS.ilog(NUM_REDUCED_SYMBOLS as usize) + 1;
+    const NUM_WORD_DIGITS: u32 = NUM_WORDS.ilog(NUM_REDUCED_SYMBOLS as usize) + 1; // Number of trits it takes to store NUM_WORDS
     const _: () = assert!(NUM_LETTERS as u32 + NUM_WORD_DIGITS <= u32::MAX.ilog(NUM_REDUCED_SYMBOLS)); // Make sure that information needed can't exceed u32 trits
 
+    let signature = uncompress(compressed_signature);
     let word_positions: [usize; NUM_WORDS] = func::linspace(0, signature.len() - NUM_LETTERS);
     let words: [[u8; NUM_LETTERS]; NUM_WORDS] = core::array::from_fn(|word_index| {
         let pos = word_positions[word_index];
@@ -73,7 +89,7 @@ pub fn generate_indexes(signature: &[u8]) -> [i32; NUM_WORDS] {
         let word = words[word_index];
         let encoded_letters: u32 = word
             .iter()
-            .map(|&letter| letter as i8)
+            .map(|&letter| letter as i8 - LUMINANCE_LEVELS as i8)
             .map(|letter| letter.clamp(-CLAMP_VALUE, CLAMP_VALUE))
             .enumerate()
             .map(|(letter_index, letter)| (letter + CLAMP_VALUE) as u32 * NUM_REDUCED_SYMBOLS.pow(letter_index as u32))
@@ -82,12 +98,21 @@ pub fn generate_indexes(signature: &[u8]) -> [i32; NUM_WORDS] {
     })
 }
 
+/*
+    Converts a deserialized database signature into a non-null signature array
+*/
+pub fn from_database(database_signature: Vec<Option<i64>>) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
+    array_from_iter(database_signature.into_iter().flatten())
+}
+
 const CROP_PERCENTILE: u64 = 5;
 const GRID_SIZE: usize = 9; // Size of the square grid used to compute signature
 const IDENTICAL_TOLERANCE: i16 = 1; // Pixel intensities within this distance will be treated as identical
 const LUMINANCE_LEVELS: usize = 2; // How many shades of light/dark
 const NUM_LETTERS: usize = 12; // Length of each index
 const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS + 1; // Number of possible values letters can take
+const SIGNATURE_SIZE: usize = 8 * (GRID_SIZE - 2).pow(2) + 20 * (GRID_SIZE - 2) + 12;
+const SIGNATURE_DIGITS: usize = u64::MAX.ilog(NUM_SYMBOLS as u64) as usize - 1;
 
 type GridPoints = CartesianProduct<u32, u32, GRID_SIZE, GRID_SIZE>;
 
@@ -281,17 +306,43 @@ fn normalize(differences: [i16; SIGNATURE_SIZE]) -> [u8; SIGNATURE_SIZE] {
             .chain(light_cutoffs),
     );
 
-    let signature_iter = differences
-        .iter()
-        .map(|&diff| {
-            cutoffs
-                .iter()
-                .position(|opt_cutoff| opt_cutoff.map(|cutoff| diff <= cutoff).unwrap_or(false))
-                .expect("Expected diff to be under at least one cutoff") as i8
-        })
-        .map(|level| level - LUMINANCE_LEVELS as i8) // Map to range of [-LUMINANCE_LEVELS, LUMINANCE_LEVELS]
-        .map(|level| level as u8); // Convert to byte. Can convert back by casting back to i8
+    let signature_iter = differences.iter().map(|&diff| {
+        cutoffs
+            .iter()
+            .position(|opt_cutoff| opt_cutoff.map(|cutoff| diff <= cutoff).unwrap_or(false))
+            .expect("Expected diff to be under at least one cutoff") as u8
+    });
     array_from_iter(signature_iter)
+}
+
+fn compress(uncompressed_signature: [u8; SIGNATURE_SIZE]) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
+    let compression_iter = uncompressed_signature.chunks(SIGNATURE_DIGITS).map(|chunk| {
+        chunk
+            .iter()
+            .enumerate()
+            .map(|(letter_index, &letter)| u64::from(letter) * NUM_SYMBOLS.pow(letter_index as u32) as u64)
+            .sum::<u64>() as i64
+    });
+    array_from_iter(compression_iter)
+}
+
+fn uncompress(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) -> [u8; SIGNATURE_SIZE] {
+    let decompression_iter = compressed_signature
+        .iter()
+        .map(|&sum| sum as u64)
+        .flat_map(|mut sum| {
+            let mut word = [0; SIGNATURE_DIGITS];
+            for letter_index in (0..SIGNATURE_DIGITS).rev() {
+                let divisor = NUM_SYMBOLS.pow(letter_index as u32) as u64;
+                let letter = sum / divisor;
+
+                word[letter_index] = letter as u8;
+                sum -= letter * divisor;
+            }
+            word.into_iter()
+        })
+        .take(SIGNATURE_SIZE);
+    array_from_iter(decompression_iter)
 }
 
 #[cfg(test)]
@@ -303,16 +354,16 @@ mod test {
     #[test]
     fn image_signature_regression() {
         let image1 = image::open(asset_path(Path::new("png.png"))).unwrap();
-        let sig1 = compute_signature(&image1);
+        let sig1 = compute(&image1);
 
         let image2 = image::open(asset_path(Path::new("bmp.bmp"))).unwrap();
-        let sig2 = compute_signature(&image2);
+        let sig2 = compute(&image2);
 
         let image3 = image::open(asset_path(Path::new("jpeg.jpg"))).unwrap();
-        let sig3 = compute_signature(&image3);
+        let sig3 = compute(&image3);
 
         let image4 = image::open(asset_path(Path::new("jpeg-similar.jpg"))).unwrap();
-        let sig4 = compute_signature(&image4);
+        let sig4 = compute(&image4);
 
         // println!("");
         // println!("Distances:");
@@ -321,46 +372,46 @@ mod test {
         // println!("");
 
         // Identical images of different formats
-        assert_eq!(normalized_distance(&sig1, &sig2), 0.0);
+        assert_eq!(distance(sig1, sig2), 0.0);
         // Similar images of same format
-        assert!((normalized_distance(&sig3, &sig4) - 0.1583484677615785).abs() < 1e-8);
+        assert!((distance(sig3, sig4) - 0.1583484677615785).abs() < 1e-8);
         // Different images
-        assert!((normalized_distance(&sig1, &sig3) - 0.6990083687106061).abs() < 1e-8);
+        assert!((distance(sig1, sig3) - 0.6990083687106061).abs() < 1e-8);
     }
 
     #[test]
     fn signature_robustness() {
         let lisa = image::open(asset_path(Path::new("lisa.jpg"))).unwrap();
-        let lisa_signature = compute_signature(&lisa);
-        let lisa_indexes = generate_indexes(&lisa_signature);
+        let lisa_signature = compute(&lisa);
+        let lisa_indexes = generate_indexes(lisa_signature);
 
         let lisa_border = image::open(asset_path(Path::new("lisa-border.jpg"))).unwrap();
-        let lisa_border_signature = compute_signature(&lisa_border);
-        let lisa_border_indexes = generate_indexes(&lisa_border_signature);
+        let lisa_border_signature = compute(&lisa_border);
+        let lisa_border_indexes = generate_indexes(lisa_border_signature);
 
         let lisa_large_border = image::open(asset_path(Path::new("lisa-large_border.jpg"))).unwrap();
-        let lisa_large_border_signature = compute_signature(&lisa_large_border);
-        let lisa_large_border_indexes = generate_indexes(&lisa_large_border_signature);
+        let lisa_large_border_signature = compute(&lisa_large_border);
+        let lisa_large_border_indexes = generate_indexes(lisa_large_border_signature);
 
         let lisa_wide = image::open(asset_path(Path::new("lisa-wide.jpg"))).unwrap();
-        let lisa_wide_signature = compute_signature(&lisa_wide);
-        let lisa_wide_indexes = generate_indexes(&lisa_wide_signature);
+        let lisa_wide_signature = compute(&lisa_wide);
+        let lisa_wide_indexes = generate_indexes(lisa_wide_signature);
 
         let lisa_cat = image::open(asset_path(Path::new("lisa-cat.jpg"))).unwrap();
-        let lisa_cat_signature = compute_signature(&lisa_cat);
-        let lisa_cat_indexes = generate_indexes(&lisa_cat_signature);
+        let lisa_cat_signature = compute(&lisa_cat);
+        let lisa_cat_indexes = generate_indexes(lisa_cat_signature);
 
         let starry_night = image::open(asset_path(Path::new("starry_night.jpg"))).unwrap();
-        let starry_night_signature = compute_signature(&starry_night);
-        let starry_night_indexes = generate_indexes(&starry_night_signature);
+        let starry_night_signature = compute(&starry_night);
+        let starry_night_indexes = generate_indexes(starry_night_signature);
 
         println!("");
         println!("Distances:");
-        println!("{}", normalized_distance(&lisa_signature, &lisa_border_signature));
-        println!("{}", normalized_distance(&lisa_signature, &lisa_large_border_signature));
-        println!("{}", normalized_distance(&lisa_signature, &lisa_wide_signature));
-        println!("{}", normalized_distance(&lisa_signature, &lisa_cat_signature));
-        println!("{}", normalized_distance(&lisa_signature, &starry_night_signature));
+        println!("{}", distance(lisa_signature, lisa_border_signature));
+        println!("{}", distance(lisa_signature, lisa_large_border_signature));
+        println!("{}", distance(lisa_signature, lisa_wide_signature));
+        println!("{}", distance(lisa_signature, lisa_cat_signature));
+        println!("{}", distance(lisa_signature, starry_night_signature));
         println!("Matches:");
         println!("{}", matching_indexes(&lisa_indexes, &lisa_border_indexes));
         println!("{}", matching_indexes(&lisa_indexes, &lisa_large_border_indexes));
@@ -369,10 +420,10 @@ mod test {
         println!("{}", matching_indexes(&lisa_indexes, &starry_night_indexes));
         println!("");
 
-        assert!(normalized_distance(&lisa_signature, &lisa_border_signature) < 0.2);
-        assert!(normalized_distance(&lisa_signature, &lisa_large_border_signature) < 0.2);
-        assert!(normalized_distance(&lisa_signature, &lisa_wide_signature) < 0.3);
-        assert!(normalized_distance(&lisa_signature, &lisa_cat_signature) < 0.55);
+        assert!(distance(lisa_signature, lisa_border_signature) < 0.2);
+        assert!(distance(lisa_signature, lisa_large_border_signature) < 0.2);
+        assert!(distance(lisa_signature, lisa_wide_signature) < 0.3);
+        assert!(distance(lisa_signature, lisa_cat_signature) < 0.55);
 
         assert!(matching_indexes(&lisa_indexes, &lisa_border_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_large_border_indexes) > 0);

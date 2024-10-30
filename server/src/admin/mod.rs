@@ -18,6 +18,7 @@ pub fn run_tasks() -> usize {
             AdminTask::RecomputePostSignatures => post::recompute_signatures(&mut conn).unwrap(),
             AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(&mut conn).unwrap(),
             AdminTask::RecomputePostChecksums => post::recompute_checksums(&mut conn).unwrap(),
+            AdminTask::RegenerateThumbnail => post::regenerate_thumbnail(&mut conn).unwrap(),
         }
     }
     parsed_arguments.len()
@@ -30,6 +31,7 @@ enum AdminTask {
     RecomputePostSignatures,
     RecomputePostSignatureIndexes,
     RecomputePostChecksums,
+    RegenerateThumbnail,
 }
 
 fn error_message() -> String {

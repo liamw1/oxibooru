@@ -326,12 +326,15 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
 
         // Search for similar images
         let similar_signatures =
-            PostSignature::find_similar(conn, signature::generate_indexes(&content_properties.signature))?;
+            PostSignature::find_similar(conn, signature::generate_indexes(content_properties.signature))?;
         println!("Found {} similar signatures", similar_signatures.len());
         let mut similar_posts: Vec<_> = similar_signatures
             .into_iter()
             .filter_map(|post_signature| {
-                let distance = signature::normalized_distance(&post_signature.signature, &content_properties.signature);
+                let distance = signature::distance(
+                    content_properties.signature,
+                    signature::from_database(post_signature.signature),
+                );
                 let distance_threshold = 1.0 - config::get().post_similarity_threshold;
                 (distance < distance_threshold).then_some((post_signature.post_id, distance))
             })
@@ -420,7 +423,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         let new_post_signature = NewPostSignature {
             post_id,
             signature: &content_properties.signature,
-            words: &signature::generate_indexes(&content_properties.signature),
+            words: &signature::generate_indexes(content_properties.signature),
         };
         diesel::insert_into(post_signature::table)
             .values(new_post_signature)
@@ -558,7 +561,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
 
         // If replacing content, update post signature. This needs to be done before deletion because post signatures cascade
         if merge_info.replace_content {
-            let (signature, indexes): (Vec<u8>, Vec<Option<i32>>) = post_signature::table
+            let (signature, indexes): (Vec<Option<i64>>, Vec<Option<i32>>) = post_signature::table
                 .find(remove_id)
                 .select((post_signature::signature, post_signature::words))
                 .first(conn)?;
@@ -733,7 +736,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
             let new_post_signature = NewPostSignature {
                 post_id,
                 signature: &content_properties.signature,
-                words: &signature::generate_indexes(&content_properties.signature),
+                words: &signature::generate_indexes(content_properties.signature),
             };
             diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
             diesel::insert_into(post_signature::table)

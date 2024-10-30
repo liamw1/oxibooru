@@ -1,1 +1,2 @@
-ALTER TABLE "user" DROP CONSTRAINT "user_email_key";
+ALTER TABLE "user" 
+DROP CONSTRAINT "user_email_key";

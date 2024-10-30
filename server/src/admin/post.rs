@@ -1,6 +1,7 @@
+use crate::api::ApiResult;
 use crate::content::hash::PostHash;
-use crate::content::{decode, hash, signature};
-use crate::filesystem::{self, Directory};
+use crate::content::{decode, hash, signature, thumbnail};
+use crate::filesystem::{self, Directory, ThumbnailType};
 use crate::model::enums::MimeType;
 use crate::model::post::{NewPostSignature, PostSignature};
 use crate::schema::{post, post_signature};
@@ -75,16 +76,21 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> QueryResult<()> {
     conn.transaction(|conn| {
         let post_signatures: Vec<PostSignature> =
             post_signature::table.select(PostSignature::as_select()).load(conn)?;
-        let indexes: Vec<_> = post_signatures
-            .iter()
-            .map(|sig| signature::generate_indexes(&sig.signature))
+        let converted_signatures: Vec<_> = post_signatures
+            .into_iter()
+            .map(|post_sig| (post_sig.post_id, signature::from_database(post_sig.signature)))
             .collect();
-        let new_post_signatures: Vec<_> = post_signatures
+        let indexes: Vec<_> = converted_signatures
+            .iter()
+            .copied()
+            .map(|(_, signature)| signature::generate_indexes(signature))
+            .collect();
+        let new_post_signatures: Vec<_> = converted_signatures
             .iter()
             .zip(indexes.iter())
             .map(|(sig, words)| NewPostSignature {
-                post_id: sig.post_id,
-                signature: &sig.signature,
+                post_id: sig.0,
+                signature: &sig.1,
                 words,
             })
             .collect();
@@ -121,12 +127,6 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
 
     let posts: Vec<(i32, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
     for (post_index, (post_id, mime_type)) in posts.into_iter().enumerate() {
-        let image_format = if let Some(format) = mime_type.to_image_format() {
-            format
-        } else {
-            continue;
-        };
-
         let image_path = PostHash::new(post_id).content_path(mime_type);
         let file_content = match std::fs::read(&image_path) {
             Ok(content) => content,
@@ -136,10 +136,10 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
             }
         };
 
-        match decode::image(&file_content, image_format) {
+        match decode::representative_image(&file_content, &image_path, mime_type) {
             Ok(image) => {
-                let image_signature = signature::compute_signature(&image);
-                let signature_indexes = signature::generate_indexes(&image_signature);
+                let image_signature = signature::compute(&image);
+                let signature_indexes = signature::generate_indexes(image_signature);
                 let new_post_signature = NewPostSignature {
                     post_id,
                     signature: &image_signature,
@@ -193,6 +193,35 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
         print_progress_message(post_index, "Checksums computed");
     }
 
+    Ok(())
+}
+
+pub fn regenerate_thumbnail(conn: &mut PgConnection) -> ApiResult<()> {
+    let stdin = std::io::stdin();
+    let user_input = &mut String::new();
+
+    loop {
+        println!("Please enter the post ID you would like to generate a thumbnail for. Enter \"done\" when finished.");
+        user_input.clear();
+        stdin.read_line(user_input)?;
+
+        if user_input.trim() == "done" {
+            break;
+        }
+
+        if let Ok(post_id) = user_input.trim().parse::<i32>() {
+            let mime_type: MimeType = post::table.find(post_id).select(post::mime_type).first(conn)?;
+            let post_hash = PostHash::new(post_id);
+            let content_path = post_hash.content_path(mime_type);
+            let file_contents = std::fs::read(&content_path)?;
+
+            let thumbnail = decode::representative_image(&file_contents, &content_path, mime_type)
+                .map(|image| thumbnail::create(&image))?;
+            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailType::Generated)?;
+        } else {
+            println!("Post ID must be an integer");
+        }
+    }
     Ok(())
 }
 

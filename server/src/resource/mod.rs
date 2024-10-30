@@ -34,7 +34,7 @@ impl TagData {
 }
 
 fn check_batch_results(batch_size: usize, post_count: usize) {
-    assert!(batch_size == 0 || batch_size == post_count);
+    debug_assert!(batch_size == 0 || batch_size == post_count);
 }
 
 /*
@@ -50,13 +50,13 @@ fn order_by<T>(mut values: Vec<T>, order: &[i32]) -> Vec<T>
 where
     T: IntegerIdentifiable,
 {
-    assert_eq!(values.len(), order.len());
+    debug_assert_eq!(values.len(), order.len());
 
     let mut index = 0;
     while index < order.len() {
         let value_id = values[index].id();
         let correct_index = order.iter().position(|&id| id == value_id).unwrap();
-        assert!(correct_index >= index, "Value id is not unique");
+        debug_assert!(correct_index >= index, "Value id is not unique");
         if index != correct_index {
             values.swap(index, correct_index);
         } else {
@@ -78,7 +78,7 @@ where
     T: IntegerIdentifiable,
     F: Fn(&V) -> i32,
 {
-    assert!(unordered_values.len() <= ordered_values.len());
+    debug_assert!(unordered_values.len() <= ordered_values.len());
 
     let mut results: Vec<Option<V>> = std::iter::repeat_with(|| None).take(ordered_values.len()).collect();
     for value in unordered_values.into_iter() {

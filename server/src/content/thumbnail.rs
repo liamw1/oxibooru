@@ -1,6 +1,6 @@
 use crate::api::ApiResult;
 use crate::content::decode;
-use crate::model::enums::{MimeType, PostType};
+use crate::model::enums::MimeType;
 use crate::{config, filesystem};
 use image::DynamicImage;
 
@@ -19,15 +19,5 @@ pub fn create_from_token(token: &str) -> ApiResult<DynamicImage> {
     let (_uuid, extension) = token.split_once('.').unwrap();
     let mime_type = MimeType::from_extension(extension)?;
 
-    let image = match PostType::from(mime_type) {
-        PostType::Image | PostType::Animation => {
-            let image_format = mime_type
-                .to_image_format()
-                .expect("Mime type should be convertable to image format");
-            decode::image(&file_contents, image_format)?
-        }
-        PostType::Video => decode::video_frame(&temp_path)?,
-    };
-
-    Ok(create(&image))
+    decode::representative_image(&file_contents, &temp_path, mime_type).map(|image| create(&image))
 }

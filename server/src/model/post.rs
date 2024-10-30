@@ -161,7 +161,7 @@ pub struct PostScore {
 #[diesel(check_for_backend(Pg))]
 pub struct NewPostSignature<'a> {
     pub post_id: i32,
-    pub signature: &'a [u8],
+    pub signature: &'a [i64],
     pub words: &'a [i32],
 }
 
@@ -172,7 +172,7 @@ pub struct NewPostSignature<'a> {
 #[diesel(check_for_backend(Pg))]
 pub struct PostSignature {
     pub post_id: i32,
-    pub signature: Vec<u8>,
+    pub signature: Vec<Option<i64>>,
 }
 
 impl PostSignature {
