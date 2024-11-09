@@ -10,6 +10,7 @@ let fileTokens = {};
 let remoteConfig = null;
 let remoteConfigPromise = null;
 let postCount = 0;
+let diskUsage = 0;
 let serverTime = "";
 
 class Api extends events.EventTarget {
@@ -77,6 +78,7 @@ class Api extends events.EventTarget {
             remoteConfigPromise = this.get(uri.formatApiLink("info")).then((response) => {
                 remoteConfig = response.config;
                 postCount = response.postCount;
+                diskUsage = response.diskUsage;
                 serverTime = response.serverTime;
             });
             return remoteConfigPromise;
@@ -87,6 +89,10 @@ class Api extends events.EventTarget {
 
     getPostCount() {
         return postCount;
+    }
+
+    getDiskUsage() {
+        return diskUsage;
     }
 
     getServerTime() {

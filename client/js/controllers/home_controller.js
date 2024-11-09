@@ -22,6 +22,7 @@ class HomeController {
         api.fetchConfig().then(() => {
             this._homeView.setStats({
                 postCount: api.getPostCount(),
+                diskUsage: api.getDiskUsage(),
             });
         });
     }
