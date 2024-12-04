@@ -13,7 +13,7 @@ mod user_token;
 use crate::auth::header::{self, AuthenticationError};
 use crate::config::{self, RegexType};
 use crate::error::ErrorKind;
-use crate::model::enums::{Rating, UserRank};
+use crate::model::enums::{Rating, ResourceType, UserRank};
 use crate::model::user::User;
 use crate::time::DateTime;
 use crate::update;
@@ -90,6 +90,8 @@ pub enum Error {
     #[error("Resource needs at least one name")]
     NoNamesGiven,
     NotAnInteger(#[from] std::num::ParseIntError),
+    #[error("{0} not found")] // TODO: Generalize
+    NotFound(ResourceType),
     #[error("This action requires you to be logged in")]
     NotLoggedIn,
     #[error("Someone else modified this in the meantime. Please try again.")]
@@ -141,6 +143,7 @@ impl Error {
             Self::NoEmail => StatusCode::BAD_REQUEST,
             Self::NoNamesGiven => StatusCode::BAD_REQUEST,
             Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
+            Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::NotLoggedIn => StatusCode::FORBIDDEN,
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::Search(_) => StatusCode::BAD_REQUEST,
@@ -177,6 +180,7 @@ impl Error {
             Self::NoEmail => "No Email",
             Self::NoNamesGiven => "No Names Given",
             Self::NotAnInteger(_) => "Parse Int Error",
+            Self::NotFound(_) => "Resource Not Found",
             Self::NotLoggedIn => "Not Logged In",
             Self::ResourceModified => "Resource Modified",
             Self::Search(_) => "Search Error",

@@ -2,7 +2,7 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail;
-use crate::model::enums::{AvatarStyle, UserRank};
+use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
 use crate::schema::user;
@@ -100,15 +100,22 @@ fn get_user(username: String, auth: AuthResult, query: ResourceQuery) -> ApiResu
         let user = User::from_name(conn, &username)?;
 
         let viewing_self = client_id == Some(user.id);
+        if !viewing_self {
+            api::verify_privilege(client.as_ref(), config::privileges().user_view)?;
+        }
+
+        let user_id = user::table
+            .select(user::id)
+            .filter(user::name.eq(username))
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::User))?;
+
         let visibility = match viewing_self {
             true => Visibility::Full,
             false => Visibility::PublicOnly,
         };
-
-        if !viewing_self {
-            api::verify_privilege(client.as_ref(), config::privileges().user_view)?;
-        }
-        UserInfo::new(conn, user, &fields, visibility).map_err(api::Error::from)
+        UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from)
     })
 }
 

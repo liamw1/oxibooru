@@ -1,5 +1,6 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, UnpagedResponse};
 use crate::config::RegexType;
+use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPoolCategory, PoolCategory};
 use crate::resource::pool_category::PoolCategoryInfo;
 use crate::schema::{pool, pool_category};
@@ -69,7 +70,11 @@ fn get_pool_category(name: String, auth: AuthResult) -> ApiResult<PoolCategoryIn
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
-        let category = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
+        let category = pool_category::table
+            .filter(pool_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::PoolCategory))?;
         PoolCategoryInfo::new(conn, category).map_err(api::Error::from)
     })
 }

@@ -7,7 +7,7 @@ use image::ImageFormat;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::path::Path;
-use strum::{EnumCount, EnumString, FromRepr, IntoStaticStr};
+use strum::{Display, EnumCount, EnumString, FromRepr, IntoStaticStr};
 use thiserror::Error;
 
 /*
@@ -444,6 +444,18 @@ where
         let database_value = i16::from_sql(bytes)?;
         Score::from_repr(database_value).ok_or(DeserializeScoreError.into())
     }
+}
+
+#[derive(Debug, Display)]
+#[strum(serialize_all = "lowercase")]
+pub enum ResourceType {
+    Comment,
+    Pool,
+    PoolCategory,
+    Post,
+    Tag,
+    TagCategory,
+    User,
 }
 
 #[derive(Debug, Error)]

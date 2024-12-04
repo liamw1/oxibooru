@@ -1,10 +1,11 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, RatingRequest};
 use crate::model::comment::{NewComment, NewCommentScore};
-use crate::model::enums::Score;
+use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::CommentInfo;
 use crate::schema::{comment, comment_score};
 use crate::time::DateTime;
 use crate::{api, config, db, search};
+use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -89,8 +90,13 @@ fn get_comment(comment_id: i32, auth: AuthResult) -> ApiResult<CommentInfo> {
     api::verify_privilege(client.as_ref(), config::privileges().comment_view)?;
 
     let client_id = client.map(|user| user.id);
-    db::get_connection()?
-        .transaction(|conn| CommentInfo::new_from_id(conn, client_id, comment_id).map_err(api::Error::from))
+    db::get_connection()?.transaction(|conn| {
+        let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(conn)?;
+        if !comment_exists {
+            return Err(api::Error::NotFound(ResourceType::Comment));
+        }
+        CommentInfo::new_from_id(conn, client_id, comment_id).map_err(api::Error::from)
+    })
 }
 
 #[derive(Deserialize)]

@@ -1,10 +1,12 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::config::RegexType;
+use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::{FieldTable, PoolInfo};
 use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
+use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -103,7 +105,13 @@ fn get_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<P
     api::verify_privilege(client.as_ref(), config::privileges().pool_view)?;
 
     let fields = create_field_table(query.fields())?;
-    db::get_connection()?.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
+    db::get_connection()?.transaction(|conn| {
+        let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(conn)?;
+        if !pool_exists {
+            return Err(api::Error::NotFound(ResourceType::Pool));
+        }
+        PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from)
+    })
 }
 
 #[derive(Deserialize)]

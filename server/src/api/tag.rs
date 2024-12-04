@@ -1,4 +1,5 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
+use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
 use crate::resource::tag::{FieldTable, TagInfo};
 use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
@@ -117,7 +118,9 @@ fn get_tag(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<Ta
         let tag_id = tag_name::table
             .select(tag_name::tag_id)
             .filter(tag_name::name.eq(name))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Tag))?;
         TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from)
     })
 }

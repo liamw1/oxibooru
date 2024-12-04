@@ -4,7 +4,7 @@ use crate::api::{
 use crate::content::hash::PostHash;
 use crate::content::{cache, signature, thumbnail};
 use crate::filesystem::{Directory, ThumbnailType};
-use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, Score};
+use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
 use crate::model::post::{
     NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostRelation, PostSignature,
 };
@@ -12,6 +12,7 @@ use crate::resource::post::{FieldTable, Note, PostInfo};
 use crate::schema::{comment, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag};
 use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, search, update};
+use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -166,8 +167,13 @@ fn get_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<P
     let fields = create_field_table(query.fields())?;
     let client_id = client.map(|user| user.id);
 
-    db::get_connection()?
-        .transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
+    db::get_connection()?.transaction(|conn| {
+        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;
+        if !post_exists {
+            return Err(api::Error::NotFound(ResourceType::Post));
+        }
+        PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
+    })
 }
 
 #[derive(Serialize)]

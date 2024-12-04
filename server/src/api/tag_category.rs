@@ -1,5 +1,6 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, UnpagedResponse};
 use crate::config::RegexType;
+use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
@@ -69,7 +70,11 @@ fn get_tag_category(name: String, auth: AuthResult) -> ApiResult<TagCategoryInfo
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
-        let category = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        let category = tag_category::table
+            .filter(tag_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::TagCategory))?;
         TagCategoryInfo::new(conn, category).map_err(api::Error::from)
     })
 }

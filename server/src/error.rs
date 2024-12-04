@@ -353,6 +353,7 @@ impl ErrorKind for crate::api::Error {
             Self::MissingSmtpInfo => "MissingSmtpInfo",
             Self::NoNamesGiven => "NoNamesGiven",
             Self::NotAnInteger(err) => err.kind().kind(),
+            Self::NotFound(_) => "NotFound",
             Self::NotLoggedIn => "NotLoggedIn",
             Self::ResourceModified => "ResourceModified",
             Self::Search(err) => err.kind(),
