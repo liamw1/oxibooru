@@ -207,7 +207,7 @@ fn delete_tag_category(name: String, auth: AuthResult, client_version: DeleteReq
             .first(conn)?;
         api::verify_version(category_version, *client_version)?;
         if category_id == 0 {
-            return Err(api::Error::DeleteDefault);
+            return Err(api::Error::DeleteDefault(ResourceType::TagCategory));
         }
 
         diesel::delete(tag_category::table.find(category_id)).execute(conn)?;

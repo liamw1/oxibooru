@@ -189,7 +189,7 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
     api::verify_privilege(client.as_ref(), config::privileges().tag_create)?;
 
     if tag_info.names.is_empty() {
-        return Err(api::Error::NoNamesGiven);
+        return Err(api::Error::NoNamesGiven(ResourceType::Tag));
     }
 
     let fields = create_field_table(query.fields())?;
@@ -242,7 +242,7 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
         let (remove_id, remove_version) = get_tag_info(conn, merge_info.remove)?;
         let (merge_to_id, merge_to_version) = get_tag_info(conn, merge_info.merge_to)?;
         if remove_id == merge_to_id {
-            return Err(api::Error::SelfMerge);
+            return Err(api::Error::SelfMerge(ResourceType::Tag));
         }
         api::verify_version(remove_version, merge_info.remove_version)?;
         api::verify_version(merge_to_version, merge_info.merge_to_version)?;

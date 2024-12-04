@@ -105,6 +105,7 @@ where
 
 #[derive(
     Debug,
+    Display,
     Copy,
     Clone,
     PartialEq,
@@ -451,10 +452,16 @@ where
 pub enum ResourceType {
     Comment,
     Pool,
+    #[strum(serialize = "pool category")]
     PoolCategory,
     Post,
     Tag,
+    #[strum(serialize = "tag category")]
     TagCategory,
+    #[strum(serialize = "tag implication")]
+    TagImplication,
+    #[strum(serialize = "tag suggestion")]
+    TagSuggestion,
     User,
 }
 

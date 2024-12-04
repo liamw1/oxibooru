@@ -470,7 +470,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     let remove_id = merge_info.post_info.remove;
     let merge_to_id = merge_info.post_info.merge_to;
     if remove_id == merge_to_id {
-        return Err(api::Error::SelfMerge);
+        return Err(api::Error::SelfMerge(ResourceType::Post));
     }
     let remove_hash = PostHash::new(remove_id);
     let merge_to_hash = PostHash::new(merge_to_id);

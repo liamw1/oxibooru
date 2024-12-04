@@ -1,5 +1,6 @@
 use crate::api::ApiResult;
 use crate::config::RegexType;
+use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
 use crate::model::user::User;
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
@@ -44,7 +45,7 @@ pub fn add_implications(conn: &mut PgConnection, tag_id: i32, implied_ids: Vec<i
                     parent_id: tag_id,
                     child_id,
                 })
-                .ok_or(api::Error::CyclicDependency)
+                .ok_or(api::Error::CyclicDependency(ResourceType::TagImplication))
         })
         .collect::<Result<_, _>>()?;
     diesel::insert_into(tag_implication::table)
@@ -62,7 +63,7 @@ pub fn add_suggestions(conn: &mut PgConnection, tag_id: i32, suggested_ids: Vec<
                     parent_id: tag_id,
                     child_id,
                 })
-                .ok_or(api::Error::CyclicDependency)
+                .ok_or(api::Error::CyclicDependency(ResourceType::TagSuggestion))
         })
         .collect::<Result<_, _>>()?;
     diesel::insert_into(tag_suggestion::table)
@@ -102,7 +103,7 @@ pub fn get_or_create_tag_ids(
         all_implied_tag_ids.extend(implied_ids.iter().copied());
     }
     if detect_cyclic_dependencies && !implied_ids.is_empty() && iteration > 1 {
-        return Err(api::Error::CyclicDependency);
+        return Err(api::Error::CyclicDependency(ResourceType::TagImplication));
     }
 
     let existing_names: HashSet<String> = tag_name::table

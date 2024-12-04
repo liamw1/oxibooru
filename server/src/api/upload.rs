@@ -29,7 +29,7 @@ async fn extract_content(mut form_data: FormData) -> ApiResult<(Vec<u8>, MimeTyp
         let filename = std::path::Path::new(part.filename().unwrap_or(""));
         let extension = filename.extension().and_then(|ext| ext.to_str()).unwrap_or("");
         if MimeType::from_extension(extension) != Ok(mime_type) {
-            return Err(api::Error::ContentTypeMismatch);
+            return Err(api::Error::ContentTypeMismatch(mime_type, extension.to_owned()));
         }
 
         let data = part
@@ -39,7 +39,7 @@ async fn extract_content(mut form_data: FormData) -> ApiResult<(Vec<u8>, MimeTyp
                 Ok(acc)
             })
             .await
-            .map_err(|_| api::Error::FailedUpload)?;
+            .map_err(api::Error::from)?;
 
         return Ok((data, mime_type));
     }

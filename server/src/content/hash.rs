@@ -78,7 +78,7 @@ pub fn compute_checksum(content: &[u8]) -> String {
 
 pub fn compute_md5_checksum(content: &[u8]) -> String {
     let digest = md5::compute(content);
-    STANDARD_NO_PAD.encode(&digest.0)
+    STANDARD_NO_PAD.encode(digest.0)
 }
 
 pub fn compute_url_safe_hash(content: &str) -> String {

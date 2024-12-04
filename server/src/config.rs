@@ -5,11 +5,16 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::path::PathBuf;
 use std::sync::LazyLock;
+use strum::Display;
 
+#[derive(Debug, Display, Clone, Copy)]
+#[strum(serialize_all = "lowercase")]
 pub enum RegexType {
     Pool,
+    #[strum(serialize = "pool category")]
     PoolCategory,
     Tag,
+    #[strum(serialize = "tag category")]
     TagCategory,
     Username,
     Password,

@@ -13,7 +13,7 @@ mod user_token;
 use crate::auth::header::{self, AuthenticationError};
 use crate::config::{self, RegexType};
 use crate::error::ErrorKind;
-use crate::model::enums::{Rating, ResourceType, UserRank};
+use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
 use crate::model::user::User;
 use crate::time::DateTime;
 use crate::update;
@@ -60,21 +60,18 @@ pub enum Error {
     BadExtension(#[from] crate::model::enums::ParseExtensionError),
     BadHash(#[from] crate::auth::HashError),
     BadHeader(#[from] warp::http::header::ToStrError),
-    #[error("Request content-type did not match file extension")]
-    ContentTypeMismatch,
-    #[error("Cyclic dependency detected")]
-    CyclicDependency,
-    #[error("Cannot delete default category")]
-    DeleteDefault,
-    #[error("Expression does not match on regex")]
-    ExpressionFailsRegex,
+    #[error("Request content-type {0} did not match file extension .{1}")]
+    ContentTypeMismatch(MimeType, String),
+    #[error("Cyclic dependency detected in {0}s")]
+    CyclicDependency(ResourceType),
+    #[error("Cannot delete default {0}")]
+    DeleteDefault(ResourceType),
+    #[error("Expression does not match on {0} regex")]
+    ExpressionFailsRegex(RegexType),
     FailedAuthentication(#[from] AuthenticationError),
     FailedConnection(#[from] diesel::r2d2::PoolError),
-    #[error("Failed to send email. Reason: {0}")]
-    FailedEmailTransport(String),
+    FailedEmailTransport(#[from] lettre::transport::smtp::Error),
     FailedQuery(#[from] diesel::result::Error),
-    #[error("Upload failed")]
-    FailedUpload,
     FromStr(#[from] Box<dyn std::error::Error>),
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
@@ -87,18 +84,18 @@ pub enum Error {
     MissingSmtpInfo,
     #[error("User has no email")]
     NoEmail,
-    #[error("Resource needs at least one name")]
-    NoNamesGiven,
+    #[error("{0} needs at least one name")]
+    NoNamesGiven(ResourceType),
     NotAnInteger(#[from] std::num::ParseIntError),
-    #[error("{0} not found")] // TODO: Generalize
+    #[error("{0} not found")]
     NotFound(ResourceType),
     #[error("This action requires you to be logged in")]
     NotLoggedIn,
     #[error("Someone else modified this in the meantime. Please try again.")]
     ResourceModified,
     Search(#[from] crate::search::Error),
-    #[error("Cannot merge resource with itself")]
-    SelfMerge,
+    #[error("Cannot merge {0} with itself")]
+    SelfMerge(ResourceType),
     StdIo(#[from] std::io::Error),
     #[error("Password reset token is invalid")]
     UnauthorizedPasswordReset,
@@ -120,10 +117,10 @@ impl Error {
             Self::BadExtension(_) => StatusCode::BAD_REQUEST,
             Self::BadHash(_) => StatusCode::BAD_REQUEST,
             Self::BadHeader(_) => StatusCode::BAD_REQUEST,
-            Self::ContentTypeMismatch => StatusCode::BAD_REQUEST,
-            Self::CyclicDependency => StatusCode::BAD_REQUEST,
-            Self::DeleteDefault => StatusCode::BAD_REQUEST,
-            Self::ExpressionFailsRegex => StatusCode::BAD_GATEWAY,
+            Self::ContentTypeMismatch(..) => StatusCode::BAD_REQUEST,
+            Self::CyclicDependency(_) => StatusCode::BAD_REQUEST,
+            Self::DeleteDefault(_) => StatusCode::BAD_REQUEST,
+            Self::ExpressionFailsRegex(_) => StatusCode::BAD_GATEWAY,
             Self::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
                 AuthenticationError::FailedQuery(err) => query_error_status_code(err),
@@ -132,7 +129,6 @@ impl Error {
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedEmailTransport(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedQuery(err) => query_error_status_code(err),
-            Self::FailedUpload => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FromStr(_) => StatusCode::BAD_REQUEST,
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::InvalidEmailAddress(_) => StatusCode::BAD_REQUEST,
@@ -141,13 +137,13 @@ impl Error {
             Self::MissingFormData => StatusCode::BAD_REQUEST,
             Self::MissingSmtpInfo => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NoEmail => StatusCode::BAD_REQUEST,
-            Self::NoNamesGiven => StatusCode::BAD_REQUEST,
+            Self::NoNamesGiven(_) => StatusCode::BAD_REQUEST,
             Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::NotLoggedIn => StatusCode::FORBIDDEN,
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::Search(_) => StatusCode::BAD_REQUEST,
-            Self::SelfMerge => StatusCode::BAD_REQUEST,
+            Self::SelfMerge(_) => StatusCode::BAD_REQUEST,
             Self::StdIo(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
             Self::Utf8Conversion(_) => StatusCode::BAD_REQUEST,
@@ -161,15 +157,14 @@ impl Error {
             Self::BadExtension(_) => "Bad Extension",
             Self::BadHash(_) => "Bad Hash",
             Self::BadHeader(_) => "Bad Header",
-            Self::ContentTypeMismatch => "Content Type Mismatch",
-            Self::CyclicDependency => "Cyclic Dependency",
-            Self::DeleteDefault => "Delete Default",
-            Self::ExpressionFailsRegex => "Expression Fails Regex",
+            Self::ContentTypeMismatch(..) => "Content Type Mismatch",
+            Self::CyclicDependency(_) => "Cyclic Dependency",
+            Self::DeleteDefault(_) => "Delete Default",
+            Self::ExpressionFailsRegex(_) => "Expression Fails Regex",
             Self::FailedAuthentication(_) => "Failed Authentication",
             Self::FailedConnection(_) => "Failed Connection",
             Self::FailedEmailTransport(_) => "Failed Email Transport",
             Self::FailedQuery(_) => "Failed Query",
-            Self::FailedUpload => "Failed Upload",
             Self::FromStr(_) => "FromStr Error",
             Self::InsufficientPrivileges => "Insufficient Privileges",
             Self::InvalidEmailAddress(_) => "Invalid Email Address",
@@ -178,13 +173,13 @@ impl Error {
             Self::MissingFormData => "Missing Form Data",
             Self::MissingSmtpInfo => "Missing SMTP Info",
             Self::NoEmail => "No Email",
-            Self::NoNamesGiven => "No Names Given",
+            Self::NoNamesGiven(_) => "No Names Given",
             Self::NotAnInteger(_) => "Parse Int Error",
             Self::NotFound(_) => "Resource Not Found",
             Self::NotLoggedIn => "Not Logged In",
             Self::ResourceModified => "Resource Modified",
             Self::Search(_) => "Search Error",
-            Self::SelfMerge => "Self Merge",
+            Self::SelfMerge(_) => "Self Merge",
             Self::StdIo(_) => "IO Error",
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
             Self::Utf8Conversion(_) => "Utf8 Conversion Error",
@@ -212,7 +207,7 @@ pub fn verify_matches_regex(haystack: &str, regex_type: RegexType) -> ApiResult<
     config::regex(regex_type)
         .is_match(haystack)
         .then_some(())
-        .ok_or(Error::ExpressionFailsRegex)
+        .ok_or(Error::ExpressionFailsRegex(regex_type))
 }
 
 pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::AddressError> {
@@ -223,15 +218,6 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
 }
 
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> + Clone {
-    // let catch_body = warp::put()
-    //     .and(warp::body::bytes())
-    //     .map(|body: warp::hyper::body::Bytes| {
-    //         eprintln!("Bad request with body");
-    //         if let Ok(body_string) = std::str::from_utf8(&body) {
-    //             eprintln!("{body_string}");
-    //         }
-    //         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
-    //     });
     let catch_all = warp::any().map(|| {
         eprintln!("No endpoint for request!");
         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)

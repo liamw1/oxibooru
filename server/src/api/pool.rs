@@ -129,7 +129,7 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
     api::verify_privilege(client.as_ref(), config::privileges().pool_create)?;
 
     if pool_info.names.is_empty() {
-        return Err(api::Error::NoNamesGiven);
+        return Err(api::Error::NoNamesGiven(ResourceType::Pool));
     }
     pool_info
         .names
@@ -168,7 +168,7 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
     let remove_id = merge_info.remove;
     let merge_to_id = merge_info.merge_to;
     if remove_id == merge_to_id {
-        return Err(api::Error::SelfMerge);
+        return Err(api::Error::SelfMerge(ResourceType::Pool));
     }
 
     let fields = create_field_table(query.fields())?;

@@ -70,10 +70,7 @@ fn request_reset(identifier: String) -> ApiResult<()> {
         .build();
 
     // Send the email
-    match mailer.send(&email) {
-        Ok(_) => Ok(()),
-        Err(err) => Err(api::Error::FailedEmailTransport(err.to_string())),
-    }
+    mailer.send(&email).map(|_| ()).map_err(api::Error::from)
 }
 
 #[derive(Deserialize)]
