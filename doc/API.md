@@ -417,21 +417,23 @@ data.
 
     **Named tokens**
 
-    | `<key>`             | Description                               |
-    | ------------------- | ----------------------------------------- |
-    | `name`              | having given name (accepts wildcards)     |
-    | `category`          | having given category (accepts wildcards) |
-    | `creation-date`     | created at given date                     |
-    | `creation-time`     | alias of `creation-date`                  |
-    | `last-edit-date`    | edited at given date                      |
-    | `last-edit-time`    | alias of `last-edit-date`                 |
-    | `edit-date`         | alias of `last-edit-date`                 |
-    | `edit-time`         | alias of `last-edit-date`                 |
-    | `usages`            | used in given number of posts             |
-    | `usage-count`       | alias of `usages`                         |
-    | `post-count`        | alias of `usages`                         |
-    | `suggestion-count`  | with given number of suggestions          |
-    | `implication-count` | with given number of implications         |
+    | `<key>`             | Description                                                   |
+    | ------------------- | ------------------------------------------------------------- |
+    | `name`              | having given name (accepts wildcards)                         |
+    | `category`          | having given category (accepts wildcards)                     |
+    | `creation-date`     | created at given date                                         |
+    | `creation-time`     | alias of `creation-date`                                      |
+    | `last-edit-date`    | edited at given date                                          |
+    | `last-edit-time`    | alias of `last-edit-date`                                     |
+    | `edit-date`         | alias of `last-edit-date`                                     |
+    | `edit-time`         | alias of `last-edit-date`                                     |
+    | `usages`            | used in given number of posts                                 |
+    | `usage-count`       | alias of `usages`                                             |
+    | `post-count`        | alias of `usages`                                             |
+    | `suggestion-count`  | with given number of suggestions                              |
+    | `implication-count` | with given number of implications                             |
+    | `has-implication`   | having an implication with the given name (accepts wildcards) |
+    | `has-suggestion`    | having a suggestion with the given name (accepts wildcards)   |
 
     **Sort style tokens**
 
@@ -451,6 +453,8 @@ data.
     | `post-count`        | alias of `usages`            |
     | `suggestion-count`  | with most suggestions first  |
     | `implication-count` | with most implications first |
+    | `has-implication`   | alias of `implication-count` |
+    | `has-suggestion`    | alias of `suggestion-count`  |
 
     **Special tokens**
 

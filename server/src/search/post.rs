@@ -233,7 +233,6 @@ pub fn get_ordered_ids(
         Token::ImageAspectRatio => finalize!(query, post::width / post::height, sort, extra_args).load(conn),
         Token::Safety => finalize!(query, post::safety, sort, extra_args).load(conn),
         Token::Type => finalize!(query, post::type_, sort, extra_args).load(conn),
-        Token::ContentChecksum => panic!("{INVALID_SORT_ERROR}"),
         Token::CreationTime => finalize!(query, post::creation_time, sort, extra_args).load(conn),
         Token::LastEditTime => finalize!(query, post::last_edit_time, sort, extra_args).load(conn),
 
@@ -242,11 +241,9 @@ pub fn get_ordered_ids(
             Diesel's annoying restrictions around dynamic queries. If you could call .grouped_by
             on a boxed query, the implementation could be so much nicer.
         */
-        Token::Tag => tag_count_sorted(conn, query, sort, extra_args),
+        Token::Tag | Token::TagCount => tag_count_sorted(conn, query, sort, extra_args),
         Token::Uploader => uploader_sorted(conn, query, sort, extra_args),
         Token::Pool => pool_sorted(conn, query, sort, extra_args),
-        Token::NoteText => panic!("{INVALID_SORT_ERROR}"),
-        Token::TagCount => tag_count_sorted(conn, query, sort, extra_args),
         Token::CommentCount => comment_count_sorted(conn, query, sort, extra_args),
         Token::RelationCount => relation_count_sorted(conn, query, sort, extra_args),
         Token::NoteCount => note_count_sorted(conn, query, sort, extra_args),
@@ -255,7 +252,7 @@ pub fn get_ordered_ids(
         Token::CommentTime => comment_time_sorted(conn, query, sort, extra_args),
         Token::FavTime => favorite_time_sorted(conn, query, sort, extra_args),
         Token::FeatureTime => feature_time_sorted(conn, query, sort, extra_args),
-        Token::Special => panic!("{INVALID_SORT_ERROR}"),
+        Token::ContentChecksum | Token::NoteText | Token::Special => panic!("{INVALID_SORT_ERROR}"),
     }
 }
 

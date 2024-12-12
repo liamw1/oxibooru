@@ -29,6 +29,8 @@ pub enum Token {
     UsageCount,
     ImplicationCount,
     SuggestionCount,
+    HasImplication,
+    HasSuggestion,
 }
 
 pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Token>, Error> {
@@ -82,6 +84,22 @@ pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<Box
                 apply_having_clause!(tag_suggestions, count(tag_suggestion::child_id), filter)
                     .map(|subquery| query.filter(tag::id.eq_any(subquery)))
             }
+            Token::HasImplication => {
+                let implications = tag_implication::table
+                    .select(tag_implication::parent_id)
+                    .inner_join(tag_name::table.on(tag_implication::child_id.eq(tag_name::tag_id)))
+                    .into_boxed();
+                let subquery = apply_str_filter!(implications, tag_name::name, filter.unnegated());
+                Ok(apply_subquery_filter!(query, tag::id, filter, subquery))
+            }
+            Token::HasSuggestion => {
+                let suggestions = tag_suggestion::table
+                    .select(tag_suggestion::parent_id)
+                    .inner_join(tag_name::table.on(tag_suggestion::child_id.eq(tag_name::tag_id)))
+                    .into_boxed();
+                let subquery = apply_str_filter!(suggestions, tag_name::name, filter.unnegated());
+                Ok(apply_subquery_filter!(query, tag::id, filter, subquery))
+            }
         })
 }
 
@@ -112,8 +130,8 @@ pub fn get_ordered_ids(
         Token::Name => name_sorted(conn, query, sort, extra_args),
         Token::Category => category_sorted(conn, query, sort, extra_args),
         Token::UsageCount => usage_count_sorted(conn, query, sort, extra_args),
-        Token::ImplicationCount => implication_count_sorted(conn, query, sort, extra_args),
-        Token::SuggestionCount => suggestion_count_sorted(conn, query, sort, extra_args),
+        Token::ImplicationCount | Token::HasImplication => implication_count_sorted(conn, query, sort, extra_args),
+        Token::SuggestionCount | Token::HasSuggestion => suggestion_count_sorted(conn, query, sort, extra_args),
     }
 }
 
