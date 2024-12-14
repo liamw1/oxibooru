@@ -76,9 +76,7 @@ pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Tok
     let criteria = SearchCriteria::new(search_criteria, Token::Tag).map_err(Box::from)?;
     for sort in criteria.sorts.iter() {
         match sort.kind {
-            Token::ContentChecksum => return Err(Error::InvalidSort),
-            Token::NoteText => return Err(Error::InvalidSort),
-            Token::Special => return Err(Error::InvalidSort),
+            Token::ContentChecksum | Token::NoteText | Token::Special => return Err(Error::InvalidSort),
             _ => (),
         }
     }
@@ -223,7 +221,6 @@ pub fn get_ordered_ids(
         order: Order::default(),
     });
 
-    const INVALID_SORT_ERROR: &str = "Invalid sort-style token!";
     match sort.kind {
         Token::Id => finalize!(query, post::id, sort, extra_args).load(conn),
         Token::FileSize => finalize!(query, post::file_size, sort, extra_args).load(conn),
@@ -252,7 +249,7 @@ pub fn get_ordered_ids(
         Token::CommentTime => comment_time_sorted(conn, query, sort, extra_args),
         Token::FavTime => favorite_time_sorted(conn, query, sort, extra_args),
         Token::FeatureTime => feature_time_sorted(conn, query, sort, extra_args),
-        Token::ContentChecksum | Token::NoteText | Token::Special => panic!("{INVALID_SORT_ERROR}"),
+        Token::ContentChecksum | Token::NoteText | Token::Special => panic!("Invalid sort-style token!"),
     }
 }
 

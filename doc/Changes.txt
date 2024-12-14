@@ -1,4 +1,4 @@
-This is a brief list of improvements I've made to the functionality of the backend as I'm doing my rewrite:
+This is a brief list of changes I've made to the functionality of the backend as I'm doing my rewrite:
 
     1. Improved reverse search indexing
         The image signature generation paper has a significant flaw. The main idea of the algorithm
@@ -35,3 +35,5 @@ This is a brief list of improvements I've made to the functionality of the backe
     4. Getting around posts now respects sorting
 
     5. Expanded set of post sort-style tokens
+
+    6. Added has-implication and has-suggestion tag named tokens

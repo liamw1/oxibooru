@@ -12,9 +12,9 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 
 FROM chef AS builder
-COPY --from=planner /opt/app/recipe.json recipe.json
 # FFmpeg dependencies
 RUN apt-get update && apt-get install -y clang libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev pkg-config
+COPY --from=planner /opt/app/recipe.json recipe.json
 # Build dependencies - this is the caching Docker layer!
 RUN cargo chef cook --release --recipe-path recipe.json
 # Build application
@@ -28,19 +28,19 @@ WORKDIR /opt/app
 ENV RUST_BACKTRACE=full
 ENV DOCKER_DEPLOYMENT=1
 
-COPY --from=builder /opt/app/target/release/server server
-COPY --from=builder /opt/app/config.toml config.toml
-
 ARG PUID=1000
 ARG PGID=1000
 
-# Dynamic libs needed at runtime -- can these be cached somehow?
+# Dynamic libs needed at runtime
 RUN apt-get update && apt-get install -y libpq5 libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
 
 RUN mkdir -p /opt/app /data \
- && groupadd -g ${PGID} app \
- && useradd -u ${PUID} -g ${PGID} -ms /bin/bash app \
- && chown -R app:app /opt/app /data
+  && groupadd -g ${PGID} app \
+  && useradd -u ${PUID} -g ${PGID} -ms /bin/bash app \
+  && chown -R app:app /opt/app /data
+
+COPY --from=builder /opt/app/target/release/server server
+COPY --from=builder /opt/app/config.toml config.toml
 
 USER app
 CMD ["/opt/app/server"]
