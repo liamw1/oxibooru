@@ -25,19 +25,12 @@ impl<T: PrimInt> Interval<T> {
         self.end - T::one()
     }
 
-    pub fn start(self) -> T {
-        self.start
-    }
-
-    pub fn end(self) -> T {
-        self.end
-    }
-
     pub fn length(self) -> T {
         let len = self.end - self.start;
         std::cmp::max(len, T::zero())
     }
 
+    #[cfg(test)]
     pub fn is_empty_set(self) -> bool {
         self.start >= self.end
     }

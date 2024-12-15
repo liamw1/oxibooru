@@ -1,4 +1,4 @@
-use crate::math::{From, SignedCast, UnsignedCast};
+use crate::math::{From, SignedCast};
 use num_traits::int::PrimInt;
 use std::num::TryFromIntError;
 
@@ -13,6 +13,7 @@ impl<T: PrimInt> IPoint2<T> {
         Self { i, j }
     }
 
+    #[cfg(test)]
     pub fn zero() -> Self {
         Self::new(T::zero(), T::zero())
     }
@@ -26,18 +27,6 @@ where
     pub fn to_signed(self) -> Result<IPoint2<U::Signed>, TryFromIntError> {
         let i = self.i.to_signed()?;
         let j = self.j.to_signed()?;
-        Ok(IPoint2::new(i, j))
-    }
-}
-
-impl<S> IPoint2<S>
-where
-    S: PrimInt + UnsignedCast,
-    <S as UnsignedCast>::Unsigned: PrimInt,
-{
-    pub fn to_unsigned(self) -> Result<IPoint2<S::Unsigned>, TryFromIntError> {
-        let i = self.i.to_unsigned()?;
-        let j = self.j.to_unsigned()?;
         Ok(IPoint2::new(i, j))
     }
 }

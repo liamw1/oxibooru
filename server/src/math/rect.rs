@@ -22,11 +22,6 @@ impl<T: PrimInt> IRect<T> {
         Self::new(i_bounds, j_bounds)
     }
 
-    pub fn new_zero_based_square(max: T) -> Self {
-        let bounds = Interval::new(T::zero(), max);
-        Self::new(bounds, bounds)
-    }
-
     pub fn new_centered_square(center: IPoint2<T>, radius: T) -> Self {
         let i_bounds = Interval::new(center.i - radius, center.i + radius);
         let j_bounds = Interval::new(center.j - radius, center.j + radius);
@@ -43,12 +38,9 @@ impl<T: PrimInt> IRect<T> {
         Self::new(i_bounds, j_bounds)
     }
 
+    #[cfg(test)]
     pub fn is_empty_set(&self) -> bool {
         self.i_bounds.is_empty_set() || self.j_bounds.is_empty_set()
-    }
-
-    pub fn extents(&self) -> IPoint2<T> {
-        IPoint2::new(self.i_bounds.length(), self.j_bounds.length())
     }
 
     pub fn total_points(&self) -> Option<u64> {
@@ -176,21 +168,9 @@ where
         self.data.iter().flatten()
     }
 
-    pub fn indexed_iter(&self) -> impl Iterator<Item = (IPoint2<u32>, &T)> {
-        self.bounds().iter().zip(self.iter())
-    }
-
     pub fn signed_indexed_iter(&self) -> impl Iterator<Item = (IPoint2<i32>, &T)> {
         let signed_bounds = self.bounds().to_signed().unwrap();
         signed_bounds.iter().zip(self.iter())
-    }
-
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut T> {
-        self.data.iter_mut().flatten()
-    }
-
-    pub fn indexed_iter_mut(&mut self) -> impl Iterator<Item = (IPoint2<u32>, &mut T)> {
-        self.bounds().iter().zip(self.iter_mut())
     }
 }
 
