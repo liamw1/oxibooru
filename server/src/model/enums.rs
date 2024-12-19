@@ -10,13 +10,11 @@ use std::path::Path;
 use strum::{Display, EnumCount, EnumString, FromRepr, IntoStaticStr};
 use thiserror::Error;
 
-/*
-    In general, the order of these enums should not be changed.
-    They are encoded in the database as an integer, so changing
-    the underlying representation of an enum changes its meaning.
-
-    New enum variants should therefore always be appended at the end.
-*/
+/// In general, the order of these enums should not be changed.
+/// They are encoded in the database as an integer, so changing
+/// the underlying representation of an enum changes its meaning.
+///
+/// New enum variants should therefore always be appended at the end.
 
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("{extenstion} is not a supported file extension")]

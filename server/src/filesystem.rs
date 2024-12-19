@@ -1,5 +1,6 @@
 use crate::config;
 use crate::content::hash::{self, PostHash};
+use crate::content::thumbnail::ThumbnailCategory;
 use crate::model::enums::MimeType;
 use image::{DynamicImage, ImageResult};
 use std::ffi::OsStr;
@@ -8,6 +9,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::LazyLock;
 use uuid::Uuid;
 
+/// Represents important data directories.
 pub enum Directory {
     Posts,
     GeneratedThumbnails,
@@ -16,15 +18,12 @@ pub enum Directory {
     TemporaryUploads,
 }
 
-pub enum ThumbnailType {
-    Generated,
-    Custom,
-}
-
+/// Returns absolute path to the specified `directory`.
 pub fn path(directory: Directory) -> &'static Path {
     Path::new(as_str(directory))
 }
 
+/// Returns absolute path to the specified `directory` as a str.
 pub fn as_str(directory: Directory) -> &'static str {
     match directory {
         Directory::Posts => &POSTS_DIRECTORY,
@@ -35,10 +34,13 @@ pub fn as_str(directory: Directory) -> &'static str {
     }
 }
 
+/// Creates a path to a temporary upload with the given `filename`.
 pub fn temporary_upload_filepath(filename: &str) -> PathBuf {
     format!("{}/temporary-uploads/{}", config::data_dir(), filename).into()
 }
 
+/// Saves raw bytes to temporary upload folder as a `mime_type`-file to disk.
+/// Returns name of the file written.
 pub fn save_uploaded_file(data: Vec<u8>, mime_type: MimeType) -> std::io::Result<String> {
     let upload_token = format!("{}.{}", Uuid::new_v4(), mime_type.extension());
     let upload_path = temporary_upload_filepath(&upload_token);
@@ -49,6 +51,7 @@ pub fn save_uploaded_file(data: Vec<u8>, mime_type: MimeType) -> std::io::Result
     Ok(upload_token)
 }
 
+/// Saves custom avatar `thumbnail` for user with name `username` to disk.
 pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResult<()> {
     assert_eq!(thumbnail.width(), config::get().thumbnails.avatar_width);
     assert_eq!(thumbnail.height(), config::get().thumbnails.avatar_height);
@@ -63,6 +66,7 @@ pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResul
     Ok(())
 }
 
+/// Deletes custom avatar for user with name `username` from disk.
 pub fn delete_custom_avatar(username: &str) -> std::io::Result<()> {
     let custom_avatar_path = hash::custom_avatar_path(username);
     custom_avatar_path
@@ -71,16 +75,21 @@ pub fn delete_custom_avatar(username: &str) -> std::io::Result<()> {
         .unwrap_or(Ok(()))
 }
 
-pub fn save_post_thumbnail(post: &PostHash, thumbnail: DynamicImage, thumbnail_type: ThumbnailType) -> ImageResult<()> {
+/// Saves `post` `thumbnail` to disk. Can be custom or automatically generated.
+pub fn save_post_thumbnail(
+    post: &PostHash,
+    thumbnail: DynamicImage,
+    thumbnail_type: ThumbnailCategory,
+) -> ImageResult<()> {
     assert_eq!(thumbnail.width(), config::get().thumbnails.post_height);
     assert_eq!(thumbnail.height(), config::get().thumbnails.post_height);
 
     let thumbnail_path = match thumbnail_type {
-        ThumbnailType::Generated => {
+        ThumbnailCategory::Generated => {
             create_dir(Directory::GeneratedThumbnails)?;
             post.generated_thumbnail_path()
         }
-        ThumbnailType::Custom => {
+        ThumbnailCategory::Custom => {
             create_dir(Directory::CustomThumbnails)?;
             post.custom_thumbnail_path()
         }
@@ -93,10 +102,12 @@ pub fn save_post_thumbnail(post: &PostHash, thumbnail: DynamicImage, thumbnail_t
     Ok(())
 }
 
-pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailType) -> std::io::Result<()> {
+/// Deletes thumbnail of `post` from disk.
+/// Returns error if thumbnail does not exist and `thumbnail_type` is [ThumbnailType::Generated].
+pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailCategory) -> std::io::Result<()> {
     match thumbnail_type {
-        ThumbnailType::Generated => remove_file(&post.generated_thumbnail_path()),
-        ThumbnailType::Custom => {
+        ThumbnailCategory::Generated => remove_file(&post.generated_thumbnail_path()),
+        ThumbnailCategory::Custom => {
             let custom_thumbnail_path = post.custom_thumbnail_path();
             custom_thumbnail_path
                 .exists()
@@ -106,28 +117,30 @@ pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailType) -> 
     }
 }
 
+/// Deletes `post` content from disk.
 pub fn delete_content(post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
     let content_path = post.content_path(mime_type);
     remove_file(&content_path)
 }
 
+/// Deletes `post` thumbnails and content from disk.
 pub fn delete_post(post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
-    delete_post_thumbnail(post, ThumbnailType::Generated)?;
-    delete_post_thumbnail(post, ThumbnailType::Custom)?;
+    delete_post_thumbnail(post, ThumbnailCategory::Generated)?;
+    delete_post_thumbnail(post, ThumbnailCategory::Custom)?;
     delete_content(post, mime_type)
 }
 
-/*
-    Renames the contents and thumbnails of two posts as if they had swapped ids.
-*/
+/// Renames the contents and thumbnails of two posts as if they had swapped ids.
 pub fn swap_posts(
     post_a: &PostHash,
     mime_type_a: MimeType,
     post_b: &PostHash,
     mime_type_b: MimeType,
 ) -> std::io::Result<()> {
+    // No special cases needed here because generated thumbnails always exists and their type is always .jpg
     swap_files(&post_a.generated_thumbnail_path(), &post_b.generated_thumbnail_path())?;
 
+    // Handle the four distinct cases of custom thumbnails existing/not existing
     let custom_thumbnail_path_a = post_a.custom_thumbnail_path();
     let custom_thumbnail_path_b = post_b.custom_thumbnail_path();
     match (custom_thumbnail_path_a.exists(), custom_thumbnail_path_b.exists()) {
@@ -137,6 +150,7 @@ pub fn swap_posts(
         (false, false) => (),
     }
 
+    // Contents can have same MIME type or different MIME types
     let old_image_path_a = post_a.content_path(mime_type_a);
     let old_image_path_b = post_b.content_path(mime_type_b);
     if mime_type_a == mime_type_b {
@@ -147,10 +161,8 @@ pub fn swap_posts(
     }
 }
 
-/*
-    Creates a directory or does nothing if it already exists.
-    If no error occured, returns whether a directory was created.
-*/
+/// Creates `directory` or does nothing if it already exists.
+/// Returns whether `directory` was created, or an error if one occured.
 pub fn create_dir(directory: Directory) -> std::io::Result<bool> {
     let path = path(directory);
     match path.exists() {
@@ -159,6 +171,7 @@ pub fn create_dir(directory: Directory) -> std::io::Result<bool> {
     }
 }
 
+/// Deletes everything in the temporary uploads directory.
 pub fn purge_temporary_uploads() -> std::io::Result<()> {
     let temp_path = path(Directory::TemporaryUploads);
     if !temp_path.exists() {
@@ -171,6 +184,9 @@ pub fn purge_temporary_uploads() -> std::io::Result<()> {
     Ok(())
 }
 
+/// Returns total size of the data directory.
+/// This can take a significant amount of time, so we cache this value and update it with atomics after
+/// it's called for the first time.
 pub fn data_size() -> std::io::Result<u64> {
     Ok(match DATA_SIZE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst) {
         Ok(_) => DATA_SIZE.fetch_add(calculate_directory_size(Path::new(config::data_dir()))?, Ordering::SeqCst),
@@ -188,6 +204,7 @@ static CUSTOM_AVATARS_DIRECTORY: LazyLock<String> = LazyLock::new(|| format!("{}
 static TEMPORARY_UPLOADS_DIRECTORY: LazyLock<String> =
     LazyLock::new(|| format!("{}/temporary-uploads", config::data_dir()));
 
+/// Removes a single file and updates the DATA_SIZE variable.
 fn remove_file(path: &Path) -> std::io::Result<()> {
     let file_size = std::fs::metadata(path)?.len();
     std::fs::remove_file(path)?;
@@ -196,6 +213,7 @@ fn remove_file(path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// Swaps the names of two files.
 fn swap_files(file_a: &Path, file_b: &Path) -> std::io::Result<()> {
     let temp_path =
         Path::new(TEMPORARY_UPLOADS_DIRECTORY.as_str()).join(file_a.file_name().unwrap_or(OsStr::new("post.tmp")));
@@ -204,6 +222,8 @@ fn swap_files(file_a: &Path, file_b: &Path) -> std::io::Result<()> {
     std::fs::rename(temp_path, file_b)
 }
 
+/// Returns the size of the directory at the given `path`, recursively.
+/// Can take a long time for large directories.
 fn calculate_directory_size(path: &Path) -> std::io::Result<u64> {
     if !path.exists() {
         return Ok(0);

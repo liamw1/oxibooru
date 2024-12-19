@@ -1,5 +1,6 @@
 use num_traits::PrimInt;
 
+/// Returns a linearly spaced vector on the interval \[`start`, `end`\].
 pub fn linspace<T: PrimInt, const N: usize>(start: T, end: T) -> [T; N] {
     let start_f64 = start.to_f64().unwrap();
     let end_f64 = end.to_f64().unwrap();

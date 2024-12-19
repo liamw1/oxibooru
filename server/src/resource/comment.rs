@@ -10,7 +10,7 @@ use diesel::prelude::*;
 use serde::Serialize;
 use std::collections::HashMap;
 
-// No field selecting for comments
+/// No field selecting for comments
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

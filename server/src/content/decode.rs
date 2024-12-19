@@ -7,6 +7,9 @@ use video_rs::ffmpeg::format::Pixel;
 use video_rs::ffmpeg::media::Type;
 use video_rs::Decoder;
 
+/// Returns a representative image for the given content.
+/// For images, this is simply the decoded image.
+/// For videos, it is the first frame of the video.
 pub fn representative_image(file_contents: &[u8], file_path: &Path, content_type: MimeType) -> ApiResult<DynamicImage> {
     match PostType::from(content_type) {
         PostType::Image | PostType::Animation => {
@@ -19,15 +22,14 @@ pub fn representative_image(file_contents: &[u8], file_path: &Path, content_type
     }
 }
 
+/// Returns if the video at `path` has an audio channel.
 pub fn has_audio(path: &Path) -> Result<bool, video_rs::Error> {
     video_rs::ffmpeg::format::input(path)
         .map(|context| context.streams().best(Type::Audio).is_some())
         .map_err(video_rs::Error::from)
 }
 
-/*
-    Decodes a raw array of bytes into pixel data.
-*/
+/// Decodes a raw array of bytes into pixel data.
 fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
     let mut reader = ImageReader::new(Cursor::new(bytes));
     reader.set_format(format);
@@ -35,9 +37,7 @@ fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
     reader.decode()
 }
 
-/*
-    Decodes first frame of video contents
-*/
+/// Decodes first frame of video contents.
 fn video_frame(path: &Path) -> Result<DynamicImage, video_rs::Error> {
     let mut decoder = Decoder::new(path)?;
     let frame = decoder.decode_raw()?;

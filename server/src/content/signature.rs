@@ -9,11 +9,9 @@ use num_traits::ToPrimitive;
 pub const NUM_WORDS: usize = 100; // Number indexes to create from signature
 pub const COMPRESSED_SIGNATURE_SIZE: usize = SIGNATURE_SIZE.div_ceil(SIGNATURE_DIGITS);
 
-/*
-    Calculates a compact "signature" for an image that can be used for similarity search.
-
-    Implementation follows H. Chi Wong, Marshall Bern and David Goldberg with a few tweaks
-*/
+/// Calculates a compact "signature" for an image that can be used for similarity search.
+///
+/// Implementation follows H. Chi Wong, Marshall Bern and David Goldberg with a few tweaks
 pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
     let gray_image = image.to_luma8();
     let grid_points = compute_grid_points(&gray_image);
@@ -23,12 +21,10 @@ pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
     compress(signature)
 }
 
-/*
-    Computes a "distance" between two images based on their signatures.
-    Result is a number in the interval [0, 1].
-
-    The lower the number, the more similar the two images are.
-*/
+/// Computes a "distance" between two images based on their signatures.
+/// Result is a number in the interval [0, 1].
+///
+/// The lower the number, the more similar the two images are.
 pub fn distance(
     compressed_signature_a: [i64; COMPRESSED_SIGNATURE_SIZE],
     compressed_signature_b: [i64; COMPRESSED_SIGNATURE_SIZE],
@@ -63,14 +59,12 @@ pub fn distance(
     }
 }
 
-/*
-    Creates a set of indices from an image signature.
-    The signature is divided into a set intervals called words, which are allowed to overlap.
-    The "letters" of each word are values in the image signature, clamped between [-1, 1].
-    Therefore, each word can be represented by a number in base-3, which we encode into an u32
-    (which we then convert to an i32). The highest N trits of the u32 are reserved for storing
-    the word index, where N is the number of trits required to store NUM_WORDS.
-*/
+/// Creates a set of indices from an image signature.
+/// The signature is divided into a set intervals called words, which are allowed to overlap.
+/// The "letters" of each word are values in the image signature, clamped between [-1, 1].
+/// Therefore, each word can be represented by a number in base-3, which we encode into an u32
+/// (which we then convert to an i32). The highest N trits of the u32 are reserved for storing
+/// the word index, where N is the number of trits required to store NUM_WORDS.
 pub fn generate_indexes(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) -> [i32; NUM_WORDS] {
     const NUM_REDUCED_SYMBOLS: u32 = 3;
     const _: () = assert!(NUM_REDUCED_SYMBOLS % 2 == 1); // Number of reduced symbols must be odd
@@ -98,9 +92,7 @@ pub fn generate_indexes(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) 
     })
 }
 
-/*
-    Converts a deserialized database signature into a non-null signature array
-*/
+/// Converts a deserialized database signature into a non-null signature array
 pub fn from_database(database_signature: Vec<Option<i64>>) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
     array_from_iter(database_signature.into_iter().flatten())
 }
@@ -256,12 +248,10 @@ fn compute_intensity_matrix(image: &GrayImage, grid_points: &GridPoints) -> Arra
     intensity_matrix
 }
 
-/*
-    The original paper describes computing the differences of each grid square with its neighbors.
-    Grids squares on the boundaries of the 9x9 grid will have no neighbors, so differences between them
-    are considered 0. However, I would think that this would increase the likelihood of random
-    signatures matching on certain words. I've simply excluded these differences from the final signature.
-*/
+/// The original paper describes computing the differences of each grid square with its neighbors.
+/// Grids squares on the boundaries of the 9x9 grid will have no neighbors, so differences between them
+/// are considered 0. However, I would think that this would increase the likelihood of random
+/// signatures matching on certain words. I've simply excluded these differences from the final signature.
 fn compute_differences(intensity_matrix: &Array2D<u8, GRID_SIZE, GRID_SIZE>) -> [i16; SIGNATURE_SIZE] {
     let difference_iter = intensity_matrix
         .signed_indexed_iter()

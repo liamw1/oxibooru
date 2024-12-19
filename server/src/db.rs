@@ -5,17 +5,18 @@ use diesel::result::Error;
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::sync::LazyLock;
 
+/// Returns a connection to the database from a connection pool.
 pub fn get_connection() -> Result<PooledConnection<ConnectionManager<PgConnection>>, PoolError> {
     CONNECTION_POOL.get()
 }
 
+/// Runs embedded migrations on the database. Used to update database for end-users who don't build server themselves.
+/// Doesn't perform any error handling, as this is meant to be run once on application start.
 pub fn run_migrations() {
     get_connection().unwrap().run_pending_migrations(MIGRATIONS).unwrap();
 }
 
-/*
-    Executes function in a transaction and retries if it fails due to a deadlock.
-*/
+/// Executes `function` in a transaction and retries up to `max_retries` times if it fails due to a deadlock.
 pub fn deadlock_prone_transaction<T, E, F>(conn: &mut PgConnection, max_retries: u32, function: F) -> Result<T, E>
 where
     F: Fn(&mut PgConnection) -> Result<T, E>,

@@ -5,6 +5,7 @@ use crate::math::{SignedCast, UnsignedCast};
 use num_traits::int::PrimInt;
 use std::num::TryFromIntError;
 
+/// Represents a box on a 2D integer lattice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IRect<T: PrimInt> {
     i_bounds: Interval<T>,

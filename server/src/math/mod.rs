@@ -7,9 +7,10 @@ pub mod point;
 pub mod rect;
 
 pub trait From<T>: Sized {
-    fn from(valeu: &T) -> Option<Self>;
+    fn from(value: &T) -> Option<Self>;
 }
 
+/// Useful trait for converting from unsigned to signed integer in generic context.
 pub trait SignedCast {
     type Signed;
     fn to_signed(self) -> Result<Self::Signed, TryFromIntError>;
@@ -50,6 +51,7 @@ impl SignedCast for usize {
     }
 }
 
+/// Useful trait for converting from signed to unsigned integer in generic context.
 pub trait UnsignedCast {
     type Unsigned;
     fn to_unsigned(self) -> Result<Self::Unsigned, TryFromIntError>;

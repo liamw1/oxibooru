@@ -2,8 +2,9 @@ use crate::api::{
     ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, RatingRequest, ResourceQuery,
 };
 use crate::content::hash::PostHash;
+use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{cache, signature, thumbnail};
-use crate::filesystem::{Directory, ThumbnailType};
+use crate::filesystem::Directory;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
 use crate::model::post::{
     NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostRelation, PostSignature,
@@ -386,7 +387,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
     let content_properties = cache::get_or_compute_properties(post_info.content_token)?;
     let custom_thumbnail = post_info
         .thumbnail_token
-        .map(|token| thumbnail::create_from_token(&token))
+        .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Post))
         .transpose()?;
 
     let mut flags = content_properties.flags;
@@ -443,9 +444,9 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
-            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailType::Custom)?;
+            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
         }
-        filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailType::Generated)?;
+        filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
 
         PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
     })
@@ -673,7 +674,7 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
     let new_content = update.content_token.map(cache::get_or_compute_properties).transpose()?;
     let custom_thumbnail = update
         .thumbnail_token
-        .map(|token| thumbnail::create_from_token(&token))
+        .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Post))
         .transpose()?;
 
     let post_hash = PostHash::new(post_id);
@@ -755,14 +756,14 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
             std::fs::rename(temp_path, post_hash.content_path(content_properties.mime_type))?;
 
             // Replace generated thumbnail
-            filesystem::delete_post_thumbnail(&post_hash, ThumbnailType::Generated)?;
-            filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailType::Generated)?;
+            filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Generated)?;
+            filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
         }
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
 
-            filesystem::delete_post_thumbnail(&post_hash, ThumbnailType::Custom)?;
-            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailType::Custom)?;
+            filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Custom)?;
+            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
         }
 
         let client_id = client.map(|user| user.id);
@@ -770,11 +771,9 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
     })
 }
 
-/*
-    Deletes the post with the specified ID. Uses deadlock_prone_transaction because
-    post relation cascade deletion causes deadlocks when deleting related posts
-    in quick succession.
-*/
+/// Deletes the post with the specified `post_id`. Uses deadlock_prone_transaction because
+/// post relation cascade deletion causes deadlocks when deleting related posts
+/// in quick succession.
 fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;

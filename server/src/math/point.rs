@@ -2,6 +2,7 @@ use crate::math::{From, SignedCast};
 use num_traits::int::PrimInt;
 use std::num::TryFromIntError;
 
+/// Represents a point in 2D space.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IPoint2<T: PrimInt> {
     pub i: T,

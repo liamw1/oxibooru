@@ -3,6 +3,7 @@ use num_traits::PrimInt;
 use std::num::TryFromIntError;
 use std::ops::Range;
 
+/// Represents an inclusive interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Interval<T: PrimInt> {
     start: T,

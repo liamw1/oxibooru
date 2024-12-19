@@ -7,9 +7,10 @@ use hmac::digest::CtOutput;
 use hmac::{Mac, SimpleHmac};
 use std::path::PathBuf;
 
+/// Stores a `post_id` and post `hash`.
 pub struct PostHash {
-    hash: String,
     post_id: i32,
+    hash: String,
 }
 
 impl PostHash {
@@ -66,11 +67,9 @@ pub fn custom_avatar_path(username: &str) -> PathBuf {
     format!("{}/{}.png", filesystem::as_str(Directory::CustomAvatars), username.to_lowercase()).into()
 }
 
-/*
-    Computes a checksum for duplicate detection. Uses raw file data instead of decoded
-    pixel data because different compression schemes can compress identical pixel data
-    in different ways.
-*/
+/// Computes a checksum for duplicate detection. Uses raw file data instead of decoded
+/// pixel data because different compression schemes can compress identical pixel data
+/// in different ways.
 pub fn compute_checksum(content: &[u8]) -> String {
     let hash = hmac_hash(content);
     STANDARD_NO_PAD.encode(hash.into_bytes())

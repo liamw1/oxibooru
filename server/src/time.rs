@@ -9,6 +9,7 @@ use time::error::ComponentRange;
 use time::serde::rfc3339;
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime};
 
+/// Used for timing things. Prints how long the object lived when dropped.
 pub struct Timer<'a> {
     name: &'a str,
     start: std::time::Instant,
@@ -37,7 +38,7 @@ impl<'a> Drop for Timer<'a> {
     }
 }
 
-// A wrapper for time::OffsetDateTime that serializes/deserializes according to RFC 3339.
+/// A wrapper for [OffsetDateTime] that serializes/deserializes according to RFC 3339.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Timestamptz)]
 pub struct DateTime(#[serde(with = "rfc3339")] OffsetDateTime);

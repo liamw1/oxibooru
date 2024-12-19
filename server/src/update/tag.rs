@@ -8,6 +8,7 @@ use crate::{api, config};
 use diesel::prelude::*;
 use std::collections::HashSet;
 
+/// Updates `description` of tag with id `tag_id`.
 pub fn description(conn: &mut PgConnection, tag_id: i32, description: String) -> QueryResult<()> {
     diesel::update(tag::table.find(tag_id))
         .set(tag::description.eq(description))
@@ -15,6 +16,7 @@ pub fn description(conn: &mut PgConnection, tag_id: i32, description: String) ->
     Ok(())
 }
 
+/// Appends `names` onto the current list of names for the tag with id `tag_id`.
 pub fn add_names(conn: &mut PgConnection, tag_id: i32, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
     names
         .iter()
@@ -30,12 +32,15 @@ pub fn add_names(conn: &mut PgConnection, tag_id: i32, current_name_count: i32, 
     Ok(())
 }
 
+/// Deletes all names for the tag with id `tag_id`.
+/// Returns number of names deleted.
 pub fn delete_names(conn: &mut PgConnection, tag_id: i32) -> QueryResult<usize> {
     diesel::delete(tag_name::table)
         .filter(tag_name::tag_id.eq(tag_id))
         .execute(conn)
 }
 
+/// Adds `implied_ids` to the list of implications for the tag with id `tag_id`.
 pub fn add_implications(conn: &mut PgConnection, tag_id: i32, implied_ids: Vec<i32>) -> ApiResult<()> {
     let new_implications: Vec<_> = implied_ids
         .into_iter()
@@ -54,6 +59,7 @@ pub fn add_implications(conn: &mut PgConnection, tag_id: i32, implied_ids: Vec<i
     Ok(())
 }
 
+/// Adds `suggested_ids` to the list of suggestions for the tag with id `tag_id`.
 pub fn add_suggestions(conn: &mut PgConnection, tag_id: i32, suggested_ids: Vec<i32>) -> ApiResult<()> {
     let new_suggestions: Vec<_> = suggested_ids
         .into_iter()
@@ -72,13 +78,11 @@ pub fn add_suggestions(conn: &mut PgConnection, tag_id: i32, suggested_ids: Vec<
     Ok(())
 }
 
-/*
-    Returns all tag ids implied from the given set of names.
-    Returned ids will be distinct.
-
-    Requires tag creation privileges if new names are given.
-    Checks that each new name matches on the Tag regex.
-*/
+/// Returns all tag ids implied from the given set of names.
+/// Returned ids will be distinct.
+///
+/// Requires tag creation privileges if new names are given.
+/// Checks that each new name matches on the Tag regex.
 pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
     client: Option<&User>,

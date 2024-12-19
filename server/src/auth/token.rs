@@ -1,6 +1,7 @@
 use crate::model::user::UserToken;
 use crate::time::DateTime;
 
+/// Returns if the given `user_token` is enabled and has not expired.
 pub fn is_valid_token(user_token: &UserToken) -> bool {
     let expired = user_token
         .expiration_time

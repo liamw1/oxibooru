@@ -32,6 +32,8 @@ pub enum Error {
     NotLoggedIn,
 }
 
+/// Stores filters, sorts, offset, and limit of a search query.
+/// Filters will be parsed later.
 pub struct SearchCriteria<'a, T> {
     filters: Vec<UnparsedFilter<'a, T>>,
     sorts: Vec<ParsedSort<T>>,
@@ -123,6 +125,7 @@ impl Not for Order {
     }
 }
 
+/// Represents a parsed filter on a column or expression.
 #[derive(Debug, PartialEq, Eq)]
 enum Criteria<V> {
     Values(Vec<V>),
@@ -131,16 +134,16 @@ enum Criteria<V> {
     Range(Range<V>),
 }
 
-/*
-    String filters can also have wildcards.
-    Only one allowed pattern per filter for now.
-*/
+/// Represents a parsed filter on a string-based column or expression.
+/// Can either be the usual filter or a wildcard filter.
+/// Only one allowed wildcard pattern per filter for now.
 #[derive(Debug, PartialEq, Eq)]
 enum StrCritera<'a> {
     Regular(Criteria<Cow<'a, str>>),
     WildCard(String),
 }
 
+/// Represents an unparsed filter on a column or expression.
 #[derive(Clone, Copy)]
 struct UnparsedFilter<'a, T> {
     kind: T,
@@ -158,6 +161,7 @@ impl<'a, T> UnparsedFilter<'a, T> {
     }
 }
 
+/// Represents a parsed ordering on a column or expression.
 #[derive(Clone, Copy)]
 struct ParsedSort<T> {
     kind: T,

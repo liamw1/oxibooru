@@ -1,7 +1,8 @@
 use crate::api::ApiResult;
 use crate::content::hash::PostHash;
+use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{decode, hash, signature, thumbnail};
-use crate::filesystem::{self, Directory, ThumbnailType};
+use crate::filesystem::{self, Directory};
 use crate::model::enums::MimeType;
 use crate::model::post::{NewPostSignature, PostSignature};
 use crate::schema::{post, post_signature};
@@ -9,10 +10,8 @@ use crate::time::Timer;
 use diesel::prelude::*;
 use std::path::Path;
 
-/*
-    Renames post files and thumbnails.
-    Useful when the content hash changes.
-*/
+/// Renames post files and thumbnails.
+/// Useful when the content hash changes.
 pub fn rename_post_content() -> std::io::Result<()> {
     let _time = Timer::new("rename_post_content");
 
@@ -63,13 +62,11 @@ pub fn rename_post_content() -> std::io::Result<()> {
     Ok(())
 }
 
-/*
-    Recomputes post signature indexes.
-    Useful when the post signature index parameters change.
-
-    This is much faster than recomputing the signatures, as this function doesn't require
-    reading post content from disk.
-*/
+/// Recomputes post signature indexes.
+/// Useful when the post signature index parameters change.
+///
+/// This is much faster than recomputing the signatures, as this function doesn't require
+/// reading post content from disk.
 pub fn recompute_indexes(conn: &mut PgConnection) -> QueryResult<()> {
     let _time = Timer::new("recompute_indexes");
 
@@ -97,10 +94,8 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> QueryResult<()> {
 
         diesel::delete(post_signature::table).execute(conn)?;
 
-        /*
-            Postgres has a limit on the number of parameters that can be in a query, so
-            we batch the insertion of post signatures in chunks.
-        */
+        // Postgres has a limit on the number of parameters that can be in a query, so
+        // we batch the insertion of post signatures in chunks.
         const SIGNATURE_BATCH_SIZE: usize = 10000;
         for (chunk_index, post_signature_chunk) in new_post_signatures.chunks(SIGNATURE_BATCH_SIZE).enumerate() {
             diesel::insert_into(post_signature::table)
@@ -113,13 +108,11 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> QueryResult<()> {
     })
 }
 
-/*
-    Recomputes both post signatures and signature indexes.
-    Useful when the post signature parameters change.
-
-    This function is quite slow for large databases.
-    I'll look into parallelizing this in the future.
-*/
+/// Recomputes both post signatures and signature indexes.
+/// Useful when the post signature parameters change.
+///
+/// This function is quite slow for large databases.
+/// I'll look into parallelizing this in the future.
 pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
     let _time = Timer::new("recompute_signatures");
 
@@ -158,10 +151,8 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
     Ok(())
 }
 
-/*
-    Recomputes posts checksums.
-    Useful when the way we compute checksums changes.
-*/
+/// Recomputes posts checksums.
+/// Useful when the way we compute checksums changes.
 pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
     let _time = Timer::new("recompute_checksums");
 
@@ -216,8 +207,8 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) -> ApiResult<()> {
             let file_contents = std::fs::read(&content_path)?;
 
             let thumbnail = decode::representative_image(&file_contents, &content_path, mime_type)
-                .map(|image| thumbnail::create(&image))?;
-            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailType::Generated)?;
+                .map(|image| thumbnail::create(&image, ThumbnailType::Post))?;
+            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Generated)?;
         } else {
             println!("Post ID must be an integer");
         }

@@ -5,16 +5,19 @@ use itertools::Itertools;
 use std::borrow::Cow;
 use std::str::FromStr;
 
-// Make generic on Pattern when stabilized so that char pattern can be used
+/// Returns an iterator over given `text` delimited by `pat`.
+/// TODO: Make generic on Pattern when stabilized so that char pattern can be used
 pub fn split_escaped<'a>(text: &'a str, pat: &'a str) -> impl Iterator<Item = &'a str> {
     text.split(pat)
         .filter(|slice| slice.chars().rev().take_while(|&c| c == '\\').count() % 2 == 0)
 }
 
+/// Splits `text` into two parts by `pat`, but only if it can be split exactly once.
 pub fn split_once_escaped<'a>(text: &'a str, pat: &'a str) -> Option<(&'a str, &'a str)> {
     split_escaped(text, pat).collect_tuple()
 }
 
+/// Parses string-based filter.
 pub fn str_criteria(filter: &str) -> StrCritera {
     if filter.contains('*') {
         StrCritera::WildCard(unescape(filter).replace('*', "%").replace('_', "\\_"))
@@ -23,6 +26,7 @@ pub fn str_criteria(filter: &str) -> StrCritera {
     }
 }
 
+/// Parses time-based filter.
 pub fn time_criteria(filter: &str) -> Result<Criteria<DateTime>, Error> {
     if let Some(split_str) = filter.split_once("..") {
         return match split_str {
@@ -39,6 +43,7 @@ pub fn time_criteria(filter: &str) -> Result<Criteria<DateTime>, Error> {
         .map_err(Error::from)
 }
 
+/// Parses non-string non-time filters.
 pub fn criteria<T>(filter: &str) -> Result<Criteria<T>, Error>
 where
     T: FromStr,
@@ -61,6 +66,7 @@ where
         .map_err(Error::from)
 }
 
+/// Replaces escaped characters with unescaped ones.
 fn unescape(text: &str) -> Cow<str> {
     if text.contains('\\') {
         Cow::Owned(text.replace("\\.", ".").replace("\\,", ",").replace("\\:", ":"))
@@ -69,6 +75,7 @@ fn unescape(text: &str) -> Cow<str> {
     }
 }
 
+/// Parses a non-wildcard string-based filter.
 fn parse_regular_str(filter: &str) -> Criteria<Cow<str>> {
     if let Some(split_str) = split_once_escaped(filter, "..") {
         return match split_str {
@@ -80,6 +87,7 @@ fn parse_regular_str(filter: &str) -> Criteria<Cow<str>> {
     Criteria::Values(split_escaped(filter, ",").map(unescape).collect())
 }
 
+/// Parses single time value.
 fn parse_time(time: &str) -> Result<DateTime, TimeParsingError> {
     if time == "today" {
         return Ok(DateTime::today());

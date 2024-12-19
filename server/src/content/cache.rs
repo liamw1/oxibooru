@@ -1,5 +1,6 @@
 use crate::api::ApiResult;
 use crate::content::signature::COMPRESSED_SIGNATURE_SIZE;
+use crate::content::thumbnail::ThumbnailType;
 use crate::content::{decode, hash, signature, thumbnail};
 use crate::filesystem;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
@@ -7,6 +8,7 @@ use image::DynamicImage;
 use std::collections::VecDeque;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 
+/// Stores properties of content that are costly to compute (usually require reading/decoding entire file).
 #[derive(Clone)]
 pub struct CachedProperties {
     pub token: String,
@@ -21,6 +23,7 @@ pub struct CachedProperties {
     pub flags: PostFlags,
 }
 
+/// Computes content properties and caches them in memory.
 pub fn compute_properties(content_token: String) -> ApiResult<CachedProperties> {
     let properties = compute_properties_no_cache(content_token.clone())?;
 
@@ -31,6 +34,7 @@ pub fn compute_properties(content_token: String) -> ApiResult<CachedProperties> 
     Ok(properties)
 }
 
+/// Returns cached properties of content or computes them if not in cache.
 pub fn get_or_compute_properties(content_token: String) -> ApiResult<CachedProperties> {
     let maybe_properties = get_cache_guard().remove(&content_token);
     match maybe_properties {
@@ -39,10 +43,11 @@ pub fn get_or_compute_properties(content_token: String) -> ApiResult<CachedPrope
     }
 }
 
-// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
+/// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
 const CONTENT_CACHE_SIZE: usize = 10;
 static CONTENT_CACHE: LazyLock<Mutex<RingCache>> = LazyLock::new(|| Mutex::new(RingCache::new(CONTENT_CACHE_SIZE)));
 
+/// A simple ring buffer that stores [CachedProperties].
 struct RingCache {
     data: VecDeque<(String, CachedProperties)>,
     max_size: usize,
@@ -76,6 +81,7 @@ impl RingCache {
     }
 }
 
+/// Returns a [MutexGuard] to content properties cache.
 fn get_cache_guard() -> MutexGuard<'static, RingCache> {
     match CONTENT_CACHE.lock() {
         Ok(guard) => guard,
@@ -88,6 +94,7 @@ fn get_cache_guard() -> MutexGuard<'static, RingCache> {
     }
 }
 
+/// Computes content properties without storing them in cache.
 fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
     let temp_path = filesystem::temporary_upload_filepath(&token);
     let file_size = std::fs::metadata(&temp_path)?.len();
@@ -116,7 +123,7 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
         checksum,
         md5_checksum,
         signature: signature::compute(&image),
-        thumbnail: thumbnail::create(&image),
+        thumbnail: thumbnail::create(&image, ThumbnailType::Post),
         width: image.width(),
         height: image.height(),
         mime_type,

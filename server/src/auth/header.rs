@@ -27,10 +27,8 @@ pub enum AuthenticationError {
     Utf8Conversion(#[from] Utf8Error),
 }
 
-/*
-    Authentication can either be done by token-based authentication (reccommended)
-    or by sending password as plaintext.
-*/
+/// Authentication can either be done by token-based authentication (reccommended)
+/// or by sending password as plaintext.
 pub fn authenticate_user(auth: String) -> Result<User, AuthenticationError> {
     let (auth_type, credentials) = auth.split_once(' ').ok_or(AuthenticationError::MalformedCredentials)?;
     match auth_type {
@@ -40,9 +38,7 @@ pub fn authenticate_user(auth: String) -> Result<User, AuthenticationError> {
     }
 }
 
-/*
-    Credentials are sent base64 encoded, so this function decodes them to utf-8.
-*/
+/// `credentials` are sent base64 encoded, so this function decodes them to utf-8.
 fn decode_credentials(credentials: &str) -> Result<(String, String), AuthenticationError> {
     let decoded_credentials = BASE64_STANDARD.decode(credentials)?;
     let utf8_encoded_credentials = decoded_credentials
@@ -56,10 +52,8 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
         .ok_or(AuthenticationError::MalformedCredentials)
 }
 
-/*
-    Checks that the given credentials are of the form "username:password"
-    and that the username/password combination is valid.
-*/
+/// Checks that the given `credentials` are of the form "username:password"
+/// and that the username/password combination is valid.
 fn basic_access_authentication(credentials: &str) -> Result<User, AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
 
@@ -70,10 +64,8 @@ fn basic_access_authentication(credentials: &str) -> Result<User, Authentication
         .ok_or(AuthenticationError::InvalidPassword)
 }
 
-/*
-    Checks that the given credentials are of the form "username:token"
-    and that the username/token combination is valid and non-expired.
-*/
+/// Checks that the given `credentials` are of the form "username:token"
+/// and that the username/token combination is valid and non-expired.
 fn token_authentication(credentials: &str) -> Result<User, AuthenticationError> {
     let (username, unparsed_token) = decode_credentials(credentials)?;
     let token = Uuid::parse_str(&unparsed_token)?;

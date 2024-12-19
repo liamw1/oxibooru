@@ -192,6 +192,7 @@ pub fn privileges() -> &'static Privileges {
     &CONFIG.public_info.privileges
 }
 
+/// Gets Regexes that are used to filter valid names for pools, tags, usernames, etc.
 pub fn regex(regex_type: RegexType) -> &'static Regex {
     match regex_type {
         RegexType::Pool => &CONFIG.pool_name_regex,
@@ -203,6 +204,7 @@ pub fn regex(regex_type: RegexType) -> &'static Regex {
     }
 }
 
+/// The rank of an anonymous user.
 pub fn default_rank() -> UserRank {
     CONFIG.public_info.default_user_rank
 }

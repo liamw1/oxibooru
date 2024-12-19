@@ -1,7 +1,7 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::password;
 use crate::config::RegexType;
-use crate::content::thumbnail;
+use crate::content::thumbnail::{self, ThumbnailType};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
@@ -189,7 +189,7 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let custom_avatar = update
         .avatar_token
-        .map(|token| thumbnail::create_from_token(&token))
+        .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Avatar))
         .transpose()?;
 
     db::get_connection()?.transaction(|conn| {

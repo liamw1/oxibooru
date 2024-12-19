@@ -1,6 +1,9 @@
 use crate::math::point::IPoint2;
 use crate::math::rect::IRect;
 
+/// Represents the Cartesian product of two sets.
+/// Provides methods for iterating over the product.
+/// Space complexity is O(`N`+`M`).
 pub struct CartesianProduct<L, R, const N: usize, const M: usize> {
     left: [L; N],
     right: [R; M],

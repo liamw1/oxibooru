@@ -197,12 +197,16 @@ impl Error {
     }
 }
 
+/// Checks if the `client` is at least `required_rank`.
+/// Returns error if client is lower rank than `required_rank`.
 pub fn verify_privilege(client: Option<&User>, required_rank: UserRank) -> ApiResult<()> {
     (client_access_level(client) >= required_rank)
         .then_some(())
         .ok_or(Error::InsufficientPrivileges)
 }
 
+/// Checks if `haystack` matches regex `regex_type`.
+/// Returns error if it does not match on the regex.
 pub fn verify_matches_regex(haystack: &str, regex_type: RegexType) -> ApiResult<()> {
     config::regex(regex_type)
         .is_match(haystack)
@@ -210,6 +214,8 @@ pub fn verify_matches_regex(haystack: &str, regex_type: RegexType) -> ApiResult<
         .ok_or(Error::ExpressionFailsRegex(regex_type))
 }
 
+/// Checks if `email` is a valid email.
+/// Returns error if `email` is invalid.
 pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::AddressError> {
     match email {
         Some(address) => address.parse::<lettre::Address>().map(|_| ()),
@@ -217,6 +223,7 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
     }
 }
 
+/// Returns all possible routes for the application.
 pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> + Clone {
     let catch_all = warp::any().map(|| {
         eprintln!("No endpoint for request!");
@@ -243,8 +250,9 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
 
 type AuthResult = Result<Option<User>, AuthenticationError>;
 
-const MAX_UPLOAD_SIZE: u64 = 4 * 1024 * 1024 * 1024;
+const MAX_UPLOAD_SIZE: u64 = 4 * 1024_u64.pow(3);
 
+/// Represents part of a request to apply/change a score.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct RatingRequest {
@@ -258,6 +266,7 @@ impl Deref for RatingRequest {
     }
 }
 
+/// Represents part of a request to delete a resource.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct DeleteRequest {
@@ -271,6 +280,7 @@ impl Deref for DeleteRequest {
     }
 }
 
+/// Represents part of a request to merge two resources.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MergeRequest<T> {
@@ -280,6 +290,7 @@ struct MergeRequest<T> {
     merge_to_version: DateTime,
 }
 
+/// Represents part of a request to retrieve one or more resources.
 #[derive(Deserialize)]
 struct ResourceQuery {
     query: Option<String>,
@@ -305,6 +316,7 @@ impl ResourceQuery {
     }
 }
 
+/// Represents part of a request to retrieve multiple resources, paged.
 #[derive(Deserialize)]
 struct PagedQuery {
     offset: Option<i64>,
@@ -327,11 +339,15 @@ impl PagedQuery {
     }
 }
 
+/// Represents a response to a request to retrieve multiple resources.
+/// Used for resources which are not paged.
 #[derive(Serialize)]
 struct UnpagedResponse<T> {
     results: Vec<T>,
 }
 
+/// Represents a response to a request to retrieve multiple resources.
+/// Used for resources which are paged.
 #[derive(Serialize)]
 struct PagedResponse<T> {
     query: Option<String>,
@@ -341,6 +357,7 @@ struct PagedResponse<T> {
     results: Vec<T>,
 }
 
+/// Represents a response if an error occured.
 #[derive(Serialize)]
 struct ErrorResponse {
     title: &'static str,
@@ -348,16 +365,20 @@ struct ErrorResponse {
     description: String,
 }
 
+/// Returns the rank of `client`.
 fn client_access_level(client: Option<&User>) -> UserRank {
     client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
 }
 
+/// Checks if `current_version` matches `client_version`.
+/// Returns error if they do not match.
 fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiResult<()> {
     (current_version == client_version)
         .then_some(())
         .ok_or(Error::ResourceModified)
 }
 
+/// Optionally extracts an authorization header from the incoming request and attempts to authenticate with it.
 fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {
     warp::header::optional("authorization").map(|auth: Option<_>| auth.map(header::authenticate_user).transpose())
 }
@@ -370,9 +391,7 @@ async fn empty_query(_err: Rejection) -> Result<(ResourceQuery,), Infallible> {
     },))
 }
 
-/*
-    Optionally serializes a resource query
-*/
+/// Optionally serializes a resource query.
 fn resource_query() -> impl Filter<Extract = (ResourceQuery,), Error = Infallible> + Clone {
     warp::query::<ResourceQuery>().or_else(empty_query)
 }

@@ -1,8 +1,7 @@
-/*
-    Working with generic functions is Diesel is a nightmare, so I've created
-    these macros to help with dynamically adding filters to a boxed query.
-*/
+/// Working with generic functions is Diesel is a nightmare, so I've created
+/// these macros to help with dynamically adding filters to a boxed query.
 
+/// Used for applying filters on non-string non-time expressions.
 #[macro_export]
 macro_rules! apply_filter {
     ($query:expr, $expression:expr, $filter:expr, $criteria_type:ty) => {
@@ -11,6 +10,7 @@ macro_rules! apply_filter {
     };
 }
 
+/// Used for applying filters on time-based expressions.
 #[macro_export]
 macro_rules! apply_time_filter {
     ($query:expr, $expression:expr, $filter:expr) => {
@@ -19,6 +19,7 @@ macro_rules! apply_time_filter {
     };
 }
 
+/// Used for applying filters on string-based expressions.
 #[macro_export]
 macro_rules! apply_str_filter {
     ($query:expr, $expression:expr, $filter:expr) => {
@@ -37,10 +38,7 @@ macro_rules! apply_str_filter {
     };
 }
 
-/*
-    This is used for filtering based on subqueries which establish
-    a one-to-many relationship.
-*/
+/// Used for filtering based on subqueries which establish a one-to-many or many-to-many relationship.
 #[macro_export]
 macro_rules! apply_subquery_filter {
     ($query:expr, $expression:expr, $filter:expr, $subquery:expr) => {
@@ -52,6 +50,9 @@ macro_rules! apply_subquery_filter {
     };
 }
 
+/// Applies a WHERE clause to the given `query`.
+/// The `filter` determines what operation is applied to the given `expression`.
+/// The operation is one of: eq_any, ge, le, between, ne_all, lt, gt, or not_between.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! apply_criteria {
@@ -76,6 +77,9 @@ macro_rules! apply_criteria {
     };
 }
 
+/// Applies a HAVING clause to the given `query`.
+/// The `filter` determines what operation is applied to the given `expression`.
+/// The operation is one of: eq_any, ge, le, between, ne_all, lt, gt, or not_between.
 #[macro_export]
 macro_rules! apply_having_clause {
     ($query:expr, $expression:expr, $filter:expr) => {
@@ -103,6 +107,9 @@ macro_rules! apply_having_clause {
     };
 }
 
+/// Applies an ordering to the given `query`.
+/// Order is either ASC or DESC.
+#[doc(hidden)]
 #[macro_export]
 macro_rules! apply_sort {
     ($query:expr, $expression:expr, $sort:expr) => {
@@ -113,6 +120,7 @@ macro_rules! apply_sort {
     };
 }
 
+/// Finalizes a query by adding OFFSET, LIMIT, and ORDER_BY.
 #[macro_export]
 macro_rules! finalize {
     ($query:expr, $expression:expr, $sort:expr, $extra_args:expr) => {{

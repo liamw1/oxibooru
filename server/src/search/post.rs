@@ -233,11 +233,9 @@ pub fn get_ordered_ids(
         Token::CreationTime => finalize!(query, post::creation_time, sort, extra_args).load(conn),
         Token::LastEditTime => finalize!(query, post::last_edit_time, sort, extra_args).load(conn),
 
-        /*
-            The implementation for these isn't ideal, but it's the best thing I could do given
-            Diesel's annoying restrictions around dynamic queries. If you could call .grouped_by
-            on a boxed query, the implementation could be so much nicer.
-        */
+        // The implementation for these isn't ideal, but it's the best thing I could do given
+        // Diesel's annoying restrictions around dynamic queries. If you could call .grouped_by
+        // on a boxed query, the implementation could be so much nicer.
         Token::Tag | Token::TagCount => tag_count_sorted(conn, query, sort, extra_args),
         Token::Uploader => uploader_sorted(conn, query, sort, extra_args),
         Token::Pool => pool_sorted(conn, query, sort, extra_args),

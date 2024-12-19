@@ -5,6 +5,7 @@ use crate::model::pool::{NewPoolName, PoolPost};
 use crate::schema::{pool_name, pool_post};
 use diesel::prelude::*;
 
+/// Appends `names` onto the current list of names for the pool with id `pool_id`.
 pub fn add_names(conn: &mut PgConnection, pool_id: i32, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
     names
         .iter()
@@ -22,12 +23,15 @@ pub fn add_names(conn: &mut PgConnection, pool_id: i32, current_name_count: i32,
     Ok(())
 }
 
+/// Deletes all names for pool with id `pool_id`.
+/// Returns numbers of names deleted.
 pub fn delete_names(conn: &mut PgConnection, pool_id: i32) -> QueryResult<usize> {
     diesel::delete(pool_name::table)
         .filter(pool_name::pool_id.eq(pool_id))
         .execute(conn)
 }
 
+/// Appends `posts` onto the current list of posts in the pool with id `pool_id`.
 pub fn add_posts(conn: &mut PgConnection, pool_id: i32, current_post_count: i32, posts: Vec<i32>) -> QueryResult<()> {
     let new_pool_posts: Vec<_> = posts
         .into_iter()
@@ -45,6 +49,8 @@ pub fn add_posts(conn: &mut PgConnection, pool_id: i32, current_post_count: i32,
     Ok(())
 }
 
+/// Removes all posts from pool with id `pool_id`.
+/// Returns numbers of names removed.
 pub fn delete_posts(conn: &mut PgConnection, pool_id: i32) -> QueryResult<usize> {
     diesel::delete(pool_post::table)
         .filter(pool_post::pool_id.eq(pool_id))
