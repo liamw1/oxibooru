@@ -28,23 +28,21 @@ and Docker Compose (version 1.6.0 or greater) already installed.
     Read the comments to guide you. Note that `.env` should be in the root
     directory of this repository.
 
-4. Give mount directories permissions
+4. Pull the containers
+    This pulls the latest containers from docker.io:
+    ```console
+    user@host:oxibooru$ docker-compose pull
+    ```
+    If you have modified the application's source and would like to manually
+    build it, follow the instructions in [**Building**](#Building) instead,
+    then read here once you're done.
+
+5. Give mount directories permissions
 
     Set owner of mount directories (MOUNT_DATA and MOUNT_SQL in the .env) to the user with id 1000:
     ```console
     user@host:oxibooru$ sudo chown -R 1000:1000 <MOUNT_DATA>
     user@host:oxibooru$ sudo chown -R 1000:1000 <MOUNT_SQL>
-    ```
-
-5. Build the containers:
-
-    First, start database container:
-    ```console
-    user@host:oxibooru$ docker-compose up -d sql
-    ```
-    Then, build the client and server containers:
-    ```console
-    user@host:oxibooru$ docker-compose build
     ```
 
 6. Run it!
@@ -58,3 +56,19 @@ and Docker Compose (version 1.6.0 or greater) already installed.
     user@host:oxibooru$ docker-compose logs -f
     # (CTRL+C to exit)
     ```
+
+### Building
+
+1. Build the containers:
+
+    First, start database container:
+    ```console
+    user@host:oxibooru$ docker-compose up -d sql
+    ```
+    Then, build the client and server containers:
+    ```console
+    user@host:oxibooru$ docker-compose build
+    ```
+
+*Note: If your changes are not taking effect in your builds, consider building
+with `--no-cache`.*

@@ -5,6 +5,7 @@
 
 services:
   server:
+    image: oxibooru/server:latest
     build:
       context: server
       args:
@@ -29,6 +30,7 @@ services:
     stop_signal: SIGINT
 
   client:
+    image: oxibooru/client:latest
     build: client
     depends_on:
       - server
