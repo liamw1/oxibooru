@@ -20,6 +20,7 @@ mod update;
 
 #[tokio::main]
 async fn main() {
+    db::run_migrations();
     if admin::run_tasks() > 0 {
         return;
     }

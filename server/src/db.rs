@@ -2,10 +2,15 @@ use crate::config;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
 use diesel::result::Error;
+use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::sync::LazyLock;
 
 pub fn get_connection() -> Result<PooledConnection<ConnectionManager<PgConnection>>, PoolError> {
     CONNECTION_POOL.get()
+}
+
+pub fn run_migrations() {
+    get_connection().unwrap().run_pending_migrations(MIGRATIONS).unwrap();
 }
 
 /*
@@ -33,6 +38,8 @@ where
     }
     print_info(max_retries, result)
 }
+
+const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 static CONNECTION_POOL: LazyLock<Pool<ConnectionManager<PgConnection>>> = LazyLock::new(|| {
     let num_threads = tokio::runtime::Handle::try_current()
