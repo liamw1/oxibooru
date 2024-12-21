@@ -21,8 +21,8 @@ mod update;
 #[tokio::main]
 async fn main() {
     db::run_migrations();
-    if admin::run_tasks() > 0 {
-        return;
+    if admin::enabled() {
+        return admin::command_line_mode();
     }
 
     println!("Oxibooru server running on {} threads", tokio::runtime::Handle::current().metrics().num_workers());

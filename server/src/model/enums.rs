@@ -510,7 +510,6 @@ mod test {
 
     #[test]
     fn permission() {
-        use_dist_config();
         test_transaction(|conn| {
             let user = create_test_user(conn, TEST_USERNAME)?;
             assert!(user.rank >= config::privileges().user_create_self);

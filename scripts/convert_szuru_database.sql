@@ -196,7 +196,7 @@ SELECT "id", "user_id", "post_id", "text", "creation_time" AT TIME ZONE 'UTC', "
 INSERT INTO oxi."comment_score" ("comment_id", "user_id", "score", "time")
 SELECT "comment_id", "user_id", "score", "time" AT TIME ZONE 'UTC' FROM public."comment_score";
 
--- ============================ Pool Categories ============================== --
+-- ============================= Pool Categories ============================= --
 -- First, set category_id of pools in default category to 0 (the id of the default category in Oxibooru)
 ALTER TABLE public."pool" DROP CONSTRAINT "pool_category_id_fkey";
 UPDATE public."pool"
@@ -219,7 +219,7 @@ WHERE "default" = true;
 INSERT INTO oxi."pool_category" ("id", "name", "color", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "name", "color", CURRENT_TIMESTAMP FROM public."pool_category";
 
--- ================================= Pools =================================== --
+-- ================================== Pools ================================== --
 -- Descriptions are non-nullable in Oxibooru, so replace NULL values with empty description
 UPDATE public."pool"
 SET "description" = ''
@@ -240,3 +240,7 @@ SELECT "pool_id", "ord", "name" FROM public."pool_name";
 -- =============================== Pool Posts ================================ --
 INSERT INTO oxi."pool_post" ("pool_id", "post_id", "order")
 SELECT "pool_id", "post_id", "ord" FROM public."pool_post";
+
+-- ================================= Cleanup ================================= --
+DROP SCHEMA public CASCADE;
+ALTER SCHEMA oxi RENAME TO public;

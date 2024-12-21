@@ -256,18 +256,17 @@ static DATABASE_URL: LazyLock<String> = LazyLock::new(|| {
 });
 
 fn get_config_path() -> PathBuf {
-    // Use config.toml.dist if in development environment, config.toml if in production
-    match std::env::var("CARGO_MANIFEST_DIR") {
-        Ok(var) => {
-            let mut project_path = PathBuf::from(var);
-            project_path.push("config.toml.dist");
-            project_path
-        }
-        Err(_) => {
-            let exe_path = std::env::current_exe().unwrap();
-            let mut parent_path = exe_path.parent().expect("Exe path should have parent").to_owned();
-            parent_path.push("config.toml");
-            parent_path
-        }
+    // Use config.toml.dist if in test environment, config.toml if in production
+    if cfg!(test) {
+        let manifest_dir =
+            std::env::var("CARGO_MANIFEST_DIR").expect("Test environment should have CARGO_MANIFEST_DIR defined");
+        let mut project_path = PathBuf::from(manifest_dir);
+        project_path.push("config.toml.dist");
+        project_path
+    } else {
+        let exe_path = std::env::current_exe().unwrap();
+        let mut parent_path = exe_path.parent().expect("Exe path should have parent").to_owned();
+        parent_path.push("config.toml");
+        parent_path
     }
 }

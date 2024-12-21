@@ -15,48 +15,54 @@ use std::path::Path;
 pub fn rename_post_content() -> std::io::Result<()> {
     let _time = Timer::new("rename_post_content");
 
-    for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))?.enumerate() {
-        let path = entry?.path();
-        if let Some(post_id) = get_post_id(&path) {
-            let new_path = PostHash::new(post_id).generated_thumbnail_path();
-            if path != new_path {
-                std::fs::rename(path, new_path)?;
+    if filesystem::path(Directory::GeneratedThumbnails).exists() {
+        for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))?.enumerate() {
+            let path = entry?.path();
+            if let Some(post_id) = get_post_id(&path) {
+                let new_path = PostHash::new(post_id).generated_thumbnail_path();
+                if path != new_path {
+                    std::fs::rename(path, new_path)?;
+                }
+            } else {
+                eprintln!("Could not find post_id of {path:?}");
             }
-        } else {
-            eprintln!("Could not find post_id of {path:?}");
-        }
 
-        print_progress_message(entry_index, "Generated thumbnails renamed");
+            print_progress_message(entry_index, "Generated thumbnails renamed");
+        }
     }
 
-    for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))?.enumerate() {
-        let path = entry?.path();
-        if let Some(post_id) = get_post_id(&path) {
-            let new_path = PostHash::new(post_id).custom_thumbnail_path();
-            if path != new_path {
-                std::fs::rename(path, new_path)?;
+    if filesystem::path(Directory::CustomThumbnails).exists() {
+        for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))?.enumerate() {
+            let path = entry?.path();
+            if let Some(post_id) = get_post_id(&path) {
+                let new_path = PostHash::new(post_id).custom_thumbnail_path();
+                if path != new_path {
+                    std::fs::rename(path, new_path)?;
+                }
+            } else {
+                eprintln!("Could not find post_id of {path:?}");
             }
-        } else {
-            eprintln!("Could not find post_id of {path:?}");
-        }
 
-        print_progress_message(entry_index, "Custom thumbnails renamed");
+            print_progress_message(entry_index, "Custom thumbnails renamed");
+        }
     }
 
-    for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::Posts))?.enumerate() {
-        let path = entry?.path();
-        let post_id = get_post_id(&path);
-        let content_type = MimeType::from_path(&path);
-        if let (Some(id), Some(mime_type)) = (post_id, content_type) {
-            let new_path = PostHash::new(id).content_path(mime_type);
-            if path != new_path {
-                std::fs::rename(path, new_path)?;
+    if filesystem::path(Directory::Posts).exists() {
+        for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::Posts))?.enumerate() {
+            let path = entry?.path();
+            let post_id = get_post_id(&path);
+            let content_type = MimeType::from_path(&path);
+            if let (Some(id), Some(mime_type)) = (post_id, content_type) {
+                let new_path = PostHash::new(id).content_path(mime_type);
+                if path != new_path {
+                    std::fs::rename(path, new_path)?;
+                }
+            } else {
+                eprintln!("Could not find post_id or mime_type of {path:?}");
             }
-        } else {
-            eprintln!("Could not find post_id or mime_type of {path:?}");
-        }
 
-        print_progress_message(entry_index, "Posts renamed");
+            print_progress_message(entry_index, "Posts renamed");
+        }
     }
 
     Ok(())
@@ -169,8 +175,7 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
                     .filter(post::id.ne(post_id))
                     .first(conn)
                     .optional()?;
-                if duplicate.is_some() {
-                    let dup_id = duplicate.unwrap();
+                if let Some(dup_id) = duplicate {
                     eprintln!("Potential duplicate post {dup_id} for post {post_id}");
                 } else {
                     diesel::update(post::table.find(post_id))

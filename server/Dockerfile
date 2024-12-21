@@ -60,7 +60,7 @@ COPY --from=builder /opt/app/target/release/server server
 
 # Run it!
 USER app
-CMD ["/opt/app/server"]
+ENTRYPOINT ["/opt/app/server"]
 
 ARG PORT=6666
 ENV PORT=${PORT}
@@ -68,12 +68,9 @@ EXPOSE ${PORT}
 
 VOLUME ["/data/"]
 
-ARG SOURCE_COMMIT=97edfd6fe0197ce8eb00b6e2ba5fda8d9470616e
 LABEL \
     maintainer="" \
     org.opencontainers.image.title="oxibooru/server" \
     org.opencontainers.image.url="https://github.com/liamw1/oxibooru" \
-    org.opencontainers.image.documentation="https://github.com/liamw1/oxibooru/blob/${SOURCE_COMMIT}/doc/INSTALL.md" \
     org.opencontainers.image.source="https://github.com/liamw1/oxibooru" \
-    org.opencontainers.image.revision="${SOURCE_COMMIT}" \
     org.opencontainers.image.licenses="GPL-3.0"

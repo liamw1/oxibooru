@@ -17,11 +17,6 @@ pub const TEST_SALT: &str = "test_salt";
 pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
 pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
 
-/// Sets the USE_DIST_CONFIG environment variable. Useful for tests which are designed to use config.toml.dist.
-pub fn use_dist_config() {
-    std::env::set_var("USE_DIST_CONFIG", "1");
-}
-
 /// Returns path to a test asset.
 pub fn asset_path(relative_path: &Path) -> PathBuf {
     let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
