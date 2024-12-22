@@ -64,7 +64,7 @@ pub fn custom_avatar_url(username: &str) -> String {
 }
 
 pub fn custom_avatar_path(username: &str) -> PathBuf {
-    format!("{}/{}.png", filesystem::as_str(Directory::CustomAvatars), username.to_lowercase()).into()
+    format!("{}/{}.png", filesystem::as_str(Directory::Avatars), username.to_lowercase()).into()
 }
 
 /// Computes a checksum for duplicate detection. Uses raw file data instead of decoded

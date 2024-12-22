@@ -1,10 +1,7 @@
-# oxibooru
+# Oxibooru
 
-Oxibooru is an image board engine based on szurubooru.
-The backend has been entirely rewritten in Rust with a focus on performance.
-
-The database is not compatbile with szurubooru, but I am working on a script
-to convert a szurubooru database to an oxibooru database.
+Oxibooru is an image board engine based on [Szurubooru](https://github.com/rr-/szurubooru).
+The backend has been entirely rewritten in Rust with a focus on performance 🚀.
 
 ## Features
 

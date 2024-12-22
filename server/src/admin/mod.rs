@@ -3,6 +3,7 @@ mod post;
 use crate::db;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
+use std::io::Write;
 use std::str::FromStr;
 use strum::{EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
 
@@ -13,31 +14,20 @@ pub fn enabled() -> bool {
 pub fn command_line_mode() {
     print_info();
 
-    let mut input = String::new();
-    let stdin = std::io::stdin();
+    let mut buffer = String::new();
     loop {
-        input.clear();
-        if let Err(err) = stdin.read_line(&mut input) {
-            eprintln!("{err}");
-        }
-        if input.trim() == "exit" {
-            break;
-        }
-
-        let task = match AdminTask::from_str(input.trim()) {
+        let user_input = prompt_user_input("Please select a task", &mut buffer);
+        let task = match AdminTask::from_str(user_input) {
             Ok(task) => task,
             Err(_) => {
                 let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
-                eprintln!("Command line arguments should be one of {possible_arguments:?}\n");
+                eprintln!("ERROR: Command line arguments should be one of {possible_arguments:?}\n");
                 continue;
             }
         };
         match run_task(task) {
-            Ok(()) => {
-                println!("Task finished.\n");
-                print_info();
-            }
-            Err(err) => eprintln!("{err}"),
+            Ok(()) => println!("Task finished.\n"),
+            Err(err) => eprintln!("ERROR: {err}\n"),
         }
     }
 }
@@ -45,28 +35,63 @@ pub fn command_line_mode() {
 #[derive(Clone, Copy, EnumString, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 enum AdminTask {
-    RenamePostContent,
+    RenameDataPaths,
+    RecomputePostChecksums,
     RecomputePostSignatures,
     RecomputePostSignatureIndexes,
-    RecomputePostChecksums,
     RegenerateThumbnail,
-}
-
-fn print_info() {
-    println!("Running Oxibooru in admin mode. Enter \"exit\" when finished.");
-    let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
-    println!("Available commands: {possible_arguments:?}");
-    println!();
+    ResetPassword,
 }
 
 fn get_connection() -> Result<PooledConnection<ConnectionManager<PgConnection>>, String> {
     db::get_connection().map_err(|err| format!("Could not connect to the database: {err}"))
 }
 
+fn print_info() {
+    let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
+    println!("Running Oxibooru admin command line interface. Enter \"help\" for a list of commands and \"exit\" when finished.");
+    println!("Available commands: {possible_arguments:?}\n");
+}
+
+fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
+    let stdin = std::io::stdin();
+    let mut stdout = std::io::stdout();
+    loop {
+        print!("{prompt}: ");
+        if let Err(err) = stdout.flush() {
+            eprintln!("ERROR: {err}\n");
+            continue;
+        }
+
+        buffer.clear();
+        if let Err(err) = stdin.read_line(buffer) {
+            eprintln!("ERROR: {err}\n");
+            continue;
+        }
+
+        match buffer.trim() {
+            "exit" => std::process::exit(0),
+            "help" => {
+                println!();
+                print_info();
+                continue;
+            }
+            _ => return buffer.trim(),
+        }
+    }
+}
+
+/// Runs a single task. This function is designed to only establish a connection to the database
+/// if necessary. That way users can run tasks that don't require database connection without
+/// spinning up the database.
 fn run_task(task: AdminTask) -> Result<(), String> {
     println!("Starting task...");
     match task {
-        AdminTask::RenamePostContent => post::rename_post_content().map_err(|err| format!("{err}")),
+        AdminTask::RenameDataPaths => post::rename_data_paths().map_err(|err| format!("{err}")),
+        AdminTask::RecomputePostChecksums => {
+            let mut conn = get_connection()?;
+            post::recompute_checksums(&mut conn).map_err(|err| format!("{err}"))
+        }
         AdminTask::RecomputePostSignatures => {
             let mut conn = get_connection()?;
             post::recompute_signatures(&mut conn).map_err(|err| format!("{err}"))
@@ -75,13 +100,13 @@ fn run_task(task: AdminTask) -> Result<(), String> {
             let mut conn = get_connection()?;
             post::recompute_indexes(&mut conn).map_err(|err| format!("{err}"))
         }
-        AdminTask::RecomputePostChecksums => {
-            let mut conn = get_connection()?;
-            post::recompute_checksums(&mut conn).map_err(|err| format!("{err}"))
-        }
         AdminTask::RegenerateThumbnail => {
             let mut conn = get_connection()?;
             post::regenerate_thumbnail(&mut conn).map_err(|err| format!("{err}"))
+        }
+        AdminTask::ResetPassword => {
+            let mut conn = get_connection()?;
+            post::reset_password(&mut conn).map_err(|err| format!("{err}"))
         }
     }
 }

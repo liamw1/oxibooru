@@ -11,10 +11,10 @@ use uuid::Uuid;
 
 /// Represents important data directories.
 pub enum Directory {
+    Avatars,
     Posts,
     GeneratedThumbnails,
     CustomThumbnails,
-    CustomAvatars,
     TemporaryUploads,
 }
 
@@ -26,10 +26,10 @@ pub fn path(directory: Directory) -> &'static Path {
 /// Returns absolute path to the specified `directory` as a str.
 pub fn as_str(directory: Directory) -> &'static str {
     match directory {
+        Directory::Avatars => &AVATARS_DIRECTORY,
         Directory::Posts => &POSTS_DIRECTORY,
         Directory::GeneratedThumbnails => &GENERATED_THUMBNAILS_DIRECTORY,
         Directory::CustomThumbnails => &CUSTOM_THUMBNAILS_DIRECTORY,
-        Directory::CustomAvatars => &CUSTOM_AVATARS_DIRECTORY,
         Directory::TemporaryUploads => &TEMPORARY_UPLOADS_DIRECTORY,
     }
 }
@@ -56,7 +56,7 @@ pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResul
     assert_eq!(thumbnail.width(), config::get().thumbnails.avatar_width);
     assert_eq!(thumbnail.height(), config::get().thumbnails.avatar_height);
 
-    create_dir(Directory::CustomAvatars)?;
+    create_dir(Directory::Avatars)?;
     let avatar_path = hash::custom_avatar_path(username);
 
     thumbnail.to_rgb8().save(&avatar_path)?;
@@ -195,12 +195,12 @@ pub fn data_size() -> std::io::Result<u64> {
 }
 
 static DATA_SIZE: AtomicU64 = AtomicU64::new(0);
+static AVATARS_DIRECTORY: LazyLock<String> = LazyLock::new(|| format!("{}/avatars", config::data_dir()));
 static POSTS_DIRECTORY: LazyLock<String> = LazyLock::new(|| format!("{}/posts", config::data_dir()));
 static GENERATED_THUMBNAILS_DIRECTORY: LazyLock<String> =
     LazyLock::new(|| format!("{}/generated-thumbnails", config::data_dir()));
 static CUSTOM_THUMBNAILS_DIRECTORY: LazyLock<String> =
     LazyLock::new(|| format!("{}/custom-thumbnails", config::data_dir()));
-static CUSTOM_AVATARS_DIRECTORY: LazyLock<String> = LazyLock::new(|| format!("{}/custom-avatars", config::data_dir()));
 static TEMPORARY_UPLOADS_DIRECTORY: LazyLock<String> =
     LazyLock::new(|| format!("{}/temporary-uploads", config::data_dir()));
 

@@ -1,15 +1,15 @@
 This assumes that you have Docker (version 17.05 or greater)
 and Docker Compose (version 1.6.0 or greater) already installed.
 
-### Prepare things
+## Prepare things
 
-1. Download the `oxibooru` source
+1. **Download the `oxibooru` source**
     ```console
     user@host:~$ git clone https://github.com/liamw1/oxibooru
     user@host:~$ cd oxibooru
     ```
 
-2. Configure the application
+2. **Configure the application**
     ```console
     user@host:oxibooru$ cp server/config.toml.dist server/config.toml
     user@host:oxibooru$ edit server/config.toml
@@ -19,7 +19,7 @@ and Docker Compose (version 1.6.0 or greater) already installed.
     - password_secret
     - content_secret
 
-3. Configure Docker Compose
+3. **Configure Docker Compose**
     ```console
     user@host:oxibooru$ cp doc/example.env .env
     user@host:oxibooru$ edit .env
@@ -28,7 +28,7 @@ and Docker Compose (version 1.6.0 or greater) already installed.
     Read the comments to guide you. Note that `.env` should be in the root
     directory of this repository.
 
-4. Pull the containers
+4. **Pull the containers**
     This pulls the latest containers from docker.io:
     ```console
     user@host:oxibooru$ docker-compose pull
@@ -37,7 +37,7 @@ and Docker Compose (version 1.6.0 or greater) already installed.
     build it, follow the instructions in [**Building**](#Building) instead,
     then read here once you're done.
 
-5. Give mount directories permissions
+5. **Give mount directories permissions**
 
     Set owner of mount directories (MOUNT_DATA and MOUNT_SQL in the .env) to the user with id 1000:
     ```console
@@ -45,7 +45,7 @@ and Docker Compose (version 1.6.0 or greater) already installed.
     user@host:oxibooru$ sudo chown -R 1000:1000 <MOUNT_SQL>
     ```
 
-6. Run it!
+6. **Run it!**
 
     To start all containers:
     ```console
@@ -57,9 +57,9 @@ and Docker Compose (version 1.6.0 or greater) already installed.
     # (CTRL+C to exit)
     ```
 
-### Building
+## Building
 
-1. Build the containers:
+1. **Build the containers**
 
     First, start database container:
     ```console
