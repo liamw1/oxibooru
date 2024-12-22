@@ -18,7 +18,8 @@ issue on [Github](https://github.com/liamw1/oxibooru/issues).
 ### Known Limitations
 Some aspects of a Szurubooru instance can't be converted to an Oxibooru
 instance. Depending on how you're using your database, these limitations may
-make total migration difficult or impossible. In order of severity, these are:
+make total migration difficult or impossible. In order of decreasing severity,
+these are:
 
 1. **Passwords**
 
