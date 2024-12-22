@@ -17,13 +17,13 @@ pub enum AuthenticationError {
     #[error("Invalid authentication type")]
     InvalidAuthType,
     InvalidEncoding(#[from] DecodeError),
-    #[error("Password is incorrect")]
-    InvalidPassword,
     #[error("Token has expired")]
     InvalidToken,
     #[error("Authentication credentials are malformed")]
     MalformedCredentials,
     MalformedToken(#[from] uuid::Error),
+    #[error("Invalid username and password combination")]
+    UsernamePasswordMismatch,
     Utf8Conversion(#[from] Utf8Error),
 }
 
@@ -56,12 +56,20 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
 /// and that the username/password combination is valid.
 fn basic_access_authentication(credentials: &str) -> Result<User, AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
-
     let mut conn = db::get_connection()?;
-    let user = User::from_name(&mut conn, &username)?;
+
+    // For security reasons, don't give any indication to the user if it was the password
+    // or the username that was incorrect.
+    let user = User::from_name(&mut conn, &username).map_err(|err| {
+        type QueryError = diesel::result::Error;
+        match err {
+            QueryError::NotFound => AuthenticationError::UsernamePasswordMismatch,
+            err => AuthenticationError::FailedQuery(err),
+        }
+    })?;
     auth::password::is_valid_password(&user, &password)
         .then_some(user)
-        .ok_or(AuthenticationError::InvalidPassword)
+        .ok_or(AuthenticationError::UsernamePasswordMismatch)
 }
 
 /// Checks that the given `credentials` are of the form "username:token"

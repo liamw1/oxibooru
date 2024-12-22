@@ -11,12 +11,12 @@ mod user;
 mod user_token;
 
 use crate::auth::header::{self, AuthenticationError};
-use crate::config::{self, RegexType};
+use crate::config::RegexType;
 use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
 use crate::model::user::User;
 use crate::time::DateTime;
-use crate::update;
+use crate::{config, update};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::num::NonZero;

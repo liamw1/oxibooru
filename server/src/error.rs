@@ -156,10 +156,10 @@ impl ErrorKind for crate::auth::header::AuthenticationError {
             Self::FailedQuery(err) => err.kind(),
             Self::InvalidAuthType => "InvalidAuthType",
             Self::InvalidEncoding(err) => err.kind(),
-            Self::InvalidPassword => "InvalidPassword",
             Self::InvalidToken => "InvalidToken",
             Self::MalformedCredentials => "MalformedCredentials",
             Self::MalformedToken(_) => "MalformedToken",
+            Self::UsernamePasswordMismatch => "UsernamePasswordMismatch",
             Self::Utf8Conversion(_) => "Utf8ConversionError",
         }
     }

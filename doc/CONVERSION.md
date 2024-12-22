@@ -46,7 +46,7 @@ these are:
 
 4. **Post Notes**
     
-    This one isn't a fundamental limitation. I'm just dont' know enough Postgres
+    This one isn't a fundamental limitation. I just don't know enough Postgres
     to convert BYTEA to REAL[2][] so the conversion script ignores post notes. 
     I'll get around to fixing this at some point.
 
@@ -70,7 +70,7 @@ these are:
 
     ```console
     user@host:oxibooru$ docker exec oxibooru-sql-1 psql -U ${POSTGRES_USER} -d oxi -c "ALTER SCHEMA public RENAME TO oxi;"
-    user@host:oxibooru$ docker exec oxibooru-sql-1 psql -U ${POSTGRES_USER} -d oxi -c "CREATE SCHEMA public";
+    user@host:oxibooru$ docker exec oxibooru-sql-1 psql -U ${POSTGRES_USER} -d oxi -c "CREATE SCHEMA public;"
     user@host:oxibooru$ cat backup.sql | docker exec -i oxibooru-sql-1 psql -U ${POSTGRES_USER} -d oxi
     ```
     
@@ -86,8 +86,8 @@ these are:
 
     Oxibooru uses a different file naming convention, so these will need to be 
     recomputed. First, if you have any custom-thumbnails, you should move the
-    custom-thumbnails folder from ${MOUNT_DATA}/posts/custom-thumbnails to
-    ${MOUNT_DATA}/custom-thumbnails. Then, spin up the Oxibooru containers:
+    custom-thumbnails folder from $\{MOUNT_DATA\}/posts/custom-thumbnails to
+    $\{MOUNT_DATA\}/custom-thumbnails. Then, spin up the Oxibooru containers:
     ```console
     user@host:oxibooru$ docker-compose up -d
     ```

@@ -3,6 +3,9 @@
 Oxibooru is an image board engine based on [Szurubooru](https://github.com/rr-/szurubooru).
 The backend has been entirely rewritten in Rust with a focus on performance 🚀.
 
+If you're interested in migrating a Szurubooru instance to an Oxibooru one, see the
+[conversion guide](doc/CONVERSION.md).
+
 ## Features
 
 - Post content: images (JPG, PNG, BMP, GIF, WEBP) and videos (MP4, MOV, WEBM)
