@@ -86,8 +86,8 @@ these are:
 
     Oxibooru uses a different file naming convention, so these will need to be 
     recomputed. First, if you have any custom-thumbnails, you should move the
-    custom-thumbnails folder from $\{MOUNT_DATA\}/posts/custom-thumbnails to
-    $\{MOUNT_DATA\}/custom-thumbnails. Then, spin up the Oxibooru containers:
+    custom-thumbnails folder from MOUNT_DATA/posts/custom-thumbnails to
+    MOUNT_DATA/custom-thumbnails. Then, spin up the Oxibooru containers:
     ```console
     user@host:oxibooru$ docker-compose up -d
     ```
