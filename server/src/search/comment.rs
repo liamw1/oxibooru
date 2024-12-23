@@ -47,9 +47,9 @@ pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<Box
             Token::CreationTime => apply_time_filter!(query, comment::creation_time, filter),
             Token::LastEditTime => apply_time_filter!(query, comment::last_edit_time, filter),
             Token::User => {
-                let comment_authors = comment::table.select(comment::id).inner_join(user::table).into_boxed();
-                let subquery = apply_str_filter!(comment_authors, user::name, filter);
-                Ok(query.filter(comment::id.eq_any(subquery)))
+                let users = user::table.select(user::id).into_boxed();
+                let subquery = apply_str_filter!(users, user::name, filter);
+                Ok(query.filter(comment::user_id.eq_any(subquery.nullable())))
             }
         })
 }
@@ -96,7 +96,7 @@ fn author_sorted(
     let final_query = comment::table
         .select(comment::id)
         .group_by(comment::id)
-        .inner_join(user::table)
+        .left_join(user::table)
         .filter(comment::id.eq_any(&filtered_comments))
         .into_boxed();
     finalize!(final_query, min(user::name), sort, extra_args).load(conn)

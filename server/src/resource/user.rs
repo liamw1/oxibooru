@@ -195,7 +195,7 @@ enum PrivateData<T> {
 fn get_comment_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<i64>> {
     Comment::belonging_to(users)
         .group_by(comment::user_id)
-        .select((comment::user_id, count(comment::user_id)))
+        .select((comment::user_id.assume_not_null(), count(comment::user_id)))
         .load(conn)
         .map(|comment_counts| {
             resource::order_as(comment_counts, users, |(id, _)| *id)

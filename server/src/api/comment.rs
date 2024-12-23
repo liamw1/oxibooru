@@ -139,13 +139,13 @@ fn update_comment(comment_id: i32, auth: AuthResult, update: CommentUpdate) -> A
     let client_id = client.as_ref().map(|user| user.id);
 
     db::get_connection()?.transaction(|conn| {
-        let (comment_owner, comment_version): (i32, DateTime) = comment::table
+        let (comment_owner, comment_version): (Option<i32>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))
             .first(conn)?;
         api::verify_version(comment_version, update.version)?;
 
-        let required_rank = match client_id == Some(comment_owner) {
+        let required_rank = match client_id.is_some() && client_id == comment_owner {
             true => config::privileges().comment_edit_own,
             false => config::privileges().comment_edit_any,
         };
@@ -186,13 +186,13 @@ fn delete_comment(comment_id: i32, auth: AuthResult, client_version: DeleteReque
     let client_id = client.as_ref().map(|user| user.id);
 
     db::get_connection()?.transaction(|conn| {
-        let (comment_owner, comment_version): (i32, DateTime) = comment::table
+        let (comment_owner, comment_version): (Option<i32>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))
             .first(conn)?;
         api::verify_version(comment_version, *client_version)?;
 
-        let required_rank = match client_id == Some(comment_owner) {
+        let required_rank = match client_id.is_some() && client_id == comment_owner {
             true => config::privileges().comment_delete_own,
             false => config::privileges().comment_delete_any,
         };

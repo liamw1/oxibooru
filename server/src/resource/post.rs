@@ -183,7 +183,7 @@ impl PostInfo {
         let batch_size = posts.len();
 
         let mut owners = fields[Field::User]
-            .then(|| get_post_owners(conn, &posts))
+            .then(|| get_owners(conn, &posts))
             .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(owners.len(), batch_size);
@@ -350,7 +350,7 @@ impl PostInfo {
     }
 }
 
-fn get_post_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option<MicroUser>>> {
+fn get_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option<MicroUser>>> {
     let post_ids = posts.iter().map(|post| post.id).collect::<Vec<_>>();
     post::table
         .filter(post::id.eq_any(&post_ids))
@@ -418,12 +418,15 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
 }
 
 fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) -> QueryResult<Vec<Vec<CommentInfo>>> {
-    let comments: Vec<(Comment, String, AvatarStyle)> = Comment::belonging_to(posts)
+    let comments: Vec<Comment> = Comment::belonging_to(posts).order(comment::creation_time).load(conn)?;
+    let comment_ids: Vec<i32> = comments.iter().map(|comment| comment.id).collect();
+    let owners: HashMap<i32, (String, AvatarStyle)> = comment::table
         .inner_join(user::table)
-        .select((Comment::as_select(), user::name, user::avatar_style))
-        .order(comment::creation_time)
-        .load(conn)?;
-    let comment_ids: Vec<i32> = comments.iter().map(|(comment, ..)| comment.id).collect();
+        .select((comment::id, (user::name, user::avatar_style)))
+        .filter(comment::id.eq_any(&comment_ids))
+        .load(conn)?
+        .into_iter()
+        .collect();
     let scores: HashMap<i32, Option<i64>> = comment_score::table
         .group_by(comment_score::comment_id)
         .select((comment_score::comment_id, sum(comment_score::score)))
@@ -450,13 +453,17 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
         .map(|(post, comments_on_post)| {
             comments_on_post
                 .into_iter()
-                .map(|(comment, username, avatar_style)| {
+                .map(|comment| {
                     let id = comment.id;
+                    let user = owners
+                        .get(&id)
+                        .cloned()
+                        .map(|(username, avatar_style)| MicroUser::new(username, avatar_style));
                     CommentInfo {
                         version: comment.last_edit_time,
                         id,
                         post_id: post.id,
-                        user: MicroUser::new(username, avatar_style),
+                        user,
                         text: comment.text,
                         creation_time: comment.creation_time,
                         last_edit_time: comment.last_edit_time,
