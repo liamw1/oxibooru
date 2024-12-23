@@ -7,6 +7,8 @@ tested. Please make a back up of your database before attempting a conversion.
 This guide assumes you have set up an Oxibooru instance already. See the 
 [installation instructions](INSTALL.md) for more details. It also assumes
 the Oxibooru database is _empty_, which is the case on an initial install.
+Make sure that you run the server container at least once to make sure
+it has been installed correctly and that the migrations have been applied.
 
 The guide doesn't cover migrating the config.yaml, but the structure of
 the Oxibooru equivalent, config.toml, is almost identical. Just copy over the
@@ -76,7 +78,7 @@ these are:
     
 3. **Run conversion script**
     ```console
-    user@host:oxibooru$ cat scripts/convert_szuru_database/up.sql | docker exec -i oxibooru-sql-1 psql -U postgres -d oxi --single-transaction
+    user@host:oxibooru$ cat scripts/convert_szuru_database.sql | docker exec -i oxibooru-sql-1 psql -U ${POSTGRES_USER} -d oxi --single-transaction
     ```
     Any errors encountered will rollback the conversion of the database. If you 
     would like to opt-out of this behavior and attempt a partial conversion, you

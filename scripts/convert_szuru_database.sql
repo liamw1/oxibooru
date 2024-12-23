@@ -30,6 +30,9 @@ ALTER COLUMN "avatar_style" TYPE SMALLINT USING "avatar_style"::SMALLINT;
 INSERT INTO oxi."user" ("id", "name", "password_hash", "password_salt", "email", "rank", "avatar_style", "creation_time", "last_login_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "name", "password_hash", "password_salt", "email", "rank", "avatar_style", "creation_time" AT TIME ZONE 'UTC', "last_login_time" AT TIME ZONE 'UTC', CURRENT_TIMESTAMP FROM public."user";
 
+-- Update sequence
+SELECT setval(pg_get_serial_sequence('oxi.user', 'id'), (SELECT MAX("id") FROM oxi."user"));
+
 -- ============================= Tag Categories ============================== --
 -- First, set category_id of tags in default category to 0 (the id of the default category in Oxibooru)
 ALTER TABLE public."tag" DROP CONSTRAINT "tag_category_id_fkey";
@@ -54,6 +57,9 @@ WHERE "default" = true;
 INSERT INTO oxi."tag_category" ("id", "order", "name", "color", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "order", "name", "color", CURRENT_TIMESTAMP FROM public."tag_category";
 
+-- Update sequence
+SELECT setval(pg_get_serial_sequence('oxi.tag_category', 'id'), (SELECT MAX("id") FROM oxi."tag_category"));
+
 -- ================================== Tags =================================== --
 -- Descriptions are non-nullable in Oxibooru, so replace NULL values with empty description
 UPDATE public."tag"
@@ -67,6 +73,9 @@ WHERE "last_edit_time" IS NULL;
 
 INSERT INTO oxi."tag" ("id", "category_id", "description", "creation_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "category_id", "description", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."tag";
+
+-- Update sequence
+SELECT setval(pg_get_serial_sequence('oxi.tag', 'id'), (SELECT MAX("id") FROM oxi."tag"));
 
 -- ================================ Tag Names ================================ --
 INSERT INTO oxi."tag_name" ("tag_id", "order", "name")
@@ -153,6 +162,9 @@ ALTER COLUMN "flags" TYPE SMALLINT USING "flags"::SMALLINT;
 INSERT INTO oxi."post" ("id", "user_id", "file_size", "width", "height", "safety", "type", "mime_type", "checksum", "checksum_md5", "flags", "source", "creation_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "user_id", "file_size", "image_width", "image_height", "safety", "type", "mime-type", "checksum", "checksum_md5", "flags", "source", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."post";
 
+-- Update sequence
+SELECT setval(pg_get_serial_sequence('oxi.post', 'id'), (SELECT MAX("id") FROM oxi."post"));
+
 -- ============================= Post Relations ============================== --
 INSERT INTO oxi."post_relation" ("parent_id", "child_id")
 SELECT "parent_id", "child_id" FROM public."post_relation";
@@ -169,10 +181,16 @@ SELECT "post_id", "user_id", "time" AT TIME ZONE 'UTC' FROM public."post_favorit
 INSERT INTO oxi."post_feature" ("id", "post_id", "user_id", "time") OVERRIDING SYSTEM VALUE
 SELECT "id", "post_id", "user_id", "time" AT TIME ZONE 'UTC' FROM public."post_feature";
 
+-- Update sequence
+SELECT setval(pg_get_serial_sequence('oxi.post_feature', 'id'), (SELECT MAX("id") FROM oxi."post_feature"));
+
 -- ================================ Post Note ================================ --
 -- Converting the polygon column to REAL[][2] is hard, so I'm omitting post note conversion for now
 --INSERT INTO oxi."post_note" ("id", "post_id", "polygon", "text") OVERRIDING SYSTEM VALUE
 --SELECT "id", "post_id", "polygon", "text" FROM public."post_note";
+--
+---- Update sequence
+--SELECT setval(pg_get_serial_sequence('oxi.post_note', 'id'), (SELECT MAX("id") FROM oxi."post_note"));
 
 -- =============================== Post Score ================================ --
 INSERT INTO oxi."post_score" ("post_id", "user_id", "score", "time")
@@ -191,6 +209,9 @@ WHERE "last_edit_time" IS NULL;
 
 INSERT INTO oxi."comment" ("id", "user_id", "post_id", "text", "creation_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "user_id", "post_id", "text", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."comment";
+
+-- Update sequence
+SELECT setval(pg_get_serial_sequence('oxi.comment', 'id'), (SELECT MAX("id") FROM oxi."comment"));
 
 -- ============================= Comment Scores ============================== --
 INSERT INTO oxi."comment_score" ("comment_id", "user_id", "score", "time")
@@ -219,6 +240,9 @@ WHERE "default" = true;
 INSERT INTO oxi."pool_category" ("id", "name", "color", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "name", "color", CURRENT_TIMESTAMP FROM public."pool_category";
 
+-- Update sequence
+SELECT setval(pg_get_serial_sequence('oxi.pool_category', 'id'), (SELECT MAX("id") FROM oxi."pool_category"));
+
 -- ================================== Pools ================================== --
 -- Descriptions are non-nullable in Oxibooru, so replace NULL values with empty description
 UPDATE public."pool"
@@ -232,6 +256,9 @@ WHERE "last_edit_time" IS NULL;
 
 INSERT INTO oxi."pool" ("id", "category_id", "description", "creation_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "category_id", "description", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."pool";
+
+-- Update sequence
+SELECT setval(pg_get_serial_sequence('oxi.pool', 'id'), (SELECT MAX("id") FROM oxi."pool"));
 
 -- =============================== Pool Names ================================ --
 INSERT INTO oxi."pool_name" ("pool_id", "order", "name")
