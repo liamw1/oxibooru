@@ -5,7 +5,7 @@ use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{cache, signature, thumbnail};
 use crate::filesystem::Directory;
-use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
+use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
 use crate::model::post::{
     NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostRelation, PostSignature,
 };
@@ -17,6 +17,8 @@ use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::sync::LazyLock;
+use tokio::sync::Mutex;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -96,7 +98,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::path!("post" / i32))
         .and(api::auth())
         .and(warp::body::json())
-        .map(delete_post)
+        .then(delete_post)
         .map(api::Reply::from);
     let unfavorite_post = warp::delete()
         .and(warp::path!("post" / i32 / "favorite"))
@@ -121,6 +123,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 }
 
 const MAX_POSTS_PER_PAGE: i64 = 50;
+static ANTI_DEADLOCK_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
     fields
@@ -771,24 +774,38 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
     })
 }
 
-/// Deletes the post with the specified `post_id`. Uses deadlock_prone_transaction because
-/// post relation cascade deletion causes deadlocks when deleting related posts
-/// in quick succession.
-fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
+async fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 
     let mut conn = db::get_connection()?;
-    let mime_type = db::deadlock_prone_transaction::<_, api::Error, _>(&mut conn, 3, |conn| {
-        let (mime_type, post_version) = post::table
-            .find(post_id)
-            .select((post::mime_type, post::last_edit_time))
-            .first(conn)?;
-        api::verify_version(post_version, *client_version)?;
+    let relation_count: i64 = post_relation::table
+        .filter(post_relation::parent_id.eq(post_id))
+        .or_filter(post_relation::child_id.eq(post_id))
+        .count()
+        .first(&mut conn)?;
 
-        diesel::delete(post::table.find(post_id)).execute(conn)?;
-        Ok(mime_type)
-    })?;
+    let mut delete_and_get_mime_type = || -> ApiResult<MimeType> {
+        conn.transaction(|conn| {
+            let (mime_type, post_version) = post::table
+                .find(post_id)
+                .select((post::mime_type, post::last_edit_time))
+                .first(conn)?;
+            api::verify_version(post_version, *client_version)?;
+
+            diesel::delete(post::table.find(post_id)).execute(conn)?;
+            Ok(mime_type)
+        })
+    };
+
+    // Post relation cascade deletion can cause deadlocks when deleting related posts in quick
+    // succession, so we lock an aysnchronous mutex when deleting if the post has any relations.
+    let mime_type = if relation_count > 0 {
+        let _lock = ANTI_DEADLOCK_MUTEX.lock().await;
+        delete_and_get_mime_type()
+    } else {
+        delete_and_get_mime_type()
+    }?;
 
     if config::get().delete_source_files {
         filesystem::delete_post(&PostHash::new(post_id), mime_type)?;
