@@ -39,14 +39,20 @@ these are:
     less likely and depends on if I can find a good crate for them. SWF is 
     probably never going to be supported.
 
-3. **Snapshots**
+3. **Some post types**
+
+    Oxibooru does not currently support YouTube or Flash posts. YouTube posts
+    may be supported in the future, while Flash posts are unlikely to ever
+    see support.
+
+4. **Snapshots**
 
     Snapshots are not implemented in Oxibooru, and I don't have plans to
     implement them unless someone gives me a compelling case for them. I'm still
     not sure what purpose they actually served in Szurubooru. If you're a big
     snapshot fan then you may want to hold off on migrating.
 
-4. **Post Notes**
+5. **Post Notes**
     
     Post notes are represented very poorly in the Szurubooru database. The
     polygon column is stored as a serialized Python object, which makes
