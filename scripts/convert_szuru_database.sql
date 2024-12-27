@@ -185,12 +185,9 @@ SELECT "id", "post_id", "user_id", "time" AT TIME ZONE 'UTC' FROM public."post_f
 SELECT setval(pg_get_serial_sequence('oxi.post_feature', 'id'), (SELECT MAX("id") FROM oxi."post_feature"));
 
 -- ================================ Post Note ================================ --
--- Converting the polygon column to REAL[][2] is hard, so I'm omitting post note conversion for now
---INSERT INTO oxi."post_note" ("id", "post_id", "polygon", "text") OVERRIDING SYSTEM VALUE
---SELECT "id", "post_id", "polygon", "text" FROM public."post_note";
---
----- Update sequence
---SELECT setval(pg_get_serial_sequence('oxi.post_note', 'id'), (SELECT MAX("id") FROM oxi."post_note"));
+-- Converting the polygon column to REAL[][2] is surprising difficult, as entries in this
+-- column are serialized Python objects in Szurubooru. I'm skipping these for now
+-- until I figure out how to do it.
 
 -- =============================== Post Score ================================ --
 INSERT INTO oxi."post_score" ("post_id", "user_id", "score", "time")

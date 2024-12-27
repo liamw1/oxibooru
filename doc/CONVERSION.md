@@ -48,9 +48,11 @@ these are:
 
 4. **Post Notes**
     
-    This one isn't a fundamental limitation. I just don't know enough Postgres
-    to convert BYTEA to REAL[2][] so the conversion script ignores post notes. 
-    I'll get around to fixing this at some point.
+    Post notes are represented very poorly in the Szurubooru database. The
+    polygon column is stored as a serialized Python object, which makes
+    conversion very difficult as their exact layout is both hard to determine
+    and platform-dependent. These simply aren't handled in the conversion script
+    at the moment due to the complexity involved.
 
 ### Let's begin
 1. **Create a dump of the Szurubooru database**
