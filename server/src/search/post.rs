@@ -53,9 +53,11 @@ pub enum Token {
 
     // Requires join
     Tag,
+    Pool,
     #[strum(serialize = "submit", serialize = "upload", serialize = "uploader")]
     Uploader,
-    Pool,
+    Fav,
+    Comment,
     NoteText,
     TagCount,
     CommentCount,
@@ -111,14 +113,30 @@ pub fn build_query<'a>(
                 let subquery = apply_str_filter!(tags, tag_name::name, filter.unnegated());
                 Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
+            Token::Pool => {
+                let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
+                let subquery = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i32)?;
+                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
+            }
             Token::Uploader => {
                 let users = user::table.select(user::id).into_boxed();
                 let subquery = apply_str_filter!(users, user::name, filter);
                 Ok(query.filter(post::user_id.eq_any(subquery.nullable())))
             }
-            Token::Pool => {
-                let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
-                let subquery = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i32)?;
+            Token::Fav => {
+                let favorites = post_favorite::table
+                    .select(post_favorite::post_id)
+                    .inner_join(user::table)
+                    .into_boxed();
+                let subquery = apply_str_filter!(favorites, user::name, filter.unnegated());
+                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
+            }
+            Token::Comment => {
+                let comments = comment::table
+                    .select(comment::post_id)
+                    .inner_join(user::table)
+                    .into_boxed();
+                let subquery = apply_str_filter!(comments, user::name, filter.unnegated());
                 Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
             Token::NoteText => {
@@ -237,12 +255,12 @@ pub fn get_ordered_ids(
         // Diesel's annoying restrictions around dynamic queries. If you could call .grouped_by
         // on a boxed query, the implementation could be so much nicer.
         Token::Tag | Token::TagCount => tag_count_sorted(conn, query, sort, extra_args),
-        Token::Uploader => uploader_sorted(conn, query, sort, extra_args),
         Token::Pool => pool_sorted(conn, query, sort, extra_args),
-        Token::CommentCount => comment_count_sorted(conn, query, sort, extra_args),
+        Token::Uploader => uploader_sorted(conn, query, sort, extra_args),
+        Token::Fav | Token::FavCount => favorite_count_sorted(conn, query, sort, extra_args),
+        Token::Comment | Token::CommentCount => comment_count_sorted(conn, query, sort, extra_args),
         Token::RelationCount => relation_count_sorted(conn, query, sort, extra_args),
         Token::NoteCount => note_count_sorted(conn, query, sort, extra_args),
-        Token::FavCount => favorite_count_sorted(conn, query, sort, extra_args),
         Token::FeatureCount => feature_count_sorted(conn, query, sort, extra_args),
         Token::CommentTime => comment_time_sorted(conn, query, sort, extra_args),
         Token::FavTime => favorite_time_sorted(conn, query, sort, extra_args),
