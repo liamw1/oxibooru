@@ -684,51 +684,53 @@ data.
 
     **Named tokens**
 
-    | `<key>`              | Description                                                                                                                             |
-    | -------------------- | ----------------------------------------------------------                                                                              |
-    | `id`                 | having given post number                                                                                                                |
-    | `tag`                | having given tag (accepts wildcards)                                                                                                    |
-    | `score`              | having given score                                                                                                                      |
-    | `uploader`           | uploaded by given user (accepts wildcards)                                                                                              |
-    | `upload`             | alias of upload                                                                                                                         |
-    | `submit`             | alias of upload                                                                                                                         |
-    | `pool`               | belonging to the pool with the given ID                                                                                                 |
-    | `tag-count`          | having given number of tags                                                                                                             |
-    | `comment-count`      | having given number of comments                                                                                                         |
-    | `fav-count`          | favorited by given number of users                                                                                                      |
-    | `note-count`         | having given number of annotations                                                                                                      |
-    | `note-text`          | having given note text (accepts wildcards)                                                                                              |
-    | `relation-count`     | having given number of relations                                                                                                        |
-    | `feature-count`      | having been featured given number of times                                                                                              |
-    | `type`               | given type of posts. `<value>` can be either `image`, `animation` (or `animated` or `anim`), `flash` (or `swf`) or `video` (or `webm`). |
-    | `content-checksum`   | having given SHA1 checksum                                                                                                              |
-    | `file-size`          | having given file size (in bytes)                                                                                                       |
-    | `image-width`        | having given image width (where applicable)                                                                                             |
-    | `image-height`       | having given image height (where applicable)                                                                                            |
-    | `image-area`         | having given number of pixels (image width * image height)                                                                              |
-    | `image-aspect-ratio` | having given aspect ratio (image width / image height)                                                                                  |
-    | `image-ar`           | alias of `image-aspect-ratio`                                                                                                           |
-    | `width`              | alias of `image-width`                                                                                                                  |
-    | `height`             | alias of `image-height`                                                                                                                 |
-    | `area`               | alias of `image-area`                                                                                                                   |
-    | `ar`                 | alias of `image-aspect-ratio`                                                                                                           |
-    | `aspect-ratio`       | alias of `image-aspect-ratio`                                                                                                           |
-    | `creation-date`      | posted at given date                                                                                                                    |
-    | `creation-time`      | alias of `creation-date`                                                                                                                |
-    | `date`               | alias of `creation-date`                                                                                                                |
-    | `time`               | alias of `creation-date`                                                                                                                |
-    | `last-edit-date`     | edited at given date                                                                                                                    |
-    | `last-edit-time`     | alias of `last-edit-date`                                                                                                               |
-    | `edit-date`          | alias of `last-edit-date`                                                                                                               |
-    | `edit-time`          | alias of `last-edit-date`                                                                                                               |
-    | `comment-date`       | commented at given date                                                                                                                 |
-    | `comment-time`       | alias of `comment-date`                                                                                                                 |
-    | `fav-date`           | last favorited at given date                                                                                                            |
-    | `fav-time`           | alias of `fav-date`                                                                                                                     |
-    | `feature-date`       | featured at given date                                                                                                                  |
-    | `feature-time`       | alias of `feature-time`                                                                                                                 |
-    | `safety`             | having given safety. `<value>` can be either `safe`, `sketchy` (or `questionable`) or `unsafe`.                                         |
-    | `rating`             | alias of `safety`                                                                                                                       |
+    | `<key>`              | Description                                                                                                          |
+    | -------------------- | ----------------------------------------------------------                                                           |
+    | `id`                 | having given post number                                                                                             |
+    | `tag`                | having given tag (accepts wildcards)                                                                                 |
+    | `score`              | having given score                                                                                                   |
+    | `uploader`           | uploaded by given user (accepts wildcards)                                                                           |
+    | `upload`             | alias of upload                                                                                                      |
+    | `submit`             | alias of upload                                                                                                      |
+    | `comment`            | commented by given user (accepts wildcards)                                                                          |
+    | `fav`                | favorited by given user (accepts wildcards)                                                                          |
+    | `pool`               | belonging to the pool with the given ID                                                                              |
+    | `tag-count`          | having given number of tags                                                                                          |
+    | `comment-count`      | having given number of comments                                                                                      |
+    | `fav-count`          | favorited by given number of users                                                                                   |
+    | `note-count`         | having given number of annotations                                                                                   |
+    | `note-text`          | having given note text (accepts wildcards)                                                                           |
+    | `relation-count`     | having given number of relations                                                                                     |
+    | `feature-count`      | having been featured given number of times                                                                           |
+    | `type`               | given type of posts. `<value>` can be either `image`, `animation` (or `animated` or `anim`), or `video` (or `webm`). |
+    | `content-checksum`   | having given SHA1 checksum                                                                                           |
+    | `file-size`          | having given file size (in bytes)                                                                                    |
+    | `image-width`        | having given image width (where applicable)                                                                          |
+    | `image-height`       | having given image height (where applicable)                                                                         |
+    | `image-area`         | having given number of pixels (image width * image height)                                                           |
+    | `image-aspect-ratio` | having given aspect ratio (image width / image height)                                                               |
+    | `image-ar`           | alias of `image-aspect-ratio`                                                                                        |
+    | `width`              | alias of `image-width`                                                                                               |
+    | `height`             | alias of `image-height`                                                                                              |
+    | `area`               | alias of `image-area`                                                                                                |
+    | `ar`                 | alias of `image-aspect-ratio`                                                                                        |
+    | `aspect-ratio`       | alias of `image-aspect-ratio`                                                                                        |
+    | `creation-date`      | posted at given date                                                                                                 |
+    | `creation-time`      | alias of `creation-date`                                                                                             |
+    | `date`               | alias of `creation-date`                                                                                             |
+    | `time`               | alias of `creation-date`                                                                                             |
+    | `last-edit-date`     | edited at given date                                                                                                 |
+    | `last-edit-time`     | alias of `last-edit-date`                                                                                            |
+    | `edit-date`          | alias of `last-edit-date`                                                                                            |
+    | `edit-time`          | alias of `last-edit-date`                                                                                            |
+    | `comment-date`       | commented at given date                                                                                              |
+    | `comment-time`       | alias of `comment-date`                                                                                              |
+    | `fav-date`           | last favorited at given date                                                                                         |
+    | `fav-time`           | alias of `fav-date`                                                                                                  |
+    | `feature-date`       | featured at given date                                                                                               |
+    | `feature-time`       | alias of `feature-time`                                                                                              |
+    | `safety`             | having given safety. `<value>` can be either `safe`, `sketchy` (or `questionable`) or `unsafe`.                      |
+    | `rating`             | alias of `safety`                                                                                                    |
 
     **Sort style tokens**
 
@@ -741,6 +743,8 @@ data.
     | `upload`             | alias of upload                                  |
     | `submit`             | alias of upload                                  |
     | `pool`               | in most pools                                    |
+    | `comment`            | alias of `comment-count`                         |
+    | `fav`                | alias of `fav-count`                             |
     | `tag-count`          | with most tags                                   |
     | `tag`                | alias of `tag-count`                             |
     | `comment-count`      | most commented first                             |
@@ -2605,9 +2609,7 @@ A result of reverse image search operation.
 -  `exact-post`: a [post resource](#post) that is exact byte-to-byte duplicate
    of the input file. May be `null`.
 - `<similar-post>`: a [post resource](#post) that isn't exact duplicate, but
-   visually resembles the input file. Works only on images and animations, i.e.
-   does not work for videos and Flash movies. For non-images and corrupted
-   images, this list is empty.
+   visually resembles the input file.
 - `<distance>`: distance from the original image (0..1). The lower this value
    is, the more similar the post is.
 
