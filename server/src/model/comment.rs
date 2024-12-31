@@ -1,7 +1,7 @@
 use crate::model::enums::Score;
 use crate::model::post::Post;
 use crate::model::user::User;
-use crate::model::IntegerIdentifiable;
+use crate::model::Enumerable;
 use crate::schema::{comment, comment_score};
 use crate::time::DateTime;
 use diesel::pg::Pg;
@@ -29,7 +29,7 @@ pub struct Comment {
     pub last_edit_time: DateTime,
 }
 
-impl IntegerIdentifiable for Comment {
+impl Enumerable for Comment {
     fn id(&self) -> i32 {
         self.id
     }

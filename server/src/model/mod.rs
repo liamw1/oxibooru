@@ -5,6 +5,6 @@ pub mod post;
 pub mod tag;
 pub mod user;
 
-pub trait IntegerIdentifiable {
+pub trait Enumerable {
     fn id(&self) -> i32;
 }

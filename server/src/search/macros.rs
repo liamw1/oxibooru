@@ -41,15 +41,15 @@ macro_rules! apply_str_filter {
 /// Used for filtering based on subqueries which establish a one-to-many or many-to-many relationship.
 ///
 /// For instance, let's say we have a query to find all posts that don't have the tag "wallpaper".
-/// Dynamic join aren't easy, so instead we use subqueries. We perform a subquery that joins the
+/// Dynamic joins aren't easy, so instead we use subqueries. We perform a subquery that joins the
 /// post_tag table with the tag_name table and can return a list of post_tags matching our condition.
 /// If we were to apply our filter naively, we would have a list of all post_tags associated with any
 /// tag other than "wallpaper". But this means that our query would return all posts with any tag other
 /// than "wallpaper", including posts with the tag "wallpaper"!
 ///
-/// Instead, we would apply our filter without negation to the subquery, which would return post_tags
-/// associated with "wallpaper". Then, we can plug that subquery into this function to return the
-/// desired result.
+/// Instead, we should apply our filter without negation to the subquery, which returns post_tags
+/// associated with "wallpaper". Then, we can plug that subquery into this function which performs
+/// the negation, giving us the desired result.
 #[macro_export]
 macro_rules! apply_subquery_filter {
     ($query:expr, $expression:expr, $filter:expr, $subquery:expr) => {

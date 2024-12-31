@@ -1,10 +1,9 @@
 use crate::model::tag::TagCategory;
 use crate::schema::{tag, tag_category};
 use crate::time::DateTime;
-use diesel::dsl;
+use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
-use std::collections::HashMap;
 
 #[derive(Serialize)]
 pub struct TagCategoryInfo {
@@ -39,22 +38,19 @@ impl TagCategoryInfo {
     }
 
     pub fn all(conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
-        let tag_categories: Vec<TagCategory> = tag_category::table.order(tag_category::order).load(conn)?;
-        let tag_category_usages: HashMap<i32, Option<i64>> = tag_category::table
+        let tag_categories: Vec<(TagCategory, Option<i64>)> = tag_category::table
             .left_join(tag::table)
             .group_by(tag_category::id)
-            .select((tag_category::id, dsl::count(tag::id).nullable()))
-            .load(conn)?
-            .into_iter()
-            .collect();
+            .select((TagCategory::as_select(), count(tag::id).nullable()))
+            .load(conn)?;
 
         Ok(tag_categories
             .into_iter()
-            .map(|category| Self {
+            .map(|(category, usages)| Self {
                 version: category.last_edit_time,
                 name: category.name,
                 color: category.color,
-                usages: tag_category_usages[&category.id].unwrap_or(0),
+                usages: usages.unwrap_or(0),
                 order: category.order,
                 default: category.id == 0,
             })

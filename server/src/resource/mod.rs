@@ -7,7 +7,7 @@ pub mod tag_category;
 pub mod user;
 pub mod user_token;
 
-use crate::model::IntegerIdentifiable;
+use crate::model::Enumerable;
 
 /// NOTE: The more complicated queries in this module rely on the behavior of diesel's
 /// grouped_by function preserving the relative order between elements. This seems to be the
@@ -41,15 +41,22 @@ fn check_batch_results(batch_size: usize, post_count: usize) {
 /// NOTE: This algorithm is O(n^2) in values.len(), which could be made O(n) with a HashMap implementation.
 /// However, for small n this Vec-based implementation is probably much faster. Since we retrieve
 /// 40-50 resources at a time, I'm leaving it like this for the time being until it proves to be slow.
-fn order_by<T>(mut values: Vec<T>, order: &[i32]) -> Vec<T>
+fn order_as<T>(values: Vec<T>, order: &[i32]) -> Vec<T>
 where
-    T: IntegerIdentifiable,
+    T: Enumerable,
+{
+    order_transformed_as(values, order, |value| value.id())
+}
+
+fn order_transformed_as<V, F>(mut values: Vec<V>, order: &[i32], get_id: F) -> Vec<V>
+where
+    F: Fn(&V) -> i32,
 {
     debug_assert_eq!(values.len(), order.len());
 
     let mut index = 0;
     while index < order.len() {
-        let value_id = values[index].id();
+        let value_id = get_id(&values[index]);
         let correct_index = order.iter().position(|&id| id == value_id).unwrap();
         debug_assert!(correct_index >= index, "Value id is not unique");
         if index != correct_index {
@@ -66,9 +73,9 @@ where
 /// the missing values are padded as None in the resulting vector.
 ///
 /// The note in the above comment applies here as well.
-fn order_as<V, T, F>(unordered_values: Vec<V>, ordered_values: &[T], get_id: F) -> Vec<Option<V>>
+fn order_like<V, T, F>(unordered_values: Vec<V>, ordered_values: &[T], get_id: F) -> Vec<Option<V>>
 where
-    T: IntegerIdentifiable,
+    T: Enumerable,
     F: Fn(&V) -> i32,
 {
     debug_assert!(unordered_values.len() <= ordered_values.len());

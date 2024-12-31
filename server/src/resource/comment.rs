@@ -1,6 +1,6 @@
 use crate::model::comment::{Comment, CommentScore};
 use crate::model::enums::{AvatarStyle, Rating};
-use crate::model::IntegerIdentifiable;
+use crate::model::Enumerable;
 use crate::resource;
 use crate::resource::user::MicroUser;
 use crate::schema::{comment, comment_score, user};
@@ -25,7 +25,7 @@ pub struct CommentInfo {
     pub own_score: Rating,
 }
 
-impl IntegerIdentifiable for CommentInfo {
+impl Enumerable for CommentInfo {
     fn id(&self) -> i32 {
         self.id
     }
@@ -80,7 +80,7 @@ impl CommentInfo {
         comment_ids: Vec<i32>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_posts = comment::table.filter(comment::id.eq_any(&comment_ids)).load(conn)?;
-        let comments = resource::order_by(unordered_posts, &comment_ids);
+        let comments = resource::order_as(unordered_posts, &comment_ids);
         Self::new_batch(conn, client, comments)
     }
 }
@@ -93,7 +93,7 @@ fn get_owners(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         .select((comment::id, user::name, user::avatar_style))
         .load::<(i32, String, AvatarStyle)>(conn)
         .map(|comment_info| {
-            resource::order_as(comment_info, comments, |(id, ..)| *id)
+            resource::order_like(comment_info, comments, |(id, ..)| *id)
                 .into_iter()
                 .map(|comment_owner| {
                     comment_owner.map(|(_, username, avatar_style)| MicroUser::new(username, avatar_style))
@@ -108,7 +108,7 @@ fn get_scores(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         .select((comment_score::comment_id, sum(comment_score::score)))
         .load(conn)
         .map(|comment_scores| {
-            resource::order_as(comment_scores, comments, |(id, _)| *id)
+            resource::order_like(comment_scores, comments, |(id, _)| *id)
                 .into_iter()
                 .map(|comment_score| comment_score.and_then(|(_, score)| score).unwrap_or(0))
                 .collect()
@@ -121,7 +121,7 @@ fn get_client_scores(conn: &mut PgConnection, client: Option<i32>, comments: &[C
             .filter(comment_score::comment_id.eq(client_id))
             .load::<CommentScore>(conn)
             .map(|client_scores| {
-                resource::order_as(client_scores, comments, |score| score.comment_id)
+                resource::order_like(client_scores, comments, |score| score.comment_id)
                     .into_iter()
                     .map(|client_score| client_score.map(|score| Rating::from(score.score)).unwrap_or_default())
                     .collect()

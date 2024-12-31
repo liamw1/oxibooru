@@ -1,6 +1,6 @@
 use crate::content::hash;
 use crate::model::enums::{AvatarStyle, UserRank};
-use crate::model::IntegerIdentifiable;
+use crate::model::Enumerable;
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
 use diesel::pg::Pg;
@@ -49,7 +49,7 @@ impl User {
     }
 }
 
-impl IntegerIdentifiable for User {
+impl Enumerable for User {
     fn id(&self) -> i32 {
         self.id
     }

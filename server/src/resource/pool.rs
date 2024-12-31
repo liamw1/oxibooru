@@ -8,7 +8,6 @@ use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
-use std::collections::HashMap;
 use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
@@ -129,21 +128,24 @@ impl PoolInfo {
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_pools = pool::table.filter(pool::id.eq_any(&pool_ids)).load(conn)?;
-        let pools = resource::order_by(unordered_pools, &pool_ids);
+        let pools = resource::order_as(unordered_pools, &pool_ids);
         Self::new_batch(conn, pools, fields)
     }
 }
 
 fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<String>> {
-    let category_names: HashMap<i32, String> = pool_category::table
-        .select((pool_category::id, pool_category::name))
-        .load(conn)?
-        .into_iter()
-        .collect();
-    Ok(pools
-        .iter()
-        .map(|pool| category_names[&pool.category_id].clone())
-        .collect())
+    let pool_ids: Vec<_> = pools.iter().map(|pool| pool.id).collect();
+    pool::table
+        .inner_join(pool_category::table)
+        .select((pool::id, pool_category::name))
+        .filter(pool::id.eq_any(&pool_ids))
+        .load(conn)
+        .map(|category_names| {
+            resource::order_transformed_as(category_names, &pool_ids, |(pool_id, _)| *pool_id)
+                .into_iter()
+                .map(|(_, category_name)| category_name)
+                .collect()
+        })
 }
 
 fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<String>>> {
@@ -180,7 +182,7 @@ fn get_post_counts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<i
         .select((pool_post::pool_id, count(pool_post::post_id)))
         .load(conn)
         .map(|usages| {
-            resource::order_as(usages, pools, |(id, _)| *id)
+            resource::order_like(usages, pools, |(id, _)| *id)
                 .into_iter()
                 .map(|post_count| post_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()

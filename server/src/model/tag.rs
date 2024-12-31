@@ -1,4 +1,4 @@
-use crate::model::IntegerIdentifiable;
+use crate::model::Enumerable;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::time::DateTime;
 use diesel::pg::Pg;
@@ -49,7 +49,7 @@ pub struct Tag {
     pub last_edit_time: DateTime,
 }
 
-impl IntegerIdentifiable for Tag {
+impl Enumerable for Tag {
     fn id(&self) -> i32 {
         self.id
     }
