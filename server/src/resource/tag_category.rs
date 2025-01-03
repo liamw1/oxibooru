@@ -42,6 +42,7 @@ impl TagCategoryInfo {
             .left_join(tag::table)
             .group_by(tag_category::id)
             .select((TagCategory::as_select(), count(tag::id).nullable()))
+            .order(tag_category::order)
             .load(conn)?;
 
         Ok(tag_categories

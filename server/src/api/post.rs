@@ -187,8 +187,6 @@ struct PostNeighbors {
 }
 
 fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostNeighbors> {
-    let _timer = crate::time::Timer::new("get_post_neighbors");
-
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
