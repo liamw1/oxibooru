@@ -1,5 +1,4 @@
 use crate::math::cartesian::CartesianProduct;
-use crate::math::func;
 use crate::math::interval::Interval;
 use crate::math::point::IPoint2;
 use crate::math::rect::{Array2D, IRect};
@@ -72,7 +71,7 @@ pub fn generate_indexes(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) 
     const _: () = assert!(NUM_LETTERS as u32 + NUM_WORD_DIGITS <= u32::MAX.ilog(NUM_REDUCED_SYMBOLS)); // Make sure that information needed can't exceed u32 trits
 
     let signature = uncompress(compressed_signature);
-    let word_positions: [usize; NUM_WORDS] = func::linspace(0, signature.len() - NUM_LETTERS);
+    let word_positions: [usize; NUM_WORDS] = Interval::new(0, signature.len() - NUM_LETTERS).linspace();
     let words: [[u8; NUM_LETTERS]; NUM_WORDS] = core::array::from_fn(|word_index| {
         let pos = word_positions[word_index];
         signature[pos..(pos + NUM_LETTERS)].try_into().unwrap()
@@ -130,96 +129,57 @@ fn grid_square_radius(width: u32, height: u32) -> u32 {
     (grid_square_size / 2.0).to_u32().unwrap()
 }
 
+fn crop_position(iter: impl Iterator<Item = u64>, total_delta: u64) -> usize {
+    let delta_limit = CROP_PERCENTILE * total_delta / 100;
+    let iter = std::iter::once(0).chain(iter);
+    iter.scan(0, |cumulative_delta, delta| {
+        *cumulative_delta += delta;
+        Some(*cumulative_delta)
+    })
+    .position(|cumulative_delta| cumulative_delta >= delta_limit)
+    .unwrap_or(0)
+}
+
+fn crop(deltas: &[u64]) -> Interval<u32> {
+    let total_delta = deltas.iter().sum();
+    let lower = crop_position(deltas.iter().copied(), total_delta);
+    let upper = deltas.len().saturating_sub(1) - crop_position(deltas.iter().rev().copied(), total_delta);
+    Interval::new(lower as u32, upper as u32)
+}
+
 fn compute_grid_points(image: &GrayImage) -> GridPoints {
-    let bounds = IRect::new_zero_based(image.width() - 2, image.height() - 2);
-
-    let mut total_row_delta = 0;
-    let mut total_column_delta = 0;
-    for index in bounds.iter() {
-        let pixel_value = image.get_pixel(index.i, index.j).0[0];
-
-        let row_adjacent_value = image.get_pixel(index.i + 1, index.j).0[0];
-        total_row_delta += u64::from(pixel_value.abs_diff(row_adjacent_value));
-
-        let column_adjacent_value = image.get_pixel(index.i, index.j + 1).0[0];
-        total_column_delta += u64::from(pixel_value.abs_diff(column_adjacent_value));
-    }
-
-    let calc_row_delta = |i: u32| -> u64 {
-        (0..image.height())
-            .map(|j| {
-                let pixel_value = image.get_pixel(i, j).0[0];
-                let row_adjacent_value = image.get_pixel(i + 1, j).0[0];
-                u64::from(pixel_value.abs_diff(row_adjacent_value))
-            })
-            .sum()
-    };
-    let calc_column_delta = |j: u32| -> u64 {
-        (0..image.width())
-            .map(|i| {
-                let pixel_value = image.get_pixel(i, j).0[0];
-                let column_adjacent_value = image.get_pixel(i, j + 1).0[0];
-                u64::from(pixel_value.abs_diff(column_adjacent_value))
-            })
-            .sum()
-    };
-
-    let row_delta_limit = CROP_PERCENTILE * total_row_delta / 100;
-    let column_delta_limit = CROP_PERCENTILE * total_column_delta / 100;
-
-    let rows = Interval::new(0, image.width() - 2);
-    let columns = Interval::new(0, image.height() - 2);
-
-    let mut lower_row_index = 0;
-    let mut cumulative_row_delta = 0;
-    for i in rows.iter() {
-        if cumulative_row_delta >= row_delta_limit {
-            lower_row_index = i;
-            break;
-        }
-        cumulative_row_delta += calc_row_delta(i);
-    }
-
-    let mut upper_row_index = image.width() - 1;
-    let mut cumulative_row_delta = 0;
-    for i in rows.iter().rev() {
-        if cumulative_row_delta >= row_delta_limit {
-            upper_row_index = i;
-            break;
-        }
-        cumulative_row_delta += calc_row_delta(i);
-    }
-
-    let mut lower_column_index = 0;
-    let mut cumulative_column_delta = 0;
-    for j in columns.iter() {
-        if cumulative_column_delta >= column_delta_limit {
-            lower_column_index = j;
-            break;
-        }
-        cumulative_column_delta += calc_column_delta(j);
-    }
-
-    let mut upper_column_index = image.height() - 1;
-    let mut cumulative_column_delta = 0;
-    for j in columns.iter().rev() {
-        if cumulative_column_delta >= column_delta_limit {
-            upper_column_index = j;
-            break;
-        }
-        cumulative_column_delta += calc_column_delta(j);
-    }
+    let row_deltas: Vec<_> = (0..image.width() - 1)
+        .map(|i| {
+            (0..image.height())
+                .map(|j| {
+                    let pixel = image.get_pixel(i, j);
+                    let row_adjacent_pixel = image.get_pixel(i + 1, j);
+                    u64::from(pixel.0[0].abs_diff(row_adjacent_pixel.0[0]))
+                })
+                .sum()
+        })
+        .collect();
+    let column_deltas: Vec<_> = (0..image.height() - 1)
+        .map(|j| {
+            (0..image.width())
+                .map(|i| {
+                    let pixel = image.get_pixel(i, j);
+                    let column_adjacent_pixel = image.get_pixel(i, j + 1);
+                    u64::from(pixel.0[0].abs_diff(column_adjacent_pixel.0[0]))
+                })
+                .sum()
+        })
+        .collect();
+    let mut cropped_row_bounds = crop(&row_deltas);
+    let mut cropped_column_bounds = crop(&column_deltas);
 
     // Adjust cropped bounds so that grid squares won't protrude into image borders
-    let estimated_grid_square_radius =
-        grid_square_radius(upper_row_index - lower_row_index, upper_column_index - lower_column_index);
-    lower_row_index += estimated_grid_square_radius;
-    upper_row_index -= estimated_grid_square_radius;
-    lower_column_index += estimated_grid_square_radius;
-    upper_column_index -= estimated_grid_square_radius;
+    let estimated_grid_square_radius = grid_square_radius(cropped_row_bounds.length(), cropped_column_bounds.length());
+    cropped_row_bounds.shrink(estimated_grid_square_radius);
+    cropped_column_bounds.shrink(estimated_grid_square_radius);
 
-    let x_coords: [u32; GRID_SIZE] = func::linspace(lower_row_index, upper_row_index);
-    let y_coords: [u32; GRID_SIZE] = func::linspace(lower_column_index, upper_column_index);
+    let x_coords: [u32; GRID_SIZE] = cropped_row_bounds.linspace();
+    let y_coords: [u32; GRID_SIZE] = cropped_column_bounds.linspace();
     CartesianProduct::new(x_coords, y_coords)
 }
 
@@ -282,8 +242,13 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(
     let chunk_size = match filtered_values.len() % LUMINANCE_LEVELS {
         0 => filtered_values.len() / LUMINANCE_LEVELS,
         _ => filtered_values.len() / LUMINANCE_LEVELS + 1,
-    };
-    array_from_iter(filtered_values.chunks(chunk_size).map(|chunk| chunk.last().copied()))
+    }
+    .max(1); // Make sure chunk_size is not 0
+
+    // Cutoff array may need to be padded if there are not enough filtered values to split into LUMINANCE_LEVELS chunks
+    let pad_amount = LUMINANCE_LEVELS.saturating_sub(filtered_values.len());
+    let chunks = filtered_values.chunks(chunk_size).map(|chunk| chunk.last().copied());
+    array_from_iter(std::iter::repeat(None).take(pad_amount).chain(chunks))
 }
 
 fn normalize(differences: [i16; SIGNATURE_SIZE]) -> [u8; SIGNATURE_SIZE] {
@@ -342,58 +307,44 @@ mod test {
     use std::path::Path;
 
     #[test]
+    fn edge_cases() {
+        let (one_pixel, _) = image_properties("1_pixel.png");
+        let (monochrome, _) = image_properties("monochrome.png");
+        let (gradient, _) = image_properties("gradient.png");
+
+        assert_eq!(distance(one_pixel, monochrome), 0.0);
+        assert_ne!(distance(one_pixel, gradient), 0.0);
+    }
+
+    #[test]
     fn image_signature_regression() {
-        let image1 = image::open(asset_path(Path::new("png.png"))).unwrap();
-        let sig1 = compute(&image1);
+        let (png, _) = image_properties("png.png");
+        let (bmp, _) = image_properties("bmp.bmp");
+        let (jpeg, _) = image_properties("jpeg.jpg");
+        let (similar_jpeg, _) = image_properties("jpeg-similar.jpg");
 
-        let image2 = image::open(asset_path(Path::new("bmp.bmp"))).unwrap();
-        let sig2 = compute(&image2);
-
-        let image3 = image::open(asset_path(Path::new("jpeg.jpg"))).unwrap();
-        let sig3 = compute(&image3);
-
-        let image4 = image::open(asset_path(Path::new("jpeg-similar.jpg"))).unwrap();
-        let sig4 = compute(&image4);
-
-        // println!("");
-        // println!("Distances:");
-        // println!("{}", normalized_distance(&sig3, &sig4));
-        // println!("{}", normalized_distance(&sig1, &sig3));
-        // println!("");
+        println!("");
+        println!("Distances:");
+        println!("{}", distance(jpeg, similar_jpeg));
+        println!("{}", distance(png, jpeg));
+        println!("");
 
         // Identical images of different formats
-        assert_eq!(distance(sig1, sig2), 0.0);
+        assert_eq!(distance(png, bmp), 0.0);
         // Similar images of same format
-        assert!((distance(sig3, sig4) - 0.1583484677615785).abs() < 1e-8);
+        assert!((distance(jpeg, similar_jpeg) - 0.1583484677615785).abs() < 1e-8);
         // Different images
-        assert!((distance(sig1, sig3) - 0.6990083687106061).abs() < 1e-8);
+        assert!((distance(png, jpeg) - 0.6990083687106061).abs() < 1e-8);
     }
 
     #[test]
     fn signature_robustness() {
-        let lisa = image::open(asset_path(Path::new("lisa.jpg"))).unwrap();
-        let lisa_signature = compute(&lisa);
-        let lisa_indexes = generate_indexes(lisa_signature);
-
-        let lisa_border = image::open(asset_path(Path::new("lisa-border.jpg"))).unwrap();
-        let lisa_border_signature = compute(&lisa_border);
-        let lisa_border_indexes = generate_indexes(lisa_border_signature);
-
-        let lisa_large_border = image::open(asset_path(Path::new("lisa-large_border.jpg"))).unwrap();
-        let lisa_large_border_signature = compute(&lisa_large_border);
-        let lisa_large_border_indexes = generate_indexes(lisa_large_border_signature);
-
-        let lisa_wide = image::open(asset_path(Path::new("lisa-wide.jpg"))).unwrap();
-        let lisa_wide_signature = compute(&lisa_wide);
-        let lisa_wide_indexes = generate_indexes(lisa_wide_signature);
-
-        let lisa_cat = image::open(asset_path(Path::new("lisa-cat.jpg"))).unwrap();
-        let lisa_cat_signature = compute(&lisa_cat);
-        let lisa_cat_indexes = generate_indexes(lisa_cat_signature);
-
-        let starry_night = image::open(asset_path(Path::new("starry_night.jpg"))).unwrap();
-        let starry_night_signature = compute(&starry_night);
-        let starry_night_indexes = generate_indexes(starry_night_signature);
+        let (lisa_signature, lisa_indexes) = image_properties("lisa.jpg");
+        let (lisa_border_signature, lisa_border_indexes) = image_properties("lisa-border.jpg");
+        let (lisa_large_border_signature, lisa_large_border_indexes) = image_properties("lisa-large_border.jpg");
+        let (lisa_wide_signature, lisa_wide_indexes) = image_properties("lisa-wide.jpg");
+        let (lisa_cat_signature, lisa_cat_indexes) = image_properties("lisa-cat.jpg");
+        let (starry_night_signature, starry_night_indexes) = image_properties("starry_night.jpg");
 
         println!("");
         println!("Distances:");
@@ -451,5 +402,11 @@ mod test {
 
     fn matching_indexes(indexes_a: &[i32], indexes_b: &[i32]) -> usize {
         indexes_a.iter().zip(indexes_b.iter()).filter(|(a, b)| a == b).count()
+    }
+
+    fn image_properties(asset: &str) -> ([i64; COMPRESSED_SIGNATURE_SIZE], [i32; NUM_WORDS]) {
+        let signature = compute(&image::open(asset_path(Path::new(asset))).unwrap());
+        let indexes = generate_indexes(signature);
+        (signature, indexes)
     }
 }

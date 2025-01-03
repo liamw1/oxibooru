@@ -27,17 +27,18 @@ impl<T: PrimInt> Interval<T> {
     }
 
     pub fn length(self) -> T {
-        let len = self.end - self.start;
-        std::cmp::max(len, T::zero())
-    }
-
-    #[cfg(test)]
-    pub fn is_empty_set(self) -> bool {
-        self.start >= self.end
+        match self.is_empty_set() {
+            true => T::zero(),
+            false => self.end - self.start,
+        }
     }
 
     pub fn contains<U: PrimInt>(self, value: U) -> bool {
         T::from(value).map_or(false, |n| self.start <= n && n < self.end)
+    }
+
+    pub fn is_empty_set(self) -> bool {
+        self.start >= self.end
     }
 
     pub fn intersection(a: Self, b: Self) -> Self {
@@ -46,8 +47,41 @@ impl<T: PrimInt> Interval<T> {
         Self { start, end }
     }
 
+    pub fn linspace<const N: usize>(self) -> [T; N] {
+        let min_f64 = self.min().to_f64().unwrap();
+        let max_f64 = self.max().to_f64().unwrap();
+        let num_f64 = N as f64;
+
+        let mut arr = [T::zero(); N];
+        match N {
+            0 => (),
+            1 => {
+                let midpoint = 0.5 * min_f64 + 0.5 * max_f64;
+                arr[0] = T::from(midpoint).unwrap();
+            }
+            _ => {
+                let step = (max_f64 - min_f64) / (num_f64 - 1.0);
+                for (i, item) in arr.iter_mut().enumerate() {
+                    let point = (min_f64 + i as f64 * step).round();
+                    *item = T::from(point).unwrap();
+                }
+            }
+        }
+        arr
+    }
+
     pub fn iter(self) -> Range<T> {
         self.start..self.end
+    }
+
+    pub fn shrink(&mut self, n: T) {
+        self.start = self.start.saturating_add(n);
+        self.end = self.end.saturating_sub(n);
+        if self.is_empty_set() {
+            let midpoint = self.end + (self.start - self.end) / (T::one() + T::one());
+            self.start = midpoint;
+            self.end = midpoint + T::one();
+        }
     }
 }
 
@@ -110,5 +144,17 @@ mod test {
         let interval_b = Interval::new(11, 12);
         assert!(Interval::intersection(interval_a, interval_b).is_empty_set());
         assert!(Interval::intersection(interval_b, interval_a).is_empty_set());
+    }
+
+    #[test]
+    fn create_linspace() {
+        assert_eq!(Interval::new(0, 2).linspace(), [0; 0]);
+        assert_eq!(Interval::new(0, 2).linspace(), [1]);
+        assert_eq!(Interval::new(0, 2).linspace(), [0, 2]);
+        assert_eq!(Interval::new(0, 2).linspace(), [0, 1, 2]);
+        assert_eq!(Interval::new(0, 5).linspace(), [0, 3, 5]);
+        assert_eq!(Interval::new(0, 100).linspace(), [0, 20, 40, 60, 80, 100]);
+        assert_eq!(Interval::new(0, 100).linspace(), [0, 17, 33, 50, 67, 83, 100]);
+        assert_eq!(Interval::new(100, 0).linspace(), [100, 83, 67, 50, 33, 17, 0]);
     }
 }
