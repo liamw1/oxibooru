@@ -54,8 +54,7 @@ RUN mkdir -p /opt/app /data \
   && useradd -u ${PUID} -g ${PGID} -ms /bin/bash app \
   && chown -R app:app /opt/app /data
 
-# Copy over application binary and config file
-COPY --from=builder /opt/app/config.toml config.toml
+# Copy over application binary
 COPY --from=builder /opt/app/target/release/server server
 
 # Run it!

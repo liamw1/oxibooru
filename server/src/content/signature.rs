@@ -114,12 +114,12 @@ where
 {
     let mut array = [T::default(); N];
 
-    let mut i = 0; // This should be optimized away in release builds
-    for (array_item, iter_item) in array.iter_mut().zip(iter) {
-        *array_item = iter_item;
-        i += 1;
+    let mut iter_len = 0; // This should be optimized away in release builds
+    for (i, iter_item) in iter.enumerate() {
+        array[i] = iter_item;
+        iter_len += 1;
     }
-    debug_assert_eq!(i, N);
+    debug_assert_eq!(iter_len, N);
 
     array
 }
