@@ -1,6 +1,5 @@
 use crate::model::comment::{Comment, CommentScore};
 use crate::model::enums::{AvatarStyle, Rating};
-use crate::model::Enumerable;
 use crate::resource;
 use crate::resource::user::MicroUser;
 use crate::schema::{comment, comment_score, user};
@@ -23,12 +22,6 @@ pub struct CommentInfo {
     pub user: Option<MicroUser>,
     pub score: i64,
     pub own_score: Rating,
-}
-
-impl Enumerable for CommentInfo {
-    fn id(&self) -> i32 {
-        self.id
-    }
 }
 
 impl CommentInfo {

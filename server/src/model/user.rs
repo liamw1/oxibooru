@@ -1,6 +1,5 @@
 use crate::content::hash;
 use crate::model::enums::{AvatarStyle, UserRank};
-use crate::model::Enumerable;
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
 use diesel::pg::Pg;
@@ -46,12 +45,6 @@ impl User {
             AvatarStyle::Gravatar => hash::gravatar_url(&self.name),
             AvatarStyle::Manual => hash::custom_avatar_url(&self.name),
         }
-    }
-}
-
-impl Enumerable for User {
-    fn id(&self) -> i32 {
-        self.id
     }
 }
 

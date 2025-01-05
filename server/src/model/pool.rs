@@ -1,5 +1,4 @@
 use crate::model::post::Post;
-use crate::model::Enumerable;
 use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::time::DateTime;
 use diesel::pg::Pg;
@@ -47,12 +46,6 @@ pub struct Pool {
     pub description: String,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
-}
-
-impl Enumerable for Pool {
-    fn id(&self) -> i32 {
-        self.id
-    }
 }
 
 #[derive(Insertable)]

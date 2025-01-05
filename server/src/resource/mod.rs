@@ -7,7 +7,7 @@ pub mod tag_category;
 pub mod user;
 pub mod user_token;
 
-use crate::model::Enumerable;
+use diesel::prelude::*;
 
 /// NOTE: The more complicated queries in this module rely on the behavior of diesel's
 /// grouped_by function preserving the relative order between elements. This seems to be the
@@ -43,9 +43,9 @@ fn check_batch_results(batch_size: usize, post_count: usize) {
 /// 40-50 resources at a time, I'm leaving it like this for the time being until it proves to be slow.
 fn order_as<T>(values: Vec<T>, order: &[i32]) -> Vec<T>
 where
-    T: Enumerable,
+    for<'a> &'a T: Identifiable<Id = &'a i32>,
 {
-    order_transformed_as(values, order, |value| value.id())
+    order_transformed_as(values, order, |value| *value.id())
 }
 
 fn order_transformed_as<V, F>(mut values: Vec<V>, order: &[i32], get_id: F) -> Vec<V>
@@ -75,7 +75,7 @@ where
 /// The note in the above comment applies here as well.
 fn order_like<V, T, F>(unordered_values: Vec<V>, ordered_values: &[T], get_id: F) -> Vec<Option<V>>
 where
-    T: Enumerable,
+    for<'a> &'a T: Identifiable<Id = &'a i32>,
     F: Fn(&V) -> i32,
 {
     debug_assert!(unordered_values.len() <= ordered_values.len());
@@ -85,7 +85,7 @@ where
         let value_id = get_id(&value);
         let index = ordered_values
             .iter()
-            .position(|ordered_value| ordered_value.id() == value_id)
+            .position(|ordered_value| *ordered_value.id() == value_id)
             .unwrap();
         results[index] = Some(value);
     }

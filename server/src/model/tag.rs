@@ -1,4 +1,3 @@
-use crate::model::Enumerable;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::time::DateTime;
 use diesel::pg::Pg;
@@ -47,12 +46,6 @@ pub struct Tag {
     pub description: String,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
-}
-
-impl Enumerable for Tag {
-    fn id(&self) -> i32 {
-        self.id
-    }
 }
 
 #[derive(Insertable)]
