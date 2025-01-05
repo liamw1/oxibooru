@@ -93,7 +93,7 @@ fn get_owners(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         .select((comment::id, user::name, user::avatar_style))
         .load::<(i32, String, AvatarStyle)>(conn)
         .map(|comment_info| {
-            resource::order_like(comment_info, comments, |(id, ..)| *id)
+            resource::order_like(comment_info, comments, |&(id, ..)| id)
                 .into_iter()
                 .map(|comment_owner| {
                     comment_owner.map(|(_, username, avatar_style)| MicroUser::new(username, avatar_style))
@@ -108,7 +108,7 @@ fn get_scores(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         .select((comment_score::comment_id, sum(comment_score::score)))
         .load(conn)
         .map(|comment_scores| {
-            resource::order_like(comment_scores, comments, |(id, _)| *id)
+            resource::order_like(comment_scores, comments, |&(id, _)| id)
                 .into_iter()
                 .map(|comment_score| comment_score.and_then(|(_, score)| score).unwrap_or(0))
                 .collect()

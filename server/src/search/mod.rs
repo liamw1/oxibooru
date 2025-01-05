@@ -58,7 +58,7 @@ where
                 term = term.strip_prefix('-').unwrap();
             }
 
-            match parse::split_once_escaped(term, ":") {
+            match parse::split_once(term, ':') {
                 Some(("sort", "random")) => random_sort = true,
                 Some(("sort", value)) => {
                     let kind = T::from_str(value)?;

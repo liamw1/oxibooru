@@ -139,7 +139,7 @@ fn get_categories(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Stri
         .filter(tag::id.eq_any(&tag_ids))
         .load(conn)
         .map(|category_names| {
-            resource::order_transformed_as(category_names, &tag_ids, |(tag_id, _)| *tag_id)
+            resource::order_transformed_as(category_names, &tag_ids, |&(tag_id, _)| tag_id)
                 .into_iter()
                 .map(|(_, category_name)| category_name)
                 .collect()
@@ -241,7 +241,7 @@ fn get_usages(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<i64>> {
         .select((post_tag::tag_id, count(post_tag::tag_id)))
         .load(conn)
         .map(|usages| {
-            resource::order_like(usages, tags, |(id, _)| *id)
+            resource::order_like(usages, tags, |&(id, _)| id)
                 .into_iter()
                 .map(|post_count| post_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()

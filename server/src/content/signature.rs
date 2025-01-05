@@ -323,12 +323,6 @@ mod test {
         let (jpeg, _) = image_properties("jpeg.jpg");
         let (similar_jpeg, _) = image_properties("jpeg-similar.jpg");
 
-        println!("");
-        println!("Distances:");
-        println!("{}", distance(jpeg, similar_jpeg));
-        println!("{}", distance(png, jpeg));
-        println!("");
-
         // Identical images of different formats
         assert_eq!(distance(png, bmp), 0.0);
         // Similar images of same format
@@ -346,25 +340,11 @@ mod test {
         let (lisa_cat_signature, lisa_cat_indexes) = image_properties("lisa-cat.jpg");
         let (starry_night_signature, starry_night_indexes) = image_properties("starry_night.jpg");
 
-        println!("");
-        println!("Distances:");
-        println!("{}", distance(lisa_signature, lisa_border_signature));
-        println!("{}", distance(lisa_signature, lisa_large_border_signature));
-        println!("{}", distance(lisa_signature, lisa_wide_signature));
-        println!("{}", distance(lisa_signature, lisa_cat_signature));
-        println!("{}", distance(lisa_signature, starry_night_signature));
-        println!("Matches:");
-        println!("{}", matching_indexes(&lisa_indexes, &lisa_border_indexes));
-        println!("{}", matching_indexes(&lisa_indexes, &lisa_large_border_indexes));
-        println!("{}", matching_indexes(&lisa_indexes, &lisa_wide_indexes));
-        println!("{}", matching_indexes(&lisa_indexes, &lisa_cat_indexes));
-        println!("{}", matching_indexes(&lisa_indexes, &starry_night_indexes));
-        println!("");
-
         assert!(distance(lisa_signature, lisa_border_signature) < 0.2);
         assert!(distance(lisa_signature, lisa_large_border_signature) < 0.2);
         assert!(distance(lisa_signature, lisa_wide_signature) < 0.3);
         assert!(distance(lisa_signature, lisa_cat_signature) < 0.55);
+        assert!(distance(lisa_signature, starry_night_signature) > 0.6);
 
         assert!(matching_indexes(&lisa_indexes, &lisa_border_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_large_border_indexes) > 0);

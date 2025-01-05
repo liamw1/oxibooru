@@ -39,6 +39,7 @@ mod test {
     #[test]
     fn hash_password() {
         let user = test_transaction(|conn| create_test_user(conn, TEST_USERNAME));
-        assert!(is_valid_password(&user, TEST_PASSWORD))
+        assert!(is_valid_password(&user, TEST_PASSWORD));
+        assert!(!is_valid_password(&user, "wrong_password"));
     }
 }

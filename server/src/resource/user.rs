@@ -198,7 +198,7 @@ fn get_comment_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Ve
         .select((comment::user_id.assume_not_null(), count(comment::user_id)))
         .load(conn)
         .map(|comment_counts| {
-            resource::order_like(comment_counts, users, |(id, _)| *id)
+            resource::order_like(comment_counts, users, |&(id, _)| id)
                 .into_iter()
                 .map(|comment_count| comment_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()
@@ -211,7 +211,7 @@ fn get_uploaded_post_counts(conn: &mut PgConnection, users: &[User]) -> QueryRes
         .select((post::user_id.assume_not_null(), count(post::user_id)))
         .load(conn)
         .map(|upload_counts| {
-            resource::order_like(upload_counts, users, |(id, _)| *id)
+            resource::order_like(upload_counts, users, |&(id, _)| id)
                 .into_iter()
                 .map(|upload_count| upload_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()
@@ -233,7 +233,7 @@ fn get_liked_post_counts(
         .filter(post_score::score.eq(1))
         .load(conn)
         .map(|like_counts| {
-            resource::order_like(like_counts, users, |(id, _)| *id)
+            resource::order_like(like_counts, users, |&(id, _)| id)
                 .into_iter()
                 .map(|like_count| like_count.map(|(_, count)| count).unwrap_or(0))
                 .map(PrivateData::Expose)
@@ -256,7 +256,7 @@ fn get_disliked_post_counts(
         .filter(post_score::score.eq(-1))
         .load(conn)
         .map(|dislike_counts| {
-            resource::order_like(dislike_counts, users, |(id, _)| *id)
+            resource::order_like(dislike_counts, users, |&(id, _)| id)
                 .into_iter()
                 .map(|dislike_count| dislike_count.map(|(_, count)| count).unwrap_or(0))
                 .map(PrivateData::Expose)
@@ -270,7 +270,7 @@ fn get_favorite_post_counts(conn: &mut PgConnection, users: &[User]) -> QueryRes
         .select((post_favorite::user_id, count(post_favorite::user_id)))
         .load(conn)
         .map(|favorite_counts| {
-            resource::order_like(favorite_counts, users, |(id, _)| *id)
+            resource::order_like(favorite_counts, users, |&(id, _)| id)
                 .into_iter()
                 .map(|favorite_count| favorite_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()

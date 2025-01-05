@@ -141,7 +141,7 @@ fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<St
         .filter(pool::id.eq_any(&pool_ids))
         .load(conn)
         .map(|category_names| {
-            resource::order_transformed_as(category_names, &pool_ids, |(pool_id, _)| *pool_id)
+            resource::order_transformed_as(category_names, &pool_ids, |&(pool_id, _)| pool_id)
                 .into_iter()
                 .map(|(_, category_name)| category_name)
                 .collect()
@@ -182,7 +182,7 @@ fn get_post_counts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<i
         .select((pool_post::pool_id, count(pool_post::post_id)))
         .load(conn)
         .map(|usages| {
-            resource::order_like(usages, pools, |(id, _)| *id)
+            resource::order_like(usages, pools, |&(id, _)| id)
                 .into_iter()
                 .map(|post_count| post_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()

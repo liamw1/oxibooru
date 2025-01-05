@@ -358,7 +358,7 @@ fn get_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option
         .select((post::id, user::name, user::avatar_style))
         .load::<(i32, String, AvatarStyle)>(conn)
         .map(|post_info| {
-            resource::order_like(post_info, posts, |(id, ..)| *id)
+            resource::order_like(post_info, posts, |&(id, ..)| id)
                 .into_iter()
                 .map(|post_owner| post_owner.map(|(_, username, avatar_style)| MicroUser::new(username, avatar_style)))
                 .collect()
@@ -549,7 +549,7 @@ fn get_scores(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i64>> 
         .select((post_score::post_id, sum(post_score::score)))
         .load(conn)
         .map(|post_scores| {
-            resource::order_like(post_scores, posts, |(id, _)| *id)
+            resource::order_like(post_scores, posts, |&(id, _)| id)
                 .into_iter()
                 .map(|post_score| post_score.and_then(|(_, score)| score).unwrap_or(0))
                 .collect()
@@ -594,7 +594,7 @@ fn get_tag_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i6
         .select((post_tag::post_id, count(post_tag::tag_id)))
         .load(conn)
         .map(|tag_counts| {
-            resource::order_like(tag_counts, posts, |(id, _)| *id)
+            resource::order_like(tag_counts, posts, |&(id, _)| id)
                 .into_iter()
                 .map(|tag_count| tag_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()
@@ -607,7 +607,7 @@ fn get_comment_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Ve
         .select((comment::post_id, count(comment::post_id)))
         .load(conn)
         .map(|comment_counts| {
-            resource::order_like(comment_counts, posts, |(id, _)| *id)
+            resource::order_like(comment_counts, posts, |&(id, _)| id)
                 .into_iter()
                 .map(|comment_count| comment_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()
@@ -620,7 +620,7 @@ fn get_relation_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<V
         .select((post_relation::parent_id, count(post_relation::child_id)))
         .load(conn)
         .map(|relation_counts| {
-            resource::order_like(relation_counts, posts, |(id, _)| *id)
+            resource::order_like(relation_counts, posts, |&(id, _)| id)
                 .into_iter()
                 .map(|relation_count| relation_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()
@@ -633,7 +633,7 @@ fn get_note_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<i
         .select((post_note::post_id, count(post_note::id)))
         .load(conn)
         .map(|note_counts| {
-            resource::order_like(note_counts, posts, |(id, _)| *id)
+            resource::order_like(note_counts, posts, |&(id, _)| id)
                 .into_iter()
                 .map(|note_count| note_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()
@@ -646,7 +646,7 @@ fn get_favorite_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<V
         .select((post_favorite::post_id, count(post_favorite::user_id)))
         .load(conn)
         .map(|favorite_counts| {
-            resource::order_like(favorite_counts, posts, |(id, _)| *id)
+            resource::order_like(favorite_counts, posts, |&(id, _)| id)
                 .into_iter()
                 .map(|favorite_count| favorite_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()
@@ -659,7 +659,7 @@ fn get_feature_counts(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Ve
         .select((post_feature::post_id, count(post_feature::id)))
         .load(conn)
         .map(|feature_counts| {
-            resource::order_like(feature_counts, posts, |(id, _)| *id)
+            resource::order_like(feature_counts, posts, |&(id, _)| id)
                 .into_iter()
                 .map(|feature_count| feature_count.map(|(_, count)| count).unwrap_or(0))
                 .collect()
@@ -672,7 +672,7 @@ fn get_last_feature_times(conn: &mut PgConnection, posts: &[Post]) -> QueryResul
         .select((post_feature::post_id, max(post_feature::time)))
         .load(conn)
         .map(|last_feature_times| {
-            resource::order_like(last_feature_times, posts, |(id, _)| *id)
+            resource::order_like(last_feature_times, posts, |&(id, _)| id)
                 .into_iter()
                 .map(|last_feature_time| last_feature_time.and_then(|(_, time)| time))
                 .collect()

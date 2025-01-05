@@ -1,23 +1,17 @@
 use crate::search::Error;
 use crate::search::{Criteria, StrCritera, TimeParsingError};
 use crate::time::DateTime;
-use itertools::Itertools;
 use std::borrow::Cow;
 use std::str::FromStr;
 
-/// Returns an iterator over given `text` delimited by `pat`.
-/// TODO: Make generic on Pattern when stabilized so that char pattern can be used
-pub fn split_escaped<'a>(text: &'a str, pat: &'a str) -> impl Iterator<Item = &'a str> {
-    text.split(pat)
-        .filter(|slice| slice.chars().rev().take_while(|&c| c == '\\').count() % 2 == 0)
+/// Splits `text` into two parts by an unescaped `delimiter`.
+pub fn split_once(text: &str, delimiter: char) -> Option<(&str, &str)> {
+    next_split(text, delimiter)
+        .map(|index| text.split_at(index))
+        .map(|(left, right)| (left, right.strip_prefix(delimiter).unwrap()))
 }
 
-/// Splits `text` into two parts by `pat`, but only if it can be split exactly once.
-pub fn split_once_escaped<'a>(text: &'a str, pat: &'a str) -> Option<(&'a str, &'a str)> {
-    split_escaped(text, pat).collect_tuple()
-}
-
-/// Parses string-based filter.
+/// Parses string-based `filter`.
 pub fn str_criteria(filter: &str) -> StrCritera {
     if filter.contains('*') {
         StrCritera::WildCard(unescape(filter).replace('*', "%").replace('_', "\\_"))
@@ -26,7 +20,7 @@ pub fn str_criteria(filter: &str) -> StrCritera {
     }
 }
 
-/// Parses time-based filter.
+/// Parses time-based `filter`.
 pub fn time_criteria(filter: &str) -> Result<Criteria<DateTime>, Error> {
     if let Some(split_str) = filter.split_once("..") {
         return match split_str {
@@ -43,7 +37,7 @@ pub fn time_criteria(filter: &str) -> Result<Criteria<DateTime>, Error> {
         .map_err(Error::from)
 }
 
-/// Parses non-string non-time filters.
+/// Parses a non-string non-time `filter`.
 pub fn criteria<T>(filter: &str) -> Result<Criteria<T>, Error>
 where
     T: FromStr,
@@ -66,28 +60,86 @@ where
         .map_err(Error::from)
 }
 
-/// Replaces escaped characters with unescaped ones.
+/// Replaces escaped characters with unescaped ones in `text`.
 fn unescape(text: &str) -> Cow<str> {
     if text.contains('\\') {
-        Cow::Owned(text.replace("\\.", ".").replace("\\,", ",").replace("\\:", ":"))
+        let mut escaped = text.chars().nth(0) == Some('\\');
+        let start_index = if escaped { 1 } else { 0 };
+        Cow::Owned(
+            text.chars()
+                .skip(start_index)
+                .filter(|&c| {
+                    let skip = !escaped && c == '\\';
+                    escaped = skip;
+                    !skip
+                })
+                .collect(),
+        )
     } else {
         Cow::Borrowed(text)
     }
 }
 
-/// Parses a non-wildcard string-based filter.
-fn parse_regular_str(filter: &str) -> Criteria<Cow<str>> {
-    if let Some(split_str) = split_once_escaped(filter, "..") {
-        return match split_str {
-            (left, "") => Criteria::GreaterEq(unescape(left)),
-            ("", right) => Criteria::LessEq(unescape(right)),
-            (left, right) => Criteria::Range(unescape(left)..unescape(right)),
-        };
-    }
-    Criteria::Values(split_escaped(filter, ",").map(unescape).collect())
+/// Finds the index of next unescaped `delimiter`` in `text`.
+fn next_split(text: &str, delimiter: char) -> Option<usize> {
+    text.char_indices()
+        .filter_map(|(index, c)| (c == delimiter).then_some(index))
+        .find(|index| {
+            let backslash_count = text
+                .chars()
+                .rev()
+                .skip(text.len() - index)
+                .take_while(|&c| c == '\\')
+                .count();
+            backslash_count % 2 == 0
+        })
 }
 
-/// Parses single time value.
+/// Returns a vector of escaped substrings over given `text` split by the given `delimiter`.
+fn split_escaped(text: &str, delimiter: char) -> Vec<Cow<str>> {
+    let mut parts = vec![text];
+    while let Some(index) = next_split(parts.last().unwrap(), delimiter) {
+        let (left, right) = parts.last().unwrap().split_at(index);
+        *parts.last_mut().unwrap() = left;
+        parts.push(right.strip_prefix(delimiter).unwrap());
+    }
+    parts.into_iter().map(unescape).collect()
+}
+
+/// Splits `text` into two parts if it contains an unescaped ".." substring.
+fn range_split(text: &str) -> Option<(&str, &str)> {
+    let split_index = text
+        .char_indices()
+        .filter(|&(_, c)| c == '.')
+        .filter_map(|(index, c)| {
+            let next_char = text.chars().nth(index + 1);
+            (c == '.' && next_char == Some('.')).then_some(index)
+        })
+        .find(|index| {
+            let backslash_count = text
+                .chars()
+                .rev()
+                .skip(text.len() - index)
+                .take_while(|&c| c == '\\')
+                .count();
+            backslash_count % 2 == 0
+        });
+    split_index
+        .map(|index| text.split_at(index))
+        .map(|(left, right)| (left, right.strip_prefix("..").unwrap()))
+}
+
+/// Parses a non-wildcard string-based `filter`.
+fn parse_regular_str(filter: &str) -> Criteria<Cow<str>> {
+    match range_split(filter) {
+        Some((left, "")) => Criteria::GreaterEq(unescape(left)),
+        Some(("", right)) => Criteria::LessEq(unescape(right)),
+        Some((left, right)) => Criteria::Range(unescape(left)..unescape(right)),
+        None => Criteria::Values(split_escaped(filter, ',')),
+    }
+}
+
+/// Parses single `time` value.
 fn parse_time(time: &str) -> Result<DateTime, TimeParsingError> {
     if time == "today" {
         return Ok(DateTime::today());
@@ -133,6 +185,11 @@ mod test {
 
     #[test]
     fn criteria_parsing() {
+        assert_eq!(split_once("a:b", ':'), Some(("a", "b")));
+        assert_eq!(split_once(":b", ':'), Some(("", "b")));
+        assert_eq!(split_once("a:", ':'), Some(("a", "")));
+        assert_eq!(split_once(":", ':'), Some(("", "")));
+
         assert_eq!(criteria("1").unwrap(), Criteria::Values(vec![1]));
         assert_eq!(criteria("-137").unwrap(), Criteria::Values(vec![-137]));
         assert_eq!(criteria("0,1,2,3").unwrap(), Criteria::Values(vec![0, 1, 2, 3]));
@@ -147,6 +204,7 @@ mod test {
             str_criteria("a,b,c"),
             StrCritera::Regular(Criteria::Values(vec![Cow::Borrowed("a"), Cow::Borrowed("b"), Cow::Borrowed("c")]))
         );
+
         assert_eq!(str_criteria("a.."), StrCritera::Regular(Criteria::GreaterEq(Cow::Borrowed("a"))));
         assert_eq!(str_criteria("..z"), StrCritera::Regular(Criteria::LessEq(Cow::Borrowed("z"))));
         assert_eq!(str_criteria("a..z"), StrCritera::Regular(Criteria::Range(Cow::Borrowed("a")..Cow::Borrowed("z"))));
@@ -156,5 +214,53 @@ mod test {
 
         assert_eq!(criteria("safe").unwrap(), Criteria::Values(vec![PostSafety::Safe]));
         assert_eq!(criteria("safe..unsafe").unwrap(), Criteria::Range(PostSafety::Safe..PostSafety::Unsafe));
+    }
+
+    #[test]
+    fn escaped_strings() {
+        assert_eq!(split_once("a\\:b", ':'), None);
+        assert_eq!(split_once("a\\::b", ':'), Some(("a\\:", "b")));
+        assert_eq!(split_once("a\\\\:b", ':'), Some(("a\\\\", "b")));
+
+        assert_eq!(unescape("\\."), String::from("."));
+        assert_eq!(unescape("\\\\."), String::from("\\."));
+        assert_eq!(unescape("\\\\\\."), String::from("\\."));
+        assert_eq!(unescape("\\\\\\\\."), String::from("\\\\."));
+        assert_eq!(unescape(",\\.,x.\\\\:.j..\\,"), String::from(",.,x.\\:.j..,"));
+
+        // Check that escaped tokens are escaped properly
+        assert_eq!(
+            str_criteria("a\\,,b\\.,c\\:,d\\\\,e"),
+            StrCritera::Regular(Criteria::Values(vec![
+                Cow::Borrowed("a,"),
+                Cow::Borrowed("b."),
+                Cow::Borrowed("c:"),
+                Cow::Borrowed("d\\"),
+                Cow::Borrowed("e")
+            ]))
+        );
+
+        // Commas with an even number of backslashes behind it shouldn't be escaped
+        assert_eq!(
+            str_criteria("a\\\\,b\\\\\\,c\\\\\\\\,d"),
+            StrCritera::Regular(Criteria::Values(vec![
+                Cow::Borrowed("a\\"),
+                Cow::Borrowed("b\\,c\\\\"),
+                Cow::Borrowed("d")
+            ]))
+        );
+
+        // Check that ranged criterias are escaped properly
+        assert_eq!(str_criteria("a\\..b"), StrCritera::Regular(Criteria::Values(vec![Cow::Borrowed("a..b")])));
+        assert_eq!(
+            str_criteria("a\\\\..b"),
+            StrCritera::Regular(Criteria::Range(Cow::Borrowed("a\\")..Cow::Borrowed("b")))
+        );
+        assert_eq!(str_criteria("\\..."), StrCritera::Regular(Criteria::GreaterEq(Cow::Borrowed("."))));
+        assert_eq!(str_criteria("..\\."), StrCritera::Regular(Criteria::LessEq(Cow::Borrowed("."))));
+        assert_eq!(
+            str_criteria("\\\\..."),
+            StrCritera::Regular(Criteria::Range(Cow::Borrowed("\\")..Cow::Borrowed(".")))
+        );
     }
 }
