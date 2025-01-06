@@ -174,7 +174,7 @@ impl PostInfo {
         Ok(post_info.pop().unwrap())
     }
 
-    fn new_batch(
+    pub fn new_batch(
         conn: &mut PgConnection,
         client: Option<i32>,
         posts: Vec<Post>,

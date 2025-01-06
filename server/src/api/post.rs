@@ -193,6 +193,17 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
     let fields = create_field_table(query.fields())?;
     let search_criteria = search::post::parse_search_criteria(query.criteria())?;
 
+    let create_post_neighbors = |mut neighbors: Vec<PostInfo>, has_previous_post: bool| {
+        let (prev, next) = match (neighbors.pop(), neighbors.pop()) {
+            (Some(second), Some(first)) => (Some(first), Some(second)),
+            (Some(first), None) if has_previous_post => (Some(first), None),
+            (Some(first), None) => (None, Some(first)),
+            (None, Some(_)) => unreachable!(),
+            (None, None) => (None, None),
+        };
+        PostNeighbors { prev, next }
+    };
+
     db::get_connection()?.transaction(|conn| {
         // Optimized neighbor retrieval for the most common use case
         if search_criteria.has_no_sort() {
@@ -202,37 +213,27 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
                 .order_by(post::id.asc())
                 .first(conn)
                 .optional()?;
-            let prev = previous_post
-                .map(|post| PostInfo::new(conn, client_id, post, &fields))
-                .transpose()?;
-
             let next_post = search::post::build_query(client_id, &search_criteria)?
                 .select(Post::as_select())
                 .filter(post::id.lt(post_id))
                 .order_by(post::id.desc())
                 .first(conn)
                 .optional()?;
-            let next = next_post
-                .map(|post| PostInfo::new(conn, client_id, post, &fields))
-                .transpose()?;
 
-            Ok(PostNeighbors { prev, next })
+            let has_previous_post = previous_post.is_some();
+            let posts = previous_post.into_iter().chain(next_post).collect();
+            let post_infos = PostInfo::new_batch(conn, client_id, posts, &fields)?;
+            Ok(create_post_neighbors(post_infos, has_previous_post))
         } else {
             let sql_query = search::post::build_query(client_id, &search_criteria)?;
             let post_ids: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
             let post_index = post_ids.iter().position(|&id| id == post_id);
 
-            let prev_post_id = post_index.and_then(|index| post_ids.get(index - 1));
-            let prev = prev_post_id
-                .map(|&post_id| PostInfo::new_from_id(conn, client_id, post_id, &fields))
-                .transpose()?;
-
-            let next_post_id = post_index.and_then(|index| post_ids.get(index + 1));
-            let next = next_post_id
-                .map(|&post_id| PostInfo::new_from_id(conn, client_id, post_id, &fields))
-                .transpose()?;
-
-            Ok(PostNeighbors { prev, next })
+            let prev_post_id = post_index.and_then(|index| post_ids.get(index - 1)).copied();
+            let next_post_id = post_index.and_then(|index| post_ids.get(index + 1)).copied();
+            let post_ids = prev_post_id.into_iter().chain(next_post_id).collect();
+            let post_infos = PostInfo::new_batch_from_ids(conn, client_id, post_ids, &fields)?;
+            Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
         }
     })
 }
