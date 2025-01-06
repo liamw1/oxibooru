@@ -143,8 +143,6 @@ fn update_pool_category(name: String, auth: AuthResult, update: PoolCategoryUpda
 }
 
 fn set_default_pool_category(name: String, auth: AuthResult) -> ApiResult<PoolCategoryInfo> {
-    let _timer = crate::time::Timer::new("set_default_pool_category");
-
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_set_default)?;
 

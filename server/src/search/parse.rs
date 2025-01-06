@@ -63,7 +63,7 @@ where
 /// Replaces escaped characters with unescaped ones in `text`.
 fn unescape(text: &str) -> Cow<str> {
     if text.contains('\\') {
-        let mut escaped = text.chars().nth(0) == Some('\\');
+        let mut escaped = text.starts_with('\\');
         let start_index = if escaped { 1 } else { 0 };
         Cow::Owned(
             text.chars()

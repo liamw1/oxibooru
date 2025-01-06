@@ -155,8 +155,6 @@ fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdate
 }
 
 fn set_default_tag_category(name: String, auth: AuthResult) -> ApiResult<TagCategoryInfo> {
-    let _timer = crate::time::Timer::new("set_default_tag_category");
-
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_category_set_default)?;
 

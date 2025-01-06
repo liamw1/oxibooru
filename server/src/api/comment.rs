@@ -58,8 +58,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 const MAX_COMMENTS_PER_PAGE: i64 = 50;
 
 fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<CommentInfo>> {
-    let _timer = crate::time::Timer::new("list_comments");
-
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().comment_list)?;
 

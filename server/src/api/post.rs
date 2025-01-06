@@ -134,8 +134,6 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
 }
 
 fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PostInfo>> {
-    let _timer = crate::time::Timer::new("list_posts");
-
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
@@ -307,8 +305,6 @@ struct ReverseSearchInfo {
 }
 
 fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -> ApiResult<ReverseSearchInfo> {
-    let _timer = crate::time::Timer::new("reverse_search");
-
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_reverse_search)?;
@@ -462,8 +458,6 @@ struct PostMergeRequest {
 }
 
 fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequest) -> ApiResult<PostInfo> {
-    let _timer = crate::time::Timer::new("merge_posts");
-
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_merge)?;
@@ -667,8 +661,6 @@ struct PostUpdate {
 }
 
 fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
-    let _timer = crate::time::Timer::new("update_post");
-
     let client = auth?;
     query.bump_login(client.as_ref())?;
     let fields = create_field_table(query.fields())?;

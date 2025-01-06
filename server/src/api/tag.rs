@@ -79,8 +79,6 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
 }
 
 fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>> {
-    let _timer = crate::time::Timer::new("list_tags");
-
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_list)?;
@@ -223,8 +221,6 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
 }
 
 fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String>) -> ApiResult<TagInfo> {
-    let _timer = crate::time::Timer::new("merge_tags");
-
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_merge)?;
@@ -331,8 +327,6 @@ struct TagUpdate {
 }
 
 fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagUpdate) -> ApiResult<TagInfo> {
-    let _timer = crate::time::Timer::new("update_tag");
-
     let client = auth?;
     query.bump_login(client.as_ref())?;
 
