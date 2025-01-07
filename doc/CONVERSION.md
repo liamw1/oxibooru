@@ -63,30 +63,34 @@ these are:
 ### Let's begin
 1. **Create a dump of the Szurubooru database**
 
-    Navigate to the Szurubooru source directory and run.
+    Navigate to the Szurubooru source directory and run
     ```console
     user@host:szuru$ docker-compose up -d sql
     user@host:szuru$ docker exec szuru-sql-1 pg_dump -U ${SZURU_POSTGRES_USER} --no-owner --no-privileges szuru > backup.sql
     ```
+    where ${SZURU_POSTGRES_USER} is the value of the POSTGRES_USER environment
+    variable defined in the Szurubooru .env file.
     
 2. **Restore Szurubooru database**
     
-    Navigate to the Oxibooru source directory and run.
+    Navigate to the Oxibooru source directory and run
     ```console
     user@host:oxibooru$ docker-compose up -d sql
     ```
-    Now create szuru schema in Oxibooru database and use backup.sql to restore 
-    it.
-
+    Now move backup.sql to the Oxibooru directory, create a szuru schema in 
+    the Oxibooru database and restore the Szurubooru database.
     ```console
-    user@host:oxibooru$ docker exec oxibooru-sql-1 psql -U ${POSTGRES_USER} -d oxi -c "ALTER SCHEMA public RENAME TO oxi;"
-    user@host:oxibooru$ docker exec oxibooru-sql-1 psql -U ${POSTGRES_USER} -d oxi -c "CREATE SCHEMA public;"
-    user@host:oxibooru$ cat backup.sql | docker exec -i oxibooru-sql-1 psql -U ${POSTGRES_USER} -d oxi
+    user@host:oxibooru$ docker exec oxibooru-sql-1 psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c "ALTER SCHEMA public RENAME TO ${POSTGRES_DB};"
+    user@host:oxibooru$ docker exec oxibooru-sql-1 psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -c "CREATE SCHEMA public;"
+    user@host:oxibooru$ cat backup.sql | docker exec -i oxibooru-sql-1 psql -U ${POSTGRES_USER} -d ${POSTGRES_DB}
     ```
+    Here ${POSTGRES_USER} and ${POSTGRES_DB} are the values of the
+    POSTGRES_USER and POSTGRES_DB environment variables defined in the 
+    Oxibooru .env file.
     
 3. **Run conversion script**
     ```console
-    user@host:oxibooru$ cat scripts/convert_szuru_database.sql | docker exec -i oxibooru-sql-1 psql -U ${POSTGRES_USER} -d oxi --single-transaction
+    user@host:oxibooru$ cat scripts/convert_szuru_database.sql | docker exec -i oxibooru-sql-1 psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} --single-transaction
     ```
     Any errors encountered will rollback the conversion of the database. If you 
     would like to opt-out of this behavior and attempt a partial conversion, you
@@ -97,7 +101,16 @@ these are:
     Oxibooru uses a different file naming convention, so these will need to be 
     recomputed. First, if you have any custom-thumbnails, you should move the
     custom-thumbnails folder from MOUNT_DATA/posts/custom-thumbnails to
-    MOUNT_DATA/custom-thumbnails. Then, spin up the Oxibooru containers:
+    MOUNT_DATA/custom-thumbnails. 
+
+    Next, make sure the MOUNT_DATA environment variable is pointed towards the
+    data directory of the Szurubooru database. This step will modify the
+    filenames of posts and thumbnails, making Szurubooru unable to read them.
+    This should be reversible using the Szurubooru admin function 
+    reset_filenames(), but I haven't tested that so you may want to make a
+    backup.
+
+    Now, spin up the Oxibooru containers:
     ```console
     user@host:oxibooru$ docker-compose up -d
     ```

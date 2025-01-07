@@ -23,7 +23,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE OR REPLACE FUNCTION diesel_set_last_edit_time() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION diesel_set_last_edit_time() RETURNS TRIGGER AS $$
 BEGIN
     IF (
         NEW IS DISTINCT FROM OLD AND

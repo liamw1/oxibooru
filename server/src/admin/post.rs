@@ -1,3 +1,4 @@
+use crate::admin::ProgressReporter;
 use crate::api::ApiResult;
 use crate::auth::password;
 use crate::config::RegexType;
@@ -22,39 +23,40 @@ pub fn rename_data_paths() -> std::io::Result<()> {
     let _time = Timer::new("rename_data_paths");
 
     if filesystem::path(Directory::GeneratedThumbnails).exists() {
-        for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))?.enumerate() {
+        let mut progress = ProgressReporter::new("Generated thumbnails renamed", PRINT_INTERVAL);
+        for entry in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))? {
             let path = entry?.path();
             if let Some(post_id) = get_post_id(&path) {
                 let new_path = PostHash::new(post_id).generated_thumbnail_path();
                 if path != new_path {
                     std::fs::rename(path, new_path)?;
                 }
+                progress.increment();
             } else {
                 eprintln!("ERROR: Could not find post_id of {path:?}");
             }
-
-            print_progress_message(entry_index, "Generated thumbnails renamed");
         }
     }
 
     if filesystem::path(Directory::CustomThumbnails).exists() {
-        for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))?.enumerate() {
+        let mut progress = ProgressReporter::new("Custom thumbnails renamed", PRINT_INTERVAL);
+        for entry in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))? {
             let path = entry?.path();
             if let Some(post_id) = get_post_id(&path) {
                 let new_path = PostHash::new(post_id).custom_thumbnail_path();
                 if path != new_path {
                     std::fs::rename(path, new_path)?;
                 }
+                progress.increment();
             } else {
                 eprintln!("ERROR: Could not find post_id of {path:?}");
             }
-
-            print_progress_message(entry_index, "Custom thumbnails renamed");
         }
     }
 
     if filesystem::path(Directory::Posts).exists() {
-        for (entry_index, entry) in std::fs::read_dir(filesystem::path(Directory::Posts))?.enumerate() {
+        let mut progress = ProgressReporter::new("Posts renamed", PRINT_INTERVAL);
+        for entry in std::fs::read_dir(filesystem::path(Directory::Posts))? {
             let path = entry?.path();
             let post_id = get_post_id(&path);
             let content_type = MimeType::from_path(&path);
@@ -63,11 +65,10 @@ pub fn rename_data_paths() -> std::io::Result<()> {
                 if path != new_path {
                     std::fs::rename(path, new_path)?;
                 }
+                progress.increment();
             } else {
                 eprintln!("ERROR: Could not find post_id or mime_type of {path:?}");
             }
-
-            print_progress_message(entry_index, "Posts renamed");
         }
     }
 
@@ -78,9 +79,10 @@ pub fn rename_data_paths() -> std::io::Result<()> {
 /// Useful when the way we compute checksums changes.
 pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
     let _time = Timer::new("recompute_checksums");
+    let mut progress = ProgressReporter::new("Checksums computed", PRINT_INTERVAL);
 
     let posts: Vec<(i32, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
-    for (post_index, (post_id, mime_type)) in posts.into_iter().enumerate() {
+    for (post_id, mime_type) in posts.into_iter() {
         let image_path = PostHash::new(post_id).content_path(mime_type);
         match std::fs::read(&image_path) {
             Ok(file_content) => {
@@ -98,12 +100,11 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
                     diesel::update(post::table.find(post_id))
                         .set((post::checksum.eq(checksum), post::checksum_md5.eq(md5_checksum)))
                         .execute(conn)?;
+                    progress.increment();
                 }
             }
             Err(err) => eprintln!("ERROR: Unable to compute checksum for post {post_id} for reason: {err}"),
         }
-
-        print_progress_message(post_index, "Checksums computed");
     }
 
     Ok(())
@@ -116,11 +117,12 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
 /// I'll look into parallelizing this in the future.
 pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
     let _time = Timer::new("recompute_signatures");
+    let mut progress = ProgressReporter::new("Signatures computed", PRINT_INTERVAL);
 
     diesel::delete(post_signature::table).execute(conn)?;
 
     let posts: Vec<(i32, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
-    for (post_index, (post_id, mime_type)) in posts.into_iter().enumerate() {
+    for (post_id, mime_type) in posts.into_iter() {
         let image_path = PostHash::new(post_id).content_path(mime_type);
         let file_content = match std::fs::read(&image_path) {
             Ok(content) => content,
@@ -142,11 +144,10 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
                 diesel::insert_into(post_signature::table)
                     .values(new_post_signature)
                     .execute(conn)?;
+                progress.increment();
             }
             Err(err) => eprintln!("ERROR: Unable to compute signature for post {post_id} for reason: {err}"),
         }
-
-        print_progress_message(post_index, "Signatures computed");
     }
 
     Ok(())
@@ -263,16 +264,10 @@ pub fn reset_password(conn: &mut PgConnection) -> ApiResult<()> {
     Ok(())
 }
 
-const PRINT_INTERVAL: usize = 1000;
+const PRINT_INTERVAL: u64 = 1000;
 
 fn get_post_id(path: &Path) -> Option<i32> {
     let path_str = path.file_name()?.to_string_lossy();
     let (post_id, _tail) = path_str.split_once('_')?;
     post_id.parse().ok()
-}
-
-fn print_progress_message(index: usize, msg: &str) {
-    if index > 0 && index % PRINT_INTERVAL == 0 {
-        println!("{msg}: {index}");
-    }
 }

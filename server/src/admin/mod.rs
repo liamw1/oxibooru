@@ -43,6 +43,29 @@ enum AdminTask {
     ResetPassword,
 }
 
+struct ProgressReporter {
+    message: &'static str,
+    print_interval: u64,
+    count: u64,
+}
+
+impl ProgressReporter {
+    fn new(message: &'static str, print_interval: u64) -> Self {
+        Self {
+            message,
+            print_interval,
+            count: 0,
+        }
+    }
+
+    fn increment(&mut self) {
+        self.count += 1;
+        if self.count > 0 && self.count % self.print_interval == 0 {
+            println!("{}: {}", self.message, self.count);
+        }
+    }
+}
+
 fn get_connection() -> Result<PooledConnection<ConnectionManager<PgConnection>>, String> {
     db::get_connection().map_err(|err| format!("Could not connect to the database: {err}"))
 }
