@@ -116,7 +116,6 @@ struct PoolCategoryUpdate {
 fn update_pool_category(name: String, auth: AuthResult, update: PoolCategoryUpdate) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    api::verify_matches_regex(&name, RegexType::PoolCategory)?;
 
     db::get_connection()?.transaction(|conn| {
         let category = PoolCategory::from_name(conn, &name)?;
@@ -124,6 +123,7 @@ fn update_pool_category(name: String, auth: AuthResult, update: PoolCategoryUpda
 
         if let Some(name) = update.name {
             api::verify_privilege(client.as_ref(), config::privileges().pool_category_edit_name)?;
+            api::verify_matches_regex(&name, RegexType::PoolCategory)?;
 
             diesel::update(pool_category::table.find(category.id))
                 .set(pool_category::name.eq(name))

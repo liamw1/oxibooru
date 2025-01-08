@@ -119,7 +119,6 @@ struct TagCategoryUpdate {
 fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdate) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    api::verify_matches_regex(&name, RegexType::TagCategory)?;
 
     db::get_connection()?.transaction(|conn| {
         let category = TagCategory::from_name(conn, &name)?;
@@ -136,6 +135,7 @@ fn update_tag_category(name: String, auth: AuthResult, update: TagCategoryUpdate
 
         if let Some(name) = update.name {
             api::verify_privilege(client.as_ref(), config::privileges().tag_category_edit_name)?;
+            api::verify_matches_regex(&name, RegexType::TagCategory)?;
 
             diesel::update(tag_category::table.find(category.id))
                 .set(tag_category::name.eq(name))

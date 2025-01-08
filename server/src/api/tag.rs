@@ -357,6 +357,10 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
         }
         if let Some(names) = update.names {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_name)?;
+            if names.is_empty() {
+                return Err(api::Error::NoNamesGiven(ResourceType::Tag));
+            }
+
             update::tag::delete_names(conn, tag_id)?;
             update::tag::add_names(conn, tag_id, 0, names)?;
         }

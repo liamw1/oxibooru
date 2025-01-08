@@ -1,5 +1,4 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
-use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::{FieldTable, PoolInfo};
@@ -129,10 +128,6 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
     if pool_info.names.is_empty() {
         return Err(api::Error::NoNamesGiven(ResourceType::Pool));
     }
-    pool_info
-        .names
-        .iter()
-        .try_for_each(|name| api::verify_matches_regex(name, RegexType::Pool))?;
 
     let fields = create_field_table(query.fields())?;
     db::get_connection()?.transaction(|conn| {
@@ -237,6 +232,10 @@ fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: Poo
 
         if let Some(names) = update.names {
             api::verify_privilege(client.as_ref(), config::privileges().pool_edit_name)?;
+            if names.is_empty() {
+                return Err(api::Error::NoNamesGiven(ResourceType::Pool));
+            }
+
             update::pool::delete_names(conn, pool_id)?;
             update::pool::add_names(conn, pool_id, 0, names)?;
         }
