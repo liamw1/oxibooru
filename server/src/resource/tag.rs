@@ -1,9 +1,7 @@
-use crate::model::post::PostTag;
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
 use crate::resource;
-use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::schema::{tag, tag_category, tag_name, tag_statistics};
 use crate::time::DateTime;
-use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
@@ -16,7 +14,7 @@ use strum::{EnumString, EnumTable};
 pub struct MicroTag {
     pub names: Vec<String>,
     pub category: String,
-    pub usages: i64,
+    pub usages: i32,
 }
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
@@ -59,7 +57,7 @@ pub struct TagInfo {
     names: Option<Vec<String>>,
     implications: Option<Vec<MicroTag>>,
     suggestions: Option<Vec<MicroTag>>,
-    usages: Option<i64>,
+    usages: Option<i32>,
 }
 
 impl TagInfo {
@@ -157,24 +155,20 @@ fn get_names(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec<Strin
 }
 
 fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec<MicroTag>>> {
-    let implications: Vec<(TagImplication, i32, String)> = TagImplication::belonging_to(tags)
-        .inner_join(tag::table.on(tag::id.eq(tag_implication::child_id)))
-        .inner_join(tag_name::table.on(tag_name::tag_id.eq(tag_implication::child_id)))
-        .select((TagImplication::as_select(), tag::category_id, tag_name::name))
-        .order((tag_name::order, tag_name::name))
+    let implications: Vec<(TagImplication, i32, i32)> = TagImplication::belonging_to(tags)
+        .inner_join(tag::table.inner_join(tag_statistics::table))
+        .select((TagImplication::as_select(), tag::category_id, tag_statistics::implication_count))
         .load(conn)?;
-    let all_implied_tag_ids: HashSet<i32> = implications
+    let implication_ids: HashSet<i32> = implications
         .iter()
         .map(|(implication, ..)| implication.child_id)
         .collect();
 
-    let implication_usages: HashMap<i32, i64> = post_tag::table
-        .group_by(post_tag::tag_id)
-        .select((post_tag::tag_id, count(post_tag::tag_id)))
-        .filter(post_tag::tag_id.eq_any(&all_implied_tag_ids))
-        .load(conn)?
-        .into_iter()
-        .collect();
+    let implication_names: Vec<(i32, String)> = tag_name::table
+        .select((tag_name::tag_id, tag_name::name))
+        .filter(tag_name::tag_id.eq_any(implication_ids))
+        .order((tag_name::tag_id, tag_name::order, tag_name::name))
+        .load(conn)?;
     let category_names: HashMap<i32, String> = tag_category::table
         .select((tag_category::id, tag_category::name))
         .load(conn)?
@@ -185,12 +179,21 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
         .grouped_by(tags)
         .into_iter()
         .map(|implications_on_tag| {
-            resource::collect_tag_data(implications_on_tag, |implication| implication.child_id)
+            implications_on_tag
                 .into_iter()
-                .map(|tag| MicroTag {
-                    names: tag.names,
-                    category: category_names[&tag.category_id].clone(),
-                    usages: implication_usages.get(&tag.id).copied().unwrap_or(0),
+                .map(|(implication, category_id, usages)| {
+                    let names = implication_names
+                        .iter()
+                        .skip_while(|&&(tag_id, _)| tag_id != implication.child_id)
+                        .take_while(|&&(tag_id, _)| tag_id == implication.child_id)
+                        .map(|(_, name)| name)
+                        .cloned()
+                        .collect();
+                    MicroTag {
+                        names,
+                        category: category_names[&category_id].clone(),
+                        usages,
+                    }
                 })
                 .collect()
         })
@@ -198,21 +201,17 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
 }
 
 fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec<MicroTag>>> {
-    let suggestions: Vec<(TagSuggestion, i32, String)> = TagSuggestion::belonging_to(tags)
-        .inner_join(tag::table.on(tag::id.eq(tag_suggestion::child_id)))
-        .inner_join(tag_name::table.on(tag_name::tag_id.eq(tag_suggestion::child_id)))
-        .select((TagSuggestion::as_select(), tag::category_id, tag_name::name))
-        .order((tag_name::order, tag_name::name))
+    let suggestions: Vec<(TagSuggestion, i32, i32)> = TagSuggestion::belonging_to(tags)
+        .inner_join(tag::table.inner_join(tag_statistics::table))
+        .select((TagSuggestion::as_select(), tag::category_id, tag_statistics::suggestion_count))
         .load(conn)?;
-    let all_suggested_tag_ids: HashSet<i32> = suggestions.iter().map(|(suggestion, ..)| suggestion.child_id).collect();
+    let suggestion_ids: HashSet<i32> = suggestions.iter().map(|(suggestion, ..)| suggestion.child_id).collect();
 
-    let suggestion_usages: HashMap<i32, i64> = post_tag::table
-        .group_by(post_tag::tag_id)
-        .select((post_tag::tag_id, count(post_tag::tag_id)))
-        .filter(post_tag::tag_id.eq_any(all_suggested_tag_ids))
-        .load(conn)?
-        .into_iter()
-        .collect();
+    let suggestion_names: Vec<(i32, String)> = tag_name::table
+        .select((tag_name::tag_id, tag_name::name))
+        .filter(tag_name::tag_id.eq_any(suggestion_ids))
+        .order((tag_name::tag_id, tag_name::order, tag_name::name))
+        .load(conn)?;
     let category_names: HashMap<i32, String> = tag_category::table
         .select((tag_category::id, tag_category::name))
         .load(conn)?
@@ -223,27 +222,37 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
         .grouped_by(tags)
         .into_iter()
         .map(|suggestions_on_tag| {
-            resource::collect_tag_data(suggestions_on_tag, |suggestion| suggestion.child_id)
+            suggestions_on_tag
                 .into_iter()
-                .map(|tag| MicroTag {
-                    names: tag.names,
-                    category: category_names[&tag.category_id].clone(),
-                    usages: suggestion_usages.get(&tag.id).copied().unwrap_or(0),
+                .map(|(suggestion, category_id, usages)| {
+                    let names = suggestion_names
+                        .iter()
+                        .skip_while(|&&(tag_id, _)| tag_id != suggestion.child_id)
+                        .take_while(|&&(tag_id, _)| tag_id == suggestion.child_id)
+                        .map(|(_, name)| name)
+                        .cloned()
+                        .collect();
+                    MicroTag {
+                        names,
+                        category: category_names[&category_id].clone(),
+                        usages,
+                    }
                 })
                 .collect()
         })
         .collect())
 }
 
-fn get_usages(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<i64>> {
-    PostTag::belonging_to(tags)
-        .group_by(post_tag::tag_id)
-        .select((post_tag::tag_id, count(post_tag::tag_id)))
+fn get_usages(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<i32>> {
+    let tag_ids: Vec<_> = tags.iter().map(Identifiable::id).copied().collect();
+    tag_statistics::table
+        .select((tag_statistics::tag_id, tag_statistics::usage_count))
+        .filter(tag_statistics::tag_id.eq_any(&tag_ids))
         .load(conn)
-        .map(|usages| {
-            resource::order_like(usages, tags, |&(id, _)| id)
+        .map(|tag_usages| {
+            resource::order_transformed_as(tag_usages, &tag_ids, |&(id, _)| id)
                 .into_iter()
-                .map(|post_count| post_count.map(|(_, count)| count).unwrap_or(0))
+                .map(|(_, usages)| usages)
                 .collect()
         })
 }

@@ -46,6 +46,8 @@ pub struct Post {
     pub source: Option<String>,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
+    generated_thumbnail_size: i64,
+    custom_thumbnail_size: i64,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Associations, Identifiable, Insertable, Queryable, Selectable)]

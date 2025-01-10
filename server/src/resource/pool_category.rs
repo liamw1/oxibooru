@@ -1,7 +1,6 @@
 use crate::model::pool::PoolCategory;
-use crate::schema::{pool, pool_category};
+use crate::schema::{pool_category, pool_category_statistics};
 use crate::time::DateTime;
-use diesel::dsl::count;
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -10,17 +9,16 @@ pub struct PoolCategoryInfo {
     version: DateTime,
     name: String,
     color: String,
-    usages: i64,
+    usages: i32,
     default: bool,
 }
 
 impl PoolCategoryInfo {
     pub fn new(conn: &mut PgConnection, category: PoolCategory) -> QueryResult<Self> {
-        let usages = pool::table
-            .filter(pool::category_id.eq(category.id))
-            .count()
+        let usages = pool_category_statistics::table
+            .find(category.id)
+            .select(pool_category_statistics::usage_count)
             .first(conn)?;
-
         Ok(Self {
             version: category.last_edit_time,
             name: category.name,
@@ -36,19 +34,17 @@ impl PoolCategoryInfo {
     }
 
     pub fn all(conn: &mut PgConnection) -> QueryResult<Vec<Self>> {
-        let pool_categories: Vec<(PoolCategory, Option<i64>)> = pool_category::table
-            .left_join(pool::table)
-            .group_by(pool_category::id)
-            .select((PoolCategory::as_select(), count(pool::id).nullable()))
+        let pool_categories: Vec<(PoolCategory, i32)> = pool_category::table
+            .inner_join(pool_category_statistics::table)
+            .select((PoolCategory::as_select(), pool_category_statistics::usage_count))
             .load(conn)?;
-
         Ok(pool_categories
             .into_iter()
             .map(|(category, usages)| Self {
                 version: category.last_edit_time,
                 name: category.name,
                 color: category.color,
-                usages: usages.unwrap_or(0),
+                usages,
                 default: category.id == 0,
             })
             .collect())

@@ -2,9 +2,8 @@ use crate::content::hash::PostHash;
 use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource;
 use crate::resource::post::MicroPost;
-use crate::schema::{pool, pool_category, pool_name, pool_post};
+use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
 use crate::time::DateTime;
-use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
@@ -18,7 +17,7 @@ pub struct MicroPool {
     pub names: Vec<String>,
     pub category: String,
     pub description: String,
-    pub post_count: i64,
+    pub post_count: i32,
 }
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
@@ -61,7 +60,7 @@ pub struct PoolInfo {
     category: Option<String>,
     names: Option<Vec<String>>,
     posts: Option<Vec<MicroPost>>,
-    post_count: Option<i64>,
+    post_count: Option<i32>,
 }
 
 impl PoolInfo {
@@ -134,7 +133,7 @@ impl PoolInfo {
 }
 
 fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<String>> {
-    let pool_ids: Vec<_> = pools.iter().map(|pool| pool.id).collect();
+    let pool_ids: Vec<_> = pools.iter().map(Identifiable::id).copied().collect();
     pool::table
         .inner_join(pool_category::table)
         .select((pool::id, pool_category::name))
@@ -176,15 +175,16 @@ fn get_posts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<Mic
         .collect())
 }
 
-fn get_post_counts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<i64>> {
-    PoolPost::belonging_to(pools)
-        .group_by(pool_post::pool_id)
-        .select((pool_post::pool_id, count(pool_post::post_id)))
+fn get_post_counts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<i32>> {
+    let pool_ids: Vec<_> = pools.iter().map(Identifiable::id).copied().collect();
+    pool_statistics::table
+        .select((pool_statistics::pool_id, pool_statistics::post_count))
+        .filter(pool_statistics::pool_id.eq_any(&pool_ids))
         .load(conn)
         .map(|usages| {
-            resource::order_like(usages, pools, |&(id, _)| id)
+            resource::order_transformed_as(usages, &pool_ids, |&(id, _)| id)
                 .into_iter()
-                .map(|post_count| post_count.map(|(_, count)| count).unwrap_or(0))
+                .map(|(_, post_count)| post_count)
                 .collect()
         })
 }

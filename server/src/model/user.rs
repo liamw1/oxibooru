@@ -33,6 +33,8 @@ pub struct User {
     pub creation_time: DateTime,
     pub last_login_time: DateTime,
     pub last_edit_time: DateTime,
+    #[allow(dead_code)]
+    custom_avatar_size: i64,
 }
 
 impl User {

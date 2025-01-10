@@ -41,8 +41,7 @@ pub fn time_criteria(filter: &str) -> Result<Criteria<DateTime>, Error> {
 pub fn criteria<T>(filter: &str) -> Result<Criteria<T>, Error>
 where
     T: FromStr,
-    <T as FromStr>::Err: std::error::Error,
-    <T as FromStr>::Err: 'static,
+    <T as FromStr>::Err: std::error::Error + 'static,
 {
     if let Some(split_str) = filter.split_once("..") {
         return match split_str {

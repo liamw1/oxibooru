@@ -1,9 +1,9 @@
 use crate::api::{ApiResult, AuthResult, ResourceQuery};
 use crate::model::post::PostFeature;
 use crate::resource::post::{FieldTable, PostInfo};
-use crate::schema::{post, post_feature, user};
+use crate::schema::{database_statistics, post_feature, user};
 use crate::time::DateTime;
-use crate::{api, config, db, filesystem, resource};
+use crate::{api, config, db, resource};
 use diesel::prelude::*;
 use serde::Serialize;
 use warp::{Filter, Rejection, Reply};
@@ -29,8 +29,8 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Info {
-    post_count: i64,
-    disk_usage: u64,
+    post_count: i32,
+    disk_usage: i64,
     featured_post: Option<PostInfo>,
     featuring_time: Option<DateTime>,
     featuring_user: Option<String>,
@@ -44,9 +44,11 @@ fn get_info(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
 
     let client_id = client.as_ref().map(|user| user.id);
     let fields = create_field_table(query.fields())?;
-    let disk_usage = filesystem::data_size()?;
 
     db::get_connection()?.transaction(|conn| {
+        let (post_count, disk_usage) = database_statistics::table
+            .select((database_statistics::post_count, database_statistics::disk_usage))
+            .first(conn)?;
         let latest_feature: Option<PostFeature> = post_feature::table
             .order_by(post_feature::time.desc())
             .first(conn)
@@ -68,7 +70,7 @@ fn get_info(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
             .flatten();
 
         Ok(Info {
-            post_count: post::table.count().first(conn)?,
+            post_count,
             disk_usage,
             featured_post,
             featuring_time: latest_feature.as_ref().map(|feature| feature.time),

@@ -2,9 +2,8 @@ use crate::model::comment::{Comment, CommentScore};
 use crate::model::enums::{AvatarStyle, Rating};
 use crate::resource;
 use crate::resource::user::MicroUser;
-use crate::schema::{comment, comment_score, user};
+use crate::schema::{comment, comment_score, comment_statistics, user};
 use crate::time::DateTime;
-use diesel::dsl::*;
 use diesel::prelude::*;
 use serde::Serialize;
 
@@ -20,7 +19,7 @@ pub struct CommentInfo {
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
     pub user: Option<MicroUser>,
-    pub score: i64,
+    pub score: i32,
     pub own_score: Rating,
 }
 
@@ -79,7 +78,7 @@ impl CommentInfo {
 }
 
 fn get_owners(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<Option<MicroUser>>> {
-    let comment_ids = comments.iter().map(|comment| comment.id).collect::<Vec<_>>();
+    let comment_ids: Vec<_> = comments.iter().map(Identifiable::id).copied().collect();
     comment::table
         .filter(comment::id.eq_any(&comment_ids))
         .inner_join(user::table)
@@ -95,15 +94,16 @@ fn get_owners(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         })
 }
 
-fn get_scores(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<i64>> {
-    CommentScore::belonging_to(comments)
-        .group_by(comment_score::comment_id)
-        .select((comment_score::comment_id, sum(comment_score::score)))
+fn get_scores(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<i32>> {
+    let comment_ids: Vec<_> = comments.iter().map(Identifiable::id).copied().collect();
+    comment_statistics::table
+        .select((comment_statistics::comment_id, comment_statistics::score))
+        .filter(comment_statistics::comment_id.eq_any(&comment_ids))
         .load(conn)
         .map(|comment_scores| {
-            resource::order_like(comment_scores, comments, |&(id, _)| id)
+            resource::order_transformed_as(comment_scores, &comment_ids, |&(id, _)| id)
                 .into_iter()
-                .map(|comment_score| comment_score.and_then(|(_, score)| score).unwrap_or(0))
+                .map(|(_, score)| score)
                 .collect()
         })
 }

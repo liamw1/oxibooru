@@ -5,7 +5,7 @@ use crate::content::thumbnail::{self, ThumbnailType};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
-use crate::schema::user;
+use crate::schema::{database_statistics, user};
 use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, search};
 use argon2::password_hash::SaltString;
@@ -73,10 +73,18 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Us
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
-        let count_query = search::user::build_query(&search_criteria)?;
         let sql_query = search::user::build_query(&search_criteria)?;
 
-        let total = count_query.count().first(conn)?;
+        let total = if search_criteria.has_filter() {
+            let count_query = search::user::build_query(&search_criteria)?;
+            count_query.count().first(conn)?
+        } else {
+            let user_count: i32 = database_statistics::table
+                .select(database_statistics::user_count)
+                .first(conn)?;
+            i64::from(user_count)
+        };
+
         let selected_users: Vec<i32> = search::user::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,
@@ -276,7 +284,10 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
             api::verify_privilege(client.as_ref(), required_rank)?;
 
             filesystem::delete_custom_avatar(&username)?;
-            filesystem::save_custom_avatar(&username, avatar)?;
+            let avatar_size = filesystem::save_custom_avatar(&username, avatar)?;
+            diesel::update(user::table.find(user_id))
+                .set(user::custom_avatar_size.eq(avatar_size as i64))
+                .execute(conn)?;
         }
 
         UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from)

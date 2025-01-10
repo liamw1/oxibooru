@@ -1,12 +1,16 @@
-use crate::schema::{pool, pool_category, pool_name, pool_post};
-use crate::search::{Error, Order, ParsedSort, QueryArgs, SearchCriteria};
-use crate::{apply_having_clause, apply_str_filter, apply_subquery_filter, apply_time_filter, finalize};
+use crate::schema::{pool, pool_category, pool_name, pool_statistics};
+use crate::search::{Error, Order, ParsedSort, SearchCriteria};
+use crate::{apply_filter, apply_str_filter, apply_subquery_filter, apply_time_filter, finalize};
 use diesel::dsl::*;
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use strum::EnumString;
 
-pub type BoxedQuery<'a> = IntoBoxed<'a, Select<pool::table, pool::id>, Pg>;
+pub type BoxedQuery<'a> = IntoBoxed<
+    'a,
+    InnerJoin<InnerJoin<Select<pool::table, pool::id>, pool_statistics::table>, pool_category::table>,
+    Pg,
+>;
 
 #[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "kebab-case")]
@@ -34,7 +38,11 @@ pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Tok
 }
 
 pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<BoxedQuery<'a>, Error> {
-    let base_query = pool::table.select(pool::id).into_boxed();
+    let base_query = pool::table
+        .select(pool::id)
+        .inner_join(pool_statistics::table)
+        .inner_join(pool_category::table)
+        .into_boxed();
     search_criteria
         .filters
         .iter()
@@ -46,23 +54,8 @@ pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<Box
                 let subquery = apply_str_filter!(names, pool_name::name, filter.unnegated());
                 Ok(apply_subquery_filter!(query, pool::id, filter, subquery))
             }
-            Token::Category => {
-                let category_names = pool::table
-                    .select(pool::id)
-                    .inner_join(pool_category::table)
-                    .into_boxed();
-                let subquery = apply_str_filter!(category_names, pool_category::name, filter);
-                Ok(query.filter(pool::id.eq_any(subquery)))
-            }
-            Token::PostCount => {
-                let pool_posts = pool::table
-                    .select(pool::id)
-                    .left_join(pool_post::table)
-                    .group_by(pool::id)
-                    .into_boxed();
-                apply_having_clause!(pool_posts, count(pool_post::post_id), filter)
-                    .map(|subquery| query.filter(pool::id.eq_any(subquery)))
-            }
+            Token::Category => Ok(apply_str_filter!(query, pool_category::name, filter)),
+            Token::PostCount => apply_filter!(query, pool_statistics::post_count, filter, i32),
         })
 }
 
@@ -71,6 +64,8 @@ pub fn get_ordered_ids(
     query: BoxedQuery,
     search_criteria: &SearchCriteria<Token>,
 ) -> QueryResult<Vec<i32>> {
+    let query = query.inner_join(pool_name::table).filter(pool_name::order.eq(0));
+
     // If random sort specified, no other sorts matter
     let extra_args = search_criteria.extra_args;
     if search_criteria.random_sort {
@@ -90,57 +85,8 @@ pub fn get_ordered_ids(
     match sort.kind {
         Token::CreationTime => finalize!(query, pool::creation_time, sort, extra_args).load(conn),
         Token::LastEditTime => finalize!(query, pool::last_edit_time, sort, extra_args).load(conn),
-        Token::Name => name_sorted(conn, query, sort, extra_args),
-        Token::Category => category_sorted(conn, query, sort, extra_args),
-        Token::PostCount => post_count_sorted(conn, query, sort, extra_args),
+        Token::Name => finalize!(query, pool_name::name, sort, extra_args).load(conn),
+        Token::Category => finalize!(query, pool_category::name, sort, extra_args).load(conn),
+        Token::PostCount => finalize!(query, pool_statistics::post_count, sort, extra_args).load(conn),
     }
-}
-
-fn name_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_pools: Vec<i32> = query.load(conn)?;
-    let final_query = pool::table
-        .select(pool::id)
-        .group_by(pool::id)
-        .left_join(pool_name::table)
-        .filter(pool::id.eq_any(&filtered_pools))
-        .filter(pool_name::order.eq(0)) // Only sort on first name
-        .into_boxed();
-    finalize!(final_query, min(pool_name::name), sort, extra_args).load(conn)
-}
-
-fn category_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_pools: Vec<i32> = query.load(conn)?;
-    let final_query = pool::table
-        .select(pool::id)
-        .group_by(pool::id)
-        .left_join(pool_category::table)
-        .filter(pool::id.eq_any(&filtered_pools))
-        .into_boxed();
-    finalize!(final_query, min(pool_category::name), sort, extra_args).load(conn)
-}
-
-fn post_count_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_pools: Vec<i32> = query.load(conn)?;
-    let final_query = pool::table
-        .select(pool::id)
-        .group_by(pool::id)
-        .left_join(pool_post::table)
-        .filter(pool::id.eq_any(&filtered_pools))
-        .into_boxed();
-    finalize!(final_query, count(pool_post::post_id), sort, extra_args).load(conn)
 }

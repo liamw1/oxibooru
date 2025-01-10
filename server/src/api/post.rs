@@ -10,7 +10,10 @@ use crate::model::post::{
     NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostRelation, PostSignature,
 };
 use crate::resource::post::{FieldTable, Note, PostInfo};
-use crate::schema::{comment, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_tag};
+use crate::schema::{
+    comment, database_statistics, post, post_favorite, post_feature, post_relation, post_score, post_signature,
+    post_tag,
+};
 use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, search, update};
 use diesel::dsl::exists;
@@ -146,10 +149,18 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::post::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
-        let count_query = search::post::build_query(client_id, &search_criteria)?;
         let sql_query = search::post::build_query(client_id, &search_criteria)?;
 
-        let total = count_query.count().first(conn)?;
+        let total = if search_criteria.has_filter() {
+            let count_query = search::post::build_query(client_id, &search_criteria)?;
+            count_query.count().first(conn)?
+        } else {
+            let post_count: i32 = database_statistics::table
+                .select(database_statistics::post_count)
+                .first(conn)?;
+            i64::from(post_count)
+        };
+
         let selected_posts: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,
@@ -205,8 +216,19 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
     };
 
     db::get_connection()?.transaction(|conn| {
-        // Optimized neighbor retrieval for the most common use case
-        if search_criteria.has_no_sort() {
+        if search_criteria.has_sort() {
+            // Most general method of retrieving neighbors
+            let sql_query = search::post::build_query(client_id, &search_criteria)?;
+            let post_ids: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+            let post_index = post_ids.iter().position(|&id| id == post_id);
+
+            let prev_post_id = post_index.and_then(|index| post_ids.get(index - 1)).copied();
+            let next_post_id = post_index.and_then(|index| post_ids.get(index + 1)).copied();
+            let post_ids = prev_post_id.into_iter().chain(next_post_id).collect();
+            let post_infos = PostInfo::new_batch_from_ids(conn, client_id, post_ids, &fields)?;
+            Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
+        } else {
+            // Optimized neighbor retrieval for the most common use case
             let previous_post = search::post::build_query(client_id, &search_criteria)?
                 .select(Post::as_select())
                 .filter(post::id.gt(post_id))
@@ -224,16 +246,6 @@ fn get_post_neighbors(post_id: i32, auth: AuthResult, query: ResourceQuery) -> A
             let posts = previous_post.into_iter().chain(next_post).collect();
             let post_infos = PostInfo::new_batch(conn, client_id, posts, &fields)?;
             Ok(create_post_neighbors(post_infos, has_previous_post))
-        } else {
-            let sql_query = search::post::build_query(client_id, &search_criteria)?;
-            let post_ids: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
-            let post_index = post_ids.iter().position(|&id| id == post_id);
-
-            let prev_post_id = post_index.and_then(|index| post_ids.get(index - 1)).copied();
-            let next_post_id = post_index.and_then(|index| post_ids.get(index + 1)).copied();
-            let post_ids = prev_post_id.into_iter().chain(next_post_id).collect();
-            let post_infos = PostInfo::new_batch_from_ids(conn, client_id, post_ids, &fields)?;
-            Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
         }
     })
 }
@@ -442,9 +454,18 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
-            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
+
+            let custom_thumbnail_size =
+                filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
+            diesel::update(post::table.find(post_id))
+                .set(post::custom_thumbnail_size.eq(custom_thumbnail_size as i64))
+                .execute(conn)?;
         }
-        filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
+        let generated_thumbnail_size =
+            filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
+        diesel::update(post::table.find(post_id))
+            .set(post::custom_thumbnail_size.eq(generated_thumbnail_size as i64))
+            .execute(conn)?;
 
         PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
     })
@@ -751,13 +772,24 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
 
             // Replace generated thumbnail
             filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Generated)?;
-            filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
+            let generated_thumbnail_size = filesystem::save_post_thumbnail(
+                &post_hash,
+                content_properties.thumbnail,
+                ThumbnailCategory::Generated,
+            )?;
+            diesel::update(post::table.find(post_id))
+                .set(post::generated_thumbnail_size.eq(generated_thumbnail_size as i64))
+                .execute(conn)?;
         }
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
 
             filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Custom)?;
-            filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
+            let custom_thumbnail_size =
+                filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
+            diesel::update(post::table.find(post_id))
+                .set(post::custom_thumbnail_size.eq(custom_thumbnail_size as i64))
+                .execute(conn)?;
         }
 
         let client_id = client.map(|user| user.id);

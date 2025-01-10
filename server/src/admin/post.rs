@@ -19,8 +19,8 @@ use std::path::Path;
 
 /// Renames post files and thumbnails.
 /// Useful when the content hash changes.
-pub fn rename_data_paths() -> std::io::Result<()> {
-    let _time = Timer::new("rename_data_paths");
+pub fn reset_filenames() -> std::io::Result<()> {
+    let _time = Timer::new("reset_filenames");
 
     if filesystem::path(Directory::GeneratedThumbnails).exists() {
         let mut progress = ProgressReporter::new("Generated thumbnails renamed", PRINT_INTERVAL);

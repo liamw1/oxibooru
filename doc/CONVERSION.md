@@ -118,7 +118,7 @@ these are:
     ```console
     user@host:oxibooru$ docker exec -it oxibooru-server-1 ./server --admin
     ```
-    From there, run the rename_data_paths command, which will automatically
+    From there, run the reset_filenames command, which will automatically
     rename every file in the data directory to match the Oxibooru convention.
 
 5. **Recompute post properties**

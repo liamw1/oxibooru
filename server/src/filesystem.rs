@@ -5,7 +5,6 @@ use crate::model::enums::MimeType;
 use image::{DynamicImage, ImageResult};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::LazyLock;
 use uuid::Uuid;
 
@@ -45,14 +44,12 @@ pub fn save_uploaded_file(data: Vec<u8>, mime_type: MimeType) -> std::io::Result
     let upload_token = format!("{}.{}", Uuid::new_v4(), mime_type.extension());
     let upload_path = temporary_upload_filepath(&upload_token);
     std::fs::write(upload_path, &data)?;
-
-    let data_size = size_of::<u8>() * data.len();
-    DATA_SIZE.fetch_add(data_size as u64, Ordering::SeqCst);
     Ok(upload_token)
 }
 
 /// Saves custom avatar `thumbnail` for user with name `username` to disk.
-pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResult<()> {
+/// Returns size of the thumbnail in bytes.
+pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResult<u64> {
     assert_eq!(thumbnail.width(), config::get().thumbnails.avatar_width);
     assert_eq!(thumbnail.height(), config::get().thumbnails.avatar_height);
 
@@ -60,10 +57,8 @@ pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResul
     let avatar_path = hash::custom_avatar_path(username);
 
     thumbnail.to_rgb8().save(&avatar_path)?;
-    let file_size = std::fs::metadata(avatar_path)?.len();
-
-    DATA_SIZE.fetch_add(file_size, Ordering::SeqCst);
-    Ok(())
+    let metadata = std::fs::metadata(avatar_path)?;
+    Ok(metadata.len())
 }
 
 /// Deletes custom avatar for user with name `username` from disk.
@@ -71,16 +66,17 @@ pub fn delete_custom_avatar(username: &str) -> std::io::Result<()> {
     let custom_avatar_path = hash::custom_avatar_path(username);
     custom_avatar_path
         .exists()
-        .then(|| remove_file(&custom_avatar_path))
+        .then(|| std::fs::remove_file(&custom_avatar_path))
         .unwrap_or(Ok(()))
 }
 
 /// Saves `post` `thumbnail` to disk. Can be custom or automatically generated.
+/// Returns size of the thumbnail in bytes.
 pub fn save_post_thumbnail(
     post: &PostHash,
     thumbnail: DynamicImage,
     thumbnail_type: ThumbnailCategory,
-) -> ImageResult<()> {
+) -> ImageResult<u64> {
     assert_eq!(thumbnail.width(), config::get().thumbnails.post_height);
     assert_eq!(thumbnail.height(), config::get().thumbnails.post_height);
 
@@ -96,22 +92,20 @@ pub fn save_post_thumbnail(
     };
 
     thumbnail.to_rgb8().save(&thumbnail_path)?;
-    let file_size = std::fs::metadata(thumbnail_path)?.len();
-
-    DATA_SIZE.fetch_add(file_size, Ordering::SeqCst);
-    Ok(())
+    let metadata = std::fs::metadata(thumbnail_path)?;
+    Ok(metadata.len())
 }
 
 /// Deletes thumbnail of `post` from disk.
 /// Returns error if thumbnail does not exist and `thumbnail_type` is [ThumbnailType::Generated].
 pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailCategory) -> std::io::Result<()> {
     match thumbnail_type {
-        ThumbnailCategory::Generated => remove_file(&post.generated_thumbnail_path()),
+        ThumbnailCategory::Generated => std::fs::remove_file(&post.generated_thumbnail_path()),
         ThumbnailCategory::Custom => {
             let custom_thumbnail_path = post.custom_thumbnail_path();
             custom_thumbnail_path
                 .exists()
-                .then(|| remove_file(&custom_thumbnail_path))
+                .then(|| std::fs::remove_file(&custom_thumbnail_path))
                 .unwrap_or(Ok(()))
         }
     }
@@ -120,7 +114,7 @@ pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailCategory)
 /// Deletes `post` content from disk.
 pub fn delete_content(post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
     let content_path = post.content_path(mime_type);
-    remove_file(&content_path)
+    std::fs::remove_file(content_path)
 }
 
 /// Deletes `post` thumbnails and content from disk.
@@ -184,17 +178,6 @@ pub fn purge_temporary_uploads() -> std::io::Result<()> {
     Ok(())
 }
 
-/// Returns total size of the data directory.
-/// This can take a significant amount of time, so we cache this value and update it with atomics after
-/// it's called for the first time.
-pub fn data_size() -> std::io::Result<u64> {
-    Ok(match DATA_SIZE.compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst) {
-        Ok(_) => DATA_SIZE.fetch_add(calculate_directory_size(Path::new(config::data_dir()))?, Ordering::SeqCst),
-        Err(current_value) => current_value,
-    })
-}
-
-static DATA_SIZE: AtomicU64 = AtomicU64::new(0);
 static AVATARS_DIRECTORY: LazyLock<String> = LazyLock::new(|| format!("{}/avatars", config::data_dir()));
 static POSTS_DIRECTORY: LazyLock<String> = LazyLock::new(|| format!("{}/posts", config::data_dir()));
 static GENERATED_THUMBNAILS_DIRECTORY: LazyLock<String> =
@@ -203,15 +186,6 @@ static CUSTOM_THUMBNAILS_DIRECTORY: LazyLock<String> =
     LazyLock::new(|| format!("{}/custom-thumbnails", config::data_dir()));
 static TEMPORARY_UPLOADS_DIRECTORY: LazyLock<String> =
     LazyLock::new(|| format!("{}/temporary-uploads", config::data_dir()));
-
-/// Removes a single file and updates the DATA_SIZE variable.
-fn remove_file(path: &Path) -> std::io::Result<()> {
-    let file_size = std::fs::metadata(path)?.len();
-    std::fs::remove_file(path)?;
-
-    DATA_SIZE.fetch_sub(file_size, Ordering::SeqCst);
-    Ok(())
-}
 
 /// Swaps the names of two files.
 fn swap_files(file_a: &Path, file_b: &Path) -> std::io::Result<()> {

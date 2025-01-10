@@ -1,17 +1,18 @@
 use crate::model::enums::{PostSafety, PostType};
 use crate::schema::{
-    comment, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_tag, tag_name,
+    comment, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics, post_tag, tag_name,
     user,
 };
-use crate::search::{Error, Order, ParsedSort, QueryArgs, SearchCriteria, UnparsedFilter};
-use crate::{apply_filter, apply_having_clause, apply_str_filter, apply_subquery_filter, apply_time_filter, finalize};
+use crate::search::{Error, Order, ParsedSort, SearchCriteria, UnparsedFilter};
+use crate::{apply_filter, apply_str_filter, apply_subquery_filter, apply_time_filter, finalize};
 use diesel::dsl::*;
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use std::str::FromStr;
 use strum::EnumString;
 
-pub type BoxedQuery<'a> = IntoBoxed<'a, Select<post::table, post::id>, Pg>;
+pub type BoxedQuery<'a> =
+    IntoBoxed<'a, LeftJoin<InnerJoin<Select<post::table, post::id>, post_statistics::table>, user::table>, Pg>;
 
 #[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "kebab-case")]
@@ -89,7 +90,11 @@ pub fn build_query<'a>(
     client: Option<i32>,
     search_criteria: &'a SearchCriteria<Token>,
 ) -> Result<BoxedQuery<'a>, Error> {
-    let base_query = post::table.select(post::id).into_boxed();
+    let base_query = post::table
+        .select(post::id)
+        .inner_join(post_statistics::table)
+        .left_join(user::table)
+        .into_boxed();
     search_criteria
         .filters
         .iter()
@@ -118,11 +123,7 @@ pub fn build_query<'a>(
                 let subquery = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i32)?;
                 Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
-            Token::Uploader => {
-                let users = user::table.select(user::id).into_boxed();
-                let subquery = apply_str_filter!(users, user::name, filter);
-                Ok(query.filter(post::user_id.eq_any(subquery.nullable())))
-            }
+            Token::Uploader => Ok(apply_str_filter!(query, user::name, filter)),
             Token::Fav => {
                 let favorites = post_favorite::table
                     .select(post_favorite::post_id)
@@ -144,60 +145,12 @@ pub fn build_query<'a>(
                 let subquery = apply_str_filter!(post_notes, post_note::text, filter.unnegated());
                 Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
-            Token::TagCount => {
-                let post_tags = post::table
-                    .select(post::id)
-                    .left_join(post_tag::table)
-                    .group_by(post::id)
-                    .into_boxed();
-                apply_having_clause!(post_tags, count(post_tag::tag_id), filter)
-                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
-            }
-            Token::CommentCount => {
-                let comments = post::table
-                    .select(post::id)
-                    .left_join(comment::table)
-                    .group_by(post::id)
-                    .into_boxed();
-                apply_having_clause!(comments, count(comment::id), filter)
-                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
-            }
-            Token::RelationCount => {
-                let post_relations = post::table
-                    .select(post::id)
-                    .left_join(post_relation::table)
-                    .group_by(post::id)
-                    .into_boxed();
-                apply_having_clause!(post_relations, count(post_relation::child_id), filter)
-                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
-            }
-            Token::NoteCount => {
-                let post_notes = post::table
-                    .select(post::id)
-                    .left_join(post_note::table)
-                    .group_by(post::id)
-                    .into_boxed();
-                apply_having_clause!(post_notes, count(post_note::id), filter)
-                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
-            }
-            Token::FavCount => {
-                let post_favorites = post::table
-                    .select(post::id)
-                    .left_join(post_favorite::table)
-                    .group_by(post::id)
-                    .into_boxed();
-                apply_having_clause!(post_favorites, count(post_favorite::user_id), filter)
-                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
-            }
-            Token::FeatureCount => {
-                let post_features = post::table
-                    .select(post::id)
-                    .left_join(post_feature::table)
-                    .group_by(post::id)
-                    .into_boxed();
-                apply_having_clause!(post_features, count(post_feature::id), filter)
-                    .map(|subquery| query.filter(post::id.eq_any(subquery)))
-            }
+            Token::TagCount => apply_filter!(query, post_statistics::tag_count, filter, i32),
+            Token::CommentCount => apply_filter!(query, post_statistics::comment_count, filter, i32),
+            Token::RelationCount => apply_filter!(query, post_statistics::relation_count, filter, i32),
+            Token::NoteCount => apply_filter!(query, post_statistics::note_count, filter, i32),
+            Token::FavCount => apply_filter!(query, post_statistics::favorite_count, filter, i32),
+            Token::FeatureCount => apply_filter!(query, post_statistics::feature_count, filter, i32),
             Token::CommentTime => {
                 let comments = comment::table.select(comment::post_id).into_boxed();
                 let subquery = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
@@ -254,17 +207,19 @@ pub fn get_ordered_ids(
         // The implementation for these isn't ideal, but it's the best thing I could do given
         // Diesel's annoying restrictions around dynamic queries. If you could call .grouped_by
         // on a boxed query, the implementation could be so much nicer.
-        Token::Tag | Token::TagCount => tag_count_sorted(conn, query, sort, extra_args),
-        Token::Pool => pool_sorted(conn, query, sort, extra_args),
-        Token::Uploader => uploader_sorted(conn, query, sort, extra_args),
-        Token::Fav | Token::FavCount => favorite_count_sorted(conn, query, sort, extra_args),
-        Token::Comment | Token::CommentCount => comment_count_sorted(conn, query, sort, extra_args),
-        Token::RelationCount => relation_count_sorted(conn, query, sort, extra_args),
-        Token::NoteCount => note_count_sorted(conn, query, sort, extra_args),
-        Token::FeatureCount => feature_count_sorted(conn, query, sort, extra_args),
-        Token::CommentTime => comment_time_sorted(conn, query, sort, extra_args),
-        Token::FavTime => favorite_time_sorted(conn, query, sort, extra_args),
-        Token::FeatureTime => feature_time_sorted(conn, query, sort, extra_args),
+        Token::Tag | Token::TagCount => finalize!(query, post_statistics::tag_count, sort, extra_args).load(conn),
+        Token::Pool => finalize!(query, post_statistics::pool_count, sort, extra_args).load(conn),
+        Token::Uploader => finalize!(query, user::name, sort, extra_args).load(conn),
+        Token::Fav | Token::FavCount => finalize!(query, post_statistics::favorite_count, sort, extra_args).load(conn),
+        Token::Comment | Token::CommentCount => {
+            finalize!(query, post_statistics::comment_count, sort, extra_args).load(conn)
+        }
+        Token::RelationCount => finalize!(query, post_statistics::relation_count, sort, extra_args).load(conn),
+        Token::NoteCount => finalize!(query, post_statistics::note_count, sort, extra_args).load(conn),
+        Token::FeatureCount => finalize!(query, post_statistics::feature_count, sort, extra_args).load(conn),
+        Token::CommentTime => finalize!(query, post_statistics::last_comment_time, sort, extra_args).load(conn),
+        Token::FavTime => finalize!(query, post_statistics::last_favorite_time, sort, extra_args).load(conn),
+        Token::FeatureTime => finalize!(query, post_statistics::last_feature_time, sort, extra_args).load(conn),
         Token::ContentChecksum | Token::NoteText | Token::Special => panic!("Invalid sort-style token!"),
     }
 }
@@ -306,194 +261,16 @@ fn apply_special_filter<'a>(
             apply_subquery_filter!(query, post::id, filter, subquery)
         }),
         SpecialToken::Tumbleweed => {
-            let no_scores = count(post_score::post_id).eq(0);
-            let no_favorites = count(post_favorite::post_id).eq(0);
-            let no_comments = count(comment::post_id).eq(0);
-            let subquery = post::table
-                .select(post::id)
-                .left_join(post_score::table)
-                .left_join(post_favorite::table)
-                .left_join(comment::table)
-                .group_by(post::id)
-                .having(no_scores.and(no_favorites).and(no_comments))
+            // A score of 0 doesn't necessarily mean no ratings, so we count them with a subquery
+            let subquery = post_statistics::table
+                .select(post_statistics::post_id)
+                .left_join(post_score::table.on(post_score::post_id.eq(post_statistics::post_id)))
+                .filter(post_statistics::favorite_count.eq(0))
+                .filter(post_statistics::comment_count.eq(0))
+                .group_by(post_statistics::post_id)
+                .having(count(post_score::post_id).eq(0))
                 .into_boxed();
             Ok(apply_subquery_filter!(query, post::id, filter, subquery))
         }
     }
-}
-
-fn uploader_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(user::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, min(user::name), sort, extra_args).load(conn)
-}
-
-fn pool_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(pool_post::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, count(pool_post::pool_id), sort, extra_args).load(conn)
-}
-
-fn tag_count_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(post_tag::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, count(post_tag::tag_id), sort, extra_args).load(conn)
-}
-
-fn comment_count_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(comment::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, count(comment::id), sort, extra_args).load(conn)
-}
-
-fn relation_count_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(post_relation::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, count(post_relation::child_id), sort, extra_args).load(conn)
-}
-
-fn note_count_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(post_note::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, count(post_note::id), sort, extra_args).load(conn)
-}
-
-fn favorite_count_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(post_favorite::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, count(post_favorite::user_id), sort, extra_args).load(conn)
-}
-
-fn feature_count_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(post_feature::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, count(post_feature::id), sort, extra_args).load(conn)
-}
-
-fn comment_time_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(comment::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, max(comment::creation_time), sort, extra_args).load(conn)
-}
-
-fn favorite_time_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(post_favorite::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, max(post_favorite::time), sort, extra_args).load(conn)
-}
-
-fn feature_time_sorted(
-    conn: &mut PgConnection,
-    query: BoxedQuery,
-    sort: ParsedSort<Token>,
-    extra_args: Option<QueryArgs>,
-) -> QueryResult<Vec<i32>> {
-    let filtered_posts: Vec<i32> = query.load(conn)?;
-    let final_query = post::table
-        .select(post::id)
-        .group_by(post::id)
-        .left_join(post_feature::table)
-        .filter(post::id.eq_any(&filtered_posts))
-        .into_boxed();
-    finalize!(final_query, max(post_feature::time), sort, extra_args).load(conn)
 }

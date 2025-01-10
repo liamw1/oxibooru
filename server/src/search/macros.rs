@@ -88,36 +88,6 @@ macro_rules! apply_criteria {
     };
 }
 
-/// Applies a HAVING clause to the given `query`.
-/// The `filter` determines what operation is applied to the given `expression`.
-/// The operation is one of: eq_any, ge, le, between, ne_all, lt, gt, or not_between.
-#[macro_export]
-macro_rules! apply_having_clause {
-    ($query:expr, $expression:expr, $filter:expr) => {
-        $crate::search::parse::criteria::<i64>($filter.criteria).map(|criteria| {
-            if $filter.negated {
-                match criteria {
-                    $crate::search::Criteria::Values(values) => $query.having($expression.ne_all(values)),
-                    $crate::search::Criteria::GreaterEq(value) => $query.having($expression.lt(value)),
-                    $crate::search::Criteria::LessEq(value) => $query.having($expression.gt(value)),
-                    $crate::search::Criteria::Range(range) => {
-                        $query.having($expression.not_between(range.start, range.end))
-                    }
-                }
-            } else {
-                match criteria {
-                    $crate::search::Criteria::Values(values) => $query.having($expression.eq_any(values)),
-                    $crate::search::Criteria::GreaterEq(value) => $query.having($expression.ge(value)),
-                    $crate::search::Criteria::LessEq(value) => $query.having($expression.le(value)),
-                    $crate::search::Criteria::Range(range) => {
-                        $query.having($expression.between(range.start, range.end))
-                    }
-                }
-            }
-        })
-    };
-}
-
 /// Applies an ordering to the given `query`.
 /// Order is either ASC or DESC.
 #[doc(hidden)]

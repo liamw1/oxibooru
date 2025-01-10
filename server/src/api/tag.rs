@@ -2,7 +2,7 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery,
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
 use crate::resource::tag::{FieldTable, TagInfo};
-use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::schema::{database_statistics, post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
 use diesel::dsl::*;
@@ -90,10 +90,18 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Tag
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::tag::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
-        let count_query = search::tag::build_query(&search_criteria)?;
         let sql_query = search::tag::build_query(&search_criteria)?;
 
-        let total = count_query.count().first(conn)?;
+        let total = if search_criteria.has_filter() {
+            let count_query = search::tag::build_query(&search_criteria)?;
+            count_query.count().first(conn)?
+        } else {
+            let tag_count: i32 = database_statistics::table
+                .select(database_statistics::tag_count)
+                .first(conn)?;
+            i64::from(tag_count)
+        };
+
         let selected_tags: Vec<i32> = search::tag::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,

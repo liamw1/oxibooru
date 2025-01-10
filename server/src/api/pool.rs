@@ -2,7 +2,7 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery,
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::{FieldTable, PoolInfo};
-use crate::schema::{pool, pool_category, pool_name, pool_post};
+use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_post};
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
 use diesel::dsl::exists;
@@ -81,10 +81,18 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::pool::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
-        let count_query = search::pool::build_query(&search_criteria)?;
         let sql_query = search::pool::build_query(&search_criteria)?;
 
-        let total = count_query.count().first(conn)?;
+        let total = if search_criteria.has_filter() {
+            let count_query = search::pool::build_query(&search_criteria)?;
+            count_query.count().first(conn)?
+        } else {
+            let pool_count: i32 = database_statistics::table
+                .select(database_statistics::pool_count)
+                .first(conn)?;
+            i64::from(pool_count)
+        };
+
         let selected_tags: Vec<i32> = search::pool::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,

@@ -43,8 +43,7 @@ pub struct SearchCriteria<'a, T> {
 
 impl<'a, T> SearchCriteria<'a, T>
 where
-    T: Copy,
-    T: FromStr,
+    T: Copy + FromStr,
     <T as FromStr>::Err: std::error::Error,
 {
     pub fn new(search_criteria: &'a str, anonymous_token: T) -> Result<Self, <T as FromStr>::Err> {
@@ -92,8 +91,12 @@ where
         self.extra_args = Some(QueryArgs { offset, limit });
     }
 
-    pub fn has_no_sort(&self) -> bool {
-        self.sorts.is_empty()
+    pub fn has_sort(&self) -> bool {
+        !self.sorts.is_empty() || self.random_sort
+    }
+
+    pub fn has_filter(&self) -> bool {
+        !self.filters.is_empty()
     }
 }
 

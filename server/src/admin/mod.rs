@@ -35,7 +35,7 @@ pub fn command_line_mode() {
 #[derive(Clone, Copy, EnumString, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 enum AdminTask {
-    RenameDataPaths,
+    ResetFilenames,
     RecomputePostChecksums,
     RecomputePostSignatures,
     RecomputePostSignatureIndexes,
@@ -110,7 +110,7 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
 fn run_task(task: AdminTask) -> Result<(), String> {
     println!("Starting task...");
     match task {
-        AdminTask::RenameDataPaths => post::rename_data_paths().map_err(|err| format!("{err}")),
+        AdminTask::ResetFilenames => post::reset_filenames().map_err(|err| format!("{err}")),
         AdminTask::RecomputePostChecksums => {
             let mut conn = get_connection()?;
             post::recompute_checksums(&mut conn).map_err(|err| format!("{err}"))

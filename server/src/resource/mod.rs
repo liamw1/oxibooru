@@ -15,24 +15,8 @@ use diesel::prelude::*;
 /// but I don't see this as a guarantee anywhere in the documentation. If this changes, I'll need
 /// to reimplement a similar function with this behavior.
 
-struct TagData {
-    id: i32,
-    category_id: i32,
-    names: Vec<String>,
-}
-
-impl TagData {
-    fn new(id: i32, category_id: i32, name: String) -> Self {
-        Self {
-            id,
-            category_id,
-            names: vec![name],
-        }
-    }
-}
-
 fn check_batch_results(batch_size: usize, post_count: usize) {
-    debug_assert!(batch_size == 0 || batch_size == post_count);
+    assert!(batch_size == 0 || batch_size == post_count);
 }
 
 /// For a given set of resources, orders them so that their primary keys are in the same order
@@ -52,13 +36,13 @@ fn order_transformed_as<V, F>(mut values: Vec<V>, order: &[i32], get_id: F) -> V
 where
     F: Fn(&V) -> i32,
 {
-    debug_assert_eq!(values.len(), order.len());
+    assert_eq!(values.len(), order.len());
 
     let mut index = 0;
     while index < order.len() {
         let value_id = get_id(&values[index]);
         let correct_index = order.iter().position(|&id| id == value_id).unwrap();
-        debug_assert!(correct_index >= index, "Value id is not unique");
+        assert!(correct_index >= index, "Value id is not unique");
         if index != correct_index {
             values.swap(index, correct_index);
         } else {
@@ -78,7 +62,7 @@ where
     for<'a> &'a T: Identifiable<Id = &'a i32>,
     F: Fn(&V) -> i32,
 {
-    debug_assert!(unordered_values.len() <= ordered_values.len());
+    assert!(unordered_values.len() <= ordered_values.len());
 
     let mut results: Vec<Option<V>> = std::iter::repeat_with(|| None).take(ordered_values.len()).collect();
     for value in unordered_values.into_iter() {
@@ -90,26 +74,4 @@ where
         results[index] = Some(value);
     }
     results
-}
-
-/// Takes a set of tag names which have an associated id and category_id and groups
-/// names which share an id together. Preserves relative order between names.
-///
-/// NOTE: Here we also take a O(n^2) Vec-based approach to this function, as I assume
-/// tags will have a small number of children (implications or suggestions). This approach
-/// is also easier for preserving relative order between names.
-fn collect_tag_data<T, F>(tag_names: Vec<(T, i32, String)>, get_id: F) -> Vec<TagData>
-where
-    F: Fn(&T) -> i32,
-{
-    let mut tags: Vec<TagData> = Vec::new();
-    for (value, category_id, name) in tag_names {
-        let tag_id = get_id(&value);
-        let index = tags.iter().position(|tag| tag.id == tag_id);
-        match index {
-            Some(i) => tags[i].names.push(name),
-            None => tags.push(TagData::new(tag_id, category_id, name)),
-        };
-    }
-    tags
 }

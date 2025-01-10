@@ -2,7 +2,7 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::CommentInfo;
-use crate::schema::{comment, comment_score};
+use crate::schema::{comment, comment_score, database_statistics};
 use crate::time::DateTime;
 use crate::{api, config, db, search};
 use diesel::dsl::exists;
@@ -68,10 +68,18 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::comment::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
-        let count_query = search::comment::build_query(&search_criteria)?;
         let sql_query = search::comment::build_query(&search_criteria)?;
 
-        let total = count_query.count().first(conn)?;
+        let total = if search_criteria.has_filter() {
+            let count_query = search::comment::build_query(&search_criteria)?;
+            count_query.count().first(conn)?
+        } else {
+            let comment_count: i32 = database_statistics::table
+                .select(database_statistics::comment_count)
+                .first(conn)?;
+            i64::from(comment_count)
+        };
+
         let selected_tags: Vec<i32> = search::comment::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,
