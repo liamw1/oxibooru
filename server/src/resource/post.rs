@@ -427,7 +427,8 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
 }
 
 fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) -> QueryResult<Vec<Vec<CommentInfo>>> {
-    let comments: Vec<(Comment, i32, Option<(String, AvatarStyle)>)> = Comment::belonging_to(posts)
+    type CommentData = (Comment, i32, Option<(String, AvatarStyle)>);
+    let comments: Vec<CommentData> = Comment::belonging_to(posts)
         .inner_join(comment_statistics::table)
         .left_join(user::table)
         .select((Comment::as_select(), comment_statistics::score, (user::name, user::avatar_style).nullable()))

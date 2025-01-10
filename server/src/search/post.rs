@@ -4,7 +4,7 @@ use crate::schema::{
     user,
 };
 use crate::search::{Error, Order, ParsedSort, SearchCriteria, UnparsedFilter};
-use crate::{apply_filter, apply_str_filter, apply_subquery_filter, apply_time_filter, finalize};
+use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
 use diesel::dsl::*;
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -172,56 +172,58 @@ pub fn build_query<'a>(
 
 pub fn get_ordered_ids(
     conn: &mut PgConnection,
-    query: BoxedQuery,
+    unsorted_query: BoxedQuery,
     search_criteria: &SearchCriteria<Token>,
 ) -> QueryResult<Vec<i32>> {
     // If random sort specified, no other sorts matter
-    let extra_args = search_criteria.extra_args;
     if search_criteria.random_sort {
         define_sql_function!(fn random() -> Integer);
-        return match extra_args {
-            Some(args) => query.order(random()).offset(args.offset).limit(args.limit),
-            None => query.order(random()),
+        return match search_criteria.extra_args {
+            Some(args) => unsorted_query.order(random()).offset(args.offset).limit(args.limit),
+            None => unsorted_query.order(random()),
         }
         .load(conn);
     }
 
     // Add default sort if none specified
-    let sort = search_criteria.sorts.last().copied().unwrap_or(ParsedSort {
-        kind: Token::Id,
-        order: Order::default(),
-    });
+    let sorts = if search_criteria.has_sort() {
+        search_criteria.sorts.as_slice()
+    } else {
+        &[ParsedSort {
+            kind: Token::Id,
+            order: Order::default(),
+        }]
+    };
 
-    match sort.kind {
-        Token::Id => finalize!(query, post::id, sort, extra_args).load(conn),
-        Token::FileSize => finalize!(query, post::file_size, sort, extra_args).load(conn),
-        Token::ImageWidth => finalize!(query, post::width, sort, extra_args).load(conn),
-        Token::ImageHeight => finalize!(query, post::height, sort, extra_args).load(conn),
-        Token::ImageArea => finalize!(query, post::width * post::height, sort, extra_args).load(conn),
-        Token::ImageAspectRatio => finalize!(query, post::width / post::height, sort, extra_args).load(conn),
-        Token::Safety => finalize!(query, post::safety, sort, extra_args).load(conn),
-        Token::Type => finalize!(query, post::type_, sort, extra_args).load(conn),
-        Token::CreationTime => finalize!(query, post::creation_time, sort, extra_args).load(conn),
-        Token::LastEditTime => finalize!(query, post::last_edit_time, sort, extra_args).load(conn),
-
-        // The implementation for these isn't ideal, but it's the best thing I could do given
-        // Diesel's annoying restrictions around dynamic queries. If you could call .grouped_by
-        // on a boxed query, the implementation could be so much nicer.
-        Token::Tag | Token::TagCount => finalize!(query, post_statistics::tag_count, sort, extra_args).load(conn),
-        Token::Pool => finalize!(query, post_statistics::pool_count, sort, extra_args).load(conn),
-        Token::Uploader => finalize!(query, user::name, sort, extra_args).load(conn),
-        Token::Fav | Token::FavCount => finalize!(query, post_statistics::favorite_count, sort, extra_args).load(conn),
-        Token::Comment | Token::CommentCount => {
-            finalize!(query, post_statistics::comment_count, sort, extra_args).load(conn)
-        }
-        Token::RelationCount => finalize!(query, post_statistics::relation_count, sort, extra_args).load(conn),
-        Token::NoteCount => finalize!(query, post_statistics::note_count, sort, extra_args).load(conn),
-        Token::FeatureCount => finalize!(query, post_statistics::feature_count, sort, extra_args).load(conn),
-        Token::CommentTime => finalize!(query, post_statistics::last_comment_time, sort, extra_args).load(conn),
-        Token::FavTime => finalize!(query, post_statistics::last_favorite_time, sort, extra_args).load(conn),
-        Token::FeatureTime => finalize!(query, post_statistics::last_feature_time, sort, extra_args).load(conn),
+    let query = sorts.iter().fold(unsorted_query, |query, sort| match sort.kind {
+        Token::Id => apply_sort!(query, post::id, sort),
+        Token::FileSize => apply_sort!(query, post::file_size, sort),
+        Token::ImageWidth => apply_sort!(query, post::width, sort),
+        Token::ImageHeight => apply_sort!(query, post::height, sort),
+        Token::ImageArea => apply_sort!(query, post::width * post::height, sort),
+        Token::ImageAspectRatio => apply_sort!(query, post::width / post::height, sort),
+        Token::Safety => apply_sort!(query, post::safety, sort),
+        Token::Type => apply_sort!(query, post::type_, sort),
+        Token::CreationTime => apply_sort!(query, post::creation_time, sort),
+        Token::LastEditTime => apply_sort!(query, post::last_edit_time, sort),
+        Token::Tag | Token::TagCount => apply_sort!(query, post_statistics::tag_count, sort),
+        Token::Pool => apply_sort!(query, post_statistics::pool_count, sort),
+        Token::Uploader => apply_sort!(query, user::name, sort),
+        Token::Fav | Token::FavCount => apply_sort!(query, post_statistics::favorite_count, sort),
+        Token::Comment | Token::CommentCount => apply_sort!(query, post_statistics::comment_count, sort),
+        Token::RelationCount => apply_sort!(query, post_statistics::relation_count, sort),
+        Token::NoteCount => apply_sort!(query, post_statistics::note_count, sort),
+        Token::FeatureCount => apply_sort!(query, post_statistics::feature_count, sort),
+        Token::CommentTime => apply_sort!(query, post_statistics::last_comment_time, sort),
+        Token::FavTime => apply_sort!(query, post_statistics::last_favorite_time, sort),
+        Token::FeatureTime => apply_sort!(query, post_statistics::last_feature_time, sort),
         Token::ContentChecksum | Token::NoteText | Token::Special => panic!("Invalid sort-style token!"),
+    });
+    match search_criteria.extra_args {
+        Some(args) => query.offset(args.offset).limit(args.limit),
+        None => query,
     }
+    .load(conn)
 }
 
 #[derive(Clone, Copy, EnumString)]

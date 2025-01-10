@@ -6,7 +6,7 @@ pub fn is_valid_token(user_token: &UserToken) -> bool {
     let expired = user_token
         .expiration_time
         .as_ref()
-        .map_or(false, |&time| time < DateTime::now());
+        .is_some_and(|&time| time < DateTime::now());
     user_token.enabled && !expired
 }
 

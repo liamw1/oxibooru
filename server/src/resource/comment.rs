@@ -24,12 +24,6 @@ pub struct CommentInfo {
 }
 
 impl CommentInfo {
-    pub fn new(conn: &mut PgConnection, client: Option<i32>, comment: Comment) -> QueryResult<Self> {
-        let mut comment_info = Self::new_batch(conn, client, vec![comment])?;
-        assert_eq!(comment_info.len(), 1);
-        Ok(comment_info.pop().unwrap())
-    }
-
     pub fn new_from_id(conn: &mut PgConnection, client: Option<i32>, comment_id: i32) -> QueryResult<Self> {
         let mut comment_info = Self::new_batch_from_ids(conn, client, vec![comment_id])?;
         assert_eq!(comment_info.len(), 1);

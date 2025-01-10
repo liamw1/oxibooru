@@ -154,7 +154,7 @@ struct UnparsedFilter<'a, T> {
     negated: bool,
 }
 
-impl<'a, T> UnparsedFilter<'a, T> {
+impl<T> UnparsedFilter<'_, T> {
     fn unnegated(self) -> Self {
         Self {
             kind: self.kind,

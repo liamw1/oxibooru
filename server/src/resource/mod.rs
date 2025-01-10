@@ -9,11 +9,11 @@ pub mod user_token;
 
 use diesel::prelude::*;
 
-/// NOTE: The more complicated queries in this module rely on the behavior of diesel's
-/// grouped_by function preserving the relative order between elements. This seems to be the
-/// case, and the most straightforward way of implementing the function would have this behavior,
-/// but I don't see this as a guarantee anywhere in the documentation. If this changes, I'll need
-/// to reimplement a similar function with this behavior.
+// NOTE: The more complicated queries in this module rely on the behavior of diesel's
+// grouped_by function preserving the relative order between elements. This seems to be the
+// case, and the most straightforward way of implementing the function would have this behavior,
+// but I don't see this as a guarantee anywhere in the documentation. If this changes, I'll need
+// to reimplement a similar function with this behavior.
 
 fn check_batch_results(batch_size: usize, post_count: usize) {
     assert!(batch_size == 0 || batch_size == post_count);

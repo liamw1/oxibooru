@@ -100,7 +100,7 @@ pub fn save_post_thumbnail(
 /// Returns error if thumbnail does not exist and `thumbnail_type` is [ThumbnailType::Generated].
 pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailCategory) -> std::io::Result<()> {
     match thumbnail_type {
-        ThumbnailCategory::Generated => std::fs::remove_file(&post.generated_thumbnail_path()),
+        ThumbnailCategory::Generated => std::fs::remove_file(post.generated_thumbnail_path()),
         ThumbnailCategory::Custom => {
             let custom_thumbnail_path = post.custom_thumbnail_path();
             custom_thumbnail_path

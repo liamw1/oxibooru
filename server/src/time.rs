@@ -24,7 +24,7 @@ impl<'a> Timer<'a> {
     }
 }
 
-impl<'a> Drop for Timer<'a> {
+impl Drop for Timer<'_> {
     fn drop(&mut self) {
         let elapsed_time = self.start.elapsed();
         let time_in_s = elapsed_time.as_secs_f32();

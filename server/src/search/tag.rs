@@ -1,6 +1,6 @@
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::search::{Error, Order, ParsedSort, SearchCriteria};
-use crate::{apply_filter, apply_str_filter, apply_subquery_filter, apply_time_filter, finalize};
+use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
 use diesel::define_sql_function;
 use diesel::dsl::*;
 use diesel::pg::Pg;
@@ -82,38 +82,42 @@ pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<Box
 
 pub fn get_ordered_ids(
     conn: &mut PgConnection,
-    query: BoxedQuery,
+    unsorted_query: BoxedQuery,
     search_criteria: &SearchCriteria<Token>,
 ) -> QueryResult<Vec<i32>> {
-    let query = query.inner_join(tag_name::table).filter(tag_name::order.eq(0));
-
     // If random sort specified, no other sorts matter
-    let extra_args = search_criteria.extra_args;
     if search_criteria.random_sort {
         define_sql_function!(fn random() -> Integer);
-        return match extra_args {
-            Some(args) => query.order(random()).offset(args.offset).limit(args.limit),
-            None => query.order(random()),
+        return match search_criteria.extra_args {
+            Some(args) => unsorted_query.order(random()).offset(args.offset).limit(args.limit),
+            None => unsorted_query.order(random()),
         }
         .load(conn);
     }
-    // Add default sort if none specified
-    let sort = search_criteria.sorts.last().copied().unwrap_or(ParsedSort {
-        kind: Token::CreationTime,
-        order: Order::default(),
-    });
 
-    match sort.kind {
-        Token::CreationTime => finalize!(query, tag::creation_time, sort, extra_args).load(conn),
-        Token::LastEditTime => finalize!(query, tag::last_edit_time, sort, extra_args).load(conn),
-        Token::Name => finalize!(query, tag_name::name, sort, extra_args).load(conn),
-        Token::Category => finalize!(query, tag_category::name, sort, extra_args).load(conn),
-        Token::UsageCount => finalize!(query, tag_statistics::usage_count, sort, extra_args).load(conn),
-        Token::ImplicationCount | Token::HasImplication => {
-            finalize!(query, tag_statistics::implication_count, sort, extra_args).load(conn)
-        }
-        Token::SuggestionCount | Token::HasSuggestion => {
-            finalize!(query, tag_statistics::suggestion_count, sort, extra_args).load(conn)
-        }
+    // Add default sort if none specified
+    let sorts = if search_criteria.has_sort() {
+        search_criteria.sorts.as_slice()
+    } else {
+        &[ParsedSort {
+            kind: Token::CreationTime,
+            order: Order::default(),
+        }]
+    };
+
+    let unsorted_query = unsorted_query.inner_join(tag_name::table).filter(tag_name::order.eq(0));
+    let query = sorts.iter().fold(unsorted_query, |query, sort| match sort.kind {
+        Token::CreationTime => apply_sort!(query, tag::creation_time, sort),
+        Token::LastEditTime => apply_sort!(query, tag::last_edit_time, sort),
+        Token::Name => apply_sort!(query, tag_name::name, sort),
+        Token::Category => apply_sort!(query, tag_category::name, sort),
+        Token::UsageCount => apply_sort!(query, tag_statistics::usage_count, sort),
+        Token::ImplicationCount | Token::HasImplication => apply_sort!(query, tag_statistics::implication_count, sort),
+        Token::SuggestionCount | Token::HasSuggestion => apply_sort!(query, tag_statistics::suggestion_count, sort),
+    });
+    match search_criteria.extra_args {
+        Some(args) => query.offset(args.offset).limit(args.limit),
+        None => query,
     }
+    .load(conn)
 }

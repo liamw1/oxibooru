@@ -1,5 +1,5 @@
-/// Working with generic functions is Diesel is a nightmare, so I've created
-/// these macros to help with dynamically adding filters to a boxed query.
+// Working with generic functions is Diesel is a nightmare, so I've created
+// these macros to help with dynamically adding filters to a boxed query.
 
 /// Used for applying filters on non-string non-time expressions.
 #[macro_export]
@@ -90,7 +90,6 @@ macro_rules! apply_criteria {
 
 /// Applies an ordering to the given `query`.
 /// Order is either ASC or DESC.
-#[doc(hidden)]
 #[macro_export]
 macro_rules! apply_sort {
     ($query:expr, $expression:expr, $sort:expr) => {
@@ -99,16 +98,4 @@ macro_rules! apply_sort {
             $crate::search::Order::Desc => $query.then_order_by($expression.desc()),
         }
     };
-}
-
-/// Finalizes a query by adding OFFSET, LIMIT, and ORDER_BY.
-#[macro_export]
-macro_rules! finalize {
-    ($query:expr, $expression:expr, $sort:expr, $extra_args:expr) => {{
-        let query = match $extra_args {
-            Some(args) => $query.offset(args.offset).limit(args.limit),
-            None => $query,
-        };
-        $crate::apply_sort!(query, $expression, $sort)
-    }};
 }

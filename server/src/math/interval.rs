@@ -1,7 +1,6 @@
 use crate::math::{From, SignedCast, UnsignedCast};
 use num_traits::PrimInt;
 use std::num::TryFromIntError;
-use std::ops::Range;
 
 /// Represents an inclusive interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +33,7 @@ impl<T: PrimInt> Interval<T> {
     }
 
     pub fn contains<U: PrimInt>(self, value: U) -> bool {
-        T::from(value).map_or(false, |n| self.start <= n && n < self.end)
+        T::from(value).is_some_and(|n| self.start <= n && n < self.end)
     }
 
     pub fn is_empty_set(self) -> bool {
@@ -68,10 +67,6 @@ impl<T: PrimInt> Interval<T> {
             }
         }
         arr
-    }
-
-    pub fn iter(self) -> Range<T> {
-        self.start..self.end
     }
 
     pub fn shrink(&mut self, n: T) {
