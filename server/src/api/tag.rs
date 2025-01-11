@@ -1,5 +1,6 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::model::enums::ResourceType;
+use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
 use crate::resource::tag::{FieldTable, TagInfo};
 use crate::schema::{database_statistics, post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
@@ -155,10 +156,10 @@ fn get_tag_siblings(name: String, auth: AuthResult, query: ResourceQuery) -> Api
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
             .first(conn)?;
-        let posts_tagged_on: Vec<i32> = post_tag::table
+        let posts_tagged_on = post_tag::table
             .select(post_tag::post_id)
             .filter(post_tag::tag_id.eq(tag_id))
-            .load(conn)?;
+            .into_boxed();
         let (sibling_ids, common_post_counts): (_, Vec<_>) = post_tag::table
             .group_by(post_tag::tag_id)
             .select((post_tag::tag_id, count(post_tag::post_id)))
@@ -204,15 +205,14 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
             .select(tag_category::id)
             .filter(tag_category::name.eq(tag_info.category))
             .first(conn)?;
-        let new_tag = NewTag { category_id };
+        let new_tag = NewTag {
+            category_id,
+            description: tag_info.description.as_deref().unwrap_or(""),
+        };
         let tag_id: i32 = diesel::insert_into(tag::table)
             .values(new_tag)
             .returning(tag::id)
             .get_result(conn)?;
-
-        if let Some(description) = tag_info.description {
-            update::tag::description(conn, tag_id, description)?;
-        }
 
         update::tag::add_names(conn, tag_id, 0, tag_info.names)?;
         if let Some(implications) = tag_info.implications {
@@ -312,11 +312,31 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
             .select(post_tag::post_id)
             .filter(post_tag::tag_id.eq(merge_to_id))
             .into_boxed();
-        diesel::update(post_tag::table)
+        let new_post_tags: Vec<_> = post_tag::table
+            .select(post_tag::post_id)
             .filter(post_tag::tag_id.eq(remove_id))
             .filter(post_tag::post_id.ne_all(merge_to_posts))
-            .set(post_tag::tag_id.eq(merge_to_id))
+            .load(conn)?
+            .into_iter()
+            .map(|post_id| PostTag {
+                post_id,
+                tag_id: merge_to_id,
+            })
+            .collect();
+        diesel::insert_into(post_tag::table)
+            .values(new_post_tags)
             .execute(conn)?;
+
+        // Merge names
+        let current_name_count = tag_name::table
+            .select(max(tag_name::order) + 1)
+            .filter(tag_name::tag_id.eq(merge_to_id))
+            .first::<Option<_>>(conn)?
+            .unwrap_or(0);
+        let removed_names = diesel::delete(tag_name::table.filter(tag_name::tag_id.eq(remove_id)))
+            .returning(tag_name::name)
+            .get_results(conn)?;
+        update::tag::add_names(conn, merge_to_id, current_name_count, removed_names)?;
 
         diesel::delete(tag::table.find(remove_id)).execute(conn)?;
         TagInfo::new_from_id(conn, merge_to_id, &fields).map_err(api::Error::from)
@@ -361,7 +381,10 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
         }
         if let Some(description) = update.description {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_description)?;
-            update::tag::description(conn, tag_id, description)?;
+
+            diesel::update(tag::table.find(tag_id))
+                .set(tag::description.eq(description))
+                .execute(conn)?;
         }
         if let Some(names) = update.names {
             api::verify_privilege(client.as_ref(), config::privileges().tag_edit_name)?;

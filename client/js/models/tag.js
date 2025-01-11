@@ -128,15 +128,6 @@ class Tag extends events.EventTarget {
                 });
             })
             .then((response) => {
-                if (!addAlias) {
-                    return Promise.resolve(response);
-                }
-                return api.put(uri.formatApiLink("tag", targetName), {
-                    version: response.version,
-                    names: response.names.concat(this._names),
-                });
-            })
-            .then((response) => {
                 this._updateFromResponse(response);
                 this.dispatchEvent(
                     new CustomEvent("change", {

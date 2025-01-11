@@ -5,14 +5,15 @@ use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{cache, signature, thumbnail};
 use crate::filesystem::Directory;
+use crate::model::comment::NewComment;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
 use crate::model::post::{
-    NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostRelation, PostSignature,
+    NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostRelation, PostScore, PostSignature, PostTag,
 };
 use crate::resource::post::{FieldTable, Note, PostInfo};
 use crate::schema::{
     comment, database_statistics, post, post_favorite, post_feature, post_relation, post_score, post_signature,
-    post_tag,
+    post_statistics, post_tag,
 };
 use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, search, update};
@@ -286,7 +287,11 @@ fn feature_post(auth: AuthResult, query: ResourceQuery, post_feature: PostFeatur
     let fields = create_field_table(query.fields())?;
     let post_id = post_feature.id;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
-    let new_post_feature = NewPostFeature { post_id, user_id };
+    let new_post_feature = NewPostFeature {
+        post_id,
+        user_id,
+        time: DateTime::now(),
+    };
 
     db::get_connection()?.transaction(|conn| {
         diesel::insert_into(post_feature::table)
@@ -464,7 +469,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         let generated_thumbnail_size =
             filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
         diesel::update(post::table.find(post_id))
-            .set(post::custom_thumbnail_size.eq(generated_thumbnail_size as i64))
+            .set(post::generated_thumbnail_size.eq(generated_thumbnail_size as i64))
             .execute(conn)?;
 
         PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
@@ -533,21 +538,39 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
             .select(post_tag::tag_id)
             .filter(post_tag::post_id.eq(merge_to_id))
             .into_boxed();
-        diesel::update(post_tag::table)
+        let new_tags: Vec<_> = post_tag::table
+            .select(post_tag::tag_id)
             .filter(post_tag::post_id.eq(remove_id))
             .filter(post_tag::tag_id.ne_all(merge_to_tags))
-            .set(post_tag::post_id.eq(merge_to_id))
-            .execute(conn)?;
+            .load(conn)?
+            .into_iter()
+            .map(|tag_id| PostTag {
+                post_id: merge_to_id,
+                tag_id,
+            })
+            .collect();
+        diesel::insert_into(post_tag::table).values(new_tags).execute(conn)?;
 
         // Merge scores
         let merge_to_scores = post_score::table
             .select(post_score::user_id)
             .filter(post_score::post_id.eq(merge_to_id))
             .into_boxed();
-        diesel::update(post_score::table)
+        let new_scores: Vec<_> = post_score::table
+            .select((post_score::user_id, post_score::score, post_score::time))
             .filter(post_score::post_id.eq(remove_id))
             .filter(post_score::user_id.ne_all(merge_to_scores))
-            .set(post_score::post_id.eq(merge_to_id))
+            .load(conn)?
+            .into_iter()
+            .map(|(user_id, score, time)| PostScore {
+                post_id: merge_to_id,
+                user_id,
+                score,
+                time,
+            })
+            .collect();
+        diesel::insert_into(post_score::table)
+            .values(new_scores)
             .execute(conn)?;
 
         // Merge favorites
@@ -555,33 +578,52 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
             .select(post_favorite::user_id)
             .filter(post_favorite::post_id.eq(merge_to_id))
             .into_boxed();
-        diesel::update(post_favorite::table)
+        let new_favorites: Vec<_> = post_favorite::table
+            .select((post_favorite::user_id, post_favorite::time))
             .filter(post_favorite::post_id.eq(remove_id))
             .filter(post_favorite::user_id.ne_all(merge_to_favorites))
-            .set(post_favorite::post_id.eq(merge_to_id))
+            .load(conn)?
+            .into_iter()
+            .map(|(user_id, time)| PostFavorite {
+                post_id: merge_to_id,
+                user_id,
+                time,
+            })
+            .collect();
+        diesel::insert_into(post_favorite::table)
+            .values(new_favorites)
             .execute(conn)?;
 
         // Merge features
-        let merge_to_features = post_feature::table
-            .select(post_feature::id)
-            .filter(post_feature::post_id.eq(merge_to_id))
-            .into_boxed();
-        diesel::update(post_feature::table)
-            .filter(post_feature::post_id.eq(remove_id))
-            .filter(post_feature::id.ne_all(merge_to_features))
-            .set(post_feature::post_id.eq(merge_to_id))
+        let new_features: Vec<_> = diesel::delete(post_feature::table.filter(post_feature::post_id.eq(remove_id)))
+            .returning((post_feature::user_id, post_feature::time))
+            .get_results(conn)?
+            .into_iter()
+            .map(|(user_id, time)| NewPostFeature {
+                post_id: merge_to_id,
+                user_id,
+                time,
+            })
+            .collect();
+        diesel::insert_into(post_feature::table)
+            .values(new_features)
             .execute(conn)?;
 
         // Merge comments
-        let merge_to_comments = comment::table
-            .select(comment::id)
-            .filter(comment::post_id.eq(merge_to_id))
-            .into_boxed();
-        diesel::update(comment::table)
-            .filter(comment::post_id.eq(remove_id))
-            .filter(comment::id.ne_all(merge_to_comments))
-            .set(comment::post_id.eq(merge_to_id))
-            .execute(conn)?;
+        let removed_comments: Vec<(_, String, _)> =
+            diesel::delete(comment::table.filter(comment::post_id.eq(remove_id)))
+                .returning((comment::user_id, comment::text, comment::creation_time))
+                .get_results(conn)?;
+        let new_comments: Vec<_> = removed_comments
+            .iter()
+            .map(|(user_id, text, creation_time)| NewComment {
+                user_id: *user_id,
+                post_id: merge_to_id,
+                text,
+                creation_time: *creation_time,
+            })
+            .collect();
+        diesel::insert_into(comment::table).values(new_comments).execute(conn)?;
 
         // If replacing content, update post signature. This needs to be done before deletion because post signatures cascade
         if merge_info.replace_content {
@@ -629,7 +671,11 @@ fn favorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiRes
 
     let fields = create_field_table(query.fields())?;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
-    let new_post_favorite = NewPostFavorite { post_id, user_id };
+    let new_post_favorite = PostFavorite {
+        post_id,
+        user_id,
+        time: DateTime::now(),
+    };
 
     db::get_connection()?.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
@@ -653,10 +699,11 @@ fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, rating: Ratin
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*rating) {
-            let new_post_score = NewPostScore {
+            let new_post_score = PostScore {
                 post_id,
                 user_id,
                 score,
+                time: DateTime::now(),
             };
             diesel::insert_into(post_score::table)
                 .values(new_post_score)
@@ -683,6 +730,8 @@ struct PostUpdate {
 }
 
 fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
+    let _timer = crate::time::Timer::new("update_post");
+
     let client = auth?;
     query.bump_login(client.as_ref())?;
     let fields = create_field_table(query.fields())?;
@@ -802,10 +851,9 @@ async fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteReque
     api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
 
     let mut conn = db::get_connection()?;
-    let relation_count: i64 = post_relation::table
-        .filter(post_relation::parent_id.eq(post_id))
-        .or_filter(post_relation::child_id.eq(post_id))
-        .count()
+    let relation_count: i32 = post_statistics::table
+        .find(post_id)
+        .select(post_statistics::relation_count)
         .first(&mut conn)?;
 
     let mut delete_and_get_mime_type = || -> ApiResult<MimeType> {

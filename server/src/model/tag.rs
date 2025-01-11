@@ -32,8 +32,9 @@ impl TagCategory {
 #[derive(Clone, Copy, Default, Insertable)]
 #[diesel(table_name = tag)]
 #[diesel(check_for_backend(Pg))]
-pub struct NewTag {
+pub struct NewTag<'a> {
     pub category_id: i32,
+    pub description: &'a str,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]

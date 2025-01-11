@@ -50,6 +50,11 @@ GET http://localhost:8080/api/tags/?query=e*%20sort%3Ausages&limit=15&fields=nam
 content-Type: application/json
 accept: application/json
 
+### Getting tag siblings
+GET http://localhost:8080/api/tag-siblings/tagme/?limit=50&fields=names%2Csuggestions%2Cimplications%2CcreationTime%2Cusages%2Ccategory
+content-Type: application/json
+accept: application/json
+
 ### Getting post neighbors
 GET http://localhost:8080/api/post/2/around/?query=&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion
 content-Type: application/json

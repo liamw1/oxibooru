@@ -31,9 +31,9 @@ impl PoolCategory {
 #[derive(Insertable)]
 #[diesel(table_name = pool)]
 #[diesel(check_for_backend(Pg))]
-pub struct NewPool {
+pub struct NewPool<'a> {
     pub category_id: i32,
-    pub description: String,
+    pub description: &'a str,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]

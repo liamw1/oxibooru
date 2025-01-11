@@ -202,12 +202,29 @@ FOR EACH ROW EXECUTE FUNCTION update_comment_score_statistics();
 -- Add pool_category triggers
 CREATE FUNCTION update_pool_category_statistics() RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO "pool_category_statistics" ("category_id") VALUES (NEW."id");
-    RETURN NEW;
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO "pool_category_statistics" ("category_id") VALUES (NEW."id");
+    ELSIF TG_OP = 'DELETE' THEN
+        UPDATE "pool_category_statistics"
+        SET "usage_count" = (SELECT COUNT(*) FROM "pool" WHERE "category_id" = 0)
+        WHERE "category_id" = 0;
+    ELSE
+        IF NEW."id" IS DISTINCT FROM OLD."id" THEN
+            UPDATE "pool_category_statistics"
+            SET "usage_count" = (SELECT COUNT(*) FROM "pool" WHERE "category_id" = OLD."id")
+            WHERE "category_id" = OLD."id";
+
+            UPDATE "pool_category_statistics"
+            SET "usage_count" = (SELECT COUNT(*) FROM "pool" WHERE "category_id" = NEW."id")
+            WHERE "category_id" = NEW."id";
+        END IF;
+    END IF;
+
+    RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER pool_category_update_trigger AFTER INSERT ON "pool_category"
+CREATE TRIGGER pool_category_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "pool_category"
 FOR EACH ROW EXECUTE FUNCTION update_pool_category_statistics();
 
 -- Add pool triggers
@@ -218,8 +235,19 @@ BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO "pool_statistics" ("pool_id") VALUES (NEW."id");
         count_change := 1;
-    ELSE
+    ELSIF TG_OP = 'DELETE' THEN
         count_change := -1;
+    ELSE
+        IF NEW."category_id" IS DISTINCT FROM OLD."category_id" THEN
+            UPDATE "pool_category_statistics"
+            SET "usage_count" = "usage_count" - 1
+            WHERE "category_id" = OLD."id";
+
+            UPDATE "pool_category_statistics"
+            SET "usage_count" = "usage_count" + 1
+            WHERE "category_id" = NEW."id";
+        END IF;
+        RETURN NEW;
     END IF;
 
     UPDATE "database_statistics"
@@ -233,7 +261,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER pool_update_trigger AFTER INSERT OR DELETE ON "pool"
+CREATE TRIGGER pool_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "pool"
 FOR EACH ROW EXECUTE FUNCTION update_pool_statistics();
 
 -- Add pool_post triggers
@@ -427,12 +455,29 @@ FOR EACH ROW EXECUTE FUNCTION update_post_score_statistics();
 -- Add tag_category triggers
 CREATE FUNCTION update_tag_category_statistics() RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO "tag_category_statistics" ("category_id") VALUES (NEW."id");
-    RETURN NEW;
+    IF TG_OP = 'INSERT' THEN
+        INSERT INTO "tag_category_statistics" ("category_id") VALUES (NEW."id");
+    ELSIF TG_OP = 'DELETE' THEN
+        UPDATE "tag_category_statistics"
+        SET "usage_count" = (SELECT COUNT(*) FROM "tag" WHERE "category_id" = 0)
+        WHERE "category_id" = 0;
+    ELSE
+        IF NEW."id" IS DISTINCT FROM OLD."id" THEN
+            UPDATE "tag_category_statistics"
+            SET "usage_count" = (SELECT COUNT(*) FROM "tag" WHERE "category_id" = OLD."id")
+            WHERE "category_id" = OLD."id";
+
+            UPDATE "tag_category_statistics"
+            SET "usage_count" = (SELECT COUNT(*) FROM "tag" WHERE "category_id" = NEW."id")
+            WHERE "category_id" = NEW."id";
+        END IF;
+    END IF;
+
+    RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tag_category_update_trigger AFTER INSERT ON "tag_category"
+CREATE TRIGGER tag_category_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "tag_category"
 FOR EACH ROW EXECUTE FUNCTION update_tag_category_statistics();
 
 -- Add tag triggers
@@ -443,8 +488,19 @@ BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO "tag_statistics" ("tag_id") VALUES (NEW."id");
         count_change := 1;
-    ELSE
+    ELSIF TG_OP = 'DELETE' THEN
         count_change := -1;
+    ELSE
+        IF NEW."category_id" IS DISTINCT FROM OLD."category_id" THEN
+            UPDATE "tag_category_statistics"
+            SET "usage_count" = "usage_count" - 1
+            WHERE "category_id" = OLD."id";
+
+            UPDATE "tag_category_statistics"
+            SET "usage_count" = "usage_count" + 1
+            WHERE "category_id" = NEW."id";
+        END IF;
+        RETURN NEW;
     END IF;
 
     UPDATE "database_statistics"
@@ -458,7 +514,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tag_update_trigger AFTER INSERT OR DELETE ON "tag"
+CREATE TRIGGER tag_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "tag"
 FOR EACH ROW EXECUTE FUNCTION update_tag_statistics();
 
 -- Add tag_implication triggers

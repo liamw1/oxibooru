@@ -5,7 +5,7 @@ use crate::resource::pool::{FieldTable, PoolInfo};
 use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_post};
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
-use diesel::dsl::exists;
+use diesel::dsl::{exists, max};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -145,7 +145,7 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
             .first(conn)?;
         let new_pool = NewPool {
             category_id,
-            description: pool_info.description.unwrap_or_default(),
+            description: pool_info.description.as_deref().unwrap_or(""),
         };
         let pool = diesel::insert_into(pool::table)
             .values(new_pool)
@@ -182,7 +182,7 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
             .select(pool_post::post_id)
             .filter(pool_post::pool_id.eq(merge_to_id))
             .into_boxed();
-        let new_pool_posts: Vec<i32> = pool_post::table
+        let new_pool_posts: Vec<_> = pool_post::table
             .select(pool_post::post_id)
             .filter(pool_post::pool_id.eq(remove_id))
             .filter(pool_post::post_id.ne_all(merge_to_pool_posts))
@@ -193,6 +193,17 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
             .count()
             .first(conn)?;
         update::pool::add_posts(conn, merge_to_id, post_count as i32, new_pool_posts)?;
+
+        // Merge names
+        let current_name_count = pool_name::table
+            .select(max(pool_name::order) + 1)
+            .filter(pool_name::pool_id.eq(merge_to_id))
+            .first::<Option<_>>(conn)?
+            .unwrap_or(0);
+        let removed_names = diesel::delete(pool_name::table.filter(pool_name::pool_id.eq(remove_id)))
+            .returning(pool_name::name)
+            .get_results(conn)?;
+        update::pool::add_names(conn, merge_to_id, current_name_count, removed_names)?;
 
         diesel::delete(pool::table.find(remove_id)).execute(conn)?;
         PoolInfo::new_from_id(conn, merge_to_id, &fields).map_err(api::Error::from)
@@ -229,7 +240,6 @@ fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: Poo
                 .set(pool::category_id.eq(category_id))
                 .execute(conn)?;
         }
-
         if let Some(description) = update.description {
             api::verify_privilege(client.as_ref(), config::privileges().pool_edit_description)?;
 
@@ -237,7 +247,6 @@ fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: Poo
                 .set(pool::description.eq(description))
                 .execute(conn)?;
         }
-
         if let Some(names) = update.names {
             api::verify_privilege(client.as_ref(), config::privileges().pool_edit_name)?;
             if names.is_empty() {
@@ -247,7 +256,6 @@ fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: Poo
             update::pool::delete_names(conn, pool_id)?;
             update::pool::add_names(conn, pool_id, 0, names)?;
         }
-
         if let Some(posts) = update.posts {
             api::verify_privilege(client.as_ref(), config::privileges().pool_edit_post)?;
             update::pool::delete_posts(conn, pool_id)?;

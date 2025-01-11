@@ -8,14 +8,6 @@ use crate::{api, config};
 use diesel::prelude::*;
 use std::collections::HashSet;
 
-/// Updates `description` of tag with id `tag_id`.
-pub fn description(conn: &mut PgConnection, tag_id: i32, description: String) -> QueryResult<()> {
-    diesel::update(tag::table.find(tag_id))
-        .set(tag::description.eq(description))
-        .execute(conn)?;
-    Ok(())
-}
-
 /// Appends `names` onto the current list of names for the tag with id `tag_id`.
 pub fn add_names(conn: &mut PgConnection, tag_id: i32, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
     names

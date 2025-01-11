@@ -119,9 +119,10 @@ fn create_comment(auth: AuthResult, comment_info: NewCommentInfo) -> ApiResult<C
 
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
     let new_comment = NewComment {
-        user_id,
+        user_id: Some(user_id),
         post_id: comment_info.post_id,
         text: &comment_info.text,
+        creation_time: DateTime::now(),
     };
 
     db::get_connection()?.transaction(|conn| {

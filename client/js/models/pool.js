@@ -120,15 +120,6 @@ class Pool extends events.EventTarget {
                 });
             })
             .then((response) => {
-                if (!addAlias) {
-                    return Promise.resolve(response);
-                }
-                return api.put(uri.formatApiLink("pool", targetId), {
-                    version: response.version,
-                    names: response.names.concat(this._names),
-                });
-            })
-            .then((response) => {
                 this._updateFromResponse(response);
                 this.dispatchEvent(
                     new CustomEvent("change", {

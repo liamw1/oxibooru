@@ -10,9 +10,10 @@ use diesel::prelude::*;
 #[diesel(table_name = comment)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewComment<'a> {
-    pub user_id: i32,
+    pub user_id: Option<i32>,
     pub post_id: i32,
     pub text: &'a str,
+    pub creation_time: DateTime,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
