@@ -22,7 +22,7 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::LazyLock;
-use tokio::sync::Mutex;
+use tokio::sync::Mutex as AsyncMutex;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -127,7 +127,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 }
 
 const MAX_POSTS_PER_PAGE: i64 = 50;
-static ANTI_DEADLOCK_MUTEX: LazyLock<Mutex<()>> = LazyLock::new(|| Mutex::new(()));
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
     fields
@@ -871,6 +870,7 @@ async fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteReque
 
     // Post relation cascade deletion can cause deadlocks when deleting related posts in quick
     // succession, so we lock an aysnchronous mutex when deleting if the post has any relations.
+    static ANTI_DEADLOCK_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
     let mime_type = if relation_count > 0 {
         let _lock = ANTI_DEADLOCK_MUTEX.lock().await;
         delete_and_get_mime_type()

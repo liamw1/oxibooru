@@ -162,9 +162,9 @@ DECLARE
     last_time_update TIMESTAMP WITH TIME ZONE; 
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        INSERT INTO "comment_statistics" ("comment_id") VALUES (NEW."id");
         count_change := 1;
         last_time_update := NEW."creation_time";
+        INSERT INTO "comment_statistics" ("comment_id") VALUES (NEW."id");
     ELSE
         count_change := -1;
         last_time_update := (SELECT MAX("creation_time") FROM "comment" WHERE "post_id" = OLD."post_id");
@@ -182,8 +182,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER comment_update_trigger AFTER INSERT OR DELETE ON "comment"
-FOR EACH ROW EXECUTE FUNCTION update_comment_statistics();
+CREATE CONSTRAINT TRIGGER comment_update_trigger AFTER INSERT OR DELETE ON "comment"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_comment_statistics();
 
 -- Add comment_score triggers
 CREATE FUNCTION update_comment_score_statistics() RETURNS TRIGGER AS $$
@@ -196,35 +196,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER comment_score_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "comment_score"
-FOR EACH ROW EXECUTE FUNCTION update_comment_score_statistics();
+CREATE CONSTRAINT TRIGGER comment_score_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "comment_score"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_comment_score_statistics();
 
 -- Add pool_category triggers
 CREATE FUNCTION update_pool_category_statistics() RETURNS TRIGGER AS $$
 BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO "pool_category_statistics" ("category_id") VALUES (NEW."id");
-    ELSIF TG_OP = 'DELETE' THEN
-        UPDATE "pool_category_statistics"
-        SET "usage_count" = (SELECT COUNT(*) FROM "pool" WHERE "category_id" = 0)
-        WHERE "category_id" = 0;
     ELSE
-        IF NEW."id" IS DISTINCT FROM OLD."id" THEN
-            UPDATE "pool_category_statistics"
-            SET "usage_count" = (SELECT COUNT(*) FROM "pool" WHERE "category_id" = OLD."id")
-            WHERE "category_id" = OLD."id";
-
-            UPDATE "pool_category_statistics"
-            SET "usage_count" = (SELECT COUNT(*) FROM "pool" WHERE "category_id" = NEW."id")
-            WHERE "category_id" = NEW."id";
-        END IF;
+        UPDATE "pool_category_statistics"
+        SET "usage_count" = "usage_count" + (SELECT "usage_count" FROM "pool_category_statistics" WHERE "category_id" = OLD."id")
+        WHERE "category_id" = 0;
     END IF;
 
     RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER pool_category_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "pool_category"
+CREATE TRIGGER pool_category_update_trigger BEFORE INSERT OR DELETE ON "pool_category"
 FOR EACH ROW EXECUTE FUNCTION update_pool_category_statistics();
 
 -- Add pool triggers
@@ -233,8 +223,8 @@ DECLARE
     count_change INT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        INSERT INTO "pool_statistics" ("pool_id") VALUES (NEW."id");
         count_change := 1;
+        INSERT INTO "pool_statistics" ("pool_id") VALUES (NEW."id");
     ELSIF TG_OP = 'DELETE' THEN
         count_change := -1;
     ELSE
@@ -261,8 +251,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER pool_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "pool"
-FOR EACH ROW EXECUTE FUNCTION update_pool_statistics();
+CREATE CONSTRAINT TRIGGER pool_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "pool"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_pool_statistics();
 
 -- Add pool_post triggers
 CREATE FUNCTION update_pool_post_statistics() RETURNS TRIGGER AS $$
@@ -287,8 +277,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER pool_post_update_trigger AFTER INSERT OR DELETE ON "pool_post"
-FOR EACH ROW EXECUTE FUNCTION update_pool_post_statistics();
+CREATE CONSTRAINT TRIGGER pool_post_update_trigger AFTER INSERT OR DELETE ON "pool_post"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_pool_post_statistics();
 
 -- Add post triggers
 CREATE FUNCTION update_post_statistics() RETURNS TRIGGER AS $$
@@ -296,8 +286,8 @@ DECLARE
     count_change INT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        INSERT INTO "post_statistics" ("post_id") VALUES (NEW."id");
         count_change := 1;
+        INSERT INTO "post_statistics" ("post_id") VALUES (NEW."id");
     ELSIF TG_OP = 'DELETE' THEN
         count_change := -1;
     ELSE
@@ -313,8 +303,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER post_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "post"
-FOR EACH ROW EXECUTE FUNCTION update_post_statistics();
+CREATE CONSTRAINT TRIGGER post_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "post"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_statistics();
 
 -- Add post_relation triggers
 CREATE FUNCTION update_post_relation_statistics() RETURNS TRIGGER AS $$
@@ -335,8 +325,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER post_relation_update_trigger AFTER INSERT OR DELETE ON "post_relation"
-FOR EACH ROW EXECUTE FUNCTION update_post_relation_statistics();
+CREATE CONSTRAINT TRIGGER post_relation_update_trigger AFTER INSERT OR DELETE ON "post_relation"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_relation_statistics();
 
 -- Add post_tag triggers
 CREATE FUNCTION update_post_tag_statistics() RETURNS TRIGGER AS $$
@@ -361,8 +351,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER post_tag_update_trigger AFTER INSERT OR DELETE ON "post_tag"
-FOR EACH ROW EXECUTE FUNCTION update_post_tag_statistics();
+CREATE CONSTRAINT TRIGGER post_tag_update_trigger AFTER INSERT OR DELETE ON "post_tag"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_tag_statistics();
 
 -- Add post_favorite triggers
 CREATE FUNCTION update_post_favorite_statistics() RETURNS TRIGGER AS $$
@@ -387,8 +377,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER post_favorite_update_trigger AFTER INSERT OR DELETE ON "post_favorite"
-FOR EACH ROW EXECUTE FUNCTION update_post_favorite_statistics();
+CREATE CONSTRAINT TRIGGER post_favorite_update_trigger AFTER INSERT OR DELETE ON "post_favorite"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_favorite_statistics();
 
 -- Add post_feature triggers
 CREATE FUNCTION update_post_feature_statistics() RETURNS TRIGGER AS $$
@@ -413,8 +403,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER post_feature_update_trigger AFTER INSERT OR DELETE ON "post_feature"
-FOR EACH ROW EXECUTE FUNCTION update_post_feature_statistics();
+CREATE CONSTRAINT TRIGGER post_feature_update_trigger AFTER INSERT OR DELETE ON "post_feature"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_feature_statistics();
 
 -- Add post_note triggers
 CREATE FUNCTION update_post_note_statistics() RETURNS TRIGGER AS $$
@@ -435,8 +425,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER post_note_update_trigger AFTER INSERT OR DELETE ON "post_note"
-FOR EACH ROW EXECUTE FUNCTION update_post_note_statistics();
+CREATE CONSTRAINT TRIGGER post_note_update_trigger AFTER INSERT OR DELETE ON "post_note"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_note_statistics();
 
 -- Add post_score triggers
 CREATE FUNCTION update_post_score_statistics() RETURNS TRIGGER AS $$
@@ -449,35 +439,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER post_score_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "post_score"
-FOR EACH ROW EXECUTE FUNCTION update_post_score_statistics();
+CREATE CONSTRAINT TRIGGER post_score_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "post_score"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_score_statistics();
 
 -- Add tag_category triggers
 CREATE FUNCTION update_tag_category_statistics() RETURNS TRIGGER AS $$
 BEGIN
     IF TG_OP = 'INSERT' THEN
         INSERT INTO "tag_category_statistics" ("category_id") VALUES (NEW."id");
-    ELSIF TG_OP = 'DELETE' THEN
-        UPDATE "tag_category_statistics"
-        SET "usage_count" = (SELECT COUNT(*) FROM "tag" WHERE "category_id" = 0)
-        WHERE "category_id" = 0;
     ELSE
-        IF NEW."id" IS DISTINCT FROM OLD."id" THEN
-            UPDATE "tag_category_statistics"
-            SET "usage_count" = (SELECT COUNT(*) FROM "tag" WHERE "category_id" = OLD."id")
-            WHERE "category_id" = OLD."id";
-
-            UPDATE "tag_category_statistics"
-            SET "usage_count" = (SELECT COUNT(*) FROM "tag" WHERE "category_id" = NEW."id")
-            WHERE "category_id" = NEW."id";
-        END IF;
+        UPDATE "tag_category_statistics"
+        SET "usage_count" = "usage_count" + (SELECT "usage_count" FROM "tag_category_statistics" WHERE "category_id" = OLD."id")
+        WHERE "category_id" = 0;
     END IF;
 
     RETURN COALESCE(NEW, OLD);
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tag_category_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "tag_category"
+CREATE TRIGGER tag_category_update_trigger BEFORE INSERT OR DELETE ON "tag_category"
 FOR EACH ROW EXECUTE FUNCTION update_tag_category_statistics();
 
 -- Add tag triggers
@@ -486,8 +466,8 @@ DECLARE
     count_change INT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
-        INSERT INTO "tag_statistics" ("tag_id") VALUES (NEW."id");
         count_change := 1;
+        INSERT INTO "tag_statistics" ("tag_id") VALUES (NEW."id");
     ELSIF TG_OP = 'DELETE' THEN
         count_change := -1;
     ELSE
@@ -514,8 +494,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tag_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "tag"
-FOR EACH ROW EXECUTE FUNCTION update_tag_statistics();
+CREATE CONSTRAINT TRIGGER tag_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "tag"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_tag_statistics();
 
 -- Add tag_implication triggers
 CREATE FUNCTION update_tag_implication_statistics() RETURNS TRIGGER AS $$
@@ -536,8 +516,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tag_implication_update_trigger AFTER INSERT OR DELETE ON "tag_implication"
-FOR EACH ROW EXECUTE FUNCTION update_tag_implication_statistics();
+CREATE CONSTRAINT TRIGGER tag_implication_update_trigger AFTER INSERT OR DELETE ON "tag_implication"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_tag_implication_statistics();
 
 -- Add tag_suggestion triggers
 CREATE FUNCTION update_tag_suggestion_statistics() RETURNS TRIGGER AS $$
@@ -558,8 +538,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tag_suggestion_update_trigger AFTER INSERT OR DELETE ON "tag_suggestion"
-FOR EACH ROW EXECUTE FUNCTION update_tag_suggestion_statistics();
+CREATE CONSTRAINT TRIGGER tag_suggestion_update_trigger AFTER INSERT OR DELETE ON "tag_suggestion"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_tag_suggestion_statistics();
 
 -- Add user triggers
 CREATE FUNCTION update_user_statistics() RETURNS TRIGGER AS $$
@@ -582,5 +562,5 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER user_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "user"
-FOR EACH ROW EXECUTE FUNCTION update_user_statistics();
+CREATE CONSTRAINT TRIGGER user_update_trigger AFTER INSERT OR UPDATE OR DELETE ON "user"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_user_statistics();
