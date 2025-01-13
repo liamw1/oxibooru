@@ -1,9 +1,9 @@
 # Benchmarks
 These benchmarks are meant to give a rough idea of the relative speed 
 differences between szurubooru and oxibooru for various operations. My 
-mythodology here is very crude (often just taking a single measurement) and 
+mythodology here is very crude (often just taking a few measurements) and 
 there's a lot of external factors that could affect the results, so take them 
-with a grain of salt. I might work on improving these later.
+with a grain of salt.
 
 These benchmarks were performed on the same database consisting of about 125k 
 images and 25k tags. Everything is containerized with Docker and all requests 
@@ -16,38 +16,46 @@ are made anonymously, so time to authenticate isn't included.
 
 ## Startup
 - Here I measure the time it takes for the first "info" request, which gathers
-  statistics about the size of the database. This is the cached, so subsequent
-  requests are much faster.
+  statistics about the size of the database.
 
     **`GET http://localhost:8080/api/info`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      2287 |
-    | oxibooru          |      2661 |
+    | oxibooru          |        10 |
 
-    Szurubooru seems slightly faster here. This was a pretty surprising result 
-    to me, because in practice I find that the szurubooru homepage is quite slow
-    to load from a cold start (10 seconds or more). Looking at the client logs,
-    the client actually makes two info requests when viewing the homepage. It
-    seems like two concurrent info requests are significantly slower than if 
-    they were run sequentially. However, this is true for both oxi and szuru, so
-    I'm still not sure why szurubooru is so much slower to load up in practice.
+    Oxibooru blows Szurubooru out of the water here. The reason for this is
+    that Szurubooru calculates the disk usage by iterating over the entire data
+    directory, summing up the sizes of all the files it contains. This process 
+    is quite slow for directories with many files. This request is the main
+    reason that Szurubooru is unresponsive for so long after a cold start. In
+    my experience it can take 10 seconds or more to become usable, much longer
+    than the time of a single info request. That's because the server actually
+    makes _two_ info request on startup, and it seems like they interfere with
+    each other in a way that makes them slower than if they were run
+    sequentially.
+
+    Oxibooru avoids this by storing a running total of the disk usage inside 
+    the database, which can be retrieved almost instantly. This makes cold
+    starts lightning fast.
     
 ## Listing Posts
 - Let's start with the simplest case: viewing the first page of posts with no
-  sort tokens or filters.
+  sort tokens or filters. This first page of posts have no tags, so it should
+  be pretty fast.
 
     **`GET http://localhost:8080/api/posts/?query=&limit=42`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       435 |
-    | oxibooru          |        86 |
+    | oxibooru          |        40 |
     
-    Oxibooru is quite a bit faster here, but I admit this is a bit of an 
+    Oxibooru is over 10x faster here, but I admit this is a bit of an 
     unrealistic comparison. This query doesn't perform any field selection, so
-    by default all post fields will be retrieved. A decent amount of the oxi
+    by default all post fields will be retrieved. A decent amount of the 
     codebase is dedicated to performing efficient queries for batch retrieval
-    of resource field data, so it's no surprise that it outperforms szuru here.
+    of resource field data, so it's no surprise that it outperforms Szurubooru
+    here.
 
 - Here's a more realistic case: the query the client actually performs when
   viewing the first page of posts with no sort tokens or filters.
@@ -63,10 +71,11 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |        53 |
-    | oxibooru          |        52 |
+    | oxibooru          |        22 |
 
-    Nearly identical performance here. Where oxibooru shines is when we apply 
-    filters to our queries.
+    About 2x faster now. Oxibooru achieves a speedup here by caching the total
+    post count in the database, avoiding a slow COUNT(*) query. Without this,
+    Oxibooru would perform identically to Szurubooru here.
 
 - Let's now add a negative filter for unsafe posts.
 
@@ -74,22 +83,28 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |        93 |
-    | oxibooru          |        56 |
+    | oxibooru          |        46 |
+
+    Some overhead is added here because the Oxibooru server can't just use the
+    total post count because of the filter. Even still it remains about 2x
+    faster than Szurubooru.
     
-    Now oxibooru is nearly 2x faster relative to szurubooru. The unsafe filter 
-    barely adds any overhead.
-    
-- What about with a huge offset?
+- What about with a huge offset? This query is fairly challenging, not only
+  because of the large offset, but also because we have to retrieve posts
+  with tags. This can be expensive because we need to retrieve statistics
+  about those tags, like usage counts.
 
     **`GET http://localhost:8080/api/posts/?query=-rating%3Aunsafe&offset=33726&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      2490 |
-    | oxibooru          |       580 |
+    | oxibooru          |       133 |
     
-    As expected, large offsets inflate the runtime quite a bit. What's
-    surprising is that the relative difference between oxi and szuru grows to
-    nearly 5x.
+    The relative difference between Oxibooru and Szurubooru grows to almost
+    20x! One big thing that helps Oxibooru go fast here is that it keeps
+    track of usage counts for each tag with triggers rather than counting them 
+    every time. This does come at a cost (slower updates), but I think this 
+    trade-off is worth it for read-heavy applications like this.
     
 - One very common use case is to search for posts with a particular tag. Let's
   search for all posts with the tag `tagme`.
@@ -98,10 +113,11 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       594 |
-    | oxibooru          |       171 |
+    | oxibooru          |        57 |
     
     I'm not sure why szurubooru performs so poorly here, as both tag names
-    and post tags are indexed. Perhaps SQLAlchemy is generating inefficient SQL?
+    and post tags are indexed and `tagme` posts typically have few tags. Perhaps
+    SQLAlchemy is generating inefficient SQL?
     
 - Onto a more challenging query: sorting by tag count.
 
@@ -109,10 +125,10 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      5061 |
-    | oxibooru          |       784 |
+    | oxibooru          |       116 |
     
-    Oxibooru clocks in around 6x faster. In general it tends to handle complex 
-    queries much better.
+    Oxibooru clocks in around 40x faster! Those cached tag usage counts
+    massively benefit Oxibooru here.
 
 ## Listing Tags
 - Just like posts, we'll start by benchmarking listing the first page of tags:
@@ -122,15 +138,14 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       834 |
-    | oxibooru          |       112 |
+    | oxibooru          |        51 |
     
     I expected the performance from szurubooru to be reasonable here, but it
-    turned out to be slower than the _autocomplete_ query. My best guess as to
-    what's going on is that SQLAlchemy generates bad queries for collecting the
-    tag field data like names, suggestions, and implications. It was pretty
-    tricky to create efficient queries for these by hand, so I wouldn't be 
-    surprised if ORMs struggle a bit here. Still, an 8x difference is suprising
-    here.
+    turned out to be slower than the _autocomplete_ query. My best guess for
+    why this is so slow in Szurubooru is the counting of tag usages. Though
+    even before Oxibooru cached tag usages it was still 8x faster. It's
+    possible that SQLAlchemy is partly to blame by generating suboptimal 
+    queries, as this request was fairly tricky to implement by hand.
     
 - Now let's try sorting by usage count:
     
@@ -139,9 +154,9 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      5858 |
-    | oxibooru          |       792 |
+    | oxibooru          |        43 |
     
-    Again, oxibooru greatly outperforms szurubooru on more challenging queries.
+    Oxibooru just crushes Szurubooru here. It's around 135x faster.
 
 - Finally, we'll try the query used when performing autocomplete when the user
   types the word `e` in the search bar:
@@ -151,9 +166,10 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       688 |
-    | oxibooru          |       309 |
+    | oxibooru          |        52 |
     
-    A decent improvement here, which is noticeable when using the search bar.
+    This is an area where a speedup is very noticeable. You get much faster
+    autocomplete feedback when using the search bar in Oxibooru.
     
 ## Reverse Image Search
 - First, let's try to batch upload 50 small images each around 40-300kb. This
@@ -172,23 +188,22 @@ are made anonymously, so time to authenticate isn't included.
     optimizing image search paid off! However, the total runtime doesn't show
     the full story here.
 
-    First of all, oxibooru is actually doing a lot more
-    work than szurubooru. The reverse image search method uses a two-tier
-    approach. We have a fine-grained filter that computes the "distance"
-    between two post signatures and a coarse-grained filter that looks up likely
-    candidate signatures with a series of signature "words" (basically indexes).
-    Two signatures are considered likely to be similar if they have any words
-    in common. This is faster than computing the signature distance and can
-    easily be done within Postgres, so we run the coarse-grained filter first so
-    that we don't have to run every signature through the fine-grained filter.
-    However, the coarse-grained filter is _very_ coarse. It generally passes for 
-    5-20% of all images in the database, meaning there will be 8k-25k candidate
-    signatures for a single reverse search. Szurubooru chooses to limit this to 
-    the 100 candidates with the most words in common. The problem with this is
-    that as databases get larger, the likelihood of an actual match falling
-    outside of the top 100 candidate signatures increases. In oxibooru, I made
-    the choice to evaulate _all of the candidate signatures_ against the
-    fine-grained filter.
+    First of all, Oxibooru is actually doing a lot more work than Szurubooru. 
+    The reverse image search method uses a two-tier approach. We have a 
+    fine-grained filter that computes the "distance" between two post 
+    signatures and a coarse-grained filter that looks up likely candidate 
+    signatures with a series of signature "words". Two signatures are considered
+    likely to be similar if they have any words in common. This is faster than 
+    computing the signature distance and can easily be done within Postgres, so 
+    we run the coarse-grained filter first so that we don't have to run every 
+    signature through the fine-grained filter. However, the coarse-grained 
+    filter is _very_ coarse. It generally passes for 5-20% of all images in the 
+    database, meaning there will be 8k-25k candidate signatures for a single 
+    reverse search. Szurubooru chooses to limit this to the 100 candidates with 
+    the most words in common. The problem with this is that as databases get 
+    larger, the likelihood of an actual match falling outside of the top 100 
+    candidate signatures increases. In oxibooru, I made the choice to evaulate 
+    _all of the candidate signatures_ against the fine-grained filter.
     
     Secondly, something interesting is going on when we look at the times for
     the individual reverse search queries. Here are the first 10:
@@ -208,20 +223,27 @@ are made anonymously, so time to authenticate isn't included.
     
     The reverse search times for szurubooru are fairly consistent, hovering 
     around 670ms each. On the other hand, the oxibooru reverse search actually 
-    starts out 2x _slower_ than szurubooru. But after the first 5 searches the 
+    starts out 2x _slower_ than szurubooru. But after the first 5 searches, the 
     queries suddenly speed up dramatically (3x faster than szurubooru on 
-    average) and stay that way until the end of the batch. I don't know what 
-    kind of black magic is going on in Postgres, but if I can figure out how to 
-    harness it I could make the first few reverse searches fast too.
+    average) and stay that way until the end of the batch. 
+    
+    My best guess as to what's going on here is that each time a query is 
+    executed, some of the signature rows are cached. Because each request is 
+    expected to find around 20% of the signatures to be likely matches, it takes
+    ~5 requests for most of the rows to be cached. Once that happends, things 
+    can progress at reasonable speed. Perhaps there's some way of pre-loading 
+    the signature table into cache? In any case, if I can harness whatever black
+    magic is going on in Postgres, maybe I could make the first few reverse 
+    searches fast too.
     
 - Now let's try a large image so that the signature and checksum creation time 
   dominates. Here's the results from an upload of a 92MB image of the Mona Lisa 
-  I took from wikipedia:
+  I took from [wikipedia](https://en.wikipedia.org/wiki/Mona_Lisa#/media/File:Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg):
 
     | Database          | Post Creation Time (s) |
     | ----------------- | ---------------------- |
     | szurubooru        |                   8.68 |
-    | oxibooru          |                   4.81 |
+    | oxibooru          |                   4.51 |
     
     These times are for upload, reverse image search, and post creation. The 
     reason oxibooru is about 2x faster here is because it caches the checksum 
@@ -230,6 +252,5 @@ are made anonymously, so time to authenticate isn't included.
     perform about as well as szurubooru. There's probably still some room for 
     improvement here. The runtime is a somewhat even split between the png 
     decoding, the thumbnail creation, and the image signature creation. The 
-    first two are out of my control (unless I switch libraries), but I may try 
-    playing around with vectorizing and/or multithreading the post signature
-    creation at some point.
+    first two are largely out of my control, but I may try playing around with 
+    vectorizing and/or multithreading the post signature creation at some point.
