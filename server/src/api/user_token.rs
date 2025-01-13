@@ -82,7 +82,7 @@ fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTok
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    db::get_connection()?.transaction(|conn| {
+    let (user_token, avatar_style) = db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -104,12 +104,13 @@ fn create_user_token(username: String, auth: AuthResult, token_info: PostUserTok
             enabled: token_info.enabled,
             expiration_time: token_info.expiration_time,
         };
-        let user_token: UserToken = diesel::insert_into(user_token::table)
+        let user_token = diesel::insert_into(user_token::table)
             .values(new_user_token)
             .returning(UserToken::as_returning())
             .get_result(conn)?;
-        Ok(UserTokenInfo::new(MicroUser::new(username.to_string(), avatar_style), user_token))
-    })
+        Ok::<_, api::Error>((user_token, avatar_style))
+    })?;
+    Ok(UserTokenInfo::new(MicroUser::new(username.to_string(), avatar_style), user_token))
 }
 
 #[derive(Deserialize)]
@@ -132,7 +133,7 @@ fn update_user_token(
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    db::get_connection()?.transaction(|conn| {
+    let (updated_user_token, avatar_style) = db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -173,8 +174,9 @@ fn update_user_token(
         }
 
         let updated_user_token: UserToken = user_token::table.find(user_id).first(conn)?;
-        Ok(UserTokenInfo::new(MicroUser::new(username.to_string(), avatar_style), updated_user_token))
-    })
+        Ok::<_, api::Error>((updated_user_token, avatar_style))
+    })?;
+    Ok(UserTokenInfo::new(MicroUser::new(username.to_string(), avatar_style), updated_user_token))
 }
 
 fn delete_user_token(username: String, token: Uuid, auth: AuthResult) -> ApiResult<()> {

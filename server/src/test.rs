@@ -33,7 +33,7 @@ where
 {
     db::get_connection()
         .unwrap()
-        .test_transaction::<_, Error, _>(|conn| Ok(function(conn).unwrap()))
+        .test_transaction(|conn| Ok::<_, Error>(function(conn).unwrap()))
 }
 
 /// Inserts a dummy user with username `name` into the database.

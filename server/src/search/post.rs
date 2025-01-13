@@ -5,7 +5,7 @@ use crate::schema::{
 };
 use crate::search::{Error, Order, ParsedSort, SearchCriteria, UnparsedFilter};
 use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
-use diesel::dsl::*;
+use diesel::dsl::{count, InnerJoin, IntoBoxed, LeftJoin, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use std::str::FromStr;

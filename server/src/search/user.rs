@@ -2,7 +2,7 @@ use crate::schema::user;
 use crate::search::{Error, Order, ParsedSort, SearchCriteria};
 use crate::{apply_sort, apply_str_filter, apply_time_filter};
 use diesel::define_sql_function;
-use diesel::dsl::*;
+use diesel::dsl::{IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use strum::EnumString;

@@ -6,7 +6,7 @@ use crate::resource::tag::{FieldTable, TagInfo};
 use crate::schema::{database_statistics, post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
-use diesel::dsl::*;
+use diesel::dsl::{count, max};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -200,7 +200,8 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
     }
 
     let fields = create_field_table(query.fields())?;
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    let tag_id = conn.transaction(|conn| {
         let category_id: i32 = tag_category::table
             .select(tag_category::id)
             .filter(tag_category::name.eq(tag_info.category))
@@ -223,9 +224,9 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
             let suggested_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), suggestions, true)?;
             update::tag::add_suggestions(conn, tag_id, suggested_ids)?;
         }
-
-        TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>(tag_id)
+    })?;
+    conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
 }
 
 fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String>) -> ApiResult<TagInfo> {
@@ -242,7 +243,8 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
     };
 
     let fields = create_field_table(query.fields())?;
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    let merged_tag_id = conn.transaction(|conn| {
         let (remove_id, remove_version) = get_tag_info(conn, merge_info.remove)?;
         let (merge_to_id, merge_to_version) = get_tag_info(conn, merge_info.merge_to)?;
         if remove_id == merge_to_id {
@@ -339,8 +341,9 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
         update::tag::add_names(conn, merge_to_id, current_name_count, removed_names)?;
 
         diesel::delete(tag::table.find(remove_id)).execute(conn)?;
-        TagInfo::new_from_id(conn, merge_to_id, &fields).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>(merge_to_id)
+    })?;
+    conn.transaction(|conn| TagInfo::new_from_id(conn, merged_tag_id, &fields).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -360,7 +363,8 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
 
     let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    let tag_id = conn.transaction(|conn| {
         let (tag_id, tag_version) = tag::table
             .select((tag::id, tag::last_edit_time))
             .inner_join(tag_name::table)
@@ -413,9 +417,9 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
                 .execute(conn)?;
             update::tag::add_suggestions(conn, tag_id, suggested_ids)?;
         }
-
-        TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>(tag_id)
+    })?;
+    conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
 }
 
 fn delete_tag(name: String, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {

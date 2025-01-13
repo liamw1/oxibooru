@@ -2,7 +2,7 @@ use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics
 use crate::search::{Error, Order, ParsedSort, SearchCriteria};
 use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
 use diesel::define_sql_function;
-use diesel::dsl::*;
+use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use strum::EnumString;

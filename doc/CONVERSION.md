@@ -129,7 +129,8 @@ these are:
     
     Run recompute_post_checksums and recompute_post_signatures in the admin
     cli. For databases with many posts recompute_post_signatures can take quite 
-    a bit of time, so be prepared for that.
+    a bit of time (around 12 posts per second on my machine), so be prepared for
+    that.
     
 6. **Reset user passwords**
 

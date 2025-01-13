@@ -614,10 +614,10 @@ macro_rules! get_post_stats {
             .select((post_statistics::post_id, $column))
             .filter(post_statistics::post_id.eq_any(&post_ids))
             .load($conn)
-            .map(|post_scores| {
-                resource::order_transformed_as(post_scores, &post_ids, |&(id, _)| id)
+            .map(|post_stats| {
+                resource::order_transformed_as(post_stats, &post_ids, |&(id, _)| id)
                     .into_iter()
-                    .map(|(_, score)| score)
+                    .map(|(_, stat)| stat)
                     .collect::<Vec<$return_type>>()
             })
     }};

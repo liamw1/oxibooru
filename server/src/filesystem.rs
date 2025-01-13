@@ -65,7 +65,7 @@ pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResul
 pub fn delete_custom_avatar(username: &str) -> std::io::Result<()> {
     let custom_avatar_path = hash::custom_avatar_path(username);
     custom_avatar_path
-        .exists()
+        .try_exists()?
         .then(|| std::fs::remove_file(&custom_avatar_path))
         .unwrap_or(Ok(()))
 }
@@ -104,7 +104,7 @@ pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailCategory)
         ThumbnailCategory::Custom => {
             let custom_thumbnail_path = post.custom_thumbnail_path();
             custom_thumbnail_path
-                .exists()
+                .try_exists()?
                 .then(|| std::fs::remove_file(&custom_thumbnail_path))
                 .unwrap_or(Ok(()))
         }
@@ -137,7 +137,7 @@ pub fn swap_posts(
     // Handle the four distinct cases of custom thumbnails existing/not existing
     let custom_thumbnail_path_a = post_a.custom_thumbnail_path();
     let custom_thumbnail_path_b = post_b.custom_thumbnail_path();
-    match (custom_thumbnail_path_a.exists(), custom_thumbnail_path_b.exists()) {
+    match (custom_thumbnail_path_a.try_exists()?, custom_thumbnail_path_b.try_exists()?) {
         (true, true) => swap_files(&custom_thumbnail_path_a, &custom_thumbnail_path_b)?,
         (true, false) => std::fs::rename(custom_thumbnail_path_a, custom_thumbnail_path_b)?,
         (false, true) => std::fs::rename(custom_thumbnail_path_b, custom_thumbnail_path_a)?,
@@ -159,7 +159,7 @@ pub fn swap_posts(
 /// Returns whether `directory` was created, or an error if one occured.
 pub fn create_dir(directory: Directory) -> std::io::Result<bool> {
     let path = path(directory);
-    match path.exists() {
+    match path.try_exists()? {
         true => Ok(false),
         false => std::fs::create_dir(path).map(|_| true),
     }
@@ -168,7 +168,7 @@ pub fn create_dir(directory: Directory) -> std::io::Result<bool> {
 /// Deletes everything in the temporary uploads directory.
 pub fn purge_temporary_uploads() -> std::io::Result<()> {
     let temp_path = path(Directory::TemporaryUploads);
-    if !temp_path.exists() {
+    if !temp_path.try_exists()? {
         return Ok(());
     }
     for entry in std::fs::read_dir(temp_path)? {
@@ -194,23 +194,4 @@ fn swap_files(file_a: &Path, file_b: &Path) -> std::io::Result<()> {
     std::fs::rename(file_a, &temp_path)?;
     std::fs::rename(file_b, file_a)?;
     std::fs::rename(temp_path, file_b)
-}
-
-/// Returns the size of the directory at the given `path`, recursively.
-/// Can take a long time for large directories.
-fn calculate_directory_size(path: &Path) -> std::io::Result<u64> {
-    if !path.exists() {
-        return Ok(0);
-    }
-
-    let mut total_size = 0;
-    if path.is_dir() {
-        for entry in std::fs::read_dir(path)? {
-            let path = entry?.path();
-            total_size += calculate_directory_size(&path)?;
-        }
-    } else {
-        total_size += std::fs::metadata(path)?.len();
-    }
-    Ok(total_size)
 }

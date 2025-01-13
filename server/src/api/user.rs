@@ -166,13 +166,12 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
         avatar_style: AvatarStyle::Gravatar,
     };
 
-    db::get_connection()?.transaction(|conn| {
-        let user: User = diesel::insert_into(user::table)
-            .values(new_user)
-            .returning(User::as_returning())
-            .get_result(conn)?;
-        UserInfo::new(conn, user, &fields, Visibility::Full).map_err(api::Error::from)
-    })
+    let mut conn = db::get_connection()?;
+    let user: User = diesel::insert_into(user::table)
+        .values(new_user)
+        .returning(User::as_returning())
+        .get_result(&mut conn)?;
+    conn.transaction(|conn| UserInfo::new(conn, user, &fields, Visibility::Full).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -200,7 +199,8 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
         .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Avatar))
         .transpose()?;
 
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    let (user_id, visibility) = conn.transaction(|conn| {
         let (user_id, user_version): (i32, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(&username))
@@ -289,9 +289,9 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
                 .set(user::custom_avatar_size.eq(avatar_size as i64))
                 .execute(conn)?;
         }
-
-        UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>((user_id, visibility))
+    })?;
+    conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from))
 }
 
 fn delete_user(username: String, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {

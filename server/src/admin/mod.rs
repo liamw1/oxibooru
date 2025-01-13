@@ -1,9 +1,12 @@
+mod database;
 mod post;
+mod user;
 
 use crate::db;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, PooledConnection};
 use std::io::Write;
+use std::path::Path;
 use std::str::FromStr;
 use strum::{EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
 
@@ -32,15 +35,18 @@ pub fn command_line_mode() {
     }
 }
 
+const PRINT_INTERVAL: u64 = 1000;
+
 #[derive(Clone, Copy, EnumString, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 enum AdminTask {
-    ResetFilenames,
     RecomputePostChecksums,
     RecomputePostSignatures,
     RecomputePostSignatureIndexes,
     RegenerateThumbnail,
     ResetPassword,
+    ResetFilenames,
+    ResetStatistics,
 }
 
 struct ProgressReporter {
@@ -110,7 +116,6 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
 fn run_task(task: AdminTask) -> Result<(), String> {
     println!("Starting task...");
     match task {
-        AdminTask::ResetFilenames => post::reset_filenames().map_err(|err| format!("{err}")),
         AdminTask::RecomputePostChecksums => {
             let mut conn = get_connection()?;
             post::recompute_checksums(&mut conn).map_err(|err| format!("{err}"))
@@ -129,7 +134,18 @@ fn run_task(task: AdminTask) -> Result<(), String> {
         }
         AdminTask::ResetPassword => {
             let mut conn = get_connection()?;
-            post::reset_password(&mut conn).map_err(|err| format!("{err}"))
+            user::reset_password(&mut conn).map_err(|err| format!("{err}"))
+        }
+        AdminTask::ResetFilenames => database::reset_filenames().map_err(|err| format!("{err}")),
+        AdminTask::ResetStatistics => {
+            let mut conn = get_connection()?;
+            database::reset_statistics(&mut conn).map_err(|err| format!("{err}"))
         }
     }
+}
+
+fn get_post_id(path: &Path) -> Option<i32> {
+    let path_str = path.file_name()?.to_string_lossy();
+    let (post_id, _tail) = path_str.split_once('_')?;
+    post_id.parse().ok()
 }

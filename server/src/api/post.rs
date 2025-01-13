@@ -292,13 +292,11 @@ fn feature_post(auth: AuthResult, query: ResourceQuery, post_feature: PostFeatur
         time: DateTime::now(),
     };
 
-    db::get_connection()?.transaction(|conn| {
-        diesel::insert_into(post_feature::table)
-            .values(new_post_feature)
-            .execute(conn)?;
-
-        PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from)
-    })
+    let mut conn = db::get_connection()?;
+    diesel::insert_into(post_feature::table)
+        .values(new_post_feature)
+        .execute(&mut conn)?;
+    conn.transaction(|conn| PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -322,6 +320,7 @@ struct ReverseSearchInfo {
 }
 
 fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -> ApiResult<ReverseSearchInfo> {
+    let _timer = crate::time::Timer::new("reverse search");
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().post_reverse_search)?;
@@ -424,7 +423,8 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
         source: post_info.source.as_deref(),
     };
 
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    let post_id = conn.transaction(|conn| {
         let post_id = diesel::insert_into(post::table)
             .values(new_post)
             .returning(post::id)
@@ -471,8 +471,9 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
             .set(post::generated_thumbnail_size.eq(generated_thumbnail_size as i64))
             .execute(conn)?;
 
-        PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>(post_id)
+    })?;
+    conn.transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -498,7 +499,8 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     let merge_to_hash = PostHash::new(merge_to_id);
 
     let fields = create_field_table(query.fields())?;
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    let merged_post = conn.transaction(|conn| {
         let mut remove_post: Post = post::table.find(remove_id).first(conn)?;
         let mut merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
         api::verify_version(remove_post.last_edit_time, merge_info.post_info.remove_version)?;
@@ -659,8 +661,9 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
             filesystem::delete_post(&remove_hash, remove_post.mime_type)?;
         }
 
-        PostInfo::new(conn, client_id, merge_to_post, &fields).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>(merge_to_post)
+    })?;
+    conn.transaction(|conn| PostInfo::new(conn, client_id, merged_post, &fields).map_err(api::Error::from))
 }
 
 fn favorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiResult<PostInfo> {
@@ -676,14 +679,15 @@ fn favorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiRes
         time: DateTime::now(),
     };
 
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    conn.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
         diesel::insert_into(post_favorite::table)
             .values(new_post_favorite)
-            .execute(conn)?;
-
-        PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from)
-    })
+            .execute(conn)
+            .map_err(api::Error::from)
+    })?;
+    conn.transaction(|conn| PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from))
 }
 
 fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, rating: RatingRequest) -> ApiResult<PostInfo> {
@@ -694,7 +698,8 @@ fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, rating: Ratin
     let fields = create_field_table(query.fields())?;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
 
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    conn.transaction(|conn| {
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*rating) {
@@ -708,9 +713,9 @@ fn rate_post(post_id: i32, auth: AuthResult, query: ResourceQuery, rating: Ratin
                 .values(new_post_score)
                 .execute(conn)?;
         }
-
-        PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>(())
+    })?;
+    conn.transaction(|conn| PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -729,8 +734,6 @@ struct PostUpdate {
 }
 
 fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
-    let _timer = crate::time::Timer::new("update_post");
-
     let client = auth?;
     query.bump_login(client.as_ref())?;
     let fields = create_field_table(query.fields())?;
@@ -741,7 +744,8 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
         .transpose()?;
 
     let post_hash = PostHash::new(post_id);
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    conn.transaction(|conn| {
         let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
         api::verify_version(post_version, update.version)?;
 
@@ -839,10 +843,11 @@ fn update_post(post_id: i32, auth: AuthResult, query: ResourceQuery, update: Pos
                 .set(post::custom_thumbnail_size.eq(custom_thumbnail_size as i64))
                 .execute(conn)?;
         }
+        Ok::<_, api::Error>(())
+    })?;
 
-        let client_id = client.map(|user| user.id);
-        PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from)
-    })
+    let client_id = client.map(|user| user.id);
+    conn.transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
 }
 
 async fn delete_post(post_id: i32, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
@@ -891,8 +896,7 @@ fn unfavorite_post(post_id: i32, auth: AuthResult, query: ResourceQuery) -> ApiR
     let fields = create_field_table(query.fields())?;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
 
-    db::get_connection()?.transaction(|conn| {
-        diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
-        PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from)
-    })
+    let mut conn = db::get_connection()?;
+    diesel::delete(post_favorite::table.find((post_id, user_id))).execute(&mut conn)?;
+    conn.transaction(|conn| PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from))
 }

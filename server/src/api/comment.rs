@@ -80,13 +80,13 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse
             i64::from(comment_count)
         };
 
-        let selected_tags: Vec<i32> = search::comment::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let selected_comments: Vec<i32> = search::comment::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,
             offset,
             limit,
             total,
-            results: CommentInfo::new_batch_from_ids(conn, client_id, selected_tags)?,
+            results: CommentInfo::new_batch_from_ids(conn, client_id, selected_comments)?,
         })
     })
 }
@@ -125,13 +125,12 @@ fn create_comment(auth: AuthResult, comment_info: NewCommentInfo) -> ApiResult<C
         creation_time: DateTime::now(),
     };
 
-    db::get_connection()?.transaction(|conn| {
-        let comment_id: i32 = diesel::insert_into(comment::table)
-            .values(new_comment)
-            .returning(comment::id)
-            .get_result(conn)?;
-        CommentInfo::new_from_id(conn, Some(user_id), comment_id).map_err(api::Error::from)
-    })
+    let mut conn = db::get_connection()?;
+    let comment_id: i32 = diesel::insert_into(comment::table)
+        .values(new_comment)
+        .returning(comment::id)
+        .get_result(&mut conn)?;
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, Some(user_id), comment_id).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -145,7 +144,8 @@ fn update_comment(comment_id: i32, auth: AuthResult, update: CommentUpdate) -> A
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
 
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    conn.transaction(|conn| {
         let (comment_owner, comment_version): (Option<i32>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))
@@ -160,9 +160,10 @@ fn update_comment(comment_id: i32, auth: AuthResult, update: CommentUpdate) -> A
 
         diesel::update(comment::table.find(comment_id))
             .set(comment::text.eq(update.text))
-            .execute(conn)?;
-        CommentInfo::new_from_id(conn, client_id, comment_id).map_err(api::Error::from)
-    })
+            .execute(conn)
+            .map_err(api::Error::from)
+    })?;
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, client_id, comment_id).map_err(api::Error::from))
 }
 
 fn rate_comment(comment_id: i32, auth: AuthResult, rating: RatingRequest) -> ApiResult<CommentInfo> {
@@ -170,7 +171,9 @@ fn rate_comment(comment_id: i32, auth: AuthResult, rating: RatingRequest) -> Api
     api::verify_privilege(client.as_ref(), config::privileges().comment_score)?;
 
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
-    db::get_connection()?.transaction(|conn| {
+
+    let mut conn = db::get_connection()?;
+    conn.transaction(|conn| {
         diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*rating) {
@@ -183,9 +186,9 @@ fn rate_comment(comment_id: i32, auth: AuthResult, rating: RatingRequest) -> Api
                 .values(new_comment_score)
                 .execute(conn)?;
         }
-
-        CommentInfo::new_from_id(conn, Some(user_id), comment_id).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>(())
+    })?;
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, Some(user_id), comment_id).map_err(api::Error::from))
 }
 
 fn delete_comment(comment_id: i32, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {

@@ -230,7 +230,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
         warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
     });
     let log = warp::filters::log::custom(|info| {
-        // println!("{} {} [{}]", info.method(), info.path(), info.status());
+        println!("{} {} [{}]", info.method(), info.path(), info.status());
     });
 
     info::routes()

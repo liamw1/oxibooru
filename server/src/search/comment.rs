@@ -1,7 +1,7 @@
 use crate::schema::{comment, user};
 use crate::search::{Error, Order, ParsedSort, SearchCriteria};
 use crate::{apply_filter, apply_sort, apply_str_filter, apply_time_filter};
-use diesel::dsl::*;
+use diesel::dsl::{IntoBoxed, LeftJoin, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use strum::EnumString;

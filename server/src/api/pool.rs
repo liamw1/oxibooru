@@ -138,7 +138,8 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
     }
 
     let fields = create_field_table(query.fields())?;
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    let pool = conn.transaction(|conn| {
         let category_id: i32 = pool_category::table
             .select(pool_category::id)
             .filter(pool_category::name.eq(pool_info.category))
@@ -154,9 +155,9 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
 
         update::pool::add_names(conn, pool.id, 0, pool_info.names)?;
         update::pool::add_posts(conn, pool.id, 0, pool_info.posts.unwrap_or_default())?;
-
-        PoolInfo::new(conn, pool, &fields).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>(pool)
+    })?;
+    conn.transaction(|conn| PoolInfo::new(conn, pool, &fields).map_err(api::Error::from))
 }
 
 fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i32>) -> ApiResult<PoolInfo> {
@@ -171,7 +172,8 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
     }
 
     let fields = create_field_table(query.fields())?;
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    conn.transaction(|conn| {
         let remove_version = pool::table.find(remove_id).select(pool::last_edit_time).first(conn)?;
         let merge_to_version = pool::table.find(merge_to_id).select(pool::last_edit_time).first(conn)?;
         api::verify_version(remove_version, merge_info.remove_version)?;
@@ -205,9 +207,11 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
             .get_results(conn)?;
         update::pool::add_names(conn, merge_to_id, current_name_count, removed_names)?;
 
-        diesel::delete(pool::table.find(remove_id)).execute(conn)?;
-        PoolInfo::new_from_id(conn, merge_to_id, &fields).map_err(api::Error::from)
-    })
+        diesel::delete(pool::table.find(remove_id))
+            .execute(conn)
+            .map_err(api::Error::from)
+    })?;
+    conn.transaction(|conn| PoolInfo::new_from_id(conn, merge_to_id, &fields).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -225,7 +229,8 @@ fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: Poo
     query.bump_login(client.as_ref())?;
     let fields = create_field_table(query.fields())?;
 
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    conn.transaction(|conn| {
         let pool_version: DateTime = pool::table.find(pool_id).select(pool::last_edit_time).first(conn)?;
         api::verify_version(pool_version, update.version)?;
 
@@ -261,9 +266,9 @@ fn update_pool(pool_id: i32, auth: AuthResult, query: ResourceQuery, update: Poo
             update::pool::delete_posts(conn, pool_id)?;
             update::pool::add_posts(conn, pool_id, 0, posts)?;
         }
-
-        PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>(())
+    })?;
+    conn.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
 }
 
 fn delete_pool(name: String, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {

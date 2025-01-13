@@ -91,18 +91,17 @@ fn create_pool_category(auth: AuthResult, category_info: NewPoolCategoryInfo) ->
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_create)?;
     api::verify_matches_regex(&category_info.name, RegexType::PoolCategory)?;
 
-    db::get_connection()?.transaction(|conn| {
-        let new_category = NewPoolCategory {
-            name: &category_info.name,
-            color: &category_info.color,
-        };
-        let category = diesel::insert_into(pool_category::table)
-            .values(new_category)
-            .returning(PoolCategory::as_returning())
-            .get_result(conn)?;
+    let new_category = NewPoolCategory {
+        name: &category_info.name,
+        color: &category_info.color,
+    };
 
-        PoolCategoryInfo::new(conn, category).map_err(api::Error::from)
-    })
+    let mut conn = db::get_connection()?;
+    let category = diesel::insert_into(pool_category::table)
+        .values(new_category)
+        .returning(PoolCategory::as_returning())
+        .get_result(&mut conn)?;
+    conn.transaction(|conn| PoolCategoryInfo::new(conn, category).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -117,7 +116,8 @@ fn update_pool_category(name: String, auth: AuthResult, update: PoolCategoryUpda
     let client = auth?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    let category_id = conn.transaction(|conn| {
         let category = PoolCategory::from_name(conn, &name)?;
         api::verify_version(category.last_edit_time, update.version)?;
 
@@ -138,8 +138,9 @@ fn update_pool_category(name: String, auth: AuthResult, update: PoolCategoryUpda
                 .execute(conn)?;
         }
 
-        PoolCategoryInfo::new_from_id(conn, category.id).map_err(api::Error::from)
-    })
+        Ok::<_, api::Error>(category.id)
+    })?;
+    conn.transaction(|conn| PoolCategoryInfo::new_from_id(conn, category_id).map_err(api::Error::from))
 }
 
 fn set_default_pool_category(name: String, auth: AuthResult) -> ApiResult<PoolCategoryInfo> {
@@ -147,7 +148,8 @@ fn set_default_pool_category(name: String, auth: AuthResult) -> ApiResult<PoolCa
     api::verify_privilege(client.as_ref(), config::privileges().pool_category_set_default)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    db::get_connection()?.transaction(|conn| {
+    let mut conn = db::get_connection()?;
+    let new_default_category: PoolCategory = conn.transaction(|conn| {
         let mut category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
         let mut old_default_category: PoolCategory =
             pool_category::table.filter(pool_category::id.eq(0)).first(conn)?;
@@ -176,10 +178,9 @@ fn set_default_pool_category(name: String, auth: AuthResult) -> ApiResult<PoolCa
 
         // Give new default category back it's name
         new_default_category.name = temporary_category_name;
-        let new_default_category: PoolCategory = new_default_category.save_changes(conn)?;
-
-        PoolCategoryInfo::new(conn, new_default_category).map_err(api::Error::from)
-    })
+        new_default_category.save_changes(conn)
+    })?;
+    conn.transaction(|conn| PoolCategoryInfo::new(conn, new_default_category).map_err(api::Error::from))
 }
 
 fn delete_pool_category(name: String, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
