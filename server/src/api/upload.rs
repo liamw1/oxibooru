@@ -11,8 +11,8 @@ use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::post()
-        .and(warp::path!("uploads"))
         .and(api::auth())
+        .and(warp::path!("uploads"))
         .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
         .then(upload)
         .map(api::Reply::from)

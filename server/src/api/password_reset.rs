@@ -1,8 +1,9 @@
 use crate::api::ApiResult;
 use crate::auth::password;
 use crate::content::hash;
+use crate::db::ConnectionResult;
 use crate::schema::user;
-use crate::{api, config, db};
+use crate::{api, config};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use lettre::message::header::ContentType;
@@ -15,10 +16,12 @@ use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let request_reset = warp::get()
+        .and(api::connection())
         .and(warp::path!("password-reset" / String))
         .map(request_reset)
         .map(api::Reply::from);
     let reset_password = warp::post()
+        .and(api::connection())
         .and(warp::path!("password-reset" / String))
         .and(warp::body::json())
         .map(reset_password)
@@ -35,11 +38,11 @@ fn get_user_info(conn: &mut PgConnection, identifier: &str) -> ApiResult<(i32, S
         .map_err(api::Error::from)
 }
 
-fn request_reset(identifier: String) -> ApiResult<()> {
+fn request_reset(conn: ConnectionResult, identifier: String) -> ApiResult<()> {
+    let mut conn = conn?;
     let smtp_info = config::smtp().ok_or(api::Error::MissingSmtpInfo)?;
     let identifier = percent_encoding::percent_decode_str(&identifier).decode_utf8()?;
 
-    let mut conn = db::get_connection()?;
     let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;
     let user_email_address = user_email.ok_or(api::Error::NoEmail)?;
     let user_mailbox: Mailbox = format!("User <{user_email_address}>").parse()?;
@@ -84,10 +87,11 @@ struct NewPassword {
     password: String,
 }
 
-fn reset_password(identifier: String, confirmation: ResetToken) -> ApiResult<NewPassword> {
+fn reset_password(conn: ConnectionResult, identifier: String, confirmation: ResetToken) -> ApiResult<NewPassword> {
+    let mut conn = conn?;
     let identifier = percent_encoding::percent_decode_str(&identifier).decode_utf8()?;
 
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let (user_id, _name, _email, password_salt) = get_user_info(conn, &identifier)?;
         if confirmation.token != hash::compute_url_safe_hash(&password_salt) {
             return Err(api::Error::UnauthorizedPasswordReset);

@@ -2,12 +2,13 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::{self, ThumbnailType};
+use crate::db::ConnectionResult;
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::time::DateTime;
-use crate::{api, config, db, filesystem, resource, search};
+use crate::{api, config, filesystem, resource, search};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
@@ -16,34 +17,39 @@ use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_users = warp::get()
-        .and(warp::path!("users"))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("users"))
         .and(warp::query())
         .map(list_users)
         .map(api::Reply::from);
     let get_user = warp::get()
-        .and(warp::path!("user" / String))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("user" / String))
         .and(api::resource_query())
         .map(get_user)
         .map(api::Reply::from);
     let create_user = warp::post()
-        .and(warp::path!("users"))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("users"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(create_user)
         .map(api::Reply::from);
     let update_user = warp::put()
-        .and(warp::path!("user" / String))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("user" / String))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(update_user)
         .map(api::Reply::from);
     let delete_user = warp::delete()
-        .and(warp::path!("user" / String))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("user" / String))
         .and(warp::body::json())
         .map(delete_user)
         .map(api::Reply::from);
@@ -61,7 +67,8 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
+fn list_users(conn: ConnectionResult, auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
+    let mut conn = conn?;
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().user_list)?;
@@ -70,7 +77,7 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Us
     let limit = std::cmp::min(query.limit.get(), MAX_USERS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let sql_query = search::user::build_query(&search_criteria)?;
@@ -96,7 +103,8 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Us
     })
 }
 
-fn get_user(username: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<UserInfo> {
+fn get_user(conn: ConnectionResult, auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UserInfo> {
+    let mut conn = conn?;
     let client = auth?;
     query.bump_login(client.as_ref())?;
 
@@ -104,7 +112,7 @@ fn get_user(username: String, auth: AuthResult, query: ResourceQuery) -> ApiResu
     let fields = create_field_table(query.fields())?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let user = User::from_name(conn, &username)?;
 
         let viewing_self = client_id == Some(user.id);
@@ -136,7 +144,13 @@ struct NewUserInfo {
     rank: Option<UserRank>,
 }
 
-fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
+fn create_user(
+    conn: ConnectionResult,
+    auth: AuthResult,
+    query: ResourceQuery,
+    user_info: NewUserInfo,
+) -> ApiResult<UserInfo> {
+    let mut conn = conn?;
     let client = auth?;
     query.bump_login(client.as_ref())?;
 
@@ -166,7 +180,6 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
         avatar_style: AvatarStyle::Gravatar,
     };
 
-    let mut conn = db::get_connection()?;
     let user: User = diesel::insert_into(user::table)
         .values(new_user)
         .returning(User::as_returning())
@@ -187,7 +200,14 @@ struct UserUpdate {
     avatar_token: Option<String>,
 }
 
-fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
+fn update_user(
+    conn: ConnectionResult,
+    auth: AuthResult,
+    username: String,
+    query: ResourceQuery,
+    update: UserUpdate,
+) -> ApiResult<UserInfo> {
+    let mut conn = conn?;
     let client = auth?;
     query.bump_login(client.as_ref())?;
 
@@ -199,7 +219,6 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
         .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Avatar))
         .transpose()?;
 
-    let mut conn = db::get_connection()?;
     let (user_id, visibility) = conn.transaction(|conn| {
         let (user_id, user_version): (i32, DateTime) = user::table
             .select((user::id, user::last_edit_time))
@@ -294,12 +313,18 @@ fn update_user(username: String, auth: AuthResult, query: ResourceQuery, update:
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from))
 }
 
-fn delete_user(username: String, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete_user(
+    conn: ConnectionResult,
+    auth: AuthResult,
+    username: String,
+    client_version: DeleteRequest,
+) -> ApiResult<()> {
+    let mut conn = conn?;
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let (user_id, user_version): (i32, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(username))

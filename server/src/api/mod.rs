@@ -12,11 +12,12 @@ mod user_token;
 
 use crate::auth::header::{self, AuthenticationError};
 use crate::config::RegexType;
+use crate::db::ConnectionResult;
 use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
 use crate::model::user::User;
 use crate::time::DateTime;
-use crate::{config, update};
+use crate::{config, db, update};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::num::NonZero;
@@ -381,6 +382,10 @@ fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiRes
 /// Optionally extracts an authorization header from the incoming request and attempts to authenticate with it.
 fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {
     warp::header::optional("authorization").map(|auth: Option<_>| auth.map(header::authenticate_user).transpose())
+}
+
+fn connection() -> impl Filter<Extract = (ConnectionResult,), Error = Infallible> + Clone {
+    warp::any().map(|| db::get_connection())
 }
 
 async fn empty_query(_err: Rejection) -> Result<(ResourceQuery,), Infallible> {

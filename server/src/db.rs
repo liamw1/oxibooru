@@ -5,8 +5,12 @@ use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::borrow::Cow;
 use std::sync::LazyLock;
 
+pub type Connection = PooledConnection<ConnectionManager<PgConnection>>;
+pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
+pub type ConnectionResult = Result<Connection, PoolError>;
+
 /// Returns a connection to the database from a connection pool.
-pub fn get_connection() -> Result<PooledConnection<ConnectionManager<PgConnection>>, PoolError> {
+pub fn get_connection() -> ConnectionResult {
     CONNECTION_POOL.get()
 }
 
@@ -38,7 +42,7 @@ pub fn create_url(database_override: Option<&str>) -> String {
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
-static CONNECTION_POOL: LazyLock<Pool<ConnectionManager<PgConnection>>> = LazyLock::new(|| {
+static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
     let num_threads = tokio::runtime::Handle::try_current()
         .map(|handle| handle.metrics().num_workers())
         .unwrap_or(1);

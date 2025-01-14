@@ -1,10 +1,11 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, RatingRequest};
+use crate::db::ConnectionResult;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::CommentInfo;
 use crate::schema::{comment, comment_score, database_statistics};
 use crate::time::DateTime;
-use crate::{api, config, db, search};
+use crate::{api, config, search};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
@@ -12,37 +13,43 @@ use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_comments = warp::get()
-        .and(warp::path!("comments"))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("comments"))
         .and(warp::query())
         .map(list_comments)
         .map(api::Reply::from);
     let get_comment = warp::get()
-        .and(warp::path!("comment" / i32))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("comment" / i32))
         .map(get_comment)
         .map(api::Reply::from);
     let create_comment = warp::post()
-        .and(warp::path!("comments"))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("comments"))
         .and(warp::body::json())
         .map(create_comment)
         .map(api::Reply::from);
     let update_comment = warp::put()
-        .and(warp::path!("comment" / i32))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("comment" / i32))
         .and(warp::body::json())
         .map(update_comment)
         .map(api::Reply::from);
     let rate_comment = warp::put()
-        .and(warp::path!("comment" / i32 / "score"))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("comment" / i32 / "score"))
         .and(warp::body::json())
         .map(rate_comment)
         .map(api::Reply::from);
     let delete_comment = warp::delete()
-        .and(warp::path!("comment" / i32))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("comment" / i32))
         .and(warp::body::json())
         .map(delete_comment)
         .map(api::Reply::from);
@@ -57,7 +64,8 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 
 const MAX_COMMENTS_PER_PAGE: i64 = 50;
 
-fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<CommentInfo>> {
+fn list_comments(conn: ConnectionResult, auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<CommentInfo>> {
+    let mut conn = conn?;
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().comment_list)?;
 
@@ -65,7 +73,7 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_COMMENTS_PER_PAGE);
 
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let mut search_criteria = search::comment::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let sql_query = search::comment::build_query(&search_criteria)?;
@@ -91,12 +99,13 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse
     })
 }
 
-fn get_comment(comment_id: i32, auth: AuthResult) -> ApiResult<CommentInfo> {
+fn get_comment(conn: ConnectionResult, auth: AuthResult, comment_id: i32) -> ApiResult<CommentInfo> {
+    let mut conn = conn?;
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().comment_view)?;
 
     let client_id = client.map(|user| user.id);
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(conn)?;
         if !comment_exists {
             return Err(api::Error::NotFound(ResourceType::Comment));
@@ -113,7 +122,8 @@ struct NewCommentInfo {
     text: String,
 }
 
-fn create_comment(auth: AuthResult, comment_info: NewCommentInfo) -> ApiResult<CommentInfo> {
+fn create_comment(conn: ConnectionResult, auth: AuthResult, comment_info: NewCommentInfo) -> ApiResult<CommentInfo> {
+    let mut conn = conn?;
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().comment_create)?;
 
@@ -125,7 +135,6 @@ fn create_comment(auth: AuthResult, comment_info: NewCommentInfo) -> ApiResult<C
         creation_time: DateTime::now(),
     };
 
-    let mut conn = db::get_connection()?;
     let comment_id: i32 = diesel::insert_into(comment::table)
         .values(new_comment)
         .returning(comment::id)
@@ -140,11 +149,16 @@ struct CommentUpdate {
     text: String,
 }
 
-fn update_comment(comment_id: i32, auth: AuthResult, update: CommentUpdate) -> ApiResult<CommentInfo> {
+fn update_comment(
+    conn: ConnectionResult,
+    auth: AuthResult,
+    comment_id: i32,
+    update: CommentUpdate,
+) -> ApiResult<CommentInfo> {
+    let mut conn = conn?;
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
 
-    let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         let (comment_owner, comment_version): (Option<i32>, DateTime) = comment::table
             .find(comment_id)
@@ -166,13 +180,18 @@ fn update_comment(comment_id: i32, auth: AuthResult, update: CommentUpdate) -> A
     conn.transaction(|conn| CommentInfo::new_from_id(conn, client_id, comment_id).map_err(api::Error::from))
 }
 
-fn rate_comment(comment_id: i32, auth: AuthResult, rating: RatingRequest) -> ApiResult<CommentInfo> {
+fn rate_comment(
+    conn: ConnectionResult,
+    auth: AuthResult,
+    comment_id: i32,
+    rating: RatingRequest,
+) -> ApiResult<CommentInfo> {
+    let mut conn = conn?;
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().comment_score)?;
 
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
 
-    let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
 
@@ -191,11 +210,17 @@ fn rate_comment(comment_id: i32, auth: AuthResult, rating: RatingRequest) -> Api
     conn.transaction(|conn| CommentInfo::new_from_id(conn, Some(user_id), comment_id).map_err(api::Error::from))
 }
 
-fn delete_comment(comment_id: i32, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete_comment(
+    conn: ConnectionResult,
+    auth: AuthResult,
+    comment_id: i32,
+    client_version: DeleteRequest,
+) -> ApiResult<()> {
+    let mut conn = conn?;
     let client = auth?;
     let client_id = client.as_ref().map(|user| user.id);
 
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let (comment_owner, comment_version): (Option<i32>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))

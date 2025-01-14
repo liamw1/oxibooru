@@ -1,11 +1,12 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
+use crate::db::ConnectionResult;
 use crate::model::enums::ResourceType;
 use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
 use crate::resource::tag::{FieldTable, TagInfo};
 use crate::schema::{database_statistics, post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::time::DateTime;
-use crate::{api, config, db, resource, search, update};
+use crate::{api, config, resource, search, update};
 use diesel::dsl::{count, max};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -14,47 +15,54 @@ use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_tags = warp::get()
-        .and(warp::path!("tags"))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("tags"))
         .and(warp::query())
         .map(list_tags)
         .map(api::Reply::from);
     let get_tag = warp::get()
-        .and(warp::path!("tag" / String))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("tag" / String))
         .and(api::resource_query())
         .map(get_tag)
         .map(api::Reply::from);
     let get_tag_siblings = warp::get()
-        .and(warp::path!("tag-siblings" / String))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("tag-siblings" / String))
         .and(api::resource_query())
         .map(get_tag_siblings)
         .map(api::Reply::from);
     let create_tag = warp::post()
-        .and(warp::path!("tags"))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("tags"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(create_tag)
         .map(api::Reply::from);
     let merge_tags = warp::post()
-        .and(warp::path!("tag-merge"))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("tag-merge"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(merge_tags)
         .map(api::Reply::from);
     let update_tag = warp::put()
-        .and(warp::path!("tag" / String))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("tag" / String))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(update_tag)
         .map(api::Reply::from);
     let delete_tag = warp::delete()
-        .and(warp::path!("tag" / String))
+        .and(api::connection())
         .and(api::auth())
+        .and(warp::path!("tag" / String))
         .and(warp::body::json())
         .map(delete_tag)
         .map(api::Reply::from);
@@ -79,7 +87,8 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>> {
+fn list_tags(conn: ConnectionResult, auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>> {
+    let mut conn = conn?;
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_list)?;
@@ -88,7 +97,7 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Tag
     let limit = std::cmp::min(query.limit.get(), MAX_TAGS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let mut search_criteria = search::tag::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let sql_query = search::tag::build_query(&search_criteria)?;
@@ -114,14 +123,15 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Tag
     })
 }
 
-fn get_tag(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<TagInfo> {
+fn get_tag(conn: ConnectionResult, auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagInfo> {
+    let mut conn = conn?;
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_view)?;
 
     let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let tag_id = tag_name::table
             .select(tag_name::tag_id)
             .filter(tag_name::name.eq(name))
@@ -143,14 +153,20 @@ struct TagSiblings {
     results: Vec<TagSibling>,
 }
 
-fn get_tag_siblings(name: String, auth: AuthResult, query: ResourceQuery) -> ApiResult<TagSiblings> {
+fn get_tag_siblings(
+    conn: ConnectionResult,
+    auth: AuthResult,
+    name: String,
+    query: ResourceQuery,
+) -> ApiResult<TagSiblings> {
+    let mut conn = conn?;
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_view)?;
 
     let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let tag_id: i32 = tag::table
             .select(tag::id)
             .inner_join(tag_name::table)
@@ -190,7 +206,13 @@ struct NewTagInfo {
     suggestions: Option<Vec<String>>,
 }
 
-fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> ApiResult<TagInfo> {
+fn create_tag(
+    conn: ConnectionResult,
+    auth: AuthResult,
+    query: ResourceQuery,
+    tag_info: NewTagInfo,
+) -> ApiResult<TagInfo> {
+    let mut conn = conn?;
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_create)?;
@@ -200,7 +222,6 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
     }
 
     let fields = create_field_table(query.fields())?;
-    let mut conn = db::get_connection()?;
     let tag_id = conn.transaction(|conn| {
         let category_id: i32 = tag_category::table
             .select(tag_category::id)
@@ -229,7 +250,13 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
     conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
 }
 
-fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String>) -> ApiResult<TagInfo> {
+fn merge_tags(
+    conn: ConnectionResult,
+    auth: AuthResult,
+    query: ResourceQuery,
+    merge_info: MergeRequest<String>,
+) -> ApiResult<TagInfo> {
+    let mut conn = conn?;
     let client = auth?;
     query.bump_login(client.as_ref())?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_merge)?;
@@ -243,7 +270,6 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
     };
 
     let fields = create_field_table(query.fields())?;
-    let mut conn = db::get_connection()?;
     let merged_tag_id = conn.transaction(|conn| {
         let (remove_id, remove_version) = get_tag_info(conn, merge_info.remove)?;
         let (merge_to_id, merge_to_version) = get_tag_info(conn, merge_info.merge_to)?;
@@ -357,13 +383,19 @@ struct TagUpdate {
     suggestions: Option<Vec<String>>,
 }
 
-fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagUpdate) -> ApiResult<TagInfo> {
+fn update_tag(
+    conn: ConnectionResult,
+    auth: AuthResult,
+    name: String,
+    query: ResourceQuery,
+    update: TagUpdate,
+) -> ApiResult<TagInfo> {
+    let mut conn = conn?;
     let client = auth?;
     query.bump_login(client.as_ref())?;
 
     let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    let mut conn = db::get_connection()?;
     let tag_id = conn.transaction(|conn| {
         let (tag_id, tag_version) = tag::table
             .select((tag::id, tag::last_edit_time))
@@ -422,12 +454,13 @@ fn update_tag(name: String, auth: AuthResult, query: ResourceQuery, update: TagU
     conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
 }
 
-fn delete_tag(name: String, auth: AuthResult, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete_tag(conn: ConnectionResult, auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
+    let mut conn = conn?;
     let client = auth?;
     api::verify_privilege(client.as_ref(), config::privileges().tag_delete)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    db::get_connection()?.transaction(|conn| {
+    conn.transaction(|conn| {
         let (tag_id, tag_version): (i32, DateTime) = tag::table
             .select((tag::id, tag::last_edit_time))
             .inner_join(tag_name::table)
