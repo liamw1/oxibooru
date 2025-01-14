@@ -1,3 +1,4 @@
+use crate::db;
 use crate::model::enums::UserRank;
 use lettre::message::Mailbox;
 use regex::Regex;
@@ -210,10 +211,18 @@ pub fn default_rank() -> UserRank {
 }
 
 pub fn data_dir() -> &'static str {
+    static DATA_DIR: LazyLock<Cow<str>> = LazyLock::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
+        Ok(_) => Cow::Borrowed(&CONFIG.data_dir),
+        Err(_) => {
+            dotenvy::from_filename("../.env").unwrap();
+            Cow::Owned(std::env::var("MOUNT_DATA").unwrap())
+        }
+    });
     &DATA_DIR
 }
 
 pub fn database_url() -> &'static str {
+    static DATABASE_URL: LazyLock<String> = LazyLock::new(|| db::create_url(None));
     &DATABASE_URL
 }
 
@@ -229,30 +238,6 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     let mut config: Config = toml::from_str(&std::fs::read_to_string(get_config_path()).unwrap()).unwrap();
     config.public_info.can_send_mails = config.public_info.smtp.is_some();
     config
-});
-
-static DATA_DIR: LazyLock<Cow<str>> = LazyLock::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
-    Ok(_) => Cow::Borrowed(&CONFIG.data_dir),
-    Err(_) => {
-        dotenvy::from_filename("../.env").unwrap();
-        Cow::Owned(std::env::var("MOUNT_DATA").unwrap())
-    }
-});
-
-static DATABASE_URL: LazyLock<String> = LazyLock::new(|| {
-    if std::env::var("DOCKER_DEPLOYMENT").is_err() {
-        dotenvy::from_filename("../.env").unwrap();
-    }
-
-    let user = std::env::var("POSTGRES_USER").unwrap();
-    let password = std::env::var("POSTGRES_PASSWORD").unwrap();
-    let database = std::env::var("POSTGRES_DB").unwrap();
-    let hostname = match std::env::var("DOCKER_DEPLOYMENT") {
-        Ok(_) => "host.docker.internal",
-        Err(_) => "localhost",
-    };
-
-    format!("postgres://{user}:{password}@{hostname}/{database}")
 });
 
 fn get_config_path() -> PathBuf {

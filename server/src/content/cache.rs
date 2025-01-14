@@ -43,10 +43,6 @@ pub fn get_or_compute_properties(content_token: String) -> ApiResult<CachedPrope
     }
 }
 
-/// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
-const CONTENT_CACHE_SIZE: usize = 10;
-static CONTENT_CACHE: LazyLock<Mutex<RingCache>> = LazyLock::new(|| Mutex::new(RingCache::new(CONTENT_CACHE_SIZE)));
-
 /// A simple ring buffer that stores [CachedProperties].
 struct RingCache {
     data: VecDeque<(String, CachedProperties)>,
@@ -83,6 +79,10 @@ impl RingCache {
 
 /// Returns a [MutexGuard] to content properties cache.
 fn get_cache_guard() -> MutexGuard<'static, RingCache> {
+    /// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
+    const CONTENT_CACHE_SIZE: usize = 10;
+    static CONTENT_CACHE: LazyLock<Mutex<RingCache>> = LazyLock::new(|| Mutex::new(RingCache::new(CONTENT_CACHE_SIZE)));
+
     match CONTENT_CACHE.lock() {
         Ok(guard) => guard,
         Err(err) => {

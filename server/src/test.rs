@@ -6,8 +6,11 @@ use crate::model::user::{NewUser, NewUserToken, User, UserToken};
 use crate::schema::{post, user, user_token};
 use crate::time::DateTime;
 use diesel::prelude::*;
+use diesel::r2d2::{ConnectionManager, Pool, PooledConnection};
 use diesel::result::Error;
 use std::path::{Path, PathBuf};
+use std::sync::LazyLock;
+use std::time::Duration;
 use uuid::Uuid;
 
 pub const TEST_PRIVILEGE: UserRank = UserRank::Regular;
@@ -16,6 +19,10 @@ pub const TEST_PASSWORD: &str = "test_password";
 pub const TEST_SALT: &str = "test_salt";
 pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
 pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
+
+pub fn get_connection() -> PooledConnection<ConnectionManager<PgConnection>> {
+    CONNECTION_POOL.get().unwrap()
+}
 
 /// Returns path to a test asset.
 pub fn asset_path(relative_path: &Path) -> PathBuf {
@@ -31,9 +38,7 @@ pub fn test_transaction<F, R>(function: F) -> R
 where
     F: FnOnce(&mut PgConnection) -> QueryResult<R>,
 {
-    db::get_connection()
-        .unwrap()
-        .test_transaction(|conn| Ok::<_, Error>(function(conn).unwrap()))
+    get_connection().test_transaction(|conn| Ok::<_, Error>(function(conn).unwrap()))
 }
 
 /// Inserts a dummy user with username `name` into the database.
@@ -95,3 +100,27 @@ pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Pos
         .returning(Post::as_returning())
         .get_result(conn)
 }
+
+const DATABASE_NAME: &str = "__test";
+
+static CONNECTION_POOL: LazyLock<Pool<ConnectionManager<PgConnection>>> = LazyLock::new(|| {
+    let mut conn = db::get_connection().unwrap();
+    diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}"))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}"))
+        .execute(&mut conn)
+        .unwrap();
+
+    let database_url = db::create_url(Some("__test"));
+    let mut conn = PgConnection::establish(&database_url).unwrap();
+    db::run_migrations(&mut conn);
+
+    let manager = ConnectionManager::new(database_url);
+    Pool::builder()
+        .max_lifetime(Some(Duration::from_secs(60)))
+        .idle_timeout(None)
+        .test_on_check_out(true)
+        .build(manager)
+        .expect("Could not build connection pool")
+});

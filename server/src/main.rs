@@ -20,7 +20,7 @@ mod update;
 
 #[tokio::main]
 async fn main() {
-    db::run_migrations();
+    db::run_migrations(&mut db::get_connection().unwrap());
     if admin::enabled() {
         return admin::command_line_mode();
     }

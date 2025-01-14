@@ -12,7 +12,7 @@ CREATE TABLE "database_statistics" (
 
 INSERT INTO "database_statistics" ("disk_usage", "comment_count", "pool_count", "post_count", "tag_count", "user_count")
 VALUES (
-    (SELECT SUM("file_size") FROM "post"),
+    (SELECT COALESCE(SUM("file_size"), 0) FROM "post"),
     (SELECT COUNT(*) FROM "comment"),
     (SELECT COUNT(*) FROM "pool"),
     (SELECT COUNT(*) FROM "post"),
@@ -159,15 +159,12 @@ ALTER TABLE "user" ADD COLUMN "custom_avatar_size" BIGINT NOT NULL DEFAULT 0;
 CREATE FUNCTION update_comment_statistics() RETURNS TRIGGER AS $$
 DECLARE
     count_change INT;
-    last_time_update TIMESTAMP WITH TIME ZONE; 
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
-        last_time_update := NEW."creation_time";
         INSERT INTO "comment_statistics" ("comment_id") VALUES (NEW."id");
     ELSE
         count_change := -1;
-        last_time_update := (SELECT MAX("creation_time") FROM "comment" WHERE "post_id" = OLD."post_id");
     END IF;
 
     UPDATE "database_statistics"
@@ -175,7 +172,7 @@ BEGIN
 
     UPDATE "post_statistics"
     SET "comment_count" = "comment_count" + count_change,
-        "last_comment_time" = last_time_update
+        "last_comment_time" = (SELECT MAX("creation_time") FROM "comment" WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id"))
     WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id");
 
     RETURN NEW;
@@ -358,19 +355,16 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_tag_stat
 CREATE FUNCTION update_post_favorite_statistics() RETURNS TRIGGER AS $$
 DECLARE
     count_change INT;
-    last_time_update TIMESTAMP WITH TIME ZONE;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
-        last_time_update := NEW."time";
     ELSE
         count_change := -1;
-        last_time_update := (SELECT MAX("time") FROM "post_favorite" WHERE "post_id" = OLD."post_id");
     END IF;
 
     UPDATE "post_statistics"
     SET "favorite_count" = "favorite_count" + count_change,
-        "last_favorite_time" = last_time_update
+        "last_favorite_time" = (SELECT MAX("time") FROM "post_favorite" WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id"))
     WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id");
 
     RETURN COALESCE(NEW, OLD);
@@ -384,19 +378,16 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_favorite
 CREATE FUNCTION update_post_feature_statistics() RETURNS TRIGGER AS $$
 DECLARE
     count_change INT;
-    last_time_update TIMESTAMP WITH TIME ZONE;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
-        last_time_update := NEW."time";
     ELSE
         count_change := -1;
-        last_time_update := (SELECT MAX("time") FROM "post_feature" WHERE "post_id" = OLD."post_id");
     END IF;
 
     UPDATE "post_statistics"
     SET "feature_count" = "feature_count" + count_change,
-        "last_feature_time" = last_time_update
+        "last_feature_time" = (SELECT MAX("time") FROM "post_feature" WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id"))
     WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id");
 
     RETURN COALESCE(NEW, OLD);
