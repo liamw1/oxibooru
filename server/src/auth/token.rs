@@ -13,6 +13,7 @@ pub fn is_valid_token(user_token: &UserToken) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::model::enums::UserRank;
     use crate::test::*;
     use time::Duration;
 
@@ -33,7 +34,7 @@ mod test {
 
     fn create_token(enabled: bool, expiration_time: Option<DateTime>) -> UserToken {
         test_transaction(|conn| {
-            create_test_user(conn, TEST_USERNAME)
+            create_test_user(conn, TEST_USERNAME, UserRank::Regular)
                 .and_then(|user| create_test_user_token(conn, &user, enabled, expiration_time))
         })
     }

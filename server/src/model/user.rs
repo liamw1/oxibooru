@@ -84,7 +84,7 @@ mod test {
 
     #[test]
     fn save_user() {
-        let user = test_transaction(|conn: &mut PgConnection| create_test_user(conn, TEST_USERNAME));
+        let user = test_transaction(|conn: &mut PgConnection| create_test_user(conn, TEST_USERNAME, UserRank::Regular));
 
         assert_eq!(user.name, TEST_USERNAME);
         assert_eq!(user.password_hash, TEST_HASH);
@@ -95,7 +95,8 @@ mod test {
     #[test]
     fn save_user_token() {
         let user_token = test_transaction(|conn: &mut PgConnection| {
-            create_test_user(conn, "test_user").and_then(|user| create_test_user_token(conn, &user, false, None))
+            create_test_user(conn, TEST_USERNAME, UserRank::Regular)
+                .and_then(|user| create_test_user_token(conn, &user, false, None))
         });
 
         assert_eq!(user_token.token, TEST_TOKEN);

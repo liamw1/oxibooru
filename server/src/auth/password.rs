@@ -34,11 +34,12 @@ static ARGON_CONTEXT: LazyLock<Argon2> = LazyLock::new(|| {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::model::enums::UserRank;
     use crate::test::*;
 
     #[test]
     fn hash_password() {
-        let user = test_transaction(|conn| create_test_user(conn, TEST_USERNAME));
+        let user = test_transaction(|conn| create_test_user(conn, TEST_USERNAME, UserRank::Regular));
         assert!(is_valid_password(&user, TEST_PASSWORD));
         assert!(!is_valid_password(&user, "wrong_password"));
     }

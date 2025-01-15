@@ -5,17 +5,12 @@ use diesel::prelude::*;
 
 /// Creates relations for the post with id `post_id`, symmetrically.
 pub fn create_relations(conn: &mut PgConnection, post_id: i32, relations: Vec<i32>) -> QueryResult<()> {
-    let post_as_parent = relations.iter().map(|&child_id| PostRelation {
-        parent_id: post_id,
-        child_id,
-    });
-    let post_as_child = relations.iter().map(|&parent_id| PostRelation {
-        parent_id,
-        child_id: post_id,
-    });
-    let updated_relations: Vec<_> = post_as_parent.chain(post_as_child).collect();
+    let new_relations: Vec<_> = relations
+        .iter()
+        .flat_map(|&other_id| PostRelation::new_pair(post_id, other_id))
+        .collect();
     diesel::insert_into(post_relation::table)
-        .values(updated_relations)
+        .values(new_relations)
         .execute(conn)?;
     Ok(())
 }

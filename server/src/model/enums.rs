@@ -272,11 +272,11 @@ pub struct PostFlags {
 }
 
 impl PostFlags {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { flags: 0 }
     }
 
-    pub fn new_with(flag: PostFlag) -> Self {
+    pub const fn new_with(flag: PostFlag) -> Self {
         Self {
             flags: 1 << flag as u16,
         }
@@ -511,7 +511,7 @@ mod test {
     #[test]
     fn permission() {
         test_transaction(|conn| {
-            let user = create_test_user(conn, TEST_USERNAME)?;
+            let user = create_test_user(conn, TEST_USERNAME, UserRank::Regular)?;
             assert!(user.rank >= config::privileges().user_create_self);
             assert!(user.rank >= config::privileges().post_list);
             assert!(user.rank < config::privileges().user_edit_self_rank);

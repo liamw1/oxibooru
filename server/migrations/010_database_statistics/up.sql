@@ -199,20 +199,26 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_comment_score
 -- Add pool_category triggers
 CREATE FUNCTION update_pool_category_statistics() RETURNS TRIGGER AS $$
 BEGIN
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO "pool_category_statistics" ("category_id") VALUES (NEW."id");
-    ELSE
-        UPDATE "pool_category_statistics"
-        SET "usage_count" = "usage_count" + (SELECT "usage_count" FROM "pool_category_statistics" WHERE "category_id" = OLD."id")
-        WHERE "category_id" = 0;
-    END IF;
-
-    RETURN COALESCE(NEW, OLD);
+    INSERT INTO "pool_category_statistics" ("category_id") VALUES (NEW."id");
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER pool_category_update_trigger BEFORE INSERT OR DELETE ON "pool_category"
-FOR EACH ROW EXECUTE FUNCTION update_pool_category_statistics();
+CREATE FUNCTION update_default_pool_category_statistics() RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE "pool_category_statistics"
+    SET "usage_count" = "usage_count" + (SELECT "usage_count" FROM "pool_category_statistics" WHERE "category_id" = OLD."id")
+    WHERE "category_id" = 0;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER pool_category_update_trigger AFTER INSERT ON "pool_category"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_pool_category_statistics();
+
+CREATE TRIGGER default_pool_category_update_trigger BEFORE DELETE ON "pool_category"
+FOR EACH ROW EXECUTE FUNCTION update_default_pool_category_statistics();
 
 -- Add pool triggers
 CREATE FUNCTION update_pool_statistics() RETURNS TRIGGER AS $$
@@ -242,7 +248,7 @@ BEGIN
 
     UPDATE "pool_category_statistics"
     SET "usage_count" = "usage_count" + count_change
-    WHERE "category_id" = COALESCE(NEW."id", OLD."id");
+    WHERE "category_id" = COALESCE(NEW."category_id", OLD."category_id");
 
     RETURN COALESCE(NEW, OLD);
 END;
@@ -267,7 +273,7 @@ BEGIN
     WHERE "pool_id" = COALESCE(NEW."pool_id", OLD."pool_id");
 
     UPDATE "post_statistics"
-    SET "pools_in" = "pools_in" + count_change
+    SET "pool_count" = "pool_count" + count_change
     WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id");
 
     RETURN COALESCE(NEW, OLD);
@@ -436,20 +442,26 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_score_st
 -- Add tag_category triggers
 CREATE FUNCTION update_tag_category_statistics() RETURNS TRIGGER AS $$
 BEGIN
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO "tag_category_statistics" ("category_id") VALUES (NEW."id");
-    ELSE
-        UPDATE "tag_category_statistics"
-        SET "usage_count" = "usage_count" + (SELECT "usage_count" FROM "tag_category_statistics" WHERE "category_id" = OLD."id")
-        WHERE "category_id" = 0;
-    END IF;
-
-    RETURN COALESCE(NEW, OLD);
+    INSERT INTO "tag_category_statistics" ("category_id") VALUES (NEW."id");
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER tag_category_update_trigger BEFORE INSERT OR DELETE ON "tag_category"
-FOR EACH ROW EXECUTE FUNCTION update_tag_category_statistics();
+CREATE FUNCTION update_default_tag_category_statistics() RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE "tag_category_statistics"
+    SET "usage_count" = "usage_count" + (SELECT "usage_count" FROM "tag_category_statistics" WHERE "category_id" = OLD."id")
+    WHERE "category_id" = 0;
+
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE CONSTRAINT TRIGGER tag_category_update_trigger AFTER INSERT ON "tag_category"
+DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_tag_category_statistics();
+
+CREATE TRIGGER default_category_update_trigger BEFORE DELETE ON "tag_category"
+FOR EACH ROW EXECUTE FUNCTION update_default_tag_category_statistics();
 
 -- Add tag triggers
 CREATE FUNCTION update_tag_statistics() RETURNS TRIGGER AS $$
@@ -479,7 +491,7 @@ BEGIN
 
     UPDATE "tag_category_statistics"
     SET "usage_count" = "usage_count" + count_change
-    WHERE "category_id" = COALESCE(NEW."id", OLD."id");
+    WHERE "category_id" = COALESCE(NEW."category_id", OLD."category_id");
 
     RETURN COALESCE(NEW, OLD);
 END;

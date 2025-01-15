@@ -62,6 +62,16 @@ pub struct PostRelation {
 
 diesel::joinable!(post_relation -> post (parent_id));
 
+impl PostRelation {
+    pub fn new_pair(id_1: i32, id_2: i32) -> [Self; 2] {
+        [PostRelation::new(id_1, id_2), PostRelation::new(id_2, id_1)]
+    }
+
+    fn new(parent_id: i32, child_id: i32) -> Self {
+        Self { parent_id, child_id }
+    }
+}
+
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(Tag))]
 #[diesel(table_name = post_tag)]
@@ -166,12 +176,13 @@ impl PostSignature {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::model::enums::UserRank;
     use crate::test::*;
 
     #[test]
     fn save_post() {
         let post = test_transaction(|conn: &mut PgConnection| {
-            create_test_user(conn, TEST_USERNAME).and_then(|user| create_test_post(conn, &user))
+            create_test_user(conn, TEST_USERNAME, UserRank::Regular).and_then(|user| create_test_post(conn, &user))
         });
 
         assert_eq!(post.safety, PostSafety::Safe);
