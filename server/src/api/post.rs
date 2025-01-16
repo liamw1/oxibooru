@@ -4,7 +4,6 @@ use crate::api::{
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{cache, signature, thumbnail};
-use crate::db::ConnectionResult;
 use crate::filesystem::Directory;
 use crate::model::comment::NewComment;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
@@ -17,7 +16,7 @@ use crate::schema::{
     post_statistics, post_tag,
 };
 use crate::time::DateTime;
-use crate::{api, config, filesystem, resource, search, update};
+use crate::{api, config, db, filesystem, resource, search, update};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -28,85 +27,85 @@ use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_posts = warp::get()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("posts"))
         .and(warp::query())
         .map(list_posts)
         .map(api::Reply::from);
     let get_post = warp::get()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("post" / i32))
         .and(api::resource_query())
         .map(get_post)
         .map(api::Reply::from);
     let get_post_neighbors = warp::get()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("post" / i32 / "around"))
         .and(api::resource_query())
         .map(get_post_neighbors)
         .map(api::Reply::from);
     let get_featured_post = warp::get()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("featured-post"))
         .and(api::resource_query())
         .map(get_featured_post)
         .map(api::Reply::from);
     let feature_post = warp::post()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("featured-post"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(feature_post)
         .map(api::Reply::from);
     let reverse_search = warp::post()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("posts" / "reverse-search"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(reverse_search)
         .map(api::Reply::from);
     let create_post = warp::post()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("posts"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(create_post)
         .map(api::Reply::from);
     let merge_posts = warp::post()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("post-merge"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(merge_posts)
         .map(api::Reply::from);
     let favorite_post = warp::post()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("post" / i32 / "favorite"))
         .and(api::resource_query())
         .map(favorite_post)
         .map(api::Reply::from);
     let rate_post = warp::put()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("post" / i32 / "score"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(rate_post)
         .map(api::Reply::from);
     let update_post = warp::put()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("post" / i32))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(update_post)
         .map(api::Reply::from);
     let delete_post = warp::delete()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("post" / i32))
         .and(warp::body::json())
         .then(delete_post)
         .map(api::Reply::from);
     let unfavorite_post = warp::delete()
-        .and(api::connection()).and(api::auth())
+        .and(api::auth())
         .and(warp::path!("post" / i32 / "favorite"))
         .and(api::resource_query())
         .map(unfavorite_post)
@@ -137,18 +136,17 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_posts(conn: ConnectionResult, auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PostInfo>> {
-    let mut conn = conn?;
+fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PostInfo>> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_POSTS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::post::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let sql_query = search::post::build_query(client_id, &search_criteria)?;
@@ -174,16 +172,15 @@ fn list_posts(conn: ConnectionResult, auth: AuthResult, query: PagedQuery) -> Ap
     })
 }
 
-fn get_post(conn: ConnectionResult, auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiResult<PostInfo> {
-    let mut conn = conn?;
+fn get_post(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_view)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, config::privileges().post_view)?;
 
     let fields = create_field_table(query.fields())?;
     let client_id = client.map(|user| user.id);
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;
         if !post_exists {
             return Err(api::Error::NotFound(ResourceType::Post));
@@ -198,16 +195,10 @@ struct PostNeighbors {
     next: Option<PostInfo>,
 }
 
-fn get_post_neighbors(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    post_id: i32,
-    query: ResourceQuery,
-) -> ApiResult<PostNeighbors> {
-    let mut conn = conn?;
+fn get_post_neighbors(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiResult<PostNeighbors> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_list)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, config::privileges().post_list)?;
 
     let client_id = client.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
@@ -224,7 +215,7 @@ fn get_post_neighbors(
         PostNeighbors { prev, next }
     };
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         if search_criteria.has_sort() {
             // Most general method of retrieving neighbors
             let sql_query = search::post::build_query(client_id, &search_criteria)?;
@@ -259,16 +250,15 @@ fn get_post_neighbors(
     })
 }
 
-fn get_featured_post(conn: ConnectionResult, auth: AuthResult, query: ResourceQuery) -> ApiResult<Option<PostInfo>> {
-    let mut conn = conn?;
+fn get_featured_post(auth: AuthResult, query: ResourceQuery) -> ApiResult<Option<PostInfo>> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_view_featured)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, config::privileges().post_view_featured)?;
 
     let client_id = client.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let featured_post_id: Option<i32> = post_feature::table
             .select(post_feature::post_id)
             .order_by(post_feature::time.desc())
@@ -288,16 +278,10 @@ struct PostFeature {
     id: i32,
 }
 
-fn feature_post(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    query: ResourceQuery,
-    post_feature: PostFeature,
-) -> ApiResult<PostInfo> {
-    let mut conn = conn?;
+fn feature_post(auth: AuthResult, query: ResourceQuery, post_feature: PostFeature) -> ApiResult<PostInfo> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_feature)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, config::privileges().post_feature)?;
 
     let fields = create_field_table(query.fields())?;
     let post_id = post_feature.id;
@@ -308,6 +292,7 @@ fn feature_post(
         time: DateTime::now(),
     };
 
+    let mut conn = db::get_connection()?;
     diesel::insert_into(post_feature::table)
         .values(new_post_feature)
         .execute(&mut conn)?;
@@ -334,23 +319,17 @@ struct ReverseSearchInfo {
     similar_posts: Vec<SimilarPostInfo>,
 }
 
-fn reverse_search(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    query: ResourceQuery,
-    token: ContentToken,
-) -> ApiResult<ReverseSearchInfo> {
+fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -> ApiResult<ReverseSearchInfo> {
     let _timer = crate::time::Timer::new("reverse search");
-    let mut conn = conn?;
     let client = auth?;
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_reverse_search)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, config::privileges().post_reverse_search)?;
 
     let fields = create_field_table(query.fields())?;
     let content_properties = cache::compute_properties(token.content_token)?;
 
     let client_id = client.map(|user| user.id);
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         // Check for exact match
         let exact_post = post::table
             .filter(post::checksum.eq(content_properties.checksum))
@@ -408,20 +387,14 @@ struct NewPostInfo {
     flags: Option<Vec<PostFlag>>,
 }
 
-fn create_post(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    query: ResourceQuery,
-    post_info: NewPostInfo,
-) -> ApiResult<PostInfo> {
-    let mut conn = conn?;
+fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {
     let client = auth?;
     let required_rank = match post_info.anonymous.unwrap_or(false) {
         true => config::privileges().post_create_anonymous,
         false => config::privileges().post_create_identified,
     };
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), required_rank)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, required_rank)?;
 
     let fields = create_field_table(query.fields())?;
     let content_properties = cache::get_or_compute_properties(post_info.content_token)?;
@@ -435,7 +408,7 @@ fn create_post(
         flags.add(flag);
     }
 
-    let client_id = client.as_ref().map(|user| user.id);
+    let client_id = client.map(|user| user.id);
     let new_post = NewPost {
         user_id: client_id,
         file_size: content_properties.file_size as i64,
@@ -450,6 +423,7 @@ fn create_post(
         source: post_info.source.as_deref(),
     };
 
+    let mut conn = db::get_connection()?;
     let post_id = conn.transaction(|conn| {
         let post_id = diesel::insert_into(post::table)
             .values(new_post)
@@ -458,8 +432,7 @@ fn create_post(
         let post_hash = PostHash::new(post_id);
 
         // Add tags
-        let tags =
-            update::tag::get_or_create_tag_ids(conn, client.as_ref(), post_info.tags.unwrap_or_default(), false)?;
+        let tags = update::tag::get_or_create_tag_ids(conn, client, post_info.tags.unwrap_or_default(), false)?;
         update::post::add_tags(conn, post_id, tags)?;
 
         // Add relations
@@ -483,7 +456,7 @@ fn create_post(
 
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
-            api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
+            api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
 
             let custom_thumbnail_size =
                 filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
@@ -510,18 +483,12 @@ struct PostMergeRequest {
     replace_content: bool,
 }
 
-fn merge_posts(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    query: ResourceQuery,
-    merge_info: PostMergeRequest,
-) -> ApiResult<PostInfo> {
-    let mut conn = conn?;
+fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequest) -> ApiResult<PostInfo> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_merge)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, config::privileges().post_merge)?;
 
-    let client_id = client.as_ref().map(|user| user.id);
+    let client_id = client.map(|user| user.id);
     let remove_id = merge_info.post_info.remove;
     let merge_to_id = merge_info.post_info.merge_to;
     if remove_id == merge_to_id {
@@ -531,6 +498,7 @@ fn merge_posts(
     let merge_to_hash = PostHash::new(merge_to_id);
 
     let fields = create_field_table(query.fields())?;
+    let mut conn = db::get_connection()?;
     let merged_post = conn.transaction(|conn| {
         let mut remove_post: Post = post::table.find(remove_id).first(conn)?;
         let mut merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
@@ -697,11 +665,10 @@ fn merge_posts(
     conn.transaction(|conn| PostInfo::new(conn, client_id, merged_post, &fields).map_err(api::Error::from))
 }
 
-fn favorite_post(conn: ConnectionResult, auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiResult<PostInfo> {
-    let mut conn = conn?;
+fn favorite_post(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_favorite)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, config::privileges().post_favorite)?;
 
     let fields = create_field_table(query.fields())?;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
@@ -711,6 +678,7 @@ fn favorite_post(conn: ConnectionResult, auth: AuthResult, post_id: i32, query: 
         time: DateTime::now(),
     };
 
+    let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
         diesel::insert_into(post_favorite::table)
@@ -721,21 +689,15 @@ fn favorite_post(conn: ConnectionResult, auth: AuthResult, post_id: i32, query: 
     conn.transaction(|conn| PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from))
 }
 
-fn rate_post(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    post_id: i32,
-    query: ResourceQuery,
-    rating: RatingRequest,
-) -> ApiResult<PostInfo> {
-    let mut conn = conn?;
+fn rate_post(auth: AuthResult, post_id: i32, query: ResourceQuery, rating: RatingRequest) -> ApiResult<PostInfo> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_score)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, config::privileges().post_score)?;
 
     let fields = create_field_table(query.fields())?;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
 
+    let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
@@ -770,16 +732,9 @@ struct PostUpdate {
     thumbnail_token: Option<String>,
 }
 
-fn update_post(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    post_id: i32,
-    query: ResourceQuery,
-    update: PostUpdate,
-) -> ApiResult<PostInfo> {
-    let mut conn = conn?;
+fn update_post(auth: AuthResult, post_id: i32, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
+    query.bump_login(client)?;
     let fields = create_field_table(query.fields())?;
     let new_content = update.content_token.map(cache::get_or_compute_properties).transpose()?;
     let custom_thumbnail = update
@@ -788,45 +743,46 @@ fn update_post(
         .transpose()?;
 
     let post_hash = PostHash::new(post_id);
+    let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
         api::verify_version(post_version, update.version)?;
 
         if let Some(safety) = update.safety {
-            api::verify_privilege(client.as_ref(), config::privileges().post_edit_safety)?;
+            api::verify_privilege(client, config::privileges().post_edit_safety)?;
 
             diesel::update(post::table.find(post_id))
                 .set(post::safety.eq(safety))
                 .execute(conn)?;
         }
         if let Some(source) = update.source {
-            api::verify_privilege(client.as_ref(), config::privileges().post_edit_source)?;
+            api::verify_privilege(client, config::privileges().post_edit_source)?;
 
             diesel::update(post::table.find(post_id))
                 .set(post::source.eq(source))
                 .execute(conn)?;
         }
         if let Some(relations) = update.relations {
-            api::verify_privilege(client.as_ref(), config::privileges().post_edit_relation)?;
+            api::verify_privilege(client, config::privileges().post_edit_relation)?;
 
             update::post::delete_relations(conn, post_id)?;
             update::post::create_relations(conn, post_id, relations)?;
         }
         if let Some(tags) = update.tags {
-            api::verify_privilege(client.as_ref(), config::privileges().post_edit_tag)?;
+            api::verify_privilege(client, config::privileges().post_edit_tag)?;
 
-            let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client.as_ref(), tags, false)?;
+            let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client, tags, false)?;
             update::post::delete_tags(conn, post_id)?;
             update::post::add_tags(conn, post_id, updated_tag_ids)?;
         }
         if let Some(notes) = update.notes {
-            api::verify_privilege(client.as_ref(), config::privileges().post_edit_note)?;
+            api::verify_privilege(client, config::privileges().post_edit_note)?;
 
             update::post::delete_notes(conn, post_id)?;
             update::post::add_notes(conn, post_id, notes)?;
         }
         if let Some(flags) = update.flags {
-            api::verify_privilege(client.as_ref(), config::privileges().post_edit_flag)?;
+            api::verify_privilege(client, config::privileges().post_edit_flag)?;
 
             let updated_flags = PostFlags::from_slice(&flags);
             diesel::update(post::table.find(post_id))
@@ -834,7 +790,7 @@ fn update_post(
                 .execute(conn)?;
         }
         if let Some(content_properties) = new_content {
-            api::verify_privilege(client.as_ref(), config::privileges().post_edit_content)?;
+            api::verify_privilege(client, config::privileges().post_edit_content)?;
 
             let mut post: Post = post::table.find(post_id).first(conn)?;
             let old_mime_type = post.mime_type;
@@ -877,7 +833,7 @@ fn update_post(
                 .execute(conn)?;
         }
         if let Some(thumbnail) = custom_thumbnail {
-            api::verify_privilege(client.as_ref(), config::privileges().post_edit_thumbnail)?;
+            api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
 
             filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Custom)?;
             let custom_thumbnail_size =
@@ -893,16 +849,11 @@ fn update_post(
     conn.transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
 }
 
-async fn delete_post(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    post_id: i32,
-    client_version: DeleteRequest,
-) -> ApiResult<()> {
-    let mut conn = conn?;
+async fn delete_post(auth: AuthResult, post_id: i32, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_delete)?;
+    api::verify_privilege(client, config::privileges().post_delete)?;
 
+    let mut conn = db::get_connection()?;
     let relation_count: i32 = post_statistics::table
         .find(post_id)
         .select(post_statistics::relation_count)
@@ -937,19 +888,14 @@ async fn delete_post(
     Ok(())
 }
 
-fn unfavorite_post(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    post_id: i32,
-    query: ResourceQuery,
-) -> ApiResult<PostInfo> {
-    let mut conn = conn?;
+fn unfavorite_post(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().post_favorite)?;
+    api::verify_privilege(client, config::privileges().post_favorite)?;
 
     let fields = create_field_table(query.fields())?;
     let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
 
+    let mut conn = db::get_connection()?;
     diesel::delete(post_favorite::table.find((post_id, user_id))).execute(&mut conn)?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from))
 }

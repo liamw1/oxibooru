@@ -1,17 +1,15 @@
 use crate::api::{ApiResult, AuthResult, ResourceQuery};
-use crate::db::ConnectionResult;
 use crate::model::post::PostFeature;
 use crate::resource::post::{FieldTable, PostInfo};
 use crate::schema::{database_statistics, post_feature, user};
 use crate::time::DateTime;
-use crate::{api, config, resource};
+use crate::{api, config, db, resource};
 use diesel::prelude::*;
 use serde::Serialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     warp::get()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("info"))
         .and(api::resource_query())
@@ -40,15 +38,14 @@ struct Info {
     config: &'static config::PublicInfo,
 }
 
-fn get_info(conn: ConnectionResult, auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
-    let mut conn = conn?;
+fn get_info(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
+    query.bump_login(client)?;
 
-    let client_id = client.as_ref().map(|user| user.id);
+    let client_id = client.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (post_count, disk_usage) = database_statistics::table
             .select((database_statistics::post_count, database_statistics::disk_usage))
             .first(conn)?;

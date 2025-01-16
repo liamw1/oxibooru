@@ -1,37 +1,66 @@
-use crate::db::{self, ConnectionPool};
+use crate::db::ConnectionPool;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{AvatarStyle, MimeType, PostFlag, PostFlags, Score, UserRank};
 use crate::model::enums::{PostSafety, PostType};
 use crate::model::pool::{NewPool, NewPoolCategory, NewPoolName, PoolPost};
-use crate::model::post::{NewPost, NewPostFeature, NewPostNote, Post, PostFavorite, PostRelation, PostScore, PostTag};
+use crate::model::post::{NewPost, NewPostFeature, NewPostNote, PostFavorite, PostRelation, PostScore, PostTag};
 use crate::model::tag::{NewTag, NewTagCategory, NewTagName, TagImplication, TagSuggestion};
-use crate::model::user::{NewUser, NewUserToken, User, UserToken};
+use crate::model::user::NewUser;
 use crate::schema::{
     comment, comment_score, pool, pool_category, pool_category_statistics, pool_name, pool_post, pool_statistics, post,
     post_favorite, post_feature, post_note, post_relation, post_score, post_statistics, post_tag, tag, tag_category,
-    tag_category_statistics, tag_implication, tag_name, tag_statistics, tag_suggestion, user, user_token,
+    tag_category_statistics, tag_implication, tag_name, tag_statistics, tag_suggestion, user,
 };
 use crate::time::DateTime;
+use crate::{api, db};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::time::Duration;
-use uuid::Uuid;
 
-pub const TEST_PRIVILEGE: UserRank = UserRank::Regular;
-pub const TEST_USERNAME: &str = "test_user";
 pub const TEST_PASSWORD: &str = "test_password";
 pub const TEST_SALT: &str = "test_salt";
 pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
-pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
 
-/// Returns path to a test asset.
-pub fn asset_path(relative_path: &Path) -> PathBuf {
+pub static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
+    let mut conn = db::get_prod_connection().unwrap();
+    diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}"))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}"))
+        .execute(&mut conn)
+        .unwrap();
+
+    let database_url = db::create_url(Some("__test"));
+    let mut conn = PgConnection::establish(&database_url).unwrap();
+    db::run_migrations(&mut conn);
+    populate_database(&mut conn).unwrap();
+
+    let manager = ConnectionManager::new(database_url);
+    Pool::builder()
+        .max_lifetime(Some(Duration::from_secs(60)))
+        .idle_timeout(None)
+        .test_on_check_out(true)
+        .build(manager)
+        .expect("Could not build connection pool")
+});
+
+/// Returns path to a test image.
+pub fn image_path(relative_path: &Path) -> PathBuf {
     let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    path.push("assets");
     path.push("test");
+    path.push("images");
+    path.push(relative_path);
+    path
+}
+
+/// Returns path to an expected reply.
+pub fn reply_path(relative_path: &Path) -> PathBuf {
+    let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    path.push("test");
+    path.push("reply");
     path.push(relative_path);
     path
 }
@@ -47,64 +76,18 @@ where
         .test_transaction(|conn| Ok::<_, Error>(function(conn).unwrap()))
 }
 
-/// Inserts a dummy user with username `name` into the database.
-/// Returns database [User].
-pub fn create_test_user(conn: &mut PgConnection, name: &str, rank: UserRank) -> QueryResult<User> {
-    let new_user = NewUser {
-        name,
-        password_hash: TEST_HASH,
-        password_salt: TEST_SALT,
-        email: None,
-        rank,
-        avatar_style: AvatarStyle::Manual,
-    };
-    diesel::insert_into(user::table)
-        .values(new_user)
-        .returning(User::as_returning())
-        .get_result(conn)
-}
+pub async fn verify_query(query: &str, reply_filepath: &str) {
+    let filter = api::routes();
+    let (method, path) = query.split_once(' ').unwrap();
+    let reply = warp::test::request().method(method).path(path).reply(&filter).await;
+    let body = std::str::from_utf8(reply.body()).unwrap();
 
-/// Inserts a dummy user token of user with username `name` into the database.
-/// Returns database [UserToken].
-pub fn create_test_user_token(
-    conn: &mut PgConnection,
-    user: &User,
-    enabled: bool,
-    expiration_time: Option<DateTime>,
-) -> QueryResult<UserToken> {
-    let new_user_token = NewUserToken {
-        user_id: user.id,
-        token: TEST_TOKEN,
-        note: None,
-        enabled,
-        expiration_time,
-    };
-    diesel::insert_into(user_token::table)
-        .values(new_user_token)
-        .returning(UserToken::as_returning())
-        .get_result(conn)
-}
+    let file_contents = std::fs::read_to_string(reply_path(Path::new(reply_filepath))).unwrap();
+    let expected_body: String = file_contents.split_whitespace().collect();
+    let body: String = body.split_whitespace().collect();
 
-/// Inserts a dummy post uploaded by user with username `name` into the database.
-/// Returns database [Post].
-pub fn create_test_post(conn: &mut PgConnection, user: &User) -> QueryResult<Post> {
-    let new_post = NewPost {
-        user_id: Some(user.id),
-        file_size: 64,
-        width: 64,
-        height: 64,
-        safety: PostSafety::Safe,
-        type_: PostType::Image,
-        mime_type: MimeType::Png,
-        checksum: "",
-        checksum_md5: "",
-        flags: PostFlags::default(),
-        source: None,
-    };
-    diesel::insert_into(post::table)
-        .values(new_post)
-        .returning(Post::as_returning())
-        .get_result(conn)
+    assert_eq!(reply.status(), 200);
+    assert_eq!(body, expected_body);
 }
 
 const DATABASE_NAME: &str = "__test";
@@ -312,7 +295,7 @@ const COMMENTS: &[(Option<i32>, i32, &str)] = &[
     (Some(2), 1, "Cool post!"),
     (Some(5), 1, "how did you post this"),
     (Some(2), 4, "I don't think this uploaded correctly"),
-    (None, 5, "Ĺ̶͉̳̭̲̑̆̎̌̿͂͆́̃̈͊̏͐̂́̎̊͑̌͑̓͛̽̑̃̒͂͒̀͂̄̉̄͛̋̊̓̆̂̚͘͘͝͝͠͠ǫ̷̨̢̡̧̨̢̧̛̛̛̱̜͚̘̬̩̜͖̭͖̻̣̠̗͈̦͓̥̬̠̳̭͈̫͉͙͔͖͍͙̬̺̗͐͛͑̓̀̄̿̽̐̅̊͆̌́̐͌́̈͂̈́͆̓͗̆́̽͒͌̿͛͗͊̌̇̚͘͜͜͠͠͝ͅͅr̵̪̻͍̥̫̬̲̰͓͚̬̩̬͚̋̎͗̌͊̑̓͝ë̷̠̞̝̪̲͉̙̼͚͎̺̜́́͋̑͐̔̄̆̉̎̀̓̈́̈́̔̀̓̕̕̕͜͠ͅm̷̢̛͍̤͙̊́̐̽͐̌̃͂̀̃̅̓̀̂̍̀̅̃̑͋͂̂̐̃̄͊̏̂̈́̃̋͘̕͠͝ ̷̢̨̨̧̛̜̗͙̞͔̗̜̭̦̼͙̞͕̪̖͇͈̰̜͕͕̗̙̦̬͍̫̭̯̭̲̳͓̖̩͍̳͈̌̃͋̾̓̂̎̂̎̌̋̑̆͆̏̃̓̆̉͊̚̚͘͝͠ͅͅì̷̢̡̨̛̖͇̬͖̘̯̹̙̣̰̗̥͉̤̹͇̤̦̰̝͕̲̼̤̣̥͓̜̙̳̼̮͕̖̰̹̭͎̲͎̻̬̗̔̇̃̑̈́̈͌̐̐̽̌͛̅̒͑̃̌͗̐̽͋̋̉͌̀͂̎̕͠͝p̷̛̛͈͉͓͂́̋͋́͆̈́̅̎̅́̓́́͋̃̄̊̇̆̇̃̀̐͌̅̊̔͂̅̔̀̄͘̚͘̚͝͝͝s̶̨̨̧̨̧͎̙̝̪̣̹̝̫̭̗̖̼̭̫̙̗̗͉̮̺̲̦̑́̅̌̄̎̈̂͜u̵̱̗̗̞̱̇́̂̆̏̈́͝m̵̟̪͎̞̜̱̪̖̰̣͉̔̔̃̿̓̍͂̊̌̅͆͛̾͊̋̾̈́̂̈́̃͑̊̊̾̇͛̃̅̈́̍̆̌̀͌̀͗͂́̚̕͠͝͝ ̸͚̞̹̜͕̥͈̤̖͉͇̞͚̻̽̓͛̅͘d̵̢̡̢̛͕͔͙̟͈̱̗̄̇͛̑̋̊̒͌͘̚ǭ̵̡͖̫̻̗̹̞͍̱̩̻̮͇̝͔̯̙̺̳̾́͊͗͒̍̌̑́̏́̈́̓̐̒̀̾̇͆̃̑̉̇͐̽̈́̊͒̕ͅl̷̨̨̧̦̝̖̜̥͚̝̟͈̤̦̹͍̹̥̜͍̊͊͊̽̿͗̓̂̅̓͜ͅo̵̧̢̢̺̤̼͉͙̬̪͎͇͍̘̙̯̟̗̯̣͈̩̻͕͍̖̳͔͔̮̯̥͍̰̭̤̦̗̮̹̓͑̊͛͆̋͊͌̉͜͜͜͝͝͝͝r̶̨̡̛̺̳̯̟̭̅̈́̑̓̆̂̆̾̍͒̇̆̀̆̅̾̕͘͝ ̷̧͕̼̙͔̺͕̬͔̫͙̤̰̖̺̜͓̖̘͇̠͇͓̘͓̖͚̝̲̫̪̳͖̜͔̱̤̹͕̜͊̃̆͌̍͜͜͜͝ͅͅͅs̵̨̨̹͚͓͚̼̯̥̦͚͖̖͉̼͇͙̣̼͈͎̺͈͇̲̟̙̟̦̭̝̬̳̳̜̞͍̥̘̗͔̯̻̻̘̺̔̈̍̌̆͑͂̿̂̓̈̈̈̈́̉̕͜͝͝͝ͅͅi̴̧̡̧̛̠͓͇͖̖̥̮̯̼͈̬̫̳̋̇̓̇̔͊̆̓̀̾͂̈́̾͗̿̂̎̅̊̈́̆̔͐̕̕͘̕͜͝͠ͅţ̶̧̡̧̛̦̗̫͓̩͍͔̠̻͔͎͔͈̮̗̝̩̜̱̬̲̟͓͖̫͕͓̥̹̬̦̞͔̏̃͆̓̂̾̉̓͗̃̓̉͗͆̀̾̿̑̈́̄̍́͆͂̔̌̂͂̓̅̚͘̕͠͝͝ ̸̢̢̧̧̧̤͙̠̖͙͇͍̰̣̯̰̝͙̺̺̝͙̝̺͉͙̪͔̗̱͚̜̝͍̮͉̬̫̳̳͓̟͒͜͜͜ͅa̶̢̛̛̛͈̳̼͓̩̖͕̥͙̥̻̟̠̱͍͖̖̟̭̦͇͛̒́̃̉̐͆́̇̃͌̾́͗̀͒͗̊̋̀̿̇͒̋͋̈̿̀̈͗̽̀́̐̚̚͜m̶̧̡̜̠͚̻͖̜̹̼͖̖̝̪͇͆̆͊̉͑͒̒́̕ȩ̸̡̛̟͕͚̗̩̹͓̬̦̟͇̟̝̦͇̺͚̤̖̞̠̹͙͈͈̹̩̔̌́̀̀́̽͗̓̅̇̓͒͗͆̓̉̄̀̽̃̈̔͒̂̅̂̆̚͘͜͝͝ṯ̶̨̧̨̛̪̜̟̫͚͙̣̝͔̹̪͉̹̲͉͉̝́͆͆̃͊̂̊͂̒̄̏̽̅͆͌̌̄̑̃̍͗̔̋̓̔̀̔̾́͛̐͘͘͘̚̚͜͝͝͝͝,̷̢̡̛̛̮͓͓̹̳͇͈̞̪͓͔͚̭̙͕̤̜̘̜̦͇̥͖̤̖̤̙̩͎̰̬͎̹̤͛̅̿̋̓̏̽̈́̔͛́́̆̀̃̽͊́̅̄̐͌̇̈́̈́̈͌̿̀̈̀̋̿́̚͘͝͠͝͠͠ ̷̧͉̼̟̪͓͖͉̤͕̭͈̱̳̹̤̤͔̞̖͚͔͔̈͒́̄̆̕ͅc̴̡̛͉̹͙̯̣̺̳̗̪̠͖͔̤̙͕̻̲͚̳̪̼̠̖̞̖̟͓͙̺͇̼͖̜̭̖̻̅̓̅́̑̑̅͋̆͑́͊͒͆̀̊̋̌̑͂̾̑̏̐̈́́̆́͋́́̊̕͘͜͠͠͠ơ̸̡̡̢̨̱̬̬̜̟̖͕̤̳̦̤͉͚̩̝̗͙̗̙̯̗̺̫͓̹̜͇̻̗̠̰͔͓̜̩̼̳͆̆͒̀͌͋̃̿̀̈́̄̐̑͛́̌̈̍̌̽́̐͂̔̾̋̃̐͘̕͘̚̕͜n̸͇̺̘̪̠̮̻͍̺̖̼̟̲͖̬͕̰͔̗̪̦͕̲̤͈͓̞͈̬̻̬̮̅̓͂̒͛̍̀͆̾̅̓̒̉̈̓̔̊̅̔̾͂͗͂̍̓͗̈́̋́̀̕̚̚͝͠͝s̷̡̡̡̡̧̬͍̳̪̗̩̤̲̰͇̳͇̳͙̜̲̼͎̙̩̤̲̥̤͓̱͎͇̜̹͙͚̭̦͍͖͎̜̱̰̦̜͚̀̉̃̊̄̆͆̐̓̒͆̈́͗̽̆̇̎͂͋̐̓̀̍̑̄̈́̀̓͂͊̓̾̚͘͘͘̕͝͝͝͠͝͠e̷̢̨̧͎̙͓̮̫̝̣͎̰̜͕̱͉̜͚͉͖͈͇͉̗͔͕͈͔̙͗͐̒̓͋͌͂́̔̊́͒̌̀͗̕͜͜͝͝c̴̢̨̡̨̧̛͔̯͇̘̮͇̹̳̫̻̥͓̎̓͜͝t̷̢̧̧̧̝̱̘̲͓̤̠̯͈͇̦̥̻͎̪͚̼͎͎̹͖͚̜̗͇̺̺͆̌̓̐͛͊̈̂̌̾̈́͘͜ę̴̥̞̠̭̮͈̮̝̦̖̦̪̭̝͖̮̘͍̰͇̟͋̎̂̄̉̔̌̎͋͛̉̈́͑̂̽̉͛͆̇͒͋̽͐̃̑́͘͜͜t̶̨̧̨̧̰̼̠̞͍͉̩̘̫̥̍̋͛̈́̄̀́͋̉̀͊̽̍̓̂̀̄́͛̈́̊̀̓̽̉̿́̂̅̽̄̈́̀͗̂͌͗̈̋̀̍̈̔̓̅̋̽͝͠ư̸̡̡̨̮̻̭̝̲̞̩̺̬̮͙̯̙͚̰̜͈̘̤̘̺͔͎̗̩̪̤̥̩̗̐̍̓̌̊̈́̓͒̈̍͆͒̚͘̚͠ŗ̷̢̡̦̫̱͍̠͇̲̲̙̞͓͔̠̱͉̟̥͉̃̎̈́͗͌̊̐̒̀ ̶̛̛̤͖̝̮̯͓͊̄̈́̓̿̀͊̂̿͂͒̽̆͗̎̉̿̆̇͑̆̀̉̓̓̾̕͝a̸̡̢̧̧̺̰̺̥̗͔̭̦̳̱͓͖̙͎̦̼̥̹̭̤̖̙̗͖̗̠̩̮̙̯̥͙̟͙̯͓̤̥͕̖͓̝̐͆͑͒̋̇̿̅̀̾̃̏́̾̍̏͂̇͋̿͐̾̉̄͆̍͋̆̄́̇̕̚͘͘̕͜ͅḑ̸̘̮̝͉͈̱̦̠̤̼̰̯͚̠̼̪̝̭̙̰͓̣̣̻̤͚͈̺̩̝̭̪̫̟̬̻͕͈̃̅̑̏̓̅̃̏͜͜͝ͅį̴̢̨̢̢̛̥̬̮̖̳͔̩̲̜̝͙̭̬̰̤͓̼͙̹͔͙̰̌̈́̽̽̅̿͆̽͌̐͂̊̈́͑̓̈̈́̽̆̈́̿̊̌̑̌̆͊̂̅̏̋̑̀̎̄͐̆̅͂̏̚̕͠͠͝ͅp̶̛̳͕̝͎͎͖̥̼͉̖̰͙͈̻̥̝̤̩̯̩̮̹͕̘͎̼̤͖̏̿̋͒̓͊̇̂̎͑̉̋͋́͊́̔͑̐͆͂̈́̚̕͝͝i̷̳̘̩̭͍͙͚̰͍̖̤͖̩̱̗̤͖͇͗̄̓̐̉͆̔́̉̈͊̒̈́̎̌͂̔͛̇̌͌͗̍̍͛͐̾͒͆̏̓̐́̆͗̕̕͝͝͝ͅͅs̷̨̢̢̡̛͇̗̬̩̳̥͚͉̞̠̱̯̰̬̪͉̝̫̹͉͎̼̜̹̩͇̝̜̽͑̾͛̔̅̄̎̆͒̏̃́̀̔̽̅̄̓̆̾̄͐͒̂͋̈́́̅͂̒̈́̈̕͘͝͝ͅç̴̭̯̱̞͙̌̋̇̋́͊̒̆̊͆̽́̇̚͝͝ì̸̢̧̡̢̨̛̛̛̛̟̬͉̞͉̖̦̙͕̱̲̖̹̜̭̥̱̩͙̖͍̖͉̠̘̲̠͙̱̠͕̞̖̍̍́̎̌͗̑̈́͋̍̍͋̽͗͗̊͗̑͋̀̃̊̄̀̚̕̚͜͜͝ͅͅͅͅͅṉ̴̢̢̡̨̧̡̖̭͇̱͇͇̟̼̫͖̱̬͙̺̞̝̬̮̱̤̫͈̝̯̤̥̜̩̖͚̙͚̹͚̳̭͓͙̆̽̈́͛́̄̒͗́̒͗̉̂́͑̿̇̆̃͛ͅg̷̞̬̓́͌͌͋̾͒͌̽̂̾̀͛̃̓̽̃̎͆̀͛͒̎͋̀͊̿̒̈́̀́͆̆̿̉̈́͒́͑̓̇̊̌̐͛̚͝͠ ̴̢̧̧̧̨̡̛̯̥̥̟̩̲̫̗͚͕͇͔̖̭̯̰̜͚͙̱̘̖̪̞̬̫̙̗̭͇͔͕͔̲̞̺̏̋͛̇̇̈́̄̈̉̎͋̀̽̓̈́̉̿̂̃́̓̈́̃̒͆̅̿̕͜͜e̶̐̃͗́̊͆̽̊͒͋́̌͐̀̒̅̀̐̃̏̑̚͘͘̚͘͝͠ͅl̸̨̡̢̧̨͚͔̥̳̳͕̮͈̺̦̆͌͆͋͛̀̂̀̀͒̌͊̓̈́̈́̌͐͛̽̕̕ͅͅͅi̶̧̢̨̢̡̨͖̫̗̪̞͎͇̝̥̦͚̹̲̗̯̣̤̮̭͎̭̰̿͠ͅͅţ̷̬̰͍̟̞̹̰̞͙̹͚̥̦͚͉̫̀͛̂͛̊̽͑̚ͅ"),
+    (None, 5, "Lorem ipsum dolor sit amet, consectetur adipiscing elit"),
 ];
 
 const COMMENT_SCORES: &[(i32, i32, Score)] = &[
@@ -324,29 +307,6 @@ const COMMENT_SCORES: &[(i32, i32, Score)] = &[
     (3, 3, Score::Dislike),
     (3, 4, Score::Dislike),
 ];
-
-static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
-    let mut conn = db::get_connection().unwrap();
-    diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}"))
-        .execute(&mut conn)
-        .unwrap();
-    diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}"))
-        .execute(&mut conn)
-        .unwrap();
-
-    let database_url = db::create_url(Some("__test"));
-    let mut conn = PgConnection::establish(&database_url).unwrap();
-    db::run_migrations(&mut conn);
-    populate_database(&mut conn).unwrap();
-
-    let manager = ConnectionManager::new(database_url);
-    Pool::builder()
-        .max_lifetime(Some(Duration::from_secs(60)))
-        .idle_timeout(None)
-        .test_on_check_out(true)
-        .build(manager)
-        .expect("Could not build connection pool")
-});
 
 const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRank) -> NewUser<'static> {
     NewUser {
@@ -759,7 +719,6 @@ mod test {
                 .load(conn)
         });
         for (tag_name, usage_count) in stats {
-            println!("{tag_name}");
             let expected_usage_count = POST_TAGS
                 .iter()
                 .filter_map(|tags| tags.iter().find(|&&name| name == tag_name))

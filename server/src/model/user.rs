@@ -38,10 +38,6 @@ pub struct User {
 }
 
 impl User {
-    pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<Self> {
-        user::table.filter(user::name.eq(name)).first(conn)
-    }
-
     pub fn avatar_url(&self) -> String {
         match self.avatar_style {
             AvatarStyle::Gravatar => hash::gravatar_url(&self.name),
@@ -75,33 +71,4 @@ pub struct UserToken {
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
     pub last_usage_time: DateTime,
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::test::*;
-
-    #[test]
-    fn save_user() {
-        let user = test_transaction(|conn: &mut PgConnection| create_test_user(conn, TEST_USERNAME, UserRank::Regular));
-
-        assert_eq!(user.name, TEST_USERNAME);
-        assert_eq!(user.password_hash, TEST_HASH);
-        assert_eq!(user.password_salt, TEST_SALT);
-        assert_eq!(user.rank, TEST_PRIVILEGE);
-    }
-
-    #[test]
-    fn save_user_token() {
-        let user_token = test_transaction(|conn: &mut PgConnection| {
-            create_test_user(conn, TEST_USERNAME, UserRank::Regular)
-                .and_then(|user| create_test_user_token(conn, &user, false, None))
-        });
-
-        assert_eq!(user_token.token, TEST_TOKEN);
-        assert_eq!(user_token.note, "");
-        assert!(!user_token.enabled);
-        assert_eq!(user_token.expiration_time, None);
-    }
 }

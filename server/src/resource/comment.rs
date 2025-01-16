@@ -6,55 +6,104 @@ use crate::schema::{comment, comment_score, comment_statistics, user};
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
+use serde_with::skip_serializing_none;
+use std::str::FromStr;
+use strum::{EnumString, EnumTable};
 
-/// No field selecting for comments
+#[derive(Clone, Copy, EnumString, EnumTable)]
+#[strum(serialize_all = "camelCase")]
+pub enum Field {
+    Version,
+    Id,
+    PostId,
+    Text,
+    CreationTime,
+    LastEditTime,
+    User,
+    Score,
+    OwnScore,
+}
 
+impl Field {
+    pub fn create_table(fields_str: &str) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
+        let mut table = FieldTable::filled(false);
+        let fields = fields_str
+            .split(',')
+            .map(Self::from_str)
+            .collect::<Result<Vec<_>, _>>()?;
+        for field in fields.into_iter() {
+            table[field] = true;
+        }
+        Ok(table)
+    }
+}
+
+#[skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct CommentInfo {
-    pub version: DateTime, // TODO: Remove last_edit_time as it fills the same role as version here
-    pub id: i32,
-    pub post_id: i32,
-    pub text: String,
-    pub creation_time: DateTime,
-    pub last_edit_time: DateTime,
-    pub user: Option<MicroUser>,
-    pub score: i32,
-    pub own_score: Rating,
+    pub version: Option<DateTime>, // TODO: Remove last_edit_time as it fills the same role as version here
+    pub id: Option<i32>,
+    pub post_id: Option<i32>,
+    pub text: Option<String>,
+    pub creation_time: Option<DateTime>,
+    pub last_edit_time: Option<DateTime>,
+    pub user: Option<Option<MicroUser>>,
+    pub score: Option<i32>,
+    pub own_score: Option<Rating>,
 }
 
 impl CommentInfo {
-    pub fn new_from_id(conn: &mut PgConnection, client: Option<i32>, comment_id: i32) -> QueryResult<Self> {
-        let mut comment_info = Self::new_batch_from_ids(conn, client, vec![comment_id])?;
+    pub fn new_from_id(
+        conn: &mut PgConnection,
+        client: Option<i32>,
+        comment_id: i32,
+        fields: &FieldTable<bool>,
+    ) -> QueryResult<Self> {
+        let mut comment_info = Self::new_batch_from_ids(conn, client, vec![comment_id], fields)?;
         assert_eq!(comment_info.len(), 1);
         Ok(comment_info.pop().unwrap())
     }
 
-    pub fn new_batch(conn: &mut PgConnection, client: Option<i32>, comments: Vec<Comment>) -> QueryResult<Vec<Self>> {
+    pub fn new_batch(
+        conn: &mut PgConnection,
+        client: Option<i32>,
+        comments: Vec<Comment>,
+        fields: &FieldTable<bool>,
+    ) -> QueryResult<Vec<Self>> {
         let batch_size = comments.len();
 
-        let mut owners = get_owners(conn, &comments)?;
+        let mut owners = fields[Field::User]
+            .then(|| get_owners(conn, &comments))
+            .transpose()?
+            .unwrap_or_default();
         resource::check_batch_results(owners.len(), batch_size);
 
-        let mut scores = get_scores(conn, &comments)?;
+        let mut scores = fields[Field::Score]
+            .then(|| get_scores(conn, &comments))
+            .transpose()?
+            .unwrap_or_default();
         resource::check_batch_results(scores.len(), batch_size);
 
-        let mut client_scores = get_client_scores(conn, client, &comments)?;
+        let mut client_scores = fields[Field::OwnScore]
+            .then(|| get_client_scores(conn, client, &comments))
+            .transpose()?
+            .unwrap_or_default();
         resource::check_batch_results(client_scores.len(), batch_size);
 
         let results = comments
             .into_iter()
             .rev()
             .map(|comment| Self {
-                version: comment.last_edit_time,
-                id: comment.id,
-                post_id: comment.post_id,
-                text: comment.text,
-                creation_time: comment.creation_time,
-                last_edit_time: comment.last_edit_time,
-                user: owners.pop().flatten(),
-                score: scores.pop().unwrap_or(0),
-                own_score: client_scores.pop().unwrap_or_default(),
+                version: fields[Field::Version].then_some(comment.last_edit_time),
+                id: fields[Field::Id].then_some(comment.id),
+                post_id: fields[Field::PostId].then_some(comment.post_id),
+                text: fields[Field::Text].then_some(comment.text),
+                creation_time: fields[Field::CreationTime].then_some(comment.creation_time),
+                last_edit_time: fields[Field::LastEditTime].then_some(comment.last_edit_time),
+                user: owners.pop(),
+                score: scores.pop(),
+                own_score: client_scores.pop(),
             })
             .collect::<Vec<_>>();
         Ok(results.into_iter().rev().collect())
@@ -64,10 +113,11 @@ impl CommentInfo {
         conn: &mut PgConnection,
         client: Option<i32>,
         comment_ids: Vec<i32>,
+        fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_posts = comment::table.filter(comment::id.eq_any(&comment_ids)).load(conn)?;
         let comments = resource::order_as(unordered_posts, &comment_ids);
-        Self::new_batch(conn, client, comments)
+        Self::new_batch(conn, client, comments, fields)
     }
 }
 

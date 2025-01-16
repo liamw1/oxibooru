@@ -1,51 +1,44 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, UnpagedResponse};
 use crate::config::RegexType;
-use crate::db::ConnectionResult;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
 use crate::time::DateTime;
-use crate::{api, config};
+use crate::{api, config, db};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_tag_categories = warp::get()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("tag-categories"))
         .map(list_tag_categories)
         .map(api::Reply::from);
     let get_tag_category = warp::get()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("tag-category" / String))
         .map(get_tag_category)
         .map(api::Reply::from);
     let create_tag_category = warp::post()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("tag-categories"))
         .and(warp::body::json())
         .map(create_tag_category)
         .map(api::Reply::from);
     let update_tag_category = warp::put()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("tag-category" / String))
         .and(warp::body::json())
         .map(update_tag_category)
         .map(api::Reply::from);
     let set_default_tag_category = warp::put()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("tag-category" / String / "default"))
         .map(set_default_tag_category)
         .map(api::Reply::from);
     let delete_tag_category = warp::delete()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("tag-category" / String))
         .and(warp::body::json())
@@ -60,25 +53,23 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete_tag_category)
 }
 
-fn list_tag_categories(conn: ConnectionResult, auth: AuthResult) -> ApiResult<UnpagedResponse<TagCategoryInfo>> {
-    let mut conn = conn?;
+fn list_tag_categories(auth: AuthResult) -> ApiResult<UnpagedResponse<TagCategoryInfo>> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().tag_category_list)?;
+    api::verify_privilege(client, config::privileges().tag_category_list)?;
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         TagCategoryInfo::all(conn)
             .map(|results| UnpagedResponse { results })
             .map_err(api::Error::from)
     })
 }
 
-fn get_tag_category(conn: ConnectionResult, auth: AuthResult, name: String) -> ApiResult<TagCategoryInfo> {
-    let mut conn = conn?;
+fn get_tag_category(auth: AuthResult, name: String) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().tag_category_view)?;
+    api::verify_privilege(client, config::privileges().tag_category_view)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let category = tag_category::table
             .filter(tag_category::name.eq(name))
             .first(conn)
@@ -96,14 +87,9 @@ struct NewTagCategoryInfo {
     color: String,
 }
 
-fn create_tag_category(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    category_info: NewTagCategoryInfo,
-) -> ApiResult<TagCategoryInfo> {
-    let mut conn = conn?;
+fn create_tag_category(auth: AuthResult, category_info: NewTagCategoryInfo) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().tag_category_create)?;
+    api::verify_privilege(client, config::privileges().tag_category_create)?;
     api::verify_matches_regex(&category_info.name, RegexType::TagCategory)?;
 
     let new_category = NewTagCategory {
@@ -112,6 +98,7 @@ fn create_tag_category(
         color: &category_info.color,
     };
 
+    let mut conn = db::get_connection()?;
     let category = diesel::insert_into(tag_category::table)
         .values(new_category)
         .returning(TagCategory::as_returning())
@@ -128,54 +115,52 @@ struct TagCategoryUpdate {
     color: Option<String>,
 }
 
-fn update_tag_category(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    name: String,
-    update: TagCategoryUpdate,
-) -> ApiResult<TagCategoryInfo> {
-    let mut conn = conn?;
+fn update_tag_category(auth: AuthResult, name: String, update: TagCategoryUpdate) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
+    let mut conn = db::get_connection()?;
     let category_id = conn.transaction(|conn| {
-        let category = TagCategory::from_name(conn, &name)?;
-        api::verify_version(category.last_edit_time, update.version)?;
+        let (category_id, last_edit_time) = tag_category::table
+            .select((tag_category::id, tag_category::last_edit_time))
+            .filter(tag_category::name.eq(name))
+            .first(conn)?;
+        api::verify_version(last_edit_time, update.version)?;
 
         if let Some(order) = update.order {
-            api::verify_privilege(client.as_ref(), config::privileges().tag_category_edit_order)?;
+            api::verify_privilege(client, config::privileges().tag_category_edit_order)?;
 
             let order: i32 = order.parse()?;
-            diesel::update(tag_category::table.find(category.id))
+            diesel::update(tag_category::table.find(category_id))
                 .set(tag_category::order.eq(order))
                 .execute(conn)?;
         }
         if let Some(name) = update.name {
-            api::verify_privilege(client.as_ref(), config::privileges().tag_category_edit_name)?;
+            api::verify_privilege(client, config::privileges().tag_category_edit_name)?;
             api::verify_matches_regex(&name, RegexType::TagCategory)?;
 
-            diesel::update(tag_category::table.find(category.id))
+            diesel::update(tag_category::table.find(category_id))
                 .set(tag_category::name.eq(name))
                 .execute(conn)?;
         }
         if let Some(color) = update.color {
-            api::verify_privilege(client.as_ref(), config::privileges().tag_category_edit_color)?;
+            api::verify_privilege(client, config::privileges().tag_category_edit_color)?;
 
-            diesel::update(tag_category::table.find(category.id))
+            diesel::update(tag_category::table.find(category_id))
                 .set(tag_category::color.eq(color))
                 .execute(conn)?;
         }
-        Ok::<_, api::Error>(category.id)
+        Ok::<_, api::Error>(category_id)
     })?;
     conn.transaction(|conn| TagCategoryInfo::new_from_id(conn, category_id).map_err(api::Error::from))
 }
 
-fn set_default_tag_category(conn: ConnectionResult, auth: AuthResult, name: String) -> ApiResult<TagCategoryInfo> {
-    let mut conn = conn?;
+fn set_default_tag_category(auth: AuthResult, name: String) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().tag_category_set_default)?;
+    api::verify_privilege(client, config::privileges().tag_category_set_default)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
+    let mut conn = db::get_connection()?;
     let new_default_category: TagCategory = conn.transaction(|conn| {
         let mut category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
         let mut old_default_category: TagCategory = tag_category::table.filter(tag_category::id.eq(0)).first(conn)?;
@@ -209,18 +194,12 @@ fn set_default_tag_category(conn: ConnectionResult, auth: AuthResult, name: Stri
     conn.transaction(|conn| TagCategoryInfo::new(conn, new_default_category).map_err(api::Error::from))
 }
 
-fn delete_tag_category(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    name: String,
-    client_version: DeleteRequest,
-) -> ApiResult<()> {
-    let mut conn = conn?;
+fn delete_tag_category(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().tag_category_delete)?;
+    api::verify_privilege(client, config::privileges().tag_category_delete)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (category_id, category_version): (i32, DateTime) = tag_category::table
             .select((tag_category::id, tag_category::last_edit_time))
             .filter(tag_category::name.eq(name))

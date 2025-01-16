@@ -1,5 +1,6 @@
-use crate::model::user::{User, UserToken};
-use crate::schema::user_token;
+use crate::model::enums::UserRank;
+use crate::schema::{user, user_token};
+use crate::time::DateTime;
 use crate::{auth, db};
 use base64::prelude::*;
 use base64::DecodeError;
@@ -27,9 +28,21 @@ pub enum AuthenticationError {
     Utf8Conversion(#[from] Utf8Error),
 }
 
+#[derive(Clone, Copy)]
+pub struct AuthUser {
+    pub id: i32,
+    pub rank: UserRank,
+}
+
+impl AuthUser {
+    fn new(id: i32, rank: UserRank) -> Self {
+        Self { id, rank }
+    }
+}
+
 /// Authentication can either be done by token-based authentication (reccommended)
 /// or by sending password as plaintext.
-pub fn authenticate_user(auth: String) -> Result<User, AuthenticationError> {
+pub fn authenticate_user(auth: String) -> Result<AuthUser, AuthenticationError> {
     let (auth_type, credentials) = auth.split_once(' ').ok_or(AuthenticationError::MalformedCredentials)?;
     match auth_type {
         "Basic" => basic_access_authentication(credentials),
@@ -54,36 +67,41 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
 
 /// Checks that the given `credentials` are of the form "username:password"
 /// and that the username/password combination is valid.
-fn basic_access_authentication(credentials: &str) -> Result<User, AuthenticationError> {
+fn basic_access_authentication(credentials: &str) -> Result<AuthUser, AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
     let mut conn = db::get_connection()?;
 
     // For security reasons, don't give any indication to the user if it was the password
     // or the username that was incorrect.
-    let user = User::from_name(&mut conn, &username).map_err(|err| {
-        type QueryError = diesel::result::Error;
-        match err {
-            QueryError::NotFound => AuthenticationError::UsernamePasswordMismatch,
-            err => AuthenticationError::FailedQuery(err),
-        }
-    })?;
-    auth::password::is_valid_password(&user, &password)
-        .then_some(user)
+    let (user_id, rank, password_hash): (i32, UserRank, String) = user::table
+        .select((user::id, user::rank, user::password_hash))
+        .filter(user::name.eq(username))
+        .first(&mut conn)
+        .optional()?
+        .ok_or(AuthenticationError::UsernamePasswordMismatch)?;
+    auth::password::is_valid_password(&password_hash, &password)
+        .then_some(AuthUser::new(user_id, rank))
         .ok_or(AuthenticationError::UsernamePasswordMismatch)
 }
 
 /// Checks that the given `credentials` are of the form "username:token"
 /// and that the username/token combination is valid and non-expired.
-fn token_authentication(credentials: &str) -> Result<User, AuthenticationError> {
+fn token_authentication(credentials: &str) -> Result<AuthUser, AuthenticationError> {
     let (username, unparsed_token) = decode_credentials(credentials)?;
     let token = Uuid::parse_str(&unparsed_token)?;
 
     let mut conn = db::get_connection()?;
-    let user = User::from_name(&mut conn, &username)?;
-    let user_token = UserToken::belonging_to(&user)
+
+    let (user_id, rank, enabled, expiration_time): (i32, UserRank, bool, Option<DateTime>) = user_token::table
+        .inner_join(user::table)
+        .select((user::id, user::rank, user_token::enabled, user_token::expiration_time))
+        .filter(user::name.eq(username))
         .filter(user_token::token.eq(token))
         .first(&mut conn)?;
-    auth::token::is_valid_token(&user_token)
-        .then_some(user)
+
+    let expired = expiration_time.as_ref().is_some_and(|&time| time < DateTime::now());
+    let is_valid_token = enabled && !expired;
+    is_valid_token
+        .then_some(AuthUser::new(user_id, rank))
         .ok_or(AuthenticationError::InvalidToken)
 }

@@ -458,15 +458,15 @@ fn get_comments(conn: &mut PgConnection, client: Option<i32>, posts: &[Post]) ->
                 .map(|(comment, score, owner)| {
                     let id = comment.id;
                     CommentInfo {
-                        version: comment.last_edit_time,
-                        id,
-                        post_id: post.id,
-                        user: owner.map(|(username, avatar_style)| MicroUser::new(username, avatar_style)),
-                        text: comment.text,
-                        creation_time: comment.creation_time,
-                        last_edit_time: comment.last_edit_time,
-                        score,
-                        own_score: client_scores.get(&id).copied().map(Rating::from).unwrap_or_default(),
+                        version: Some(comment.last_edit_time),
+                        id: Some(id),
+                        post_id: Some(post.id),
+                        user: Some(owner.map(|(username, avatar_style)| MicroUser::new(username, avatar_style))),
+                        text: Some(comment.text),
+                        creation_time: Some(comment.creation_time),
+                        last_edit_time: Some(comment.last_edit_time),
+                        score: Some(score),
+                        own_score: Some(client_scores.get(&id).copied().map(Rating::from).unwrap_or_default()),
                     }
                 })
                 .collect()

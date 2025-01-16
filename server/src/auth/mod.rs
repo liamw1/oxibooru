@@ -1,6 +1,5 @@
 pub mod header;
 pub mod password;
-pub mod token;
 
 use thiserror::Error;
 

@@ -22,12 +22,6 @@ pub struct PoolCategory {
     pub last_edit_time: DateTime,
 }
 
-impl PoolCategory {
-    pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<Self> {
-        pool_category::table.filter(pool_category::name.eq(name)).first(conn)
-    }
-}
-
 #[derive(Insertable)]
 #[diesel(table_name = pool)]
 #[diesel(check_for_backend(Pg))]

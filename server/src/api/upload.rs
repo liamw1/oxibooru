@@ -53,7 +53,7 @@ struct UploadResponse {
 
 async fn upload(auth: AuthResult, form_data: FormData) -> ApiResult<UploadResponse> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().upload_create)?;
+    api::verify_privilege(client, config::privileges().upload_create)?;
 
     // Set up temp directory if necessary
     filesystem::create_dir(Directory::TemporaryUploads)?;

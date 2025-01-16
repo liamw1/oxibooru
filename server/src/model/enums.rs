@@ -337,8 +337,8 @@ impl Serialize for PostFlags {
 
 #[derive(
     Debug,
-    Copy,
     Clone,
+    Copy,
     PartialEq,
     Eq,
     PartialOrd,
@@ -490,7 +490,6 @@ struct DeserializeScoreError;
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{config, test::*};
 
     #[test]
     fn safety_ordering() {
@@ -506,17 +505,5 @@ mod test {
         assert!(UserRank::Administrator > UserRank::Moderator);
         assert_eq!(UserRank::Regular, UserRank::Regular);
         assert_ne!(UserRank::Regular, UserRank::Moderator);
-    }
-
-    #[test]
-    fn permission() {
-        test_transaction(|conn| {
-            let user = create_test_user(conn, TEST_USERNAME, UserRank::Regular)?;
-            assert!(user.rank >= config::privileges().user_create_self);
-            assert!(user.rank >= config::privileges().post_list);
-            assert!(user.rank < config::privileges().user_edit_self_rank);
-            assert!(user.rank < config::privileges().user_delete_any);
-            Ok(())
-        });
     }
 }

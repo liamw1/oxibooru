@@ -1,12 +1,11 @@
 use crate::api::{ApiResult, AuthResult, UnpagedResponse};
-use crate::db::ConnectionResult;
 use crate::model::enums::AvatarStyle;
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
 use crate::resource::user_token::UserTokenInfo;
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
-use crate::{api, config};
+use crate::{api, config, db};
 use diesel::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -14,27 +13,23 @@ use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_user_tokens = warp::get()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("user-tokens" / String))
         .map(list_user_tokens)
         .map(api::Reply::from);
     let create_user_token = warp::post()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("user-token" / String))
         .and(warp::body::json())
         .map(create_user_token)
         .map(api::Reply::from);
     let update_user_token = warp::put()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("user-token" / String / Uuid))
         .and(warp::body::json())
         .map(update_user_token)
         .map(api::Reply::from);
     let delete_user_token = warp::delete()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("user-token" / String / Uuid))
         .map(delete_user_token)
@@ -46,17 +41,12 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete_user_token)
 }
 
-fn list_user_tokens(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    username: String,
-) -> ApiResult<UnpagedResponse<UserTokenInfo>> {
-    let mut conn = conn?;
+fn list_user_tokens(auth: AuthResult, username: String) -> ApiResult<UnpagedResponse<UserTokenInfo>> {
     let client = auth?;
-    let client_id = client.as_ref().map(|user| user.id);
+    let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -66,7 +56,7 @@ fn list_user_tokens(
             true => config::privileges().user_token_list_self,
             false => config::privileges().user_token_list_any,
         };
-        api::verify_privilege(client.as_ref(), required_rank)?;
+        api::verify_privilege(client, required_rank)?;
 
         let results = user_token::table
             .filter(user_token::user_id.eq(user_id))
@@ -87,17 +77,12 @@ struct PostUserTokenInfo {
     expiration_time: Option<DateTime>,
 }
 
-fn create_user_token(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    username: String,
-    token_info: PostUserTokenInfo,
-) -> ApiResult<UserTokenInfo> {
-    let mut conn = conn?;
+fn create_user_token(auth: AuthResult, username: String, token_info: PostUserTokenInfo) -> ApiResult<UserTokenInfo> {
     let client = auth?;
-    let client_id = client.as_ref().map(|user| user.id);
+    let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
+    let mut conn = db::get_connection()?;
     let (user_token, avatar_style) = conn.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
@@ -108,7 +93,7 @@ fn create_user_token(
             true => config::privileges().user_token_create_self,
             false => config::privileges().user_token_create_any,
         };
-        api::verify_privilege(client.as_ref(), required_rank)?;
+        api::verify_privilege(client, required_rank)?;
 
         // Delete previous token, if it exists
         diesel::delete(user_token::table.find(user_id)).execute(conn)?;
@@ -140,17 +125,16 @@ struct UserTokenUpdate {
 }
 
 fn update_user_token(
-    conn: ConnectionResult,
     auth: AuthResult,
     username: String,
     token: Uuid,
     update: UserTokenUpdate,
 ) -> ApiResult<UserTokenInfo> {
-    let mut conn = conn?;
     let client = auth?;
-    let client_id = client.as_ref().map(|user| user.id);
+    let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
+    let mut conn = db::get_connection()?;
     let (updated_user_token, avatar_style) = conn.transaction(|conn| {
         let (user_id, avatar_style): (i32, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
@@ -161,7 +145,7 @@ fn update_user_token(
             true => config::privileges().user_token_edit_self,
             false => config::privileges().user_token_edit_any,
         };
-        api::verify_privilege(client.as_ref(), required_rank)?;
+        api::verify_privilege(client, required_rank)?;
 
         let user_token_version = user_token::table
             .find(user_id)
@@ -197,13 +181,12 @@ fn update_user_token(
     Ok(UserTokenInfo::new(MicroUser::new(username.to_string(), avatar_style), updated_user_token))
 }
 
-fn delete_user_token(conn: ConnectionResult, auth: AuthResult, username: String, token: Uuid) -> ApiResult<()> {
-    let mut conn = conn?;
+fn delete_user_token(auth: AuthResult, username: String, token: Uuid) -> ApiResult<()> {
     let client = auth?;
-    let client_id = client.as_ref().map(|user| user.id);
+    let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let user_token_owner: i32 = user::table
             .inner_join(user_token::table)
             .select(user_token::user_id)
@@ -215,7 +198,7 @@ fn delete_user_token(conn: ConnectionResult, auth: AuthResult, username: String,
             true => config::privileges().user_token_delete_self,
             false => config::privileges().user_token_delete_any,
         };
-        api::verify_privilege(client.as_ref(), required_rank)?;
+        api::verify_privilege(client, required_rank)?;
 
         diesel::delete(user_token::table.find(user_token_owner)).execute(conn)?;
         Ok(())

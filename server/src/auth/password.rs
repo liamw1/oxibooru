@@ -1,6 +1,5 @@
 use crate::auth::HashError;
 use crate::config;
-use crate::model::user::User;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
 use argon2::{Algorithm, Params, Version};
@@ -15,8 +14,8 @@ pub fn hash_password(password: &str, salt: &SaltString) -> Result<String, HashEr
 }
 
 /// Returns if the given `user` and `password` match.
-pub fn is_valid_password(user: &User, password: &str) -> bool {
-    PasswordHash::new(&user.password_hash)
+pub fn is_valid_password(password_hash: &str, password: &str) -> bool {
+    PasswordHash::new(&password_hash)
         .and_then(|parsed_hash| ARGON_CONTEXT.verify_password(password.as_bytes(), &parsed_hash))
         .is_ok()
 }
@@ -34,13 +33,11 @@ static ARGON_CONTEXT: LazyLock<Argon2> = LazyLock::new(|| {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::model::enums::UserRank;
     use crate::test::*;
 
     #[test]
     fn hash_password() {
-        let user = test_transaction(|conn| create_test_user(conn, TEST_USERNAME, UserRank::Regular));
-        assert!(is_valid_password(&user, TEST_PASSWORD));
-        assert!(!is_valid_password(&user, "wrong_password"));
+        assert!(is_valid_password(TEST_HASH, TEST_PASSWORD));
+        assert!(!is_valid_password(TEST_HASH, "wrong_password"));
     }
 }

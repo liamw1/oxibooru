@@ -2,13 +2,12 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::{self, ThumbnailType};
-use crate::db::ConnectionResult;
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::time::DateTime;
-use crate::{api, config, filesystem, resource, search};
+use crate::{api, config, db, filesystem, resource, search};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
@@ -17,21 +16,18 @@ use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_users = warp::get()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("users"))
         .and(warp::query())
         .map(list_users)
         .map(api::Reply::from);
     let get_user = warp::get()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("user" / String))
         .and(api::resource_query())
         .map(get_user)
         .map(api::Reply::from);
     let create_user = warp::post()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("users"))
         .and(api::resource_query())
@@ -39,7 +35,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(create_user)
         .map(api::Reply::from);
     let update_user = warp::put()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("user" / String))
         .and(api::resource_query())
@@ -47,7 +42,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(update_user)
         .map(api::Reply::from);
     let delete_user = warp::delete()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("user" / String))
         .and(warp::body::json())
@@ -67,17 +61,16 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_users(conn: ConnectionResult, auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
-    let mut conn = conn?;
+fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
-    api::verify_privilege(client.as_ref(), config::privileges().user_list)?;
+    query.bump_login(client)?;
+    api::verify_privilege(client, config::privileges().user_list)?;
 
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_USERS_PER_PAGE);
     let fields = create_field_table(query.fields())?;
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let sql_query = search::user::build_query(&search_criteria)?;
@@ -103,29 +96,26 @@ fn list_users(conn: ConnectionResult, auth: AuthResult, query: PagedQuery) -> Ap
     })
 }
 
-fn get_user(conn: ConnectionResult, auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UserInfo> {
-    let mut conn = conn?;
+fn get_user(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UserInfo> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
+    query.bump_login(client)?;
 
-    let client_id = client.as_ref().map(|user| user.id);
+    let client_id = client.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    conn.transaction(|conn| {
-        let user = User::from_name(conn, &username)?;
-
-        let viewing_self = client_id == Some(user.id);
-        if !viewing_self {
-            api::verify_privilege(client.as_ref(), config::privileges().user_view)?;
-        }
-
+    db::get_connection()?.transaction(|conn| {
         let user_id = user::table
             .select(user::id)
             .filter(user::name.eq(username))
             .first(conn)
             .optional()?
             .ok_or(api::Error::NotFound(ResourceType::User))?;
+
+        let viewing_self = client_id == Some(user_id);
+        if !viewing_self {
+            api::verify_privilege(client, config::privileges().user_view)?;
+        }
 
         let visibility = match viewing_self {
             true => Visibility::Full,
@@ -144,24 +134,18 @@ struct NewUserInfo {
     rank: Option<UserRank>,
 }
 
-fn create_user(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    query: ResourceQuery,
-    user_info: NewUserInfo,
-) -> ApiResult<UserInfo> {
-    let mut conn = conn?;
+fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
+    query.bump_login(client)?;
 
     let creation_rank = user_info.rank.unwrap_or(config::default_rank());
     let required_rank = match client.is_some() {
         true => config::privileges().user_create_any,
         false => config::privileges().user_create_self,
     };
-    api::verify_privilege(client.as_ref(), required_rank)?;
+    api::verify_privilege(client, required_rank)?;
     if creation_rank > config::default_rank() {
-        api::verify_privilege(client.as_ref(), creation_rank)?;
+        api::verify_privilege(client, creation_rank)?;
     }
 
     let fields = create_field_table(query.fields())?;
@@ -180,6 +164,7 @@ fn create_user(
         avatar_style: AvatarStyle::Gravatar,
     };
 
+    let mut conn = db::get_connection()?;
     let user: User = diesel::insert_into(user::table)
         .values(new_user)
         .returning(User::as_returning())
@@ -200,18 +185,11 @@ struct UserUpdate {
     avatar_token: Option<String>,
 }
 
-fn update_user(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    username: String,
-    query: ResourceQuery,
-    update: UserUpdate,
-) -> ApiResult<UserInfo> {
-    let mut conn = conn?;
+fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
     let client = auth?;
-    query.bump_login(client.as_ref())?;
+    query.bump_login(client)?;
 
-    let client_id = client.as_ref().map(|user| user.id);
+    let client_id = client.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let custom_avatar = update
@@ -219,6 +197,7 @@ fn update_user(
         .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Avatar))
         .transpose()?;
 
+    let mut conn = db::get_connection()?;
     let (user_id, visibility) = conn.transaction(|conn| {
         let (user_id, user_version): (i32, DateTime) = user::table
             .select((user::id, user::last_edit_time))
@@ -237,7 +216,7 @@ fn update_user(
                 true => config::privileges().user_edit_self_name,
                 false => config::privileges().user_edit_any_name,
             };
-            api::verify_privilege(client.as_ref(), required_rank)?;
+            api::verify_privilege(client, required_rank)?;
             api::verify_matches_regex(&name, RegexType::Username)?;
 
             diesel::update(user::table.find(user_id))
@@ -249,7 +228,7 @@ fn update_user(
                 true => config::privileges().user_edit_self_pass,
                 false => config::privileges().user_edit_any_pass,
             };
-            api::verify_privilege(client.as_ref(), required_rank)?;
+            api::verify_privilege(client, required_rank)?;
             api::verify_matches_regex(&password, RegexType::Password)?;
 
             let salt = SaltString::generate(&mut OsRng);
@@ -263,7 +242,7 @@ fn update_user(
                 true => config::privileges().user_edit_self_email,
                 false => config::privileges().user_edit_any_email,
             };
-            api::verify_privilege(client.as_ref(), required_rank)?;
+            api::verify_privilege(client, required_rank)?;
             api::verify_valid_email(Some(&email))?;
 
             diesel::update(user::table.find(user_id))
@@ -275,9 +254,9 @@ fn update_user(
                 true => config::privileges().user_edit_self_rank,
                 false => config::privileges().user_edit_any_rank,
             };
-            api::verify_privilege(client.as_ref(), required_rank)?;
+            api::verify_privilege(client, required_rank)?;
             if rank > config::default_rank() {
-                api::verify_privilege(client.as_ref(), rank)?;
+                api::verify_privilege(client, rank)?;
             }
 
             diesel::update(user::table.find(user_id))
@@ -289,7 +268,7 @@ fn update_user(
                 true => config::privileges().user_edit_self_avatar,
                 false => config::privileges().user_edit_any_avatar,
             };
-            api::verify_privilege(client.as_ref(), required_rank)?;
+            api::verify_privilege(client, required_rank)?;
 
             diesel::update(user::table.find(user_id))
                 .set(user::avatar_style.eq(avatar_style))
@@ -300,7 +279,7 @@ fn update_user(
                 true => config::privileges().user_edit_self_avatar,
                 false => config::privileges().user_edit_any_avatar,
             };
-            api::verify_privilege(client.as_ref(), required_rank)?;
+            api::verify_privilege(client, required_rank)?;
 
             filesystem::delete_custom_avatar(&username)?;
             let avatar_size = filesystem::save_custom_avatar(&username, avatar)?;
@@ -313,18 +292,12 @@ fn update_user(
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from))
 }
 
-fn delete_user(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    username: String,
-    client_version: DeleteRequest,
-) -> ApiResult<()> {
-    let mut conn = conn?;
+fn delete_user(auth: AuthResult, username: String, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
-    let client_id = client.as_ref().map(|user| user.id);
+    let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (user_id, user_version): (i32, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(username))
@@ -336,7 +309,7 @@ fn delete_user(
             true => config::privileges().user_delete_self,
             false => config::privileges().user_delete_any,
         };
-        api::verify_privilege(client.as_ref(), required_rank)?;
+        api::verify_privilege(client, required_rank)?;
 
         diesel::delete(user::table.find(user_id)).execute(conn)?;
         Ok(())

@@ -23,12 +23,6 @@ pub struct TagCategory {
     pub last_edit_time: DateTime,
 }
 
-impl TagCategory {
-    pub fn from_name(conn: &mut PgConnection, name: &str) -> QueryResult<Self> {
-        tag_category::table.filter(tag_category::name.eq(name)).first(conn)
-    }
-}
-
 #[derive(Clone, Copy, Default, Insertable)]
 #[diesel(table_name = tag)]
 #[diesel(check_for_backend(Pg))]

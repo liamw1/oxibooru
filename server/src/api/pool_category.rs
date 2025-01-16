@@ -1,51 +1,44 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, UnpagedResponse};
 use crate::config::RegexType;
-use crate::db::ConnectionResult;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPoolCategory, PoolCategory};
 use crate::resource::pool_category::PoolCategoryInfo;
 use crate::schema::{pool, pool_category};
 use crate::time::DateTime;
-use crate::{api, config};
+use crate::{api, config, db};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
     let list_pool_categories = warp::get()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("pool-categories"))
         .map(list_pool_categories)
         .map(api::Reply::from);
     let get_pool_category = warp::get()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("pool-category" / String))
         .map(get_pool_category)
         .map(api::Reply::from);
     let create_pool_category = warp::post()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("pool-categories"))
         .and(warp::body::json())
         .map(create_pool_category)
         .map(api::Reply::from);
     let update_pool_category = warp::put()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("pool-category" / String))
         .and(warp::body::json())
         .map(update_pool_category)
         .map(api::Reply::from);
     let set_default_pool_category = warp::put()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("pool-category" / String / "default"))
         .map(set_default_pool_category)
         .map(api::Reply::from);
     let delete_pool_category = warp::delete()
-        .and(api::connection())
         .and(api::auth())
         .and(warp::path!("pool-category" / String))
         .and(warp::body::json())
@@ -60,25 +53,23 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete_pool_category)
 }
 
-fn list_pool_categories(conn: ConnectionResult, auth: AuthResult) -> ApiResult<UnpagedResponse<PoolCategoryInfo>> {
-    let mut conn = conn?;
+fn list_pool_categories(auth: AuthResult) -> ApiResult<UnpagedResponse<PoolCategoryInfo>> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().pool_category_list)?;
+    api::verify_privilege(client, config::privileges().pool_category_list)?;
 
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         PoolCategoryInfo::all(conn)
             .map(|results| UnpagedResponse { results })
             .map_err(api::Error::from)
     })
 }
 
-fn get_pool_category(conn: ConnectionResult, auth: AuthResult, name: String) -> ApiResult<PoolCategoryInfo> {
-    let mut conn = conn?;
+fn get_pool_category(auth: AuthResult, name: String) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().pool_category_view)?;
+    api::verify_privilege(client, config::privileges().pool_category_view)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let category = pool_category::table
             .filter(pool_category::name.eq(name))
             .first(conn)
@@ -95,14 +86,9 @@ struct NewPoolCategoryInfo {
     color: String,
 }
 
-fn create_pool_category(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    category_info: NewPoolCategoryInfo,
-) -> ApiResult<PoolCategoryInfo> {
-    let mut conn = conn?;
+fn create_pool_category(auth: AuthResult, category_info: NewPoolCategoryInfo) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().pool_category_create)?;
+    api::verify_privilege(client, config::privileges().pool_category_create)?;
     api::verify_matches_regex(&category_info.name, RegexType::PoolCategory)?;
 
     let new_category = NewPoolCategory {
@@ -110,6 +96,7 @@ fn create_pool_category(
         color: &category_info.color,
     };
 
+    let mut conn = db::get_connection()?;
     let category = diesel::insert_into(pool_category::table)
         .values(new_category)
         .returning(PoolCategory::as_returning())
@@ -125,48 +112,46 @@ struct PoolCategoryUpdate {
     color: Option<String>,
 }
 
-fn update_pool_category(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    name: String,
-    update: PoolCategoryUpdate,
-) -> ApiResult<PoolCategoryInfo> {
-    let mut conn = conn?;
+fn update_pool_category(auth: AuthResult, name: String, update: PoolCategoryUpdate) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
+    let mut conn = db::get_connection()?;
     let category_id = conn.transaction(|conn| {
-        let category = PoolCategory::from_name(conn, &name)?;
-        api::verify_version(category.last_edit_time, update.version)?;
+        let (category_id, last_edit_time) = pool_category::table
+            .select((pool_category::id, pool_category::last_edit_time))
+            .filter(pool_category::name.eq(name))
+            .first(conn)?;
+        api::verify_version(last_edit_time, update.version)?;
 
         if let Some(name) = update.name {
-            api::verify_privilege(client.as_ref(), config::privileges().pool_category_edit_name)?;
+            api::verify_privilege(client, config::privileges().pool_category_edit_name)?;
             api::verify_matches_regex(&name, RegexType::PoolCategory)?;
 
-            diesel::update(pool_category::table.find(category.id))
+            diesel::update(pool_category::table.find(category_id))
                 .set(pool_category::name.eq(name))
                 .execute(conn)?;
         }
 
         if let Some(color) = update.color {
-            api::verify_privilege(client.as_ref(), config::privileges().pool_category_edit_color)?;
+            api::verify_privilege(client, config::privileges().pool_category_edit_color)?;
 
-            diesel::update(pool_category::table.find(category.id))
+            diesel::update(pool_category::table.find(category_id))
                 .set(pool_category::color.eq(color))
                 .execute(conn)?;
         }
 
-        Ok::<_, api::Error>(category.id)
+        Ok::<_, api::Error>(category_id)
     })?;
     conn.transaction(|conn| PoolCategoryInfo::new_from_id(conn, category_id).map_err(api::Error::from))
 }
 
-fn set_default_pool_category(conn: ConnectionResult, auth: AuthResult, name: String) -> ApiResult<PoolCategoryInfo> {
-    let mut conn = conn?;
+fn set_default_pool_category(auth: AuthResult, name: String) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().pool_category_set_default)?;
+    api::verify_privilege(client, config::privileges().pool_category_set_default)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
+    let mut conn = db::get_connection()?;
     let new_default_category: PoolCategory = conn.transaction(|conn| {
         let mut category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
         let mut old_default_category: PoolCategory =
@@ -201,18 +186,12 @@ fn set_default_pool_category(conn: ConnectionResult, auth: AuthResult, name: Str
     conn.transaction(|conn| PoolCategoryInfo::new(conn, new_default_category).map_err(api::Error::from))
 }
 
-fn delete_pool_category(
-    conn: ConnectionResult,
-    auth: AuthResult,
-    name: String,
-    client_version: DeleteRequest,
-) -> ApiResult<()> {
-    let mut conn = conn?;
+fn delete_pool_category(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
-    api::verify_privilege(client.as_ref(), config::privileges().pool_category_delete)?;
+    api::verify_privilege(client, config::privileges().pool_category_delete)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         let (category_id, category_version): (i32, DateTime) = pool_category::table
             .select((pool_category::id, pool_category::last_edit_time))
             .filter(pool_category::name.eq(name))

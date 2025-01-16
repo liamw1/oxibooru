@@ -355,7 +355,7 @@ mod test {
 
     #[test]
     fn grid_points() {
-        let lisa_small_border = image::open(asset_path(Path::new("lisa-border.jpg")))
+        let lisa_small_border = image::open(image_path(Path::new("lisa-border.jpg")))
             .unwrap()
             .to_luma8();
 
@@ -367,7 +367,7 @@ mod test {
         assert!(lower_left_pixel.0[0] < 250);
         assert!(upper_right_pixel.0[0] < 250);
 
-        let lisa_large_border = image::open(asset_path(Path::new("lisa-large_border.jpg")))
+        let lisa_large_border = image::open(image_path(Path::new("lisa-large_border.jpg")))
             .unwrap()
             .to_luma8();
 
@@ -385,7 +385,7 @@ mod test {
     }
 
     fn image_properties(asset: &str) -> ([i64; COMPRESSED_SIGNATURE_SIZE], [i32; NUM_WORDS]) {
-        let signature = compute(&image::open(asset_path(Path::new(asset))).unwrap());
+        let signature = compute(&image::open(image_path(Path::new(asset))).unwrap());
         let indexes = generate_indexes(signature);
         (signature, indexes)
     }

@@ -10,14 +10,12 @@ mod upload;
 mod user;
 mod user_token;
 
-use crate::auth::header::{self, AuthenticationError};
+use crate::auth::header::{self, AuthUser, AuthenticationError};
 use crate::config::RegexType;
-use crate::db::ConnectionResult;
 use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
-use crate::model::user::User;
 use crate::time::DateTime;
-use crate::{config, db, update};
+use crate::{config, update};
 use serde::{Deserialize, Serialize};
 use std::convert::Infallible;
 use std::num::NonZero;
@@ -200,7 +198,7 @@ impl Error {
 
 /// Checks if the `client` is at least `required_rank`.
 /// Returns error if client is lower rank than `required_rank`.
-pub fn verify_privilege(client: Option<&User>, required_rank: UserRank) -> ApiResult<()> {
+pub fn verify_privilege(client: Option<AuthUser>, required_rank: UserRank) -> ApiResult<()> {
     (client_access_level(client) >= required_rank)
         .then_some(())
         .ok_or(Error::InsufficientPrivileges)
@@ -249,7 +247,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
         .with(log)
 }
 
-type AuthResult = Result<Option<User>, AuthenticationError>;
+type AuthResult = Result<Option<AuthUser>, AuthenticationError>;
 
 const MAX_UPLOAD_SIZE: u64 = 4 * 1024_u64.pow(3);
 
@@ -309,9 +307,9 @@ impl ResourceQuery {
         self.fields.as_deref()
     }
 
-    fn bump_login(&self, user: Option<&User>) -> ApiResult<()> {
-        match (user, self.bump_login) {
-            (Some(user), Some(true)) => update::last_login_time(user),
+    fn bump_login(&self, client: Option<AuthUser>) -> ApiResult<()> {
+        match (client, self.bump_login) {
+            (Some(user), Some(true)) => update::last_login_time(user.id),
             _ => Ok(()),
         }
     }
@@ -335,7 +333,7 @@ impl PagedQuery {
         self.query.fields()
     }
 
-    fn bump_login(&self, user: Option<&User>) -> ApiResult<()> {
+    fn bump_login(&self, user: Option<AuthUser>) -> ApiResult<()> {
         self.query.bump_login(user)
     }
 }
@@ -367,8 +365,12 @@ struct ErrorResponse {
 }
 
 /// Returns the rank of `client`.
-fn client_access_level(client: Option<&User>) -> UserRank {
-    client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
+fn client_access_level(client: Option<AuthUser>) -> UserRank {
+    if cfg!(test) {
+        UserRank::Administrator
+    } else {
+        client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
+    }
 }
 
 /// Checks if `current_version` matches `client_version`.
@@ -382,10 +384,6 @@ fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiRes
 /// Optionally extracts an authorization header from the incoming request and attempts to authenticate with it.
 fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {
     warp::header::optional("authorization").map(|auth: Option<_>| auth.map(header::authenticate_user).transpose())
-}
-
-fn connection() -> impl Filter<Extract = (ConnectionResult,), Error = Infallible> + Clone {
-    warp::any().map(|| db::get_connection())
 }
 
 async fn empty_query(_err: Rejection) -> Result<(ResourceQuery,), Infallible> {

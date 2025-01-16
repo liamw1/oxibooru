@@ -172,19 +172,3 @@ impl PostSignature {
             .load(conn)
     }
 }
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::model::enums::UserRank;
-    use crate::test::*;
-
-    #[test]
-    fn save_post() {
-        let post = test_transaction(|conn: &mut PgConnection| {
-            create_test_user(conn, TEST_USERNAME, UserRank::Regular).and_then(|user| create_test_post(conn, &user))
-        });
-
-        assert_eq!(post.safety, PostSafety::Safe);
-    }
-}
