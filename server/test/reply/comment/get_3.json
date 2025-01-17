@@ -1,0 +1,11 @@
+{
+    "id": 3,
+    "postId": 4,
+    "text": "I don't think this uploaded correctly",
+    "user": {
+        "name": "regular_user",
+        "avatarUrl": "data/custom-avatars/regular_user.png"
+    },
+    "score": -3,
+    "ownScore": 0
+}

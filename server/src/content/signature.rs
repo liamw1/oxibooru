@@ -304,7 +304,6 @@ fn uncompress(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) -> [u8; SI
 mod test {
     use super::*;
     use crate::test::*;
-    use std::path::Path;
 
     #[test]
     fn edge_cases() {
@@ -355,9 +354,7 @@ mod test {
 
     #[test]
     fn grid_points() {
-        let lisa_small_border = image::open(image_path(Path::new("lisa-border.jpg")))
-            .unwrap()
-            .to_luma8();
+        let lisa_small_border = image::open(image_path("lisa-border.jpg")).unwrap().to_luma8();
 
         let grid_points = compute_grid_points(&lisa_small_border);
         let lower_left_grid_point = (grid_points.left_set().first().unwrap(), grid_points.right_set().first().unwrap());
@@ -367,9 +364,7 @@ mod test {
         assert!(lower_left_pixel.0[0] < 250);
         assert!(upper_right_pixel.0[0] < 250);
 
-        let lisa_large_border = image::open(image_path(Path::new("lisa-large_border.jpg")))
-            .unwrap()
-            .to_luma8();
+        let lisa_large_border = image::open(image_path("lisa-large_border.jpg")).unwrap().to_luma8();
 
         let grid_points = compute_grid_points(&lisa_large_border);
         let lower_left_grid_point = (grid_points.left_set().first().unwrap(), grid_points.right_set().first().unwrap());
@@ -385,7 +380,7 @@ mod test {
     }
 
     fn image_properties(asset: &str) -> ([i64; COMPRESSED_SIGNATURE_SIZE], [i32; NUM_WORDS]) {
-        let signature = compute(&image::open(image_path(Path::new(asset))).unwrap());
+        let signature = compute(&image::open(image_path(asset)).unwrap());
         let indexes = generate_indexes(signature);
         (signature, indexes)
     }

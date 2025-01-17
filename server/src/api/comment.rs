@@ -248,10 +248,22 @@ fn delete_comment(auth: AuthResult, comment_id: i32, client_version: DeleteReque
 mod test {
     use crate::test::*;
 
-    const FIELDS: &str = "fields=id%2CpostId%2Ctext%2Cuser%2Cscore%2CownScore";
+    // Exclude fields that involve creation_time or last_edit_time
+    const FIELDS: &str = "&fields=id,postId,text,user,score,ownScore";
 
     #[tokio::test]
     async fn list() {
-        verify_query(&format!("GET /comments/?query=-sort:id&limit=42&{FIELDS}"), "comment/list.json").await;
+        const QUERY: &str = "GET /comments/?query";
+        const SORT: &str = "-sort:id&limit=40";
+        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "comment/list.json").await;
+        verify_query(&format!("{QUERY}=sort:score&limit=1{FIELDS}"), "comment/list_highest_score.json").await;
+        verify_query(&format!("{QUERY}=user:regular_user {SORT}{FIELDS}"), "comment/list_regular_user.json").await;
+        verify_query(&format!("{QUERY}=text:*this* {SORT}{FIELDS}"), "comment/list_text_filter.json").await;
+    }
+
+    #[tokio::test]
+    async fn get() {
+        verify_query(&format!("GET /comment/1/?{FIELDS}"), "comment/get_1.json").await;
+        verify_query(&format!("GET /comment/3/?{FIELDS}"), "comment/get_3.json").await;
     }
 }

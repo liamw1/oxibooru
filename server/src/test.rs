@@ -1,4 +1,5 @@
-use crate::db::ConnectionPool;
+use crate::auth::header;
+use crate::db::{ConnectionPool, ConnectionResult};
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{AvatarStyle, MimeType, PostFlag, PostFlags, Score, UserRank};
 use crate::model::enums::{PostSafety, PostType};
@@ -24,45 +25,23 @@ pub const TEST_PASSWORD: &str = "test_password";
 pub const TEST_SALT: &str = "test_salt";
 pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
 
-pub static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
-    let mut conn = db::get_prod_connection().unwrap();
-    diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}"))
-        .execute(&mut conn)
-        .unwrap();
-    diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}"))
-        .execute(&mut conn)
-        .unwrap();
-
-    let database_url = db::create_url(Some("__test"));
-    let mut conn = PgConnection::establish(&database_url).unwrap();
-    db::run_migrations(&mut conn);
-    populate_database(&mut conn).unwrap();
-
-    let manager = ConnectionManager::new(database_url);
-    Pool::builder()
-        .max_lifetime(Some(Duration::from_secs(60)))
-        .idle_timeout(None)
-        .test_on_check_out(true)
-        .build(manager)
-        .expect("Could not build connection pool")
-});
-
-/// Returns path to a test image.
-pub fn image_path(relative_path: &Path) -> PathBuf {
-    let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    path.push("test");
-    path.push("images");
-    path.push(relative_path);
-    path
+pub fn get_connection() -> ConnectionResult {
+    CONNECTION_POOL.get()
 }
 
-/// Returns path to an expected reply.
-pub fn reply_path(relative_path: &Path) -> PathBuf {
-    let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    path.push("test");
-    path.push("reply");
-    path.push(relative_path);
-    path
+/// Returns path to a test image.
+pub fn image_path(relative_path: &str) -> PathBuf {
+    asset_path("images", relative_path)
+}
+
+/// Returns path to an expected test request reply.
+pub fn reply_path(relative_path: &str) -> PathBuf {
+    asset_path("reply", relative_path)
+}
+
+/// Returns path to a test request body.
+pub fn body_path(relative_path: &str) -> PathBuf {
+    asset_path("body", relative_path)
 }
 
 /// Used in place of conn.test_transaction as that function doesn't give any useful information on failure
@@ -76,18 +55,41 @@ where
         .test_transaction(|conn| Ok::<_, Error>(function(conn).unwrap()))
 }
 
-pub async fn verify_query(query: &str, reply_filepath: &str) {
+/// Verifies that a given `query` matches the contents of a `reply_filepath`.
+/// `query` must be of the form `METHOD path` (e.g. `GET /post/1`).
+pub async fn verify_query(query: &str, relative_path: &str) {
+    verify_query_with_user("administrator", query, relative_path).await
+}
+
+pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) {
     let filter = api::routes();
     let (method, path) = query.split_once(' ').unwrap();
-    let reply = warp::test::request().method(method).path(path).reply(&filter).await;
-    let body = std::str::from_utf8(reply.body()).unwrap();
+    let path = path.replace(' ', "%20"); // Percent-encode all spaces
+    let credentials = header::credentials_for(user, TEST_PASSWORD);
+    let basic_access_authentication = format!("Basic {credentials}");
 
-    let file_contents = std::fs::read_to_string(reply_path(Path::new(reply_filepath))).unwrap();
+    let request = warp::test::request()
+        .header("authorization", basic_access_authentication)
+        .method(method)
+        .path(&path);
+
+    // Optionally specify a body
+    let body_path = body_path(relative_path);
+    let reply = match body_path.try_exists().unwrap() {
+        true => {
+            let body = std::fs::read_to_string(body_path).unwrap();
+            request.body(body).reply(&filter).await
+        }
+        false => request.reply(&filter).await,
+    };
+    let actual_body = std::str::from_utf8(reply.body()).unwrap();
+
+    let file_contents = std::fs::read_to_string(reply_path(relative_path)).unwrap();
     let expected_body: String = file_contents.split_whitespace().collect();
-    let body: String = body.split_whitespace().collect();
+    let actual_body: String = actual_body.split_whitespace().collect();
 
     assert_eq!(reply.status(), 200);
-    assert_eq!(body, expected_body);
+    assert_eq!(actual_body, expected_body);
 }
 
 const DATABASE_NAME: &str = "__test";
@@ -307,6 +309,29 @@ const COMMENT_SCORES: &[(i32, i32, Score)] = &[
     (3, 3, Score::Dislike),
     (3, 4, Score::Dislike),
 ];
+
+static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
+    let mut conn = db::get_prod_connection().unwrap();
+    diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}"))
+        .execute(&mut conn)
+        .unwrap();
+    diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}"))
+        .execute(&mut conn)
+        .unwrap();
+
+    let database_url = db::create_url(Some("__test"));
+    let mut conn = PgConnection::establish(&database_url).unwrap();
+    db::run_migrations(&mut conn);
+    populate_database(&mut conn).unwrap();
+
+    let manager = ConnectionManager::new(database_url);
+    Pool::builder()
+        .max_lifetime(Some(Duration::from_secs(60)))
+        .idle_timeout(None)
+        .test_on_check_out(true)
+        .build(manager)
+        .expect("Could not build connection pool")
+});
 
 const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRank) -> NewUser<'static> {
     NewUser {
@@ -726,4 +751,12 @@ mod test {
             assert_eq!(usage_count, expected_usage_count);
         }
     }
+}
+
+fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
+    let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    path.push("test");
+    path.push(Path::new(folder_path));
+    path.push(Path::new(relative_path));
+    path
 }

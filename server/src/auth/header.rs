@@ -51,6 +51,12 @@ pub fn authenticate_user(auth: String) -> Result<AuthUser, AuthenticationError> 
     }
 }
 
+#[cfg(test)]
+pub fn credentials_for(username: &str, password: &str) -> String {
+    let credentials = format!("{username}:{password}");
+    BASE64_STANDARD.encode(credentials)
+}
+
 /// `credentials` are sent base64 encoded, so this function decodes them to utf-8.
 fn decode_credentials(credentials: &str) -> Result<(String, String), AuthenticationError> {
     let decoded_credentials = BASE64_STANDARD.decode(credentials)?;

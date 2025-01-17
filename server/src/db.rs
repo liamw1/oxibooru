@@ -1,6 +1,6 @@
 use crate::config;
 #[cfg(test)]
-use crate::test::CONNECTION_POOL as TEST_CONNECTION_POOL;
+use crate::test;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
@@ -12,14 +12,16 @@ pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type ConnectionResult = Result<Connection, PoolError>;
 
 /// Returns a connection to the database from a connection pool.
-#[cfg(not(test))]
+/// TODO: Try making this function async to increase throughput
 pub fn get_connection() -> ConnectionResult {
-    CONNECTION_POOL.get()
-}
-
-#[cfg(test)]
-pub fn get_connection() -> ConnectionResult {
-    TEST_CONNECTION_POOL.get()
+    #[cfg(not(test))]
+    {
+        CONNECTION_POOL.get()
+    }
+    #[cfg(test)]
+    {
+        test::get_connection()
+    }
 }
 
 #[cfg(test)]

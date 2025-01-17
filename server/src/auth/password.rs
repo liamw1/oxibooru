@@ -15,7 +15,7 @@ pub fn hash_password(password: &str, salt: &SaltString) -> Result<String, HashEr
 
 /// Returns if the given `user` and `password` match.
 pub fn is_valid_password(password_hash: &str, password: &str) -> bool {
-    PasswordHash::new(&password_hash)
+    PasswordHash::new(password_hash)
         .and_then(|parsed_hash| ARGON_CONTEXT.verify_password(password.as_bytes(), &parsed_hash))
         .is_ok()
 }

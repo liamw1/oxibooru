@@ -1,0 +1,19 @@
+{
+    "query": "sort:score",
+    "offset": 0,
+    "limit": 1,
+    "total": 4,
+    "results": [
+        {
+            "id": 1,
+            "postId": 1,
+            "text": "Cool post!",
+            "user": {
+                "name": "regular_user",
+                "avatarUrl": "data/custom-avatars/regular_user.png"
+            },
+            "score": 2,
+            "ownScore": 0
+        }
+    ]
+}

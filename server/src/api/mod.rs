@@ -366,11 +366,7 @@ struct ErrorResponse {
 
 /// Returns the rank of `client`.
 fn client_access_level(client: Option<AuthUser>) -> UserRank {
-    if cfg!(test) {
-        UserRank::Administrator
-    } else {
-        client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
-    }
+    client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
 }
 
 /// Checks if `current_version` matches `client_version`.

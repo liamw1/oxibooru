@@ -1,20 +1,9 @@
 {
-    "query": "-sort:id",
+    "query": "text:*this* -sort:id",
     "offset": 0,
     "limit": 40,
-    "total": 4,
+    "total": 2,
     "results": [
-        {
-            "id": 1,
-            "postId": 1,
-            "text": "Cool post!",
-            "user": {
-                "name": "regular_user",
-                "avatarUrl": "data/custom-avatars/regular_user.png"
-            },
-            "score": 2,
-            "ownScore": 0
-        },
         {
             "id": 2,
             "postId": 1,
@@ -35,14 +24,6 @@
                 "avatarUrl": "data/custom-avatars/regular_user.png"
             },
             "score": -3,
-            "ownScore": 0
-        },
-        {
-            "id": 4,
-            "postId": 5,
-            "text": "Lorem ipsum dolor sit amet, consectetur adipiscing elit",
-            "user": null,
-            "score": 0,
             "ownScore": 0
         }
     ]
