@@ -1,0 +1,21 @@
+{
+    "id": 7,
+    "description": "This is a test pool",
+    "category": "default",
+    "names": [
+        "Name1",
+        "Name2",
+        "Name3"
+    ],
+    "posts": [
+        {
+            "id": 1,
+            "thumbnailUrl": "data/generated-thumbnails/1_d77wlWbdkWl19hwWOHP-ux7RlGdOl488e1JbD4ZZzpg.jpg"
+        },
+        {
+            "id": 5,
+            "thumbnailUrl": "data/generated-thumbnails/5_Hxof4ZHXut9WtGlGR3uTAdJx1_9-J_0C9ZoPQLh-2Rk.jpg"
+        }
+    ],
+    "postCount": 2
+}

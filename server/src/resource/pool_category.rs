@@ -65,6 +65,7 @@ impl PoolCategoryInfo {
         let pool_categories: Vec<(PoolCategory, i32)> = pool_category::table
             .inner_join(pool_category_statistics::table)
             .select((PoolCategory::as_select(), pool_category_statistics::usage_count))
+            .order_by(pool_category::id)
             .load(conn)?;
         Ok(pool_categories
             .into_iter()

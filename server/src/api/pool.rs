@@ -207,6 +207,12 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
             .get_results(conn)?;
         update::pool::add_names(conn, merge_to_id, current_name_count, removed_names)?;
 
+        // Update last_edit_time
+        diesel::update(pool::table)
+            .set(pool::last_edit_time.eq(DateTime::now()))
+            .filter(pool::id.eq(merge_to_id))
+            .execute(conn)?;
+
         diesel::delete(pool::table.find(remove_id))
             .execute(conn)
             .map_err(api::Error::from)
@@ -266,7 +272,13 @@ fn update_pool(auth: AuthResult, pool_id: i32, query: ResourceQuery, update: Poo
             update::pool::delete_posts(conn, pool_id)?;
             update::pool::add_posts(conn, pool_id, 0, posts)?;
         }
-        Ok::<_, api::Error>(())
+
+        // Update last_edit_time
+        diesel::update(pool::table)
+            .set(pool::last_edit_time.eq(DateTime::now()))
+            .filter(pool::id.eq(pool_id))
+            .execute(conn)
+            .map_err(api::Error::from)
     })?;
     conn.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
 }
@@ -287,4 +299,153 @@ fn delete_pool(auth: AuthResult, name: String, client_version: DeleteRequest) ->
         diesel::delete(pool::table.find(pool_id)).execute(conn)?;
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod test {
+    use crate::api::ApiResult;
+    use crate::model::pool::Pool;
+    use crate::schema::{database_statistics, pool, pool_name, pool_statistics};
+    use crate::test::*;
+    use crate::time::DateTime;
+    use diesel::dsl::exists;
+    use diesel::prelude::*;
+    use serial_test::{parallel, serial};
+
+    // Exclude fields that involve creation_time or last_edit_time
+    const FIELDS: &str = "&fields=id,description,category,names,posts,postCount";
+
+    #[tokio::test]
+    #[parallel]
+    async fn list() -> ApiResult<()> {
+        const QUERY: &str = "GET /pools/?query";
+        const SORT: &str = "-sort:creation-time&limit=40";
+        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "pool/list.json").await?;
+        verify_query(&format!("{QUERY}=sort:post-count&limit=1{FIELDS}"), "pool/list_most_posts.json").await?;
+        verify_query(&format!("{QUERY}=category:Setting {SORT}{FIELDS}"), "pool/list_category_setting.json").await?;
+        verify_query(&format!("{QUERY}=name:*punk* {SORT}{FIELDS}"), "pool/list_name_punk.json").await
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn get() -> ApiResult<()> {
+        const POOL_ID: i32 = 4;
+        let get_last_edit_time = |conn: &mut PgConnection| -> QueryResult<DateTime> {
+            pool::table
+                .select(pool::last_edit_time)
+                .filter(pool::id.eq(POOL_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let last_edit_time = get_last_edit_time(&mut conn)?;
+
+        verify_query(&format!("GET /pool/{POOL_ID}/?{FIELDS}"), "pool/get.json").await?;
+
+        let new_last_edit_time = get_last_edit_time(&mut conn)?;
+        assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn create() -> ApiResult<()> {
+        let get_pool_count = |conn: &mut PgConnection| -> QueryResult<i32> {
+            database_statistics::table
+                .select(database_statistics::pool_count)
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let pool_count = get_pool_count(&mut conn)?;
+
+        verify_query(&format!("POST /pool/?{FIELDS}"), "pool/create.json").await?;
+
+        let (pool_id, name): (i32, String) = pool::table
+            .inner_join(pool_name::table)
+            .select((pool::id, pool_name::name))
+            .order_by(pool::id.desc())
+            .first(&mut conn)?;
+
+        let new_pool_count = get_pool_count(&mut conn)?;
+        let post_count: i32 = pool_statistics::table
+            .select(pool_statistics::post_count)
+            .filter(pool_statistics::pool_id.eq(pool_id))
+            .first(&mut conn)?;
+        assert_eq!(new_pool_count, pool_count + 1);
+        assert_eq!(post_count, 2);
+
+        verify_query(&format!("DELETE /pool/{name}/?{FIELDS}"), "delete.json").await?;
+
+        let new_pool_count = get_pool_count(&mut conn)?;
+        let has_pool: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(&mut conn)?;
+        assert_eq!(new_pool_count, pool_count);
+        assert!(!has_pool);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn merge() -> ApiResult<()> {
+        const REMOVE_ID: i32 = 2;
+        const MERGE_TO_ID: i32 = 5;
+        let get_pool_info = |conn: &mut PgConnection| -> QueryResult<(Pool, i32)> {
+            pool::table
+                .inner_join(pool_statistics::table)
+                .select((Pool::as_select(), pool_statistics::post_count))
+                .filter(pool::id.eq(MERGE_TO_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let (pool, post_count) = get_pool_info(&mut conn)?;
+
+        verify_query(&format!("POST /pool-merge/?{FIELDS}"), "pool/merge.json").await?;
+
+        let has_pool: bool = diesel::select(exists(pool::table.find(REMOVE_ID))).get_result(&mut conn)?;
+        assert!(!has_pool);
+
+        let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
+        assert_eq!(new_pool.category_id, pool.category_id);
+        assert_eq!(new_pool.description, pool.description);
+        assert_eq!(new_pool.creation_time, pool.creation_time);
+        assert!(new_pool.last_edit_time > pool.last_edit_time);
+        assert_ne!(new_post_count, post_count);
+        Ok(reset_database())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn update() -> ApiResult<()> {
+        const POOL_ID: i32 = 2;
+        let get_pool_info = |conn: &mut PgConnection| -> QueryResult<(Pool, i32)> {
+            pool::table
+                .inner_join(pool_statistics::table)
+                .select((Pool::as_select(), pool_statistics::post_count))
+                .filter(pool::id.eq(POOL_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let (pool, post_count) = get_pool_info(&mut conn)?;
+
+        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/update.json").await?;
+
+        let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
+        assert_ne!(new_pool.category_id, pool.category_id);
+        assert_ne!(new_pool.description, pool.description);
+        assert_eq!(new_pool.creation_time, pool.creation_time);
+        assert!(new_pool.last_edit_time > pool.last_edit_time);
+        assert_ne!(new_post_count, post_count);
+
+        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/update_restore.json").await?;
+
+        let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
+        assert_eq!(new_pool.category_id, pool.category_id);
+        assert_eq!(new_pool.description, pool.description);
+        assert_eq!(new_pool.creation_time, pool.creation_time);
+        assert!(new_pool.last_edit_time > pool.last_edit_time);
+        assert_eq!(new_post_count, post_count);
+        Ok(())
+    }
 }

@@ -19,7 +19,7 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::result::Error;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
+use std::sync::Mutex;
 use std::time::Duration;
 
 pub const TEST_PASSWORD: &str = "test_password";
@@ -27,7 +27,22 @@ pub const TEST_SALT: &str = "test_salt";
 pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
 
 pub fn get_connection() -> ConnectionResult {
-    CONNECTION_POOL.get()
+    let mut lock = CONNECTION_POOL.lock().unwrap();
+    match lock.as_mut() {
+        Some(pool) => pool.get(),
+        None => {
+            let pool = recreate_database().unwrap();
+            let conn = pool.get();
+            *lock = Some(pool);
+            conn
+        }
+    }
+}
+
+/// Resets the test database. Useful after operations that are hard to reverse perfectly, like merging.
+pub fn reset_database() {
+    let mut lock = CONNECTION_POOL.lock().unwrap();
+    *lock = None;
 }
 
 /// Returns path to a test image.
@@ -50,8 +65,7 @@ pub fn test_transaction<F, R>(function: F) -> R
 where
     F: FnOnce(&mut PgConnection) -> QueryResult<R>,
 {
-    CONNECTION_POOL
-        .get()
+    get_connection()
         .unwrap()
         .test_transaction(|conn| Ok::<_, Error>(function(conn).unwrap()))
 }
@@ -309,28 +323,7 @@ const COMMENT_SCORES: &[(i32, i32, Score)] = &[
     (3, 5, Score::Dislike),
 ];
 
-static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
-    let mut conn = db::get_prod_connection().unwrap();
-    diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}"))
-        .execute(&mut conn)
-        .unwrap();
-    diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}"))
-        .execute(&mut conn)
-        .unwrap();
-
-    let database_url = db::create_url(Some("__test"));
-    let mut conn = PgConnection::establish(&database_url).unwrap();
-    db::run_migrations(&mut conn);
-    populate_database(&mut conn).unwrap();
-
-    let manager = ConnectionManager::new(database_url);
-    Pool::builder()
-        .max_lifetime(Some(Duration::from_secs(60)))
-        .idle_timeout(None)
-        .test_on_check_out(true)
-        .build(manager)
-        .expect("Could not build connection pool")
-});
+static CONNECTION_POOL: Mutex<Option<ConnectionPool>> = Mutex::new(None);
 
 const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRank) -> NewUser<'static> {
     NewUser {
@@ -598,6 +591,26 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
         .execute(conn)?;
 
     Ok(())
+}
+
+fn recreate_database() -> ApiResult<ConnectionPool> {
+    let mut conn = db::get_prod_connection()?;
+    diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}")).execute(&mut conn)?;
+    diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
+
+    let database_url = db::create_url(Some("__test"));
+    let mut conn = PgConnection::establish(&database_url).unwrap();
+    db::run_migrations(&mut conn);
+    populate_database(&mut conn)?;
+
+    let manager = ConnectionManager::new(database_url);
+    let pool = Pool::builder()
+        .max_lifetime(Some(Duration::from_secs(60)))
+        .idle_timeout(None)
+        .test_on_check_out(true)
+        .build(manager)
+        .expect("Could not build connection pool");
+    Ok(pool)
 }
 
 fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {

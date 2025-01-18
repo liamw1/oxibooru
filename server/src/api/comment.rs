@@ -247,6 +247,7 @@ fn delete_comment(auth: AuthResult, comment_id: i32, client_version: DeleteReque
 #[cfg(test)]
 mod test {
     use crate::api::ApiResult;
+    use crate::model::comment::Comment;
     use crate::schema::{comment, comment_statistics, database_statistics};
     use crate::test::*;
     use crate::time::DateTime;
@@ -329,23 +330,33 @@ mod test {
     #[serial]
     async fn update() -> ApiResult<()> {
         const COMMENT_ID: i32 = 4;
-        let get_comment_info = |conn: &mut PgConnection| -> QueryResult<(String, DateTime)> {
+        let get_comment_info = |conn: &mut PgConnection| -> QueryResult<(Comment, i32)> {
             comment::table
-                .select((comment::text, comment::last_edit_time))
+                .inner_join(comment_statistics::table)
+                .select((Comment::as_select(), comment_statistics::score))
                 .filter(comment::id.eq(COMMENT_ID))
                 .first(conn)
         };
 
         let mut conn = get_connection()?;
-        let (text, last_edit_time) = get_comment_info(&mut conn)?;
+        let (comment, score) = get_comment_info(&mut conn)?;
 
         verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/update.json").await?;
 
-        let (new_text, new_last_edit_time) = get_comment_info(&mut conn)?;
-        assert_ne!(new_text, text);
-        assert!(new_last_edit_time > last_edit_time);
+        let (new_comment, new_score) = get_comment_info(&mut conn)?;
+        assert_ne!(new_comment.text, comment.text);
+        assert_eq!(new_comment.creation_time, comment.creation_time);
+        assert!(new_comment.last_edit_time > comment.last_edit_time);
+        assert_eq!(new_score, score);
 
-        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/update_restore.json").await
+        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/update_restore.json").await?;
+
+        let (new_comment, new_score) = get_comment_info(&mut conn)?;
+        assert_eq!(new_comment.text, comment.text);
+        assert_eq!(new_comment.creation_time, comment.creation_time);
+        assert!(new_comment.last_edit_time > comment.last_edit_time);
+        assert_eq!(new_score, score);
+        Ok(())
     }
 
     #[tokio::test]
