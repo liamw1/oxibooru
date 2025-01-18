@@ -105,13 +105,13 @@ const USERS: &[NewUser] = &[
 ];
 
 const POOL_CATEGORY_NAMES: &[&str] = &["Setting", "Style"];
-const DEFAULT_POOLS: &[&[&str]] = &[];
+const DEFAULT_POOLS: &[&[&str]] = &[&["favs"]];
 const SETTINGS_POOLS: &[&[&str]] = &[&["fantasy"], &["steampunk"], &["cyberpunk"]];
 const STYLES_POOLS: &[&[&str]] = &[&["abstract"], &["realistic"]];
 const POOL_GROUPS: &[&[&[&str]]] = &[DEFAULT_POOLS, SETTINGS_POOLS, STYLES_POOLS];
 
 const TAG_CATEGORY_NAMES: &[&str] = &["Artist", "Source", "Character", "Surroundings", "Meta"];
-const DEFAULT_TAGS: &[&[&str]] = &[];
+const DEFAULT_TAGS: &[&[&str]] = &[&["tagme", "tag_me"]];
 const ARTIST_TAGS: &[&[&str]] = &[&["shakespeare"], &["george_lucas"], &["hidetaka_miyazaki"]];
 const SOURCE_TAGS: &[&[&str]] = &[&["classic_literature"], &["star_wars"], &["sekiro"]];
 const CHARACTER_TAGS: &[&[&str]] = &[
@@ -140,11 +140,7 @@ const SURROUNDINGS_TAGS: &[&[&str]] = &[
     &["sky"],
     &["night_sky"],
 ];
-const META_TAGS: &[&[&str]] = &[
-    &["high_resolution", "high_res"],
-    &["16:9_aspect_ratio"],
-    &["tagme", "tag_me"],
-];
+const META_TAGS: &[&[&str]] = &[&["high_resolution", "high_res"], &["16:9_aspect_ratio"]];
 const TAG_GROUPS: &[&[&[&str]]] = &[
     DEFAULT_TAGS,
     ARTIST_TAGS,

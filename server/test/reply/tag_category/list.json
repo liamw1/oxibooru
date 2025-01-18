@@ -1,0 +1,46 @@
+{
+    "results": [
+        {
+            "name": "default",
+            "color": "default",
+            "usages": 1,
+            "order": 0,
+            "default": true
+        },
+        {
+            "name": "Artist",
+            "color": "default",
+            "usages": 3,
+            "order": 1,
+            "default": false
+        },
+        {
+            "name": "Source",
+            "color": "default",
+            "usages": 3,
+            "order": 2,
+            "default": false
+        },
+        {
+            "name": "Character",
+            "color": "default",
+            "usages": 11,
+            "order": 3,
+            "default": false
+        },
+        {
+            "name": "Surroundings",
+            "color": "default",
+            "usages": 11,
+            "order": 4,
+            "default": false
+        },
+        {
+            "name": "Meta",
+            "color": "default",
+            "usages": 2,
+            "order": 5,
+            "default": false
+        }
+    ]
+}
