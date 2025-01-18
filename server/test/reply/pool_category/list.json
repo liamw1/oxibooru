@@ -1,0 +1,22 @@
+{
+    "results": [
+        {
+            "name": "default",
+            "color": "default",
+            "usages": 0,
+            "default": true
+        },
+        {
+            "name": "Setting",
+            "color": "default",
+            "usages": 3,
+            "default": false
+        },
+        {
+            "name": "Style",
+            "color": "default",
+            "usages": 2,
+            "default": false
+        }
+    ]
+}

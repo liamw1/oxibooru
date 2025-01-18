@@ -234,11 +234,11 @@ BEGIN
         IF NEW."category_id" IS DISTINCT FROM OLD."category_id" THEN
             UPDATE "pool_category_statistics"
             SET "usage_count" = "usage_count" - 1
-            WHERE "category_id" = OLD."id";
+            WHERE "category_id" = OLD."category_id";
 
             UPDATE "pool_category_statistics"
             SET "usage_count" = "usage_count" + 1
-            WHERE "category_id" = NEW."id";
+            WHERE "category_id" = NEW."category_id";
         END IF;
         RETURN NEW;
     END IF;
@@ -477,11 +477,11 @@ BEGIN
         IF NEW."category_id" IS DISTINCT FROM OLD."category_id" THEN
             UPDATE "tag_category_statistics"
             SET "usage_count" = "usage_count" - 1
-            WHERE "category_id" = OLD."id";
+            WHERE "category_id" = OLD."category_id";
 
             UPDATE "tag_category_statistics"
             SET "usage_count" = "usage_count" + 1
-            WHERE "category_id" = NEW."id";
+            WHERE "category_id" = NEW."category_id";
         END IF;
         RETURN NEW;
     END IF;

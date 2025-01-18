@@ -899,3 +899,22 @@ fn unfavorite_post(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiR
     diesel::delete(post_favorite::table.find((post_id, user_id))).execute(&mut conn)?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from))
 }
+
+#[cfg(test)]
+mod test {
+    use crate::api::ApiResult;
+    use serial_test::parallel;
+
+    #[tokio::test]
+    #[parallel]
+    async fn list() -> ApiResult<()> {
+        // Exclude fields that involve creation_time or last_edit_time
+        const FIELDS: &str = "&fields=id,user,fileSize,canvasWidth,canvasHeight,safety,type,mimeType,\
+        checksum,checksumMd5,flags,source,contentUrl,thumbnailUrl,tags,relations,pools,notes,\
+        score,ownScore,ownFavorite,tagCount,commentCount,relationCount,noteCount,favoriteCount,featureCount,\
+        favoritedBy,hasCustomThumbnail";
+
+        // TODO
+        Ok(())
+    }
+}

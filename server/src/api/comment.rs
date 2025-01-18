@@ -20,27 +20,27 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     let get_comment = warp::get()
         .and(api::auth())
         .and(warp::path!("comment" / i32))
-        .and(warp::query())
+        .and(api::resource_query())
         .map(get_comment)
         .map(api::Reply::from);
     let create_comment = warp::post()
         .and(api::auth())
         .and(warp::path!("comments"))
-        .and(warp::query())
+        .and(api::resource_query())
         .and(warp::body::json())
         .map(create_comment)
         .map(api::Reply::from);
     let update_comment = warp::put()
         .and(api::auth())
         .and(warp::path!("comment" / i32))
-        .and(warp::query())
+        .and(api::resource_query())
         .and(warp::body::json())
         .map(update_comment)
         .map(api::Reply::from);
     let rate_comment = warp::put()
         .and(api::auth())
         .and(warp::path!("comment" / i32 / "score"))
-        .and(warp::query())
+        .and(api::resource_query())
         .and(warp::body::json())
         .map(rate_comment)
         .map(api::Reply::from);
@@ -265,8 +265,7 @@ mod test {
         verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "comment/list.json").await?;
         verify_query(&format!("{QUERY}=sort:score&limit=1{FIELDS}"), "comment/list_highest_score.json").await?;
         verify_query(&format!("{QUERY}=user:regular_user {SORT}{FIELDS}"), "comment/list_regular_user.json").await?;
-        verify_query(&format!("{QUERY}=text:*this* {SORT}{FIELDS}"), "comment/list_text_filter.json").await?;
-        Ok(())
+        verify_query(&format!("{QUERY}=text:*this* {SORT}{FIELDS}"), "comment/list_text_filter.json").await
     }
 
     #[tokio::test]
@@ -346,8 +345,7 @@ mod test {
         assert_ne!(new_text, text);
         assert!(new_last_edit_time > last_edit_time);
 
-        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/update_restore.json").await?;
-        Ok(())
+        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/update_restore.json").await
     }
 
     #[tokio::test]

@@ -1,11 +1,11 @@
-use crate::api::{ApiResult, AuthResult, DeleteRequest, UnpagedResponse};
+use crate::api::{ApiResult, AuthResult, DeleteRequest, ResourceQuery, UnpagedResponse};
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPoolCategory, PoolCategory};
-use crate::resource::pool_category::PoolCategoryInfo;
+use crate::resource::pool_category::{FieldTable, PoolCategoryInfo};
 use crate::schema::{pool, pool_category};
 use crate::time::DateTime;
-use crate::{api, config, db};
+use crate::{api, config, db, resource};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -14,28 +14,33 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     let list_pool_categories = warp::get()
         .and(api::auth())
         .and(warp::path!("pool-categories"))
+        .and(api::resource_query())
         .map(list_pool_categories)
         .map(api::Reply::from);
     let get_pool_category = warp::get()
         .and(api::auth())
         .and(warp::path!("pool-category" / String))
+        .and(api::resource_query())
         .map(get_pool_category)
         .map(api::Reply::from);
     let create_pool_category = warp::post()
         .and(api::auth())
         .and(warp::path!("pool-categories"))
+        .and(api::resource_query())
         .and(warp::body::json())
         .map(create_pool_category)
         .map(api::Reply::from);
     let update_pool_category = warp::put()
         .and(api::auth())
         .and(warp::path!("pool-category" / String))
+        .and(api::resource_query())
         .and(warp::body::json())
         .map(update_pool_category)
         .map(api::Reply::from);
     let set_default_pool_category = warp::put()
         .and(api::auth())
         .and(warp::path!("pool-category" / String / "default"))
+        .and(api::resource_query())
         .map(set_default_pool_category)
         .map(api::Reply::from);
     let delete_pool_category = warp::delete()
@@ -53,21 +58,31 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete_pool_category)
 }
 
-fn list_pool_categories(auth: AuthResult) -> ApiResult<UnpagedResponse<PoolCategoryInfo>> {
+fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
+    fields
+        .map(resource::pool_category::Field::create_table)
+        .transpose()
+        .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
+        .map_err(Box::from)
+}
+
+fn list_pool_categories(auth: AuthResult, query: ResourceQuery) -> ApiResult<UnpagedResponse<PoolCategoryInfo>> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_list)?;
 
+    let fields = create_field_table(query.fields())?;
     db::get_connection()?.transaction(|conn| {
-        PoolCategoryInfo::all(conn)
+        PoolCategoryInfo::all(conn, &fields)
             .map(|results| UnpagedResponse { results })
             .map_err(api::Error::from)
     })
 }
 
-fn get_pool_category(auth: AuthResult, name: String) -> ApiResult<PoolCategoryInfo> {
+fn get_pool_category(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_view)?;
 
+    let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let category = pool_category::table
@@ -75,7 +90,7 @@ fn get_pool_category(auth: AuthResult, name: String) -> ApiResult<PoolCategoryIn
             .first(conn)
             .optional()?
             .ok_or(api::Error::NotFound(ResourceType::PoolCategory))?;
-        PoolCategoryInfo::new(conn, category).map_err(api::Error::from)
+        PoolCategoryInfo::new(conn, category, &fields).map_err(api::Error::from)
     })
 }
 
@@ -86,7 +101,11 @@ struct NewPoolCategoryInfo {
     color: String,
 }
 
-fn create_pool_category(auth: AuthResult, category_info: NewPoolCategoryInfo) -> ApiResult<PoolCategoryInfo> {
+fn create_pool_category(
+    auth: AuthResult,
+    query: ResourceQuery,
+    category_info: NewPoolCategoryInfo,
+) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_create)?;
     api::verify_matches_regex(&category_info.name, RegexType::PoolCategory)?;
@@ -96,12 +115,13 @@ fn create_pool_category(auth: AuthResult, category_info: NewPoolCategoryInfo) ->
         color: &category_info.color,
     };
 
+    let fields = create_field_table(query.fields())?;
     let mut conn = db::get_connection()?;
     let category = diesel::insert_into(pool_category::table)
         .values(new_category)
         .returning(PoolCategory::as_returning())
         .get_result(&mut conn)?;
-    conn.transaction(|conn| PoolCategoryInfo::new(conn, category).map_err(api::Error::from))
+    conn.transaction(|conn| PoolCategoryInfo::new(conn, category, &fields).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -112,8 +132,14 @@ struct PoolCategoryUpdate {
     color: Option<String>,
 }
 
-fn update_pool_category(auth: AuthResult, name: String, update: PoolCategoryUpdate) -> ApiResult<PoolCategoryInfo> {
+fn update_pool_category(
+    auth: AuthResult,
+    name: String,
+    query: ResourceQuery,
+    update: PoolCategoryUpdate,
+) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
+    let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
@@ -143,13 +169,14 @@ fn update_pool_category(auth: AuthResult, name: String, update: PoolCategoryUpda
 
         Ok::<_, api::Error>(category_id)
     })?;
-    conn.transaction(|conn| PoolCategoryInfo::new_from_id(conn, category_id).map_err(api::Error::from))
+    conn.transaction(|conn| PoolCategoryInfo::new_from_id(conn, category_id, &fields).map_err(api::Error::from))
 }
 
-fn set_default_pool_category(auth: AuthResult, name: String) -> ApiResult<PoolCategoryInfo> {
+fn set_default_pool_category(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_set_default)?;
 
+    let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let new_default_category: PoolCategory = conn.transaction(|conn| {
@@ -183,7 +210,7 @@ fn set_default_pool_category(auth: AuthResult, name: String) -> ApiResult<PoolCa
         new_default_category.name = temporary_category_name;
         new_default_category.save_changes(conn)
     })?;
-    conn.transaction(|conn| PoolCategoryInfo::new(conn, new_default_category).map_err(api::Error::from))
+    conn.transaction(|conn| PoolCategoryInfo::new(conn, new_default_category, &fields).map_err(api::Error::from))
 }
 
 fn delete_pool_category(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
@@ -204,4 +231,123 @@ fn delete_pool_category(auth: AuthResult, name: String, client_version: DeleteRe
         diesel::delete(pool_category::table.find(category_id)).execute(conn)?;
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod test {
+    use crate::api::ApiResult;
+    use crate::model::pool::PoolCategory;
+    use crate::schema::{pool_category, pool_category_statistics};
+    use crate::test::*;
+    use crate::time::DateTime;
+    use diesel::prelude::*;
+    use serial_test::{parallel, serial};
+
+    // Exclude fields that involve creation_time or last_edit_time
+    const FIELDS: &str = "&fields=name,color,usages,default";
+
+    #[tokio::test]
+    #[parallel]
+    async fn list() -> ApiResult<()> {
+        verify_query(&format!("GET /pool-categories/?{FIELDS}"), "pool_category/list.json").await
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn get() -> ApiResult<()> {
+        const NAME: &str = "Setting";
+        let get_last_edit_time = |conn: &mut PgConnection| -> QueryResult<DateTime> {
+            pool_category::table
+                .select(pool_category::last_edit_time)
+                .filter(pool_category::name.eq(NAME))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let last_edit_time = get_last_edit_time(&mut conn)?;
+
+        verify_query(&format!("GET /pool-category/{NAME}/?{FIELDS}"), "pool_category/get.json").await?;
+
+        let new_last_edit_time = get_last_edit_time(&mut conn)?;
+        assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn create() -> ApiResult<()> {
+        let mut conn = get_connection()?;
+        let category_count: i64 = pool_category::table.count().first(&mut conn)?;
+
+        verify_query(&format!("POST /pool-categories/?{FIELDS}"), "pool_category/create.json").await?;
+
+        let category_name: String = pool_category::table
+            .select(pool_category::name)
+            .order_by(pool_category::id.desc())
+            .first(&mut conn)?;
+
+        let new_category_count: i64 = pool_category::table.count().first(&mut conn)?;
+        let usage_count: i32 = pool_category::table
+            .inner_join(pool_category_statistics::table)
+            .select(pool_category_statistics::usage_count)
+            .filter(pool_category::name.eq(&category_name))
+            .first(&mut conn)?;
+        assert_eq!(new_category_count, category_count + 1);
+        assert_eq!(usage_count, 0);
+
+        verify_query(&format!("DELETE /pool-category/{category_name}"), "delete.json").await?;
+
+        let new_category_count: i64 = pool_category::table.count().first(&mut conn)?;
+        assert_eq!(new_category_count, category_count);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn update() -> ApiResult<()> {
+        const NAME: &str = "Style";
+
+        let mut conn = get_connection()?;
+        let category: PoolCategory = pool_category::table
+            .filter(pool_category::name.eq(NAME))
+            .first(&mut conn)?;
+
+        verify_query(&format!("PUT /pool-category/{NAME}/?{FIELDS}"), "pool_category/update.json").await?;
+
+        let updated_category: PoolCategory = pool_category::table
+            .filter(pool_category::id.eq(category.id))
+            .first(&mut conn)?;
+        assert_ne!(updated_category.name, category.name);
+        assert_ne!(updated_category.color, category.color);
+        assert!(updated_category.last_edit_time > category.last_edit_time);
+
+        let new_name = updated_category.name;
+        verify_query(&format!("PUT /pool-category/{new_name}/?{FIELDS}"), "pool_category/update_restore.json").await
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn set_default() -> ApiResult<()> {
+        const NAME: &str = "Setting";
+        let is_default = |conn: &mut PgConnection| -> QueryResult<bool> {
+            let category_id: i32 = pool_category::table
+                .select(pool_category::id)
+                .filter(pool_category::name.eq(NAME))
+                .first(conn)?;
+            Ok(category_id == 0)
+        };
+
+        verify_query(&format!("PUT /pool-category/{NAME}/default/?{FIELDS}"), "pool_category/set_default.json").await?;
+
+        let mut conn = get_connection()?;
+        let default = is_default(&mut conn)?;
+        assert!(default);
+
+        verify_query(&format!("PUT /pool-category/default/default/?{FIELDS}"), "pool_category/restore_default.json")
+            .await?;
+
+        let default = is_default(&mut conn)?;
+        assert!(!default);
+        Ok(())
+    }
 }
