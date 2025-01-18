@@ -23,8 +23,8 @@
                 "name": "regular_user",
                 "avatarUrl": "data/custom-avatars/regular_user.png"
             },
-            "score": -3,
-            "ownScore": 0
+            "score": -4,
+            "ownScore": -1
         }
     ]
 }

@@ -155,7 +155,7 @@ fn get_scores(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
 fn get_client_scores(conn: &mut PgConnection, client: Option<i32>, comments: &[Comment]) -> QueryResult<Vec<Rating>> {
     if let Some(client_id) = client {
         CommentScore::belonging_to(comments)
-            .filter(comment_score::comment_id.eq(client_id))
+            .filter(comment_score::user_id.eq(client_id))
             .load::<CommentScore>(conn)
             .map(|client_scores| {
                 resource::order_like(client_scores, comments, |score| score.comment_id)

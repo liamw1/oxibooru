@@ -1,3 +1,4 @@
+use crate::api::ApiResult;
 use crate::auth::header;
 use crate::db::{ConnectionPool, ConnectionResult};
 use crate::model::comment::{NewComment, NewCommentScore};
@@ -57,11 +58,11 @@ where
 
 /// Verifies that a given `query` matches the contents of a `reply_filepath`.
 /// `query` must be of the form `METHOD path` (e.g. `GET /post/1`).
-pub async fn verify_query(query: &str, relative_path: &str) {
+pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
     verify_query_with_user("administrator", query, relative_path).await
 }
 
-pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) {
+pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) -> ApiResult<()> {
     let filter = api::routes();
     let (method, path) = query.split_once(' ').unwrap();
     let path = path.replace(' ', "%20"); // Percent-encode all spaces
@@ -75,21 +76,22 @@ pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str
 
     // Optionally specify a body
     let body_path = body_path(relative_path);
-    let reply = match body_path.try_exists().unwrap() {
+    let reply = match body_path.try_exists()? {
         true => {
-            let body = std::fs::read_to_string(body_path).unwrap();
+            let body = std::fs::read_to_string(body_path)?;
             request.body(body).reply(&filter).await
         }
         false => request.reply(&filter).await,
     };
-    let actual_body = std::str::from_utf8(reply.body()).unwrap();
+    let actual_body = std::str::from_utf8(reply.body())?;
 
-    let file_contents = std::fs::read_to_string(reply_path(relative_path)).unwrap();
+    let file_contents = std::fs::read_to_string(reply_path(relative_path))?;
     let expected_body: String = file_contents.split_whitespace().collect();
     let actual_body: String = actual_body.split_whitespace().collect();
 
     assert_eq!(reply.status(), 200);
     assert_eq!(actual_body, expected_body);
+    Ok(())
 }
 
 const DATABASE_NAME: &str = "__test";
@@ -308,6 +310,7 @@ const COMMENT_SCORES: &[(i32, i32, Score)] = &[
     (3, 1, Score::Dislike),
     (3, 3, Score::Dislike),
     (3, 4, Score::Dislike),
+    (3, 5, Score::Dislike),
 ];
 
 static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
@@ -601,12 +604,21 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
     Ok(())
 }
 
-#[cfg(test)]
+fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
+    let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
+    path.push("test");
+    path.push(Path::new(folder_path));
+    path.push(Path::new(relative_path));
+    path
+}
+
 mod test {
     use super::*;
     use crate::schema::{comment_statistics, database_statistics};
+    use serial_test::parallel;
 
     #[test]
+    #[parallel]
     fn database_statistics() {
         let expected_disk_usage: i64 = POSTS.iter().map(|post| post.file_size).sum();
         let expected_pool_count: i32 = POOL_GROUPS.iter().map(|group| group.len() as i32).sum();
@@ -632,6 +644,7 @@ mod test {
     }
 
     #[test]
+    #[parallel]
     fn comment_statistics() {
         let stats: Vec<(i32, i32)> = test_transaction(|conn| comment_statistics::table.load(conn));
         for (comment_id, total_score) in stats {
@@ -645,6 +658,7 @@ mod test {
     }
 
     #[test]
+    #[parallel]
     fn pool_category_statistics() {
         let stats: Vec<(i32, i32)> = test_transaction(|conn| pool_category_statistics::table.load(conn));
         for (category_id, usage_count) in stats {
@@ -654,6 +668,7 @@ mod test {
     }
 
     #[test]
+    #[parallel]
     fn pool_statistics() {
         let stats: Vec<(String, i32)> = test_transaction(|conn| {
             pool_statistics::table
@@ -669,6 +684,7 @@ mod test {
     }
 
     #[test]
+    #[parallel]
     fn post_statistics() {
         let stats: Vec<(
             i32,
@@ -726,6 +742,7 @@ mod test {
     }
 
     #[test]
+    #[parallel]
     fn tag_category_statistics() {
         let stats: Vec<(i32, i32)> = test_transaction(|conn| tag_category_statistics::table.load(conn));
         for (category_id, usage_count) in stats {
@@ -735,6 +752,7 @@ mod test {
     }
 
     #[test]
+    #[parallel]
     fn tag_statistics() {
         let stats: Vec<(String, i32)> = test_transaction(|conn| {
             tag_statistics::table
@@ -751,12 +769,4 @@ mod test {
             assert_eq!(usage_count, expected_usage_count);
         }
     }
-}
-
-fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
-    let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    path.push("test");
-    path.push(Path::new(folder_path));
-    path.push(Path::new(relative_path));
-    path
 }

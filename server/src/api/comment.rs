@@ -246,24 +246,142 @@ fn delete_comment(auth: AuthResult, comment_id: i32, client_version: DeleteReque
 
 #[cfg(test)]
 mod test {
+    use crate::api::ApiResult;
+    use crate::schema::{comment, comment_statistics, database_statistics};
     use crate::test::*;
+    use crate::time::DateTime;
+    use diesel::dsl::exists;
+    use diesel::prelude::*;
+    use serial_test::{parallel, serial};
 
     // Exclude fields that involve creation_time or last_edit_time
     const FIELDS: &str = "&fields=id,postId,text,user,score,ownScore";
 
     #[tokio::test]
-    async fn list() {
+    #[parallel]
+    async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /comments/?query";
         const SORT: &str = "-sort:id&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "comment/list.json").await;
-        verify_query(&format!("{QUERY}=sort:score&limit=1{FIELDS}"), "comment/list_highest_score.json").await;
-        verify_query(&format!("{QUERY}=user:regular_user {SORT}{FIELDS}"), "comment/list_regular_user.json").await;
-        verify_query(&format!("{QUERY}=text:*this* {SORT}{FIELDS}"), "comment/list_text_filter.json").await;
+        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "comment/list.json").await?;
+        verify_query(&format!("{QUERY}=sort:score&limit=1{FIELDS}"), "comment/list_highest_score.json").await?;
+        verify_query(&format!("{QUERY}=user:regular_user {SORT}{FIELDS}"), "comment/list_regular_user.json").await?;
+        verify_query(&format!("{QUERY}=text:*this* {SORT}{FIELDS}"), "comment/list_text_filter.json").await?;
+        Ok(())
     }
 
     #[tokio::test]
-    async fn get() {
-        verify_query(&format!("GET /comment/1/?{FIELDS}"), "comment/get_1.json").await;
-        verify_query(&format!("GET /comment/3/?{FIELDS}"), "comment/get_3.json").await;
+    #[parallel]
+    async fn get() -> ApiResult<()> {
+        const COMMENT_ID: i32 = 3;
+        let get_last_edit_time = |conn: &mut PgConnection| -> QueryResult<DateTime> {
+            comment::table
+                .select(comment::last_edit_time)
+                .filter(comment::id.eq(COMMENT_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let last_edit_time = get_last_edit_time(&mut conn)?;
+
+        verify_query(&format!("GET /comment/{COMMENT_ID}/?{FIELDS}"), "comment/get.json").await?;
+
+        let new_last_edit_time = get_last_edit_time(&mut conn)?;
+        assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn create() -> ApiResult<()> {
+        let get_comment_count = |conn: &mut PgConnection| -> QueryResult<i32> {
+            database_statistics::table
+                .select(database_statistics::comment_count)
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let comment_count = get_comment_count(&mut conn)?;
+
+        verify_query(&format!("POST /comments/?{FIELDS}"), "comment/create.json").await?;
+
+        let comment_id: i32 = comment::table
+            .select(comment::id)
+            .order_by(comment::id.desc())
+            .first(&mut conn)?;
+
+        let new_comment_count = get_comment_count(&mut conn)?;
+        let comment_score: i32 = comment_statistics::table
+            .select(comment_statistics::score)
+            .filter(comment_statistics::comment_id.eq(comment_id))
+            .first(&mut conn)?;
+        assert_eq!(new_comment_count, comment_count + 1);
+        assert_eq!(comment_score, 0);
+
+        verify_query(&format!("DELETE /comment/{comment_id}"), "delete.json").await?;
+
+        let new_comment_count = get_comment_count(&mut conn)?;
+        let has_comment: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(&mut conn)?;
+        assert_eq!(new_comment_count, comment_count);
+        assert!(!has_comment);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn update() -> ApiResult<()> {
+        const COMMENT_ID: i32 = 4;
+        let get_comment_info = |conn: &mut PgConnection| -> QueryResult<(String, DateTime)> {
+            comment::table
+                .select((comment::text, comment::last_edit_time))
+                .filter(comment::id.eq(COMMENT_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let (text, last_edit_time) = get_comment_info(&mut conn)?;
+
+        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/update.json").await?;
+
+        let (new_text, new_last_edit_time) = get_comment_info(&mut conn)?;
+        assert_ne!(new_text, text);
+        assert!(new_last_edit_time > last_edit_time);
+
+        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/update_restore.json").await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn rate() -> ApiResult<()> {
+        const COMMENT_ID: i32 = 2;
+        let get_comment_info = |conn: &mut PgConnection| -> QueryResult<(i32, DateTime)> {
+            comment::table
+                .inner_join(comment_statistics::table)
+                .select((comment_statistics::score, comment::last_edit_time))
+                .filter(comment::id.eq(COMMENT_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let (score, last_edit_time) = get_comment_info(&mut conn)?;
+
+        verify_query(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/like.json").await?;
+
+        let (new_score, new_last_edit_time) = get_comment_info(&mut conn)?;
+        assert_eq!(new_score, score + 1);
+        assert_eq!(new_last_edit_time, last_edit_time);
+
+        verify_query(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/dislike.json").await?;
+
+        let (new_score, new_last_edit_time) = get_comment_info(&mut conn)?;
+        assert_eq!(new_score, score - 1);
+        assert_eq!(new_last_edit_time, last_edit_time);
+
+        verify_query(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/remove_score.json").await?;
+
+        let (new_score, new_last_edit_time) = get_comment_info(&mut conn)?;
+        assert_eq!(new_score, score);
+        assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
     }
 }

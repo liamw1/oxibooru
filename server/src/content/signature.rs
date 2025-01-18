@@ -304,23 +304,25 @@ fn uncompress(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) -> [u8; SI
 mod test {
     use super::*;
     use crate::test::*;
+    use image::ImageResult;
 
     #[test]
-    fn edge_cases() {
-        let (one_pixel, _) = image_properties("1_pixel.png");
-        let (monochrome, _) = image_properties("monochrome.png");
-        let (gradient, _) = image_properties("gradient.png");
+    fn edge_cases() -> ImageResult<()> {
+        let (one_pixel, _) = image_properties("1_pixel.png")?;
+        let (monochrome, _) = image_properties("monochrome.png")?;
+        let (gradient, _) = image_properties("gradient.png")?;
 
         assert_eq!(distance(one_pixel, monochrome), 0.0);
         assert_ne!(distance(one_pixel, gradient), 0.0);
+        Ok(())
     }
 
     #[test]
-    fn image_signature_regression() {
-        let (png, _) = image_properties("png.png");
-        let (bmp, _) = image_properties("bmp.bmp");
-        let (jpeg, _) = image_properties("jpeg.jpg");
-        let (similar_jpeg, _) = image_properties("jpeg-similar.jpg");
+    fn image_signature_regression() -> ImageResult<()> {
+        let (png, _) = image_properties("png.png")?;
+        let (bmp, _) = image_properties("bmp.bmp")?;
+        let (jpeg, _) = image_properties("jpeg.jpg")?;
+        let (similar_jpeg, _) = image_properties("jpeg-similar.jpg")?;
 
         // Identical images of different formats
         assert_eq!(distance(png, bmp), 0.0);
@@ -328,16 +330,17 @@ mod test {
         assert!((distance(jpeg, similar_jpeg) - 0.1583484677615785).abs() < 1e-8);
         // Different images
         assert!((distance(png, jpeg) - 0.6990083687106061).abs() < 1e-8);
+        Ok(())
     }
 
     #[test]
-    fn signature_robustness() {
-        let (lisa_signature, lisa_indexes) = image_properties("lisa.jpg");
-        let (lisa_border_signature, lisa_border_indexes) = image_properties("lisa-border.jpg");
-        let (lisa_large_border_signature, lisa_large_border_indexes) = image_properties("lisa-large_border.jpg");
-        let (lisa_wide_signature, lisa_wide_indexes) = image_properties("lisa-wide.jpg");
-        let (lisa_cat_signature, lisa_cat_indexes) = image_properties("lisa-cat.jpg");
-        let (starry_night_signature, starry_night_indexes) = image_properties("starry_night.jpg");
+    fn signature_robustness() -> ImageResult<()> {
+        let (lisa_signature, lisa_indexes) = image_properties("lisa.jpg")?;
+        let (lisa_border_signature, lisa_border_indexes) = image_properties("lisa-border.jpg")?;
+        let (lisa_large_border_signature, lisa_large_border_indexes) = image_properties("lisa-large_border.jpg")?;
+        let (lisa_wide_signature, lisa_wide_indexes) = image_properties("lisa-wide.jpg")?;
+        let (lisa_cat_signature, lisa_cat_indexes) = image_properties("lisa-cat.jpg")?;
+        let (starry_night_signature, starry_night_indexes) = image_properties("starry_night.jpg")?;
 
         assert!(distance(lisa_signature, lisa_border_signature) < 0.2);
         assert!(distance(lisa_signature, lisa_large_border_signature) < 0.2);
@@ -350,11 +353,12 @@ mod test {
         assert!(matching_indexes(&lisa_indexes, &lisa_wide_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_cat_indexes) > 0);
         assert_eq!(matching_indexes(&lisa_indexes, &starry_night_indexes), 0);
+        Ok(())
     }
 
     #[test]
-    fn grid_points() {
-        let lisa_small_border = image::open(image_path("lisa-border.jpg")).unwrap().to_luma8();
+    fn grid_points() -> ImageResult<()> {
+        let lisa_small_border = image::open(image_path("lisa-border.jpg"))?.to_luma8();
 
         let grid_points = compute_grid_points(&lisa_small_border);
         let lower_left_grid_point = (grid_points.left_set().first().unwrap(), grid_points.right_set().first().unwrap());
@@ -364,7 +368,7 @@ mod test {
         assert!(lower_left_pixel.0[0] < 250);
         assert!(upper_right_pixel.0[0] < 250);
 
-        let lisa_large_border = image::open(image_path("lisa-large_border.jpg")).unwrap().to_luma8();
+        let lisa_large_border = image::open(image_path("lisa-large_border.jpg"))?.to_luma8();
 
         let grid_points = compute_grid_points(&lisa_large_border);
         let lower_left_grid_point = (grid_points.left_set().first().unwrap(), grid_points.right_set().first().unwrap());
@@ -373,15 +377,16 @@ mod test {
         let upper_right_pixel = lisa_large_border.get_pixel(*upper_right_grid_point.0, *upper_right_grid_point.1);
         assert!(lower_left_pixel.0[0] < 250);
         assert!(upper_right_pixel.0[0] < 250);
+        Ok(())
     }
 
     fn matching_indexes(indexes_a: &[i32], indexes_b: &[i32]) -> usize {
         indexes_a.iter().zip(indexes_b.iter()).filter(|(a, b)| a == b).count()
     }
 
-    fn image_properties(asset: &str) -> ([i64; COMPRESSED_SIGNATURE_SIZE], [i32; NUM_WORDS]) {
-        let signature = compute(&image::open(image_path(asset)).unwrap());
+    fn image_properties(asset: &str) -> ImageResult<([i64; COMPRESSED_SIGNATURE_SIZE], [i32; NUM_WORDS])> {
+        let signature = compute(&image::open(image_path(asset))?);
         let indexes = generate_indexes(signature);
-        (signature, indexes)
+        Ok((signature, indexes))
     }
 }

@@ -166,13 +166,13 @@ mod test {
     use crate::model::enums::PostSafety;
 
     #[test]
-    fn time_parsing() {
-        assert_eq!(parse_time("1970").unwrap(), DateTime::from_date(1970, 1, 1).unwrap());
-        assert_eq!(parse_time("2024").unwrap(), DateTime::from_date(2024, 1, 1).unwrap());
-        assert_eq!(parse_time("2024-7").unwrap(), DateTime::from_date(2024, 7, 1).unwrap());
-        assert_eq!(parse_time("2024-7-11").unwrap(), DateTime::from_date(2024, 7, 11).unwrap());
-        assert_eq!(parse_time("2024-07-11").unwrap(), DateTime::from_date(2024, 7, 11).unwrap());
-        assert_eq!(parse_time("2024-2-29").unwrap(), DateTime::from_date(2024, 2, 29).unwrap());
+    fn time_parsing() -> Result<(), TimeParsingError> {
+        assert_eq!(parse_time("1970")?, DateTime::from_date(1970, 1, 1)?);
+        assert_eq!(parse_time("2024")?, DateTime::from_date(2024, 1, 1)?);
+        assert_eq!(parse_time("2024-7")?, DateTime::from_date(2024, 7, 1)?);
+        assert_eq!(parse_time("2024-7-11")?, DateTime::from_date(2024, 7, 11)?);
+        assert_eq!(parse_time("2024-07-11")?, DateTime::from_date(2024, 7, 11)?);
+        assert_eq!(parse_time("2024-2-29")?, DateTime::from_date(2024, 2, 29)?);
 
         assert!(parse_time("").is_err());
         assert!(parse_time("2000-01-01-01").is_err());
@@ -180,23 +180,24 @@ mod test {
         assert!(parse_time("Hello World!").is_err());
         assert!(parse_time("a-b-c").is_err());
         assert!(parse_time("--").is_err());
+        Ok(())
     }
 
     #[test]
-    fn criteria_parsing() {
+    fn criteria_parsing() -> Result<(), Error> {
         assert_eq!(split_once("a:b", ':'), Some(("a", "b")));
         assert_eq!(split_once(":b", ':'), Some(("", "b")));
         assert_eq!(split_once("a:", ':'), Some(("a", "")));
         assert_eq!(split_once(":", ':'), Some(("", "")));
 
-        assert_eq!(criteria("1").unwrap(), Criteria::Values(vec![1]));
-        assert_eq!(criteria("-137").unwrap(), Criteria::Values(vec![-137]));
-        assert_eq!(criteria("0,1,2,3").unwrap(), Criteria::Values(vec![0, 1, 2, 3]));
-        assert_eq!(criteria("-4,-1,0,0,70,6").unwrap(), Criteria::Values(vec![-4, -1, 0, 0, 70, 6]));
-        assert_eq!(criteria("7..").unwrap(), Criteria::GreaterEq(7));
-        assert_eq!(criteria("..7").unwrap(), Criteria::LessEq(7));
-        assert_eq!(criteria("0..1").unwrap(), Criteria::Range(0..1));
-        assert_eq!(criteria("-10..5").unwrap(), Criteria::Range(-10..5));
+        assert_eq!(criteria("1")?, Criteria::Values(vec![1]));
+        assert_eq!(criteria("-137")?, Criteria::Values(vec![-137]));
+        assert_eq!(criteria("0,1,2,3")?, Criteria::Values(vec![0, 1, 2, 3]));
+        assert_eq!(criteria("-4,-1,0,0,70,6")?, Criteria::Values(vec![-4, -1, 0, 0, 70, 6]));
+        assert_eq!(criteria("7..")?, Criteria::GreaterEq(7));
+        assert_eq!(criteria("..7")?, Criteria::LessEq(7));
+        assert_eq!(criteria("0..1")?, Criteria::Range(0..1));
+        assert_eq!(criteria("-10..5")?, Criteria::Range(-10..5));
 
         assert_eq!(str_criteria("str"), StrCritera::Regular(Criteria::Values(vec![Cow::Borrowed("str")])));
         assert_eq!(
@@ -211,8 +212,9 @@ mod test {
         assert_eq!(str_criteria("a*,*b,*c*"), StrCritera::WildCard(String::from("a%,%b,%c%")));
         assert_eq!(str_criteria("*a..b"), StrCritera::WildCard(String::from("%a..b")));
 
-        assert_eq!(criteria("safe").unwrap(), Criteria::Values(vec![PostSafety::Safe]));
-        assert_eq!(criteria("safe..unsafe").unwrap(), Criteria::Range(PostSafety::Safe..PostSafety::Unsafe));
+        assert_eq!(criteria("safe")?, Criteria::Values(vec![PostSafety::Safe]));
+        assert_eq!(criteria("safe..unsafe")?, Criteria::Range(PostSafety::Safe..PostSafety::Unsafe));
+        Ok(())
     }
 
     #[test]
