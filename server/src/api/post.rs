@@ -903,18 +903,32 @@ fn unfavorite_post(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiR
 #[cfg(test)]
 mod test {
     use crate::api::ApiResult;
+    use crate::search::post::Token;
+    use crate::test::*;
     use serial_test::parallel;
+    use strum::IntoEnumIterator;
+
+    // Exclude fields that involve creation_time or last_edit_time
+    const FIELDS: &str = "&fields=id,user,fileSize,canvasWidth,canvasHeight,safety,type,mimeType,checksum,checksumMd5,\
+    flags,source,contentUrl,thumbnailUrl,tags,relations,pools,notes,score,ownScore,ownFavorite,tagCount,commentCount,\
+    relationCount,noteCount,favoriteCount,featureCount,favoritedBy,hasCustomThumbnail";
 
     #[tokio::test]
     #[parallel]
     async fn list() -> ApiResult<()> {
-        // Exclude fields that involve creation_time or last_edit_time
-        const FIELDS: &str = "&fields=id,user,fileSize,canvasWidth,canvasHeight,safety,type,mimeType,\
-        checksum,checksumMd5,flags,source,contentUrl,thumbnailUrl,tags,relations,pools,notes,\
-        score,ownScore,ownFavorite,tagCount,commentCount,relationCount,noteCount,favoriteCount,featureCount,\
-        favoritedBy,hasCustomThumbnail";
-
-        // TODO
+        const QUERY: &str = "GET /posts/?query";
+        const SORT: &str = "-sort:id&limit=40";
+        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "post/list.json").await?;
+        for token in Token::iter() {
+            match token {
+                Token::Id | Token::ContentChecksum | Token::NoteText | Token::Special => continue,
+                _ => (),
+            };
+            let token_str: &'static str = token.into();
+            let query = format!("{QUERY}=sort:{token_str} {SORT}&fields=id");
+            let path = format!("post/list_{token_str}_sorted.json");
+            verify_query(&query, &path).await?;
+        }
         Ok(())
     }
 }

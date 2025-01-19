@@ -518,30 +518,28 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
     }
 
     // Add favorites
-    let new_favorites: Vec<_> = POST_FAVORITES
-        .iter()
-        .map(|&(user_id, post_id)| PostFavorite {
+    for &(user_id, post_id) in POST_FAVORITES {
+        let new_post_favorite = PostFavorite {
             post_id,
             user_id,
             time: DateTime::now(),
-        })
-        .collect();
-    diesel::insert_into(post_favorite::table)
-        .values(new_favorites)
-        .execute(conn)?;
+        };
+        diesel::insert_into(post_favorite::table)
+            .values(new_post_favorite)
+            .execute(conn)?;
+    }
 
     // Add features
-    let new_features: Vec<_> = POST_FEATURES
-        .iter()
-        .map(|&(user_id, post_id)| NewPostFeature {
+    for &(user_id, post_id) in POST_FEATURES {
+        let new_post_feature = NewPostFeature {
             user_id,
             post_id,
             time: DateTime::now(),
-        })
-        .collect();
-    diesel::insert_into(post_feature::table)
-        .values(new_features)
-        .execute(conn)?;
+        };
+        diesel::insert_into(post_feature::table)
+            .values(new_post_feature)
+            .execute(conn)?;
+    }
 
     // Add scores
     let new_scores: Vec<_> = POST_SCORES
@@ -566,16 +564,15 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
     diesel::insert_into(post_note::table).values(post_note).execute(conn)?;
 
     // Add comments
-    let new_comments: Vec<_> = COMMENTS
-        .iter()
-        .map(|&(user_id, post_id, text)| NewComment {
+    for &(user_id, post_id, text) in COMMENTS {
+        let new_comment = NewComment {
             user_id,
             post_id,
             text,
             creation_time: DateTime::now(),
-        })
-        .collect();
-    diesel::insert_into(comment::table).values(new_comments).execute(conn)?;
+        };
+        diesel::insert_into(comment::table).values(new_comment).execute(conn)?;
+    }
 
     // Add comment scores
     let new_comment_scores: Vec<_> = COMMENT_SCORES

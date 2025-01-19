@@ -1,0 +1,23 @@
+{
+    "query": "sort:type -sort:id",
+    "offset": 0,
+    "limit": 40,
+    "total": 5,
+    "results": [
+        {
+            "id": 5
+        },
+        {
+            "id": 2
+        },
+        {
+            "id": 1
+        },
+        {
+            "id": 3
+        },
+        {
+            "id": 4
+        }
+    ]
+}

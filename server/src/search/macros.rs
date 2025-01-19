@@ -95,7 +95,7 @@ macro_rules! apply_sort {
     ($query:expr, $expression:expr, $sort:expr) => {
         match $sort.order {
             $crate::search::Order::Asc => $query.then_order_by($expression.asc()),
-            $crate::search::Order::Desc => $query.then_order_by($expression.desc()),
+            $crate::search::Order::Desc => $query.then_order_by($expression.desc().nulls_last()),
         }
     };
 }

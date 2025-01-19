@@ -5,34 +5,36 @@ use crate::schema::{
 };
 use crate::search::{Error, Order, ParsedSort, SearchCriteria, UnparsedFilter};
 use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
-use diesel::dsl::{count, InnerJoin, IntoBoxed, LeftJoin, Select};
+use diesel::dsl::{count, sql, InnerJoin, IntoBoxed, LeftJoin, Select};
+use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::prelude::*;
+use diesel::sql_types::Float;
 use std::str::FromStr;
-use strum::EnumString;
+use strum::{EnumIter, EnumString, IntoStaticStr};
 
 pub type BoxedQuery<'a> =
     IntoBoxed<'a, LeftJoin<InnerJoin<Select<post::table, post::id>, post_statistics::table>, user::table>, Pg>;
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Clone, Copy, EnumIter, EnumString, IntoStaticStr)]
 #[strum(serialize_all = "kebab-case")]
 #[strum(use_phf)]
 pub enum Token {
     Id,
     FileSize,
     #[strum(serialize = "width", serialize = "image-width")]
-    ImageWidth,
+    Width,
     #[strum(serialize = "height", serialize = "image-height")]
-    ImageHeight,
+    Height,
     #[strum(serialize = "area", serialize = "image-area")]
-    ImageArea,
+    Area,
     #[strum(
         serialize = "ar",
         serialize = "aspect-ratio",
         serialize = "image-ar",
         serialize = "image-aspect-ratio"
     )]
-    ImageAspectRatio,
+    AspectRatio,
     #[strum(serialize = "rating", serialize = "safety")]
     Safety,
     Type,
@@ -101,10 +103,10 @@ pub fn build_query<'a>(
         .try_fold(base_query, |query, filter| match filter.kind {
             Token::Id => apply_filter!(query, post::id, filter, i32),
             Token::FileSize => apply_filter!(query, post::file_size, filter, i64),
-            Token::ImageWidth => apply_filter!(query, post::width, filter, i32),
-            Token::ImageHeight => apply_filter!(query, post::height, filter, i32),
-            Token::ImageArea => apply_filter!(query, post::width * post::height, filter, i32),
-            Token::ImageAspectRatio => apply_filter!(query, post::width / post::height, filter, i32),
+            Token::Width => apply_filter!(query, post::width, filter, i32),
+            Token::Height => apply_filter!(query, post::height, filter, i32),
+            Token::Area => apply_filter!(query, post::width * post::height, filter, i32),
+            Token::AspectRatio => apply_filter!(query, aspect_ratio(), filter, f32),
             Token::Safety => apply_filter!(query, post::safety, filter, PostSafety),
             Token::Type => apply_filter!(query, post::type_, filter, PostType),
             Token::ContentChecksum => Ok(apply_str_filter!(query, post::checksum, filter)),
@@ -198,10 +200,10 @@ pub fn get_ordered_ids(
     let query = sorts.iter().fold(unsorted_query, |query, sort| match sort.kind {
         Token::Id => apply_sort!(query, post::id, sort),
         Token::FileSize => apply_sort!(query, post::file_size, sort),
-        Token::ImageWidth => apply_sort!(query, post::width, sort),
-        Token::ImageHeight => apply_sort!(query, post::height, sort),
-        Token::ImageArea => apply_sort!(query, post::width * post::height, sort),
-        Token::ImageAspectRatio => apply_sort!(query, post::width / post::height, sort),
+        Token::Width => apply_sort!(query, post::width, sort),
+        Token::Height => apply_sort!(query, post::height, sort),
+        Token::Area => apply_sort!(query, post::width * post::height, sort),
+        Token::AspectRatio => apply_sort!(query, aspect_ratio(), sort),
         Token::Safety => apply_sort!(query, post::safety, sort),
         Token::Type => apply_sort!(query, post::type_, sort),
         Token::CreationTime => apply_sort!(query, post::creation_time, sort),
@@ -233,6 +235,15 @@ enum SpecialToken {
     Disliked,
     Fav,
     Tumbleweed,
+}
+
+fn aspect_ratio(
+) -> SqlLiteral<Float, UncheckedBind<SqlLiteral<Float, UncheckedBind<SqlLiteral<Float>, post::width>>, post::height>> {
+    sql("CAST(")
+        .bind(post::width)
+        .sql(" AS REAL) / CAST(")
+        .bind(post::height)
+        .sql(" AS REAL)")
 }
 
 fn apply_special_filter<'a>(

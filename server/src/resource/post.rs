@@ -382,18 +382,20 @@ fn get_thumbnail_urls(posts: &[Post]) -> Vec<String> {
 fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroTag>>> {
     let tag_info = tag::table
         .inner_join(tag_statistics::table)
-        .inner_join(tag_category::table);
+        .inner_join(tag_category::table)
+        .inner_join(tag_name::table);
     let post_tags: Vec<(PostTag, i32, i32)> = PostTag::belonging_to(posts)
         .inner_join(tag_info)
         .select((PostTag::as_select(), tag::category_id, tag_statistics::usage_count))
-        .order(tag_category::order)
+        .filter(tag_name::order.eq(0))
+        .order((tag_category::order, tag_name::name))
         .load(conn)?;
     let tag_ids: HashSet<i32> = post_tags.iter().map(|(post_tag, ..)| post_tag.tag_id).collect();
 
     let tag_names: Vec<(i32, String)> = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(tag_ids))
-        .order((tag_name::tag_id, tag_name::order, tag_name::name))
+        .order((tag_name::tag_id, tag_name::order))
         .load(conn)?;
     let category_names: HashMap<i32, String> = tag_category::table
         .select((tag_category::id, tag_category::name))
