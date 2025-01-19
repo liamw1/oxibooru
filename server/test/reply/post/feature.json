@@ -1,0 +1,54 @@
+{
+    "id": 4,
+    "user": {
+        "name": "regular_user",
+        "avatarUrl": "data/custom-avatars/regular_user.png"
+    },
+    "fileSize": 1,
+    "canvasWidth": 1,
+    "canvasHeight": 1,
+    "safety": "safe",
+    "type": "image",
+    "mimeType": "image/bmp",
+    "checksum": "4",
+    "checksumMD5": "4",
+    "flags": [],
+    "source": null,
+    "contentUrl": "data/posts/4_2T0h9OctazrL_1YqDMMcFYoaq0VEgj8VgS-E8XumnaE.bmp",
+    "thumbnailUrl": "data/generated-thumbnails/4_2T0h9OctazrL_1YqDMMcFYoaq0VEgj8VgS-E8XumnaE.jpg",
+    "tags": [],
+    "relations": [
+        {
+            "id": 5,
+            "thumbnailUrl": "data/generated-thumbnails/5_Hxof4ZHXut9WtGlGR3uTAdJx1_9-J_0C9ZoPQLh-2Rk.jpg"
+        }
+    ],
+    "pools": [
+        {
+            "id": 5,
+            "names": [
+                "abstract"
+            ],
+            "category": "Style",
+            "description": "",
+            "postCount": 1
+        }
+    ],
+    "notes": [],
+    "score": 0,
+    "ownScore": -1,
+    "ownFavorite": false,
+    "tagCount": 0,
+    "commentCount": 1,
+    "relationCount": 1,
+    "noteCount": 0,
+    "favoriteCount": 1,
+    "featureCount": 2,
+    "favoritedBy": [
+        {
+            "name": "regular_user",
+            "avatarUrl": "data/custom-avatars/regular_user.png"
+        }
+    ],
+    "hasCustomThumbnail": false
+}

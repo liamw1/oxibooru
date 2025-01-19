@@ -1,0 +1,207 @@
+{
+    "prev": {
+        "id": 3,
+        "user": {
+            "name": "regular_user",
+            "avatarUrl": "data/custom-avatars/regular_user.png"
+        },
+        "fileSize": 96468992,
+        "canvasWidth": 11146,
+        "canvasHeight": 7479,
+        "safety": "safe",
+        "type": "image",
+        "mimeType": "image/png",
+        "checksum": "3",
+        "checksumMD5": "3",
+        "flags": [],
+        "source": "Wikipedia",
+        "contentUrl": "data/posts/3_FpORoUpGt8L-80CmqKqluUXKjy09jQnkE-5ZZ0TDNik.png",
+        "thumbnailUrl": "data/generated-thumbnails/3_FpORoUpGt8L-80CmqKqluUXKjy09jQnkE-5ZZ0TDNik.jpg",
+        "tags": [
+            {
+                "names": [
+                    "tagme",
+                    "tag_me"
+                ],
+                "category": "default",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "high_resolution",
+                    "high_res"
+                ],
+                "category": "Meta",
+                "usages": 1
+            }
+        ],
+        "relations": [
+            {
+                "id": 1,
+                "thumbnailUrl": "data/generated-thumbnails/1_d77wlWbdkWl19hwWOHP-ux7RlGdOl488e1JbD4ZZzpg.jpg"
+            }
+        ],
+        "pools": [],
+        "notes": [
+            {
+                "polygon": [
+                    [
+                        0.0,
+                        0.0
+                    ],
+                    [
+                        0.0,
+                        1.0
+                    ],
+                    [
+                        1.0,
+                        0.0
+                    ]
+                ],
+                "text": "My favorite part"
+            }
+        ],
+        "score": 1,
+        "ownScore": 0,
+        "ownFavorite": false,
+        "tagCount": 2,
+        "commentCount": 0,
+        "relationCount": 1,
+        "noteCount": 1,
+        "favoriteCount": 1,
+        "featureCount": 1,
+        "favoritedBy": [
+            {
+                "name": "regular_user",
+                "avatarUrl": "data/custom-avatars/regular_user.png"
+            }
+        ],
+        "hasCustomThumbnail": false
+    },
+    "next": {
+        "id": 5,
+        "user": null,
+        "fileSize": 107374182400,
+        "canvasWidth": 1980,
+        "canvasHeight": 1080,
+        "safety": "unsafe",
+        "type": "video",
+        "mimeType": "video/mp4",
+        "checksum": "5",
+        "checksumMD5": "5",
+        "flags": [
+            "sound"
+        ],
+        "source": "???",
+        "contentUrl": "data/posts/5_Hxof4ZHXut9WtGlGR3uTAdJx1_9-J_0C9ZoPQLh-2Rk.mp4",
+        "thumbnailUrl": "data/generated-thumbnails/5_Hxof4ZHXut9WtGlGR3uTAdJx1_9-J_0C9ZoPQLh-2Rk.jpg",
+        "tags": [
+            {
+                "names": [
+                    "hidetaka_miyazaki"
+                ],
+                "category": "Artist",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "sekiro"
+                ],
+                "category": "Source",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "black_hat_badger"
+                ],
+                "category": "Character",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "isshin_ashina"
+                ],
+                "category": "Character",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "sekiro_(sekiro)"
+                ],
+                "category": "Character",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "night"
+                ],
+                "category": "Surroundings",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "night_sky"
+                ],
+                "category": "Surroundings",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "sky"
+                ],
+                "category": "Surroundings",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "16:9_aspect_ratio"
+                ],
+                "category": "Meta",
+                "usages": 2
+            }
+        ],
+        "relations": [
+            {
+                "id": 4,
+                "thumbnailUrl": "data/generated-thumbnails/4_2T0h9OctazrL_1YqDMMcFYoaq0VEgj8VgS-E8XumnaE.jpg"
+            }
+        ],
+        "pools": [
+            {
+                "id": 2,
+                "names": [
+                    "fantasy"
+                ],
+                "category": "Setting",
+                "description": "",
+                "postCount": 3
+            },
+            {
+                "id": 6,
+                "names": [
+                    "realistic"
+                ],
+                "category": "Style",
+                "description": "",
+                "postCount": 1
+            }
+        ],
+        "notes": [],
+        "score": 0,
+        "ownScore": 1,
+        "ownFavorite": true,
+        "tagCount": 9,
+        "commentCount": 1,
+        "relationCount": 1,
+        "noteCount": 0,
+        "favoriteCount": 1,
+        "featureCount": 1,
+        "favoritedBy": [
+            {
+                "name": "administrator",
+                "avatarUrl": "data/custom-avatars/administrator.png"
+            }
+        ],
+        "hasCustomThumbnail": false
+    }
+}

@@ -1,0 +1,14 @@
+{
+    "query": "-pool:2 -sort:id",
+    "offset": 0,
+    "limit": 40,
+    "total": 2,
+    "results": [
+        {
+            "id": 3
+        },
+        {
+            "id": 4
+        }
+    ]
+}

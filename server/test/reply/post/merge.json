@@ -1,0 +1,194 @@
+{
+    "id": 1,
+    "user": {
+        "name": "restricted_user",
+        "avatarUrl": "data/custom-avatars/restricted_user.png"
+    },
+    "fileSize": 5242880,
+    "canvasWidth": 1980,
+    "canvasHeight": 1080,
+    "safety": "safe",
+    "type": "animation",
+    "mimeType": "image/gif",
+    "checksum": "2",
+    "checksumMD5": "2",
+    "flags": [],
+    "source": null,
+    "contentUrl": "data/posts/1_d77wlWbdkWl19hwWOHP-ux7RlGdOl488e1JbD4ZZzpg.gif",
+    "thumbnailUrl": "data/generated-thumbnails/1_d77wlWbdkWl19hwWOHP-ux7RlGdOl488e1JbD4ZZzpg.jpg",
+    "tags": [
+        {
+            "names": [
+                "george_lucas"
+            ],
+            "category": "Artist",
+            "usages": 1
+        },
+        {
+            "names": [
+                "shakespeare"
+            ],
+            "category": "Artist",
+            "usages": 1
+        },
+        {
+            "names": [
+                "classic_literature"
+            ],
+            "category": "Source",
+            "usages": 1
+        },
+        {
+            "names": [
+                "star_wars"
+            ],
+            "category": "Source",
+            "usages": 1
+        },
+        {
+            "names": [
+                "admiral_ackbar"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "claudius"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "darth_vader",
+                "annakin_skywalker"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "laertes"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "luke_skywalker"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "princess_leia"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "forest",
+                "woods"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "plant",
+                "foliage"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "river",
+                "stream",
+                "creek"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "rock",
+                "stone"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "tree"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "water",
+                "agua"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "16:9_aspect_ratio"
+            ],
+            "category": "Meta",
+            "usages": 2
+        }
+    ],
+    "relations": [
+        {
+            "id": 3,
+            "thumbnailUrl": "data/generated-thumbnails/3_FpORoUpGt8L-80CmqKqluUXKjy09jQnkE-5ZZ0TDNik.jpg"
+        }
+    ],
+    "pools": [
+        {
+            "id": 2,
+            "names": [
+                "fantasy"
+            ],
+            "category": "Setting",
+            "description": "",
+            "postCount": 2
+        },
+        {
+            "id": 4,
+            "names": [
+                "cyberpunk"
+            ],
+            "category": "Setting",
+            "description": "",
+            "postCount": 1
+        }
+    ],
+    "notes": [],
+    "score": 1,
+    "ownScore": 0,
+    "ownFavorite": false,
+    "tagCount": 17,
+    "commentCount": 2,
+    "relationCount": 1,
+    "noteCount": 0,
+    "favoriteCount": 2,
+    "featureCount": 2,
+    "favoritedBy": [
+        {
+            "name": "regular_user",
+            "avatarUrl": "data/custom-avatars/regular_user.png"
+        },
+        {
+            "name": "restricted_user",
+            "avatarUrl": "data/custom-avatars/restricted_user.png"
+        }
+    ],
+    "hasCustomThumbnail": false
+}

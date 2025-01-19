@@ -1,0 +1,17 @@
+{
+    "query": "-comment:*user* -sort:id",
+    "offset": 0,
+    "limit": 40,
+    "total": 3,
+    "results": [
+        {
+            "id": 2
+        },
+        {
+            "id": 3
+        },
+        {
+            "id": 5
+        }
+    ]
+}

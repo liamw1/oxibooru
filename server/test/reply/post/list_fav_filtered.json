@@ -1,0 +1,20 @@
+{
+    "query": "fav:*user* -sort:id",
+    "offset": 0,
+    "limit": 40,
+    "total": 4,
+    "results": [
+        {
+            "id": 1
+        },
+        {
+            "id": 2
+        },
+        {
+            "id": 3
+        },
+        {
+            "id": 4
+        }
+    ]
+}

@@ -1,0 +1,103 @@
+{
+    "id": 1,
+    "user": {
+        "name": "restricted_user",
+        "avatarUrl": "data/custom-avatars/restricted_user.png"
+    },
+    "fileSize": 1048576,
+    "canvasWidth": 1000,
+    "canvasHeight": 2000,
+    "safety": "safe",
+    "type": "image",
+    "mimeType": "image/jpeg",
+    "checksum": "1",
+    "checksumMD5": "1",
+    "flags": [],
+    "source": "My hard drive",
+    "contentUrl": "data/posts/1_d77wlWbdkWl19hwWOHP-ux7RlGdOl488e1JbD4ZZzpg.jpg",
+    "thumbnailUrl": "data/generated-thumbnails/1_d77wlWbdkWl19hwWOHP-ux7RlGdOl488e1JbD4ZZzpg.jpg",
+    "tags": [
+        {
+            "names": [
+                "shakespeare"
+            ],
+            "category": "Artist",
+            "usages": 1
+        },
+        {
+            "names": [
+                "classic_literature"
+            ],
+            "category": "Source",
+            "usages": 1
+        },
+        {
+            "names": [
+                "claudius"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "laertes"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "plant",
+                "foliage"
+            ],
+            "category": "Surroundings",
+            "usages": 2
+        },
+        {
+            "names": [
+                "rock",
+                "stone"
+            ],
+            "category": "Surroundings",
+            "usages": 2
+        }
+    ],
+    "relations": [
+        {
+            "id": 2,
+            "thumbnailUrl": "data/generated-thumbnails/2_pFHmh19-cJXkwg4Wt8OruZCsA2SplL0nZdhGl1w9haw.jpg"
+        },
+        {
+            "id": 3,
+            "thumbnailUrl": "data/generated-thumbnails/3_FpORoUpGt8L-80CmqKqluUXKjy09jQnkE-5ZZ0TDNik.jpg"
+        }
+    ],
+    "pools": [
+        {
+            "id": 2,
+            "names": [
+                "fantasy"
+            ],
+            "category": "Setting",
+            "description": "",
+            "postCount": 3
+        }
+    ],
+    "notes": [],
+    "score": 1,
+    "ownScore": 0,
+    "ownFavorite": false,
+    "tagCount": 6,
+    "commentCount": 2,
+    "relationCount": 2,
+    "noteCount": 0,
+    "favoriteCount": 1,
+    "featureCount": 2,
+    "favoritedBy": [
+        {
+            "name": "restricted_user",
+            "avatarUrl": "data/custom-avatars/restricted_user.png"
+        }
+    ],
+    "hasCustomThumbnail": false
+}

@@ -7,13 +7,14 @@ use crate::content::{cache, signature, thumbnail};
 use crate::filesystem::Directory;
 use crate::model::comment::NewComment;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
+use crate::model::pool::PoolPost;
 use crate::model::post::{
     NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostRelation, PostScore, PostSignature, PostTag,
 };
 use crate::resource::post::{FieldTable, Note, PostInfo};
 use crate::schema::{
-    comment, database_statistics, post, post_favorite, post_feature, post_relation, post_score, post_signature,
-    post_statistics, post_tag,
+    comment, database_statistics, pool_post, post, post_favorite, post_feature, post_relation, post_score,
+    post_signature, post_statistics, post_tag,
 };
 use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, search, update};
@@ -551,6 +552,25 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
             .collect();
         diesel::insert_into(post_tag::table).values(new_tags).execute(conn)?;
 
+        // Merge pools
+        let merge_to_pools = pool_post::table
+            .select(pool_post::pool_id)
+            .filter(pool_post::post_id.eq(merge_to_id))
+            .into_boxed();
+        let new_pools: Vec<_> = pool_post::table
+            .select((pool_post::pool_id, pool_post::order))
+            .filter(pool_post::post_id.eq(remove_id))
+            .filter(pool_post::pool_id.ne_all(merge_to_pools))
+            .load(conn)?
+            .into_iter()
+            .map(|(pool_id, order)| PoolPost {
+                pool_id,
+                post_id: merge_to_id,
+                order,
+            })
+            .collect();
+        diesel::insert_into(pool_post::table).values(new_pools).execute(conn)?;
+
         // Merge scores
         let merge_to_scores = post_score::table
             .select(post_score::user_id)
@@ -626,7 +646,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
         diesel::insert_into(comment::table).values(new_comments).execute(conn)?;
 
         // If replacing content, update post signature. This needs to be done before deletion because post signatures cascade
-        if merge_info.replace_content {
+        if merge_info.replace_content && !cfg!(test) {
             let (signature, indexes): (Vec<Option<i64>>, Vec<Option<i32>>) = post_signature::table
                 .find(remove_id)
                 .select((post_signature::signature, post_signature::words))
@@ -639,10 +659,11 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
         diesel::delete(post::table.find(remove_id)).execute(conn)?;
 
         if merge_info.replace_content {
-            filesystem::swap_posts(&remove_hash, remove_post.mime_type, &merge_to_hash, merge_to_post.mime_type)?;
+            if !cfg!(test) {
+                filesystem::swap_posts(&remove_hash, remove_post.mime_type, &merge_to_hash, merge_to_post.mime_type)?;
+            }
 
             // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
-            std::mem::swap(&mut remove_post.user_id, &mut merge_to_post.user_id);
             std::mem::swap(&mut remove_post.file_size, &mut merge_to_post.file_size);
             std::mem::swap(&mut remove_post.width, &mut merge_to_post.width);
             std::mem::swap(&mut remove_post.height, &mut merge_to_post.height);
@@ -652,14 +673,18 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
             std::mem::swap(&mut remove_post.checksum_md5, &mut merge_to_post.checksum_md5);
             std::mem::swap(&mut remove_post.flags, &mut merge_to_post.flags);
             std::mem::swap(&mut remove_post.source, &mut merge_to_post.source);
+            std::mem::swap(&mut remove_post.generated_thumbnail_size, &mut merge_to_post.generated_thumbnail_size);
+            std::mem::swap(&mut remove_post.custom_thumbnail_size, &mut merge_to_post.custom_thumbnail_size);
             merge_to_post = merge_to_post.save_changes(conn)?;
         }
+        diesel::update(post::table.find(merge_to_id))
+            .set(post::last_edit_time.eq(DateTime::now()))
+            .execute(conn)?;
 
-        if config::get().delete_source_files {
+        if config::get().delete_source_files && !cfg!(test) {
             // This is the correct id and mime_type, even if replacing content :)
             filesystem::delete_post(&remove_hash, remove_post.mime_type)?;
         }
-
         Ok::<_, api::Error>(merge_to_post)
     })?;
     conn.transaction(|conn| PostInfo::new(conn, client_id, merged_post, &fields).map_err(api::Error::from))
@@ -903,9 +928,14 @@ fn unfavorite_post(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiR
 #[cfg(test)]
 mod test {
     use crate::api::ApiResult;
+    use crate::model::post::Post;
+    use crate::schema::{post, post_feature, post_statistics, tag, tag_name};
     use crate::search::post::Token;
     use crate::test::*;
-    use serial_test::parallel;
+    use crate::time::DateTime;
+    use diesel::dsl::exists;
+    use diesel::prelude::*;
+    use serial_test::{parallel, serial};
     use strum::IntoEnumIterator;
 
     // Exclude fields that involve creation_time or last_edit_time
@@ -919,6 +949,8 @@ mod test {
         const QUERY: &str = "GET /posts/?query";
         const SORT: &str = "-sort:id&limit=40";
         verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "post/list.json").await?;
+
+        // Test sorts
         for token in Token::iter() {
             match token {
                 Token::Id | Token::ContentChecksum | Token::NoteText | Token::Special => continue,
@@ -929,6 +961,248 @@ mod test {
             let path = format!("post/list_{token_str}_sorted.json");
             verify_query(&query, &path).await?;
         }
+
+        // Test filters
+        verify_query(&format!("{QUERY}=-plant,sky,tagme {SORT}&fields=id"), "post/list_tag_filtered.json").await?;
+        verify_query(&format!("{QUERY}=-pool:2 {SORT}&fields=id"), "post/list_pool_filtered.json").await?;
+        verify_query(&format!("{QUERY}=fav:*user* {SORT}&fields=id"), "post/list_fav_filtered.json").await?;
+        verify_query(&format!("{QUERY}=-comment:*user* {SORT}&fields=id"), "post/list_comment_filtered.json").await?;
+        verify_query(&format!("{QUERY}=note-text:*fav* {SORT}&fields=id"), "post/list_note-text_filtered.json").await?;
+        verify_query(&format!("{QUERY}=special:liked {SORT}&fields=id"), "post/list_liked_filtered.json").await?;
+        verify_query(&format!("{QUERY}=special:disliked {SORT}&fields=id"), "post/list_disliked_filtered.json").await?;
+        verify_query(&format!("{QUERY}=special:fav {SORT}&fields=id"), "post/list_special-fav_filtered.json").await?;
+        verify_query(&format!("{QUERY}=special:tumbleweed {SORT}&fields=id"), "post/list_tumbleweed_filtered.json")
+            .await
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn get() -> ApiResult<()> {
+        const POST_ID: i32 = 2;
+        let get_last_edit_time = |conn: &mut PgConnection| -> QueryResult<DateTime> {
+            post::table
+                .select(post::last_edit_time)
+                .filter(post::id.eq(POST_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let last_edit_time = get_last_edit_time(&mut conn)?;
+
+        verify_query(&format!("GET /post/{POST_ID}/?{FIELDS}"), "post/get.json").await?;
+
+        let new_last_edit_time = get_last_edit_time(&mut conn)?;
+        assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn get_neighbors() -> ApiResult<()> {
+        const QUERY: &str = "around/?query=-sort:id";
+        verify_query(&format!("GET /post/1/{QUERY}{FIELDS}"), "post/get_1_neighbors.json").await?;
+        verify_query(&format!("GET /post/4/{QUERY}{FIELDS}"), "post/get_4_neighbors.json").await?;
+        verify_query(&format!("GET /post/5/{QUERY}{FIELDS}"), "post/get_5_neighbors.json").await
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn get_featured() -> ApiResult<()> {
+        verify_query(&format!("GET /featured-post/?{FIELDS}"), "post/get_featured.json").await
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn feature() -> ApiResult<()> {
+        const POST_ID: i32 = 4;
+        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i32, DateTime)> {
+            post::table
+                .inner_join(post_statistics::table)
+                .select((post_statistics::feature_count, post::last_edit_time))
+                .filter(post::id.eq(POST_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let (feature_count, last_edit_time) = get_post_info(&mut conn)?;
+
+        verify_query(&format!("POST /featured-post/?{FIELDS}"), "post/feature.json").await?;
+
+        let (new_feature_count, new_last_edit_time) = get_post_info(&mut conn)?;
+        assert_eq!(new_feature_count, feature_count + 1);
+        assert_eq!(new_last_edit_time, last_edit_time);
+
+        let last_feature_time: DateTime = post_feature::table
+            .select(post_feature::time)
+            .order_by(post_feature::time.desc())
+            .first(&mut conn)?;
+        diesel::delete(post_feature::table)
+            .filter(post_feature::post_id.eq(POST_ID))
+            .filter(post_feature::time.eq(last_feature_time))
+            .execute(&mut conn)?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn merge() -> ApiResult<()> {
+        const REMOVE_ID: i32 = 2;
+        const MERGE_TO_ID: i32 = 1;
+        let get_post = |conn: &mut PgConnection| -> QueryResult<Post> {
+            post::table
+                .select(Post::as_select())
+                .filter(post::id.eq(MERGE_TO_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let post = get_post(&mut conn)?;
+
+        verify_query(&format!("POST /post-merge/?{FIELDS}"), "post/merge.json").await?;
+
+        let has_post: bool = diesel::select(exists(post::table.find(REMOVE_ID))).get_result(&mut conn)?;
+        assert!(!has_post);
+
+        let new_post = get_post(&mut conn)?;
+        assert_eq!(new_post.user_id, post.user_id);
+        assert_ne!(new_post.file_size, post.file_size);
+        assert_ne!(new_post.width, post.width);
+        assert_ne!(new_post.height, post.height);
+        assert_eq!(new_post.safety, post.safety);
+        assert_ne!(new_post.type_, post.type_);
+        assert_ne!(new_post.mime_type, post.mime_type);
+        assert_ne!(new_post.checksum, post.checksum);
+        assert_ne!(new_post.checksum_md5, post.checksum_md5);
+        assert_eq!(new_post.flags, post.flags);
+        assert_ne!(new_post.source, post.source);
+        assert_eq!(new_post.creation_time, post.creation_time);
+        assert!(new_post.last_edit_time > post.last_edit_time);
+        Ok(reset_database())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn favorite() -> ApiResult<()> {
+        const POST_ID: i32 = 4;
+        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i32, DateTime)> {
+            post::table
+                .inner_join(post_statistics::table)
+                .select((post_statistics::favorite_count, post::last_edit_time))
+                .filter(post_statistics::post_id.eq(POST_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let (favorite_count, last_edit_time) = get_post_info(&mut conn)?;
+
+        verify_query(&format!("POST /post/{POST_ID}/favorite/?{FIELDS}"), "post/favorite.json").await?;
+
+        let (new_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
+        assert_eq!(new_favorite_count, favorite_count + 1);
+        assert_eq!(new_last_edit_time, last_edit_time);
+
+        verify_query(&format!("DELETE /post/{POST_ID}/favorite/?{FIELDS}"), "post/unfavorite.json").await?;
+
+        let (new_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
+        assert_eq!(new_favorite_count, favorite_count);
+        assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn rate() -> ApiResult<()> {
+        const POST_ID: i32 = 3;
+        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i32, DateTime)> {
+            post::table
+                .inner_join(post_statistics::table)
+                .select((post_statistics::score, post::last_edit_time))
+                .filter(post_statistics::post_id.eq(POST_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let (score, last_edit_time) = get_post_info(&mut conn)?;
+
+        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/like.json").await?;
+
+        let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
+        assert_eq!(new_score, score + 1);
+        assert_eq!(new_last_edit_time, last_edit_time);
+
+        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/dislike.json").await?;
+
+        let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
+        assert_eq!(new_score, score - 1);
+        assert_eq!(new_last_edit_time, last_edit_time);
+
+        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/remove_score.json").await?;
+
+        let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
+        assert_eq!(new_score, score);
+        assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn update() -> ApiResult<()> {
+        const POST_ID: i32 = 5;
+        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(Post, i32, i32)> {
+            post::table
+                .inner_join(post_statistics::table)
+                .select((Post::as_select(), post_statistics::tag_count, post_statistics::relation_count))
+                .filter(post::id.eq(POST_ID))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let (post, tag_count, relation_count) = get_post_info(&mut conn)?;
+
+        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/update.json").await?;
+
+        let (new_post, new_tag_count, new_relation_count) = get_post_info(&mut conn)?;
+        assert_eq!(new_post.user_id, post.user_id);
+        assert_eq!(new_post.file_size, post.file_size);
+        assert_eq!(new_post.width, post.width);
+        assert_eq!(new_post.height, post.height);
+        assert_ne!(new_post.safety, post.safety);
+        assert_eq!(new_post.type_, post.type_);
+        assert_eq!(new_post.mime_type, post.mime_type);
+        assert_eq!(new_post.checksum, post.checksum);
+        assert_eq!(new_post.checksum_md5, post.checksum_md5);
+        assert_ne!(new_post.flags, post.flags);
+        assert_ne!(new_post.source, post.source);
+        assert_eq!(new_post.creation_time, post.creation_time);
+        assert!(new_post.last_edit_time > post.last_edit_time);
+        assert_ne!(new_tag_count, tag_count);
+        assert_ne!(new_relation_count, relation_count);
+
+        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/update_restore.json").await?;
+
+        let new_tag_id: i32 = tag::table
+            .select(tag::id)
+            .inner_join(tag_name::table)
+            .filter(tag_name::name.eq("new_tag"))
+            .first(&mut conn)?;
+        diesel::delete(tag::table.find(new_tag_id)).execute(&mut conn)?;
+
+        let (new_post, new_tag_count, new_relation_count) = get_post_info(&mut conn)?;
+        assert_eq!(new_post.user_id, post.user_id);
+        assert_eq!(new_post.file_size, post.file_size);
+        assert_eq!(new_post.width, post.width);
+        assert_eq!(new_post.height, post.height);
+        assert_eq!(new_post.safety, post.safety);
+        assert_eq!(new_post.type_, post.type_);
+        assert_eq!(new_post.mime_type, post.mime_type);
+        assert_eq!(new_post.checksum, post.checksum);
+        assert_eq!(new_post.checksum_md5, post.checksum_md5);
+        assert_eq!(new_post.flags, post.flags);
+        assert_eq!(new_post.source, post.source);
+        assert_eq!(new_post.creation_time, post.creation_time);
+        assert!(new_post.last_edit_time > post.last_edit_time);
+        assert_eq!(new_tag_count, tag_count);
+        assert_eq!(new_relation_count, relation_count);
         Ok(())
     }
 }

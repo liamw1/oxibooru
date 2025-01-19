@@ -499,7 +499,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
     let pool_posts: Vec<(PoolPost, i32, String, i32)> = PoolPost::belonging_to(posts)
         .inner_join(pool::table.inner_join(pool_statistics::table))
         .select((PoolPost::as_select(), pool::category_id, pool::description, pool_statistics::post_count))
-        .order(pool::category_id)
+        .order((pool::category_id, pool::id))
         .load(conn)?;
     let pool_ids: HashSet<i32> = pool_posts.iter().map(|(pool_post, ..)| pool_post.pool_id).collect();
 
@@ -586,6 +586,7 @@ fn get_users_who_favorited(conn: &mut PgConnection, posts: &[Post]) -> QueryResu
     let users_who_favorited: Vec<(i32, String, AvatarStyle)> = PostFavorite::belonging_to(posts)
         .inner_join(user::table)
         .select((post_favorite::post_id, user::name, user::avatar_style))
+        .order_by(user::name)
         .load(conn)?;
 
     let mut users_grouped_by_posts: Vec<Vec<(String, AvatarStyle)>> =

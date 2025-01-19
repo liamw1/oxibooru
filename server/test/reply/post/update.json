@@ -1,0 +1,90 @@
+{
+    "id": 5,
+    "user": null,
+    "fileSize": 107374182400,
+    "canvasWidth": 1980,
+    "canvasHeight": 1080,
+    "safety": "safe",
+    "type": "video",
+    "mimeType": "video/mp4",
+    "checksum": "5",
+    "checksumMD5": "5",
+    "flags": [
+        "loop",
+        "sound"
+    ],
+    "source": "I found a new source for this",
+    "contentUrl": "data/posts/5_Hxof4ZHXut9WtGlGR3uTAdJx1_9-J_0C9ZoPQLh-2Rk.mp4",
+    "thumbnailUrl": "data/generated-thumbnails/5_Hxof4ZHXut9WtGlGR3uTAdJx1_9-J_0C9ZoPQLh-2Rk.jpg",
+    "tags": [
+        {
+            "names": [
+                "new_tag"
+            ],
+            "category": "default",
+            "usages": 1
+        },
+        {
+            "names": [
+                "plant",
+                "foliage"
+            ],
+            "category": "Surroundings",
+            "usages": 3
+        },
+        {
+            "names": [
+                "sky"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        }
+    ],
+    "relations": [
+        {
+            "id": 1,
+            "thumbnailUrl": "data/generated-thumbnails/1_d77wlWbdkWl19hwWOHP-ux7RlGdOl488e1JbD4ZZzpg.jpg"
+        },
+        {
+            "id": 3,
+            "thumbnailUrl": "data/generated-thumbnails/3_FpORoUpGt8L-80CmqKqluUXKjy09jQnkE-5ZZ0TDNik.jpg"
+        }
+    ],
+    "pools": [
+        {
+            "id": 2,
+            "names": [
+                "fantasy"
+            ],
+            "category": "Setting",
+            "description": "",
+            "postCount": 3
+        },
+        {
+            "id": 6,
+            "names": [
+                "realistic"
+            ],
+            "category": "Style",
+            "description": "",
+            "postCount": 1
+        }
+    ],
+    "notes": [],
+    "score": 0,
+    "ownScore": 1,
+    "ownFavorite": true,
+    "tagCount": 3,
+    "commentCount": 1,
+    "relationCount": 2,
+    "noteCount": 0,
+    "favoriteCount": 1,
+    "featureCount": 1,
+    "favoritedBy": [
+        {
+            "name": "administrator",
+            "avatarUrl": "data/custom-avatars/administrator.png"
+        }
+    ],
+    "hasCustomThumbnail": false
+}

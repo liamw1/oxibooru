@@ -1,0 +1,7 @@
+{
+    "query": "special:tumbleweed -sort:id",
+    "offset": 0,
+    "limit": 40,
+    "total": 0,
+    "results": []
+}

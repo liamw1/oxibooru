@@ -1,0 +1,79 @@
+{
+    "id": 3,
+    "user": {
+        "name": "regular_user",
+        "avatarUrl": "data/custom-avatars/regular_user.png"
+    },
+    "fileSize": 96468992,
+    "canvasWidth": 11146,
+    "canvasHeight": 7479,
+    "safety": "safe",
+    "type": "image",
+    "mimeType": "image/png",
+    "checksum": "3",
+    "checksumMD5": "3",
+    "flags": [],
+    "source": "Wikipedia",
+    "contentUrl": "data/posts/3_FpORoUpGt8L-80CmqKqluUXKjy09jQnkE-5ZZ0TDNik.png",
+    "thumbnailUrl": "data/generated-thumbnails/3_FpORoUpGt8L-80CmqKqluUXKjy09jQnkE-5ZZ0TDNik.jpg",
+    "tags": [
+        {
+            "names": [
+                "tagme",
+                "tag_me"
+            ],
+            "category": "default",
+            "usages": 1
+        },
+        {
+            "names": [
+                "high_resolution",
+                "high_res"
+            ],
+            "category": "Meta",
+            "usages": 1
+        }
+    ],
+    "relations": [
+        {
+            "id": 1,
+            "thumbnailUrl": "data/generated-thumbnails/1_d77wlWbdkWl19hwWOHP-ux7RlGdOl488e1JbD4ZZzpg.jpg"
+        }
+    ],
+    "pools": [],
+    "notes": [
+        {
+            "polygon": [
+                [
+                    0.0,
+                    0.0
+                ],
+                [
+                    0.0,
+                    1.0
+                ],
+                [
+                    1.0,
+                    0.0
+                ]
+            ],
+            "text": "My favorite part"
+        }
+    ],
+    "score": 0,
+    "ownScore": -1,
+    "ownFavorite": false,
+    "tagCount": 2,
+    "commentCount": 0,
+    "relationCount": 1,
+    "noteCount": 1,
+    "favoriteCount": 1,
+    "featureCount": 1,
+    "favoritedBy": [
+        {
+            "name": "regular_user",
+            "avatarUrl": "data/custom-avatars/regular_user.png"
+        }
+    ],
+    "hasCustomThumbnail": false
+}

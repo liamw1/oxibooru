@@ -265,7 +265,7 @@ pub enum PostFlag {
     Sound,
 }
 
-#[derive(Debug, Copy, Clone, Default, AsExpression, FromSqlRow)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, AsExpression, FromSqlRow)]
 #[diesel(sql_type = SmallInt)]
 pub struct PostFlags {
     flags: u16, // Bit mask of possible flags

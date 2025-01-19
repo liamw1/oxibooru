@@ -28,6 +28,7 @@ pub struct NewPost<'a> {
 }
 
 #[derive(AsChangeset, Associations, Identifiable, Queryable, Selectable)]
+#[diesel(treat_none_as_null = true)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = post)]
 #[diesel(check_for_backend(Pg))]
@@ -46,8 +47,8 @@ pub struct Post {
     pub source: Option<String>,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
-    generated_thumbnail_size: i64,
-    custom_thumbnail_size: i64,
+    pub generated_thumbnail_size: i64,
+    pub custom_thumbnail_size: i64,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Associations, Identifiable, Insertable, Queryable, Selectable)]

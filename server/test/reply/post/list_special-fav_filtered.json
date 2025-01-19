@@ -1,0 +1,11 @@
+{
+    "query": "special:fav -sort:id",
+    "offset": 0,
+    "limit": 40,
+    "total": 1,
+    "results": [
+        {
+            "id": 5
+        }
+    ]
+}
