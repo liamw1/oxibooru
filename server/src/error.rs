@@ -346,6 +346,7 @@ impl ErrorKind for crate::api::Error {
             Self::InsufficientPrivileges => "InsufficientPrivileges",
             Self::InvalidEmailAddress(err) => err.kind(),
             Self::InvalidEmail(err) => err.kind(),
+            Self::InvalidUserRank => "InvalidUserRank",
             Self::Image(err) => err.kind(),
             Self::NoEmail => "NoEmail",
             Self::MissingFormData => "MissingFormData",

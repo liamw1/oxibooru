@@ -76,6 +76,8 @@ pub enum Error {
     InsufficientPrivileges,
     InvalidEmailAddress(#[from] lettre::address::AddressError),
     InvalidEmail(#[from] lettre::error::Error),
+    #[error("Cannot create an anonymous user")]
+    InvalidUserRank,
     Image(#[from] image::ImageError),
     #[error("Missing form data")]
     MissingFormData,
@@ -132,6 +134,7 @@ impl Error {
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::InvalidEmailAddress(_) => StatusCode::BAD_REQUEST,
             Self::InvalidEmail(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InvalidUserRank => StatusCode::BAD_REQUEST,
             Self::Image(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::MissingFormData => StatusCode::BAD_REQUEST,
             Self::MissingSmtpInfo => StatusCode::INTERNAL_SERVER_ERROR,
@@ -168,6 +171,7 @@ impl Error {
             Self::InsufficientPrivileges => "Insufficient Privileges",
             Self::InvalidEmailAddress(_) => "Invalid Email Address",
             Self::InvalidEmail(_) => "Invalid Email",
+            Self::InvalidUserRank => "Invalid User Rank",
             Self::Image(_) => "Image Error",
             Self::MissingFormData => "Missing Form Data",
             Self::MissingSmtpInfo => "Missing SMTP Info",

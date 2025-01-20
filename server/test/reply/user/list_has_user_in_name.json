@@ -1,0 +1,44 @@
+{
+    "query": "name:*user* -sort:name",
+    "offset": 0,
+    "limit": 40,
+    "total": 3,
+    "results": [
+        {
+            "name": "power_user",
+            "email": false,
+            "rank": "power",
+            "avatarStyle": "manual",
+            "avatarUrl": "data/custom-avatars/power_user.png",
+            "commentCount": 0,
+            "uploadedPostCount": 0,
+            "likedPostCount": false,
+            "dislikedPostCount": false,
+            "favoritePostCount": 0
+        },
+        {
+            "name": "regular_user",
+            "email": false,
+            "rank": "regular",
+            "avatarStyle": "manual",
+            "avatarUrl": "data/custom-avatars/regular_user.png",
+            "commentCount": 2,
+            "uploadedPostCount": 3,
+            "likedPostCount": false,
+            "dislikedPostCount": false,
+            "favoritePostCount": 3
+        },
+        {
+            "name": "restricted_user",
+            "email": false,
+            "rank": "restricted",
+            "avatarStyle": "manual",
+            "avatarUrl": "data/custom-avatars/restricted_user.png",
+            "commentCount": 0,
+            "uploadedPostCount": 1,
+            "likedPostCount": false,
+            "dislikedPostCount": false,
+            "favoritePostCount": 1
+        }
+    ]
+}

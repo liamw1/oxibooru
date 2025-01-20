@@ -1,9 +1,10 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::password;
 use crate::config::RegexType;
+use crate::content::hash;
 use crate::content::thumbnail::{self, ThumbnailType};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
-use crate::model::user::{NewUser, User};
+use crate::model::user::NewUser;
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::time::DateTime;
@@ -127,11 +128,14 @@ fn get_user(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResu
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase")]
 struct NewUserInfo {
     name: String,
     password: String,
     email: Option<String>,
     rank: Option<UserRank>,
+    avatar_style: Option<AvatarStyle>,
+    avatar_token: Option<String>,
 }
 
 fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
@@ -139,6 +143,10 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
     query.bump_login(client)?;
 
     let creation_rank = user_info.rank.unwrap_or(config::default_rank());
+    if creation_rank == UserRank::Anonymous {
+        return Err(api::Error::InvalidUserRank);
+    }
+
     let required_rank = match client.is_some() {
         true => config::privileges().user_create_any,
         false => config::privileges().user_create_self,
@@ -161,15 +169,32 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
         password_salt: salt.as_str(),
         email: user_info.email.as_deref(),
         rank: creation_rank,
-        avatar_style: AvatarStyle::Gravatar,
+        avatar_style: user_info.avatar_style.unwrap_or_default(),
     };
+    let custom_avatar = user_info
+        .avatar_token
+        .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Avatar))
+        .transpose()?;
 
     let mut conn = db::get_connection()?;
-    let user: User = diesel::insert_into(user::table)
-        .values(new_user)
-        .returning(User::as_returning())
-        .get_result(&mut conn)?;
-    conn.transaction(|conn| UserInfo::new(conn, user, &fields, Visibility::Full).map_err(api::Error::from))
+    let user_id = conn.transaction(|conn| {
+        let user_id = diesel::insert_into(user::table)
+            .values(new_user)
+            .returning(user::id)
+            .get_result(conn)?;
+
+        if let Some(avatar) = custom_avatar {
+            api::verify_privilege(client, config::privileges().user_edit_any_avatar)?;
+
+            let avatar_size = filesystem::save_custom_avatar(&user_info.name, avatar)?;
+            diesel::update(user::table.find(user_id))
+                .set(user::custom_avatar_size.eq(avatar_size as i64))
+                .execute(conn)?;
+        }
+
+        Ok::<_, api::Error>(user_id)
+    })?;
+    conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -211,17 +236,24 @@ fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update:
             false => Visibility::PublicOnly,
         };
 
-        if let Some(name) = update.name {
+        if let Some(new_name) = update.name.as_deref() {
             let required_rank = match editing_self {
                 true => config::privileges().user_edit_self_name,
                 false => config::privileges().user_edit_any_name,
             };
             api::verify_privilege(client, required_rank)?;
-            api::verify_matches_regex(&name, RegexType::Username)?;
+            api::verify_matches_regex(new_name, RegexType::Username)?;
 
+            // Update first to see if new name clashes with any existing names
             diesel::update(user::table.find(user_id))
-                .set(user::name.eq(name))
+                .set(user::name.eq(new_name))
                 .execute(conn)?;
+
+            let old_custom_avatar_path = hash::custom_avatar_path(&username);
+            if old_custom_avatar_path.try_exists()? {
+                let new_custom_avatar_path = hash::custom_avatar_path(new_name);
+                std::fs::rename(old_custom_avatar_path, new_custom_avatar_path)?;
+            }
         }
         if let Some(password) = update.password {
             let required_rank = match editing_self {
@@ -282,7 +314,9 @@ fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update:
             api::verify_privilege(client, required_rank)?;
 
             filesystem::delete_custom_avatar(&username)?;
-            let avatar_size = filesystem::save_custom_avatar(&username, avatar)?;
+
+            let name = update.name.as_deref().unwrap_or(&username);
+            let avatar_size = filesystem::save_custom_avatar(name, avatar)?;
             diesel::update(user::table.find(user_id))
                 .set(user::custom_avatar_size.eq(avatar_size as i64))
                 .execute(conn)?;
@@ -314,4 +348,123 @@ fn delete_user(auth: AuthResult, username: String, client_version: DeleteRequest
         diesel::delete(user::table.find(user_id)).execute(conn)?;
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod test {
+    use crate::api::ApiResult;
+    use crate::model::user::User;
+    use crate::schema::{database_statistics, user};
+    use crate::test::*;
+    use crate::time::DateTime;
+    use diesel::dsl::exists;
+    use diesel::prelude::*;
+    use serial_test::{parallel, serial};
+
+    // Exclude fields that involve creation_time or last_edit_time
+    const FIELDS: &str = "&fields=name,email,rank,avatarStyle,avatarUrl,commentCount,uploadedPostCount,likedPostCount,dislikedPostCount,favoritePostCount";
+
+    #[tokio::test]
+    #[parallel]
+    async fn list() -> ApiResult<()> {
+        const QUERY: &str = "GET /users/?query";
+        const SORT: &str = "-sort:name&limit=40";
+        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "user/list.json").await?;
+        verify_query(&format!("{QUERY}=name:*user* {SORT}{FIELDS}"), "user/list_has_user_in_name.json").await
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn get() -> ApiResult<()> {
+        const NAME: &str = "regular_user";
+        let get_last_edit_time = |conn: &mut PgConnection| -> QueryResult<DateTime> {
+            user::table
+                .select(user::last_edit_time)
+                .filter(user::name.eq(NAME))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let last_edit_time = get_last_edit_time(&mut conn)?;
+
+        verify_query(&format!("GET /user/{NAME}/?{FIELDS}"), "user/get.json").await?;
+
+        let new_last_edit_time = get_last_edit_time(&mut conn)?;
+        assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn create() -> ApiResult<()> {
+        let get_user_count = |conn: &mut PgConnection| -> QueryResult<i32> {
+            database_statistics::table
+                .select(database_statistics::user_count)
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let user_count = get_user_count(&mut conn)?;
+
+        verify_query(&format!("POST /users/?{FIELDS}"), "user/create.json").await?;
+
+        let (user_id, name): (i32, String) = user::table
+            .select((user::id, user::name))
+            .order_by(user::id.desc())
+            .first(&mut conn)?;
+
+        let new_user_count = get_user_count(&mut conn)?;
+        assert_eq!(new_user_count, user_count + 1);
+
+        verify_query(&format!("DELETE /user/{name}"), "delete.json").await?;
+
+        let new_user_count = get_user_count(&mut conn)?;
+        let has_user: bool = diesel::select(exists(user::table.find(user_id))).get_result(&mut conn)?;
+        assert_eq!(new_user_count, user_count);
+        assert!(!has_user);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn update() -> ApiResult<()> {
+        const NAME: &str = "regular_user";
+
+        let mut conn = get_connection()?;
+        let user_id: i32 = user::table
+            .select(user::id)
+            .filter(user::name.eq(NAME))
+            .first(&mut conn)?;
+
+        let user: User = user::table.find(user_id).first(&mut conn)?;
+
+        verify_query(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/update.json").await?;
+
+        let new_user: User = user::table.find(user_id).first(&mut conn)?;
+        assert_eq!(new_user.id, user.id);
+        assert_ne!(new_user.name, user.name);
+        assert_eq!(new_user.password_hash, user.password_hash);
+        assert_eq!(new_user.password_salt, user.password_salt);
+        assert_ne!(new_user.email, user.email);
+        assert_ne!(new_user.rank, user.rank);
+        assert_ne!(new_user.avatar_style, user.avatar_style);
+        assert_eq!(new_user.creation_time, user.creation_time);
+        assert_eq!(new_user.last_login_time, user.last_login_time);
+        assert!(new_user.last_edit_time > user.last_edit_time);
+
+        verify_query(&format!("PUT /user/{}/?{FIELDS}", new_user.name), "user/update_restore.json").await?;
+
+        let new_user: User = user::table.find(user_id).first(&mut conn)?;
+        assert_eq!(new_user.id, user.id);
+        assert_eq!(new_user.name, user.name);
+        assert_eq!(new_user.password_hash, user.password_hash);
+        assert_eq!(new_user.password_salt, user.password_salt);
+        assert_eq!(new_user.email, user.email);
+        assert_eq!(new_user.rank, user.rank);
+        assert_eq!(new_user.avatar_style, user.avatar_style);
+        assert_eq!(new_user.creation_time, user.creation_time);
+        assert_eq!(new_user.last_login_time, user.last_login_time);
+        assert!(new_user.last_edit_time > user.last_edit_time);
+        Ok(())
+    }
 }

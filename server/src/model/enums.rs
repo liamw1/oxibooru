@@ -35,6 +35,12 @@ pub enum AvatarStyle {
     Manual,
 }
 
+impl Default for AvatarStyle {
+    fn default() -> Self {
+        Self::Gravatar
+    }
+}
+
 impl ToSql<SmallInt, Pg> for AvatarStyle
 where
     i16: ToSql<SmallInt, Pg>,

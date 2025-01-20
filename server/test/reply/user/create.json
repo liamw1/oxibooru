@@ -1,0 +1,12 @@
+{
+    "name": "new_user",
+    "email": "example@email.com",
+    "rank": "regular",
+    "avatarStyle": "gravatar",
+    "avatarUrl": "https://gravatar.com/avatar/c1932f4c09fdf9f68bca2aaafd61f63e9ea9859bef140ebf1a8dc233b55f942e?d=retro&s=300",
+    "commentCount": 0,
+    "uploadedPostCount": 0,
+    "likedPostCount": 0,
+    "dislikedPostCount": 0,
+    "favoritePostCount": 0
+}

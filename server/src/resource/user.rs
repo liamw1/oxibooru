@@ -88,17 +88,6 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub fn new(
-        conn: &mut PgConnection,
-        user: User,
-        fields: &FieldTable<bool>,
-        visibility: Visibility,
-    ) -> QueryResult<Self> {
-        let mut user_info = Self::new_batch(conn, vec![user], fields, visibility)?;
-        assert_eq!(user_info.len(), 1);
-        Ok(user_info.pop().unwrap())
-    }
-
     pub fn new_from_id(
         conn: &mut PgConnection,
         user_id: i32,
