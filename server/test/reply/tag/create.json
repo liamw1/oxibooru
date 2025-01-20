@@ -1,0 +1,51 @@
+{
+    "description": "This is my new tag!",
+    "category": "Surroundings",
+    "names": [
+        "name1",
+        "name2",
+        "name3"
+    ],
+    "implications": [
+        {
+            "names": [
+                "tagme",
+                "tag_me"
+            ],
+            "category": "default",
+            "usages": 1
+        }
+    ],
+    "suggestions": [
+        {
+            "names": [
+                "darth_vader",
+                "annakin_skywalker"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "night"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "night_sky"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "sky"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        }
+    ],
+    "usages": 0
+}

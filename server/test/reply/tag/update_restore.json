@@ -1,0 +1,37 @@
+{
+    "description": "",
+    "category": "Surroundings",
+    "names": [
+        "river",
+        "stream",
+        "creek"
+    ],
+    "implications": [
+        {
+            "names": [
+                "water",
+                "agua"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        }
+    ],
+    "suggestions": [
+        {
+            "names": [
+                "plant",
+                "foliage"
+            ],
+            "category": "Surroundings",
+            "usages": 2
+        },
+        {
+            "names": [
+                "sand"
+            ],
+            "category": "Surroundings",
+            "usages": 0
+        }
+    ],
+    "usages": 1
+}

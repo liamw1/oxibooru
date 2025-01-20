@@ -1,0 +1,25 @@
+{
+    "description": "",
+    "category": "Surroundings",
+    "names": [
+        "night_sky"
+    ],
+    "implications": [
+        {
+            "names": [
+                "night"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "sky"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        }
+    ],
+    "suggestions": [],
+    "usages": 1
+}

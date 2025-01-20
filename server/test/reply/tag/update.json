@@ -1,0 +1,58 @@
+{
+    "description": "A big body of water",
+    "category": "default",
+    "names": [
+        "lake",
+        "pond"
+    ],
+    "implications": [
+        {
+            "names": [
+                "new_tag"
+            ],
+            "category": "default",
+            "usages": 0
+        },
+        {
+            "names": [
+                "water",
+                "agua"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        }
+    ],
+    "suggestions": [
+        {
+            "names": [
+                "new_tag"
+            ],
+            "category": "default",
+            "usages": 0
+        },
+        {
+            "names": [
+                "plant",
+                "foliage"
+            ],
+            "category": "Surroundings",
+            "usages": 2
+        },
+        {
+            "names": [
+                "rock",
+                "stone"
+            ],
+            "category": "Surroundings",
+            "usages": 2
+        },
+        {
+            "names": [
+                "tree"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        }
+    ],
+    "usages": 1
+}

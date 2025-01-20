@@ -1,0 +1,400 @@
+{
+    "query": "-sort:name",
+    "offset": 0,
+    "limit": 40,
+    "total": 31,
+    "results": [
+        {
+            "description": "",
+            "category": "Meta",
+            "names": [
+                "16:9_aspect_ratio"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 2
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "admiral_ackbar"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "black_hat_badger"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Source",
+            "names": [
+                "classic_literature"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "claudius"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "darth_vader",
+                "annakin_skywalker"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "desert"
+            ],
+            "implications": [
+                {
+                    "names": [
+                        "sand"
+                    ],
+                    "category": "Surroundings",
+                    "usages": 0
+                }
+            ],
+            "suggestions": [],
+            "usages": 0
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "forest",
+                "woods"
+            ],
+            "implications": [
+                {
+                    "names": [
+                        "plant",
+                        "foliage"
+                    ],
+                    "category": "Surroundings",
+                    "usages": 2
+                },
+                {
+                    "names": [
+                        "tree"
+                    ],
+                    "category": "Surroundings",
+                    "usages": 1
+                }
+            ],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Artist",
+            "names": [
+                "george_lucas"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Artist",
+            "names": [
+                "hidetaka_miyazaki"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Meta",
+            "names": [
+                "high_resolution",
+                "high_res"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "isshin_ashina"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "kuro"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 0
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "laertes"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "luke_skywalker"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "night"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "night_sky"
+            ],
+            "implications": [
+                {
+                    "names": [
+                        "night"
+                    ],
+                    "category": "Surroundings",
+                    "usages": 1
+                },
+                {
+                    "names": [
+                        "sky"
+                    ],
+                    "category": "Surroundings",
+                    "usages": 1
+                }
+            ],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "ophelia"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 0
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "plant",
+                "foliage"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 2
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "princess_leia"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "river",
+                "stream",
+                "creek"
+            ],
+            "implications": [
+                {
+                    "names": [
+                        "water",
+                        "agua"
+                    ],
+                    "category": "Surroundings",
+                    "usages": 1
+                }
+            ],
+            "suggestions": [
+                {
+                    "names": [
+                        "plant",
+                        "foliage"
+                    ],
+                    "category": "Surroundings",
+                    "usages": 2
+                },
+                {
+                    "names": [
+                        "sand"
+                    ],
+                    "category": "Surroundings",
+                    "usages": 0
+                }
+            ],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "rock",
+                "stone"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 2
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "sand"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 0
+        },
+        {
+            "description": "",
+            "category": "Source",
+            "names": [
+                "sekiro"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "sekiro_(sekiro)"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Artist",
+            "names": [
+                "shakespeare"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "sky"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Source",
+            "names": [
+                "star_wars"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "default",
+            "names": [
+                "tagme",
+                "tag_me"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "tree"
+            ],
+            "implications": [
+                {
+                    "names": [
+                        "plant",
+                        "foliage"
+                    ],
+                    "category": "Surroundings",
+                    "usages": 2
+                }
+            ],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Surroundings",
+            "names": [
+                "water",
+                "agua"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        }
+    ]
+}

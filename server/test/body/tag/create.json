@@ -1,0 +1,16 @@
+{
+    "names": [
+        "name1",
+        "name2",
+        "name3"
+    ],
+    "category": "Surroundings",
+    "description": "This is my new tag!",
+    "implications": [
+        "tag_me"
+    ],
+    "suggestions": [
+        "darth_vader",
+        "night_sky"
+    ]
+}

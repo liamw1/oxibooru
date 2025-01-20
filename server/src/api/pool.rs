@@ -361,10 +361,9 @@ mod test {
 
         verify_query(&format!("POST /pool/?{FIELDS}"), "pool/create.json").await?;
 
-        let (pool_id, name): (i32, String) = pool::table
-            .inner_join(pool_name::table)
-            .select((pool::id, pool_name::name))
-            .order_by(pool::id.desc())
+        let (pool_id, name): (i32, String) = pool_name::table
+            .select((pool_name::pool_id, pool_name::name))
+            .order_by(pool_name::pool_id.desc())
             .first(&mut conn)?;
 
         let new_pool_count = get_pool_count(&mut conn)?;

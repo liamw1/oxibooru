@@ -1,0 +1,119 @@
+{
+    "query": "category:Character -sort:name",
+    "offset": 0,
+    "limit": 40,
+    "total": 11,
+    "results": [
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "admiral_ackbar"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "black_hat_badger"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "claudius"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "darth_vader",
+                "annakin_skywalker"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "isshin_ashina"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "kuro"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 0
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "laertes"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "luke_skywalker"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "ophelia"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 0
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "princess_leia"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        },
+        {
+            "description": "",
+            "category": "Character",
+            "names": [
+                "sekiro_(sekiro)"
+            ],
+            "implications": [],
+            "suggestions": [],
+            "usages": 1
+        }
+    ]
+}

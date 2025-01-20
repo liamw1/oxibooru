@@ -1,0 +1,52 @@
+{
+    "description": "",
+    "category": "Surroundings",
+    "names": [
+        "night_sky",
+        "river",
+        "stream",
+        "creek"
+    ],
+    "implications": [
+        {
+            "names": [
+                "night"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "sky"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "water",
+                "agua"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        }
+    ],
+    "suggestions": [
+        {
+            "names": [
+                "plant",
+                "foliage"
+            ],
+            "category": "Surroundings",
+            "usages": 2
+        },
+        {
+            "names": [
+                "sand"
+            ],
+            "category": "Surroundings",
+            "usages": 0
+        }
+    ],
+    "usages": 2
+}

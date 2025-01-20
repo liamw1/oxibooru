@@ -340,6 +340,11 @@ fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<S
             .get_results(conn)?;
         update::tag::add_names(conn, merge_to_id, current_name_count, removed_names)?;
 
+        // Update last_edit_time
+        diesel::update(tag::table.find(merge_to_id))
+            .set(tag::last_edit_time.eq(DateTime::now()))
+            .execute(conn)?;
+
         diesel::delete(tag::table.find(remove_id)).execute(conn)?;
         Ok::<_, api::Error>(merge_to_id)
     })?;
@@ -438,4 +443,206 @@ fn delete_tag(auth: AuthResult, name: String, client_version: DeleteRequest) -> 
         diesel::delete(tag::table.find(tag_id)).execute(conn)?;
         Ok(())
     })
+}
+
+#[cfg(test)]
+mod test {
+    use crate::api::ApiResult;
+    use crate::model::tag::Tag;
+    use crate::schema::{database_statistics, tag, tag_name, tag_statistics};
+    use crate::test::*;
+    use crate::time::DateTime;
+    use diesel::dsl::exists;
+    use diesel::prelude::*;
+    use serial_test::{parallel, serial};
+
+    // Exclude fields that involve creation_time or last_edit_time
+    const FIELDS: &str = "&fields=description,category,names,implications,suggestions,usages";
+
+    #[tokio::test]
+    #[parallel]
+    async fn list() -> ApiResult<()> {
+        const QUERY: &str = "GET /tags/?query";
+        const SORT: &str = "-sort:name&limit=40";
+        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "tag/list.json").await?;
+        verify_query(&format!("{QUERY}=sort:usage-count -sort:name&limit=1{FIELDS}"), "tag/list_most_used.json")
+            .await?;
+        verify_query(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character.json").await?;
+        verify_query(&format!("{QUERY}=*sky* {SORT}{FIELDS}"), "tag/list_has_sky_in_name.json").await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn get() -> ApiResult<()> {
+        const NAME: &str = "night_sky";
+        let get_last_edit_time = |conn: &mut PgConnection| -> QueryResult<DateTime> {
+            tag::table
+                .select(tag::last_edit_time)
+                .inner_join(tag_name::table)
+                .filter(tag_name::name.eq(NAME))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let last_edit_time = get_last_edit_time(&mut conn)?;
+
+        verify_query(&format!("GET /tag/{NAME}/?{FIELDS}"), "tag/get.json").await?;
+
+        let new_last_edit_time = get_last_edit_time(&mut conn)?;
+        assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn get_siblings() -> ApiResult<()> {
+        const NAME: &str = "plant";
+        let get_last_edit_time = |conn: &mut PgConnection| -> QueryResult<DateTime> {
+            tag::table
+                .select(tag::last_edit_time)
+                .inner_join(tag_name::table)
+                .filter(tag_name::name.eq(NAME))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let last_edit_time = get_last_edit_time(&mut conn)?;
+
+        verify_query(&format!("GET /tag-siblings/{NAME}/?{FIELDS}"), "tag/get_siblings.json").await?;
+
+        let new_last_edit_time = get_last_edit_time(&mut conn)?;
+        assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn create() -> ApiResult<()> {
+        let get_tag_count = |conn: &mut PgConnection| -> QueryResult<i32> {
+            database_statistics::table
+                .select(database_statistics::tag_count)
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let tag_count = get_tag_count(&mut conn)?;
+
+        verify_query(&format!("POST /tags/?{FIELDS}"), "tag/create.json").await?;
+
+        let (tag_id, name): (i32, String) = tag_name::table
+            .select((tag_name::tag_id, tag_name::name))
+            .order_by(tag_name::tag_id.desc())
+            .first(&mut conn)?;
+
+        let new_tag_count = get_tag_count(&mut conn)?;
+        assert_eq!(new_tag_count, tag_count + 1);
+
+        verify_query(&format!("DELETE /tag/{name}/?{FIELDS}"), "delete.json").await?;
+
+        let new_tag_count = get_tag_count(&mut conn)?;
+        let has_tag: bool = diesel::select(exists(tag::table.find(tag_id))).get_result(&mut conn)?;
+        assert_eq!(new_tag_count, tag_count);
+        assert!(!has_tag);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn merge() -> ApiResult<()> {
+        const REMOVE: &str = "stream";
+        const MERGE_TO: &str = "night_sky";
+        let get_tag_info = |conn: &mut PgConnection| -> QueryResult<(Tag, i32, i32, i32)> {
+            tag::table
+                .inner_join(tag_statistics::table)
+                .inner_join(tag_name::table)
+                .select((
+                    Tag::as_select(),
+                    tag_statistics::usage_count,
+                    tag_statistics::implication_count,
+                    tag_statistics::suggestion_count,
+                ))
+                .filter(tag_name::name.eq(MERGE_TO))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let (tag, usage_count, implication_count, suggestion_count) = get_tag_info(&mut conn)?;
+        let remove_id: i32 = tag_name::table
+            .select(tag_name::tag_id)
+            .filter(tag_name::name.eq(REMOVE))
+            .first(&mut conn)?;
+
+        verify_query(&format!("POST /tag-merge/?{FIELDS}"), "tag/merge.json").await?;
+
+        let has_tag: bool = diesel::select(exists(tag::table.find(remove_id))).get_result(&mut conn)?;
+        assert!(!has_tag);
+
+        let (new_tag, new_usage_count, new_implication_count, new_suggestion_count) = get_tag_info(&mut conn)?;
+        assert_eq!(new_tag.id, tag.id);
+        assert_eq!(new_tag.category_id, tag.category_id);
+        assert_eq!(new_tag.description, tag.description);
+        assert_eq!(new_tag.creation_time, tag.creation_time);
+        assert!(new_tag.last_edit_time > tag.last_edit_time);
+        assert_ne!(new_usage_count, usage_count);
+        assert_ne!(new_implication_count, implication_count);
+        assert_ne!(new_suggestion_count, suggestion_count);
+        Ok(reset_database())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn update() -> ApiResult<()> {
+        const NAME: &str = "creek";
+        let get_tag_info = |conn: &mut PgConnection, name: &str| -> QueryResult<(Tag, i32, i32, i32)> {
+            tag::table
+                .inner_join(tag_statistics::table)
+                .inner_join(tag_name::table)
+                .select((
+                    Tag::as_select(),
+                    tag_statistics::usage_count,
+                    tag_statistics::implication_count,
+                    tag_statistics::suggestion_count,
+                ))
+                .filter(tag_name::name.eq(name))
+                .first(conn)
+        };
+
+        let mut conn = get_connection()?;
+        let (tag, usage_count, implication_count, suggestion_count) = get_tag_info(&mut conn, NAME)?;
+
+        verify_query(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/update.json").await?;
+
+        let new_name: String = tag_name::table
+            .select(tag_name::name)
+            .filter(tag_name::tag_id.eq(tag.id))
+            .first(&mut conn)?;
+
+        let (new_tag, new_usage_count, new_implication_count, new_suggestion_count) =
+            get_tag_info(&mut conn, &new_name)?;
+        assert_eq!(new_tag.id, tag.id);
+        assert_ne!(new_tag.category_id, tag.category_id);
+        assert_ne!(new_tag.description, tag.description);
+        assert_eq!(new_tag.creation_time, tag.creation_time);
+        assert!(new_tag.last_edit_time > tag.last_edit_time);
+        assert_eq!(new_usage_count, usage_count);
+        assert_ne!(new_implication_count, implication_count);
+        assert_ne!(new_suggestion_count, suggestion_count);
+
+        verify_query(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/update_restore.json").await?;
+
+        let new_tag_id: i32 = tag::table.select(tag::id).order_by(tag::id.desc()).first(&mut conn)?;
+        diesel::delete(tag::table.find(new_tag_id)).execute(&mut conn)?;
+
+        let (new_tag, new_usage_count, new_implication_count, new_suggestion_count) = get_tag_info(&mut conn, NAME)?;
+        assert_eq!(new_tag.id, tag.id);
+        assert_eq!(new_tag.category_id, tag.category_id);
+        assert_eq!(new_tag.description, tag.description);
+        assert_eq!(new_tag.creation_time, tag.creation_time);
+        assert!(new_tag.last_edit_time > tag.last_edit_time);
+        assert_eq!(new_usage_count, usage_count);
+        assert_eq!(new_implication_count, implication_count);
+        assert_eq!(new_suggestion_count, suggestion_count);
+        Ok(())
+    }
 }

@@ -1,6 +1,6 @@
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
 use crate::resource;
-use crate::schema::{tag, tag_category, tag_name, tag_statistics};
+use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -155,9 +155,12 @@ fn get_names(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec<Strin
 }
 
 fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec<MicroTag>>> {
+    let implication_info = tag::table.inner_join(tag_statistics::table).inner_join(tag_name::table);
     let implications: Vec<(TagImplication, i32, i32)> = TagImplication::belonging_to(tags)
-        .inner_join(tag::table.inner_join(tag_statistics::table))
-        .select((TagImplication::as_select(), tag::category_id, tag_statistics::implication_count))
+        .inner_join(implication_info.on(tag::id.eq(tag_implication::child_id)))
+        .select((TagImplication::as_select(), tag::category_id, tag_statistics::usage_count))
+        .filter(tag_name::order.eq(0))
+        .order_by(tag_name::name)
         .load(conn)?;
     let implication_ids: HashSet<i32> = implications
         .iter()
@@ -167,7 +170,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
     let implication_names: Vec<(i32, String)> = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(implication_ids))
-        .order((tag_name::tag_id, tag_name::order, tag_name::name))
+        .order((tag_name::tag_id, tag_name::order))
         .load(conn)?;
     let category_names: HashMap<i32, String> = tag_category::table
         .select((tag_category::id, tag_category::name))
@@ -201,16 +204,19 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
 }
 
 fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec<MicroTag>>> {
+    let suggestion_info = tag::table.inner_join(tag_statistics::table).inner_join(tag_name::table);
     let suggestions: Vec<(TagSuggestion, i32, i32)> = TagSuggestion::belonging_to(tags)
-        .inner_join(tag::table.inner_join(tag_statistics::table))
-        .select((TagSuggestion::as_select(), tag::category_id, tag_statistics::suggestion_count))
+        .inner_join(suggestion_info.on(tag::id.eq(tag_suggestion::child_id)))
+        .select((TagSuggestion::as_select(), tag::category_id, tag_statistics::usage_count))
+        .filter(tag_name::order.eq(0))
+        .order_by(tag_name::name)
         .load(conn)?;
     let suggestion_ids: HashSet<i32> = suggestions.iter().map(|(suggestion, ..)| suggestion.child_id).collect();
 
     let suggestion_names: Vec<(i32, String)> = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(suggestion_ids))
-        .order((tag_name::tag_id, tag_name::order, tag_name::name))
+        .order((tag_name::tag_id, tag_name::order))
         .load(conn)?;
     let category_names: HashMap<i32, String> = tag_category::table
         .select((tag_category::id, tag_category::name))

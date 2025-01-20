@@ -1,0 +1,18 @@
+{
+    "version": "2025-01-17T06:25:08.461692853Z",
+    "names": [
+        "lake",
+        "pond"
+    ],
+    "category": "default",
+    "description": "A big body of water",
+    "implications": [
+        "water",
+        "new_tag"
+    ],
+    "suggestions": [
+        "tree",
+        "rock",
+        "new_tag"
+    ]
+}

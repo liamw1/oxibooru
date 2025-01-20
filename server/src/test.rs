@@ -173,7 +173,7 @@ const TAG_IMPLICATIONS: &[(&str, &str)] = &[
     ("night_sky", "night"),
     ("night_sky", "sky"),
 ];
-const TAG_SUGGESTIONS: &[(&str, &str)] = &[("river", "sand"), ("river", "forest")];
+const TAG_SUGGESTIONS: &[(&str, &str)] = &[("river", "sand"), ("river", "plant")];
 
 const POST_1_TAGS: &[&str] = &[
     "shakespeare",

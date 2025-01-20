@@ -223,8 +223,14 @@ fn get_post_neighbors(auth: AuthResult, post_id: i32, query: ResourceQuery) -> A
             let post_ids: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
             let post_index = post_ids.iter().position(|&id| id == post_id);
 
-            let prev_post_id = post_index.and_then(|index| post_ids.get(index - 1)).copied();
-            let next_post_id = post_index.and_then(|index| post_ids.get(index + 1)).copied();
+            let prev_post_id = post_index
+                .and_then(|index| index.checked_sub(1))
+                .and_then(|prev_index| post_ids.get(prev_index))
+                .copied();
+            let next_post_id = post_index
+                .and_then(|index| index.checked_add(1))
+                .and_then(|next_index| post_ids.get(next_index))
+                .copied();
             let post_ids = prev_post_id.into_iter().chain(next_post_id).collect();
             let post_infos = PostInfo::new_batch_from_ids(conn, client_id, post_ids, &fields)?;
             Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))

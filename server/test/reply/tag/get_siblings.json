@@ -1,0 +1,268 @@
+{
+    "results": [
+        {
+            "tag": {
+                "description": "",
+                "category": "Surroundings",
+                "names": [
+                    "rock",
+                    "stone"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 2
+            },
+            "occurrences": 2
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Character",
+                "names": [
+                    "luke_skywalker"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Character",
+                "names": [
+                    "laertes"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Surroundings",
+                "names": [
+                    "forest",
+                    "woods"
+                ],
+                "implications": [
+                    {
+                        "names": [
+                            "plant",
+                            "foliage"
+                        ],
+                        "category": "Surroundings",
+                        "usages": 2
+                    },
+                    {
+                        "names": [
+                            "tree"
+                        ],
+                        "category": "Surroundings",
+                        "usages": 1
+                    }
+                ],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Artist",
+                "names": [
+                    "george_lucas"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Source",
+                "names": [
+                    "classic_literature"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Source",
+                "names": [
+                    "star_wars"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Meta",
+                "names": [
+                    "16:9_aspect_ratio"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 2
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Character",
+                "names": [
+                    "admiral_ackbar"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Character",
+                "names": [
+                    "princess_leia"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Artist",
+                "names": [
+                    "shakespeare"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Character",
+                "names": [
+                    "darth_vader",
+                    "annakin_skywalker"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Surroundings",
+                "names": [
+                    "river",
+                    "stream",
+                    "creek"
+                ],
+                "implications": [
+                    {
+                        "names": [
+                            "water",
+                            "agua"
+                        ],
+                        "category": "Surroundings",
+                        "usages": 1
+                    }
+                ],
+                "suggestions": [
+                    {
+                        "names": [
+                            "plant",
+                            "foliage"
+                        ],
+                        "category": "Surroundings",
+                        "usages": 2
+                    },
+                    {
+                        "names": [
+                            "sand"
+                        ],
+                        "category": "Surroundings",
+                        "usages": 0
+                    }
+                ],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Surroundings",
+                "names": [
+                    "tree"
+                ],
+                "implications": [
+                    {
+                        "names": [
+                            "plant",
+                            "foliage"
+                        ],
+                        "category": "Surroundings",
+                        "usages": 2
+                    }
+                ],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Surroundings",
+                "names": [
+                    "water",
+                    "agua"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Character",
+                "names": [
+                    "claudius"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        }
+    ]
+}
