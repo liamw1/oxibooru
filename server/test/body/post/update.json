@@ -6,7 +6,7 @@
         "new_tag"
     ],
     "safety": "safe",
-    "source": "I found a new source for this",
+    "source": null,
     "relations": [
         1,
         3

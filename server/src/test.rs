@@ -7,11 +7,11 @@ use crate::model::enums::{PostSafety, PostType};
 use crate::model::pool::{NewPool, NewPoolCategory, NewPoolName, PoolPost};
 use crate::model::post::{NewPost, NewPostFeature, NewPostNote, PostFavorite, PostRelation, PostScore, PostTag};
 use crate::model::tag::{NewTag, NewTagCategory, NewTagName, TagImplication, TagSuggestion};
-use crate::model::user::NewUser;
+use crate::model::user::{NewUser, NewUserToken};
 use crate::schema::{
     comment, comment_score, pool, pool_category, pool_category_statistics, pool_name, pool_post, pool_statistics, post,
     post_favorite, post_feature, post_note, post_relation, post_score, post_statistics, post_tag, tag, tag_category,
-    tag_category_statistics, tag_implication, tag_name, tag_statistics, tag_suggestion, user,
+    tag_category_statistics, tag_implication, tag_name, tag_statistics, tag_suggestion, user, user_token,
 };
 use crate::time::DateTime;
 use crate::{api, db};
@@ -21,10 +21,12 @@ use diesel::result::Error;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
+use uuid::Uuid;
 
 pub const TEST_PASSWORD: &str = "test_password";
 pub const TEST_SALT: &str = "test_salt";
 pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
+pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
 
 pub fn get_connection() -> ConnectionResult {
     let mut lock = CONNECTION_POOL.lock().unwrap();
@@ -461,6 +463,18 @@ fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
 fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
     // Create users
     diesel::insert_into(user::table).values(USERS).execute(conn)?;
+
+    // Create user token
+    let new_user_token = NewUserToken {
+        user_id: 5,
+        token: TEST_TOKEN,
+        note: Some("This is a test token"),
+        enabled: true,
+        expiration_time: None,
+    };
+    diesel::insert_into(user_token::table)
+        .values(new_user_token)
+        .execute(conn)?;
 
     // Create tags and pools
     create_tag_categories(conn)?;

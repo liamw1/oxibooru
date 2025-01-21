@@ -16,7 +16,7 @@ use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
 use crate::time::DateTime;
 use crate::{config, update};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::Infallible;
 use std::num::NonZero;
 use std::ops::Deref;
@@ -401,4 +401,13 @@ async fn empty_query(_err: Rejection) -> Result<(ResourceQuery,), Infallible> {
 /// Optionally serializes a resource query.
 fn resource_query() -> impl Filter<Extract = (ResourceQuery,), Error = Infallible> + Clone {
     warp::query::<ResourceQuery>().or_else(empty_query)
+}
+
+// Any value that is present is considered Some value, including null.
+fn deserialize_some<'de, T, D>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
 }

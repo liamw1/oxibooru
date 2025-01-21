@@ -1,0 +1,13 @@
+{
+    "results": [
+        {
+            "user": {
+                "name": "administrator",
+                "avatarUrl": "data/custom-avatars/administrator.png"
+            },
+            "note": "This is a test token",
+            "enabled": true,
+            "expirationTime": null
+        }
+    ]
+}

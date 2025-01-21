@@ -755,7 +755,8 @@ fn rate_post(auth: AuthResult, post_id: i32, query: ResourceQuery, rating: Ratin
 struct PostUpdate {
     version: DateTime,
     safety: Option<PostSafety>,
-    source: Option<String>,
+    #[serde(default, deserialize_with = "api::deserialize_some")]
+    source: Option<Option<String>>,
     relations: Option<Vec<i32>>,
     tags: Option<Vec<String>>,
     notes: Option<Vec<Note>>,

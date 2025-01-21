@@ -204,7 +204,8 @@ struct UserUpdate {
     version: DateTime,
     name: Option<String>,
     password: Option<String>,
-    email: Option<String>,
+    #[serde(default, deserialize_with = "api::deserialize_some")]
+    email: Option<Option<String>>,
     rank: Option<UserRank>,
     avatar_style: Option<AvatarStyle>,
     avatar_token: Option<String>,
@@ -275,7 +276,7 @@ fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update:
                 false => config::privileges().user_edit_any_email,
             };
             api::verify_privilege(client, required_rank)?;
-            api::verify_valid_email(Some(&email))?;
+            api::verify_valid_email(email.as_deref())?;
 
             diesel::update(user::table.find(user_id))
                 .set(user::email.eq(email))
@@ -428,14 +429,13 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn update() -> ApiResult<()> {
-        const NAME: &str = "regular_user";
+        const NAME: &str = "restricted_user";
 
         let mut conn = get_connection()?;
         let user_id: i32 = user::table
             .select(user::id)
             .filter(user::name.eq(NAME))
             .first(&mut conn)?;
-
         let user: User = user::table.find(user_id).first(&mut conn)?;
 
         verify_query(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/update.json").await?;
@@ -452,7 +452,8 @@ mod test {
         assert_eq!(new_user.last_login_time, user.last_login_time);
         assert!(new_user.last_edit_time > user.last_edit_time);
 
-        verify_query(&format!("PUT /user/{}/?{FIELDS}", new_user.name), "user/update_restore.json").await?;
+        let new_name = &new_user.name;
+        verify_query(&format!("PUT /user/{new_name}/?{FIELDS}"), "user/update_restore.json").await?;
 
         let new_user: User = user::table.find(user_id).first(&mut conn)?;
         assert_eq!(new_user.id, user.id);

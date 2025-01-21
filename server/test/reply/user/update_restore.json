@@ -1,12 +1,12 @@
 {
-    "name": "regular_user",
+    "name": "restricted_user",
     "email": false,
-    "rank": "regular",
+    "rank": "restricted",
     "avatarStyle": "manual",
-    "avatarUrl": "data/custom-avatars/regular_user.png",
-    "commentCount": 2,
-    "uploadedPostCount": 3,
+    "avatarUrl": "data/custom-avatars/restricted_user.png",
+    "commentCount": 0,
+    "uploadedPostCount": 1,
     "likedPostCount": false,
     "dislikedPostCount": false,
-    "favoritePostCount": 3
+    "favoritePostCount": 1
 }

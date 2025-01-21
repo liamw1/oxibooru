@@ -1,7 +1,7 @@
 {
     "version": "2025-01-17T06:25:08.461692853Z",
-    "name": "regular_user",
-    "email": "email@domain.com",
-    "rank": "regular",
+    "name": "restricted_user",
+    "email": null,
+    "rank": "restricted",
     "avatarStyle": "manual"
 }

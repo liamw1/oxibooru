@@ -2,34 +2,66 @@ use crate::model::user::UserToken;
 use crate::resource::user::MicroUser;
 use crate::time::DateTime;
 use serde::Serialize;
+use serde_with::skip_serializing_none;
+use std::str::FromStr;
+use strum::{EnumString, EnumTable};
 use uuid::Uuid;
 
+#[derive(Clone, Copy, EnumString, EnumTable)]
+#[strum(serialize_all = "camelCase")]
+pub enum Field {
+    Version,
+    User,
+    Token,
+    Note,
+    Enabled,
+    ExpirationTime,
+    CreationTime,
+    LastEditTime,
+    LastUsageTime,
+}
+
+impl Field {
+    pub fn create_table(fields_str: &str) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
+        let mut table = FieldTable::filled(false);
+        let fields = fields_str
+            .split(',')
+            .map(Self::from_str)
+            .collect::<Result<Vec<_>, _>>()?;
+        for field in fields.into_iter() {
+            table[field] = true;
+        }
+        Ok(table)
+    }
+}
+
+#[skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UserTokenInfo {
-    version: DateTime,
-    user: MicroUser,
-    token: Uuid,
-    note: String,
-    enabled: bool,
-    expiration_time: Option<DateTime>,
-    creation_time: DateTime,
-    last_edit_time: DateTime,
-    last_usage_time: DateTime,
+    version: Option<DateTime>,
+    user: Option<MicroUser>,
+    token: Option<Uuid>,
+    note: Option<String>,
+    enabled: Option<bool>,
+    expiration_time: Option<Option<DateTime>>,
+    creation_time: Option<DateTime>,
+    last_edit_time: Option<DateTime>,
+    last_usage_time: Option<DateTime>,
 }
 
 impl UserTokenInfo {
-    pub fn new(user: MicroUser, user_token: UserToken) -> Self {
+    pub fn new(user: MicroUser, user_token: UserToken, fields: &FieldTable<bool>) -> Self {
         UserTokenInfo {
-            version: user_token.last_edit_time,
-            user,
-            token: user_token.token,
-            note: user_token.note,
-            enabled: user_token.enabled,
-            expiration_time: user_token.expiration_time,
-            creation_time: user_token.creation_time,
-            last_edit_time: user_token.last_edit_time,
-            last_usage_time: user_token.last_usage_time,
+            version: fields[Field::Version].then_some(user_token.last_edit_time),
+            user: fields[Field::User].then_some(user),
+            token: fields[Field::Token].then_some(user_token.token),
+            note: fields[Field::Note].then_some(user_token.note),
+            enabled: fields[Field::Enabled].then_some(user_token.enabled),
+            expiration_time: fields[Field::ExpirationTime].then_some(user_token.expiration_time),
+            creation_time: fields[Field::CreationTime].then_some(user_token.creation_time),
+            last_edit_time: fields[Field::LastEditTime].then_some(user_token.last_edit_time),
+            last_usage_time: fields[Field::LastUsageTime].then_some(user_token.last_usage_time),
         }
     }
 }
