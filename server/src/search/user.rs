@@ -46,7 +46,7 @@ pub fn get_ordered_ids(
     conn: &mut PgConnection,
     unsorted_query: BoxedQuery,
     search_criteria: &SearchCriteria<Token>,
-) -> QueryResult<Vec<i32>> {
+) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
     if search_criteria.random_sort {
         define_sql_function!(fn random() -> Integer);

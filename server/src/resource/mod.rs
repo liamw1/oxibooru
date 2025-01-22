@@ -25,16 +25,16 @@ fn check_batch_results(batch_size: usize, post_count: usize) {
 /// NOTE: This algorithm is O(n^2) in values.len(), which could be made O(n) with a HashMap implementation.
 /// However, for small n this Vec-based implementation is probably much faster. Since we retrieve
 /// 40-50 resources at a time, I'm leaving it like this for the time being until it proves to be slow.
-fn order_as<T>(values: Vec<T>, order: &[i32]) -> Vec<T>
+fn order_as<T>(values: Vec<T>, order: &[i64]) -> Vec<T>
 where
-    for<'a> &'a T: Identifiable<Id = &'a i32>,
+    for<'a> &'a T: Identifiable<Id = &'a i64>,
 {
     order_transformed_as(values, order, |value| *value.id())
 }
 
-fn order_transformed_as<V, F>(mut values: Vec<V>, order: &[i32], get_id: F) -> Vec<V>
+fn order_transformed_as<V, F>(mut values: Vec<V>, order: &[i64], get_id: F) -> Vec<V>
 where
-    F: Fn(&V) -> i32,
+    F: Fn(&V) -> i64,
 {
     assert_eq!(values.len(), order.len());
 
@@ -59,8 +59,8 @@ where
 /// The note in the above comment applies here as well.
 fn order_like<V, T, F>(unordered_values: Vec<V>, ordered_values: &[T], get_id: F) -> Vec<Option<V>>
 where
-    for<'a> &'a T: Identifiable<Id = &'a i32>,
-    F: Fn(&V) -> i32,
+    for<'a> &'a T: Identifiable<Id = &'a i64>,
+    F: Fn(&V) -> i64,
 {
     assert!(unordered_values.len() <= ordered_values.len());
 

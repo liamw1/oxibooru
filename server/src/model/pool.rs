@@ -16,7 +16,7 @@ pub struct NewPoolCategory<'a> {
 #[diesel(table_name = pool_category)]
 #[diesel(check_for_backend(Pg))]
 pub struct PoolCategory {
-    pub id: i32,
+    pub id: i64,
     pub name: String,
     pub color: String,
     pub last_edit_time: DateTime,
@@ -26,7 +26,7 @@ pub struct PoolCategory {
 #[diesel(table_name = pool)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewPool<'a> {
-    pub category_id: i32,
+    pub category_id: i64,
     pub description: &'a str,
 }
 
@@ -35,8 +35,8 @@ pub struct NewPool<'a> {
 #[diesel(table_name = pool)]
 #[diesel(check_for_backend(Pg))]
 pub struct Pool {
-    pub id: i32,
-    pub category_id: i32,
+    pub id: i64,
+    pub category_id: i64,
     pub description: String,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
@@ -46,7 +46,7 @@ pub struct Pool {
 #[diesel(table_name = pool_name)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewPoolName<'a> {
-    pub pool_id: i32,
+    pub pool_id: i64,
     pub order: i32,
     pub name: &'a str,
 }
@@ -57,7 +57,7 @@ pub struct NewPoolName<'a> {
 #[diesel(primary_key(pool_id, order))]
 #[diesel(check_for_backend(Pg))]
 pub struct PoolName {
-    pub pool_id: i32,
+    pub pool_id: i64,
     pub order: i32,
     pub name: String,
 }
@@ -68,7 +68,7 @@ pub struct PoolName {
 #[diesel(primary_key(pool_id, post_id))]
 #[diesel(check_for_backend(Pg))]
 pub struct PoolPost {
-    pub pool_id: i32,
-    pub post_id: i32,
-    pub order: i32,
+    pub pool_id: i64,
+    pub post_id: i64,
+    pub order: i64,
 }

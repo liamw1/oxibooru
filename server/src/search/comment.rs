@@ -47,13 +47,13 @@ pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<Box
         .filters
         .iter()
         .try_fold(base_query, |query, filter| match filter.kind {
-            Token::Id => apply_filter!(query, comment::id, filter, i32),
-            Token::Post => apply_filter!(query, comment::post_id, filter, i32),
+            Token::Id => apply_filter!(query, comment::id, filter, i64),
+            Token::Post => apply_filter!(query, comment::post_id, filter, i64),
             Token::Text => Ok(apply_str_filter!(query, comment::text, filter)),
             Token::CreationTime => apply_time_filter!(query, comment::creation_time, filter),
             Token::LastEditTime => apply_time_filter!(query, comment::last_edit_time, filter),
             Token::User => Ok(apply_str_filter!(query, user::name, filter)),
-            Token::Score => apply_filter!(query, comment_statistics::score, filter, i32),
+            Token::Score => apply_filter!(query, comment_statistics::score, filter, i64),
         })
 }
 
@@ -61,7 +61,7 @@ pub fn get_ordered_ids(
     conn: &mut PgConnection,
     unsorted_query: BoxedQuery,
     search_criteria: &SearchCriteria<Token>,
-) -> QueryResult<Vec<i32>> {
+) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
     if search_criteria.random_sort {
         define_sql_function!(fn random() -> Integer);

@@ -30,12 +30,12 @@ pub enum AuthenticationError {
 
 #[derive(Clone, Copy)]
 pub struct AuthUser {
-    pub id: i32,
+    pub id: i64,
     pub rank: UserRank,
 }
 
 impl AuthUser {
-    fn new(id: i32, rank: UserRank) -> Self {
+    fn new(id: i64, rank: UserRank) -> Self {
         Self { id, rank }
     }
 }
@@ -79,7 +79,7 @@ fn basic_access_authentication(credentials: &str) -> Result<AuthUser, Authentica
 
     // For security reasons, don't give any indication to the user if it was the password
     // or the username that was incorrect.
-    let (user_id, rank, password_hash): (i32, UserRank, String) = user::table
+    let (user_id, rank, password_hash): (i64, UserRank, String) = user::table
         .select((user::id, user::rank, user::password_hash))
         .filter(user::name.eq(username))
         .first(&mut conn)
@@ -98,7 +98,7 @@ fn token_authentication(credentials: &str) -> Result<AuthUser, AuthenticationErr
 
     let mut conn = db::get_connection()?;
 
-    let (user_id, rank, enabled, expiration_time): (i32, UserRank, bool, Option<DateTime>) = user_token::table
+    let (user_id, rank, enabled, expiration_time): (i64, UserRank, bool, Option<DateTime>) = user_token::table
         .inner_join(user::table)
         .select((user::id, user::rank, user_token::enabled, user_token::expiration_time))
         .filter(user::name.eq(username))

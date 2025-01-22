@@ -17,7 +17,7 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
     let _timer = Timer::new("recompute_checksums");
     let mut progress = ProgressReporter::new("Checksums computed", PRINT_INTERVAL);
 
-    let posts: Vec<(i32, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
+    let posts: Vec<(i64, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
     for (post_id, mime_type) in posts.into_iter() {
         let image_path = PostHash::new(post_id).content_path(mime_type);
         let file_contents = match std::fs::read(&image_path) {
@@ -30,7 +30,7 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
 
         let checksum = hash::compute_checksum(&file_contents);
         let md5_checksum = hash::compute_md5_checksum(&file_contents);
-        let duplicate: Option<i32> = post::table
+        let duplicate: Option<i64> = post::table
             .select(post::id)
             .filter(post::checksum.eq(&checksum))
             .filter(post::id.ne(post_id))
@@ -60,7 +60,7 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
 
     diesel::delete(post_signature::table).execute(conn)?;
 
-    let posts: Vec<(i32, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
+    let posts: Vec<(i64, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
     for (post_id, mime_type) in posts.into_iter() {
         let image_path = PostHash::new(post_id).content_path(mime_type);
         let file_contents = match std::fs::read(&image_path) {
@@ -151,7 +151,7 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) -> ApiResult<()> {
             break;
         }
 
-        let post_id = match user_input.parse::<i32>() {
+        let post_id = match user_input.parse::<i64>() {
             Ok(id) => id,
             Err(_) => {
                 eprintln!("ERROR: Post ID must be an integer\n");

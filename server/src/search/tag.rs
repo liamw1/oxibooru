@@ -58,9 +58,9 @@ pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<Box
                 Ok(apply_subquery_filter!(query, tag::id, filter, subquery))
             }
             Token::Category => Ok(apply_str_filter!(query, tag_category::name, filter)),
-            Token::UsageCount => apply_filter!(query, tag_statistics::usage_count, filter, i32),
-            Token::ImplicationCount => apply_filter!(query, tag_statistics::implication_count, filter, i32),
-            Token::SuggestionCount => apply_filter!(query, tag_statistics::suggestion_count, filter, i32),
+            Token::UsageCount => apply_filter!(query, tag_statistics::usage_count, filter, i64),
+            Token::ImplicationCount => apply_filter!(query, tag_statistics::implication_count, filter, i64),
+            Token::SuggestionCount => apply_filter!(query, tag_statistics::suggestion_count, filter, i64),
             Token::HasImplication => {
                 let implications = tag_implication::table
                     .select(tag_implication::parent_id)
@@ -84,7 +84,7 @@ pub fn get_ordered_ids(
     conn: &mut PgConnection,
     unsorted_query: BoxedQuery,
     search_criteria: &SearchCriteria<Token>,
-) -> QueryResult<Vec<i32>> {
+) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
     if search_criteria.random_sort {
         define_sql_function!(fn random() -> Integer);

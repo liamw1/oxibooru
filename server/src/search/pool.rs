@@ -55,7 +55,7 @@ pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<Box
                 Ok(apply_subquery_filter!(query, pool::id, filter, subquery))
             }
             Token::Category => Ok(apply_str_filter!(query, pool_category::name, filter)),
-            Token::PostCount => apply_filter!(query, pool_statistics::post_count, filter, i32),
+            Token::PostCount => apply_filter!(query, pool_statistics::post_count, filter, i64),
         })
 }
 
@@ -63,7 +63,7 @@ pub fn get_ordered_ids(
     conn: &mut PgConnection,
     unsorted_query: BoxedQuery,
     search_criteria: &SearchCriteria<Token>,
-) -> QueryResult<Vec<i32>> {
+) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
     if search_criteria.random_sort {
         define_sql_function!(fn random() -> Integer);

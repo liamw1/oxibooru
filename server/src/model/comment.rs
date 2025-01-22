@@ -10,8 +10,8 @@ use diesel::prelude::*;
 #[diesel(table_name = comment)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewComment<'a> {
-    pub user_id: Option<i32>,
-    pub post_id: i32,
+    pub user_id: Option<i64>,
+    pub post_id: i64,
     pub text: &'a str,
     pub creation_time: DateTime,
 }
@@ -21,9 +21,9 @@ pub struct NewComment<'a> {
 #[diesel(table_name = comment)]
 #[diesel(check_for_backend(Pg))]
 pub struct Comment {
-    pub id: i32,
-    pub user_id: Option<i32>,
-    pub post_id: i32,
+    pub id: i64,
+    pub user_id: Option<i64>,
+    pub post_id: i64,
     pub text: String,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
@@ -33,8 +33,8 @@ pub struct Comment {
 #[diesel(table_name = comment_score)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewCommentScore {
-    pub comment_id: i32,
-    pub user_id: i32,
+    pub comment_id: i64,
+    pub user_id: i64,
     pub score: Score,
 }
 
@@ -44,8 +44,8 @@ pub struct NewCommentScore {
 #[diesel(primary_key(comment_id, user_id))]
 #[diesel(check_for_backend(Pg))]
 pub struct CommentScore {
-    pub comment_id: i32,
-    pub user_id: i32,
+    pub comment_id: i64,
+    pub user_id: i64,
     pub score: Score,
     pub time: DateTime,
 }

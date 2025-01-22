@@ -183,7 +183,7 @@ fn set_default_pool_category(auth: AuthResult, name: String, query: ResourceQuer
         let mut old_default_category: PoolCategory =
             pool_category::table.filter(pool_category::id.eq(0)).first(conn)?;
 
-        let defaulted_pools: Vec<i32> = diesel::update(pool::table)
+        let defaulted_pools: Vec<i64> = diesel::update(pool::table)
             .filter(pool::category_id.eq(category.id))
             .set(pool::category_id.eq(0))
             .returning(pool::id)
@@ -223,7 +223,7 @@ fn delete_pool_category(auth: AuthResult, name: String, client_version: DeleteRe
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
-        let (category_id, category_version): (i32, DateTime) = pool_category::table
+        let (category_id, category_version): (i64, DateTime) = pool_category::table
             .select((pool_category::id, pool_category::last_edit_time))
             .filter(pool_category::name.eq(name))
             .first(conn)?;
@@ -291,7 +291,7 @@ mod test {
             .first(&mut conn)?;
 
         let new_category_count: i64 = pool_category::table.count().first(&mut conn)?;
-        let usage_count: i32 = pool_category::table
+        let usage_count: i64 = pool_category::table
             .inner_join(pool_category_statistics::table)
             .select(pool_category_statistics::usage_count)
             .filter(pool_category::name.eq(&category_name))
@@ -334,7 +334,7 @@ mod test {
     async fn set_default() -> ApiResult<()> {
         const NAME: &str = "Setting";
         let is_default = |conn: &mut PgConnection| -> QueryResult<bool> {
-            let category_id: i32 = pool_category::table
+            let category_id: i64 = pool_category::table
                 .select(pool_category::id)
                 .filter(pool_category::name.eq(NAME))
                 .first(conn)?;

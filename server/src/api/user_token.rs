@@ -63,7 +63,7 @@ fn list_user_tokens(
     let fields = create_field_table(query.fields())?;
 
     db::get_connection()?.transaction(|conn| {
-        let (user_id, avatar_style): (i32, AvatarStyle) = user::table
+        let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
             .first(conn)?;
@@ -108,7 +108,7 @@ fn create_user_token(
 
     let mut conn = db::get_connection()?;
     let (user_token, avatar_style) = conn.transaction(|conn| {
-        let (user_id, avatar_style): (i32, AvatarStyle) = user::table
+        let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
             .first(conn)?;
@@ -171,7 +171,7 @@ fn update_user_token(
 
     let mut conn = db::get_connection()?;
     let (updated_user_token, avatar_style) = conn.transaction(|conn| {
-        let (user_id, avatar_style): (i32, AvatarStyle) = user::table
+        let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
             .first(conn)?;
@@ -208,7 +208,7 @@ fn delete_user_token(auth: AuthResult, username: String, token: Uuid) -> ApiResu
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
     db::get_connection()?.transaction(|conn| {
-        let user_token_owner: i32 = user::table
+        let user_token_owner: i64 = user::table
             .inner_join(user_token::table)
             .select(user_token::user_id)
             .filter(user::name.eq(username))

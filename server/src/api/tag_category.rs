@@ -197,7 +197,7 @@ fn set_default_tag_category(auth: AuthResult, name: String, query: ResourceQuery
         let mut category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
         let mut old_default_category: TagCategory = tag_category::table.filter(tag_category::id.eq(0)).first(conn)?;
 
-        let defaulted_tags: Vec<i32> = diesel::update(tag::table)
+        let defaulted_tags: Vec<i64> = diesel::update(tag::table)
             .filter(tag::category_id.eq(category.id))
             .set(tag::category_id.eq(0))
             .returning(tag::id)
@@ -237,7 +237,7 @@ fn delete_tag_category(auth: AuthResult, name: String, client_version: DeleteReq
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
-        let (category_id, category_version): (i32, DateTime) = tag_category::table
+        let (category_id, category_version): (i64, DateTime) = tag_category::table
             .select((tag_category::id, tag_category::last_edit_time))
             .filter(tag_category::name.eq(name))
             .first(conn)?;
@@ -305,7 +305,7 @@ mod test {
             .first(&mut conn)?;
 
         let new_category_count: i64 = tag_category::table.count().first(&mut conn)?;
-        let usage_count: i32 = tag_category::table
+        let usage_count: i64 = tag_category::table
             .inner_join(tag_category_statistics::table)
             .select(tag_category_statistics::usage_count)
             .filter(tag_category::name.eq(&category_name))
@@ -348,7 +348,7 @@ mod test {
     async fn set_default() -> ApiResult<()> {
         const NAME: &str = "Surroundings";
         let is_default = |conn: &mut PgConnection| -> QueryResult<bool> {
-            let category_id: i32 = tag_category::table
+            let category_id: i64 = tag_category::table
                 .select(tag_category::id)
                 .filter(tag_category::name.eq(NAME))
                 .first(conn)?;

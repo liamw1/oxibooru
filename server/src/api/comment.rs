@@ -19,7 +19,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(api::Reply::from);
     let get_comment = warp::get()
         .and(api::auth())
-        .and(warp::path!("comment" / i32))
+        .and(warp::path!("comment" / i64))
         .and(api::resource_query())
         .map(get_comment)
         .map(api::Reply::from);
@@ -32,21 +32,21 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(api::Reply::from);
     let update_comment = warp::put()
         .and(api::auth())
-        .and(warp::path!("comment" / i32))
+        .and(warp::path!("comment" / i64))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(update_comment)
         .map(api::Reply::from);
     let rate_comment = warp::put()
         .and(api::auth())
-        .and(warp::path!("comment" / i32 / "score"))
+        .and(warp::path!("comment" / i64 / "score"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(rate_comment)
         .map(api::Reply::from);
     let delete_comment = warp::delete()
         .and(api::auth())
-        .and(warp::path!("comment" / i32))
+        .and(warp::path!("comment" / i64))
         .and(warp::body::json())
         .map(delete_comment)
         .map(api::Reply::from);
@@ -87,13 +87,12 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse
             let count_query = search::comment::build_query(&search_criteria)?;
             count_query.count().first(conn)?
         } else {
-            let comment_count: i32 = database_statistics::table
+            database_statistics::table
                 .select(database_statistics::comment_count)
-                .first(conn)?;
-            i64::from(comment_count)
+                .first(conn)?
         };
 
-        let selected_comments: Vec<i32> = search::comment::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let selected_comments: Vec<i64> = search::comment::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,
             offset,
@@ -104,7 +103,7 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse
     })
 }
 
-fn get_comment(auth: AuthResult, comment_id: i32, query: ResourceQuery) -> ApiResult<CommentInfo> {
+fn get_comment(auth: AuthResult, comment_id: i64, query: ResourceQuery) -> ApiResult<CommentInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().comment_view)?;
 
@@ -123,7 +122,7 @@ fn get_comment(auth: AuthResult, comment_id: i32, query: ResourceQuery) -> ApiRe
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct NewCommentInfo {
-    post_id: i32,
+    post_id: i64,
     text: String,
 }
 
@@ -141,7 +140,7 @@ fn create_comment(auth: AuthResult, query: ResourceQuery, comment_info: NewComme
     };
 
     let mut conn = db::get_connection()?;
-    let comment_id: i32 = diesel::insert_into(comment::table)
+    let comment_id: i64 = diesel::insert_into(comment::table)
         .values(new_comment)
         .returning(comment::id)
         .get_result(&mut conn)?;
@@ -159,7 +158,7 @@ struct CommentUpdate {
 
 fn update_comment(
     auth: AuthResult,
-    comment_id: i32,
+    comment_id: i64,
     query: ResourceQuery,
     update: CommentUpdate,
 ) -> ApiResult<CommentInfo> {
@@ -169,7 +168,7 @@ fn update_comment(
 
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
-        let (comment_owner, comment_version): (Option<i32>, DateTime) = comment::table
+        let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))
             .first(conn)?;
@@ -191,7 +190,7 @@ fn update_comment(
 
 fn rate_comment(
     auth: AuthResult,
-    comment_id: i32,
+    comment_id: i64,
     query: ResourceQuery,
     rating: RatingRequest,
 ) -> ApiResult<CommentInfo> {
@@ -222,12 +221,12 @@ fn rate_comment(
     })
 }
 
-fn delete_comment(auth: AuthResult, comment_id: i32, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete_comment(auth: AuthResult, comment_id: i64, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     let client_id = client.map(|user| user.id);
 
     db::get_connection()?.transaction(|conn| {
-        let (comment_owner, comment_version): (Option<i32>, DateTime) = comment::table
+        let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))
             .first(conn)?;
@@ -272,7 +271,7 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn get() -> ApiResult<()> {
-        const COMMENT_ID: i32 = 3;
+        const COMMENT_ID: i64 = 3;
         let get_last_edit_time = |conn: &mut PgConnection| -> QueryResult<DateTime> {
             comment::table
                 .select(comment::last_edit_time)
@@ -293,7 +292,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn create() -> ApiResult<()> {
-        let get_comment_count = |conn: &mut PgConnection| -> QueryResult<i32> {
+        let get_comment_count = |conn: &mut PgConnection| -> QueryResult<i64> {
             database_statistics::table
                 .select(database_statistics::comment_count)
                 .first(conn)
@@ -304,13 +303,13 @@ mod test {
 
         verify_query(&format!("POST /comments/?{FIELDS}"), "comment/create.json").await?;
 
-        let comment_id: i32 = comment::table
+        let comment_id: i64 = comment::table
             .select(comment::id)
             .order_by(comment::id.desc())
             .first(&mut conn)?;
 
         let new_comment_count = get_comment_count(&mut conn)?;
-        let comment_score: i32 = comment_statistics::table
+        let comment_score: i64 = comment_statistics::table
             .select(comment_statistics::score)
             .filter(comment_statistics::comment_id.eq(comment_id))
             .first(&mut conn)?;
@@ -329,8 +328,8 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn update() -> ApiResult<()> {
-        const COMMENT_ID: i32 = 4;
-        let get_comment_info = |conn: &mut PgConnection| -> QueryResult<(Comment, i32)> {
+        const COMMENT_ID: i64 = 4;
+        let get_comment_info = |conn: &mut PgConnection| -> QueryResult<(Comment, i64)> {
             comment::table
                 .inner_join(comment_statistics::table)
                 .select((Comment::as_select(), comment_statistics::score))
@@ -362,8 +361,8 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn rate() -> ApiResult<()> {
-        const COMMENT_ID: i32 = 2;
-        let get_comment_info = |conn: &mut PgConnection| -> QueryResult<(i32, DateTime)> {
+        const COMMENT_ID: i64 = 2;
+        let get_comment_info = |conn: &mut PgConnection| -> QueryResult<(i64, DateTime)> {
             comment::table
                 .inner_join(comment_statistics::table)
                 .select((comment_statistics::score, comment::last_edit_time))

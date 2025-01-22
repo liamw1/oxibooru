@@ -35,13 +35,13 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(api::Reply::from);
     let get_post = warp::get()
         .and(api::auth())
-        .and(warp::path!("post" / i32))
+        .and(warp::path!("post" / i64))
         .and(api::resource_query())
         .map(get_post)
         .map(api::Reply::from);
     let get_post_neighbors = warp::get()
         .and(api::auth())
-        .and(warp::path!("post" / i32 / "around"))
+        .and(warp::path!("post" / i64 / "around"))
         .and(api::resource_query())
         .map(get_post_neighbors)
         .map(api::Reply::from);
@@ -81,33 +81,33 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(api::Reply::from);
     let favorite_post = warp::post()
         .and(api::auth())
-        .and(warp::path!("post" / i32 / "favorite"))
+        .and(warp::path!("post" / i64 / "favorite"))
         .and(api::resource_query())
         .map(favorite_post)
         .map(api::Reply::from);
     let rate_post = warp::put()
         .and(api::auth())
-        .and(warp::path!("post" / i32 / "score"))
+        .and(warp::path!("post" / i64 / "score"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(rate_post)
         .map(api::Reply::from);
     let update_post = warp::put()
         .and(api::auth())
-        .and(warp::path!("post" / i32))
+        .and(warp::path!("post" / i64))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(update_post)
         .map(api::Reply::from);
     let delete_post = warp::delete()
         .and(api::auth())
-        .and(warp::path!("post" / i32))
+        .and(warp::path!("post" / i64))
         .and(warp::body::json())
         .then(delete_post)
         .map(api::Reply::from);
     let unfavorite_post = warp::delete()
         .and(api::auth())
-        .and(warp::path!("post" / i32 / "favorite"))
+        .and(warp::path!("post" / i64 / "favorite"))
         .and(api::resource_query())
         .map(unfavorite_post)
         .map(api::Reply::from);
@@ -156,13 +156,12 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
             let count_query = search::post::build_query(client_id, &search_criteria)?;
             count_query.count().first(conn)?
         } else {
-            let post_count: i32 = database_statistics::table
+            database_statistics::table
                 .select(database_statistics::post_count)
-                .first(conn)?;
-            i64::from(post_count)
+                .first(conn)?
         };
 
-        let selected_posts: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let selected_posts: Vec<i64> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,
             offset,
@@ -173,7 +172,7 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     })
 }
 
-fn get_post(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiResult<PostInfo> {
+fn get_post(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_view)?;
@@ -196,7 +195,7 @@ struct PostNeighbors {
     next: Option<PostInfo>,
 }
 
-fn get_post_neighbors(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiResult<PostNeighbors> {
+fn get_post_neighbors(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostNeighbors> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_list)?;
@@ -220,7 +219,7 @@ fn get_post_neighbors(auth: AuthResult, post_id: i32, query: ResourceQuery) -> A
         if search_criteria.has_sort() {
             // Most general method of retrieving neighbors
             let sql_query = search::post::build_query(client_id, &search_criteria)?;
-            let post_ids: Vec<i32> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+            let post_ids: Vec<i64> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
             let post_index = post_ids.iter().position(|&id| id == post_id);
 
             let prev_post_id = post_index
@@ -266,7 +265,7 @@ fn get_featured_post(auth: AuthResult, query: ResourceQuery) -> ApiResult<Option
     let fields = create_field_table(query.fields())?;
 
     db::get_connection()?.transaction(|conn| {
-        let featured_post_id: Option<i32> = post_feature::table
+        let featured_post_id: Option<i64> = post_feature::table
             .select(post_feature::post_id)
             .order_by(post_feature::time.desc())
             .first(conn)
@@ -282,7 +281,7 @@ fn get_featured_post(auth: AuthResult, query: ResourceQuery) -> ApiResult<Option
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct PostFeature {
-    id: i32,
+    id: i64,
 }
 
 fn feature_post(auth: AuthResult, query: ResourceQuery, post_feature: PostFeature) -> ApiResult<PostInfo> {
@@ -388,7 +387,7 @@ struct NewPostInfo {
     thumbnail_token: Option<String>,
     safety: PostSafety,
     source: Option<String>,
-    relations: Option<Vec<i32>>,
+    relations: Option<Vec<i64>>,
     anonymous: Option<bool>,
     tags: Option<Vec<String>>,
     flags: Option<Vec<PostFlag>>,
@@ -487,7 +486,7 @@ fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -
 #[serde(rename_all = "camelCase")]
 struct PostMergeRequest {
     #[serde(flatten)]
-    post_info: MergeRequest<i32>,
+    post_info: MergeRequest<i64>,
     replace_content: bool,
 }
 
@@ -699,7 +698,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     conn.transaction(|conn| PostInfo::new(conn, client_id, merged_post, &fields).map_err(api::Error::from))
 }
 
-fn favorite_post(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiResult<PostInfo> {
+fn favorite_post(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_favorite)?;
@@ -723,7 +722,7 @@ fn favorite_post(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiRes
     conn.transaction(|conn| PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from))
 }
 
-fn rate_post(auth: AuthResult, post_id: i32, query: ResourceQuery, rating: RatingRequest) -> ApiResult<PostInfo> {
+fn rate_post(auth: AuthResult, post_id: i64, query: ResourceQuery, rating: RatingRequest) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_score)?;
@@ -759,7 +758,7 @@ struct PostUpdate {
     safety: Option<PostSafety>,
     #[serde(default, deserialize_with = "api::deserialize_some")]
     source: Option<Option<String>>,
-    relations: Option<Vec<i32>>,
+    relations: Option<Vec<i64>>,
     tags: Option<Vec<String>>,
     notes: Option<Vec<Note>>,
     flags: Option<Vec<PostFlag>>,
@@ -767,7 +766,7 @@ struct PostUpdate {
     thumbnail_token: Option<String>,
 }
 
-fn update_post(auth: AuthResult, post_id: i32, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
+fn update_post(auth: AuthResult, post_id: i64, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
     let fields = create_field_table(query.fields())?;
@@ -889,12 +888,12 @@ fn update_post(auth: AuthResult, post_id: i32, query: ResourceQuery, update: Pos
     conn.transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
 }
 
-async fn delete_post(auth: AuthResult, post_id: i32, client_version: DeleteRequest) -> ApiResult<()> {
+async fn delete_post(auth: AuthResult, post_id: i64, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().post_delete)?;
 
     let mut conn = db::get_connection()?;
-    let relation_count: i32 = post_statistics::table
+    let relation_count: i64 = post_statistics::table
         .find(post_id)
         .select(post_statistics::relation_count)
         .first(&mut conn)?;
@@ -928,7 +927,7 @@ async fn delete_post(auth: AuthResult, post_id: i32, client_version: DeleteReque
     Ok(())
 }
 
-fn unfavorite_post(auth: AuthResult, post_id: i32, query: ResourceQuery) -> ApiResult<PostInfo> {
+fn unfavorite_post(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().post_favorite)?;
 
@@ -993,7 +992,7 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn get() -> ApiResult<()> {
-        const POST_ID: i32 = 2;
+        const POST_ID: i64 = 2;
         let get_last_edit_time = |conn: &mut PgConnection| -> QueryResult<DateTime> {
             post::table
                 .select(post::last_edit_time)
@@ -1029,8 +1028,8 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn feature() -> ApiResult<()> {
-        const POST_ID: i32 = 4;
-        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i32, DateTime)> {
+        const POST_ID: i64 = 4;
+        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i64, DateTime)> {
             post::table
                 .inner_join(post_statistics::table)
                 .select((post_statistics::feature_count, post::last_edit_time))
@@ -1061,8 +1060,8 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn merge() -> ApiResult<()> {
-        const REMOVE_ID: i32 = 2;
-        const MERGE_TO_ID: i32 = 1;
+        const REMOVE_ID: i64 = 2;
+        const MERGE_TO_ID: i64 = 1;
         let get_post = |conn: &mut PgConnection| -> QueryResult<Post> {
             post::table
                 .select(Post::as_select())
@@ -1098,8 +1097,8 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn favorite() -> ApiResult<()> {
-        const POST_ID: i32 = 4;
-        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i32, DateTime)> {
+        const POST_ID: i64 = 4;
+        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i64, DateTime)> {
             post::table
                 .inner_join(post_statistics::table)
                 .select((post_statistics::favorite_count, post::last_edit_time))
@@ -1127,8 +1126,8 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn rate() -> ApiResult<()> {
-        const POST_ID: i32 = 3;
-        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i32, DateTime)> {
+        const POST_ID: i64 = 3;
+        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i64, DateTime)> {
             post::table
                 .inner_join(post_statistics::table)
                 .select((post_statistics::score, post::last_edit_time))
@@ -1162,8 +1161,8 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn update() -> ApiResult<()> {
-        const POST_ID: i32 = 5;
-        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(Post, i32, i32)> {
+        const POST_ID: i64 = 5;
+        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(Post, i64, i64)> {
             post::table
                 .inner_join(post_statistics::table)
                 .select((Post::as_select(), post_statistics::tag_count, post_statistics::relation_count))
@@ -1195,7 +1194,7 @@ mod test {
 
         verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/update_restore.json").await?;
 
-        let new_tag_id: i32 = tag::table
+        let new_tag_id: i64 = tag::table
             .select(tag::id)
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq("new_tag"))

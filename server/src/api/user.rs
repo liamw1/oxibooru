@@ -80,13 +80,12 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Us
             let count_query = search::user::build_query(&search_criteria)?;
             count_query.count().first(conn)?
         } else {
-            let user_count: i32 = database_statistics::table
+            database_statistics::table
                 .select(database_statistics::user_count)
-                .first(conn)?;
-            i64::from(user_count)
+                .first(conn)?
         };
 
-        let selected_users: Vec<i32> = search::user::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let selected_users: Vec<i64> = search::user::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,
             offset,
@@ -225,7 +224,7 @@ fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update:
 
     let mut conn = db::get_connection()?;
     let (user_id, visibility) = conn.transaction(|conn| {
-        let (user_id, user_version): (i32, DateTime) = user::table
+        let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(&username))
             .first(conn)?;
@@ -338,7 +337,7 @@ fn delete_user(auth: AuthResult, username: String, client_version: DeleteRequest
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
     db::get_connection()?.transaction(|conn| {
-        let (user_id, user_version): (i32, DateTime) = user::table
+        let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(username))
             .first(conn)?;
@@ -403,7 +402,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn create() -> ApiResult<()> {
-        let get_user_count = |conn: &mut PgConnection| -> QueryResult<i32> {
+        let get_user_count = |conn: &mut PgConnection| -> QueryResult<i64> {
             database_statistics::table
                 .select(database_statistics::user_count)
                 .first(conn)
@@ -414,7 +413,7 @@ mod test {
 
         verify_query(&format!("POST /users/?{FIELDS}"), "user/create.json").await?;
 
-        let (user_id, name): (i32, String) = user::table
+        let (user_id, name): (i64, String) = user::table
             .select((user::id, user::name))
             .order_by(user::id.desc())
             .first(&mut conn)?;
@@ -437,7 +436,7 @@ mod test {
         const NAME: &str = "restricted_user";
 
         let mut conn = get_connection()?;
-        let user_id: i32 = user::table
+        let user_id: i64 = user::table
             .select(user::id)
             .filter(user::name.eq(NAME))
             .first(&mut conn)?;

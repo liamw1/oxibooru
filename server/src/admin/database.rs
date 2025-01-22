@@ -185,63 +185,63 @@ pub fn reset_statistics(conn: &mut PgConnection) -> ApiResult<()> {
     let user_count: i64 = user::table.count().first(conn)?;
     diesel::update(database_statistics::table)
         .set((
-            database_statistics::comment_count.eq(comment_count as i32),
-            database_statistics::pool_count.eq(pool_count as i32),
-            database_statistics::post_count.eq(post_count as i32),
-            database_statistics::tag_count.eq(tag_count as i32),
-            database_statistics::user_count.eq(user_count as i32),
+            database_statistics::comment_count.eq(comment_count),
+            database_statistics::pool_count.eq(pool_count),
+            database_statistics::post_count.eq(post_count),
+            database_statistics::tag_count.eq(tag_count),
+            database_statistics::user_count.eq(user_count),
         ))
         .execute(conn)?;
 
-    let comment_stats: Vec<(i32, Option<i64>)> = comment::table
+    let comment_stats: Vec<(i64, Option<i64>)> = comment::table
         .left_join(comment_score::table)
         .group_by(comment::id)
         .select((comment::id, count(comment_score::user_id).nullable()))
         .load(conn)?;
     for (comment_id, score) in comment_stats {
         diesel::update(comment_statistics::table)
-            .set(comment_statistics::score.eq(score.unwrap_or(0) as i32))
+            .set(comment_statistics::score.eq(score.unwrap_or(0)))
             .filter(comment_statistics::comment_id.eq(comment_id))
             .execute(conn)?;
     }
 
-    let pool_category_stats: Vec<(i32, Option<i64>)> = pool_category::table
+    let pool_category_stats: Vec<(i64, Option<i64>)> = pool_category::table
         .left_join(pool::table)
         .group_by(pool_category::id)
         .select((pool_category::id, count(pool::id).nullable()))
         .load(conn)?;
     for (category_id, usage_count) in pool_category_stats {
         diesel::update(pool_category_statistics::table)
-            .set(pool_category_statistics::usage_count.eq(usage_count.unwrap_or(0) as i32))
+            .set(pool_category_statistics::usage_count.eq(usage_count.unwrap_or(0)))
             .filter(pool_category_statistics::category_id.eq(category_id))
             .execute(conn)?;
     }
 
-    let pool_stats: Vec<(i32, Option<i64>)> = pool::table
+    let pool_stats: Vec<(i64, Option<i64>)> = pool::table
         .left_join(pool_post::table)
         .group_by(pool::id)
         .select((pool::id, count(pool_post::post_id).nullable()))
         .load(conn)?;
     for (pool_id, post_count) in pool_stats {
         diesel::update(pool_statistics::table)
-            .set(pool_statistics::post_count.eq(post_count.unwrap_or(0) as i32))
+            .set(pool_statistics::post_count.eq(post_count.unwrap_or(0)))
             .filter(pool_statistics::pool_id.eq(pool_id))
             .execute(conn)?;
     }
 
-    let tag_category_stats: Vec<(i32, Option<i64>)> = tag_category::table
+    let tag_category_stats: Vec<(i64, Option<i64>)> = tag_category::table
         .left_join(tag::table)
         .group_by(tag_category::id)
         .select((tag_category::id, count(tag::id).nullable()))
         .load(conn)?;
     for (category_id, usage_count) in tag_category_stats {
         diesel::update(tag_category_statistics::table)
-            .set(tag_category_statistics::usage_count.eq(usage_count.unwrap_or(0) as i32))
+            .set(tag_category_statistics::usage_count.eq(usage_count.unwrap_or(0)))
             .filter(tag_category_statistics::category_id.eq(category_id))
             .execute(conn)?;
     }
 
-    let tag_ids: Vec<i32> = tag::table.select(tag::id).load(conn)?;
+    let tag_ids: Vec<i64> = tag::table.select(tag::id).load(conn)?;
     for tag_id in tag_ids {
         let usage_count: i64 = post_tag::table
             .count()
@@ -257,15 +257,15 @@ pub fn reset_statistics(conn: &mut PgConnection) -> ApiResult<()> {
             .first(conn)?;
         diesel::update(tag_statistics::table)
             .set((
-                tag_statistics::usage_count.eq(usage_count as i32),
-                tag_statistics::implication_count.eq(implication_count as i32),
-                tag_statistics::suggestion_count.eq(suggestion_count as i32),
+                tag_statistics::usage_count.eq(usage_count),
+                tag_statistics::implication_count.eq(implication_count),
+                tag_statistics::suggestion_count.eq(suggestion_count),
             ))
             .filter(tag_statistics::tag_id.eq(tag_id))
             .execute(conn)?;
     }
 
-    let post_ids: Vec<i32> = post::table.select(post::id).load(conn)?;
+    let post_ids: Vec<i64> = post::table.select(post::id).load(conn)?;
     for post_id in post_ids {
         let tag_count: i64 = post_tag::table
             .count()
@@ -313,14 +313,14 @@ pub fn reset_statistics(conn: &mut PgConnection) -> ApiResult<()> {
             .first(conn)?;
         diesel::update(post_statistics::table)
             .set((
-                post_statistics::tag_count.eq(tag_count as i32),
-                post_statistics::pool_count.eq(pool_count as i32),
-                post_statistics::note_count.eq(note_count as i32),
-                post_statistics::comment_count.eq(comment_count as i32),
-                post_statistics::relation_count.eq(relation_count as i32),
-                post_statistics::score.eq(score.unwrap_or(0) as i32),
-                post_statistics::favorite_count.eq(favorite_count as i32),
-                post_statistics::feature_count.eq(feature_count as i32),
+                post_statistics::tag_count.eq(tag_count),
+                post_statistics::pool_count.eq(pool_count),
+                post_statistics::note_count.eq(note_count),
+                post_statistics::comment_count.eq(comment_count),
+                post_statistics::relation_count.eq(relation_count),
+                post_statistics::score.eq(score.unwrap_or(0)),
+                post_statistics::favorite_count.eq(favorite_count),
+                post_statistics::feature_count.eq(feature_count),
                 post_statistics::last_comment_time.eq(last_comment_time),
                 post_statistics::last_favorite_time.eq(last_favorite_time),
                 post_statistics::last_feature_time.eq(last_feature_time),

@@ -27,7 +27,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     request_reset.or(reset_password)
 }
 
-fn get_user_info(conn: &mut PgConnection, identifier: &str) -> ApiResult<(i32, String, Option<String>, String)> {
+fn get_user_info(conn: &mut PgConnection, identifier: &str) -> ApiResult<(i64, String, Option<String>, String)> {
     user::table
         .select((user::id, user::name, user::email, user::password_salt))
         .filter(user::name.eq(identifier).or(user::email.eq(identifier)))

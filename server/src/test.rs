@@ -215,7 +215,7 @@ const POST_5_TAGS: &[&str] = &[
 ];
 const POST_TAGS: &[&[&str]] = &[POST_1_TAGS, POST_2_TAGS, POST_3_TAGS, POST_4_TAGS, POST_5_TAGS];
 
-const POOL_POSTS: &[(&str, i32)] = &[
+const POOL_POSTS: &[(&str, i64)] = &[
     ("fantasy", 1),
     ("fantasy", 2),
     ("cyberpunk", 2),
@@ -294,10 +294,10 @@ const POSTS: &[NewPost] = &[
     },
 ];
 
-const POST_RELATIONS: &[(i32, i32)] = &[(1, 2), (1, 3), (4, 5)];
-const POST_FAVORITES: &[(i32, i32)] = &[(1, 1), (2, 2), (2, 3), (2, 4), (5, 5)];
-const POST_FEATURES: &[(i32, i32)] = &[(5, 5), (4, 4), (3, 1), (3, 3), (3, 1)];
-const POST_SCORES: &[(i32, i32, Score)] = &[
+const POST_RELATIONS: &[(i64, i64)] = &[(1, 2), (1, 3), (4, 5)];
+const POST_FAVORITES: &[(i64, i64)] = &[(1, 1), (2, 2), (2, 3), (2, 4), (5, 5)];
+const POST_FEATURES: &[(i64, i64)] = &[(5, 5), (4, 4), (3, 1), (3, 3), (3, 1)];
+const POST_SCORES: &[(i64, i64, Score)] = &[
     (1, 5, Score::Dislike),
     (2, 1, Score::Like),
     (2, 2, Score::Like),
@@ -307,14 +307,14 @@ const POST_SCORES: &[(i32, i32, Score)] = &[
     (5, 5, Score::Like),
 ];
 
-const COMMENTS: &[(Option<i32>, i32, &str)] = &[
+const COMMENTS: &[(Option<i64>, i64, &str)] = &[
     (Some(2), 1, "Cool post!"),
     (Some(5), 1, "how did you post this"),
     (Some(2), 4, "I don't think this uploaded correctly"),
     (None, 5, "Lorem ipsum dolor sit amet, consectetur adipiscing elit"),
 ];
 
-const COMMENT_SCORES: &[(i32, i32, Score)] = &[
+const COMMENT_SCORES: &[(i64, i64, Score)] = &[
     (1, 1, Score::Like),
     (1, 3, Score::Like),
     (2, 1, Score::Dislike),
@@ -358,7 +358,7 @@ fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
         let new_tags: Vec<_> = tags
             .iter()
             .map(|_| NewTag {
-                category_id: i as i32,
+                category_id: i as i64,
                 description: "",
             })
             .collect();
@@ -433,7 +433,7 @@ fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
         let new_pools: Vec<_> = pools
             .iter()
             .map(|_| NewPool {
-                category_id: i as i32,
+                category_id: i as i64,
                 description: "",
             })
             .collect();
@@ -505,7 +505,7 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
         let new_post_tags: Vec<_> = tag_ids
             .iter()
             .map(|&tag_id| PostTag {
-                post_id: i as i32 + 1,
+                post_id: i as i64 + 1,
                 tag_id,
             })
             .collect();
@@ -524,7 +524,7 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
         let new_pool_post = PoolPost {
             pool_id,
             post_id,
-            order: i as i32,
+            order: i as i64,
         };
         diesel::insert_into(pool_post::table)
             .values(new_pool_post)
@@ -641,37 +641,37 @@ mod test {
     #[parallel]
     fn database_statistics() {
         let expected_disk_usage: i64 = POSTS.iter().map(|post| post.file_size).sum();
-        let expected_pool_count: i32 = POOL_GROUPS.iter().map(|group| group.len() as i32).sum();
-        let expected_tag_count: i32 = TAG_GROUPS.iter().map(|group| group.len() as i32).sum();
+        let expected_pool_count: i64 = POOL_GROUPS.iter().map(|group| group.len() as i64).sum();
+        let expected_tag_count: i64 = TAG_GROUPS.iter().map(|group| group.len() as i64).sum();
 
         let (id, disk_usage, comment_count, pool_count, post_count, tag_count, user_count): (
             bool,
             i64,
-            i32,
-            i32,
-            i32,
-            i32,
-            i32,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
         ) = test_transaction(|conn| database_statistics::table.first(conn));
 
         assert_eq!(id, true);
         assert_eq!(disk_usage, expected_disk_usage);
-        assert_eq!(comment_count, COMMENTS.len() as i32);
+        assert_eq!(comment_count, COMMENTS.len() as i64);
         assert_eq!(pool_count, expected_pool_count);
-        assert_eq!(post_count, POSTS.len() as i32);
+        assert_eq!(post_count, POSTS.len() as i64);
         assert_eq!(tag_count, expected_tag_count);
-        assert_eq!(user_count, USERS.len() as i32);
+        assert_eq!(user_count, USERS.len() as i64);
     }
 
     #[test]
     #[parallel]
     fn comment_statistics() {
-        let stats: Vec<(i32, i32)> = test_transaction(|conn| comment_statistics::table.load(conn));
+        let stats: Vec<(i64, i64)> = test_transaction(|conn| comment_statistics::table.load(conn));
         for (comment_id, total_score) in stats {
-            let expected_score: i32 = COMMENT_SCORES
+            let expected_score: i64 = COMMENT_SCORES
                 .iter()
                 .filter(|&&(id, ..)| id == comment_id)
-                .map(|&(.., score)| score as i32)
+                .map(|&(.., score)| score as i64)
                 .sum();
             assert_eq!(total_score, expected_score);
         }
@@ -680,9 +680,9 @@ mod test {
     #[test]
     #[parallel]
     fn pool_category_statistics() {
-        let stats: Vec<(i32, i32)> = test_transaction(|conn| pool_category_statistics::table.load(conn));
+        let stats: Vec<(i64, i64)> = test_transaction(|conn| pool_category_statistics::table.load(conn));
         for (category_id, usage_count) in stats {
-            let exepected_usage_count = POOL_GROUPS[category_id as usize].len() as i32;
+            let exepected_usage_count = POOL_GROUPS[category_id as usize].len() as i64;
             assert_eq!(usage_count, exepected_usage_count);
         }
     }
@@ -690,7 +690,7 @@ mod test {
     #[test]
     #[parallel]
     fn pool_statistics() {
-        let stats: Vec<(String, i32)> = test_transaction(|conn| {
+        let stats: Vec<(String, i64)> = test_transaction(|conn| {
             pool_statistics::table
                 .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool_statistics::pool_id)))
                 .select((pool_name::name, pool_statistics::post_count))
@@ -698,7 +698,7 @@ mod test {
                 .load(conn)
         });
         for (pool_name, post_count) in stats {
-            let exepected_post_count = POOL_POSTS.iter().filter(|&&(name, _)| name == pool_name).count() as i32;
+            let exepected_post_count = POOL_POSTS.iter().filter(|&&(name, _)| name == pool_name).count() as i64;
             assert_eq!(post_count, exepected_post_count);
         }
     }
@@ -707,15 +707,15 @@ mod test {
     #[parallel]
     fn post_statistics() {
         let stats: Vec<(
-            i32,
-            i32,
-            i32,
-            i32,
-            i32,
-            i32,
-            i32,
-            i32,
-            i32,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
+            i64,
             Option<DateTime>,
             Option<DateTime>,
             Option<DateTime>,
@@ -734,21 +734,21 @@ mod test {
             ..,
         ) in stats
         {
-            let expected_tag_count = POST_TAGS[post_id as usize - 1].len() as i32;
-            let expected_pool_count = POOL_POSTS.iter().filter(|&&(_, id)| id == post_id).count() as i32;
+            let expected_tag_count = POST_TAGS[post_id as usize - 1].len() as i64;
+            let expected_pool_count = POOL_POSTS.iter().filter(|&&(_, id)| id == post_id).count() as i64;
             let expected_note_count = if post_id == 3 { 1 } else { 0 };
-            let expected_comment_count = COMMENTS.iter().filter(|&&(_, id, _)| id == post_id).count() as i32;
+            let expected_comment_count = COMMENTS.iter().filter(|&&(_, id, _)| id == post_id).count() as i64;
             let expected_relation_count = POST_RELATIONS
                 .iter()
                 .filter(|&&(id_1, id_2)| id_1 == post_id || id_2 == post_id)
-                .count() as i32;
-            let expected_score: i32 = POST_SCORES
+                .count() as i64;
+            let expected_score: i64 = POST_SCORES
                 .iter()
                 .filter(|&&(_, id, _)| id == post_id)
-                .map(|&(.., score)| score as i32)
+                .map(|&(.., score)| score as i64)
                 .sum();
-            let expected_favorite_count = POST_FAVORITES.iter().filter(|&&(_, id)| id == post_id).count() as i32;
-            let expected_feature_count = POST_FEATURES.iter().filter(|&&(_, id)| id == post_id).count() as i32;
+            let expected_favorite_count = POST_FAVORITES.iter().filter(|&&(_, id)| id == post_id).count() as i64;
+            let expected_feature_count = POST_FEATURES.iter().filter(|&&(_, id)| id == post_id).count() as i64;
 
             assert_eq!(tag_count, expected_tag_count);
             assert_eq!(pool_count, expected_pool_count);
@@ -764,9 +764,9 @@ mod test {
     #[test]
     #[parallel]
     fn tag_category_statistics() {
-        let stats: Vec<(i32, i32)> = test_transaction(|conn| tag_category_statistics::table.load(conn));
+        let stats: Vec<(i64, i64)> = test_transaction(|conn| tag_category_statistics::table.load(conn));
         for (category_id, usage_count) in stats {
-            let expected_usage_count = TAG_GROUPS[category_id as usize].len() as i32;
+            let expected_usage_count = TAG_GROUPS[category_id as usize].len() as i64;
             assert_eq!(usage_count, expected_usage_count);
         }
     }
@@ -774,7 +774,7 @@ mod test {
     #[test]
     #[parallel]
     fn tag_statistics() {
-        let stats: Vec<(String, i32)> = test_transaction(|conn| {
+        let stats: Vec<(String, i64)> = test_transaction(|conn| {
             tag_statistics::table
                 .inner_join(tag_name::table.on(tag_name::tag_id.eq(tag_statistics::tag_id)))
                 .select((tag_name::name, tag_statistics::usage_count))
@@ -785,7 +785,7 @@ mod test {
             let expected_usage_count = POST_TAGS
                 .iter()
                 .filter_map(|tags| tags.iter().find(|&&name| name == tag_name))
-                .count() as i32;
+                .count() as i64;
             assert_eq!(usage_count, expected_usage_count);
         }
     }

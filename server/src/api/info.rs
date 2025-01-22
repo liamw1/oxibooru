@@ -29,7 +29,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Info {
-    post_count: i32,
+    post_count: i64,
     disk_usage: i64,
     featured_post: Option<PostInfo>,
     featuring_time: Option<DateTime>,

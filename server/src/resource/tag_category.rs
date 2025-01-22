@@ -38,7 +38,7 @@ pub struct TagCategoryInfo {
     version: Option<DateTime>,
     name: Option<String>,
     color: Option<String>,
-    usages: Option<i32>,
+    usages: Option<i64>,
     order: Option<i32>,
     default: Option<bool>,
 }
@@ -59,13 +59,13 @@ impl TagCategoryInfo {
         })
     }
 
-    pub fn new_from_id(conn: &mut PgConnection, category_id: i32, fields: &FieldTable<bool>) -> QueryResult<Self> {
+    pub fn new_from_id(conn: &mut PgConnection, category_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
         let category = tag_category::table.find(category_id).first(conn)?;
         Self::new(conn, category, fields)
     }
 
     pub fn all(conn: &mut PgConnection, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
-        let tag_categories: Vec<(TagCategory, i32)> = tag_category::table
+        let tag_categories: Vec<(TagCategory, i64)> = tag_category::table
             .inner_join(tag_category_statistics::table)
             .select((TagCategory::as_select(), tag_category_statistics::usage_count))
             .order(tag_category::order)

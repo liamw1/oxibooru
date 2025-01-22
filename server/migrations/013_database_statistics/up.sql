@@ -2,11 +2,11 @@
 CREATE TABLE "database_statistics" (
     "id" BOOLEAN PRIMARY KEY DEFAULT true,
     "disk_usage" BIGINT NOT NULL,
-    "comment_count" INTEGER NOT NULL,
-    "pool_count" INTEGER NOT NULL,
-    "post_count" INTEGER NOT NULL,
-    "tag_count" INTEGER NOT NULL,
-    "user_count" INTEGER NOT NULL,
+    "comment_count" BIGINT NOT NULL,
+    "pool_count" BIGINT NOT NULL,
+    "post_count" BIGINT NOT NULL,
+    "tag_count" BIGINT NOT NULL,
+    "user_count" BIGINT NOT NULL,
     CONSTRAINT "singular" CHECK ("id")
 );
 
@@ -22,8 +22,8 @@ VALUES (
 
 -- Create comment statistics table
 CREATE TABLE "comment_statistics" (
-    "comment_id" INTEGER PRIMARY KEY REFERENCES "comment" ON DELETE CASCADE,
-    "score" INTEGER NOT NULL DEFAULT 0
+    "comment_id" BIGINT PRIMARY KEY REFERENCES "comment" ON DELETE CASCADE,
+    "score" BIGINT NOT NULL DEFAULT 0
 );
 
 INSERT INTO "comment_statistics" ("comment_id", "score")
@@ -33,8 +33,8 @@ GROUP BY "id";
 
 -- Create pool category statistics table
 CREATE TABLE "pool_category_statistics" (
-    "category_id" INTEGER PRIMARY KEY REFERENCES "pool_category" ON DELETE CASCADE,
-    "usage_count" INTEGER NOT NULL DEFAULT 0
+    "category_id" BIGINT PRIMARY KEY REFERENCES "pool_category" ON DELETE CASCADE,
+    "usage_count" BIGINT NOT NULL DEFAULT 0
 );
 
 INSERT INTO "pool_category_statistics" ("category_id", "usage_count")
@@ -44,8 +44,8 @@ GROUP BY "pool_category"."id";
 
 -- Create pool statistics table
 CREATE TABLE "pool_statistics" (
-    "pool_id" INTEGER PRIMARY KEY REFERENCES "pool" ON DELETE CASCADE,
-    "post_count" INTEGER NOT NULL DEFAULT 0
+    "pool_id" BIGINT PRIMARY KEY REFERENCES "pool" ON DELETE CASCADE,
+    "post_count" BIGINT NOT NULL DEFAULT 0
 );
 
 INSERT INTO "pool_statistics" ("pool_id", "post_count")
@@ -55,15 +55,15 @@ GROUP BY "id";
 
 -- Create post statistics table
 CREATE TABLE "post_statistics" (
-    "post_id" INTEGER PRIMARY KEY REFERENCES "post" ON DELETE CASCADE,
-    "tag_count" INTEGER NOT NULL DEFAULT 0,
-    "pool_count" INTEGER NOT NULL DEFAULT 0,
-    "note_count" INTEGER NOT NULL DEFAULT 0,
-    "comment_count" INTEGER NOT NULL DEFAULT 0,
-    "relation_count" INTEGER NOT NULL DEFAULT 0,
-    "score" INTEGER NOT NULL DEFAULT 0,
-    "favorite_count" INTEGER NOT NULL DEFAULT 0,
-    "feature_count" INTEGER NOT NULL DEFAULT 0,
+    "post_id" BIGINT PRIMARY KEY REFERENCES "post" ON DELETE CASCADE,
+    "tag_count" BIGINT NOT NULL DEFAULT 0,
+    "pool_count" BIGINT NOT NULL DEFAULT 0,
+    "note_count" BIGINT NOT NULL DEFAULT 0,
+    "comment_count" BIGINT NOT NULL DEFAULT 0,
+    "relation_count" BIGINT NOT NULL DEFAULT 0,
+    "score" BIGINT NOT NULL DEFAULT 0,
+    "favorite_count" BIGINT NOT NULL DEFAULT 0,
+    "feature_count" BIGINT NOT NULL DEFAULT 0,
     "last_comment_time" TIMESTAMP WITH TIME ZONE,
     "last_favorite_time" TIMESTAMP WITH TIME ZONE,
     "last_feature_time" TIMESTAMP WITH TIME ZONE
@@ -119,8 +119,8 @@ INNER JOIN
 
 -- Create tag category statistics table
 CREATE TABLE "tag_category_statistics" (
-    "category_id" INTEGER PRIMARY KEY REFERENCES "tag_category" ON DELETE CASCADE,
-    "usage_count" INTEGER NOT NULL DEFAULT 0
+    "category_id" BIGINT PRIMARY KEY REFERENCES "tag_category" ON DELETE CASCADE,
+    "usage_count" BIGINT NOT NULL DEFAULT 0
 );
 
 INSERT INTO "tag_category_statistics" ("category_id", "usage_count")
@@ -130,10 +130,10 @@ GROUP BY "tag_category"."id";
 
 -- Create tag statistics table
 CREATE TABLE "tag_statistics" (
-    "tag_id" INTEGER PRIMARY KEY REFERENCES "tag" ON DELETE CASCADE,
-    "usage_count" INTEGER NOT NULL DEFAULT 0,
-    "implication_count" INTEGER NOT NULL DEFAULT 0,
-    "suggestion_count" INTEGER NOT NULL DEFAULT 0
+    "tag_id" BIGINT PRIMARY KEY REFERENCES "tag" ON DELETE CASCADE,
+    "usage_count" BIGINT NOT NULL DEFAULT 0,
+    "implication_count" BIGINT NOT NULL DEFAULT 0,
+    "suggestion_count" BIGINT NOT NULL DEFAULT 0
 );
 
 INSERT INTO "tag_statistics" ("tag_id", "usage_count", "implication_count", "suggestion_count")
@@ -158,7 +158,7 @@ ALTER TABLE "user" ADD COLUMN "custom_avatar_size" BIGINT NOT NULL DEFAULT 0;
 -- Add comment triggers
 CREATE FUNCTION update_comment_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -223,7 +223,7 @@ FOR EACH ROW EXECUTE FUNCTION update_default_pool_category_statistics();
 -- Add pool triggers
 CREATE FUNCTION update_pool_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -260,7 +260,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_pool_statisti
 -- Add pool_post triggers
 CREATE FUNCTION update_pool_post_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -286,7 +286,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_pool_post_sta
 -- Add post triggers
 CREATE FUNCTION update_post_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -312,7 +312,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_statisti
 -- Add post_relation triggers
 CREATE FUNCTION update_post_relation_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -334,7 +334,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_relation
 -- Add post_tag triggers
 CREATE FUNCTION update_post_tag_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -360,7 +360,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_tag_stat
 -- Add post_favorite triggers
 CREATE FUNCTION update_post_favorite_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -383,7 +383,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_favorite
 -- Add post_feature triggers
 CREATE FUNCTION update_post_feature_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -406,7 +406,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_post_feature_
 -- Add post_note triggers
 CREATE FUNCTION update_post_note_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -466,7 +466,7 @@ FOR EACH ROW EXECUTE FUNCTION update_default_tag_category_statistics();
 -- Add tag triggers
 CREATE FUNCTION update_tag_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -503,7 +503,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_tag_statistic
 -- Add tag_implication triggers
 CREATE FUNCTION update_tag_implication_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -525,7 +525,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_tag_implicati
 -- Add tag_suggestion triggers
 CREATE FUNCTION update_tag_suggestion_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
@@ -547,7 +547,7 @@ DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION update_tag_suggestio
 -- Add user triggers
 CREATE FUNCTION update_user_statistics() RETURNS TRIGGER AS $$
 DECLARE
-    count_change INT;
+    count_change BIGINT;
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;

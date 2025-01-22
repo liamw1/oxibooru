@@ -13,11 +13,11 @@ use strum::{EnumString, EnumTable};
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroPool {
-    pub id: i32,
+    pub id: i64,
     pub names: Vec<String>,
     pub category: String,
     pub description: String,
-    pub post_count: i32,
+    pub post_count: i64,
 }
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
@@ -53,14 +53,14 @@ impl Field {
 #[serde(rename_all = "camelCase")]
 pub struct PoolInfo {
     version: Option<DateTime>,
-    id: Option<i32>,
+    id: Option<i64>,
     description: Option<String>,
     creation_time: Option<DateTime>,
     last_edit_time: Option<DateTime>,
     category: Option<String>,
     names: Option<Vec<String>>,
     posts: Option<Vec<MicroPost>>,
-    post_count: Option<i32>,
+    post_count: Option<i64>,
 }
 
 impl PoolInfo {
@@ -70,7 +70,7 @@ impl PoolInfo {
         Ok(pool_info.pop().unwrap())
     }
 
-    pub fn new_from_id(conn: &mut PgConnection, pool_id: i32, fields: &FieldTable<bool>) -> QueryResult<Self> {
+    pub fn new_from_id(conn: &mut PgConnection, pool_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
         let mut pool_info = Self::new_batch_from_ids(conn, vec![pool_id], fields)?;
         assert_eq!(pool_info.len(), 1);
         Ok(pool_info.pop().unwrap())
@@ -123,7 +123,7 @@ impl PoolInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        pool_ids: Vec<i32>,
+        pool_ids: Vec<i64>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_pools = pool::table.filter(pool::id.eq_any(&pool_ids)).load(conn)?;
@@ -175,7 +175,7 @@ fn get_posts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<Mic
         .collect())
 }
 
-fn get_post_counts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<i32>> {
+fn get_post_counts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<i64>> {
     let pool_ids: Vec<_> = pools.iter().map(Identifiable::id).copied().collect();
     pool_statistics::table
         .select((pool_statistics::pool_id, pool_statistics::post_count))

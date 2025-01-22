@@ -16,7 +16,7 @@ pub struct NewTagCategory<'a> {
 #[diesel(table_name = tag_category)]
 #[diesel(check_for_backend(Pg))]
 pub struct TagCategory {
-    pub id: i32,
+    pub id: i64,
     pub order: i32,
     pub name: String,
     pub color: String,
@@ -27,7 +27,7 @@ pub struct TagCategory {
 #[diesel(table_name = tag)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewTag<'a> {
-    pub category_id: i32,
+    pub category_id: i64,
     pub description: &'a str,
 }
 
@@ -36,8 +36,8 @@ pub struct NewTag<'a> {
 #[diesel(table_name = tag)]
 #[diesel(check_for_backend(Pg))]
 pub struct Tag {
-    pub id: i32,
-    pub category_id: i32,
+    pub id: i64,
+    pub category_id: i64,
     pub description: String,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
@@ -47,7 +47,7 @@ pub struct Tag {
 #[diesel(table_name = tag_name)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewTagName<'a> {
-    pub tag_id: i32,
+    pub tag_id: i64,
     pub order: i32,
     pub name: &'a str,
 }
@@ -58,7 +58,7 @@ pub struct NewTagName<'a> {
 #[diesel(primary_key(tag_id, order))]
 #[diesel(check_for_backend(Pg))]
 pub struct TagName {
-    pub tag_id: i32,
+    pub tag_id: i64,
     pub order: i32,
     pub name: String,
 }
@@ -69,8 +69,8 @@ pub struct TagName {
 #[diesel(primary_key(parent_id, child_id))]
 #[diesel(check_for_backend(Pg))]
 pub struct TagImplication {
-    pub parent_id: i32,
-    pub child_id: i32,
+    pub parent_id: i64,
+    pub child_id: i64,
 }
 
 diesel::joinable!(tag_implication -> tag (parent_id));
@@ -81,8 +81,8 @@ diesel::joinable!(tag_implication -> tag (parent_id));
 #[diesel(primary_key(parent_id, child_id))]
 #[diesel(check_for_backend(Pg))]
 pub struct TagSuggestion {
-    pub parent_id: i32,
-    pub child_id: i32,
+    pub parent_id: i64,
+    pub child_id: i64,
 }
 
 diesel::joinable!(tag_suggestion -> tag (parent_id));

@@ -9,7 +9,7 @@ use diesel::prelude::*;
 use std::collections::HashSet;
 
 /// Appends `names` onto the current list of names for the tag with id `tag_id`.
-pub fn add_names(conn: &mut PgConnection, tag_id: i32, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
+pub fn add_names(conn: &mut PgConnection, tag_id: i64, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
     names
         .iter()
         .try_for_each(|name| api::verify_matches_regex(name, RegexType::Tag))?;
@@ -26,14 +26,14 @@ pub fn add_names(conn: &mut PgConnection, tag_id: i32, current_name_count: i32, 
 
 /// Deletes all names for the tag with id `tag_id`.
 /// Returns number of names deleted.
-pub fn delete_names(conn: &mut PgConnection, tag_id: i32) -> QueryResult<usize> {
+pub fn delete_names(conn: &mut PgConnection, tag_id: i64) -> QueryResult<usize> {
     diesel::delete(tag_name::table)
         .filter(tag_name::tag_id.eq(tag_id))
         .execute(conn)
 }
 
 /// Adds `implied_ids` to the list of implications for the tag with id `tag_id`.
-pub fn add_implications(conn: &mut PgConnection, tag_id: i32, implied_ids: Vec<i32>) -> ApiResult<()> {
+pub fn add_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: Vec<i64>) -> ApiResult<()> {
     let new_implications: Vec<_> = implied_ids
         .into_iter()
         .map(|child_id| {
@@ -52,7 +52,7 @@ pub fn add_implications(conn: &mut PgConnection, tag_id: i32, implied_ids: Vec<i
 }
 
 /// Adds `suggested_ids` to the list of suggestions for the tag with id `tag_id`.
-pub fn add_suggestions(conn: &mut PgConnection, tag_id: i32, suggested_ids: Vec<i32>) -> ApiResult<()> {
+pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: Vec<i64>) -> ApiResult<()> {
     let new_suggestions: Vec<_> = suggested_ids
         .into_iter()
         .map(|child_id| {
@@ -80,12 +80,12 @@ pub fn get_or_create_tag_ids(
     client: Option<AuthUser>,
     names: Vec<String>,
     detect_cyclic_dependencies: bool,
-) -> ApiResult<Vec<i32>> {
-    let mut implied_ids: Vec<i32> = tag_name::table
+) -> ApiResult<Vec<i64>> {
+    let mut implied_ids: Vec<i64> = tag_name::table
         .select(tag_name::tag_id)
         .filter(tag_name::name.eq_any(&names))
         .load(conn)?;
-    let mut all_implied_tag_ids: HashSet<i32> = implied_ids.iter().copied().collect();
+    let mut all_implied_tag_ids: HashSet<i64> = implied_ids.iter().copied().collect();
 
     let mut iteration = 0;
     let mut previous_len = 0;
@@ -122,7 +122,7 @@ pub fn get_or_create_tag_ids(
     if !new_tag_names.is_empty() {
         api::verify_privilege(client, config::privileges().tag_create)?;
 
-        let new_tag_ids: Vec<i32> = diesel::insert_into(tag::table)
+        let new_tag_ids: Vec<i64> = diesel::insert_into(tag::table)
             .values(vec![NewTag::default(); new_tag_names.len()])
             .returning(tag::id)
             .get_results(conn)?;

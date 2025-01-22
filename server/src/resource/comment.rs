@@ -43,21 +43,21 @@ impl Field {
 #[serde(rename_all = "camelCase")]
 pub struct CommentInfo {
     pub version: Option<DateTime>, // TODO: Remove last_edit_time as it fills the same role as version here
-    pub id: Option<i32>,
-    pub post_id: Option<i32>,
+    pub id: Option<i64>,
+    pub post_id: Option<i64>,
     pub text: Option<String>,
     pub creation_time: Option<DateTime>,
     pub last_edit_time: Option<DateTime>,
     pub user: Option<Option<MicroUser>>,
-    pub score: Option<i32>,
+    pub score: Option<i64>,
     pub own_score: Option<Rating>,
 }
 
 impl CommentInfo {
     pub fn new_from_id(
         conn: &mut PgConnection,
-        client: Option<i32>,
-        comment_id: i32,
+        client: Option<i64>,
+        comment_id: i64,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
         let mut comment_info = Self::new_batch_from_ids(conn, client, vec![comment_id], fields)?;
@@ -67,7 +67,7 @@ impl CommentInfo {
 
     pub fn new_batch(
         conn: &mut PgConnection,
-        client: Option<i32>,
+        client: Option<i64>,
         comments: Vec<Comment>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
@@ -111,8 +111,8 @@ impl CommentInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        client: Option<i32>,
-        comment_ids: Vec<i32>,
+        client: Option<i64>,
+        comment_ids: Vec<i64>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_posts = comment::table.filter(comment::id.eq_any(&comment_ids)).load(conn)?;
@@ -127,7 +127,7 @@ fn get_owners(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         .filter(comment::id.eq_any(&comment_ids))
         .inner_join(user::table)
         .select((comment::id, user::name, user::avatar_style))
-        .load::<(i32, String, AvatarStyle)>(conn)
+        .load::<(i64, String, AvatarStyle)>(conn)
         .map(|comment_info| {
             resource::order_like(comment_info, comments, |&(id, ..)| id)
                 .into_iter()
@@ -138,7 +138,7 @@ fn get_owners(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         })
 }
 
-fn get_scores(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<i32>> {
+fn get_scores(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<i64>> {
     let comment_ids: Vec<_> = comments.iter().map(Identifiable::id).copied().collect();
     comment_statistics::table
         .select((comment_statistics::comment_id, comment_statistics::score))
@@ -152,7 +152,7 @@ fn get_scores(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         })
 }
 
-fn get_client_scores(conn: &mut PgConnection, client: Option<i32>, comments: &[Comment]) -> QueryResult<Vec<Rating>> {
+fn get_client_scores(conn: &mut PgConnection, client: Option<i64>, comments: &[Comment]) -> QueryResult<Vec<Rating>> {
     if let Some(client_id) = client {
         CommentScore::belonging_to(comments)
             .filter(comment_score::user_id.eq(client_id))

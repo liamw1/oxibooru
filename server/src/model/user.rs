@@ -23,7 +23,7 @@ pub struct NewUser<'a> {
 #[diesel(table_name = user)]
 #[diesel(check_for_backend(Pg))]
 pub struct User {
-    pub id: i32,
+    pub id: i64,
     pub name: String,
     pub password_hash: String,
     pub password_salt: String,
@@ -51,7 +51,7 @@ impl User {
 #[diesel(check_for_backend(Pg))]
 pub struct NewUserToken<'a> {
     pub id: Uuid,
-    pub user_id: i32,
+    pub user_id: i64,
     pub note: Option<&'a str>,
     pub enabled: bool,
     pub expiration_time: Option<DateTime>,
@@ -64,7 +64,7 @@ pub struct NewUserToken<'a> {
 #[diesel(check_for_backend(Pg))]
 pub struct UserToken {
     pub id: Uuid,
-    pub user_id: i32,
+    pub user_id: i64,
     pub note: String,
     pub enabled: bool,
     pub expiration_time: Option<DateTime>,

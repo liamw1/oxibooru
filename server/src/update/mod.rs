@@ -13,7 +13,7 @@ use diesel::prelude::*;
 // Make sure to check for privileges before calling them, if necessary.
 
 /// Updates the last known login time for the user with the given `user_id`.
-pub fn last_login_time(user_id: i32) -> ApiResult<()> {
+pub fn last_login_time(user_id: i64) -> ApiResult<()> {
     let mut conn = db::get_connection()?;
     diesel::update(user::table.find(user_id))
         .set(user::last_login_time.eq(DateTime::now()))

@@ -19,7 +19,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(api::Reply::from);
     let get_pool = warp::get()
         .and(api::auth())
-        .and(warp::path!("pool" / i32))
+        .and(warp::path!("pool" / i64))
         .and(api::resource_query())
         .map(get_pool)
         .map(api::Reply::from);
@@ -39,7 +39,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(api::Reply::from);
     let update_pool = warp::put()
         .and(api::auth())
-        .and(warp::path!("pool" / i32))
+        .and(warp::path!("pool" / i64))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(update_pool)
@@ -87,13 +87,12 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
             let count_query = search::pool::build_query(&search_criteria)?;
             count_query.count().first(conn)?
         } else {
-            let pool_count: i32 = database_statistics::table
+            database_statistics::table
                 .select(database_statistics::pool_count)
-                .first(conn)?;
-            i64::from(pool_count)
+                .first(conn)?
         };
 
-        let selected_tags: Vec<i32> = search::pool::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let selected_tags: Vec<i64> = search::pool::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,
             offset,
@@ -104,7 +103,7 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     })
 }
 
-fn get_pool(auth: AuthResult, pool_id: i32, query: ResourceQuery) -> ApiResult<PoolInfo> {
+fn get_pool(auth: AuthResult, pool_id: i64, query: ResourceQuery) -> ApiResult<PoolInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_view)?;
@@ -125,7 +124,7 @@ struct NewPoolInfo {
     names: Vec<String>,
     category: String,
     description: Option<String>,
-    posts: Option<Vec<i32>>,
+    posts: Option<Vec<i64>>,
 }
 
 fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -> ApiResult<PoolInfo> {
@@ -140,7 +139,7 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
     let fields = create_field_table(query.fields())?;
     let mut conn = db::get_connection()?;
     let pool = conn.transaction(|conn| {
-        let category_id: i32 = pool_category::table
+        let category_id: i64 = pool_category::table
             .select(pool_category::id)
             .filter(pool_category::name.eq(pool_info.category))
             .first(conn)?;
@@ -160,7 +159,7 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
     conn.transaction(|conn| PoolInfo::new(conn, pool, &fields).map_err(api::Error::from))
 }
 
-fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i32>) -> ApiResult<PoolInfo> {
+fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i64>) -> ApiResult<PoolInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_merge)?;
@@ -194,7 +193,7 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
             .filter(pool_post::pool_id.eq(merge_to_id))
             .count()
             .first(conn)?;
-        update::pool::add_posts(conn, merge_to_id, post_count as i32, new_pool_posts)?;
+        update::pool::add_posts(conn, merge_to_id, post_count, new_pool_posts)?;
 
         // Merge names
         let current_name_count = pool_name::table
@@ -226,10 +225,10 @@ struct PoolUpdate {
     category: Option<String>,
     description: Option<String>,
     names: Option<Vec<String>>,
-    posts: Option<Vec<i32>>,
+    posts: Option<Vec<i64>>,
 }
 
-fn update_pool(auth: AuthResult, pool_id: i32, query: ResourceQuery, update: PoolUpdate) -> ApiResult<PoolInfo> {
+fn update_pool(auth: AuthResult, pool_id: i64, query: ResourceQuery, update: PoolUpdate) -> ApiResult<PoolInfo> {
     let client = auth?;
     query.bump_login(client)?;
     let fields = create_field_table(query.fields())?;
@@ -242,7 +241,7 @@ fn update_pool(auth: AuthResult, pool_id: i32, query: ResourceQuery, update: Poo
         if let Some(category) = update.category {
             api::verify_privilege(client, config::privileges().pool_edit_category)?;
 
-            let category_id: i32 = pool_category::table
+            let category_id: i64 = pool_category::table
                 .select(pool_category::id)
                 .filter(pool_category::name.eq(category))
                 .first(conn)?;
@@ -287,7 +286,7 @@ fn delete_pool(auth: AuthResult, name: String, client_version: DeleteRequest) ->
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
-        let (pool_id, pool_version): (i32, DateTime) = pool::table
+        let (pool_id, pool_version): (i64, DateTime) = pool::table
             .select((pool::id, pool::last_edit_time))
             .inner_join(pool_name::table)
             .filter(pool_name::name.eq(name))
@@ -327,7 +326,7 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn get() -> ApiResult<()> {
-        const POOL_ID: i32 = 4;
+        const POOL_ID: i64 = 4;
         let get_last_edit_time = |conn: &mut PgConnection| -> QueryResult<DateTime> {
             pool::table
                 .select(pool::last_edit_time)
@@ -348,7 +347,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn create() -> ApiResult<()> {
-        let get_pool_count = |conn: &mut PgConnection| -> QueryResult<i32> {
+        let get_pool_count = |conn: &mut PgConnection| -> QueryResult<i64> {
             database_statistics::table
                 .select(database_statistics::pool_count)
                 .first(conn)
@@ -359,13 +358,13 @@ mod test {
 
         verify_query(&format!("POST /pool/?{FIELDS}"), "pool/create.json").await?;
 
-        let (pool_id, name): (i32, String) = pool_name::table
+        let (pool_id, name): (i64, String) = pool_name::table
             .select((pool_name::pool_id, pool_name::name))
             .order_by(pool_name::pool_id.desc())
             .first(&mut conn)?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
-        let post_count: i32 = pool_statistics::table
+        let post_count: i64 = pool_statistics::table
             .select(pool_statistics::post_count)
             .filter(pool_statistics::pool_id.eq(pool_id))
             .first(&mut conn)?;
@@ -384,9 +383,9 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn merge() -> ApiResult<()> {
-        const REMOVE_ID: i32 = 2;
-        const MERGE_TO_ID: i32 = 5;
-        let get_pool_info = |conn: &mut PgConnection| -> QueryResult<(Pool, i32)> {
+        const REMOVE_ID: i64 = 2;
+        const MERGE_TO_ID: i64 = 5;
+        let get_pool_info = |conn: &mut PgConnection| -> QueryResult<(Pool, i64)> {
             pool::table
                 .inner_join(pool_statistics::table)
                 .select((Pool::as_select(), pool_statistics::post_count))
@@ -414,8 +413,8 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn update() -> ApiResult<()> {
-        const POOL_ID: i32 = 2;
-        let get_pool_info = |conn: &mut PgConnection| -> QueryResult<(Pool, i32)> {
+        const POOL_ID: i64 = 2;
+        let get_pool_info = |conn: &mut PgConnection| -> QueryResult<(Pool, i64)> {
             pool::table
                 .inner_join(pool_statistics::table)
                 .select((Pool::as_select(), pool_statistics::post_count))

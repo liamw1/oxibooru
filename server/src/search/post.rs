@@ -89,7 +89,7 @@ pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Tok
 }
 
 pub fn build_query<'a>(
-    client: Option<i32>,
+    client: Option<i64>,
     search_criteria: &'a SearchCriteria<Token>,
 ) -> Result<BoxedQuery<'a>, Error> {
     let base_query = post::table
@@ -101,7 +101,7 @@ pub fn build_query<'a>(
         .filters
         .iter()
         .try_fold(base_query, |query, filter| match filter.kind {
-            Token::Id => apply_filter!(query, post::id, filter, i32),
+            Token::Id => apply_filter!(query, post::id, filter, i64),
             Token::FileSize => apply_filter!(query, post::file_size, filter, i64),
             Token::Width => apply_filter!(query, post::width, filter, i32),
             Token::Height => apply_filter!(query, post::height, filter, i32),
@@ -122,7 +122,7 @@ pub fn build_query<'a>(
             }
             Token::Pool => {
                 let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
-                let subquery = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i32)?;
+                let subquery = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
                 Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
             Token::Uploader => Ok(apply_str_filter!(query, user::name, filter)),
@@ -147,12 +147,12 @@ pub fn build_query<'a>(
                 let subquery = apply_str_filter!(post_notes, post_note::text, filter.unnegated());
                 Ok(apply_subquery_filter!(query, post::id, filter, subquery))
             }
-            Token::TagCount => apply_filter!(query, post_statistics::tag_count, filter, i32),
-            Token::CommentCount => apply_filter!(query, post_statistics::comment_count, filter, i32),
-            Token::RelationCount => apply_filter!(query, post_statistics::relation_count, filter, i32),
-            Token::NoteCount => apply_filter!(query, post_statistics::note_count, filter, i32),
-            Token::FavCount => apply_filter!(query, post_statistics::favorite_count, filter, i32),
-            Token::FeatureCount => apply_filter!(query, post_statistics::feature_count, filter, i32),
+            Token::TagCount => apply_filter!(query, post_statistics::tag_count, filter, i64),
+            Token::CommentCount => apply_filter!(query, post_statistics::comment_count, filter, i64),
+            Token::RelationCount => apply_filter!(query, post_statistics::relation_count, filter, i64),
+            Token::NoteCount => apply_filter!(query, post_statistics::note_count, filter, i64),
+            Token::FavCount => apply_filter!(query, post_statistics::favorite_count, filter, i64),
+            Token::FeatureCount => apply_filter!(query, post_statistics::feature_count, filter, i64),
             Token::CommentTime => {
                 let comments = comment::table.select(comment::post_id).into_boxed();
                 let subquery = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
@@ -176,7 +176,7 @@ pub fn get_ordered_ids(
     conn: &mut PgConnection,
     unsorted_query: BoxedQuery,
     search_criteria: &SearchCriteria<Token>,
-) -> QueryResult<Vec<i32>> {
+) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
     if search_criteria.random_sort {
         define_sql_function!(fn random() -> Integer);
@@ -237,8 +237,8 @@ enum SpecialToken {
     Tumbleweed,
 }
 
-fn aspect_ratio(
-) -> SqlLiteral<Float, UncheckedBind<SqlLiteral<Float, UncheckedBind<SqlLiteral<Float>, post::width>>, post::height>> {
+type Bind = UncheckedBind<SqlLiteral<Float, UncheckedBind<SqlLiteral<Float>, post::width>>, post::height>;
+fn aspect_ratio() -> SqlLiteral<Float, Bind> {
     sql("CAST(")
         .bind(post::width)
         .sql(" AS REAL) / CAST(")
@@ -249,7 +249,7 @@ fn aspect_ratio(
 fn apply_special_filter<'a>(
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<'a, Token>,
-    client: Option<i32>,
+    client: Option<i64>,
 ) -> Result<BoxedQuery<'a>, Error> {
     let special_token = SpecialToken::from_str(filter.criteria).map_err(Box::from)?;
     match special_token {

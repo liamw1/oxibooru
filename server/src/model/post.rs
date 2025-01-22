@@ -14,7 +14,7 @@ use std::option::Option;
 #[diesel(table_name = post)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewPost<'a> {
-    pub user_id: Option<i32>,
+    pub user_id: Option<i64>,
     pub file_size: i64,
     pub width: i32,
     pub height: i32,
@@ -33,8 +33,8 @@ pub struct NewPost<'a> {
 #[diesel(table_name = post)]
 #[diesel(check_for_backend(Pg))]
 pub struct Post {
-    pub id: i32,
-    pub user_id: Option<i32>,
+    pub id: i64,
+    pub user_id: Option<i64>,
     pub file_size: i64,
     pub width: i32,
     pub height: i32,
@@ -57,18 +57,18 @@ pub struct Post {
 #[diesel(primary_key(parent_id, child_id))]
 #[diesel(check_for_backend(Pg))]
 pub struct PostRelation {
-    pub parent_id: i32,
-    pub child_id: i32,
+    pub parent_id: i64,
+    pub child_id: i64,
 }
 
 diesel::joinable!(post_relation -> post (parent_id));
 
 impl PostRelation {
-    pub fn new_pair(id_1: i32, id_2: i32) -> [Self; 2] {
+    pub fn new_pair(id_1: i64, id_2: i64) -> [Self; 2] {
         [PostRelation::new(id_1, id_2), PostRelation::new(id_2, id_1)]
     }
 
-    fn new(parent_id: i32, child_id: i32) -> Self {
+    fn new(parent_id: i64, child_id: i64) -> Self {
         Self { parent_id, child_id }
     }
 }
@@ -79,8 +79,8 @@ impl PostRelation {
 #[diesel(primary_key(post_id, tag_id))]
 #[diesel(check_for_backend(Pg))]
 pub struct PostTag {
-    pub post_id: i32,
-    pub tag_id: i32,
+    pub post_id: i64,
+    pub tag_id: i64,
 }
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
@@ -89,8 +89,8 @@ pub struct PostTag {
 #[diesel(primary_key(post_id, user_id))]
 #[diesel(check_for_backend(Pg))]
 pub struct PostFavorite {
-    pub post_id: i32,
-    pub user_id: i32,
+    pub post_id: i64,
+    pub user_id: i64,
     pub time: DateTime,
 }
 
@@ -98,8 +98,8 @@ pub struct PostFavorite {
 #[diesel(table_name = post_feature)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewPostFeature {
-    pub post_id: i32,
-    pub user_id: i32,
+    pub post_id: i64,
+    pub user_id: i64,
     pub time: DateTime,
 }
 
@@ -108,9 +108,9 @@ pub struct NewPostFeature {
 #[diesel(table_name = post_feature)]
 #[diesel(check_for_backend(Pg))]
 pub struct PostFeature {
-    pub id: i32,
-    pub post_id: i32,
-    pub user_id: i32,
+    pub id: i64,
+    pub post_id: i64,
+    pub user_id: i64,
     pub time: DateTime,
 }
 
@@ -118,7 +118,7 @@ pub struct PostFeature {
 #[diesel(table_name = post_note)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewPostNote<'a> {
-    pub post_id: i32,
+    pub post_id: i64,
     pub polygon: &'a [f32],
     pub text: &'a str,
 }
@@ -128,8 +128,8 @@ pub struct NewPostNote<'a> {
 #[diesel(table_name = post_note)]
 #[diesel(check_for_backend(Pg))]
 pub struct PostNote {
-    pub id: i32,
-    pub post_id: i32,
+    pub id: i64,
+    pub post_id: i64,
     pub polygon: Vec<Option<f32>>,
     pub text: String,
 }
@@ -140,8 +140,8 @@ pub struct PostNote {
 #[diesel(primary_key(post_id, user_id))]
 #[diesel(check_for_backend(Pg))]
 pub struct PostScore {
-    pub post_id: i32,
-    pub user_id: i32,
+    pub post_id: i64,
+    pub user_id: i64,
     pub score: Score,
     pub time: DateTime,
 }
@@ -150,7 +150,7 @@ pub struct PostScore {
 #[diesel(table_name = post_signature)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewPostSignature<'a> {
-    pub post_id: i32,
+    pub post_id: i64,
     pub signature: &'a [i64],
     pub words: &'a [i32],
 }
@@ -161,7 +161,7 @@ pub struct NewPostSignature<'a> {
 #[diesel(primary_key(post_id))]
 #[diesel(check_for_backend(Pg))]
 pub struct PostSignature {
-    pub post_id: i32,
+    pub post_id: i64,
     pub signature: Vec<Option<i64>>,
 }
 

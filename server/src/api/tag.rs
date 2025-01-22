@@ -97,13 +97,12 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Tag
             let count_query = search::tag::build_query(&search_criteria)?;
             count_query.count().first(conn)?
         } else {
-            let tag_count: i32 = database_statistics::table
+            database_statistics::table
                 .select(database_statistics::tag_count)
-                .first(conn)?;
-            i64::from(tag_count)
+                .first(conn)?
         };
 
-        let selected_tags: Vec<i32> = search::tag::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let selected_tags: Vec<i64> = search::tag::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: query.query.query,
             offset,
@@ -151,7 +150,7 @@ fn get_tag_siblings(auth: AuthResult, name: String, query: ResourceQuery) -> Api
     let fields = create_field_table(query.fields())?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
-        let tag_id: i32 = tag::table
+        let tag_id: i64 = tag::table
             .select(tag::id)
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
@@ -167,7 +166,7 @@ fn get_tag_siblings(auth: AuthResult, name: String, query: ResourceQuery) -> Api
             .filter(post_tag::tag_id.ne(tag_id))
             .order_by(count(post_tag::post_id).desc())
             .limit(MAX_TAG_SIBLINGS)
-            .load::<(i32, i64)>(conn)?
+            .load::<(i64, i64)>(conn)?
             .into_iter()
             .unzip();
 
@@ -202,7 +201,7 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
     let fields = create_field_table(query.fields())?;
     let mut conn = db::get_connection()?;
     let tag_id = conn.transaction(|conn| {
-        let category_id: i32 = tag_category::table
+        let category_id: i64 = tag_category::table
             .select(tag_category::id)
             .filter(tag_category::name.eq(tag_info.category))
             .first(conn)?;
@@ -210,7 +209,7 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
             category_id,
             description: tag_info.description.as_deref().unwrap_or(""),
         };
-        let tag_id: i32 = diesel::insert_into(tag::table)
+        let tag_id: i64 = diesel::insert_into(tag::table)
             .values(new_tag)
             .returning(tag::id)
             .get_result(conn)?;
@@ -380,7 +379,7 @@ fn update_tag(auth: AuthResult, name: String, query: ResourceQuery, update: TagU
         if let Some(category) = update.category {
             api::verify_privilege(client, config::privileges().tag_edit_category)?;
 
-            let category_id: i32 = tag_category::table
+            let category_id: i64 = tag_category::table
                 .select(tag_category::id)
                 .filter(tag_category::name.eq(category))
                 .first(conn)?;
@@ -438,7 +437,7 @@ fn delete_tag(auth: AuthResult, name: String, client_version: DeleteRequest) -> 
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
-        let (tag_id, tag_version): (i32, DateTime) = tag::table
+        let (tag_id, tag_version): (i64, DateTime) = tag::table
             .select((tag::id, tag::last_edit_time))
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
@@ -524,7 +523,7 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn create() -> ApiResult<()> {
-        let get_tag_count = |conn: &mut PgConnection| -> QueryResult<i32> {
+        let get_tag_count = |conn: &mut PgConnection| -> QueryResult<i64> {
             database_statistics::table
                 .select(database_statistics::tag_count)
                 .first(conn)
@@ -535,7 +534,7 @@ mod test {
 
         verify_query(&format!("POST /tags/?{FIELDS}"), "tag/create.json").await?;
 
-        let (tag_id, name): (i32, String) = tag_name::table
+        let (tag_id, name): (i64, String) = tag_name::table
             .select((tag_name::tag_id, tag_name::name))
             .order_by(tag_name::tag_id.desc())
             .first(&mut conn)?;
@@ -557,7 +556,7 @@ mod test {
     async fn merge() -> ApiResult<()> {
         const REMOVE: &str = "stream";
         const MERGE_TO: &str = "night_sky";
-        let get_tag_info = |conn: &mut PgConnection| -> QueryResult<(Tag, i32, i32, i32)> {
+        let get_tag_info = |conn: &mut PgConnection| -> QueryResult<(Tag, i64, i64, i64)> {
             tag::table
                 .inner_join(tag_statistics::table)
                 .inner_join(tag_name::table)
@@ -573,7 +572,7 @@ mod test {
 
         let mut conn = get_connection()?;
         let (tag, usage_count, implication_count, suggestion_count) = get_tag_info(&mut conn)?;
-        let remove_id: i32 = tag_name::table
+        let remove_id: i64 = tag_name::table
             .select(tag_name::tag_id)
             .filter(tag_name::name.eq(REMOVE))
             .first(&mut conn)?;
@@ -599,7 +598,7 @@ mod test {
     #[serial]
     async fn update() -> ApiResult<()> {
         const NAME: &str = "creek";
-        let get_tag_info = |conn: &mut PgConnection, name: &str| -> QueryResult<(Tag, i32, i32, i32)> {
+        let get_tag_info = |conn: &mut PgConnection, name: &str| -> QueryResult<(Tag, i64, i64, i64)> {
             tag::table
                 .inner_join(tag_statistics::table)
                 .inner_join(tag_name::table)
@@ -636,7 +635,7 @@ mod test {
 
         verify_query(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/update_restore.json").await?;
 
-        let new_tag_id: i32 = tag::table.select(tag::id).order_by(tag::id.desc()).first(&mut conn)?;
+        let new_tag_id: i64 = tag::table.select(tag::id).order_by(tag::id.desc()).first(&mut conn)?;
         diesel::delete(tag::table.find(new_tag_id)).execute(&mut conn)?;
 
         let (new_tag, new_usage_count, new_implication_count, new_suggestion_count) = get_tag_info(&mut conn, NAME)?;

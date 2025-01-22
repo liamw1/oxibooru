@@ -90,7 +90,7 @@ pub struct UserInfo {
 impl UserInfo {
     pub fn new_from_id(
         conn: &mut PgConnection,
-        user_id: i32,
+        user_id: i64,
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Self> {
@@ -164,7 +164,7 @@ impl UserInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        user_ids: Vec<i32>,
+        user_ids: Vec<i64>,
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Vec<Self>> {

@@ -144,7 +144,7 @@ fn run_task(task: AdminTask) -> Result<(), String> {
     }
 }
 
-fn get_post_id(path: &Path) -> Option<i32> {
+fn get_post_id(path: &Path) -> Option<i64> {
     let path_str = path.file_name()?.to_string_lossy();
     let (post_id, _tail) = path_str.split_once('_')?;
     post_id.parse().ok()
