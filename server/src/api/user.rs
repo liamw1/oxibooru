@@ -322,6 +322,11 @@ fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update:
                 .set(user::custom_avatar_size.eq(avatar_size as i64))
                 .execute(conn)?;
         }
+
+        // Update last_edit_time
+        diesel::update(user::table.find(user_id))
+            .set(user::last_edit_time.eq(DateTime::now()))
+            .execute(conn)?;
         Ok::<_, api::Error>((user_id, visibility))
     })?;
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from))

@@ -684,6 +684,8 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
             std::mem::swap(&mut remove_post.custom_thumbnail_size, &mut merge_to_post.custom_thumbnail_size);
             merge_to_post = merge_to_post.save_changes(conn)?;
         }
+
+        // Update last_edit_time
         diesel::update(post::table.find(merge_to_id))
             .set(post::last_edit_time.eq(DateTime::now()))
             .execute(conn)?;
@@ -875,7 +877,12 @@ fn update_post(auth: AuthResult, post_id: i32, query: ResourceQuery, update: Pos
                 .set(post::custom_thumbnail_size.eq(custom_thumbnail_size as i64))
                 .execute(conn)?;
         }
-        Ok::<_, api::Error>(())
+
+        // Update last_edit_time
+        diesel::update(post::table.find(post_id))
+            .set(post::last_edit_time.eq(DateTime::now()))
+            .execute(conn)
+            .map_err(api::Error::from)
     })?;
 
     let client_id = client.map(|user| user.id);

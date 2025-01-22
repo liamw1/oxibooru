@@ -174,35 +174,24 @@ fn update_user_token(
         };
         api::verify_privilege(client, required_rank)?;
 
-        let user_token_version = user_token::table
+        let mut user_token: UserToken = user_token::table
             .find(user_id)
-            .select(user_token::last_edit_time)
+            .filter(user_token::token.eq(token))
             .first(conn)?;
-        api::verify_version(user_token_version, update.version)?;
+        api::verify_version(user_token.last_edit_time, update.version)?;
 
         if let Some(enabled) = update.enabled {
-            diesel::update(user_token::table)
-                .filter(user_token::user_id.eq(user_id))
-                .filter(user_token::token.eq(token))
-                .set(user_token::enabled.eq(enabled))
-                .execute(conn)?;
+            user_token.enabled = enabled;
         }
         if let Some(note) = update.note {
-            diesel::update(user_token::table)
-                .filter(user_token::user_id.eq(user_id))
-                .filter(user_token::token.eq(token))
-                .set(user_token::note.eq(note))
-                .execute(conn)?;
+            user_token.note = note;
         }
         if let Some(expiration_time) = update.expiration_time {
-            diesel::update(user_token::table)
-                .filter(user_token::user_id.eq(user_id))
-                .filter(user_token::token.eq(token))
-                .set(user_token::expiration_time.eq(expiration_time))
-                .execute(conn)?;
+            user_token.expiration_time = expiration_time;
         }
+        user_token.last_edit_time = DateTime::now();
 
-        let updated_user_token: UserToken = user_token::table.find(user_id).first(conn)?;
+        let updated_user_token: UserToken = user_token.save_changes(conn)?;
         Ok::<_, api::Error>((updated_user_token, avatar_style))
     })?;
     Ok(UserTokenInfo::new(MicroUser::new(username.to_string(), avatar_style), updated_user_token, &fields))

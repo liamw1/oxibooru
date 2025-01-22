@@ -422,6 +422,11 @@ fn update_tag(auth: AuthResult, name: String, query: ResourceQuery, update: TagU
                 .execute(conn)?;
             update::tag::add_suggestions(conn, tag_id, suggested_ids)?;
         }
+
+        // Update last_edit_time
+        diesel::update(tag::table.find(tag_id))
+            .set(tag::last_edit_time.eq(DateTime::now()))
+            .execute(conn)?;
         Ok::<_, api::Error>(tag_id)
     })?;
     conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))

@@ -176,6 +176,11 @@ fn update_tag_category(
                 .set(tag_category::color.eq(color))
                 .execute(conn)?;
         }
+
+        // Update last_edit_time
+        diesel::update(tag_category::table.find(category_id))
+            .set(tag_category::last_edit_time.eq(DateTime::now()))
+            .execute(conn)?;
         Ok::<_, api::Error>(category_id)
     })?;
     conn.transaction(|conn| TagCategoryInfo::new_from_id(conn, category_id, &fields).map_err(api::Error::from))
@@ -202,6 +207,11 @@ fn set_default_tag_category(auth: AuthResult, name: String, query: ResourceQuery
             .filter(tag::id.ne_all(defaulted_tags))
             .set(tag::category_id.eq(category.id))
             .execute(conn)?;
+
+        // Update last_edit_time
+        let current_time = DateTime::now();
+        category.last_edit_time = current_time;
+        old_default_category.last_edit_time = current_time;
 
         // Make category default
         std::mem::swap(&mut category.id, &mut old_default_category.id);

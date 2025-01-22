@@ -57,7 +57,8 @@ pub struct NewUserToken<'a> {
     pub expiration_time: Option<DateTime>,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(AsChangeset, Associations, Identifiable, Queryable, Selectable)]
+#[diesel(treat_none_as_null = true)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = user_token)]
 #[diesel(primary_key(user_id))]

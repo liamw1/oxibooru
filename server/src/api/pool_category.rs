@@ -150,23 +150,22 @@ fn update_pool_category(
             .first(conn)?;
         api::verify_version(last_edit_time, update.version)?;
 
+        let current_time = DateTime::now();
         if let Some(name) = update.name {
             api::verify_privilege(client, config::privileges().pool_category_edit_name)?;
             api::verify_matches_regex(&name, RegexType::PoolCategory)?;
 
             diesel::update(pool_category::table.find(category_id))
-                .set(pool_category::name.eq(name))
+                .set((pool_category::name.eq(name), pool_category::last_edit_time.eq(current_time)))
                 .execute(conn)?;
         }
-
         if let Some(color) = update.color {
             api::verify_privilege(client, config::privileges().pool_category_edit_color)?;
 
             diesel::update(pool_category::table.find(category_id))
-                .set(pool_category::color.eq(color))
+                .set((pool_category::color.eq(color), pool_category::last_edit_time.eq(current_time)))
                 .execute(conn)?;
         }
-
         Ok::<_, api::Error>(category_id)
     })?;
     conn.transaction(|conn| PoolCategoryInfo::new_from_id(conn, category_id, &fields).map_err(api::Error::from))
@@ -194,6 +193,11 @@ fn set_default_pool_category(auth: AuthResult, name: String, query: ResourceQuer
             .filter(pool::id.ne_all(defaulted_pools))
             .set(pool::category_id.eq(category.id))
             .execute(conn)?;
+
+        // Update last_edit_time
+        let current_time = DateTime::now();
+        category.last_edit_time = current_time;
+        old_default_category.last_edit_time = current_time;
 
         // Make category default
         std::mem::swap(&mut category.id, &mut old_default_category.id);

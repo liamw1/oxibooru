@@ -208,9 +208,8 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
         update::pool::add_names(conn, merge_to_id, current_name_count, removed_names)?;
 
         // Update last_edit_time
-        diesel::update(pool::table)
+        diesel::update(pool::table.find(merge_to_id))
             .set(pool::last_edit_time.eq(DateTime::now()))
-            .filter(pool::id.eq(merge_to_id))
             .execute(conn)?;
 
         diesel::delete(pool::table.find(remove_id))
@@ -274,9 +273,8 @@ fn update_pool(auth: AuthResult, pool_id: i32, query: ResourceQuery, update: Poo
         }
 
         // Update last_edit_time
-        diesel::update(pool::table)
+        diesel::update(pool::table.find(pool_id))
             .set(pool::last_edit_time.eq(DateTime::now()))
-            .filter(pool::id.eq(pool_id))
             .execute(conn)
             .map_err(api::Error::from)
     })?;

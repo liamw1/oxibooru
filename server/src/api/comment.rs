@@ -182,7 +182,7 @@ fn update_comment(
         api::verify_privilege(client, required_rank)?;
 
         diesel::update(comment::table.find(comment_id))
-            .set(comment::text.eq(update.text))
+            .set((comment::text.eq(update.text), comment::last_edit_time.eq(DateTime::now())))
             .execute(conn)
             .map_err(api::Error::from)
     })?;
