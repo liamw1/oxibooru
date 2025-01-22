@@ -1,3 +1,4 @@
+use crate::model::pool::PoolName;
 use crate::schema::{pool, pool_category, pool_name, pool_statistics};
 use crate::search::{Error, Order, ParsedSort, SearchCriteria};
 use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
@@ -84,9 +85,7 @@ pub fn get_ordered_ids(
         }]
     };
 
-    let unsorted_query = unsorted_query
-        .inner_join(pool_name::table)
-        .filter(pool_name::order.eq(0));
+    let unsorted_query = unsorted_query.inner_join(pool_name::table).filter(PoolName::primary());
     let query = sorts.iter().fold(unsorted_query, |query, sort| match sort.kind {
         Token::CreationTime => apply_sort!(query, pool::creation_time, sort),
         Token::LastEditTime => apply_sort!(query, pool::last_edit_time, sort),

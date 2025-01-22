@@ -634,6 +634,8 @@ fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
 
 mod test {
     use super::*;
+    use crate::model::pool::PoolName;
+    use crate::model::tag::TagName;
     use crate::schema::{comment_statistics, database_statistics};
     use serial_test::parallel;
 
@@ -694,7 +696,7 @@ mod test {
             pool_statistics::table
                 .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool_statistics::pool_id)))
                 .select((pool_name::name, pool_statistics::post_count))
-                .filter(pool_name::order.eq(0))
+                .filter(PoolName::primary())
                 .load(conn)
         });
         for (pool_name, post_count) in stats {
@@ -778,7 +780,7 @@ mod test {
             tag_statistics::table
                 .inner_join(tag_name::table.on(tag_name::tag_id.eq(tag_statistics::tag_id)))
                 .select((tag_name::name, tag_statistics::usage_count))
-                .filter(tag_name::order.eq(0))
+                .filter(TagName::primary())
                 .load(conn)
         });
         for (tag_name, usage_count) in stats {

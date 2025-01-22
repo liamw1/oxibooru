@@ -1,7 +1,10 @@
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::time::DateTime;
+use diesel::dsl::sql;
+use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::prelude::*;
+use diesel::sql_types::Bool;
 
 #[derive(Insertable)]
 #[diesel(table_name = tag_category)]
@@ -61,6 +64,17 @@ pub struct TagName {
     pub tag_id: i64,
     pub order: i32,
     pub name: String,
+}
+
+impl TagName {
+    /// Creates an expression that filters tag_name rows to only the primary names.
+    /// This exists because certain queries are much slower when using the nearly-equivalent
+    /// tag_name::order.eq(0) (as much as 15x). Presumably this is because Diesel uses bind
+    /// parameters and the Postgres can't optimize these queries as well when it doesn't know
+    /// the exact value of `order`.
+    pub fn primary() -> SqlLiteral<Bool, UncheckedBind<SqlLiteral<Bool>, tag_name::order>> {
+        sql("").bind(tag_name::order).sql(" = 0")
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Associations, Identifiable, Insertable, Queryable, Selectable)]

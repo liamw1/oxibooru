@@ -4,6 +4,7 @@ use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType, Rating, Score};
 use crate::model::pool::PoolPost;
 use crate::model::post::{NewPostNote, Post, PostFavorite, PostNote, PostRelation, PostScore, PostTag};
+use crate::model::tag::TagName;
 use crate::resource;
 use crate::resource::comment::CommentInfo;
 use crate::resource::pool::MicroPool;
@@ -387,7 +388,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
     let post_tags: Vec<(PostTag, i64, i64)> = PostTag::belonging_to(posts)
         .inner_join(tag_info)
         .select((PostTag::as_select(), tag::category_id, tag_statistics::usage_count))
-        .filter(tag_name::order.eq(0))
+        .filter(TagName::primary())
         .order((tag_category::order, tag_name::name))
         .load(conn)?;
     let tag_ids: HashSet<i64> = post_tags.iter().map(|(post_tag, ..)| post_tag.tag_id).collect();

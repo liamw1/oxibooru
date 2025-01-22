@@ -1,3 +1,4 @@
+use crate::model::tag::TagName;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::search::{Error, Order, ParsedSort, SearchCriteria};
 use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
@@ -105,7 +106,7 @@ pub fn get_ordered_ids(
         }]
     };
 
-    let unsorted_query = unsorted_query.inner_join(tag_name::table).filter(tag_name::order.eq(0));
+    let unsorted_query = unsorted_query.inner_join(tag_name::table).filter(TagName::primary());
     let query = sorts.iter().fold(unsorted_query, |query, sort| match sort.kind {
         Token::CreationTime => apply_sort!(query, tag::creation_time, sort),
         Token::LastEditTime => apply_sort!(query, tag::last_edit_time, sort),

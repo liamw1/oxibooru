@@ -17,54 +17,11 @@
         {
             "tag": {
                 "description": "",
-                "category": "Character",
+                "category": "Artist",
                 "names": [
-                    "luke_skywalker"
+                    "shakespeare"
                 ],
                 "implications": [],
-                "suggestions": [],
-                "usages": 1
-            },
-            "occurrences": 1
-        },
-        {
-            "tag": {
-                "description": "",
-                "category": "Character",
-                "names": [
-                    "laertes"
-                ],
-                "implications": [],
-                "suggestions": [],
-                "usages": 1
-            },
-            "occurrences": 1
-        },
-        {
-            "tag": {
-                "description": "",
-                "category": "Surroundings",
-                "names": [
-                    "forest",
-                    "woods"
-                ],
-                "implications": [
-                    {
-                        "names": [
-                            "plant",
-                            "foliage"
-                        ],
-                        "category": "Surroundings",
-                        "usages": 2
-                    },
-                    {
-                        "names": [
-                            "tree"
-                        ],
-                        "category": "Surroundings",
-                        "usages": 1
-                    }
-                ],
                 "suggestions": [],
                 "usages": 1
             },
@@ -112,13 +69,13 @@
         {
             "tag": {
                 "description": "",
-                "category": "Meta",
+                "category": "Character",
                 "names": [
-                    "16:9_aspect_ratio"
+                    "claudius"
                 ],
                 "implications": [],
                 "suggestions": [],
-                "usages": 2
+                "usages": 1
             },
             "occurrences": 1
         },
@@ -127,7 +84,34 @@
                 "description": "",
                 "category": "Character",
                 "names": [
-                    "admiral_ackbar"
+                    "laertes"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Character",
+                "names": [
+                    "luke_skywalker"
+                ],
+                "implications": [],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Character",
+                "names": [
+                    "darth_vader",
+                    "annakin_skywalker"
                 ],
                 "implications": [],
                 "suggestions": [],
@@ -151,9 +135,9 @@
         {
             "tag": {
                 "description": "",
-                "category": "Artist",
+                "category": "Character",
                 "names": [
-                    "shakespeare"
+                    "admiral_ackbar"
                 ],
                 "implications": [],
                 "suggestions": [],
@@ -164,10 +148,62 @@
         {
             "tag": {
                 "description": "",
-                "category": "Character",
+                "category": "Surroundings",
                 "names": [
-                    "darth_vader",
-                    "annakin_skywalker"
+                    "tree"
+                ],
+                "implications": [
+                    {
+                        "names": [
+                            "plant",
+                            "foliage"
+                        ],
+                        "category": "Surroundings",
+                        "usages": 2
+                    }
+                ],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Surroundings",
+                "names": [
+                    "forest",
+                    "woods"
+                ],
+                "implications": [
+                    {
+                        "names": [
+                            "plant",
+                            "foliage"
+                        ],
+                        "category": "Surroundings",
+                        "usages": 2
+                    },
+                    {
+                        "names": [
+                            "tree"
+                        ],
+                        "category": "Surroundings",
+                        "usages": 1
+                    }
+                ],
+                "suggestions": [],
+                "usages": 1
+            },
+            "occurrences": 1
+        },
+        {
+            "tag": {
+                "description": "",
+                "category": "Surroundings",
+                "names": [
+                    "water",
+                    "agua"
                 ],
                 "implications": [],
                 "suggestions": [],
@@ -218,49 +254,13 @@
         {
             "tag": {
                 "description": "",
-                "category": "Surroundings",
+                "category": "Meta",
                 "names": [
-                    "tree"
-                ],
-                "implications": [
-                    {
-                        "names": [
-                            "plant",
-                            "foliage"
-                        ],
-                        "category": "Surroundings",
-                        "usages": 2
-                    }
-                ],
-                "suggestions": [],
-                "usages": 1
-            },
-            "occurrences": 1
-        },
-        {
-            "tag": {
-                "description": "",
-                "category": "Surroundings",
-                "names": [
-                    "water",
-                    "agua"
+                    "16:9_aspect_ratio"
                 ],
                 "implications": [],
                 "suggestions": [],
-                "usages": 1
-            },
-            "occurrences": 1
-        },
-        {
-            "tag": {
-                "description": "",
-                "category": "Character",
-                "names": [
-                    "claudius"
-                ],
-                "implications": [],
-                "suggestions": [],
-                "usages": 1
+                "usages": 2
             },
             "occurrences": 1
         }

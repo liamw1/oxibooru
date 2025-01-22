@@ -164,7 +164,7 @@ fn get_tag_siblings(auth: AuthResult, name: String, query: ResourceQuery) -> Api
             .select((post_tag::tag_id, count(post_tag::post_id)))
             .filter(post_tag::post_id.eq_any(posts_tagged_on))
             .filter(post_tag::tag_id.ne(tag_id))
-            .order_by(count(post_tag::post_id).desc())
+            .order_by((count(post_tag::post_id).desc(), post_tag::tag_id))
             .limit(MAX_TAG_SIBLINGS)
             .load::<(i64, i64)>(conn)?
             .into_iter()
