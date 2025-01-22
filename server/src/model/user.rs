@@ -50,8 +50,8 @@ impl User {
 #[diesel(table_name = user_token)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewUserToken<'a> {
+    pub id: Uuid,
     pub user_id: i32,
-    pub token: Uuid,
     pub note: Option<&'a str>,
     pub enabled: bool,
     pub expiration_time: Option<DateTime>,
@@ -61,11 +61,10 @@ pub struct NewUserToken<'a> {
 #[diesel(treat_none_as_null = true)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = user_token)]
-#[diesel(primary_key(user_id))]
 #[diesel(check_for_backend(Pg))]
 pub struct UserToken {
+    pub id: Uuid,
     pub user_id: i32,
-    pub token: Uuid,
     pub note: String,
     pub enabled: bool,
     pub expiration_time: Option<DateTime>,

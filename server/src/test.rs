@@ -466,8 +466,8 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
 
     // Create user token
     let new_user_token = NewUserToken {
+        id: TEST_TOKEN,
         user_id: 5,
-        token: TEST_TOKEN,
         note: Some("This is a test token"),
         enabled: true,
         expiration_time: None,

@@ -55,7 +55,7 @@ impl UserTokenInfo {
         UserTokenInfo {
             version: fields[Field::Version].then_some(user_token.last_edit_time),
             user: fields[Field::User].then_some(user),
-            token: fields[Field::Token].then_some(user_token.token),
+            token: fields[Field::Token].then_some(user_token.id),
             note: fields[Field::Note].then_some(user_token.note),
             enabled: fields[Field::Enabled].then_some(user_token.enabled),
             expiration_time: fields[Field::ExpirationTime].then_some(user_token.expiration_time),

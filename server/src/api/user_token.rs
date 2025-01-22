@@ -119,12 +119,20 @@ fn create_user_token(
         };
         api::verify_privilege(client, required_rank)?;
 
-        // Delete previous token, if it exists
-        diesel::delete(user_token::table.find(user_id)).execute(conn)?;
+        // Delete any expired or disabled tokens owned by user
+        let current_time = DateTime::now();
+        diesel::delete(user_token::table)
+            .filter(user_token::user_id.eq(user_id))
+            .filter(
+                user_token::enabled
+                    .eq(false)
+                    .or(user_token::expiration_time.lt(current_time)),
+            )
+            .execute(conn)?;
 
         let new_user_token = NewUserToken {
+            id: Uuid::new_v4(),
             user_id,
-            token: Uuid::new_v4(),
             note: token_info.note.as_deref(),
             enabled: token_info.enabled,
             expiration_time: token_info.expiration_time,
@@ -174,10 +182,7 @@ fn update_user_token(
         };
         api::verify_privilege(client, required_rank)?;
 
-        let mut user_token: UserToken = user_token::table
-            .find(user_id)
-            .filter(user_token::token.eq(token))
-            .first(conn)?;
+        let mut user_token: UserToken = user_token::table.find(token).first(conn)?;
         api::verify_version(user_token.last_edit_time, update.version)?;
 
         if let Some(enabled) = update.enabled {
@@ -207,7 +212,7 @@ fn delete_user_token(auth: AuthResult, username: String, token: Uuid) -> ApiResu
             .inner_join(user_token::table)
             .select(user_token::user_id)
             .filter(user::name.eq(username))
-            .filter(user_token::token.eq(token))
+            .filter(user_token::id.eq(token))
             .first(conn)?;
 
         let required_rank = match client_id == Some(user_token_owner) {
@@ -216,7 +221,7 @@ fn delete_user_token(auth: AuthResult, username: String, token: Uuid) -> ApiResu
         };
         api::verify_privilege(client, required_rank)?;
 
-        diesel::delete(user_token::table.find(user_token_owner)).execute(conn)?;
+        diesel::delete(user_token::table.find(token)).execute(conn)?;
         Ok(())
     })
 }
@@ -249,14 +254,14 @@ mod test {
         verify_query(&format!("POST /user-token/{USER}/?{FIELDS}"), "user_token/create.json").await?;
 
         let mut conn = get_connection()?;
-        let (user_id, token): (i32, Uuid) = user_token::table
-            .select((user_token::user_id, user_token::token))
+        let token: Uuid = user_token::table
+            .select(user_token::id)
             .order_by(user_token::creation_time.desc())
             .first(&mut conn)?;
 
         verify_query(&format!("DELETE /user-token/{USER}/{token}"), "delete.json").await?;
 
-        let has_token: bool = diesel::select(exists(user_token::table.find(user_id))).get_result(&mut conn)?;
+        let has_token: bool = diesel::select(exists(user_token::table.find(token))).get_result(&mut conn)?;
         assert!(!has_token);
         Ok(())
     }
@@ -279,8 +284,8 @@ mod test {
         verify_query(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/update.json").await?;
 
         let new_user_token = get_user_token(&mut conn)?;
+        assert_eq!(new_user_token.id, user_token.id);
         assert_eq!(new_user_token.user_id, user_token.user_id);
-        assert_eq!(new_user_token.token, user_token.token);
         assert_ne!(new_user_token.note, user_token.note);
         assert_ne!(new_user_token.enabled, user_token.enabled);
         assert_ne!(new_user_token.expiration_time, user_token.expiration_time);
@@ -291,8 +296,8 @@ mod test {
             .await?;
 
         let new_user_token = get_user_token(&mut conn)?;
+        assert_eq!(new_user_token.id, user_token.id);
         assert_eq!(new_user_token.user_id, user_token.user_id);
-        assert_eq!(new_user_token.token, user_token.token);
         assert_eq!(new_user_token.note, user_token.note);
         assert_eq!(new_user_token.enabled, user_token.enabled);
         assert_eq!(new_user_token.expiration_time, user_token.expiration_time);
