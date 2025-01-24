@@ -75,10 +75,6 @@ class PoolMergeView extends events.EventTarget {
     get _targetPoolFieldNode() {
         return this._formNode.querySelector("input[name=target-pool]");
     }
-
-    get _addAliasCheckboxNode() {
-        return this._formNode.querySelector("input[name=alias]");
-    }
 }
 
 module.exports = PoolMergeView;
