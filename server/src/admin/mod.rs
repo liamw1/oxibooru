@@ -1,4 +1,4 @@
-mod database;
+pub mod database;
 mod post;
 mod user;
 

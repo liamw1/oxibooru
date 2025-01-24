@@ -15,9 +15,8 @@ pub struct PostHash {
 
 impl PostHash {
     pub fn new(post_id: i64) -> Self {
-        let post_id_i32 = post_id as i32; // TODO: Remove
         Self {
-            hash: URL_SAFE_NO_PAD.encode(hmac_hash(&post_id_i32.to_le_bytes()).into_bytes()),
+            hash: URL_SAFE_NO_PAD.encode(hmac_hash(&post_id.to_le_bytes()).into_bytes()),
             post_id,
         }
     }

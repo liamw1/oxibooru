@@ -507,7 +507,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     let fields = create_field_table(query.fields())?;
     let mut conn = db::get_connection()?;
     let merged_post = conn.transaction(|conn| {
-        let mut remove_post: Post = post::table.find(remove_id).first(conn)?;
+        let remove_post: Post = post::table.find(remove_id).first(conn)?;
         let mut merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
         api::verify_version(remove_post.last_edit_time, merge_info.post_info.remove_version)?;
         api::verify_version(merge_to_post.last_edit_time, merge_info.post_info.merge_to_version)?;
@@ -670,17 +670,17 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
             }
 
             // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
-            std::mem::swap(&mut remove_post.file_size, &mut merge_to_post.file_size);
-            std::mem::swap(&mut remove_post.width, &mut merge_to_post.width);
-            std::mem::swap(&mut remove_post.height, &mut merge_to_post.height);
-            std::mem::swap(&mut remove_post.type_, &mut merge_to_post.type_);
-            std::mem::swap(&mut remove_post.mime_type, &mut merge_to_post.mime_type);
-            std::mem::swap(&mut remove_post.checksum, &mut merge_to_post.checksum);
-            std::mem::swap(&mut remove_post.checksum_md5, &mut merge_to_post.checksum_md5);
-            std::mem::swap(&mut remove_post.flags, &mut merge_to_post.flags);
-            std::mem::swap(&mut remove_post.source, &mut merge_to_post.source);
-            std::mem::swap(&mut remove_post.generated_thumbnail_size, &mut merge_to_post.generated_thumbnail_size);
-            std::mem::swap(&mut remove_post.custom_thumbnail_size, &mut merge_to_post.custom_thumbnail_size);
+            merge_to_post.file_size = remove_post.file_size;
+            merge_to_post.width = remove_post.width;
+            merge_to_post.height = remove_post.height;
+            merge_to_post.type_ = remove_post.type_;
+            merge_to_post.mime_type = remove_post.mime_type;
+            merge_to_post.checksum = remove_post.checksum;
+            merge_to_post.checksum_md5 = remove_post.checksum_md5;
+            merge_to_post.flags = remove_post.flags;
+            merge_to_post.source = remove_post.source;
+            merge_to_post.generated_thumbnail_size = remove_post.generated_thumbnail_size;
+            merge_to_post.custom_thumbnail_size = remove_post.custom_thumbnail_size;
             merge_to_post = merge_to_post.save_changes(conn)?;
         }
 

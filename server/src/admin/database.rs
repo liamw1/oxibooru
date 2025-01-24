@@ -34,8 +34,8 @@ pub fn reset_filenames() -> std::io::Result<()> {
             let new_path = PostHash::new(post_id).generated_thumbnail_path();
             if path != new_path {
                 std::fs::rename(path, new_path)?;
+                progress.increment();
             }
-            progress.increment();
         }
     }
 
@@ -54,8 +54,8 @@ pub fn reset_filenames() -> std::io::Result<()> {
             let new_path = PostHash::new(post_id).custom_thumbnail_path();
             if path != new_path {
                 std::fs::rename(path, new_path)?;
+                progress.increment();
             }
-            progress.increment();
         }
     }
 
@@ -74,26 +74,15 @@ pub fn reset_filenames() -> std::io::Result<()> {
             let new_path = PostHash::new(post_id).content_path(mime_type);
             if path != new_path {
                 std::fs::rename(path, new_path)?;
+                progress.increment();
             }
-            progress.increment();
         }
     }
 
     Ok(())
 }
 
-/// Recalculates cached file sizes, row counts, and table statistics.
-/// Useful for when the statistics become inconsistent with database
-/// or when migrating from an older version without statistics.
-pub fn reset_statistics(conn: &mut PgConnection) -> ApiResult<()> {
-    let _timer = Timer::new("reset_statistics");
-
-    // Disk usage will automatically be incremented via triggers as we calculate
-    // content, thumbnail, and avatar sizes
-    diesel::update(database_statistics::table)
-        .set(database_statistics::disk_usage.eq(0))
-        .execute(conn)?;
-
+pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
     if filesystem::path(Directory::Avatars).try_exists()? {
         let mut progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::Avatars))? {
@@ -157,6 +146,22 @@ pub fn reset_statistics(conn: &mut PgConnection) -> ApiResult<()> {
         }
     }
 
+    Ok(())
+}
+
+/// Recalculates cached file sizes, row counts, and table statistics.
+/// Useful for when the statistics become inconsistent with database
+/// or when migrating from an older version without statistics.
+pub fn reset_statistics(conn: &mut PgConnection) -> ApiResult<()> {
+    let _timer = Timer::new("reset_statistics");
+
+    // Disk usage will automatically be incremented via triggers as we calculate
+    // content, thumbnail, and avatar sizes
+    diesel::update(database_statistics::table)
+        .set(database_statistics::disk_usage.eq(0))
+        .execute(conn)?;
+
+    reset_thumbnail_sizes(conn)?;
     if filesystem::path(Directory::Posts).try_exists()? {
         let mut progress = ProgressReporter::new("Posts content sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::Posts))? {
