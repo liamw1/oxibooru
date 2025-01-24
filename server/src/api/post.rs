@@ -943,7 +943,7 @@ fn unfavorite_post(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiR
 mod test {
     use crate::api::ApiResult;
     use crate::model::post::Post;
-    use crate::schema::{post, post_feature, post_statistics, tag, tag_name};
+    use crate::schema::{post, post_feature, post_statistics, tag, tag_name, user, user_statistics};
     use crate::search::post::Token;
     use crate::test::*;
     use crate::time::DateTime;
@@ -1098,27 +1098,35 @@ mod test {
     #[serial]
     async fn favorite() -> ApiResult<()> {
         const POST_ID: i64 = 4;
-        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i64, DateTime)> {
-            post::table
+        let get_post_info = |conn: &mut PgConnection| -> QueryResult<(i64, i64, DateTime)> {
+            let (favorite_count, last_edit_time) = post::table
                 .inner_join(post_statistics::table)
                 .select((post_statistics::favorite_count, post::last_edit_time))
                 .filter(post_statistics::post_id.eq(POST_ID))
-                .first(conn)
+                .first(conn)?;
+            let admin_favorite_count = user::table
+                .inner_join(user_statistics::table)
+                .select(user_statistics::favorite_count)
+                .filter(user::name.eq("administrator"))
+                .first(conn)?;
+            Ok((favorite_count, admin_favorite_count, last_edit_time))
         };
 
         let mut conn = get_connection()?;
-        let (favorite_count, last_edit_time) = get_post_info(&mut conn)?;
+        let (favorite_count, admin_favorite_count, last_edit_time) = get_post_info(&mut conn)?;
 
         verify_query(&format!("POST /post/{POST_ID}/favorite/?{FIELDS}"), "post/favorite.json").await?;
 
-        let (new_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
+        let (new_favorite_count, new_admin_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_favorite_count, favorite_count + 1);
+        assert_eq!(new_admin_favorite_count, admin_favorite_count + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
         verify_query(&format!("DELETE /post/{POST_ID}/favorite/?{FIELDS}"), "post/unfavorite.json").await?;
 
-        let (new_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
+        let (new_favorite_count, new_admin_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_favorite_count, favorite_count);
+        assert_eq!(new_admin_favorite_count, admin_favorite_count);
         assert_eq!(new_last_edit_time, last_edit_time);
         Ok(())
     }

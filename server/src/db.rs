@@ -42,6 +42,9 @@ pub fn run_migrations(conn: &mut PgConnection) {
 
     println!("Running pending migrations...");
     conn.run_pending_migrations(MIGRATIONS).unwrap();
+    if cfg!(test) {
+        return;
+    }
 
     let migration_number =
         |migration: &Box<dyn Migration<Pg>>| -> i32 { migration.name().version().to_string().parse().unwrap() };

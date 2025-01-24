@@ -23,7 +23,8 @@ ALTER TABLE "user" DROP COLUMN "custom_avatar_size";
 ALTER TABLE "post" DROP COLUMN "custom_thumbnail_size";
 ALTER TABLE "post" DROP COLUMN "generated_thumbnail_size";
 
-DROP TABLE "tag_statistics", 
+DROP TABLE "user_statistics",
+           "tag_statistics", 
            "tag_category_statistics",
            "post_statistics",
            "pool_statistics",

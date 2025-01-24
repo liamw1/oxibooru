@@ -150,6 +150,28 @@ INNER JOIN
      LEFT JOIN "tag_suggestion" ON "parent_id" = "id"
      GROUP BY "id") suggestion_count ON suggestion_count."id" = usage_count."id";
 
+-- Create user statistics table
+CREATE TABLE "user_statistics" (
+    "user_id" BIGINT PRIMARY KEY REFERENCES "user" ON DELETE CASCADE,
+    "comment_count" BIGINT NOT NULL DEFAULT 0,
+    "favorite_count" BIGINT NOT NULL DEFAULT 0,
+    "upload_count" BIGINT NOT NULL DEFAULT 0
+);
+
+INSERT INTO "user_statistics" ("user_id", "comment_count", "favorite_count", "upload_count")
+SELECT comment_count."id", comment_count.count, favorite_count.count, upload_count.count FROM 
+    (SELECT "user"."id", COUNT("comment"."id") as count FROM "user"
+     LEFT JOIN "comment" ON "user_id" = "user"."id"
+     GROUP BY "user"."id") comment_count
+INNER JOIN
+    (SELECT "id", COUNT("post_id") as count FROM "user"
+     LEFT JOIN "post_favorite" ON "user_id" = "id"
+     GROUP BY "id") favorite_count ON favorite_count."id" = comment_count."id"
+INNER JOIN
+    (SELECT "user"."id", COUNT("post"."id") as count FROM "user"
+     LEFT JOIN "post" ON "post"."user_id" = "user"."id"
+     GROUP BY "user"."id") upload_count ON upload_count."id" = comment_count."id";
+
 -- Add new columns for keeping track of database file sizes
 ALTER TABLE "post" ADD COLUMN "generated_thumbnail_size" BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE "post" ADD COLUMN "custom_thumbnail_size" BIGINT NOT NULL DEFAULT 0;
@@ -174,6 +196,10 @@ BEGIN
     SET "comment_count" = "comment_count" + count_change,
         "last_comment_time" = (SELECT MAX("creation_time") FROM "comment" WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id"))
     WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id");
+
+    UPDATE "user_statistics"
+    SET "comment_count" = "comment_count" + count_change
+    WHERE "user_id" = COALESCE(NEW."user_id", OLD."user_id");
 
     RETURN NEW;
 END;
@@ -301,6 +327,10 @@ BEGIN
     SET "post_count" = "post_count" + count_change,
         "disk_usage" = "disk_usage" + COALESCE(NEW."file_size", 0) + COALESCE(NEW."generated_thumbnail_size", 0) + COALESCE(NEW."custom_thumbnail_size", 0)
                                     - COALESCE(OLD."file_size", 0) - COALESCE(OLD."generated_thumbnail_size", 0) - COALESCE(OLD."custom_thumbnail_size", 0);
+                                    
+    UPDATE "user_statistics"
+    SET "upload_count" = "upload_count" + count_change
+    WHERE "user_id" = COALESCE(NEW."user_id", OLD."user_id");
 
     RETURN COALESCE(NEW, OLD);
 END;
@@ -372,6 +402,10 @@ BEGIN
     SET "favorite_count" = "favorite_count" + count_change,
         "last_favorite_time" = (SELECT MAX("time") FROM "post_favorite" WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id"))
     WHERE "post_id" = COALESCE(NEW."post_id", OLD."post_id");
+
+    UPDATE "user_statistics"
+    SET "favorite_count" = "favorite_count" + count_change
+    WHERE "user_id" = COALESCE(NEW."user_id", OLD."user_id");
 
     RETURN COALESCE(NEW, OLD);
 END;
@@ -551,6 +585,7 @@ DECLARE
 BEGIN
     IF TG_OP = 'INSERT' THEN
         count_change := 1;
+        INSERT INTO "user_statistics" ("user_id") VALUES (NEW."id");
     ELSIF TG_OP = 'DELETE' THEN
         count_change := -1;
     ELSE

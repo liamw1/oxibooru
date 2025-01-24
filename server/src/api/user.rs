@@ -359,7 +359,7 @@ fn delete_user(auth: AuthResult, username: String, client_version: DeleteRequest
 mod test {
     use crate::api::ApiResult;
     use crate::model::user::User;
-    use crate::schema::{database_statistics, user};
+    use crate::schema::{database_statistics, user, user_statistics};
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
@@ -440,11 +440,25 @@ mod test {
             .select(user::id)
             .filter(user::name.eq(NAME))
             .first(&mut conn)?;
-        let user: User = user::table.find(user_id).first(&mut conn)?;
+
+        let get_user_info = |conn: &mut PgConnection| -> QueryResult<(User, i64, i64, i64)> {
+            user::table
+                .find(user_id)
+                .inner_join(user_statistics::table)
+                .select((
+                    User::as_select(),
+                    user_statistics::comment_count,
+                    user_statistics::favorite_count,
+                    user_statistics::upload_count,
+                ))
+                .first(conn)
+        };
+
+        let (user, comment_count, favorite_count, upload_count) = get_user_info(&mut conn)?;
 
         verify_query(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/update.json").await?;
 
-        let new_user: User = user::table.find(user_id).first(&mut conn)?;
+        let (new_user, new_comment_count, new_favorite_count, new_upload_count) = get_user_info(&mut conn)?;
         assert_eq!(new_user.id, user.id);
         assert_ne!(new_user.name, user.name);
         assert_eq!(new_user.password_hash, user.password_hash);
@@ -455,11 +469,14 @@ mod test {
         assert_eq!(new_user.creation_time, user.creation_time);
         assert_eq!(new_user.last_login_time, user.last_login_time);
         assert!(new_user.last_edit_time > user.last_edit_time);
+        assert_eq!(new_comment_count, comment_count);
+        assert_eq!(new_favorite_count, favorite_count);
+        assert_eq!(new_upload_count, upload_count);
 
         let new_name = &new_user.name;
         verify_query(&format!("PUT /user/{new_name}/?{FIELDS}"), "user/update_restore.json").await?;
 
-        let new_user: User = user::table.find(user_id).first(&mut conn)?;
+        let (new_user, new_comment_count, new_favorite_count, new_upload_count) = get_user_info(&mut conn)?;
         assert_eq!(new_user.id, user.id);
         assert_eq!(new_user.name, user.name);
         assert_eq!(new_user.password_hash, user.password_hash);
@@ -470,6 +487,9 @@ mod test {
         assert_eq!(new_user.creation_time, user.creation_time);
         assert_eq!(new_user.last_login_time, user.last_login_time);
         assert!(new_user.last_edit_time > user.last_edit_time);
+        assert_eq!(new_comment_count, comment_count);
+        assert_eq!(new_favorite_count, favorite_count);
+        assert_eq!(new_upload_count, upload_count);
         Ok(())
     }
 }

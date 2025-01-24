@@ -247,7 +247,7 @@ fn delete_comment(auth: AuthResult, comment_id: i64, client_version: DeleteReque
 mod test {
     use crate::api::ApiResult;
     use crate::model::comment::Comment;
-    use crate::schema::{comment, comment_statistics, database_statistics};
+    use crate::schema::{comment, comment_statistics, database_statistics, user, user_statistics};
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
@@ -292,14 +292,20 @@ mod test {
     #[tokio::test]
     #[serial]
     async fn create() -> ApiResult<()> {
-        let get_comment_count = |conn: &mut PgConnection| -> QueryResult<i64> {
-            database_statistics::table
+        let get_comment_counts = |conn: &mut PgConnection| -> QueryResult<(i64, i64)> {
+            let comment_count = database_statistics::table
                 .select(database_statistics::comment_count)
-                .first(conn)
+                .first(conn)?;
+            let admin_comment_count = user::table
+                .inner_join(user_statistics::table)
+                .select(user_statistics::comment_count)
+                .filter(user::name.eq("administrator"))
+                .first(conn)?;
+            Ok((comment_count, admin_comment_count))
         };
 
         let mut conn = get_connection()?;
-        let comment_count = get_comment_count(&mut conn)?;
+        let (comment_count, admin_comment_count) = get_comment_counts(&mut conn)?;
 
         verify_query(&format!("POST /comments/?{FIELDS}"), "comment/create.json").await?;
 
@@ -308,19 +314,21 @@ mod test {
             .order_by(comment::id.desc())
             .first(&mut conn)?;
 
-        let new_comment_count = get_comment_count(&mut conn)?;
+        let (new_comment_count, new_admin_comment_count) = get_comment_counts(&mut conn)?;
         let comment_score: i64 = comment_statistics::table
             .select(comment_statistics::score)
             .filter(comment_statistics::comment_id.eq(comment_id))
             .first(&mut conn)?;
         assert_eq!(new_comment_count, comment_count + 1);
+        assert_eq!(new_admin_comment_count, admin_comment_count + 1);
         assert_eq!(comment_score, 0);
 
         verify_query(&format!("DELETE /comment/{comment_id}"), "delete.json").await?;
 
-        let new_comment_count = get_comment_count(&mut conn)?;
+        let (new_comment_count, new_admin_comment_count) = get_comment_counts(&mut conn)?;
         let has_comment: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(&mut conn)?;
         assert_eq!(new_comment_count, comment_count);
+        assert_eq!(new_admin_comment_count, admin_comment_count);
         assert!(!has_comment);
         Ok(())
     }

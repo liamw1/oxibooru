@@ -1,10 +1,10 @@
 use crate::content::hash;
-use crate::model::comment::Comment;
-use crate::model::enums::{AvatarStyle, UserRank};
-use crate::model::post::{Post, PostFavorite, PostScore};
+use crate::get_user_stats;
+use crate::model::enums::{AvatarStyle, Score, UserRank};
+use crate::model::post::PostScore;
 use crate::model::user::User;
 use crate::resource;
-use crate::schema::{comment, post, post_favorite, post_score, user};
+use crate::schema::{post_score, user, user_statistics};
 use crate::time::DateTime;
 use diesel::dsl::count;
 use diesel::prelude::*;
@@ -108,31 +108,31 @@ impl UserInfo {
         let batch_size = users.len();
 
         let mut comment_counts = fields[Field::CommentCount]
-            .then(|| get_comment_counts(conn, &users))
+            .then(|| get_user_stats!(conn, &users, user_statistics::comment_count))
             .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(comment_counts.len(), batch_size);
 
         let mut upload_counts = fields[Field::UploadedPostCount]
-            .then(|| get_uploaded_post_counts(conn, &users))
+            .then(|| get_user_stats!(conn, &users, user_statistics::upload_count))
             .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(upload_counts.len(), batch_size);
 
         let mut like_counts = fields[Field::LikedPostCount]
-            .then(|| get_liked_post_counts(conn, &users, visibility))
+            .then(|| get_post_score_counts(conn, &users, Score::Like, visibility))
             .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(like_counts.len(), batch_size);
 
         let mut dislike_counts = fields[Field::DislikedPostCount]
-            .then(|| get_disliked_post_counts(conn, &users, visibility))
+            .then(|| get_post_score_counts(conn, &users, Score::Dislike, visibility))
             .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(dislike_counts.len(), batch_size);
 
         let mut favorite_counts = fields[Field::FavoritePostCount]
-            .then(|| get_favorite_post_counts(conn, &users))
+            .then(|| get_user_stats!(conn, &users, user_statistics::favorite_count))
             .transpose()?
             .unwrap_or_default();
         resource::check_batch_results(favorite_counts.len(), batch_size);
@@ -181,35 +181,10 @@ enum PrivateData<T> {
     Visible(bool), // Set to false to indicate hidden
 }
 
-fn get_comment_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<i64>> {
-    Comment::belonging_to(users)
-        .group_by(comment::user_id)
-        .select((comment::user_id.assume_not_null(), count(comment::user_id)))
-        .load(conn)
-        .map(|comment_counts| {
-            resource::order_like(comment_counts, users, |&(id, _)| id)
-                .into_iter()
-                .map(|comment_count| comment_count.map(|(_, count)| count).unwrap_or(0))
-                .collect()
-        })
-}
-
-fn get_uploaded_post_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<i64>> {
-    Post::belonging_to(users)
-        .group_by(post::user_id)
-        .select((post::user_id.assume_not_null(), count(post::user_id)))
-        .load(conn)
-        .map(|upload_counts| {
-            resource::order_like(upload_counts, users, |&(id, _)| id)
-                .into_iter()
-                .map(|upload_count| upload_count.map(|(_, count)| count).unwrap_or(0))
-                .collect()
-        })
-}
-
-fn get_liked_post_counts(
+fn get_post_score_counts(
     conn: &mut PgConnection,
     users: &[User],
+    score: Score,
     visibility: Visibility,
 ) -> QueryResult<Vec<PrivateData<i64>>> {
     if visibility == Visibility::PublicOnly {
@@ -219,7 +194,7 @@ fn get_liked_post_counts(
     PostScore::belonging_to(users)
         .group_by(post_score::user_id)
         .select((post_score::user_id, count(post_score::user_id)))
-        .filter(post_score::score.eq(1))
+        .filter(post_score::score.eq(score))
         .load(conn)
         .map(|like_counts| {
             resource::order_like(like_counts, users, |&(id, _)| id)
@@ -230,38 +205,20 @@ fn get_liked_post_counts(
         })
 }
 
-fn get_disliked_post_counts(
-    conn: &mut PgConnection,
-    users: &[User],
-    visibility: Visibility,
-) -> QueryResult<Vec<PrivateData<i64>>> {
-    if visibility == Visibility::PublicOnly {
-        return Ok(vec![PrivateData::Visible(false); users.len()]);
-    }
-
-    PostScore::belonging_to(users)
-        .group_by(post_score::user_id)
-        .select((post_score::user_id, count(post_score::user_id)))
-        .filter(post_score::score.eq(-1))
-        .load(conn)
-        .map(|dislike_counts| {
-            resource::order_like(dislike_counts, users, |&(id, _)| id)
-                .into_iter()
-                .map(|dislike_count| dislike_count.map(|(_, count)| count).unwrap_or(0))
-                .map(PrivateData::Expose)
-                .collect()
-        })
-}
-
-fn get_favorite_post_counts(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<i64>> {
-    PostFavorite::belonging_to(users)
-        .group_by(post_favorite::user_id)
-        .select((post_favorite::user_id, count(post_favorite::user_id)))
-        .load(conn)
-        .map(|favorite_counts| {
-            resource::order_like(favorite_counts, users, |&(id, _)| id)
-                .into_iter()
-                .map(|favorite_count| favorite_count.map(|(_, count)| count).unwrap_or(0))
-                .collect()
-        })
+#[doc(hidden)]
+#[macro_export]
+macro_rules! get_user_stats {
+    ($conn:expr, $users:expr, $column:expr) => {{
+        let user_ids: Vec<_> = $users.iter().map(Identifiable::id).copied().collect();
+        user_statistics::table
+            .select((user_statistics::user_id, $column))
+            .filter(user_statistics::user_id.eq_any(&user_ids))
+            .load($conn)
+            .map(|user_stats| {
+                resource::order_transformed_as(user_stats, &user_ids, |&(id, _)| id)
+                    .into_iter()
+                    .map(|(_, stat)| stat)
+                    .collect::<Vec<i64>>()
+            })
+    }};
 }

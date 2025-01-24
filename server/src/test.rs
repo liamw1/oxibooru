@@ -17,7 +17,6 @@ use crate::time::DateTime;
 use crate::{api, db};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::result::Error;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
@@ -60,16 +59,6 @@ pub fn reply_path(relative_path: &str) -> PathBuf {
 /// Returns path to a test request body.
 pub fn body_path(relative_path: &str) -> PathBuf {
     asset_path("body", relative_path)
-}
-
-/// Used in place of conn.test_transaction as that function doesn't give any useful information on failure
-pub fn test_transaction<F, R>(function: F) -> R
-where
-    F: FnOnce(&mut PgConnection) -> QueryResult<R>,
-{
-    get_connection()
-        .unwrap()
-        .test_transaction(|conn| Ok::<_, Error>(function(conn).unwrap()))
 }
 
 /// Verifies that a given `query` matches the contents of a `reply_filepath`.
@@ -634,18 +623,20 @@ fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
 
 mod test {
     use super::*;
+    use crate::admin::database;
     use crate::model::pool::PoolName;
     use crate::model::tag::TagName;
-    use crate::schema::{comment_statistics, database_statistics};
-    use serial_test::parallel;
+    use crate::schema::{comment_statistics, database_statistics, user_statistics};
+    use serial_test::{parallel, serial};
 
     #[test]
     #[parallel]
-    fn database_statistics() {
+    fn database_statistics() -> ApiResult<()> {
         let expected_disk_usage: i64 = POSTS.iter().map(|post| post.file_size).sum();
         let expected_pool_count: i64 = POOL_GROUPS.iter().map(|group| group.len() as i64).sum();
         let expected_tag_count: i64 = TAG_GROUPS.iter().map(|group| group.len() as i64).sum();
 
+        let mut conn = get_connection()?;
         let (id, disk_usage, comment_count, pool_count, post_count, tag_count, user_count): (
             bool,
             i64,
@@ -654,7 +645,7 @@ mod test {
             i64,
             i64,
             i64,
-        ) = test_transaction(|conn| database_statistics::table.first(conn));
+        ) = database_statistics::table.first(&mut conn)?;
 
         assert_eq!(id, true);
         assert_eq!(disk_usage, expected_disk_usage);
@@ -663,12 +654,14 @@ mod test {
         assert_eq!(post_count, POSTS.len() as i64);
         assert_eq!(tag_count, expected_tag_count);
         assert_eq!(user_count, USERS.len() as i64);
+        Ok(())
     }
 
     #[test]
     #[parallel]
-    fn comment_statistics() {
-        let stats: Vec<(i64, i64)> = test_transaction(|conn| comment_statistics::table.load(conn));
+    fn comment_statistics() -> ApiResult<()> {
+        let mut conn = get_connection()?;
+        let stats: Vec<(i64, i64)> = comment_statistics::table.load(&mut conn)?;
         for (comment_id, total_score) in stats {
             let expected_score: i64 = COMMENT_SCORES
                 .iter()
@@ -677,37 +670,41 @@ mod test {
                 .sum();
             assert_eq!(total_score, expected_score);
         }
+        Ok(())
     }
 
     #[test]
     #[parallel]
-    fn pool_category_statistics() {
-        let stats: Vec<(i64, i64)> = test_transaction(|conn| pool_category_statistics::table.load(conn));
+    fn pool_category_statistics() -> ApiResult<()> {
+        let mut conn = get_connection()?;
+        let stats: Vec<(i64, i64)> = pool_category_statistics::table.load(&mut conn)?;
         for (category_id, usage_count) in stats {
             let exepected_usage_count = POOL_GROUPS[category_id as usize].len() as i64;
             assert_eq!(usage_count, exepected_usage_count);
         }
+        Ok(())
     }
 
     #[test]
     #[parallel]
-    fn pool_statistics() {
-        let stats: Vec<(String, i64)> = test_transaction(|conn| {
-            pool_statistics::table
-                .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool_statistics::pool_id)))
-                .select((pool_name::name, pool_statistics::post_count))
-                .filter(PoolName::primary())
-                .load(conn)
-        });
+    fn pool_statistics() -> ApiResult<()> {
+        let mut conn = get_connection()?;
+        let stats: Vec<(String, i64)> = pool_statistics::table
+            .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool_statistics::pool_id)))
+            .select((pool_name::name, pool_statistics::post_count))
+            .filter(PoolName::primary())
+            .load(&mut conn)?;
         for (pool_name, post_count) in stats {
             let exepected_post_count = POOL_POSTS.iter().filter(|&&(name, _)| name == pool_name).count() as i64;
             assert_eq!(post_count, exepected_post_count);
         }
+        Ok(())
     }
 
     #[test]
     #[parallel]
-    fn post_statistics() {
+    fn post_statistics() -> ApiResult<()> {
+        let mut conn = get_connection()?;
         let stats: Vec<(
             i64,
             i64,
@@ -721,7 +718,7 @@ mod test {
             Option<DateTime>,
             Option<DateTime>,
             Option<DateTime>,
-        )> = test_transaction(|conn| post_statistics::table.load(conn));
+        )> = post_statistics::table.load(&mut conn)?;
 
         for (
             post_id,
@@ -761,28 +758,30 @@ mod test {
             assert_eq!(favorite_count, expected_favorite_count);
             assert_eq!(feature_count, expected_feature_count);
         }
+        Ok(())
     }
 
     #[test]
     #[parallel]
-    fn tag_category_statistics() {
-        let stats: Vec<(i64, i64)> = test_transaction(|conn| tag_category_statistics::table.load(conn));
+    fn tag_category_statistics() -> ApiResult<()> {
+        let mut conn = get_connection()?;
+        let stats: Vec<(i64, i64)> = tag_category_statistics::table.load(&mut conn)?;
         for (category_id, usage_count) in stats {
             let expected_usage_count = TAG_GROUPS[category_id as usize].len() as i64;
             assert_eq!(usage_count, expected_usage_count);
         }
+        Ok(())
     }
 
     #[test]
     #[parallel]
-    fn tag_statistics() {
-        let stats: Vec<(String, i64)> = test_transaction(|conn| {
-            tag_statistics::table
-                .inner_join(tag_name::table.on(tag_name::tag_id.eq(tag_statistics::tag_id)))
-                .select((tag_name::name, tag_statistics::usage_count))
-                .filter(TagName::primary())
-                .load(conn)
-        });
+    fn tag_statistics() -> ApiResult<()> {
+        let mut conn = get_connection()?;
+        let stats: Vec<(String, i64)> = tag_statistics::table
+            .inner_join(tag_name::table.on(tag_name::tag_id.eq(tag_statistics::tag_id)))
+            .select((tag_name::name, tag_statistics::usage_count))
+            .filter(TagName::primary())
+            .load(&mut conn)?;
         for (tag_name, usage_count) in stats {
             let expected_usage_count = POST_TAGS
                 .iter()
@@ -790,5 +789,39 @@ mod test {
                 .count() as i64;
             assert_eq!(usage_count, expected_usage_count);
         }
+        Ok(())
+    }
+
+    #[test]
+    #[parallel]
+    fn user_statistics() -> ApiResult<()> {
+        let mut conn = get_connection()?;
+        let stats: Vec<(i64, i64, i64, i64)> = user_statistics::table.load(&mut conn)?;
+        for (user_id, comment_count, favorite_count, upload_count) in stats {
+            let expected_comment_count = COMMENTS.iter().filter(|&&(user, ..)| user == Some(user_id)).count() as i64;
+            let expected_favorite_count = POST_FAVORITES.iter().filter(|&&(user, _)| user == user_id).count() as i64;
+            let expected_upload_count = POSTS.iter().filter(|post| post.user_id == Some(user_id)).count() as i64;
+
+            assert_eq!(comment_count, expected_comment_count);
+            assert_eq!(favorite_count, expected_favorite_count);
+            assert_eq!(upload_count, expected_upload_count);
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn reset_statistics() -> ApiResult<()> {
+        let mut conn = get_connection()?;
+        database::reset_relation_stats(&mut conn)?;
+
+        database_statistics()?;
+        comment_statistics()?;
+        pool_category_statistics()?;
+        pool_statistics()?;
+        post_statistics()?;
+        tag_category_statistics()?;
+        tag_statistics()?;
+        user_statistics()
     }
 }
