@@ -47,8 +47,7 @@ pub fn run_migrations(conn: &mut PgConnection) {
     }
 
     let migration_number =
-        |migration: &Box<dyn Migration<Pg>>| -> i32 { migration.name().version().to_string().parse().unwrap() };
-
+        |migration: &dyn Migration<Pg>| -> i32 { migration.name().version().to_string().parse().unwrap() };
     let first_migration = migration_number(pending_migrations.first().unwrap());
     let last_migration = migration_number(pending_migrations.last().unwrap());
     let migration_range = first_migration..=last_migration;

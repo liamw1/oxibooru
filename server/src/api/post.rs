@@ -6,7 +6,7 @@ use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{cache, signature, thumbnail};
 use crate::filesystem::Directory;
 use crate::model::comment::NewComment;
-use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
+use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
 use crate::model::pool::PoolPost;
 use crate::model::post::{
     NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostRelation, PostScore, PostSignature, PostTag,
@@ -97,7 +97,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::path!("post" / i64))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(update_post)
+        .then(update_post)
         .map(api::Reply::from);
     let delete_post = warp::delete()
         .and(api::auth())
@@ -766,17 +766,28 @@ struct PostUpdate {
     thumbnail_token: Option<String>,
 }
 
-fn update_post(auth: AuthResult, post_id: i64, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
+async fn update_post(auth: AuthResult, post_id: i64, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
+
     let fields = create_field_table(query.fields())?;
+    let post_hash = PostHash::new(post_id);
     let new_content = update.content_token.map(cache::get_or_compute_properties).transpose()?;
     let custom_thumbnail = update
         .thumbnail_token
         .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Post))
         .transpose()?;
 
-    let post_hash = PostHash::new(post_id);
+    // Updating tags of many posts simultaneously can cause deadlocks due to statistics updating,
+    // so we serialize tag updates. Technically this is more pessimistic than necessary. Parallel
+    // updates are fine if the sets of tags are disjoint, but implementing this is more complicated
+    // so we just do this for now.
+    static ANTI_DEADLOCK_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
+    let _lock;
+    if update.tags.is_some() {
+        _lock = ANTI_DEADLOCK_MUTEX.lock().await;
+    }
+
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
@@ -883,9 +894,9 @@ fn update_post(auth: AuthResult, post_id: i64, query: ResourceQuery, update: Pos
             .execute(conn)
             .map_err(api::Error::from)
     })?;
-
-    let client_id = client.map(|user| user.id);
-    conn.transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| {
+        PostInfo::new_from_id(conn, client.map(|user| user.id), post_id, &fields).map_err(api::Error::from)
+    })
 }
 
 async fn delete_post(auth: AuthResult, post_id: i64, client_version: DeleteRequest) -> ApiResult<()> {
@@ -898,29 +909,24 @@ async fn delete_post(auth: AuthResult, post_id: i64, client_version: DeleteReque
         .select(post_statistics::relation_count)
         .first(&mut conn)?;
 
-    let mut delete_and_get_mime_type = || -> ApiResult<MimeType> {
-        conn.transaction(|conn| {
-            let (mime_type, post_version) = post::table
-                .find(post_id)
-                .select((post::mime_type, post::last_edit_time))
-                .first(conn)?;
-            api::verify_version(post_version, *client_version)?;
-
-            diesel::delete(post::table.find(post_id)).execute(conn)?;
-            Ok(mime_type)
-        })
-    };
-
     // Post relation cascade deletion can cause deadlocks when deleting related posts in quick
     // succession, so we lock an aysnchronous mutex when deleting if the post has any relations.
     static ANTI_DEADLOCK_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
-    let mime_type = if relation_count > 0 {
-        let _lock = ANTI_DEADLOCK_MUTEX.lock().await;
-        delete_and_get_mime_type()
-    } else {
-        delete_and_get_mime_type()
-    }?;
+    let _lock;
+    if relation_count > 0 {
+        _lock = ANTI_DEADLOCK_MUTEX.lock().await;
+    }
 
+    let mime_type = conn.transaction(|conn| {
+        let (mime_type, post_version) = post::table
+            .find(post_id)
+            .select((post::mime_type, post::last_edit_time))
+            .first(conn)?;
+        api::verify_version(post_version, *client_version)?;
+
+        diesel::delete(post::table.find(post_id)).execute(conn)?;
+        Ok::<_, api::Error>(mime_type)
+    })?;
     if config::get().delete_source_files {
         filesystem::delete_post(&PostHash::new(post_id), mime_type)?;
     }
