@@ -48,9 +48,9 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       435 |
-    | oxibooru          |        40 |
+    | oxibooru          |        74 |
     
-    Oxibooru is over 10x faster here, but I admit this is a bit of an 
+    Oxibooru is almost 6x faster here, but I admit this is a bit of an 
     unrealistic comparison. This query doesn't perform any field selection, so
     by default all post fields will be retrieved. A decent amount of the 
     codebase is dedicated to performing efficient queries for batch retrieval
@@ -71,11 +71,12 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |        53 |
-    | oxibooru          |        22 |
+    | oxibooru          |        61 |
 
-    About 2x faster now. Oxibooru achieves a speedup here by caching the total
-    post count in the database, avoiding a slow COUNT(*) query. Without this,
-    Oxibooru would perform identically to Szurubooru here.
+    Now Oxibooru actually performs a bit worse than Szurubooru. I've mostly
+    spent time optimizing the more complex queries, as simple queries like 
+    this are already fast. I know this query could be made at least 2x faster
+    with some conditional logic, but I haven't gotten around to adding it.
 
 - Let's now add a negative filter for unsafe posts.
 
@@ -83,11 +84,10 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |        93 |
-    | oxibooru          |        46 |
+    | oxibooru          |        97 |
 
-    Some overhead is added here because the Oxibooru server can't just use the
-    total post count because of the filter. Even still it remains about 2x
-    faster than Szurubooru.
+    Oxibooru performs about as well as Szurubooru here. Nothing too crazy
+    so far.
     
 - What about with a huge offset? This query is fairly challenging, not only
   because of the large offset, but also because we have to retrieve posts
@@ -98,12 +98,12 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      2490 |
-    | oxibooru          |       133 |
+    | oxibooru          |       155 |
     
-    The relative difference between Oxibooru and Szurubooru grows to almost
-    20x! One big thing that helps Oxibooru go fast here is that it keeps
-    track of usage counts for each tag with triggers rather than counting them 
-    every time. This does come at a cost (slower updates), but I think this 
+    The relative difference between Oxibooru and Szurubooru grows to 16x! 
+    One big thing that helps Oxibooru go fast here is that it keeps track of
+    usage counts for each tag with triggers rather than counting them every 
+    time. This does come at a cost (slower updates), but I think this 
     trade-off is worth it for read-heavy applications like this.
     
 - One very common use case is to search for posts with a particular tag. Let's
@@ -113,7 +113,7 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       594 |
-    | oxibooru          |        57 |
+    | oxibooru          |        75 |
     
     I'm not sure why szurubooru performs so poorly here, as both tag names
     and post tags are indexed and `tagme` posts typically have few tags. Perhaps
@@ -125,10 +125,11 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      5061 |
-    | oxibooru          |       116 |
+    | oxibooru          |       139 |
     
-    Oxibooru clocks in around 40x faster! Those cached tag usage counts
-    massively benefit Oxibooru here.
+    Oxibooru clocks in around 36x faster! Those cached tag usage counts
+    massively benefit Oxibooru here. Szurubooru counts tag usages every 
+    time, so it scales poorly as the number of post tags increases.
 
 ## Listing Tags
 - Just like posts, we'll start by benchmarking listing the first page of tags:
@@ -138,7 +139,7 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       834 |
-    | oxibooru          |        51 |
+    | oxibooru          |        64 |
     
     I expected the performance from szurubooru to be reasonable here, but it
     turned out to be slower than the _autocomplete_ query. My best guess for
@@ -154,9 +155,11 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      5858 |
-    | oxibooru          |        43 |
+    | oxibooru          |        58 |
     
-    Oxibooru just crushes Szurubooru here. It's around 135x faster.
+    Oxibooru just crushes Szurubooru here. It's over 100x faster. Because
+    Oxibooru keeps track of tag usages, sorting by tag count is just as
+    fast as sorting by creation time.
 
 - Finally, we'll try the query used when performing autocomplete when the user
   types the word `e` in the search bar:
@@ -166,7 +169,7 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       688 |
-    | oxibooru          |        52 |
+    | oxibooru          |        53 |
     
     This is an area where a speedup is very noticeable. You get much faster
     autocomplete feedback when using the search bar in Oxibooru.
