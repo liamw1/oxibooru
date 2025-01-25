@@ -4,8 +4,18 @@ and Docker Compose (version 1.6.0 or greater) already installed.
 ## Prepare things
 
 1. **Download the `oxibooru` source**
+    
+    The latest release can be downloaded from the [releases page](https://github.com/liamw1/oxibooru/releases).
+    Alternatively, you can clone the repository with
     ```console
     user@host:~$ git clone https://github.com/liamw1/oxibooru
+    ```
+    However, by doing this you are opting out of stability. The master
+    branch uses the `latest` images, which are updated frequently.
+    Behavior may change when you `pull` the images again.
+
+    Enter the `oxibooru` directory:
+    ```console
     user@host:~$ cd oxibooru
     ```
 
