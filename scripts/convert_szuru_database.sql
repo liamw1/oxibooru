@@ -60,8 +60,7 @@ ALTER TABLE public."tag" DROP CONSTRAINT "tag_category_id_fkey";
 UPDATE public."tag"
 SET "category_id" = 0
 FROM public."tag_category"
-WHERE public."tag"."category_id" = public."tag_category"."id"
-AND public."tag_category"."default" = true;
+WHERE public."tag"."category_id" = public."tag_category"."id" AND public."tag_category"."default" = true;
 
 -- Then, update Oxibooru default category with properties of Szurubooru default category
 UPDATE oxi."tag_category"
@@ -241,8 +240,7 @@ ALTER TABLE public."pool" DROP CONSTRAINT "pool_category_id_fkey";
 UPDATE public."pool"
 SET "category_id" = 0
 FROM public."pool_category"
-WHERE public."pool"."category_id" = public."pool_category"."id"
-AND public."pool_category"."default" = true;
+WHERE public."pool"."category_id" = public."pool_category"."id" AND public."pool_category"."default" = true;
 
 -- Then, update Oxibooru default category with properties of Szurubooru default category
 UPDATE oxi."pool_category"
@@ -311,3 +309,126 @@ ALTER TABLE oxi."pool_post" ENABLE TRIGGER USER;
 -- Drop Szurubooru schema
 DROP SCHEMA public CASCADE;
 ALTER SCHEMA oxi RENAME TO public;
+
+-- ================================ Statistics ================================ --
+-- Database statistics
+UPDATE "database_statistics"
+SET "disk_usage" = (SELECT COALESCE(SUM("file_size"), 0) FROM "post"),
+    "comment_count" = (SELECT COUNT(*) FROM "comment"),
+    "pool_count" = (SELECT COUNT(*) FROM "pool"),
+    "post_count" = (SELECT COUNT(*) FROM "post"),
+    "tag_count" = (SELECT COUNT(*) FROM "tag"),
+    "user_count" = (SELECT COUNT(*) FROM "user");
+
+-- Comment statistics
+INSERT INTO "comment_statistics" ("comment_id", "score")
+SELECT "id", SUM(COALESCE("score", 0)) FROM "comment"
+LEFT JOIN "comment_score" ON "comment_id" = "id"
+GROUP BY "id";
+
+-- Pool category statistics
+UPDATE "pool_category_statistics"
+SET "usage_count" = (SELECT COUNT(*) FROM "pool" WHERE "category_id" = 0)
+WHERE "category_id" = 0;
+
+INSERT INTO "pool_category_statistics" ("category_id", "usage_count")
+SELECT "pool_category"."id", COUNT("pool"."id") FROM "pool_category"
+LEFT JOIN "pool" ON "pool"."category_id" = "pool_category"."id"
+WHERE "pool_category"."id" != 0
+GROUP BY "pool_category"."id";
+
+-- Pool statistics
+INSERT INTO "pool_statistics" ("pool_id", "post_count")
+SELECT "id", COUNT("post_id") FROM "pool"
+LEFT JOIN "pool_post" ON "pool_id" = "id"
+GROUP BY "id";
+
+-- Post statistics
+INSERT INTO "post_statistics" ("post_id", "tag_count", "pool_count", "note_count", "comment_count", "relation_count", "score", 
+                               "favorite_count", "feature_count", "last_comment_time", "last_favorite_time", "last_feature_time")
+SELECT tag_count."id", tag_count.count, pool_count.count, note_count.count, comment_count.count, relation_count.count, score.sum,
+       favorite_count.count, feature_count.count, last_comment_time.t, last_favorite_time.t, last_feature_time.t FROM
+    (SELECT "id", COUNT("tag_id") as count FROM "post"
+     LEFT JOIN "post_tag" ON "post_id" = "id"
+     GROUP BY "id") tag_count
+INNER JOIN
+    (SELECT "post"."id", COUNT("post_note"."id") as count FROM "post"
+     LEFT JOIN "post_note" ON "post_note"."id" = "post"."id"
+     GROUP BY "post"."id") note_count ON note_count."id" = tag_count."id"
+INNER JOIN
+    (SELECT "id", COUNT("pool_id") as count FROM "post"
+     LEFT JOIN "pool_post" ON "post_id" = "id"
+     GROUP BY "id") pool_count ON pool_count."id" = tag_count."id"
+INNER JOIN
+    (SELECT "post"."id", COUNT("comment"."id") as count FROM "post"
+     LEFT JOIN "comment" ON "comment"."id" = "post"."id"
+     GROUP BY "post"."id") comment_count ON comment_count."id" = tag_count."id"
+INNER JOIN
+    (SELECT "id", COUNT("child_id") as count FROM "post"
+     LEFT JOIN "post_relation" ON "parent_id" = "id"
+     GROUP BY "id") relation_count ON relation_count."id" = tag_count."id"
+INNER JOIN
+    (SELECT "id", SUM(COALESCE("score", 0)) as sum FROM "post"
+     LEFT JOIN "post_score" ON "post_id" = "id"
+     GROUP BY "id") score ON score."id" = tag_count."id"
+INNER JOIN
+    (SELECT "id", COUNT("post_favorite"."user_id") as count FROM "post"
+     LEFT JOIN "post_favorite" ON "post_id" = "id"
+     GROUP BY "id") favorite_count ON favorite_count."id" = tag_count."id"
+INNER JOIN
+    (SELECT "post"."id", COUNT("post_feature"."user_id") as count FROM "post"
+     LEFT JOIN "post_feature" ON "post_feature"."post_id" = "post"."id"
+     GROUP BY "post"."id") feature_count ON feature_count."id" = tag_count."id"
+INNER JOIN
+    (SELECT "post"."id", MAX("comment"."creation_time") as t FROM "post"
+     LEFT JOIN "comment" on "comment"."post_id" = "post"."id"
+     GROUP BY "post"."id") last_comment_time ON last_comment_time."id" = tag_count."id"
+INNER JOIN
+    (SELECT "id", MAX("time") as t FROM "post"
+     LEFT JOIN "post_favorite" ON "post_id" = "id"
+     GROUP BY "id") last_favorite_time ON last_favorite_time."id" = tag_count."id"
+INNER JOIN
+    (SELECT "post"."id", MAX("post_feature"."time") as t FROM "post"
+     LEFT JOIN "post_feature" ON "post_feature"."post_id" = "post"."id"
+     GROUP BY "post"."id") last_feature_time ON last_feature_time."id" = tag_count."id";
+
+-- Tag category statistics
+UPDATE "tag_category_statistics"
+SET "usage_count" = (SELECT COUNT(*) FROM "tag" WHERE "category_id" = 0)
+WHERE "category_id" = 0;
+
+INSERT INTO "tag_category_statistics" ("category_id", "usage_count")
+SELECT "tag_category"."id", COUNT("tag"."id") FROM "tag_category"
+LEFT JOIN "tag" ON "tag"."category_id" = "tag_category"."id"
+WHERE "tag_category"."id" != 0
+GROUP BY "tag_category"."id";
+
+-- Tag statistics
+INSERT INTO "tag_statistics" ("tag_id", "usage_count", "implication_count", "suggestion_count")
+SELECT usage_count."id", usage_count.count, implication_count.count, suggestion_count.count FROM 
+    (SELECT "id", COUNT("post_id") as count FROM "tag" 
+     LEFT JOIN "post_tag" ON "tag_id" = "id"
+     GROUP BY "id") usage_count
+INNER JOIN
+    (SELECT "id", COUNT("child_id") as count FROM "tag"
+     LEFT JOIN "tag_implication" ON "parent_id" = "id"
+     GROUP BY "id") implication_count ON implication_count."id" = usage_count."id"
+INNER JOIN
+    (SELECT "id", COUNT("child_id") as count FROM "tag"
+     LEFT JOIN "tag_suggestion" ON "parent_id" = "id"
+     GROUP BY "id") suggestion_count ON suggestion_count."id" = usage_count."id";
+
+-- User statistics
+INSERT INTO "user_statistics" ("user_id", "comment_count", "favorite_count", "upload_count")
+SELECT comment_count."id", comment_count.count, favorite_count.count, upload_count.count FROM 
+    (SELECT "user"."id", COUNT("comment"."id") as count FROM "user"
+     LEFT JOIN "comment" ON "user_id" = "user"."id"
+     GROUP BY "user"."id") comment_count
+INNER JOIN
+    (SELECT "id", COUNT("post_id") as count FROM "user"
+     LEFT JOIN "post_favorite" ON "user_id" = "id"
+     GROUP BY "id") favorite_count ON favorite_count."id" = comment_count."id"
+INNER JOIN
+    (SELECT "user"."id", COUNT("post"."id") as count FROM "user"
+     LEFT JOIN "post" ON "post"."user_id" = "user"."id"
+     GROUP BY "user"."id") upload_count ON upload_count."id" = comment_count."id";

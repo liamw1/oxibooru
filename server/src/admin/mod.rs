@@ -47,6 +47,7 @@ enum AdminTask {
     ResetPassword,
     ResetFilenames,
     ResetStatistics,
+    ResetThumbnailSizes,
 }
 
 struct ProgressReporter {
@@ -140,6 +141,10 @@ fn run_task(task: AdminTask) -> Result<(), String> {
         AdminTask::ResetStatistics => {
             let mut conn = get_connection()?;
             database::reset_statistics(&mut conn).map_err(|err| format!("{err}"))
+        }
+        AdminTask::ResetThumbnailSizes => {
+            let mut conn = get_connection()?;
+            database::reset_thumbnail_sizes(&mut conn).map_err(|err| format!("{err}"))
         }
     }
 }

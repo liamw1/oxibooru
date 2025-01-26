@@ -6,7 +6,7 @@ use crate::model::user::User;
 use crate::resource;
 use crate::schema::{post_score, user, user_statistics};
 use crate::time::DateTime;
-use diesel::dsl::count;
+use diesel::dsl::count_star;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
@@ -193,7 +193,7 @@ fn get_post_score_counts(
 
     PostScore::belonging_to(users)
         .group_by(post_score::user_id)
-        .select((post_score::user_id, count(post_score::user_id)))
+        .select((post_score::user_id, count_star()))
         .filter(post_score::score.eq(score))
         .load(conn)
         .map(|like_counts| {

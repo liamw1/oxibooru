@@ -6,7 +6,7 @@ use crate::resource::tag::{FieldTable, TagInfo};
 use crate::schema::{database_statistics, post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
-use diesel::dsl::{count, max};
+use diesel::dsl::{count_star, max};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -161,10 +161,10 @@ fn get_tag_siblings(auth: AuthResult, name: String, query: ResourceQuery) -> Api
             .into_boxed();
         let (sibling_ids, common_post_counts): (_, Vec<_>) = post_tag::table
             .group_by(post_tag::tag_id)
-            .select((post_tag::tag_id, count(post_tag::post_id)))
+            .select((post_tag::tag_id, count_star()))
             .filter(post_tag::post_id.eq_any(posts_tagged_on))
             .filter(post_tag::tag_id.ne(tag_id))
-            .order_by((count(post_tag::post_id).desc(), post_tag::tag_id))
+            .order_by((count_star().desc(), post_tag::tag_id))
             .limit(MAX_TAG_SIBLINGS)
             .load::<(i64, i64)>(conn)?
             .into_iter()

@@ -120,16 +120,21 @@ these are:
     ```
     From there, run the reset_filenames command, which will automatically
     rename every file in the data directory to match the Oxibooru convention.
+    ```console
+    Please select a task: reset_filenames
+    ```
 
-5. **Compute database statistics**
+5. **Compute thumbnail sizes**
 
-    In Oxibooru 0.2.0, a statistics system was introduced that precomputes
-    certain properties such as thumbnail sizes and tag usage counts. There
-    is no such system in Szurubooru, so we will need to calculate these
-    statistics or else search results will be incorrect.
+    Oxibooru stores thumbnail sizes along with file sizes so it can quickly
+    compute the size of the database. To store sizes of existing thumbnails,
+    run reset_thumbnail_sizes in the admin cli:
+    ```console
+    Please select a task: reset_thumbnail_sizes
+    ```
 
-    To calculate these statistics, run reset_statistics in the admin cli.
-    This process can be fairly lengthy for large databases.
+    This step is optional. The only effect skipping it would have is that
+    the disk usage that the client displays will be slightly inaccurate.
 
 6. **Recompute post properties**
 
@@ -141,6 +146,12 @@ these are:
     cli. For databases with many posts recompute_post_signatures can take quite 
     a bit of time (around 12 posts per second on my machine), so be prepared for
     that.
+    ```console
+    Please select a task: recompute_post_checksums
+    ```
+    ```console
+    Please select a task: recompute_post_signatures
+    ```
     
 7. **Reset user passwords**
 
@@ -155,5 +166,8 @@ these are:
     Upon entering reset_password in the admin cli, you will be prompted for the
     username whose password you want to reset and the new password you would 
     like for that user.
+    ```console
+    Please select a task: reset_password
+    ```
     
 8. **We're done!**
