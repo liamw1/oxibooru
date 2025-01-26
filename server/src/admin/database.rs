@@ -170,10 +170,12 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
         .group_by(comment::id)
         .select((comment::id, sum(comment_score::score).nullable()))
         .load(conn)?;
+    let mut progress = ProgressReporter::new("Comment statistics calculated", PRINT_INTERVAL);
     for (comment_id, score) in comment_stats {
         diesel::update(comment_statistics::table.find(comment_id))
             .set(comment_statistics::score.eq(score.unwrap_or(0)))
             .execute(conn)?;
+        progress.increment();
     }
 
     let pool_category_stats: Vec<(i64, Option<i64>)> = pool_category::table
@@ -181,10 +183,12 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
         .group_by(pool_category::id)
         .select((pool_category::id, count(pool::id).nullable()))
         .load(conn)?;
+    let mut progress = ProgressReporter::new("Pool category statistics calculated", PRINT_INTERVAL);
     for (category_id, usage_count) in pool_category_stats {
         diesel::update(pool_category_statistics::table.find(category_id))
             .set(pool_category_statistics::usage_count.eq(usage_count.unwrap_or(0)))
             .execute(conn)?;
+        progress.increment();
     }
 
     let pool_stats: Vec<(i64, Option<i64>)> = pool::table
@@ -192,10 +196,12 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
         .group_by(pool::id)
         .select((pool::id, count(pool_post::post_id).nullable()))
         .load(conn)?;
+    let mut progress = ProgressReporter::new("Pool statistics calculated", PRINT_INTERVAL);
     for (pool_id, post_count) in pool_stats {
         diesel::update(pool_statistics::table.find(pool_id))
             .set(pool_statistics::post_count.eq(post_count.unwrap_or(0)))
             .execute(conn)?;
+        progress.increment();
     }
 
     let tag_category_stats: Vec<(i64, Option<i64>)> = tag_category::table
@@ -203,13 +209,16 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
         .group_by(tag_category::id)
         .select((tag_category::id, count(tag::id).nullable()))
         .load(conn)?;
+    let mut progress = ProgressReporter::new("Tag category statistics calculated", PRINT_INTERVAL);
     for (category_id, usage_count) in tag_category_stats {
         diesel::update(tag_category_statistics::table.find(category_id))
             .set(tag_category_statistics::usage_count.eq(usage_count.unwrap_or(0)))
             .execute(conn)?;
+        progress.increment();
     }
 
     let tag_ids: Vec<i64> = tag::table.select(tag::id).load(conn)?;
+    let mut progress = ProgressReporter::new("Tag statistics calculated", PRINT_INTERVAL);
     for tag_id in tag_ids {
         let usage_count: i64 = post_tag::table
             .filter(post_tag::tag_id.eq(tag_id))
@@ -230,9 +239,11 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
                 tag_statistics::suggestion_count.eq(suggestion_count),
             ))
             .execute(conn)?;
+        progress.increment();
     }
 
     let user_ids: Vec<i64> = user::table.select(user::id).load(conn)?;
+    let mut progress = ProgressReporter::new("User statistics calculated", PRINT_INTERVAL);
     for user_id in user_ids {
         let comment_count: i64 = comment::table
             .filter(comment::user_id.eq(user_id))
@@ -250,9 +261,11 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
                 user_statistics::upload_count.eq(upload_count),
             ))
             .execute(conn)?;
+        progress.increment();
     }
 
     let post_ids: Vec<i64> = post::table.select(post::id).load(conn)?;
+    let mut progress = ProgressReporter::new("Post statistics calculated", PRINT_INTERVAL);
     for post_id in post_ids {
         let tag_count: i64 = post_tag::table
             .filter(post_tag::post_id.eq(post_id))
@@ -313,6 +326,7 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
                 post_statistics::last_feature_time.eq(last_feature_time),
             ))
             .execute(conn)?;
+        progress.increment();
     }
 
     Ok(())

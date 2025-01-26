@@ -121,7 +121,17 @@ these are:
     From there, run the reset_filenames command, which will automatically
     rename every file in the data directory to match the Oxibooru convention.
 
-5. **Recompute post properties**
+5. **Compute database statistics**
+
+    In Oxibooru 0.2.0, a statistics system was introduced that precomputes
+    certain properties such as thumbnail sizes and tag usage counts. There
+    is no such system in Szurubooru, so we will need to calculate these
+    statistics or else search results will be incorrect.
+
+    To calculate these statistics, run reset_statistics in the admin cli.
+    This process can be fairly lengthy for large databases.
+
+6. **Recompute post properties**
 
     Oxibooru also uses a different checksum and image signature algorithm, so 
     these will need to be recomputed. These can both be accomplished via the 
@@ -132,7 +142,7 @@ these are:
     a bit of time (around 12 posts per second on my machine), so be prepared for
     that.
     
-6. **Reset user passwords**
+7. **Reset user passwords**
 
     At this point the database is almost completely converted to a proper
     Oxibooru instance. However, there are still some important things not
@@ -146,4 +156,4 @@ these are:
     username whose password you want to reset and the new password you would 
     like for that user.
     
-7. **We're done!**
+8. **We're done!**

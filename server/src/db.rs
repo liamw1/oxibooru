@@ -15,7 +15,6 @@ pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type ConnectionResult = Result<Connection, PoolError>;
 
 /// Returns a connection to the database from a connection pool.
-/// TODO: Try making this function async to increase throughput
 pub fn get_connection() -> ConnectionResult {
     #[cfg(not(test))]
     {
@@ -40,12 +39,6 @@ pub fn run_migrations(conn: &mut PgConnection) {
         return;
     }
 
-    println!("Running pending migrations...");
-    conn.run_pending_migrations(MIGRATIONS).unwrap();
-    if cfg!(test) {
-        return;
-    }
-
     let migration_number =
         |migration: &dyn Migration<Pg>| -> i32 { migration.name().version().to_string().parse().unwrap() };
     let first_migration = migration_number(pending_migrations.first().unwrap());
@@ -55,6 +48,12 @@ pub fn run_migrations(conn: &mut PgConnection) {
     // Update filenames if migrating primary keys to BIGINT
     if migration_range.contains(&12) {
         database::reset_filenames().unwrap();
+    }
+
+    println!("Running pending migrations...");
+    conn.run_pending_migrations(MIGRATIONS).unwrap();
+    if cfg!(test) {
+        return;
     }
 
     // Cache thumbnail sizes if migrating to statistics system

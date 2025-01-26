@@ -783,118 +783,119 @@ async fn update_post(auth: AuthResult, post_id: i64, query: ResourceQuery, updat
     // updates are fine if the sets of tags are disjoint, but implementing this is more complicated
     // so we just do this for now.
     static ANTI_DEADLOCK_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
-    let _lock;
-    if update.tags.is_some() {
-        _lock = ANTI_DEADLOCK_MUTEX.lock().await;
+    {
+        let _lock;
+        if update.tags.is_some() {
+            _lock = ANTI_DEADLOCK_MUTEX.lock().await;
+        }
+
+        db::get_connection()?.transaction(|conn| {
+            let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
+            api::verify_version(post_version, update.version)?;
+
+            if let Some(safety) = update.safety {
+                api::verify_privilege(client, config::privileges().post_edit_safety)?;
+
+                diesel::update(post::table.find(post_id))
+                    .set(post::safety.eq(safety))
+                    .execute(conn)?;
+            }
+            if let Some(source) = update.source {
+                api::verify_privilege(client, config::privileges().post_edit_source)?;
+
+                diesel::update(post::table.find(post_id))
+                    .set(post::source.eq(source))
+                    .execute(conn)?;
+            }
+            if let Some(relations) = update.relations {
+                api::verify_privilege(client, config::privileges().post_edit_relation)?;
+
+                update::post::delete_relations(conn, post_id)?;
+                update::post::create_relations(conn, post_id, relations)?;
+            }
+            if let Some(tags) = update.tags {
+                api::verify_privilege(client, config::privileges().post_edit_tag)?;
+
+                let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client, tags, false)?;
+                update::post::delete_tags(conn, post_id)?;
+                update::post::add_tags(conn, post_id, updated_tag_ids)?;
+            }
+            if let Some(notes) = update.notes {
+                api::verify_privilege(client, config::privileges().post_edit_note)?;
+
+                update::post::delete_notes(conn, post_id)?;
+                update::post::add_notes(conn, post_id, notes)?;
+            }
+            if let Some(flags) = update.flags {
+                api::verify_privilege(client, config::privileges().post_edit_flag)?;
+
+                let updated_flags = PostFlags::from_slice(&flags);
+                diesel::update(post::table.find(post_id))
+                    .set(post::flags.eq(updated_flags))
+                    .execute(conn)?;
+            }
+            if let Some(content_properties) = new_content {
+                api::verify_privilege(client, config::privileges().post_edit_content)?;
+
+                let mut post: Post = post::table.find(post_id).first(conn)?;
+                let old_mime_type = post.mime_type;
+
+                // Update content metadata
+                post.file_size = content_properties.file_size as i64;
+                post.width = content_properties.width as i32;
+                post.height = content_properties.height as i32;
+                post.type_ = PostType::from(content_properties.mime_type);
+                post.mime_type = content_properties.mime_type;
+                post.checksum = content_properties.checksum;
+                post.flags |= content_properties.flags;
+                post.save_changes::<Post>(conn)?;
+
+                // Update post signature
+                let new_post_signature = NewPostSignature {
+                    post_id,
+                    signature: &content_properties.signature,
+                    words: &signature::generate_indexes(content_properties.signature),
+                };
+                diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
+                diesel::insert_into(post_signature::table)
+                    .values(new_post_signature)
+                    .execute(conn)?;
+
+                // Replace content
+                let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
+                filesystem::delete_content(&post_hash, old_mime_type)?;
+                std::fs::rename(temp_path, post_hash.content_path(content_properties.mime_type))?;
+
+                // Replace generated thumbnail
+                filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Generated)?;
+                let generated_thumbnail_size = filesystem::save_post_thumbnail(
+                    &post_hash,
+                    content_properties.thumbnail,
+                    ThumbnailCategory::Generated,
+                )?;
+                diesel::update(post::table.find(post_id))
+                    .set(post::generated_thumbnail_size.eq(generated_thumbnail_size as i64))
+                    .execute(conn)?;
+            }
+            if let Some(thumbnail) = custom_thumbnail {
+                api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
+
+                filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Custom)?;
+                let custom_thumbnail_size =
+                    filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
+                diesel::update(post::table.find(post_id))
+                    .set(post::custom_thumbnail_size.eq(custom_thumbnail_size as i64))
+                    .execute(conn)?;
+            }
+
+            // Update last_edit_time
+            diesel::update(post::table.find(post_id))
+                .set(post::last_edit_time.eq(DateTime::now()))
+                .execute(conn)
+                .map_err(api::Error::from)
+        })?;
     }
-
-    let mut conn = db::get_connection()?;
-    conn.transaction(|conn| {
-        let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
-        api::verify_version(post_version, update.version)?;
-
-        if let Some(safety) = update.safety {
-            api::verify_privilege(client, config::privileges().post_edit_safety)?;
-
-            diesel::update(post::table.find(post_id))
-                .set(post::safety.eq(safety))
-                .execute(conn)?;
-        }
-        if let Some(source) = update.source {
-            api::verify_privilege(client, config::privileges().post_edit_source)?;
-
-            diesel::update(post::table.find(post_id))
-                .set(post::source.eq(source))
-                .execute(conn)?;
-        }
-        if let Some(relations) = update.relations {
-            api::verify_privilege(client, config::privileges().post_edit_relation)?;
-
-            update::post::delete_relations(conn, post_id)?;
-            update::post::create_relations(conn, post_id, relations)?;
-        }
-        if let Some(tags) = update.tags {
-            api::verify_privilege(client, config::privileges().post_edit_tag)?;
-
-            let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client, tags, false)?;
-            update::post::delete_tags(conn, post_id)?;
-            update::post::add_tags(conn, post_id, updated_tag_ids)?;
-        }
-        if let Some(notes) = update.notes {
-            api::verify_privilege(client, config::privileges().post_edit_note)?;
-
-            update::post::delete_notes(conn, post_id)?;
-            update::post::add_notes(conn, post_id, notes)?;
-        }
-        if let Some(flags) = update.flags {
-            api::verify_privilege(client, config::privileges().post_edit_flag)?;
-
-            let updated_flags = PostFlags::from_slice(&flags);
-            diesel::update(post::table.find(post_id))
-                .set(post::flags.eq(updated_flags))
-                .execute(conn)?;
-        }
-        if let Some(content_properties) = new_content {
-            api::verify_privilege(client, config::privileges().post_edit_content)?;
-
-            let mut post: Post = post::table.find(post_id).first(conn)?;
-            let old_mime_type = post.mime_type;
-
-            // Update content metadata
-            post.file_size = content_properties.file_size as i64;
-            post.width = content_properties.width as i32;
-            post.height = content_properties.height as i32;
-            post.type_ = PostType::from(content_properties.mime_type);
-            post.mime_type = content_properties.mime_type;
-            post.checksum = content_properties.checksum;
-            post.flags |= content_properties.flags;
-            post.save_changes::<Post>(conn)?;
-
-            // Update post signature
-            let new_post_signature = NewPostSignature {
-                post_id,
-                signature: &content_properties.signature,
-                words: &signature::generate_indexes(content_properties.signature),
-            };
-            diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
-            diesel::insert_into(post_signature::table)
-                .values(new_post_signature)
-                .execute(conn)?;
-
-            // Replace content
-            let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
-            filesystem::delete_content(&post_hash, old_mime_type)?;
-            std::fs::rename(temp_path, post_hash.content_path(content_properties.mime_type))?;
-
-            // Replace generated thumbnail
-            filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Generated)?;
-            let generated_thumbnail_size = filesystem::save_post_thumbnail(
-                &post_hash,
-                content_properties.thumbnail,
-                ThumbnailCategory::Generated,
-            )?;
-            diesel::update(post::table.find(post_id))
-                .set(post::generated_thumbnail_size.eq(generated_thumbnail_size as i64))
-                .execute(conn)?;
-        }
-        if let Some(thumbnail) = custom_thumbnail {
-            api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
-
-            filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Custom)?;
-            let custom_thumbnail_size =
-                filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
-            diesel::update(post::table.find(post_id))
-                .set(post::custom_thumbnail_size.eq(custom_thumbnail_size as i64))
-                .execute(conn)?;
-        }
-
-        // Update last_edit_time
-        diesel::update(post::table.find(post_id))
-            .set(post::last_edit_time.eq(DateTime::now()))
-            .execute(conn)
-            .map_err(api::Error::from)
-    })?;
-    conn.transaction(|conn| {
+    db::get_connection()?.transaction(|conn| {
         PostInfo::new_from_id(conn, client.map(|user| user.id), post_id, &fields).map_err(api::Error::from)
     })
 }
@@ -903,11 +904,10 @@ async fn delete_post(auth: AuthResult, post_id: i64, client_version: DeleteReque
     let client = auth?;
     api::verify_privilege(client, config::privileges().post_delete)?;
 
-    let mut conn = db::get_connection()?;
     let relation_count: i64 = post_statistics::table
         .find(post_id)
         .select(post_statistics::relation_count)
-        .first(&mut conn)?;
+        .first(&mut db::get_connection()?)?;
 
     // Post relation cascade deletion can cause deadlocks when deleting related posts in quick
     // succession, so we lock an aysnchronous mutex when deleting if the post has any relations.
@@ -917,6 +917,7 @@ async fn delete_post(auth: AuthResult, post_id: i64, client_version: DeleteReque
         _lock = ANTI_DEADLOCK_MUTEX.lock().await;
     }
 
+    let mut conn = db::get_connection()?;
     let mime_type = conn.transaction(|conn| {
         let (mime_type, post_version) = post::table
             .find(post_id)

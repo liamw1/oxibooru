@@ -1,3 +1,24 @@
+-- Disable triggers on tables, as they make copying data over extremely slow
+ALTER TABLE oxi."user" DISABLE TRIGGER USER;
+ALTER TABLE oxi."tag_category" DISABLE TRIGGER USER;
+ALTER TABLE oxi."tag" DISABLE TRIGGER USER;
+ALTER TABLE oxi."tag_name" DISABLE TRIGGER USER;
+ALTER TABLE oxi."tag_implication" DISABLE TRIGGER USER;
+ALTER TABLE oxi."tag_suggestion" DISABLE TRIGGER USER;
+ALTER TABLE oxi."post" DISABLE TRIGGER USER;
+ALTER TABLE oxi."post_relation" DISABLE TRIGGER USER;
+ALTER TABLE oxi."post_tag" DISABLE TRIGGER USER;
+ALTER TABLE oxi."post_favorite" DISABLE TRIGGER USER;
+ALTER TABLE oxi."post_feature" DISABLE TRIGGER USER;
+ALTER TABLE oxi."post_note" DISABLE TRIGGER USER;
+ALTER TABLE oxi."post_score" DISABLE TRIGGER USER;
+ALTER TABLE oxi."comment" DISABLE TRIGGER USER;
+ALTER TABLE oxi."comment_score" DISABLE TRIGGER USER;
+ALTER TABLE oxi."pool_category" DISABLE TRIGGER USER;
+ALTER TABLE oxi."pool" DISABLE TRIGGER USER;
+ALTER TABLE oxi."pool_name" DISABLE TRIGGER USER;
+ALTER TABLE oxi."pool_post" DISABLE TRIGGER USER;
+
 -- ================================== Users ================================== --
 -- last_login_time is non-nullable in Oxibooru, so replace NULL values with CURRENT_TIMESTAMP
 UPDATE public."user"
@@ -266,5 +287,27 @@ INSERT INTO oxi."pool_post" ("pool_id", "post_id", "order")
 SELECT "pool_id", "post_id", "ord" FROM public."pool_post";
 
 -- ================================= Cleanup ================================= --
+-- Re-enable triggers
+ALTER TABLE oxi."user" ENABLE TRIGGER USER;
+ALTER TABLE oxi."tag_category" ENABLE TRIGGER USER;
+ALTER TABLE oxi."tag" ENABLE TRIGGER USER;
+ALTER TABLE oxi."tag_name" ENABLE TRIGGER USER;
+ALTER TABLE oxi."tag_implication" ENABLE TRIGGER USER;
+ALTER TABLE oxi."tag_suggestion" ENABLE TRIGGER USER;
+ALTER TABLE oxi."post" ENABLE TRIGGER USER;
+ALTER TABLE oxi."post_relation" ENABLE TRIGGER USER;
+ALTER TABLE oxi."post_tag" ENABLE TRIGGER USER;
+ALTER TABLE oxi."post_favorite" ENABLE TRIGGER USER;
+ALTER TABLE oxi."post_feature" ENABLE TRIGGER USER;
+ALTER TABLE oxi."post_note" ENABLE TRIGGER USER;
+ALTER TABLE oxi."post_score" ENABLE TRIGGER USER;
+ALTER TABLE oxi."comment" ENABLE TRIGGER USER;
+ALTER TABLE oxi."comment_score" ENABLE TRIGGER USER;
+ALTER TABLE oxi."pool_category" ENABLE TRIGGER USER;
+ALTER TABLE oxi."pool" ENABLE TRIGGER USER;
+ALTER TABLE oxi."pool_name" ENABLE TRIGGER USER;
+ALTER TABLE oxi."pool_post" ENABLE TRIGGER USER;
+
+-- Drop Szurubooru schema
 DROP SCHEMA public CASCADE;
 ALTER SCHEMA oxi RENAME TO public;
