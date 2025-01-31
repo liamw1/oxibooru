@@ -253,8 +253,6 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
 
 type AuthResult = Result<Option<AuthUser>, AuthenticationError>;
 
-const MAX_UPLOAD_SIZE: u64 = 4 * 1024_u64.pow(3);
-
 /// Represents part of a request to apply/change a score.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

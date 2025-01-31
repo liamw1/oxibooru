@@ -1,8 +1,8 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::password;
 use crate::config::RegexType;
-use crate::content::hash;
-use crate::content::thumbnail::{self, ThumbnailType};
+use crate::content::thumbnail::ThumbnailType;
+use crate::content::{hash, thumbnail};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
