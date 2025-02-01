@@ -39,3 +39,13 @@ pub fn create_from_token(token: &str, thumbnail_type: ThumbnailType) -> ApiResul
 
     decode::representative_image(&file_contents, &temp_path, mime_type).map(|image| create(&image, thumbnail_type))
 }
+
+pub fn create_from_bytes(
+    bytes: &[u8],
+    content_type: MimeType,
+    thumbnail_type: ThumbnailType,
+) -> ApiResult<DynamicImage> {
+    let image_format = content_type.to_image_format().expect("msg");
+    let image = decode::image(bytes, image_format)?;
+    Ok(create(&image, thumbnail_type))
+}

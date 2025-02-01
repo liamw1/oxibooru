@@ -30,7 +30,7 @@ pub fn has_audio(path: &Path) -> Result<bool, video_rs::Error> {
 }
 
 /// Decodes a raw array of bytes into pixel data.
-fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
+pub fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
     let mut reader = ImageReader::new(Cursor::new(bytes));
     reader.set_format(format);
     reader.limits(image_reader_limits());

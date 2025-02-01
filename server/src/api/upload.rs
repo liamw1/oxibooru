@@ -1,5 +1,5 @@
 use crate::api::{ApiResult, AuthResult};
-use crate::content::upload::{self, Part};
+use crate::content::upload::{self, Part, MAX_UPLOAD_SIZE};
 use crate::filesystem::Directory;
 use crate::{api, config, filesystem};
 use serde::Serialize;
@@ -15,8 +15,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(api::Reply::from)
 }
 
-const MAX_UPLOAD_SIZE: u64 = 4 * 1024_u64.pow(3);
-
 #[derive(Serialize)]
 struct UploadResponse {
     token: String,
@@ -29,9 +27,10 @@ async fn upload(auth: AuthResult, form_data: FormData) -> ApiResult<UploadRespon
     // Set up temp directory if necessary
     filesystem::create_dir(Directory::TemporaryUploads)?;
 
-    if let [Some(content)] = upload::extract(form_data, [Part::Content]).await? {
-        let upload_token = filesystem::save_uploaded_file(content.data, content.mime_type)?;
-        Ok(UploadResponse { token: upload_token })
+    let body = upload::extract(form_data, [Part::Content]).await?;
+    if let [Some(upload)] = body.files {
+        let token = filesystem::save_uploaded_file(upload.data, upload.content_type)?;
+        Ok(UploadResponse { token })
     } else {
         Err(api::Error::MissingFormData)
     }

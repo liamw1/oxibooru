@@ -328,6 +328,17 @@ impl ErrorKind for lettre::error::Error {
     }
 }
 
+impl ErrorKind for serde_json::error::Category {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Io => "SerdeJsonIO",
+            Self::Syntax => "SerdeJsonSyntax",
+            Self::Data => "SerdeJsonData",
+            Self::Eof => "SerdeJsonEOF",
+        }
+    }
+}
+
 impl ErrorKind for crate::api::Error {
     fn kind(&self) -> &'static str {
         match self {
@@ -346,10 +357,13 @@ impl ErrorKind for crate::api::Error {
             Self::InsufficientPrivileges => "InsufficientPrivileges",
             Self::InvalidEmailAddress(err) => err.kind(),
             Self::InvalidEmail(err) => err.kind(),
+            Self::InvalidMetadataType => "InvalidMetadataType",
             Self::InvalidUserRank => "InvalidUserRank",
             Self::Image(err) => err.kind(),
+            Self::JsonSerialization(err) => err.classify().kind(),
             Self::NoEmail => "NoEmail",
             Self::MissingFormData => "MissingFormData",
+            Self::MissingMetadata => "MissingMetadata",
             Self::MissingSmtpInfo => "MissingSmtpInfo",
             Self::NoNamesGiven(_) => "NoNamesGiven",
             Self::NotAnInteger(err) => err.kind().kind(),

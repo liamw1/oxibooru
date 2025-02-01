@@ -76,11 +76,16 @@ pub enum Error {
     InsufficientPrivileges,
     InvalidEmailAddress(#[from] lettre::address::AddressError),
     InvalidEmail(#[from] lettre::error::Error),
+    #[error("Metadata must be application/json")]
+    InvalidMetadataType,
     #[error("Cannot create an anonymous user")]
     InvalidUserRank,
     Image(#[from] image::ImageError),
+    JsonSerialization(#[from] serde_json::Error),
     #[error("Missing form data")]
     MissingFormData,
+    #[error("Missing metadata form")]
+    MissingMetadata,
     #[error("Missing smtp info")]
     MissingSmtpInfo,
     #[error("User has no email")]
@@ -107,6 +112,7 @@ pub enum Error {
 
 impl Error {
     fn status_code(&self) -> StatusCode {
+        use serde_json::error::Category;
         type QueryError = diesel::result::Error;
 
         let query_error_status_code = |err: &QueryError| match err {
@@ -134,9 +140,15 @@ impl Error {
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::InvalidEmailAddress(_) => StatusCode::BAD_REQUEST,
             Self::InvalidEmail(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InvalidMetadataType => StatusCode::BAD_REQUEST,
             Self::InvalidUserRank => StatusCode::BAD_REQUEST,
             Self::Image(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::JsonSerialization(err) => match err.classify() {
+                Category::Io | Category::Eof => StatusCode::INTERNAL_SERVER_ERROR,
+                Category::Syntax | Category::Data => StatusCode::BAD_REQUEST,
+            },
             Self::MissingFormData => StatusCode::BAD_REQUEST,
+            Self::MissingMetadata => StatusCode::BAD_REQUEST,
             Self::MissingSmtpInfo => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NoEmail => StatusCode::BAD_REQUEST,
             Self::NoNamesGiven(_) => StatusCode::BAD_REQUEST,
@@ -171,9 +183,12 @@ impl Error {
             Self::InsufficientPrivileges => "Insufficient Privileges",
             Self::InvalidEmailAddress(_) => "Invalid Email Address",
             Self::InvalidEmail(_) => "Invalid Email",
+            Self::InvalidMetadataType => "Invalid Metadata Type",
             Self::InvalidUserRank => "Invalid User Rank",
             Self::Image(_) => "Image Error",
+            Self::JsonSerialization(_) => "JSON Serialization Error",
             Self::MissingFormData => "Missing Form Data",
+            Self::MissingMetadata => "Missing Metadata",
             Self::MissingSmtpInfo => "Missing SMTP Info",
             Self::NoEmail => "No Email",
             Self::NoNamesGiven(_) => "No Names Given",
