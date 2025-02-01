@@ -326,7 +326,7 @@ impl ResourceQuery {
 
     fn bump_login(&self, client: Option<AuthUser>) -> ApiResult<()> {
         match (client, self.bump_login) {
-            (Some(user), Some(true)) => update::last_login_time(user.id),
+            (Some(user), Some(true)) => update::user::last_login_time(user.id),
             _ => Ok(()),
         }
     }

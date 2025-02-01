@@ -71,7 +71,7 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
             }
         };
 
-        let image = match decode::representative_image(&file_contents, &image_path, mime_type) {
+        let image = match decode::representative_image(&file_contents, Some(image_path), mime_type) {
             Ok(image) => image,
             Err(err) => {
                 eprintln!("ERROR: Unable to compute signature for post {post_id} for reason: {err}");
@@ -164,7 +164,7 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) -> ApiResult<()> {
         let content_path = post_hash.content_path(mime_type);
         let file_contents = std::fs::read(&content_path)?;
 
-        let thumbnail = decode::representative_image(&file_contents, &content_path, mime_type)
+        let thumbnail = decode::representative_image(&file_contents, Some(content_path), mime_type)
             .map(|image| thumbnail::create(&image, ThumbnailType::Post))?;
         filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Generated)?;
 

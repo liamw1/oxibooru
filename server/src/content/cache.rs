@@ -116,7 +116,7 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
             }
         }
     };
-    let image = decode::representative_image(&file_contents, &temp_path, mime_type)?;
+    let image = decode::representative_image(&file_contents, Some(temp_path), mime_type)?;
 
     Ok(CachedProperties {
         token,

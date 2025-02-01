@@ -1,19 +1,17 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, ResourceQuery};
-use crate::auth::header::AuthUser;
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::ThumbnailType;
-use crate::content::upload::{Part, MAX_UPLOAD_SIZE};
+use crate::content::upload::{Part, Upload, MAX_UPLOAD_SIZE};
 use crate::content::{hash, thumbnail, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::time::DateTime;
-use crate::{api, config, db, filesystem, resource, search};
+use crate::{api, config, db, resource, search, update};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
-use image::DynamicImage;
 use rand_core::OsRng;
 use serde::Deserialize;
 use warp::filters::multipart::FormData;
@@ -145,10 +143,13 @@ struct NewUserInfo {
     email: Option<String>,
     rank: Option<UserRank>,
     avatar_style: Option<AvatarStyle>,
-    avatar_token: Option<String>,
+    avatar_token: Option<Upload>,
 }
 
-fn create_user(client: Option<AuthUser>, user_info: &NewUserInfo) -> ApiResult<i64> {
+fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
+    let client = auth?;
+    query.bump_login(client)?;
+
     let creation_rank = user_info.rank.unwrap_or(config::default_rank());
     if creation_rank == UserRank::Anonymous {
         return Err(api::Error::InvalidUserRank);
@@ -164,6 +165,7 @@ fn create_user(client: Option<AuthUser>, user_info: &NewUserInfo) -> ApiResult<i
         api::verify_privilege(client, creation_rank)?;
     }
 
+    let fields = create_field_table(query.fields())?;
     api::verify_matches_regex(&user_info.name, RegexType::Username)?;
     api::verify_matches_regex(&user_info.password, RegexType::Password)?;
     api::verify_valid_email(user_info.email.as_deref())?;
@@ -180,8 +182,8 @@ fn create_user(client: Option<AuthUser>, user_info: &NewUserInfo) -> ApiResult<i
     };
     let custom_avatar = user_info
         .avatar_token
-        .as_deref()
-        .map(|token| thumbnail::create_from_token(token, ThumbnailType::Avatar))
+        .as_ref()
+        .map(|upload| upload.thumbnail(ThumbnailType::Avatar))
         .transpose()?;
 
     let mut conn = db::get_connection()?;
@@ -192,64 +194,23 @@ fn create_user(client: Option<AuthUser>, user_info: &NewUserInfo) -> ApiResult<i
             .get_result(conn)?;
 
         if let Some(avatar) = custom_avatar {
-            update_avatar(conn, client, user_id, &user_info.name, avatar, creating_self)?;
+            update::user::avatar(conn, client, user_id, &user_info.name, avatar, creating_self)?;
         }
 
         Ok::<_, api::Error>(user_id)
     })?;
-    Ok(user_id)
-}
-
-fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
-    let client = auth?;
-    query.bump_login(client)?;
-    let fields = create_field_table(query.fields())?;
-
-    let user_id = create_user(client, &user_info)?;
-    db::get_connection()?
-        .transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full).map_err(api::Error::from))
+    conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full).map_err(api::Error::from))
 }
 
 async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: FormData) -> ApiResult<UserInfo> {
-    let client = auth?;
-    query.bump_login(client)?;
-    let fields = create_field_table(query.fields())?;
-
     let body = upload::extract(form_data, [Part::Avatar]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
-    let user_info: NewUserInfo = serde_json::from_slice(&metadata)?;
-    let user_id = create_user(client, &user_info)?;
-
+    let mut user_info: NewUserInfo = serde_json::from_slice(&metadata)?;
     if let [Some(avatar)] = body.files {
-        let avatar_thumbnail = thumbnail::create_from_bytes(&avatar.data, avatar.content_type, ThumbnailType::Avatar)?;
-        let mut conn = db::get_connection()?;
-        update_avatar(&mut conn, client, user_id, &user_info.name, avatar_thumbnail, client.is_none())?;
+        user_info.avatar_token = Some(Upload::Content(avatar));
     }
-    db::get_connection()?
-        .transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full).map_err(api::Error::from))
-}
 
-fn update_avatar(
-    conn: &mut PgConnection,
-    client: Option<AuthUser>,
-    user_id: i64,
-    name: &str,
-    avatar: DynamicImage,
-    updating_self: bool,
-) -> ApiResult<()> {
-    let required_rank = match updating_self {
-        true => config::privileges().user_edit_self_avatar,
-        false => config::privileges().user_edit_any_avatar,
-    };
-    api::verify_privilege(client, required_rank)?;
-
-    filesystem::delete_custom_avatar(name)?;
-
-    let avatar_size = filesystem::save_custom_avatar(name, avatar)?;
-    diesel::update(user::table.find(user_id))
-        .set(user::custom_avatar_size.eq(avatar_size as i64))
-        .execute(conn)?;
-    Ok(())
+    create(auth, query, user_info)
 }
 
 #[derive(Deserialize)]
@@ -292,25 +253,6 @@ fn update(auth: AuthResult, username: String, query: ResourceQuery, update: User
             false => Visibility::PublicOnly,
         };
 
-        if let Some(new_name) = update.name.as_deref() {
-            let required_rank = match editing_self {
-                true => config::privileges().user_edit_self_name,
-                false => config::privileges().user_edit_any_name,
-            };
-            api::verify_privilege(client, required_rank)?;
-            api::verify_matches_regex(new_name, RegexType::Username)?;
-
-            // Update first to see if new name clashes with any existing names
-            diesel::update(user::table.find(user_id))
-                .set(user::name.eq(new_name))
-                .execute(conn)?;
-
-            let old_custom_avatar_path = hash::custom_avatar_path(&username);
-            if old_custom_avatar_path.try_exists()? {
-                let new_custom_avatar_path = hash::custom_avatar_path(new_name);
-                std::fs::rename(old_custom_avatar_path, new_custom_avatar_path)?;
-            }
-        }
         if let Some(password) = update.password {
             let required_rank = match editing_self {
                 true => config::privileges().user_edit_self_pass,
@@ -363,19 +305,26 @@ fn update(auth: AuthResult, username: String, query: ResourceQuery, update: User
                 .execute(conn)?;
         }
         if let Some(avatar) = custom_avatar {
+            update::user::avatar(conn, client, user_id, &username, avatar, editing_self)?;
+        }
+        if let Some(new_name) = update.name.as_deref() {
             let required_rank = match editing_self {
-                true => config::privileges().user_edit_self_avatar,
-                false => config::privileges().user_edit_any_avatar,
+                true => config::privileges().user_edit_self_name,
+                false => config::privileges().user_edit_any_name,
             };
             api::verify_privilege(client, required_rank)?;
+            api::verify_matches_regex(new_name, RegexType::Username)?;
 
-            filesystem::delete_custom_avatar(&username)?;
-
-            let name = update.name.as_deref().unwrap_or(&username);
-            let avatar_size = filesystem::save_custom_avatar(name, avatar)?;
+            // Update first to see if new name clashes with any existing names
             diesel::update(user::table.find(user_id))
-                .set(user::custom_avatar_size.eq(avatar_size as i64))
+                .set(user::name.eq(new_name))
                 .execute(conn)?;
+
+            let old_custom_avatar_path = hash::custom_avatar_path(&username);
+            if old_custom_avatar_path.try_exists()? {
+                let new_custom_avatar_path = hash::custom_avatar_path(new_name);
+                std::fs::rename(old_custom_avatar_path, new_custom_avatar_path)?;
+            }
         }
 
         // Update last_edit_time

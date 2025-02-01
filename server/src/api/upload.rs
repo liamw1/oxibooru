@@ -29,7 +29,7 @@ async fn upload(auth: AuthResult, form_data: FormData) -> ApiResult<UploadRespon
 
     let body = upload::extract(form_data, [Part::Content]).await?;
     if let [Some(upload)] = body.files {
-        let token = filesystem::save_uploaded_file(upload.data, upload.content_type)?;
+        let token = filesystem::save_uploaded_file(&upload.data, upload.content_type)?;
         Ok(UploadResponse { token })
     } else {
         Err(api::Error::MissingFormData)

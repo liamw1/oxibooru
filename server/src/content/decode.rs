@@ -1,8 +1,9 @@
-use crate::api::{self, ApiResult};
+use crate::api::ApiResult;
 use crate::model::enums::{MimeType, PostType};
+use crate::{api, filesystem};
 use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, Rgb, RgbImage};
 use std::io::Cursor;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use video_rs::ffmpeg::format::Pixel;
 use video_rs::ffmpeg::media::Type;
 use video_rs::Decoder;
@@ -10,16 +11,35 @@ use video_rs::Decoder;
 /// Returns a representative image for the given content.
 /// For images, this is simply the decoded image.
 /// For videos, it is the first frame of the video.
-pub fn representative_image(file_contents: &[u8], file_path: &Path, content_type: MimeType) -> ApiResult<DynamicImage> {
-    match PostType::from(content_type) {
+pub fn representative_image(
+    file_contents: &[u8],
+    file_path: Option<PathBuf>,
+    content_type: MimeType,
+) -> ApiResult<DynamicImage> {
+    let post_type = PostType::from(content_type);
+    let temp_file_created = post_type == PostType::Video && file_path.is_none();
+    let path = match file_path {
+        Some(path) => path,
+        None => {
+            let token = filesystem::save_uploaded_file(file_contents, content_type)?;
+            filesystem::temporary_upload_filepath(&token)
+        }
+    };
+
+    let image = match PostType::from(content_type) {
         PostType::Image | PostType::Animation => {
             let image_format = content_type
                 .to_image_format()
                 .expect("Mime type should be convertable to image format");
             image(file_contents, image_format).map_err(api::Error::from)
         }
-        PostType::Video => video_frame(file_path).map_err(api::Error::from),
+        PostType::Video => video_frame(&path).map_err(api::Error::from),
+    }?;
+
+    if temp_file_created {
+        std::fs::remove_file(path)?;
     }
+    Ok(image)
 }
 
 /// Returns if the video at `path` has an audio channel.
