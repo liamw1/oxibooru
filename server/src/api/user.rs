@@ -20,52 +20,47 @@ use warp::filters::multipart::FormData;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list_users = warp::get()
+    let list = warp::get()
         .and(api::auth())
         .and(warp::path!("users"))
         .and(warp::query())
-        .map(list_users)
+        .map(list)
         .map(api::Reply::from);
-    let get_user = warp::get()
+    let get = warp::get()
         .and(api::auth())
         .and(warp::path!("user" / String))
         .and(api::resource_query())
-        .map(get_user)
+        .map(get)
         .map(api::Reply::from);
-    let create_user = warp::post()
+    let create = warp::post()
         .and(api::auth())
         .and(warp::path!("users"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(create_user)
+        .map(create)
         .map(api::Reply::from);
-    let create_user_multipart = warp::post()
+    let create_multipart = warp::post()
         .and(api::auth())
         .and(warp::path!("users"))
         .and(api::resource_query())
         .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
-        .then(create_user_multipart)
+        .then(create_multipart)
         .map(api::Reply::from);
-    let update_user = warp::put()
+    let update = warp::put()
         .and(api::auth())
         .and(warp::path!("user" / String))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(update_user)
+        .map(update)
         .map(api::Reply::from);
-    let delete_user = warp::delete()
+    let delete = warp::delete()
         .and(api::auth())
         .and(warp::path!("user" / String))
         .and(warp::body::json())
-        .map(delete_user)
+        .map(delete)
         .map(api::Reply::from);
 
-    list_users
-        .or(get_user)
-        .or(create_user)
-        .or(create_user_multipart)
-        .or(update_user)
-        .or(delete_user)
+    list.or(get).or(create).or(create_multipart).or(update).or(delete)
 }
 
 const MAX_USERS_PER_PAGE: i64 = 50;
@@ -78,7 +73,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
+fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().user_list)?;
@@ -112,7 +107,7 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Us
     })
 }
 
-fn get_user(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UserInfo> {
+fn get(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UserInfo> {
     let client = auth?;
     query.bump_login(client)?;
 
@@ -153,7 +148,7 @@ struct NewUserInfo {
     avatar_token: Option<String>,
 }
 
-fn create(client: Option<AuthUser>, user_info: &NewUserInfo) -> ApiResult<i64> {
+fn create_user(client: Option<AuthUser>, user_info: &NewUserInfo) -> ApiResult<i64> {
     let creation_rank = user_info.rank.unwrap_or(config::default_rank());
     if creation_rank == UserRank::Anonymous {
         return Err(api::Error::InvalidUserRank);
@@ -205,17 +200,17 @@ fn create(client: Option<AuthUser>, user_info: &NewUserInfo) -> ApiResult<i64> {
     Ok(user_id)
 }
 
-fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
+fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
     let client = auth?;
     query.bump_login(client)?;
     let fields = create_field_table(query.fields())?;
 
-    let user_id = create(client, &user_info)?;
+    let user_id = create_user(client, &user_info)?;
     db::get_connection()?
         .transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full).map_err(api::Error::from))
 }
 
-async fn create_user_multipart(auth: AuthResult, query: ResourceQuery, form_data: FormData) -> ApiResult<UserInfo> {
+async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: FormData) -> ApiResult<UserInfo> {
     let client = auth?;
     query.bump_login(client)?;
     let fields = create_field_table(query.fields())?;
@@ -223,7 +218,7 @@ async fn create_user_multipart(auth: AuthResult, query: ResourceQuery, form_data
     let body = upload::extract(form_data, [Part::Avatar]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let user_info: NewUserInfo = serde_json::from_slice(&metadata)?;
-    let user_id = create(client, &user_info)?;
+    let user_id = create_user(client, &user_info)?;
 
     if let [Some(avatar)] = body.files {
         let avatar_thumbnail = thumbnail::create_from_bytes(&avatar.data, avatar.content_type, ThumbnailType::Avatar)?;
@@ -271,7 +266,7 @@ struct UserUpdate {
     avatar_token: Option<String>,
 }
 
-fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
+fn update(auth: AuthResult, username: String, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
     let client = auth?;
     query.bump_login(client)?;
 
@@ -392,7 +387,7 @@ fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update:
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from))
 }
 
-fn delete_user(auth: AuthResult, username: String, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete(auth: AuthResult, username: String, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;

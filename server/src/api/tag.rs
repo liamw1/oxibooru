@@ -13,59 +13,53 @@ use std::collections::HashSet;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list_tags = warp::get()
+    let list = warp::get()
         .and(api::auth())
         .and(warp::path!("tags"))
         .and(warp::query())
-        .map(list_tags)
+        .map(list)
         .map(api::Reply::from);
-    let get_tag = warp::get()
+    let get = warp::get()
         .and(api::auth())
         .and(warp::path!("tag" / String))
         .and(api::resource_query())
-        .map(get_tag)
+        .map(get)
         .map(api::Reply::from);
-    let get_tag_siblings = warp::get()
+    let get_siblings = warp::get()
         .and(api::auth())
         .and(warp::path!("tag-siblings" / String))
         .and(api::resource_query())
-        .map(get_tag_siblings)
+        .map(get_siblings)
         .map(api::Reply::from);
-    let create_tag = warp::post()
+    let create = warp::post()
         .and(api::auth())
         .and(warp::path!("tags"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(create_tag)
+        .map(create)
         .map(api::Reply::from);
-    let merge_tags = warp::post()
+    let merge = warp::post()
         .and(api::auth())
         .and(warp::path!("tag-merge"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(merge_tags)
+        .map(merge)
         .map(api::Reply::from);
-    let update_tag = warp::put()
+    let update = warp::put()
         .and(api::auth())
         .and(warp::path!("tag" / String))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(update_tag)
+        .map(update)
         .map(api::Reply::from);
-    let delete_tag = warp::delete()
+    let delete = warp::delete()
         .and(api::auth())
         .and(warp::path!("tag" / String))
         .and(warp::body::json())
-        .map(delete_tag)
+        .map(delete)
         .map(api::Reply::from);
 
-    list_tags
-        .or(get_tag)
-        .or(get_tag_siblings)
-        .or(create_tag)
-        .or(merge_tags)
-        .or(update_tag)
-        .or(delete_tag)
+    list.or(get).or(get_siblings).or(create).or(merge).or(update).or(delete)
 }
 
 const MAX_TAGS_PER_PAGE: i64 = 50;
@@ -79,7 +73,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>> {
+fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_list)?;
@@ -113,7 +107,7 @@ fn list_tags(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Tag
     })
 }
 
-fn get_tag(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagInfo> {
+fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_view)?;
@@ -142,7 +136,7 @@ struct TagSiblings {
     results: Vec<TagSibling>,
 }
 
-fn get_tag_siblings(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagSiblings> {
+fn get_siblings(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagSiblings> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_view)?;
@@ -189,7 +183,7 @@ struct NewTagInfo {
     suggestions: Option<Vec<String>>,
 }
 
-fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> ApiResult<TagInfo> {
+fn create(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> ApiResult<TagInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_create)?;
@@ -228,7 +222,7 @@ fn create_tag(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> A
     conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
 }
 
-fn merge_tags(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String>) -> ApiResult<TagInfo> {
+fn merge(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String>) -> ApiResult<TagInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_merge)?;
@@ -361,7 +355,7 @@ struct TagUpdate {
     suggestions: Option<Vec<String>>,
 }
 
-fn update_tag(auth: AuthResult, name: String, query: ResourceQuery, update: TagUpdate) -> ApiResult<TagInfo> {
+fn update(auth: AuthResult, name: String, query: ResourceQuery, update: TagUpdate) -> ApiResult<TagInfo> {
     let client = auth?;
     query.bump_login(client)?;
 
@@ -431,7 +425,7 @@ fn update_tag(auth: AuthResult, name: String, query: ResourceQuery, update: TagU
     conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
 }
 
-fn delete_tag(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_delete)?;
 

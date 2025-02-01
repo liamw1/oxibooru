@@ -13,7 +13,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(api::auth())
         .and(warp::path!("info"))
         .and(api::resource_query())
-        .map(get_info)
+        .map(get)
         .map(api::Reply::from)
 }
 
@@ -38,7 +38,7 @@ struct Info {
     config: &'static config::PublicInfo,
 }
 
-fn get_info(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
+fn get(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
     let client = auth?;
     query.bump_login(client)?;
 

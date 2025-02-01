@@ -27,36 +27,36 @@ use tokio::sync::Mutex as AsyncMutex;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list_posts = warp::get()
+    let list = warp::get()
         .and(api::auth())
         .and(warp::path!("posts"))
         .and(warp::query())
-        .map(list_posts)
+        .map(list)
         .map(api::Reply::from);
-    let get_post = warp::get()
+    let get = warp::get()
         .and(api::auth())
         .and(warp::path!("post" / i64))
         .and(api::resource_query())
-        .map(get_post)
+        .map(get)
         .map(api::Reply::from);
-    let get_post_neighbors = warp::get()
+    let get_neighbors = warp::get()
         .and(api::auth())
         .and(warp::path!("post" / i64 / "around"))
         .and(api::resource_query())
-        .map(get_post_neighbors)
+        .map(get_neighbors)
         .map(api::Reply::from);
-    let get_featured_post = warp::get()
+    let get_featured = warp::get()
         .and(api::auth())
         .and(warp::path!("featured-post"))
         .and(api::resource_query())
-        .map(get_featured_post)
+        .map(get_featured)
         .map(api::Reply::from);
-    let feature_post = warp::post()
+    let feature = warp::post()
         .and(api::auth())
         .and(warp::path!("featured-post"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(feature_post)
+        .map(feature)
         .map(api::Reply::from);
     let reverse_search = warp::post()
         .and(api::auth())
@@ -65,66 +65,65 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .map(reverse_search)
         .map(api::Reply::from);
-    let create_post = warp::post()
+    let create = warp::post()
         .and(api::auth())
         .and(warp::path!("posts"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(create_post)
+        .map(create)
         .map(api::Reply::from);
-    let merge_posts = warp::post()
+    let merge = warp::post()
         .and(api::auth())
         .and(warp::path!("post-merge"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(merge_posts)
+        .map(merge)
         .map(api::Reply::from);
-    let favorite_post = warp::post()
+    let favorite = warp::post()
         .and(api::auth())
         .and(warp::path!("post" / i64 / "favorite"))
         .and(api::resource_query())
-        .map(favorite_post)
+        .map(favorite)
         .map(api::Reply::from);
-    let rate_post = warp::put()
+    let rate = warp::put()
         .and(api::auth())
         .and(warp::path!("post" / i64 / "score"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(rate_post)
+        .map(rate)
         .map(api::Reply::from);
-    let update_post = warp::put()
+    let update = warp::put()
         .and(api::auth())
         .and(warp::path!("post" / i64))
         .and(api::resource_query())
         .and(warp::body::json())
-        .then(update_post)
+        .then(update)
         .map(api::Reply::from);
-    let delete_post = warp::delete()
+    let delete = warp::delete()
         .and(api::auth())
         .and(warp::path!("post" / i64))
         .and(warp::body::json())
-        .then(delete_post)
+        .then(delete)
         .map(api::Reply::from);
-    let unfavorite_post = warp::delete()
+    let unfavorite = warp::delete()
         .and(api::auth())
         .and(warp::path!("post" / i64 / "favorite"))
         .and(api::resource_query())
-        .map(unfavorite_post)
+        .map(unfavorite)
         .map(api::Reply::from);
 
-    list_posts
-        .or(get_post)
-        .or(get_post_neighbors)
-        .or(get_featured_post)
-        .or(feature_post)
+    list.or(get)
+        .or(get_neighbors)
+        .or(get_featured)
+        .or(feature)
         .or(reverse_search)
-        .or(create_post)
-        .or(merge_posts)
-        .or(favorite_post)
-        .or(rate_post)
-        .or(update_post)
-        .or(delete_post)
-        .or(unfavorite_post)
+        .or(create)
+        .or(merge)
+        .or(favorite)
+        .or(rate)
+        .or(update)
+        .or(delete)
+        .or(unfavorite)
 }
 
 const MAX_POSTS_PER_PAGE: i64 = 50;
@@ -137,7 +136,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PostInfo>> {
+fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PostInfo>> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_list)?;
@@ -172,7 +171,7 @@ fn list_posts(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     })
 }
 
-fn get_post(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostInfo> {
+fn get(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_view)?;
@@ -195,7 +194,7 @@ struct PostNeighbors {
     next: Option<PostInfo>,
 }
 
-fn get_post_neighbors(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostNeighbors> {
+fn get_neighbors(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostNeighbors> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_list)?;
@@ -256,7 +255,7 @@ fn get_post_neighbors(auth: AuthResult, post_id: i64, query: ResourceQuery) -> A
     })
 }
 
-fn get_featured_post(auth: AuthResult, query: ResourceQuery) -> ApiResult<Option<PostInfo>> {
+fn get_featured(auth: AuthResult, query: ResourceQuery) -> ApiResult<Option<PostInfo>> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_view_featured)?;
@@ -284,7 +283,7 @@ struct PostFeature {
     id: i64,
 }
 
-fn feature_post(auth: AuthResult, query: ResourceQuery, post_feature: PostFeature) -> ApiResult<PostInfo> {
+fn feature(auth: AuthResult, query: ResourceQuery, post_feature: PostFeature) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_feature)?;
@@ -393,7 +392,7 @@ struct NewPostInfo {
     flags: Option<Vec<PostFlag>>,
 }
 
-fn create_post(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {
+fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {
     let client = auth?;
     let required_rank = match post_info.anonymous.unwrap_or(false) {
         true => config::privileges().post_create_anonymous,
@@ -490,7 +489,7 @@ struct PostMergeRequest {
     replace_content: bool,
 }
 
-fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequest) -> ApiResult<PostInfo> {
+fn merge(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequest) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_merge)?;
@@ -698,7 +697,7 @@ fn merge_posts(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequ
     conn.transaction(|conn| PostInfo::new(conn, client_id, merged_post, &fields).map_err(api::Error::from))
 }
 
-fn favorite_post(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostInfo> {
+fn favorite(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_favorite)?;
@@ -722,7 +721,7 @@ fn favorite_post(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiRes
     conn.transaction(|conn| PostInfo::new_from_id(conn, Some(user_id), post_id, &fields).map_err(api::Error::from))
 }
 
-fn rate_post(auth: AuthResult, post_id: i64, query: ResourceQuery, rating: RatingRequest) -> ApiResult<PostInfo> {
+fn rate(auth: AuthResult, post_id: i64, query: ResourceQuery, rating: RatingRequest) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_score)?;
@@ -766,7 +765,7 @@ struct PostUpdate {
     thumbnail_token: Option<String>,
 }
 
-async fn update_post(auth: AuthResult, post_id: i64, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
+async fn update(auth: AuthResult, post_id: i64, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
     let client = auth?;
     query.bump_login(client)?;
 
@@ -900,7 +899,7 @@ async fn update_post(auth: AuthResult, post_id: i64, query: ResourceQuery, updat
     })
 }
 
-async fn delete_post(auth: AuthResult, post_id: i64, client_version: DeleteRequest) -> ApiResult<()> {
+async fn delete(auth: AuthResult, post_id: i64, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().post_delete)?;
 
@@ -934,7 +933,7 @@ async fn delete_post(auth: AuthResult, post_id: i64, client_version: DeleteReque
     Ok(())
 }
 
-fn unfavorite_post(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostInfo> {
+fn unfavorite(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().post_favorite)?;
 

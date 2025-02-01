@@ -12,36 +12,33 @@ use uuid::Uuid;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list_user_tokens = warp::get()
+    let list = warp::get()
         .and(api::auth())
         .and(warp::path!("user-tokens" / String))
         .and(api::resource_query())
-        .map(list_user_tokens)
+        .map(list)
         .map(api::Reply::from);
-    let create_user_token = warp::post()
+    let create = warp::post()
         .and(api::auth())
         .and(warp::path!("user-token" / String))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(create_user_token)
+        .map(create)
         .map(api::Reply::from);
-    let update_user_token = warp::put()
+    let update = warp::put()
         .and(api::auth())
         .and(warp::path!("user-token" / String / Uuid))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(update_user_token)
+        .map(update)
         .map(api::Reply::from);
-    let delete_user_token = warp::delete()
+    let delete = warp::delete()
         .and(api::auth())
         .and(warp::path!("user-token" / String / Uuid))
-        .map(delete_user_token)
+        .map(delete)
         .map(api::Reply::from);
 
-    list_user_tokens
-        .or(create_user_token)
-        .or(update_user_token)
-        .or(delete_user_token)
+    list.or(create).or(update).or(delete)
 }
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
@@ -52,11 +49,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_user_tokens(
-    auth: AuthResult,
-    username: String,
-    query: ResourceQuery,
-) -> ApiResult<UnpagedResponse<UserTokenInfo>> {
+fn list(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UnpagedResponse<UserTokenInfo>> {
     let client = auth?;
     let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
@@ -95,7 +88,7 @@ struct NewUserTokenInfo {
     expiration_time: Option<DateTime>,
 }
 
-fn create_user_token(
+fn create(
     auth: AuthResult,
     username: String,
     query: ResourceQuery,
@@ -157,7 +150,7 @@ struct UserTokenUpdate {
     expiration_time: Option<Option<DateTime>>,
 }
 
-fn update_user_token(
+fn update(
     auth: AuthResult,
     username: String,
     token: Uuid,
@@ -202,7 +195,7 @@ fn update_user_token(
     Ok(UserTokenInfo::new(MicroUser::new(username.to_string(), avatar_style), updated_user_token, &fields))
 }
 
-fn delete_user_token(auth: AuthResult, username: String, token: Uuid) -> ApiResult<()> {
+fn delete(auth: AuthResult, username: String, token: Uuid) -> ApiResult<()> {
     let client = auth?;
     let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;

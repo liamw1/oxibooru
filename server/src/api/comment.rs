@@ -11,52 +11,47 @@ use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list_comments = warp::get()
+    let list = warp::get()
         .and(api::auth())
         .and(warp::path!("comments"))
         .and(warp::query())
-        .map(list_comments)
+        .map(list)
         .map(api::Reply::from);
-    let get_comment = warp::get()
+    let get = warp::get()
         .and(api::auth())
         .and(warp::path!("comment" / i64))
         .and(api::resource_query())
-        .map(get_comment)
+        .map(get)
         .map(api::Reply::from);
-    let create_comment = warp::post()
+    let create = warp::post()
         .and(api::auth())
         .and(warp::path!("comments"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(create_comment)
+        .map(create)
         .map(api::Reply::from);
-    let update_comment = warp::put()
+    let update = warp::put()
         .and(api::auth())
         .and(warp::path!("comment" / i64))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(update_comment)
+        .map(update)
         .map(api::Reply::from);
-    let rate_comment = warp::put()
+    let rate = warp::put()
         .and(api::auth())
         .and(warp::path!("comment" / i64 / "score"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(rate_comment)
+        .map(rate)
         .map(api::Reply::from);
-    let delete_comment = warp::delete()
+    let delete = warp::delete()
         .and(api::auth())
         .and(warp::path!("comment" / i64))
         .and(warp::body::json())
-        .map(delete_comment)
+        .map(delete)
         .map(api::Reply::from);
 
-    list_comments
-        .or(get_comment)
-        .or(create_comment)
-        .or(update_comment)
-        .or(rate_comment)
-        .or(delete_comment)
+    list.or(get).or(create).or(update).or(rate).or(delete)
 }
 
 const MAX_COMMENTS_PER_PAGE: i64 = 50;
@@ -69,7 +64,7 @@ fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn 
         .map_err(Box::from)
 }
 
-fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<CommentInfo>> {
+fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<CommentInfo>> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().comment_list)?;
 
@@ -103,7 +98,7 @@ fn list_comments(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse
     })
 }
 
-fn get_comment(auth: AuthResult, comment_id: i64, query: ResourceQuery) -> ApiResult<CommentInfo> {
+fn get(auth: AuthResult, comment_id: i64, query: ResourceQuery) -> ApiResult<CommentInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().comment_view)?;
 
@@ -126,7 +121,7 @@ struct NewCommentInfo {
     text: String,
 }
 
-fn create_comment(auth: AuthResult, query: ResourceQuery, comment_info: NewCommentInfo) -> ApiResult<CommentInfo> {
+fn create(auth: AuthResult, query: ResourceQuery, comment_info: NewCommentInfo) -> ApiResult<CommentInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().comment_create)?;
 
@@ -156,12 +151,7 @@ struct CommentUpdate {
     text: String,
 }
 
-fn update_comment(
-    auth: AuthResult,
-    comment_id: i64,
-    query: ResourceQuery,
-    update: CommentUpdate,
-) -> ApiResult<CommentInfo> {
+fn update(auth: AuthResult, comment_id: i64, query: ResourceQuery, update: CommentUpdate) -> ApiResult<CommentInfo> {
     let client = auth?;
     let client_id = client.map(|user| user.id);
     let fields = create_field_table(query.fields())?;
@@ -188,12 +178,7 @@ fn update_comment(
     conn.transaction(|conn| CommentInfo::new_from_id(conn, client_id, comment_id, &fields).map_err(api::Error::from))
 }
 
-fn rate_comment(
-    auth: AuthResult,
-    comment_id: i64,
-    query: ResourceQuery,
-    rating: RatingRequest,
-) -> ApiResult<CommentInfo> {
+fn rate(auth: AuthResult, comment_id: i64, query: ResourceQuery, rating: RatingRequest) -> ApiResult<CommentInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().comment_score)?;
 
@@ -221,7 +206,7 @@ fn rate_comment(
     })
 }
 
-fn delete_comment(auth: AuthResult, comment_id: i64, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete(auth: AuthResult, comment_id: i64, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     let client_id = client.map(|user| user.id);
 
