@@ -3,7 +3,7 @@ use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::{Part, Upload, MAX_UPLOAD_SIZE};
-use crate::content::{hash, thumbnail, upload};
+use crate::content::{hash, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
 use crate::resource::user::{FieldTable, UserInfo, Visibility};
@@ -203,7 +203,7 @@ fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> Api
 }
 
 async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: FormData) -> ApiResult<UserInfo> {
-    let body = upload::extract(form_data, [Part::Avatar]).await?;
+    let body = upload::extract_with_metadata(form_data, [Part::Avatar]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut user_info: NewUserInfo = serde_json::from_slice(&metadata)?;
     if let [Some(avatar)] = body.files {
@@ -224,7 +224,7 @@ struct UserUpdate {
     email: Option<Option<String>>,
     rank: Option<UserRank>,
     avatar_style: Option<AvatarStyle>,
-    avatar_token: Option<String>,
+    avatar_token: Option<Upload>,
 }
 
 fn update(auth: AuthResult, username: String, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
@@ -236,7 +236,8 @@ fn update(auth: AuthResult, username: String, query: ResourceQuery, update: User
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let custom_avatar = update
         .avatar_token
-        .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Avatar))
+        .as_ref()
+        .map(|upload| upload.thumbnail(ThumbnailType::Avatar))
         .transpose()?;
 
     let mut conn = db::get_connection()?;

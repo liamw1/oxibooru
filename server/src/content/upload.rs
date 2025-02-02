@@ -1,6 +1,7 @@
 use crate::api::ApiResult;
+use crate::content::cache::CachedProperties;
 use crate::content::thumbnail::ThumbnailType;
-use crate::content::{decode, thumbnail};
+use crate::content::{cache, decode, thumbnail};
 use crate::model::enums::MimeType;
 use crate::{api, filesystem};
 use futures::{StreamExt, TryStreamExt};
@@ -14,12 +15,14 @@ use warp::Buf;
 
 pub const MAX_UPLOAD_SIZE: u64 = 4 * 1024_u64.pow(3);
 
+/// Stores file contents and content type of an uploaded file.
 pub struct FileContents {
     pub data: Vec<u8>,
     pub content_type: MimeType,
 }
 
 impl FileContents {
+    /// Constructs an instance from a temporary upload.
     pub fn from_token(token: &str) -> ApiResult<Self> {
         let (_uuid, extension) = token.split_once('.').unwrap();
         let content_type = MimeType::from_extension(extension)?;
@@ -31,6 +34,11 @@ impl FileContents {
     }
 }
 
+/// Contains either the name of a file uploaded to the temporary uploads
+/// directory or the contents of the file sent via a multipart request.
+///
+/// Only the Token variant can be deserialized. The Content variant has
+/// to be set manually.
 pub enum Upload {
     Token(String),
     Content(FileContents),
@@ -44,6 +52,26 @@ impl Upload {
         };
         decode::representative_image(&file_contents.data, None, file_contents.content_type)
             .map(|image| thumbnail::create(&image, thumbnail_type))
+    }
+
+    pub fn compute_properties(&self) -> ApiResult<CachedProperties> {
+        match self {
+            Self::Token(token) => cache::compute_properties(token.to_owned()),
+            Self::Content(file) => {
+                let token = filesystem::save_uploaded_file(&file.data, file.content_type)?;
+                cache::compute_properties(token)
+            }
+        }
+    }
+
+    pub fn get_or_compute_properties(&self) -> ApiResult<CachedProperties> {
+        match self {
+            Self::Token(token) => cache::get_or_compute_properties(token.to_owned()),
+            Self::Content(file) => {
+                let token = filesystem::save_uploaded_file(&file.data, file.content_type)?;
+                cache::compute_properties(token)
+            }
+        }
     }
 }
 
@@ -82,7 +110,19 @@ pub struct Body<const N: usize> {
     pub metadata: Option<Vec<u8>>,
 }
 
-pub async fn extract<const N: usize>(mut form_data: FormData, parts: [Part; N]) -> ApiResult<Body<N>> {
+pub async fn extract_with_metadata<const N: usize>(form_data: FormData, parts: [Part; N]) -> ApiResult<Body<N>> {
+    extract(form_data, parts, true).await
+}
+
+pub async fn extract_without_metadata<const N: usize>(form_data: FormData, parts: [Part; N]) -> ApiResult<Body<N>> {
+    extract(form_data, parts, false).await
+}
+
+async fn extract<const N: usize>(
+    mut form_data: FormData,
+    parts: [Part; N],
+    extract_metadata: bool,
+) -> ApiResult<Body<N>> {
     let mut files = std::array::from_fn(|_| None);
     let mut metadata = None;
     while let Some(Ok(part)) = form_data.next().await {
@@ -90,9 +130,10 @@ pub async fn extract<const N: usize>(mut form_data: FormData, parts: [Part; N]) 
             .iter()
             .map(Into::<&str>::into)
             .position(|name| part.name() == name);
-        if position.is_none() && part.name() != "metadata" {
+        if position.is_none() && (!extract_metadata || part.name() != "metadata") {
             continue;
         }
+
         let file_info = position
             .map(|index| MimeType::from_str(part.content_type().unwrap_or("")).map(|mime_type| (index, mime_type)))
             .transpose()

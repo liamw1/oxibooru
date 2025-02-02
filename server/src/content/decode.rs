@@ -16,8 +16,6 @@ pub fn representative_image(
     file_path: Option<PathBuf>,
     content_type: MimeType,
 ) -> ApiResult<DynamicImage> {
-    let post_type = PostType::from(content_type);
-    let temp_file_created = post_type == PostType::Video && file_path.is_none();
     let path = match file_path {
         Some(path) => path,
         None => {
@@ -26,7 +24,7 @@ pub fn representative_image(
         }
     };
 
-    let image = match PostType::from(content_type) {
+    match PostType::from(content_type) {
         PostType::Image | PostType::Animation => {
             let image_format = content_type
                 .to_image_format()
@@ -34,12 +32,7 @@ pub fn representative_image(
             image(file_contents, image_format).map_err(api::Error::from)
         }
         PostType::Video => video_frame(&path).map_err(api::Error::from),
-    }?;
-
-    if temp_file_created {
-        std::fs::remove_file(path)?;
     }
-    Ok(image)
 }
 
 /// Returns if the video at `path` has an audio channel.

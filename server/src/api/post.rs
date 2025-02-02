@@ -3,7 +3,8 @@ use crate::api::{
 };
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::{cache, signature, thumbnail};
+use crate::content::upload::Upload;
+use crate::content::{cache, signature};
 use crate::filesystem::Directory;
 use crate::model::comment::NewComment;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
@@ -308,7 +309,7 @@ fn feature(auth: AuthResult, query: ResourceQuery, post_feature: PostFeature) ->
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct ContentToken {
-    content_token: String,
+    content_token: Upload,
 }
 
 #[derive(Serialize)]
@@ -331,7 +332,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     api::verify_privilege(client, config::privileges().post_reverse_search)?;
 
     let fields = create_field_table(query.fields())?;
-    let content_properties = cache::compute_properties(token.content_token)?;
+    let content_properties = token.content_token.compute_properties()?;
 
     let client_id = client.map(|user| user.id);
     db::get_connection()?.transaction(|conn| {
@@ -383,7 +384,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
 #[serde(rename_all = "camelCase")]
 struct NewPostInfo {
     content_token: String,
-    thumbnail_token: Option<String>,
+    thumbnail_token: Option<Upload>,
     safety: PostSafety,
     source: Option<String>,
     relations: Option<Vec<i64>>,
@@ -405,7 +406,8 @@ fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> Api
     let content_properties = cache::get_or_compute_properties(post_info.content_token)?;
     let custom_thumbnail = post_info
         .thumbnail_token
-        .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Post))
+        .as_ref()
+        .map(|upload| upload.thumbnail(ThumbnailType::Post))
         .transpose()?;
 
     let mut flags = content_properties.flags;
@@ -761,8 +763,8 @@ struct PostUpdate {
     tags: Option<Vec<String>>,
     notes: Option<Vec<Note>>,
     flags: Option<Vec<PostFlag>>,
-    content_token: Option<String>,
-    thumbnail_token: Option<String>,
+    content_token: Option<Upload>,
+    thumbnail_token: Option<Upload>,
 }
 
 async fn update(auth: AuthResult, post_id: i64, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
@@ -771,10 +773,15 @@ async fn update(auth: AuthResult, post_id: i64, query: ResourceQuery, update: Po
 
     let fields = create_field_table(query.fields())?;
     let post_hash = PostHash::new(post_id);
-    let new_content = update.content_token.map(cache::get_or_compute_properties).transpose()?;
+    let new_content = update
+        .content_token
+        .as_ref()
+        .map(Upload::get_or_compute_properties)
+        .transpose()?;
     let custom_thumbnail = update
         .thumbnail_token
-        .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Post))
+        .as_ref()
+        .map(|upload| upload.thumbnail(ThumbnailType::Post))
         .transpose()?;
 
     // Updating tags of many posts simultaneously can cause deadlocks due to statistics updating,

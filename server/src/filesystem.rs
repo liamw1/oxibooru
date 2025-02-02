@@ -41,6 +41,9 @@ pub fn temporary_upload_filepath(filename: &str) -> PathBuf {
 /// Saves raw bytes to temporary upload folder as a `mime_type`-file to disk.
 /// Returns name of the file written.
 pub fn save_uploaded_file(data: &[u8], mime_type: MimeType) -> std::io::Result<String> {
+    // Create temp directory if necessary
+    create_dir(Directory::TemporaryUploads)?;
+
     let upload_token = format!("{}.{}", Uuid::new_v4(), mime_type.extension());
     let upload_path = temporary_upload_filepath(&upload_token);
     std::fs::write(upload_path, &data)?;
