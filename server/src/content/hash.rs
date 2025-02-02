@@ -60,7 +60,7 @@ pub fn gravatar_url(username: &str) -> String {
 }
 
 pub fn custom_avatar_url(username: &str) -> String {
-    format!("{}/custom-avatars/{}.png", config::get().data_url, username.to_lowercase())
+    format!("{}/avatars/{}.png", config::get().data_url, username.to_lowercase())
 }
 
 pub fn custom_avatar_path(username: &str) -> PathBuf {

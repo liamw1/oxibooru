@@ -3,7 +3,7 @@
     "email": false,
     "rank": "regular",
     "avatarStyle": "manual",
-    "avatarUrl": "data/custom-avatars/regular_user.png",
+    "avatarUrl": "data/avatars/regular_user.png",
     "commentCount": 2,
     "uploadedPostCount": 3,
     "likedPostCount": false,

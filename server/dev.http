@@ -59,3 +59,8 @@ accept: application/json
 GET http://localhost:8080/api/post/2/around/?query=&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion
 content-Type: application/json
 accept: application/json
+
+### List Users
+GET http://localhost:8080/api/users/?limit=30
+content-Type: application/json
+accept: application/json
