@@ -47,7 +47,7 @@ pub enum Upload {
 impl Upload {
     pub fn thumbnail(&self, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
         let file_contents = match self {
-            Self::Token(token) => &FileContents::from_token(&token)?,
+            Self::Token(token) => &FileContents::from_token(token)?,
             Self::Content(contents) => contents,
         };
         decode::representative_image(&file_contents.data, None, file_contents.content_type)
@@ -78,7 +78,7 @@ impl Upload {
 impl<'de> Deserialize<'de> for Upload {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct AvatarVisitor;
-        impl<'de> Visitor<'de> for AvatarVisitor {
+        impl Visitor<'_> for AvatarVisitor {
             type Value = Upload;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

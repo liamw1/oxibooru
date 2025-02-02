@@ -46,7 +46,7 @@ pub fn save_uploaded_file(data: &[u8], mime_type: MimeType) -> std::io::Result<S
 
     let upload_token = format!("{}.{}", Uuid::new_v4(), mime_type.extension());
     let upload_path = temporary_upload_filepath(&upload_token);
-    std::fs::write(upload_path, &data)?;
+    std::fs::write(upload_path, data)?;
     Ok(upload_token)
 }
 

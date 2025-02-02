@@ -3,8 +3,8 @@ use crate::api::{
 };
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::upload::Upload;
-use crate::content::{cache, signature};
+use crate::content::upload::{Part, Upload, MAX_UPLOAD_SIZE};
+use crate::content::{signature, upload};
 use crate::filesystem::Directory;
 use crate::model::comment::NewComment;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 use tokio::sync::Mutex as AsyncMutex;
+use warp::multipart::FormData;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -66,12 +67,26 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .map(reverse_search)
         .map(api::Reply::from);
+    let reverse_search_multipart = warp::post()
+        .and(api::auth())
+        .and(warp::path!("posts" / "reverse-search"))
+        .and(api::resource_query())
+        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
+        .then(reverse_search_multipart)
+        .map(api::Reply::from);
     let create = warp::post()
         .and(api::auth())
         .and(warp::path!("posts"))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(create)
+        .map(api::Reply::from);
+    let create_multipart = warp::post()
+        .and(api::auth())
+        .and(warp::path!("posts"))
+        .and(api::resource_query())
+        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
+        .then(create_multipart)
         .map(api::Reply::from);
     let merge = warp::post()
         .and(api::auth())
@@ -100,6 +115,13 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .then(update)
         .map(api::Reply::from);
+    let update_multipart = warp::put()
+        .and(api::auth())
+        .and(warp::path!("post" / i64))
+        .and(api::resource_query())
+        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
+        .then(update_multipart)
+        .map(api::Reply::from);
     let delete = warp::delete()
         .and(api::auth())
         .and(warp::path!("post" / i64))
@@ -118,11 +140,14 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(get_featured)
         .or(feature)
         .or(reverse_search)
+        .or(reverse_search_multipart)
         .or(create)
+        .or(create_multipart)
         .or(merge)
         .or(favorite)
         .or(rate)
         .or(update)
+        .or(update_multipart)
         .or(delete)
         .or(unfavorite)
 }
@@ -379,11 +404,27 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     })
 }
 
+async fn reverse_search_multipart(
+    auth: AuthResult,
+    query: ResourceQuery,
+    form_data: FormData,
+) -> ApiResult<ReverseSearchInfo> {
+    let body = upload::extract_without_metadata(form_data, [Part::Content]).await?;
+    if let [Some(content)] = body.files {
+        let content_token = ContentToken {
+            content_token: Upload::Content(content),
+        };
+        reverse_search(auth, query, content_token)
+    } else {
+        Err(api::Error::MissingFormData)
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct NewPostInfo {
-    content_token: String,
+    content_token: Upload,
     thumbnail_token: Option<Upload>,
     safety: PostSafety,
     source: Option<String>,
@@ -403,7 +444,7 @@ fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> Api
     api::verify_privilege(client, required_rank)?;
 
     let fields = create_field_table(query.fields())?;
-    let content_properties = cache::get_or_compute_properties(post_info.content_token)?;
+    let content_properties = post_info.content_token.get_or_compute_properties()?;
     let custom_thumbnail = post_info
         .thumbnail_token
         .as_ref()
@@ -480,6 +521,22 @@ fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> Api
         Ok::<_, api::Error>(post_id)
     })?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
+}
+
+async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: FormData) -> ApiResult<PostInfo> {
+    let body = upload::extract_with_metadata(form_data, [Part::Content, Part::Thumbnail]).await?;
+    let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
+    let mut post_info: NewPostInfo = serde_json::from_slice(&metadata)?;
+    let [content, thumbnail] = body.files;
+
+    if let Some(content) = content {
+        post_info.content_token = Upload::Content(content);
+    }
+    if let Some(thumbnail) = thumbnail {
+        post_info.thumbnail_token = Some(Upload::Content(thumbnail));
+    }
+
+    create(auth, query, post_info)
 }
 
 #[derive(Deserialize)]
@@ -904,6 +961,27 @@ async fn update(auth: AuthResult, post_id: i64, query: ResourceQuery, update: Po
     db::get_connection()?.transaction(|conn| {
         PostInfo::new_from_id(conn, client.map(|user| user.id), post_id, &fields).map_err(api::Error::from)
     })
+}
+
+async fn update_multipart(
+    auth: AuthResult,
+    post_id: i64,
+    query: ResourceQuery,
+    form_data: FormData,
+) -> ApiResult<PostInfo> {
+    let body = upload::extract_with_metadata(form_data, [Part::Content, Part::Thumbnail]).await?;
+    let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
+    let mut post_update: PostUpdate = serde_json::from_slice(&metadata)?;
+    let [content, thumbnail] = body.files;
+
+    if let Some(content) = content {
+        post_update.content_token = Some(Upload::Content(content));
+    }
+    if let Some(thumbnail) = thumbnail {
+        post_update.thumbnail_token = Some(Upload::Content(thumbnail));
+    }
+
+    update(auth, post_id, query, post_update).await
 }
 
 async fn delete(auth: AuthResult, post_id: i64, client_version: DeleteRequest) -> ApiResult<()> {
