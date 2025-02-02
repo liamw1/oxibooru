@@ -77,8 +77,8 @@ impl Upload {
 
 impl<'de> Deserialize<'de> for Upload {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        struct AvatarVisitor;
-        impl Visitor<'_> for AvatarVisitor {
+        struct UploadVisitor;
+        impl Visitor<'_> for UploadVisitor {
             type Value = Upload;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -93,7 +93,7 @@ impl<'de> Deserialize<'de> for Upload {
                 Ok(Upload::Token(value))
             }
         }
-        deserializer.deserialize_string(AvatarVisitor)
+        deserializer.deserialize_string(UploadVisitor)
     }
 }
 
@@ -134,19 +134,24 @@ async fn extract<const N: usize>(
             continue;
         }
 
+        // Get MIME type from filename
         let file_info = position
-            .map(|index| MimeType::from_str(part.content_type().unwrap_or("")).map(|mime_type| (index, mime_type)))
-            .transpose()
-            .map_err(Box::from)?;
+            .map(|index| {
+                let filename = std::path::Path::new(part.filename().unwrap_or(""));
+                let extension = filename.extension().and_then(|ext| ext.to_str()).unwrap_or("");
+                MimeType::from_extension(extension).map(|mime_type| (index, mime_type))
+            })
+            .transpose()?;
 
-        // Ensure file extension matches content type
-        if let Some((_, mime_type)) = file_info {
-            let filename = std::path::Path::new(part.filename().unwrap_or(""));
-            let extension = filename.extension().and_then(|ext| ext.to_str()).unwrap_or("");
-            if MimeType::from_extension(extension) != Ok(mime_type) {
-                return Err(api::Error::ContentTypeMismatch(mime_type, extension.to_owned()));
+        // Ensure file extension matches content type (if it exists)
+        if let (Some((_, mime_type)), Some(content_type)) = (file_info, part.content_type()) {
+            if MimeType::from_str(content_type) != Ok(mime_type) {
+                return Err(api::Error::ContentTypeMismatch(mime_type, content_type.to_owned()));
             }
-        } else if part.content_type() != Some("application/json") {
+        }
+
+        // Ensure metadata is JSON
+        if file_info.is_none() && part.content_type() != Some("application/json") {
             return Err(api::Error::InvalidMetadataType);
         }
 

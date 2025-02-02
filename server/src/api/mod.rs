@@ -59,7 +59,7 @@ pub enum Error {
     BadExtension(#[from] crate::model::enums::ParseExtensionError),
     BadHash(#[from] crate::auth::HashError),
     BadHeader(#[from] warp::http::header::ToStrError),
-    #[error("Request content-type {0} did not match file extension .{1}")]
+    #[error("File of type {0} did not match request with content-type {1}")]
     ContentTypeMismatch(MimeType, String),
     #[error("Cyclic dependency detected in {0}s")]
     CyclicDependency(ResourceType),
