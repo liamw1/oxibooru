@@ -71,13 +71,10 @@ pub fn create_url(database_override: Option<&str>) -> String {
 
     let user = std::env::var("POSTGRES_USER").unwrap();
     let password = std::env::var("POSTGRES_PASSWORD").unwrap();
+    let hostname = std::env::var("POSTGRES_HOST").unwrap_or(String::from("localhost"));
     let database = database_override
         .map(Cow::Borrowed)
         .unwrap_or(Cow::Owned(std::env::var("POSTGRES_DB").unwrap()));
-    let hostname = match std::env::var("DOCKER_DEPLOYMENT") {
-        Ok(_) => "host.docker.internal",
-        Err(_) => "localhost",
-    };
 
     format!("postgres://{user}:{password}@{hostname}/{database}")
 }
