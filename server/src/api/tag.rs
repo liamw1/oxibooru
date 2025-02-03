@@ -333,13 +333,8 @@ fn merge(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String
             .get_results(conn)?;
         update::tag::add_names(conn, merge_to_id, current_name_count, removed_names)?;
 
-        // Update last_edit_time
-        diesel::update(tag::table.find(merge_to_id))
-            .set(tag::last_edit_time.eq(DateTime::now()))
-            .execute(conn)?;
-
         diesel::delete(tag::table.find(remove_id)).execute(conn)?;
-        Ok::<_, api::Error>(merge_to_id)
+        update::tag::last_edit_time(conn, merge_to_id).map(|_| merge_to_id)
     })?;
     conn.transaction(|conn| TagInfo::new_from_id(conn, merged_tag_id, &fields).map_err(api::Error::from))
 }
@@ -415,12 +410,7 @@ fn update(auth: AuthResult, name: String, query: ResourceQuery, update: TagUpdat
                 .execute(conn)?;
             update::tag::add_suggestions(conn, tag_id, suggested_ids)?;
         }
-
-        // Update last_edit_time
-        diesel::update(tag::table.find(tag_id))
-            .set(tag::last_edit_time.eq(DateTime::now()))
-            .execute(conn)?;
-        Ok::<_, api::Error>(tag_id)
+        update::tag::last_edit_time(conn, tag_id).map(|_| tag_id)
     })?;
     conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
 }

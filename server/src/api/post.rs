@@ -505,19 +505,13 @@ fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> Api
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
-
-            let custom_thumbnail_size =
-                filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
-            diesel::update(post::table.find(post_id))
-                .set(post::custom_thumbnail_size.eq(custom_thumbnail_size as i64))
-                .execute(conn)?;
+            update::post::custom_thumbnail(conn, &post_hash, thumbnail)?;
         }
         let generated_thumbnail_size =
             filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
         diesel::update(post::table.find(post_id))
             .set(post::generated_thumbnail_size.eq(generated_thumbnail_size as i64))
             .execute(conn)?;
-
         Ok::<_, api::Error>(post_id)
     })?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, client_id, post_id, &fields).map_err(api::Error::from))
@@ -742,16 +736,11 @@ fn merge(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequest) -
             merge_to_post = merge_to_post.save_changes(conn)?;
         }
 
-        // Update last_edit_time
-        diesel::update(post::table.find(merge_to_id))
-            .set(post::last_edit_time.eq(DateTime::now()))
-            .execute(conn)?;
-
         if config::get().delete_source_files && !cfg!(test) {
             // This is the correct id and mime_type, even if replacing content :)
             filesystem::delete_post(&remove_hash, remove_post.mime_type)?;
         }
-        Ok::<_, api::Error>(merge_to_post)
+        update::post::last_edit_time(conn, merge_to_id).map(|_| merge_to_post)
     })?;
     conn.transaction(|conn| PostInfo::new(conn, client_id, merged_post, &fields).map_err(api::Error::from))
 }
@@ -942,20 +931,9 @@ async fn update(auth: AuthResult, post_id: i64, query: ResourceQuery, update: Po
             }
             if let Some(thumbnail) = custom_thumbnail {
                 api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
-
-                filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Custom)?;
-                let custom_thumbnail_size =
-                    filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
-                diesel::update(post::table.find(post_id))
-                    .set(post::custom_thumbnail_size.eq(custom_thumbnail_size as i64))
-                    .execute(conn)?;
+                update::post::custom_thumbnail(conn, &post_hash, thumbnail)?;
             }
-
-            // Update last_edit_time
-            diesel::update(post::table.find(post_id))
-                .set(post::last_edit_time.eq(DateTime::now()))
-                .execute(conn)
-                .map_err(api::Error::from)
+            update::post::last_edit_time(conn, post_id)
         })?;
     }
     db::get_connection()?.transaction(|conn| {

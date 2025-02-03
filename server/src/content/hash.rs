@@ -21,6 +21,10 @@ impl PostHash {
         }
     }
 
+    pub fn id(&self) -> i64 {
+        self.post_id
+    }
+
     pub fn content_url(&self, content_type: MimeType) -> String {
         format!("{}/posts/{}_{}.{}", config::get().data_url, self.post_id, self.hash, content_type.extension())
     }

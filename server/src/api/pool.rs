@@ -201,14 +201,8 @@ fn merge(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i64>) 
             .get_results(conn)?;
         update::pool::add_names(conn, merge_to_id, current_name_count, removed_names)?;
 
-        // Update last_edit_time
-        diesel::update(pool::table.find(merge_to_id))
-            .set(pool::last_edit_time.eq(DateTime::now()))
-            .execute(conn)?;
-
-        diesel::delete(pool::table.find(remove_id))
-            .execute(conn)
-            .map_err(api::Error::from)
+        diesel::delete(pool::table.find(remove_id)).execute(conn)?;
+        update::pool::last_edit_time(conn, merge_to_id)
     })?;
     conn.transaction(|conn| PoolInfo::new_from_id(conn, merge_to_id, &fields).map_err(api::Error::from))
 }
@@ -265,12 +259,7 @@ fn update(auth: AuthResult, pool_id: i64, query: ResourceQuery, update: PoolUpda
             update::pool::delete_posts(conn, pool_id)?;
             update::pool::add_posts(conn, pool_id, 0, posts)?;
         }
-
-        // Update last_edit_time
-        diesel::update(pool::table.find(pool_id))
-            .set(pool::last_edit_time.eq(DateTime::now()))
-            .execute(conn)
-            .map_err(api::Error::from)
+        update::pool::last_edit_time(conn, pool_id)
     })?;
     conn.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
 }

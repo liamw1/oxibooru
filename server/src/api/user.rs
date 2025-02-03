@@ -206,7 +206,13 @@ fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> Api
             .get_result(conn)?;
 
         if let Some(avatar) = custom_avatar {
-            update::user::avatar(conn, client, user_id, &user_info.name, avatar, creating_self)?;
+            let required_rank = match creating_self {
+                true => config::privileges().user_edit_self_avatar,
+                false => config::privileges().user_edit_any_avatar,
+            };
+            api::verify_privilege(client, required_rank)?;
+
+            update::user::avatar(conn, user_id, &user_info.name, avatar)?;
         }
 
         Ok::<_, api::Error>(user_id)
@@ -318,7 +324,13 @@ fn update(auth: AuthResult, username: String, query: ResourceQuery, update: User
                 .execute(conn)?;
         }
         if let Some(avatar) = custom_avatar {
-            update::user::avatar(conn, client, user_id, &username, avatar, editing_self)?;
+            let required_rank = match editing_self {
+                true => config::privileges().user_edit_self_avatar,
+                false => config::privileges().user_edit_any_avatar,
+            };
+            api::verify_privilege(client, required_rank)?;
+
+            update::user::avatar(conn, user_id, &username, avatar)?;
         }
         if let Some(new_name) = update.name.as_deref() {
             let required_rank = match editing_self {
@@ -339,12 +351,7 @@ fn update(auth: AuthResult, username: String, query: ResourceQuery, update: User
                 std::fs::rename(old_custom_avatar_path, new_custom_avatar_path)?;
             }
         }
-
-        // Update last_edit_time
-        diesel::update(user::table.find(user_id))
-            .set(user::last_edit_time.eq(DateTime::now()))
-            .execute(conn)?;
-        Ok::<_, api::Error>((user_id, visibility))
+        update::user::last_edit_time(conn, user_id).map(|_| (user_id, visibility))
     })?;
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from))
 }

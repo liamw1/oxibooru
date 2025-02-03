@@ -4,9 +4,18 @@ use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
+use crate::time::DateTime;
 use crate::{api, config};
 use diesel::prelude::*;
 use std::collections::HashSet;
+
+/// Updates last_edit_time of tag with given `tag_id`.
+pub fn last_edit_time(conn: &mut PgConnection, tag_id: i64) -> ApiResult<()> {
+    diesel::update(tag::table.find(tag_id))
+        .set(tag::last_edit_time.eq(DateTime::now()))
+        .execute(conn)?;
+    Ok(())
+}
 
 /// Appends `names` onto the current list of names for the tag with id `tag_id`.
 pub fn add_names(conn: &mut PgConnection, tag_id: i64, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {

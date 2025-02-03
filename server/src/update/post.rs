@@ -1,7 +1,31 @@
+use crate::api::ApiResult;
+use crate::content::hash::PostHash;
+use crate::content::thumbnail::ThumbnailCategory;
+use crate::filesystem;
 use crate::model::post::{PostRelation, PostTag};
 use crate::resource::post::Note;
-use crate::schema::{post_note, post_relation, post_tag};
+use crate::schema::{post, post_note, post_relation, post_tag};
+use crate::time::DateTime;
 use diesel::prelude::*;
+use image::DynamicImage;
+
+/// Updates last_edit_time of post with given `post_id`.
+pub fn last_edit_time(conn: &mut PgConnection, post_id: i64) -> ApiResult<()> {
+    diesel::update(post::table.find(post_id))
+        .set(post::last_edit_time.eq(DateTime::now()))
+        .execute(conn)?;
+    Ok(())
+}
+
+/// Updates custom thumbnail for post.
+pub fn custom_thumbnail(conn: &mut PgConnection, post_hash: &PostHash, thumbnail: DynamicImage) -> ApiResult<()> {
+    filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Custom)?;
+    let custom_thumbnail_size = filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
+    diesel::update(post::table.find(post_hash.id()))
+        .set(post::custom_thumbnail_size.eq(custom_thumbnail_size as i64))
+        .execute(conn)?;
+    Ok(())
+}
 
 /// Creates relations for the post with id `post_id`, symmetrically.
 pub fn create_relations(conn: &mut PgConnection, post_id: i64, relations: Vec<i64>) -> QueryResult<()> {
