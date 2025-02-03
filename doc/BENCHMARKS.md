@@ -21,8 +21,8 @@ are made anonymously, so time to authenticate isn't included.
     **`GET http://localhost:8080/api/info`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |      2287 |
-    | oxibooru          |        10 |
+    | szurubooru        |      1561 |
+    | oxibooru          |         3 |
 
     Oxibooru blows Szurubooru out of the water here. The reason for this is
     that Szurubooru calculates the disk usage by iterating over the entire data
@@ -47,10 +47,10 @@ are made anonymously, so time to authenticate isn't included.
     **`GET http://localhost:8080/api/posts/?query=&limit=42`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |       435 |
-    | oxibooru          |        74 |
+    | szurubooru        |       475 |
+    | oxibooru          |        99 |
     
-    Oxibooru is almost 6x faster here, but I admit this is a bit of an 
+    Oxibooru is over 4x faster here, but I admit this is a bit of an 
     unrealistic comparison. This query doesn't perform any field selection, so
     by default all post fields will be retrieved. A decent amount of the 
     codebase is dedicated to performing efficient queries for batch retrieval
@@ -70,10 +70,10 @@ are made anonymously, so time to authenticate isn't included.
     
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |        53 |
-    | oxibooru          |        61 |
+    | szurubooru        |        55 |
+    | oxibooru          |        85 |
 
-    Now Oxibooru actually performs a bit worse than Szurubooru. I've mostly
+    Now Oxibooru is about 50% _slower_ than Szurubooru. I've mostly
     spent time optimizing the more complex queries, as simple queries like 
     this are already fast. I know this query could be made at least 2x faster
     with some conditional logic, but I haven't gotten around to adding it.
@@ -83,11 +83,10 @@ are made anonymously, so time to authenticate isn't included.
     **`GET http://localhost:8080/api/posts/?query=-rating%3Aunsafe&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |        93 |
-    | oxibooru          |        97 |
+    | szurubooru        |       101 |
+    | oxibooru          |       125 |
 
-    Oxibooru performs about as well as Szurubooru here. Nothing too crazy
-    so far.
+    Oxibooru is only 25% slower here.
     
 - What about with a huge offset? This query is fairly challenging, not only
   because of the large offset, but also because we have to retrieve posts
@@ -98,13 +97,13 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      2490 |
-    | oxibooru          |       155 |
+    | oxibooru          |       193 |
     
-    The relative difference between Oxibooru and Szurubooru grows to 16x! 
-    One big thing that helps Oxibooru go fast here is that it keeps track of
-    usage counts for each tag with triggers rather than counting them every 
-    time. This does come at a cost (slower updates), but I think this 
-    trade-off is worth it for read-heavy applications like this.
+    Here Oxibooru is over 10x faster than Szurubooru! One big thing that helps 
+    Oxibooru go fast here is that it keeps track of usage counts for each tag 
+    with triggers rather than counting them every time. This does come at a 
+    cost (slower updates), but I think this  trade-off is worth it for 
+    read-heavy applications like this.
     
 - One very common use case is to search for posts with a particular tag. Let's
   search for all posts with the tag `tagme`.
@@ -112,22 +111,20 @@ are made anonymously, so time to authenticate isn't included.
     **`GET http://localhost:8080/api/posts/?query=tagme&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |       594 |
-    | oxibooru          |        75 |
+    | szurubooru        |       158 |
+    | oxibooru          |       154 |
     
-    I'm not sure why szurubooru performs so poorly here, as both tag names
-    and post tags are indexed and `tagme` posts typically have few tags. Perhaps
-    SQLAlchemy is generating inefficient SQL?
+    Szurubooru and Oxibooru perform almost identically here.
     
 - Onto a more challenging query: sorting by tag count.
 
     **`GET http://localhost:8080/api/posts/?query=sort%3Atag-count&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |      5061 |
-    | oxibooru          |       139 |
+    | szurubooru        |      5172 |
+    | oxibooru          |       171 |
     
-    Oxibooru clocks in around 36x faster! Those cached tag usage counts
+    Oxibooru clocks in around 30x faster! Those cached tag usage counts
     massively benefit Oxibooru here. Szurubooru counts tag usages every 
     time, so it scales poorly as the number of post tags increases.
 
@@ -138,8 +135,8 @@ are made anonymously, so time to authenticate isn't included.
     
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |       834 |
-    | oxibooru          |        64 |
+    | szurubooru        |       885 |
+    | oxibooru          |        73 |
     
     I expected the performance from szurubooru to be reasonable here, but it
     turned out to be slower than the _autocomplete_ query. My best guess for
@@ -154,10 +151,10 @@ are made anonymously, so time to authenticate isn't included.
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |      5858 |
-    | oxibooru          |        58 |
+    | szurubooru        |      6033 |
+    | oxibooru          |        88 |
     
-    Oxibooru just crushes Szurubooru here. It's over 100x faster. Because
+    Oxibooru just crushes Szurubooru here. It's over 60x faster. Because
     Oxibooru keeps track of tag usages, sorting by tag count is just as
     fast as sorting by creation time.
 
@@ -168,8 +165,8 @@ are made anonymously, so time to authenticate isn't included.
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
-    | szurubooru        |       688 |
-    | oxibooru          |        53 |
+    | szurubooru        |       705 |
+    | oxibooru          |        56 |
     
     This is an area where a speedup is very noticeable. You get much faster
     autocomplete feedback when using the search bar in Oxibooru.

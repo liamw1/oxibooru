@@ -62,8 +62,8 @@ pub fn run_migrations(conn: &mut PgConnection) {
     }
 }
 
-/// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DATABASE` environment variables.
-/// If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DATABASE`.
+/// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DATABASE`
+/// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DATABASE`.
 pub fn create_url(database_override: Option<&str>) -> String {
     if std::env::var("DOCKER_DEPLOYMENT").is_err() {
         dotenvy::from_filename("../.env").unwrap();

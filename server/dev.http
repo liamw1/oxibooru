@@ -60,7 +60,7 @@ GET http://localhost:8080/api/post/2/around/?query=&fields=id%2CthumbnailUrl%2Ct
 content-Type: application/json
 accept: application/json
 
-### List Users
-GET http://localhost:8080/api/users/?limit=30
+### Get tag
+GET http://localhost:8080/api/tag/tagme
 content-Type: application/json
 accept: application/json
