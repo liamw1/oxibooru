@@ -3,7 +3,7 @@ use crate::api::{
 };
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::upload::{Part, Upload, MAX_UPLOAD_SIZE};
+use crate::content::upload::{PartName, Upload, MAX_UPLOAD_SIZE};
 use crate::content::{signature, upload};
 use crate::filesystem::Directory;
 use crate::model::comment::NewComment;
@@ -152,7 +152,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(unfavorite)
 }
 
-const MAX_POSTS_PER_PAGE: i64 = 50;
+const MAX_POSTS_PER_PAGE: i64 = 1000;
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
     fields
@@ -409,7 +409,7 @@ async fn reverse_search_multipart(
     query: ResourceQuery,
     form_data: FormData,
 ) -> ApiResult<ReverseSearchInfo> {
-    let body = upload::extract_without_metadata(form_data, [Part::Content]).await?;
+    let body = upload::extract_without_metadata(form_data, [PartName::Content]).await?;
     if let [Some(content)] = body.files {
         let content_token = ContentToken {
             content_token: Upload::Content(content),
@@ -431,6 +431,7 @@ struct NewPostInfo {
     relations: Option<Vec<i64>>,
     anonymous: Option<bool>,
     tags: Option<Vec<String>>,
+    notes: Option<Vec<Note>>,
     flags: Option<Vec<PostFlag>>,
 }
 
@@ -479,15 +480,18 @@ fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> Api
             .get_result(conn)?;
         let post_hash = PostHash::new(post_id);
 
-        // Add tags
-        let tags = update::tag::get_or_create_tag_ids(conn, client, post_info.tags.unwrap_or_default(), false)?;
-        update::post::add_tags(conn, post_id, tags)?;
+        // Add tags, relations, and notes
+        if let Some(tags) = post_info.tags {
+            let tag_ids = update::tag::get_or_create_tag_ids(conn, client, tags, false)?;
+            update::post::add_tags(conn, post_id, tag_ids)?;
+        }
+        if let Some(relations) = post_info.relations {
+            update::post::create_relations(conn, post_id, relations)?;
+        }
+        if let Some(notes) = post_info.notes {
+            update::post::add_notes(conn, post_id, notes)?;
+        }
 
-        // Add relations
-        let relations = post_info.relations.unwrap_or_default();
-        update::post::create_relations(conn, post_id, relations)?;
-
-        // Create post signature
         let new_post_signature = NewPostSignature {
             post_id,
             signature: &content_properties.signature,
@@ -518,7 +522,7 @@ fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> Api
 }
 
 async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: FormData) -> ApiResult<PostInfo> {
-    let body = upload::extract_with_metadata(form_data, [Part::Content, Part::Thumbnail]).await?;
+    let body = upload::extract_with_metadata(form_data, [PartName::Content, PartName::Thumbnail]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut post_info: NewPostInfo = serde_json::from_slice(&metadata)?;
     let [content, thumbnail] = body.files;
@@ -947,7 +951,7 @@ async fn update_multipart(
     query: ResourceQuery,
     form_data: FormData,
 ) -> ApiResult<PostInfo> {
-    let body = upload::extract_with_metadata(form_data, [Part::Content, Part::Thumbnail]).await?;
+    let body = upload::extract_with_metadata(form_data, [PartName::Content, PartName::Thumbnail]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut post_update: PostUpdate = serde_json::from_slice(&metadata)?;
     let [content, thumbnail] = body.files;

@@ -62,8 +62,8 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     list.or(get).or(get_siblings).or(create).or(merge).or(update).or(delete)
 }
 
-const MAX_TAGS_PER_PAGE: i64 = 50;
-const MAX_TAG_SIBLINGS: i64 = 50;
+const MAX_TAGS_PER_PAGE: i64 = 1000;
+const MAX_TAG_SIBLINGS: i64 = 1000;
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
     fields

@@ -362,6 +362,7 @@ impl ErrorKind for crate::api::Error {
             Self::Image(err) => err.kind(),
             Self::JsonSerialization(err) => err.classify().kind(),
             Self::NoEmail => "NoEmail",
+            Self::MissingContentType => "MissingContentType",
             Self::MissingFormData => "MissingFormData",
             Self::MissingMetadata => "MissingMetadata",
             Self::MissingSmtpInfo => "MissingSmtpInfo",

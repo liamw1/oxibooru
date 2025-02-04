@@ -1,5 +1,5 @@
 use crate::api::{ApiResult, AuthResult};
-use crate::content::upload::{self, Part, MAX_UPLOAD_SIZE};
+use crate::content::upload::{self, PartName, MAX_UPLOAD_SIZE};
 use crate::{api, config, filesystem};
 use serde::Serialize;
 use warp::multipart::FormData;
@@ -23,7 +23,7 @@ async fn upload(auth: AuthResult, form_data: FormData) -> ApiResult<UploadRespon
     let client = auth?;
     api::verify_privilege(client, config::privileges().upload_create)?;
 
-    let body = upload::extract_without_metadata(form_data, [Part::Content]).await?;
+    let body = upload::extract_without_metadata(form_data, [PartName::Content]).await?;
     if let [Some(upload)] = body.files {
         let token = filesystem::save_uploaded_file(&upload.data, upload.content_type)?;
         Ok(UploadResponse { token })

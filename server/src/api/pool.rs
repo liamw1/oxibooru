@@ -54,7 +54,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     list.or(get).or(create).or(merge).or(update).or(delete)
 }
 
-const MAX_POOLS_PER_PAGE: i64 = 50;
+const MAX_POOLS_PER_PAGE: i64 = 1000;
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
     fields

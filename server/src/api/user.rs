@@ -2,7 +2,7 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::ThumbnailType;
-use crate::content::upload::{Part, Upload, MAX_UPLOAD_SIZE};
+use crate::content::upload::{PartName, Upload, MAX_UPLOAD_SIZE};
 use crate::content::{hash, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
@@ -73,7 +73,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .or(delete)
 }
 
-const MAX_USERS_PER_PAGE: i64 = 50;
+const MAX_USERS_PER_PAGE: i64 = 1000;
 
 fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
     fields
@@ -221,7 +221,7 @@ fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> Api
 }
 
 async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: FormData) -> ApiResult<UserInfo> {
-    let body = upload::extract_with_metadata(form_data, [Part::Avatar]).await?;
+    let body = upload::extract_with_metadata(form_data, [PartName::Avatar]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut user_info: NewUserInfo = serde_json::from_slice(&metadata)?;
     if let [Some(avatar)] = body.files {
@@ -362,7 +362,7 @@ async fn update_multipart(
     query: ResourceQuery,
     form_data: FormData,
 ) -> ApiResult<UserInfo> {
-    let body = upload::extract_with_metadata(form_data, [Part::Avatar]).await?;
+    let body = upload::extract_with_metadata(form_data, [PartName::Avatar]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut user_update: UserUpdate = serde_json::from_slice(&metadata)?;
     if let [Some(avatar)] = body.files {

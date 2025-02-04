@@ -82,6 +82,8 @@ pub enum Error {
     InvalidUserRank,
     Image(#[from] image::ImageError),
     JsonSerialization(#[from] serde_json::Error),
+    #[error("Form is missing content-type")]
+    MissingContentType,
     #[error("Missing form data")]
     MissingFormData,
     #[error("Missing metadata form")]
@@ -147,6 +149,7 @@ impl Error {
                 Category::Io | Category::Eof => StatusCode::INTERNAL_SERVER_ERROR,
                 Category::Syntax | Category::Data => StatusCode::BAD_REQUEST,
             },
+            Self::MissingContentType => StatusCode::BAD_REQUEST,
             Self::MissingFormData => StatusCode::BAD_REQUEST,
             Self::MissingMetadata => StatusCode::BAD_REQUEST,
             Self::MissingSmtpInfo => StatusCode::INTERNAL_SERVER_ERROR,
@@ -187,6 +190,7 @@ impl Error {
             Self::InvalidUserRank => "Invalid User Rank",
             Self::Image(_) => "Image Error",
             Self::JsonSerialization(_) => "JSON Serialization Error",
+            Self::MissingContentType => "Missing Content Type",
             Self::MissingFormData => "Missing Form Data",
             Self::MissingMetadata => "Missing Metadata",
             Self::MissingSmtpInfo => "Missing SMTP Info",
