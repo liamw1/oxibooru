@@ -424,9 +424,9 @@ async fn reverse_search_multipart(
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct NewPostInfo {
-    content_token: Upload,
-    thumbnail_token: Option<Upload>,
     safety: PostSafety,
+    content_token: Option<Upload>,
+    thumbnail_token: Option<Upload>,
     source: Option<String>,
     relations: Option<Vec<i64>>,
     anonymous: Option<bool>,
@@ -445,7 +445,11 @@ fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> Api
     api::verify_privilege(client, required_rank)?;
 
     let fields = create_field_table(query.fields())?;
-    let content_properties = post_info.content_token.get_or_compute_properties()?;
+    let content_properties = if let Some(content) = post_info.content_token {
+        content.get_or_compute_properties()?
+    } else {
+        return Err(api::Error::MissingPostContent);
+    };
     let custom_thumbnail = post_info
         .thumbnail_token
         .as_ref()
@@ -528,7 +532,7 @@ async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: For
     let [content, thumbnail] = body.files;
 
     if let Some(content) = content {
-        post_info.content_token = Upload::Content(content);
+        post_info.content_token = Some(Upload::Content(content));
     }
     if let Some(thumbnail) = thumbnail {
         post_info.thumbnail_token = Some(Upload::Content(thumbnail));

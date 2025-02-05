@@ -88,6 +88,8 @@ pub enum Error {
     MissingFormData,
     #[error("Missing metadata form")]
     MissingMetadata,
+    #[error("Missing post content")]
+    MissingPostContent,
     #[error("Missing smtp info")]
     MissingSmtpInfo,
     #[error("User has no email")]
@@ -152,6 +154,7 @@ impl Error {
             Self::MissingContentType => StatusCode::BAD_REQUEST,
             Self::MissingFormData => StatusCode::BAD_REQUEST,
             Self::MissingMetadata => StatusCode::BAD_REQUEST,
+            Self::MissingPostContent => StatusCode::BAD_REQUEST,
             Self::MissingSmtpInfo => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NoEmail => StatusCode::BAD_REQUEST,
             Self::NoNamesGiven(_) => StatusCode::BAD_REQUEST,
@@ -193,6 +196,7 @@ impl Error {
             Self::MissingContentType => "Missing Content Type",
             Self::MissingFormData => "Missing Form Data",
             Self::MissingMetadata => "Missing Metadata",
+            Self::MissingPostContent => "Missing Post Content",
             Self::MissingSmtpInfo => "Missing SMTP Info",
             Self::NoEmail => "No Email",
             Self::NoNamesGiven(_) => "No Names Given",

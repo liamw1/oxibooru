@@ -19,8 +19,8 @@ pub fn last_edit_time(conn: &mut PgConnection, post_id: i64) -> ApiResult<()> {
 
 /// Updates custom thumbnail for post.
 pub fn custom_thumbnail(conn: &mut PgConnection, post_hash: &PostHash, thumbnail: DynamicImage) -> ApiResult<()> {
-    filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Custom)?;
-    let custom_thumbnail_size = filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
+    filesystem::delete_post_thumbnail(post_hash, ThumbnailCategory::Custom)?;
+    let custom_thumbnail_size = filesystem::save_post_thumbnail(post_hash, thumbnail, ThumbnailCategory::Custom)?;
     diesel::update(post::table.find(post_hash.id()))
         .set(post::custom_thumbnail_size.eq(custom_thumbnail_size as i64))
         .execute(conn)?;
