@@ -93,6 +93,7 @@ pub fn get_or_create_tag_ids(
     let mut implied_ids: Vec<i64> = tag_name::table
         .select(tag_name::tag_id)
         .filter(tag_name::name.eq_any(&names))
+        .distinct()
         .load(conn)?;
     let mut all_implied_tag_ids: HashSet<i64> = implied_ids.iter().copied().collect();
 
@@ -104,6 +105,7 @@ pub fn get_or_create_tag_ids(
         implied_ids = tag_implication::table
             .select(tag_implication::child_id)
             .filter(tag_implication::parent_id.eq_any(&implied_ids))
+            .distinct()
             .load(conn)?;
         all_implied_tag_ids.extend(implied_ids.iter().copied());
     }
@@ -111,17 +113,18 @@ pub fn get_or_create_tag_ids(
         return Err(api::Error::CyclicDependency(ResourceType::TagImplication));
     }
 
+    let mut tag_ids: Vec<_> = all_implied_tag_ids.into_iter().collect();
     let existing_names: HashSet<String> = tag_name::table
         .select(tag_name::name)
-        .filter(tag_name::tag_id.eq_any(&all_implied_tag_ids))
+        .filter(tag_name::tag_id.eq_any(&tag_ids))
         .load(conn)?
         .into_iter()
+        .map(|name: String| name.to_lowercase())
         .collect();
-    let mut tag_ids: Vec<_> = all_implied_tag_ids.into_iter().collect();
 
     let new_tag_names: Vec<_> = names
         .into_iter()
-        .filter(|name| !existing_names.contains(name))
+        .filter(|name| !existing_names.contains(&name.to_lowercase()))
         .collect();
     new_tag_names
         .iter()
