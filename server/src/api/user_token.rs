@@ -2,10 +2,10 @@ use crate::api::{ApiResult, AuthResult, ResourceQuery, UnpagedResponse};
 use crate::model::enums::AvatarStyle;
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
-use crate::resource::user_token::{FieldTable, UserTokenInfo};
+use crate::resource::user_token::{Field, UserTokenInfo};
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
-use crate::{api, config, db, resource};
+use crate::{api, config, db};
 use diesel::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -41,27 +41,17 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     list.or(create).or(update).or(delete)
 }
 
-fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
-    fields
-        .map(resource::user_token::Field::create_table)
-        .transpose()
-        .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
-        .map_err(Box::from)
-}
-
 fn list(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UnpagedResponse<UserTokenInfo>> {
     let client = auth?;
-    let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-    let fields = create_field_table(query.fields())?;
-
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
             .first(conn)?;
 
-        let required_rank = match client_id == Some(user_id) {
+        let required_rank = match client.id == Some(user_id) {
             true => config::privileges().user_token_list_self,
             false => config::privileges().user_token_list_any,
         };
@@ -95,9 +85,8 @@ fn create(
     token_info: NewUserTokenInfo,
 ) -> ApiResult<UserTokenInfo> {
     let client = auth?;
-    let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     let (user_token, avatar_style) = conn.transaction(|conn| {
@@ -106,7 +95,7 @@ fn create(
             .filter(user::name.eq(&username))
             .first(conn)?;
 
-        let required_rank = match client_id == Some(user_id) {
+        let required_rank = match client.id == Some(user_id) {
             true => config::privileges().user_token_create_self,
             false => config::privileges().user_token_create_any,
         };
@@ -158,9 +147,8 @@ fn update(
     update: UserTokenUpdate,
 ) -> ApiResult<UserTokenInfo> {
     let client = auth?;
-    let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     let (updated_user_token, avatar_style) = conn.transaction(|conn| {
@@ -169,7 +157,7 @@ fn update(
             .filter(user::name.eq(&username))
             .first(conn)?;
 
-        let required_rank = match client_id == Some(user_id) {
+        let required_rank = match client.id == Some(user_id) {
             true => config::privileges().user_token_edit_self,
             false => config::privileges().user_token_edit_any,
         };
@@ -197,9 +185,7 @@ fn update(
 
 fn delete(auth: AuthResult, username: String, token: Uuid) -> ApiResult<()> {
     let client = auth?;
-    let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-
     db::get_connection()?.transaction(|conn| {
         let user_token_owner: i64 = user::table
             .inner_join(user_token::table)
@@ -208,7 +194,7 @@ fn delete(auth: AuthResult, username: String, token: Uuid) -> ApiResult<()> {
             .filter(user_token::id.eq(token))
             .first(conn)?;
 
-        let required_rank = match client_id == Some(user_token_owner) {
+        let required_rank = match client.id == Some(user_token_owner) {
             true => config::privileges().user_token_delete_self,
             false => config::privileges().user_token_delete_any,
         };

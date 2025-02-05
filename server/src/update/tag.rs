@@ -1,5 +1,5 @@
 use crate::api::ApiResult;
-use crate::auth::header::AuthUser;
+use crate::auth::header::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
@@ -86,7 +86,7 @@ pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: Vec<
 /// Checks that each new name matches on the Tag regex.
 pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
-    client: Option<AuthUser>,
+    client: Client,
     names: Vec<String>,
     detect_cyclic_dependencies: bool,
 ) -> ApiResult<Vec<i64>> {

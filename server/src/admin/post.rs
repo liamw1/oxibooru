@@ -106,21 +106,22 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> QueryResult<()> {
     conn.transaction(|conn| {
         let post_signatures: Vec<PostSignature> =
             post_signature::table.select(PostSignature::as_select()).load(conn)?;
-        let converted_signatures: Vec<_> = post_signatures
+        let (post_ids, converted_signatures): (Vec<_>, Vec<_>) = post_signatures
             .into_iter()
             .map(|post_sig| (post_sig.post_id, signature::from_database(post_sig.signature)))
-            .collect();
+            .unzip();
         let indexes: Vec<_> = converted_signatures
             .iter()
             .copied()
-            .map(|(_, signature)| signature::generate_indexes(signature))
+            .map(signature::generate_indexes)
             .collect();
-        let new_post_signatures: Vec<_> = converted_signatures
+        let new_post_signatures: Vec<_> = post_ids
             .iter()
+            .zip(converted_signatures.iter())
             .zip(indexes.iter())
-            .map(|(sig, words)| NewPostSignature {
-                post_id: sig.0,
-                signature: &sig.1,
+            .map(|((&post_id, signature), words)| NewPostSignature {
+                post_id,
+                signature,
                 words,
             })
             .collect();

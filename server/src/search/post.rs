@@ -1,3 +1,4 @@
+use crate::auth::header::Client;
 use crate::model::enums::{PostSafety, PostType};
 use crate::schema::{
     comment, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics, post_tag, tag_name,
@@ -88,10 +89,7 @@ pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Tok
     Ok(criteria)
 }
 
-pub fn build_query<'a>(
-    client: Option<i64>,
-    search_criteria: &'a SearchCriteria<Token>,
-) -> Result<BoxedQuery<'a>, Error> {
+pub fn build_query<'a>(client: Client, search_criteria: &'a SearchCriteria<Token>) -> Result<BoxedQuery<'a>, Error> {
     let base_query = post::table
         .select(post::id)
         .inner_join(post_statistics::table)
@@ -249,25 +247,25 @@ fn aspect_ratio() -> SqlLiteral<Float, Bind> {
 fn apply_special_filter<'a>(
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<'a, Token>,
-    client: Option<i64>,
+    client: Client,
 ) -> Result<BoxedQuery<'a>, Error> {
     let special_token = SpecialToken::from_str(filter.criteria).map_err(Box::from)?;
     match special_token {
-        SpecialToken::Liked => client.ok_or(Error::NotLoggedIn).map(|client_id| {
+        SpecialToken::Liked => client.id.ok_or(Error::NotLoggedIn).map(|client_id| {
             let subquery = post_score::table
                 .select(post_score::post_id)
                 .filter(post_score::user_id.eq(client_id))
                 .filter(post_score::score.eq(1));
             apply_subquery_filter!(query, post::id, filter, subquery)
         }),
-        SpecialToken::Disliked => client.ok_or(Error::NotLoggedIn).map(|client_id| {
+        SpecialToken::Disliked => client.id.ok_or(Error::NotLoggedIn).map(|client_id| {
             let subquery = post_score::table
                 .select(post_score::post_id)
                 .filter(post_score::user_id.eq(client_id))
                 .filter(post_score::score.eq(-1));
             apply_subquery_filter!(query, post::id, filter, subquery)
         }),
-        SpecialToken::Fav => client.ok_or(Error::NotLoggedIn).map(|client_id| {
+        SpecialToken::Fav => client.id.ok_or(Error::NotLoggedIn).map(|client_id| {
             let subquery = post_favorite::table
                 .select(post_favorite::post_id)
                 .filter(post_favorite::user_id.eq(client_id));

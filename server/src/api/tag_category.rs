@@ -2,10 +2,10 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, ResourceQuery, UnpagedRes
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTagCategory, TagCategory};
-use crate::resource::tag_category::{FieldTable, TagCategoryInfo};
+use crate::resource::tag_category::{Field, TagCategoryInfo};
 use crate::schema::{tag, tag_category};
 use crate::time::DateTime;
-use crate::{api, config, db, resource};
+use crate::{api, config, db};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -53,19 +53,11 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     list.or(get).or(create).or(update).or(set_default).or(delete)
 }
 
-fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
-    fields
-        .map(resource::tag_category::Field::create_table)
-        .transpose()
-        .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
-        .map_err(Box::from)
-}
-
 fn list(auth: AuthResult, query: ResourceQuery) -> ApiResult<UnpagedResponse<TagCategoryInfo>> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_list)?;
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         TagCategoryInfo::all(conn, &fields)
             .map(|results| UnpagedResponse { results })
@@ -77,7 +69,7 @@ fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagCat
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_view)?;
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let category = tag_category::table
@@ -108,7 +100,7 @@ fn create(auth: AuthResult, query: ResourceQuery, category_info: NewTagCategoryI
         color: &category_info.color,
     };
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let category = diesel::insert_into(tag_category::table)
         .values(new_category)
@@ -133,7 +125,7 @@ fn update(
     update: TagCategoryUpdate,
 ) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
@@ -181,7 +173,7 @@ fn set_default(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResul
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_set_default)?;
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let new_default_category: TagCategory = conn.transaction(|conn| {

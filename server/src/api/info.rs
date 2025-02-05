@@ -1,9 +1,9 @@
 use crate::api::{ApiResult, AuthResult, ResourceQuery};
 use crate::model::post::PostFeature;
-use crate::resource::post::{FieldTable, PostInfo};
+use crate::resource::post::{Field, PostInfo};
 use crate::schema::{database_statistics, post_feature, user};
 use crate::time::DateTime;
-use crate::{api, config, db, resource};
+use crate::{api, config, db};
 use diesel::prelude::*;
 use serde::Serialize;
 use warp::{Filter, Rejection, Reply};
@@ -15,14 +15,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(api::resource_query())
         .map(get)
         .map(api::Reply::from)
-}
-
-fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
-    fields
-        .map(resource::post::Field::create_table)
-        .transpose()
-        .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
-        .map_err(Box::from)
 }
 
 // TODO: Remove renames by changing references to these names in client
@@ -42,9 +34,7 @@ fn get(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
     let client = auth?;
     query.bump_login(client)?;
 
-    let client_id = client.map(|user| user.id);
-    let fields = create_field_table(query.fields())?;
-
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let (post_count, disk_usage) = database_statistics::table
             .select((database_statistics::post_count, database_statistics::disk_usage))
@@ -55,7 +45,7 @@ fn get(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
             .optional()?;
         let featured_post: Option<PostInfo> = latest_feature
             .as_ref()
-            .map(|feature| PostInfo::new_from_id(conn, client_id, feature.post_id, &fields))
+            .map(|feature| PostInfo::new_from_id(conn, client, feature.post_id, &fields))
             .transpose()?;
         let featuring_user: Option<String> = latest_feature
             .as_ref()

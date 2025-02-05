@@ -172,8 +172,9 @@ fn get_mime_type(part: &Part) -> ApiResult<MimeType> {
         .map(Path::new)
         .and_then(Path::extension)
         .and_then(OsStr::to_str);
+    let content_type = part.content_type().map(str::trim);
 
-    match (extension, part.content_type()) {
+    match (extension, content_type) {
         (Some(ext), None) | (Some(ext), Some("application/octet-stream")) => {
             MimeType::from_extension(ext).map_err(api::Error::from)
         }

@@ -1,10 +1,10 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, RatingRequest, ResourceQuery};
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
-use crate::resource::comment::{CommentInfo, FieldTable};
+use crate::resource::comment::{CommentInfo, Field};
 use crate::schema::{comment, comment_score, database_statistics};
 use crate::time::DateTime;
-use crate::{api, config, db, resource, search};
+use crate::{api, config, db, search};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
@@ -56,23 +56,13 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 
 const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 
-fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
-    fields
-        .map(resource::comment::Field::create_table)
-        .transpose()
-        .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
-        .map_err(Box::from)
-}
-
 fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<CommentInfo>> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().comment_list)?;
 
-    let client_id = client.map(|user| user.id);
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_COMMENTS_PER_PAGE);
-    let fields = create_field_table(query.fields())?;
-
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::comment::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
@@ -93,7 +83,7 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<CommentI
             offset,
             limit,
             total,
-            results: CommentInfo::new_batch_from_ids(conn, client_id, selected_comments, &fields)?,
+            results: CommentInfo::new_batch_from_ids(conn, client, selected_comments, &fields)?,
         })
     })
 }
@@ -102,14 +92,13 @@ fn get(auth: AuthResult, comment_id: i64, query: ResourceQuery) -> ApiResult<Com
     let client = auth?;
     api::verify_privilege(client, config::privileges().comment_view)?;
 
-    let client_id = client.map(|user| user.id);
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(conn)?;
         if !comment_exists {
             return Err(api::Error::NotFound(ResourceType::Comment));
         }
-        CommentInfo::new_from_id(conn, client_id, comment_id, &fields).map_err(api::Error::from)
+        CommentInfo::new_from_id(conn, client, comment_id, &fields).map_err(api::Error::from)
     })
 }
 
@@ -125,8 +114,8 @@ fn create(auth: AuthResult, query: ResourceQuery, comment_info: NewCommentInfo) 
     let client = auth?;
     api::verify_privilege(client, config::privileges().comment_create)?;
 
-    let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
-    let fields = create_field_table(query.fields())?;
+    let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let new_comment = NewComment {
         user_id: Some(user_id),
         post_id: comment_info.post_id,
@@ -139,9 +128,7 @@ fn create(auth: AuthResult, query: ResourceQuery, comment_info: NewCommentInfo) 
         .values(new_comment)
         .returning(comment::id)
         .get_result(&mut conn)?;
-    conn.transaction(|conn| {
-        CommentInfo::new_from_id(conn, Some(user_id), comment_id, &fields).map_err(api::Error::from)
-    })
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields).map_err(api::Error::from))
 }
 
 #[derive(Deserialize)]
@@ -153,8 +140,7 @@ struct CommentUpdate {
 
 fn update(auth: AuthResult, comment_id: i64, query: ResourceQuery, update: CommentUpdate) -> ApiResult<CommentInfo> {
     let client = auth?;
-    let client_id = client.map(|user| user.id);
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
@@ -164,7 +150,7 @@ fn update(auth: AuthResult, comment_id: i64, query: ResourceQuery, update: Comme
             .first(conn)?;
         api::verify_version(comment_version, update.version)?;
 
-        let required_rank = match client_id.is_some() && client_id == comment_owner {
+        let required_rank = match client.id == comment_owner && comment_owner.is_some() {
             true => config::privileges().comment_edit_own,
             false => config::privileges().comment_edit_any,
         };
@@ -175,15 +161,15 @@ fn update(auth: AuthResult, comment_id: i64, query: ResourceQuery, update: Comme
             .execute(conn)
             .map_err(api::Error::from)
     })?;
-    conn.transaction(|conn| CommentInfo::new_from_id(conn, client_id, comment_id, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields).map_err(api::Error::from))
 }
 
 fn rate(auth: AuthResult, comment_id: i64, query: ResourceQuery, rating: RatingRequest) -> ApiResult<CommentInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().comment_score)?;
 
-    let user_id = client.ok_or(api::Error::NotLoggedIn).map(|user| user.id)?;
-    let fields = create_field_table(query.fields())?;
+    let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
@@ -201,14 +187,11 @@ fn rate(auth: AuthResult, comment_id: i64, query: ResourceQuery, rating: RatingR
         }
         Ok::<_, api::Error>(())
     })?;
-    conn.transaction(|conn| {
-        CommentInfo::new_from_id(conn, Some(user_id), comment_id, &fields).map_err(api::Error::from)
-    })
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields).map_err(api::Error::from))
 }
 
 fn delete(auth: AuthResult, comment_id: i64, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
-    let client_id = client.map(|user| user.id);
 
     db::get_connection()?.transaction(|conn| {
         let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
@@ -217,7 +200,7 @@ fn delete(auth: AuthResult, comment_id: i64, client_version: DeleteRequest) -> A
             .first(conn)?;
         api::verify_version(comment_version, *client_version)?;
 
-        let required_rank = match client_id.is_some() && client_id == comment_owner {
+        let required_rank = match client.id == comment_owner && comment_owner.is_some() {
             true => config::privileges().comment_delete_own,
             false => config::privileges().comment_delete_any,
         };

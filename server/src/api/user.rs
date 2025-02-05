@@ -6,10 +6,10 @@ use crate::content::upload::{PartName, Upload, MAX_UPLOAD_SIZE};
 use crate::content::{hash, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
-use crate::resource::user::{FieldTable, UserInfo, Visibility};
+use crate::resource::user::{Field, UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::time::DateTime;
-use crate::{api, config, db, resource, search, update};
+use crate::{api, config, db, search, update};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
@@ -75,14 +75,6 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 
 const MAX_USERS_PER_PAGE: i64 = 1000;
 
-fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
-    fields
-        .map(resource::user::Field::create_table)
-        .transpose()
-        .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
-        .map_err(Box::from)
-}
-
 fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
     let client = auth?;
     query.bump_login(client)?;
@@ -90,7 +82,7 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo
 
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_USERS_PER_PAGE);
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
@@ -121,10 +113,8 @@ fn get(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<Us
     let client = auth?;
     query.bump_login(client)?;
 
-    let client_id = client.map(|user| user.id);
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-
     db::get_connection()?.transaction(|conn| {
         let user_id = user::table
             .select(user::id)
@@ -133,7 +123,7 @@ fn get(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<Us
             .optional()?
             .ok_or(api::Error::NotFound(ResourceType::User))?;
 
-        let viewing_self = client_id == Some(user_id);
+        let viewing_self = client.id == Some(user_id);
         if !viewing_self {
             api::verify_privilege(client, config::privileges().user_view)?;
         }
@@ -167,7 +157,7 @@ fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> Api
         return Err(api::Error::InvalidUserRank);
     }
 
-    let creating_self = client.is_none();
+    let creating_self = client.id.is_none();
     let required_rank = match creating_self {
         true => config::privileges().user_create_self,
         false => config::privileges().user_create_any,
@@ -177,7 +167,7 @@ fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> Api
         api::verify_privilege(client, creation_rank)?;
     }
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     api::verify_matches_regex(&user_info.name, RegexType::Username)?;
     api::verify_matches_regex(&user_info.password, RegexType::Password)?;
     api::verify_valid_email(user_info.email.as_deref())?;
@@ -249,8 +239,7 @@ fn update(auth: AuthResult, username: String, query: ResourceQuery, update: User
     let client = auth?;
     query.bump_login(client)?;
 
-    let client_id = client.map(|user| user.id);
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let custom_avatar = update
         .avatar_token
@@ -266,7 +255,7 @@ fn update(auth: AuthResult, username: String, query: ResourceQuery, update: User
             .first(conn)?;
         api::verify_version(user_version, update.version)?;
 
-        let editing_self = client_id == Some(user_id);
+        let editing_self = client.id == Some(user_id);
         let visibility = match editing_self {
             true => Visibility::Full,
             false => Visibility::PublicOnly,
@@ -374,9 +363,7 @@ async fn update_multipart(
 
 fn delete(auth: AuthResult, username: String, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
-    let client_id = client.map(|user| user.id);
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-
     db::get_connection()?.transaction(|conn| {
         let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))
@@ -384,7 +371,7 @@ fn delete(auth: AuthResult, username: String, client_version: DeleteRequest) -> 
             .first(conn)?;
         api::verify_version(user_version, *client_version)?;
 
-        let deleting_self = client_id == Some(user_id);
+        let deleting_self = client.id == Some(user_id);
         let required_rank = match deleting_self {
             true => config::privileges().user_delete_self,
             false => config::privileges().user_delete_any,

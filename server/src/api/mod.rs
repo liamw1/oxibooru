@@ -10,7 +10,7 @@ mod upload;
 mod user;
 mod user_token;
 
-use crate::auth::header::{self, AuthUser, AuthenticationError};
+use crate::auth::header::{self, AuthenticationError, Client};
 use crate::config::RegexType;
 use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
@@ -225,8 +225,8 @@ impl Error {
 
 /// Checks if the `client` is at least `required_rank`.
 /// Returns error if client is lower rank than `required_rank`.
-pub fn verify_privilege(client: Option<AuthUser>, required_rank: UserRank) -> ApiResult<()> {
-    (client_access_level(client) >= required_rank)
+pub fn verify_privilege(client: Client, required_rank: UserRank) -> ApiResult<()> {
+    (client.rank >= required_rank)
         .then_some(())
         .ok_or(Error::InsufficientPrivileges)
 }
@@ -274,7 +274,7 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
         .with(log)
 }
 
-type AuthResult = Result<Option<AuthUser>, AuthenticationError>;
+type AuthResult = Result<Client, AuthenticationError>;
 
 /// Represents part of a request to apply/change a score.
 #[derive(Deserialize)]
@@ -332,9 +332,9 @@ impl ResourceQuery {
         self.fields.as_deref()
     }
 
-    fn bump_login(&self, client: Option<AuthUser>) -> ApiResult<()> {
-        match (client, self.bump_login) {
-            (Some(user), Some(true)) => update::user::last_login_time(user.id),
+    fn bump_login(&self, client: Client) -> ApiResult<()> {
+        match (client.id, self.bump_login) {
+            (Some(user_id), Some(true)) => update::user::last_login_time(user_id),
             _ => Ok(()),
         }
     }
@@ -358,7 +358,7 @@ impl PagedQuery {
         self.query.fields()
     }
 
-    fn bump_login(&self, user: Option<AuthUser>) -> ApiResult<()> {
+    fn bump_login(&self, user: Client) -> ApiResult<()> {
         self.query.bump_login(user)
     }
 }
@@ -389,11 +389,6 @@ struct ErrorResponse {
     description: String,
 }
 
-/// Returns the rank of `client`.
-fn client_access_level(client: Option<AuthUser>) -> UserRank {
-    client.map(|user| user.rank).unwrap_or(UserRank::Anonymous)
-}
-
 /// Checks if `current_version` matches `client_version`.
 /// Returns error if they do not match.
 fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiResult<()> {
@@ -408,7 +403,10 @@ fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiRes
 
 /// Optionally extracts an authorization header from the incoming request and attempts to authenticate with it.
 fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {
-    warp::header::optional("authorization").map(|auth: Option<_>| auth.map(header::authenticate_user).transpose())
+    warp::header::optional("authorization").map(|maybe_auth: Option<_>| match maybe_auth {
+        Some(auth) => header::authenticate_user(auth),
+        None => Ok(Client::new(None, UserRank::Anonymous)),
+    })
 }
 
 async fn empty_query(_err: Rejection) -> Result<(ResourceQuery,), Infallible> {

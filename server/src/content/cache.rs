@@ -67,9 +67,9 @@ impl RingCache {
     fn remove(&mut self, key: &str) -> Option<CachedProperties> {
         self.data
             .iter()
-            .position(|entry| entry.0 == key)
+            .position(|(cache_key, _)| cache_key == key)
             .and_then(|pos| self.data.remove(pos))
-            .map(|entry| entry.1)
+            .map(|(_, cache_value)| cache_value)
     }
 
     fn reset(&mut self) {
