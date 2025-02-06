@@ -96,6 +96,14 @@ these are:
     would like to opt-out of this behavior and attempt a partial conversion, you
     can omit the --single-transaction argument.
 
+    Pool and tag names are unique and case insenstive in Oxibooru, so "tag" 
+    and "Tag" can't coexist in the database. In Szurubooru, it is possible
+    that these can coexist, although it generally tries to prevent it. In the
+    event that your Szurubooru database contains names which only differ by 
+    case, those names will be modified to {name}_name_modified_{tag_id}_{order}
+    to prevent conflicts. You can search for the affected tag/pool names by 
+    entering *_name_modified_* in the tag/pool search bar.
+
 4. **Rename data files**
 
     Oxibooru uses a different file naming convention, so these will need to be 

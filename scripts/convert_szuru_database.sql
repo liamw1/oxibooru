@@ -52,7 +52,7 @@ INSERT INTO oxi."user" ("id", "name", "password_hash", "password_salt", "email",
 SELECT "id", "name", "password_hash", "password_salt", "email", "rank", "avatar_style", "creation_time" AT TIME ZONE 'UTC', "last_login_time" AT TIME ZONE 'UTC', CURRENT_TIMESTAMP FROM public."user";
 
 -- Update sequence
-SELECT setval(pg_get_serial_sequence('oxi.user', 'id'), (SELECT MAX("id") FROM oxi."user"));
+SELECT setval(pg_get_serial_sequence('oxi.user', 'id'), GREATEST((SELECT MAX("id") FROM oxi."user"), 1));
 
 -- ============================= Tag Categories ============================== --
 -- First, set category_id of tags in default category to 0 (the id of the default category in Oxibooru)
@@ -78,7 +78,7 @@ INSERT INTO oxi."tag_category" ("id", "order", "name", "color", "last_edit_time"
 SELECT "id", "order", "name", "color", CURRENT_TIMESTAMP FROM public."tag_category";
 
 -- Update sequence
-SELECT setval(pg_get_serial_sequence('oxi.tag_category', 'id'), (SELECT MAX("id") FROM oxi."tag_category"));
+SELECT setval(pg_get_serial_sequence('oxi.tag_category', 'id'), GREATEST((SELECT MAX("id") FROM oxi."tag_category"), 1));
 
 -- ================================== Tags =================================== --
 -- Descriptions are non-nullable in Oxibooru, so replace NULL values with empty description
@@ -95,11 +95,35 @@ INSERT INTO oxi."tag" ("id", "category_id", "description", "creation_time", "las
 SELECT "id", "category_id", "description", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."tag";
 
 -- Update sequence
-SELECT setval(pg_get_serial_sequence('oxi.tag', 'id'), (SELECT MAX("id") FROM oxi."tag"));
+SELECT setval(pg_get_serial_sequence('oxi.tag', 'id'), GREATEST((SELECT MAX("id") FROM oxi."tag"), 1));
 
 -- ================================ Tag Names ================================ --
+-- Create temporary table to deduplicate case insensitive names
+CREATE TABLE "ci_tag_name" (
+    "order" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    "tag_id" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "dup_count" INTEGER
+);
+
+-- Add indexes or this part takes forever
+CREATE INDEX ON "ci_tag_name" (LOWER("name"));
+CREATE INDEX ON public."tag_name" (LOWER("name"));
+
+INSERT INTO "ci_tag_name" ("tag_id", "name")
+SELECT "tag_id", "name" FROM public."tag_name" ORDER BY "ord";
+
+UPDATE "ci_tag_name"
+SET "dup_count" = (SELECT COUNT(*) FROM public."tag_name" WHERE LOWER(public."tag_name"."name") = LOWER("ci_tag_name"."name"));
+
+UPDATE "ci_tag_name"
+SET "name" = CONCAT("name", '_name_modified_', "tag_id", '_', "order")
+WHERE "dup_count" > 1;
+
 INSERT INTO oxi."tag_name" ("tag_id", "order", "name")
-SELECT "tag_id", "ord", "name" FROM public."tag_name";
+SELECT "tag_id", "order" - 1, "name" FROM "ci_tag_name";
+
+DROP TABLE "ci_tag_name";
 
 -- ============================ Tag Implications ============================= --
 INSERT INTO oxi."tag_implication" ("parent_id", "child_id")
@@ -183,7 +207,7 @@ INSERT INTO oxi."post" ("id", "user_id", "file_size", "width", "height", "safety
 SELECT "id", "user_id", "file_size", "image_width", "image_height", "safety", "type", "mime-type", "checksum", "checksum_md5", "flags", "source", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."post";
 
 -- Update sequence
-SELECT setval(pg_get_serial_sequence('oxi.post', 'id'), (SELECT MAX("id") FROM oxi."post"));
+SELECT setval(pg_get_serial_sequence('oxi.post', 'id'), GREATEST((SELECT MAX("id") FROM oxi."post"), 1));
 
 -- ============================= Post Relations ============================== --
 INSERT INTO oxi."post_relation" ("parent_id", "child_id")
@@ -202,7 +226,7 @@ INSERT INTO oxi."post_feature" ("id", "post_id", "user_id", "time") OVERRIDING S
 SELECT "id", "post_id", "user_id", "time" AT TIME ZONE 'UTC' FROM public."post_feature";
 
 -- Update sequence
-SELECT setval(pg_get_serial_sequence('oxi.post_feature', 'id'), (SELECT MAX("id") FROM oxi."post_feature"));
+SELECT setval(pg_get_serial_sequence('oxi.post_feature', 'id'), GREATEST((SELECT MAX("id") FROM oxi."post_feature"), 1));
 
 -- ================================ Post Note ================================ --
 -- Converting the polygon column to REAL[][2] is surprising difficult, as entries in this
@@ -228,7 +252,7 @@ INSERT INTO oxi."comment" ("id", "user_id", "post_id", "text", "creation_time", 
 SELECT "id", "user_id", "post_id", "text", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."comment";
 
 -- Update sequence
-SELECT setval(pg_get_serial_sequence('oxi.comment', 'id'), (SELECT MAX("id") FROM oxi."comment"));
+SELECT setval(pg_get_serial_sequence('oxi.comment', 'id'), GREATEST((SELECT MAX("id") FROM oxi."comment"), 1));
 
 -- ============================= Comment Scores ============================== --
 INSERT INTO oxi."comment_score" ("comment_id", "user_id", "score", "time")
@@ -257,7 +281,7 @@ INSERT INTO oxi."pool_category" ("id", "name", "color", "last_edit_time") OVERRI
 SELECT "id", "name", "color", CURRENT_TIMESTAMP FROM public."pool_category";
 
 -- Update sequence
-SELECT setval(pg_get_serial_sequence('oxi.pool_category', 'id'), (SELECT MAX("id") FROM oxi."pool_category"));
+SELECT setval(pg_get_serial_sequence('oxi.pool_category', 'id'), GREATEST((SELECT MAX("id") FROM oxi."pool_category"), 1));
 
 -- ================================== Pools ================================== --
 -- Descriptions are non-nullable in Oxibooru, so replace NULL values with empty description
@@ -274,11 +298,35 @@ INSERT INTO oxi."pool" ("id", "category_id", "description", "creation_time", "la
 SELECT "id", "category_id", "description", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."pool";
 
 -- Update sequence
-SELECT setval(pg_get_serial_sequence('oxi.pool', 'id'), (SELECT MAX("id") FROM oxi."pool"));
+SELECT setval(pg_get_serial_sequence('oxi.pool', 'id'), GREATEST((SELECT MAX("id") FROM oxi."pool"), 1));
 
 -- =============================== Pool Names ================================ --
+-- Create temporary table to deduplicate case insensitive names
+CREATE TABLE "ci_pool_name" (
+    "order" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    "pool_id" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "dup_count" INTEGER
+);
+
+-- Add indexes or this part takes forever
+CREATE INDEX ON "ci_pool_name" (LOWER("name"));
+CREATE INDEX ON public."pool_name" (LOWER("name"));
+
+INSERT INTO "ci_pool_name" ("pool_id", "name")
+SELECT "pool_id", "name" FROM public."pool_name" ORDER BY "ord";
+
+UPDATE "ci_pool_name"
+SET "dup_count" = (SELECT COUNT(*) FROM public."pool_name" WHERE LOWER(public."pool_name"."name") = LOWER("ci_pool_name"."name"));
+
+UPDATE "ci_pool_name"
+SET "name" = CONCAT("name", '_name_modified_', "pool_id", '_', "order")
+WHERE "dup_count" > 1;
+
 INSERT INTO oxi."pool_name" ("pool_id", "order", "name")
-SELECT "pool_id", "ord", "name" FROM public."pool_name";
+SELECT "pool_id", "order" - 1, "name" FROM "ci_pool_name";
+
+DROP TABLE "ci_pool_name";
 
 -- =============================== Pool Posts ================================ --
 INSERT INTO oxi."pool_post" ("pool_id", "post_id", "order")
