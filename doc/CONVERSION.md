@@ -100,9 +100,9 @@ these are:
     and "Tag" can't coexist in the database. In Szurubooru, it is possible
     that these can coexist, although it generally tries to prevent it. In the
     event that your Szurubooru database contains names which only differ by 
-    case, those names will be modified to {name}_name_modified_{tag_id}_{order}
+    case, those names will be modified to {name}\_name\_modified\_{tag_id}\_{order}
     to prevent conflicts. You can search for the affected tag/pool names by 
-    entering *_name_modified_* in the tag/pool search bar.
+    entering \*\_name_modified\_\* in the tag/pool search bar.
 
 4. **Rename data files**
 
