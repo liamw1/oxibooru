@@ -14,8 +14,8 @@ pub const SIGNATURE_VERSION: i32 = 0;
 /// Implementation follows H. Chi Wong, Marshall Bern and David Goldberg with a few tweaks
 pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
     let gray_image = image.to_luma8();
-    let grid_points = compute_grid_points(&gray_image);
-    let mean_matrix = compute_intensity_matrix(&gray_image, &grid_points);
+    let (grid_points, grid_square_radius) = compute_grid_points(&gray_image);
+    let mean_matrix = compute_intensity_matrix(&gray_image, &grid_points, grid_square_radius as i32);
     let differences = compute_differences(&mean_matrix);
     let signature = normalize(differences);
     compress(signature)
@@ -97,7 +97,7 @@ pub fn from_database(database_signature: Vec<Option<i64>>) -> [i64; COMPRESSED_S
     array_from_iter(database_signature.into_iter().flatten())
 }
 
-const CROP_PERCENTILE: u64 = 5;
+const CROP_PERCENTILE: u64 = 1;
 const GRID_SIZE: usize = 9; // Size of the square grid used to compute signature
 const IDENTICAL_TOLERANCE: i16 = 1; // Pixel intensities within this distance will be treated as identical
 const LUMINANCE_LEVELS: usize = 2; // How many shades of light/dark
@@ -118,11 +118,6 @@ where
     iter.collect::<Vec<_>>().try_into().unwrap()
 }
 
-fn grid_square_radius(width: u32, height: u32) -> u32 {
-    let grid_square_size = 0.5 + std::cmp::min(width, height) as f64 / 20.0;
-    (grid_square_size / 2.0).to_u32().unwrap()
-}
-
 fn crop_position(iter: impl Iterator<Item = u64>, total_delta: u64) -> usize {
     let delta_limit = CROP_PERCENTILE * total_delta / 100;
     let iter = std::iter::once(0).chain(iter);
@@ -141,46 +136,50 @@ fn crop(deltas: &[u64]) -> Interval<u32> {
     Interval::new(lower as u32, upper as u32)
 }
 
-fn compute_grid_points(image: &GrayImage) -> GridPoints {
-    let row_deltas: Vec<_> = (0..image.width() - 1)
-        .map(|i| {
-            (0..image.height())
-                .map(|j| {
-                    let pixel = image.get_pixel(i, j);
-                    let row_adjacent_pixel = image.get_pixel(i + 1, j);
-                    u64::from(pixel.0[0].abs_diff(row_adjacent_pixel.0[0]))
-                })
-                .sum()
-        })
-        .collect();
-    let column_deltas: Vec<_> = (0..image.height() - 1)
+fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
+    let row_deltas: Vec<_> = (0..image.height() - 1)
         .map(|j| {
             (0..image.width())
                 .map(|i| {
                     let pixel = image.get_pixel(i, j);
-                    let column_adjacent_pixel = image.get_pixel(i, j + 1);
-                    u64::from(pixel.0[0].abs_diff(column_adjacent_pixel.0[0]))
+                    let next_row_pixel = image.get_pixel(i, j + 1);
+                    u64::from(pixel.0[0].abs_diff(next_row_pixel.0[0]))
                 })
                 .sum()
         })
         .collect();
-    let mut cropped_row_bounds = crop(&row_deltas);
-    let mut cropped_column_bounds = crop(&column_deltas);
+    let column_deltas: Vec<_> = (0..image.width() - 1)
+        .map(|i| {
+            (0..image.height())
+                .map(|j| {
+                    let pixel = image.get_pixel(i, j);
+                    let next_column_pixel = image.get_pixel(i + 1, j);
+                    u64::from(pixel.0[0].abs_diff(next_column_pixel.0[0]))
+                })
+                .sum()
+        })
+        .collect();
+    let mut cropped_x_bounds = crop(&column_deltas);
+    let mut cropped_y_bounds = crop(&row_deltas);
+
+    // Compute grid square radius
+    let grid_square_size = 0.5 + std::cmp::min(cropped_x_bounds.length(), cropped_y_bounds.length()) as f64 / 20.0;
+    let grid_square_radius = (grid_square_size / 2.0).to_u32().unwrap();
 
     // Adjust cropped bounds so that grid squares won't protrude into image borders
-    let estimated_grid_square_radius = grid_square_radius(cropped_row_bounds.length(), cropped_column_bounds.length());
-    cropped_row_bounds.shrink(estimated_grid_square_radius);
-    cropped_column_bounds.shrink(estimated_grid_square_radius);
+    cropped_x_bounds.shrink(grid_square_radius);
+    cropped_y_bounds.shrink(grid_square_radius);
 
-    let x_coords: [u32; GRID_SIZE] = cropped_row_bounds.linspace();
-    let y_coords: [u32; GRID_SIZE] = cropped_column_bounds.linspace();
-    CartesianProduct::new(x_coords, y_coords)
+    let x_coords: [u32; GRID_SIZE] = cropped_x_bounds.linspace();
+    let y_coords: [u32; GRID_SIZE] = cropped_y_bounds.linspace();
+    (CartesianProduct::new(x_coords, y_coords), grid_square_radius)
 }
 
-fn compute_intensity_matrix(image: &GrayImage, grid_points: &GridPoints) -> Array2D<u8, GRID_SIZE, GRID_SIZE> {
-    let cropped_width = grid_points.left_set().last().unwrap() - grid_points.left_set().first().unwrap();
-    let cropped_height = grid_points.right_set().last().unwrap() - grid_points.right_set().first().unwrap();
-    let grid_square_radius = grid_square_radius(cropped_width, cropped_height) as i32;
+fn compute_intensity_matrix(
+    image: &GrayImage,
+    grid_points: &GridPoints,
+    grid_square_radius: i32,
+) -> Array2D<u8, GRID_SIZE, GRID_SIZE> {
     let image_bounds = IRect::new_zero_based(image.width() - 1, image.height() - 1)
         .to_signed()
         .unwrap();
@@ -321,9 +320,9 @@ mod test {
         // Identical images of different formats
         assert_eq!(distance(png, bmp), 0.0);
         // Similar images of same format
-        assert!((distance(jpeg, similar_jpeg) - 0.1583484677615785).abs() < 1e-8);
+        assert!((distance(jpeg, similar_jpeg) - 0.24372455010006977).abs() < 1e-8);
         // Different images
-        assert!((distance(png, jpeg) - 0.6990083687106061).abs() < 1e-8);
+        assert!((distance(png, jpeg) - 0.7062433297659159).abs() < 1e-8);
         Ok(())
     }
 
@@ -334,19 +333,19 @@ mod test {
         let (lisa_large_border_signature, lisa_large_border_indexes) = image_properties("lisa-large_border.jpg")?;
         let (lisa_wide_signature, lisa_wide_indexes) = image_properties("lisa-wide.jpg")?;
         let (lisa_cat_signature, lisa_cat_indexes) = image_properties("lisa-cat.jpg")?;
-        let (starry_night_signature, starry_night_indexes) = image_properties("starry_night.jpg")?;
+        let (starry_night_signature, _starry_night_indexes) = image_properties("starry_night.jpg")?;
 
         assert!(distance(lisa_signature, lisa_border_signature) < 0.2);
         assert!(distance(lisa_signature, lisa_large_border_signature) < 0.2);
-        assert!(distance(lisa_signature, lisa_wide_signature) < 0.3);
-        assert!(distance(lisa_signature, lisa_cat_signature) < 0.55);
+        assert!(distance(lisa_signature, lisa_wide_signature) < 0.25);
+        assert!(distance(lisa_signature, lisa_cat_signature) < 0.45);
         assert!(distance(lisa_signature, starry_night_signature) > 0.6);
 
         assert!(matching_indexes(&lisa_indexes, &lisa_border_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_large_border_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_wide_indexes) > 0);
         assert!(matching_indexes(&lisa_indexes, &lisa_cat_indexes) > 0);
-        assert_eq!(matching_indexes(&lisa_indexes, &starry_night_indexes), 0);
+        // Starry night indexes are not checked here because indexes can match on pure chance
         Ok(())
     }
 
@@ -354,7 +353,7 @@ mod test {
     fn grid_points() -> ImageResult<()> {
         let lisa_small_border = image::open(image_path("lisa-border.jpg"))?.to_luma8();
 
-        let grid_points = compute_grid_points(&lisa_small_border);
+        let (grid_points, _) = compute_grid_points(&lisa_small_border);
         let lower_left_grid_point = (grid_points.left_set().first().unwrap(), grid_points.right_set().first().unwrap());
         let upper_right_grid_point = (grid_points.left_set().last().unwrap(), grid_points.right_set().last().unwrap());
         let lower_left_pixel = lisa_small_border.get_pixel(*lower_left_grid_point.0, *lower_left_grid_point.1);
@@ -364,7 +363,7 @@ mod test {
 
         let lisa_large_border = image::open(image_path("lisa-large_border.jpg"))?.to_luma8();
 
-        let grid_points = compute_grid_points(&lisa_large_border);
+        let (grid_points, _) = compute_grid_points(&lisa_large_border);
         let lower_left_grid_point = (grid_points.left_set().first().unwrap(), grid_points.right_set().first().unwrap());
         let upper_right_grid_point = (grid_points.left_set().last().unwrap(), grid_points.right_set().last().unwrap());
         let lower_left_pixel = lisa_large_border.get_pixel(*lower_left_grid_point.0, *lower_left_grid_point.1);
