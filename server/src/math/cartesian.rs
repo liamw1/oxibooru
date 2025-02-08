@@ -18,10 +18,12 @@ impl<L, R, const N: usize, const M: usize> CartesianProduct<L, R, N, M> {
         (&self.left[i], &self.right[j])
     }
 
+    #[cfg(test)]
     pub fn left_set(&self) -> &[L] {
         &self.left
     }
 
+    #[cfg(test)]
     pub fn right_set(&self) -> &[R] {
         &self.right
     }
