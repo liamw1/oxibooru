@@ -44,14 +44,12 @@ impl FileContents {
 /// to be set manually.
 pub enum Upload {
     Token(String),
-    Content(FileContents),
 }
 
 impl Upload {
     pub fn thumbnail(&self, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
         let file_contents = match self {
             Self::Token(token) => &FileContents::from_token(token)?,
-            Self::Content(contents) => contents,
         };
         decode::representative_image(&file_contents.data, None, file_contents.content_type)
             .map(|image| thumbnail::create(&image, thumbnail_type))
@@ -60,20 +58,12 @@ impl Upload {
     pub fn compute_properties(&self) -> ApiResult<CachedProperties> {
         match self {
             Self::Token(token) => cache::compute_properties(token.to_owned()),
-            Self::Content(file) => {
-                let token = filesystem::save_uploaded_file(&file.data, file.content_type)?;
-                cache::compute_properties(token)
-            }
         }
     }
 
     pub fn get_or_compute_properties(&self) -> ApiResult<CachedProperties> {
         match self {
             Self::Token(token) => cache::get_or_compute_properties(token.to_owned()),
-            Self::Content(file) => {
-                let token = filesystem::save_uploaded_file(&file.data, file.content_type)?;
-                cache::compute_properties(token)
-            }
         }
     }
 }
@@ -110,11 +100,6 @@ pub enum PartName {
 
 pub struct Body<const N: usize> {
     pub files: [Option<FileContents>; N],
-    pub metadata: Option<Vec<u8>>,
-}
-
-pub async fn extract_with_metadata<const N: usize>(form_data: FormData, parts: [PartName; N]) -> ApiResult<Body<N>> {
-    extract(form_data, parts, true).await
 }
 
 pub async fn extract_without_metadata<const N: usize>(form_data: FormData, parts: [PartName; N]) -> ApiResult<Body<N>> {
@@ -127,7 +112,6 @@ async fn extract<const N: usize>(
     extract_metadata: bool,
 ) -> ApiResult<Body<N>> {
     let mut files = std::array::from_fn(|_| None);
-    let mut metadata = None;
     while let Some(Ok(part)) = form_data.next().await {
         let position = parts
             .iter()
@@ -155,12 +139,11 @@ async fn extract<const N: usize>(
             })
             .await
             .map_err(api::Error::from)?;
-        match file_info {
-            Some((index, content_type)) => files[index] = Some(FileContents { data, content_type }),
-            None => metadata = Some(data),
-        };
+        if let Some((index, content_type)) = file_info {
+            files[index] = Some(FileContents { data, content_type });
+        }
     }
-    Ok(Body { files, metadata })
+    Ok(Body { files })
 }
 
 /// Returns the MIME type of the given part.

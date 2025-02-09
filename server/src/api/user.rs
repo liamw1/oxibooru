@@ -1,9 +1,9 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::password;
 use crate::config::RegexType;
+use crate::content::hash;
 use crate::content::thumbnail::ThumbnailType;
-use crate::content::upload::{PartName, Upload, MAX_UPLOAD_SIZE};
-use crate::content::{hash, upload};
+use crate::content::upload::Upload;
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
 use crate::resource::user::{Field, UserInfo, Visibility};
@@ -14,7 +14,6 @@ use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
 use serde::Deserialize;
-use warp::filters::multipart::FormData;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
@@ -37,26 +36,12 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::body::json())
         .map(create)
         .map(api::Reply::from);
-    let create_multipart = warp::post()
-        .and(api::auth())
-        .and(warp::path!("users"))
-        .and(api::resource_query())
-        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
-        .then(create_multipart)
-        .map(api::Reply::from);
     let update = warp::put()
         .and(api::auth())
         .and(warp::path!("user" / String))
         .and(api::resource_query())
         .and(warp::body::json())
         .map(update)
-        .map(api::Reply::from);
-    let update_multipart = warp::put()
-        .and(api::auth())
-        .and(warp::path!("user" / String))
-        .and(api::resource_query())
-        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
-        .then(update_multipart)
         .map(api::Reply::from);
     let delete = warp::delete()
         .and(api::auth())
@@ -65,12 +50,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .map(delete)
         .map(api::Reply::from);
 
-    list.or(get)
-        .or(create)
-        .or(create_multipart)
-        .or(update)
-        .or(update_multipart)
-        .or(delete)
+    list.or(get).or(create).or(update).or(delete)
 }
 
 const MAX_USERS_PER_PAGE: i64 = 1000;
@@ -210,17 +190,6 @@ fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> Api
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full).map_err(api::Error::from))
 }
 
-async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: FormData) -> ApiResult<UserInfo> {
-    let body = upload::extract_with_metadata(form_data, [PartName::Avatar]).await?;
-    let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
-    let mut user_info: NewUserInfo = serde_json::from_slice(&metadata)?;
-    if let [Some(avatar)] = body.files {
-        user_info.avatar_token = Some(Upload::Content(avatar));
-    }
-
-    create(auth, query, user_info)
-}
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
@@ -343,22 +312,6 @@ fn update(auth: AuthResult, username: String, query: ResourceQuery, update: User
         update::user::last_edit_time(conn, user_id).map(|_| (user_id, visibility))
     })?;
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from))
-}
-
-async fn update_multipart(
-    auth: AuthResult,
-    username: String,
-    query: ResourceQuery,
-    form_data: FormData,
-) -> ApiResult<UserInfo> {
-    let body = upload::extract_with_metadata(form_data, [PartName::Avatar]).await?;
-    let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
-    let mut user_update: UserUpdate = serde_json::from_slice(&metadata)?;
-    if let [Some(avatar)] = body.files {
-        user_update.avatar_token = Some(Upload::Content(avatar));
-    }
-
-    update(auth, username, query, user_update)
 }
 
 fn delete(auth: AuthResult, username: String, client_version: DeleteRequest) -> ApiResult<()> {

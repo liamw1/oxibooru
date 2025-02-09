@@ -364,7 +364,6 @@ impl ErrorKind for crate::api::Error {
             Self::NoEmail => "NoEmail",
             Self::MissingContentType => "MissingContentType",
             Self::MissingFormData => "MissingFormData",
-            Self::MissingMetadata => "MissingMetadata",
             Self::MissingPostContent => "MissingPostContent",
             Self::MissingSmtpInfo => "MissingSmtpInfo",
             Self::NoNamesGiven(_) => "NoNamesGiven",
