@@ -3,13 +3,13 @@ use crate::auth::password;
 use crate::content::hash;
 use crate::schema::user;
 use crate::{api, config, db};
+use argon2::password_hash::rand_core::{OsRng, RngCore};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use lettre::message::header::ContentType;
 use lettre::message::Mailbox;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
-use rand_core::{OsRng, RngCore};
 use serde::{Deserialize, Serialize};
 use warp::{Filter, Rejection, Reply};
 

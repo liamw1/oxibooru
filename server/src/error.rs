@@ -286,6 +286,7 @@ impl ErrorKind for video_rs::Error {
     fn kind(&self) -> &'static str {
         match self {
             Self::ReadExhausted => "ReadExhausted",
+            Self::DecodeExhausted => "DecodeExhausted",
             Self::WriteRetryLimitReached => "WriteRetryLimitReached",
             Self::InvalidFrameFormat => "InvalidFrameFormat",
             Self::InvalidExtraData => "InvalidExtraData",

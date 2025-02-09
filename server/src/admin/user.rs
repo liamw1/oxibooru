@@ -4,10 +4,10 @@ use crate::api::ApiResult;
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::schema::user;
+use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
 use diesel::dsl::exists;
 use diesel::prelude::*;
-use rand_core::OsRng;
 
 /// This function prompts the user for input again to reset passwords for specific users.
 pub fn reset_password(conn: &mut PgConnection) -> ApiResult<()> {
