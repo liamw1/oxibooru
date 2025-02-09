@@ -62,8 +62,8 @@ pub fn run_migrations(conn: &mut PgConnection) {
     }
 }
 
-/// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, and `POSTGRES_DATABASE` environment variables.
-/// If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DATABASE`.
+/// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DATABASE`
+/// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DATABASE`.
 pub fn create_url(database_override: Option<&str>) -> String {
     if std::env::var("DOCKER_DEPLOYMENT").is_err() {
         dotenvy::from_filename("../.env").unwrap();
@@ -71,13 +71,10 @@ pub fn create_url(database_override: Option<&str>) -> String {
 
     let user = std::env::var("POSTGRES_USER").unwrap();
     let password = std::env::var("POSTGRES_PASSWORD").unwrap();
+    let hostname = std::env::var("POSTGRES_HOST").unwrap_or(String::from("localhost"));
     let database = database_override
         .map(Cow::Borrowed)
         .unwrap_or(Cow::Owned(std::env::var("POSTGRES_DB").unwrap()));
-    let hostname = match std::env::var("DOCKER_DEPLOYMENT") {
-        Ok(_) => "host.docker.internal",
-        Err(_) => "localhost",
-    };
 
     format!("postgres://{user}:{password}@{hostname}/{database}")
 }

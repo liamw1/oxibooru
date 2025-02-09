@@ -2,8 +2,17 @@ use crate::api;
 use crate::api::ApiResult;
 use crate::config::RegexType;
 use crate::model::pool::{NewPoolName, PoolPost};
-use crate::schema::{pool_name, pool_post};
+use crate::schema::{pool, pool_name, pool_post};
+use crate::time::DateTime;
 use diesel::prelude::*;
+
+/// Updates last_edit_time of pool with given `pool_id`.
+pub fn last_edit_time(conn: &mut PgConnection, pool_id: i64) -> ApiResult<()> {
+    diesel::update(pool::table.find(pool_id))
+        .set(pool::last_edit_time.eq(DateTime::now()))
+        .execute(conn)?;
+    Ok(())
+}
 
 /// Appends `names` onto the current list of names for the pool with id `pool_id`.
 pub fn add_names(conn: &mut PgConnection, pool_id: i64, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {

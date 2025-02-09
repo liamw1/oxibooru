@@ -1,3 +1,4 @@
+use crate::auth::header::Client;
 use crate::model::comment::{Comment, CommentScore};
 use crate::model::enums::{AvatarStyle, Rating};
 use crate::resource;
@@ -25,16 +26,16 @@ pub enum Field {
 }
 
 impl Field {
-    pub fn create_table(fields_str: &str) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
-        let mut table = FieldTable::filled(false);
-        let fields = fields_str
-            .split(',')
-            .map(Self::from_str)
-            .collect::<Result<Vec<_>, _>>()?;
-        for field in fields.into_iter() {
-            table[field] = true;
+    pub fn create_table(fields: Option<&str>) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
+        if let Some(fields_str) = fields {
+            let mut table = FieldTable::filled(false);
+            for field in fields_str.split(',') {
+                table[Self::from_str(field)?] = true;
+            }
+            Ok(table)
+        } else {
+            Ok(FieldTable::filled(true))
         }
-        Ok(table)
     }
 }
 
@@ -56,7 +57,7 @@ pub struct CommentInfo {
 impl CommentInfo {
     pub fn new_from_id(
         conn: &mut PgConnection,
-        client: Option<i64>,
+        client: Client,
         comment_id: i64,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
@@ -67,7 +68,7 @@ impl CommentInfo {
 
     pub fn new_batch(
         conn: &mut PgConnection,
-        client: Option<i64>,
+        client: Client,
         comments: Vec<Comment>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
@@ -111,7 +112,7 @@ impl CommentInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        client: Option<i64>,
+        client: Client,
         comment_ids: Vec<i64>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
@@ -152,8 +153,8 @@ fn get_scores(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         })
 }
 
-fn get_client_scores(conn: &mut PgConnection, client: Option<i64>, comments: &[Comment]) -> QueryResult<Vec<Rating>> {
-    if let Some(client_id) = client {
+fn get_client_scores(conn: &mut PgConnection, client: Client, comments: &[Comment]) -> QueryResult<Vec<Rating>> {
+    if let Some(client_id) = client.id {
         CommentScore::belonging_to(comments)
             .filter(comment_score::user_id.eq(client_id))
             .load::<CommentScore>(conn)

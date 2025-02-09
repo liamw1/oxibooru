@@ -1,82 +1,69 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
-use crate::resource::pool::{FieldTable, PoolInfo};
+use crate::resource::pool::{Field, PoolInfo};
 use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_post};
 use crate::time::DateTime;
-use crate::{api, config, db, resource, search, update};
+use crate::{api, config, db, search, update};
 use diesel::dsl::{exists, max};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list_pools = warp::get()
+    let list = warp::get()
         .and(api::auth())
         .and(warp::path!("pools"))
         .and(warp::query())
-        .map(list_pools)
+        .map(list)
         .map(api::Reply::from);
-    let get_pool = warp::get()
+    let get = warp::get()
         .and(api::auth())
         .and(warp::path!("pool" / i64))
         .and(api::resource_query())
-        .map(get_pool)
+        .map(get)
         .map(api::Reply::from);
-    let create_pool = warp::post()
+    let create = warp::post()
         .and(api::auth())
         .and(warp::path!("pool"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(create_pool)
+        .map(create)
         .map(api::Reply::from);
-    let merge_pools = warp::post()
+    let merge = warp::post()
         .and(api::auth())
         .and(warp::path!("pool-merge"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(merge_pools)
+        .map(merge)
         .map(api::Reply::from);
-    let update_pool = warp::put()
+    let update = warp::put()
         .and(api::auth())
         .and(warp::path!("pool" / i64))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(update_pool)
+        .map(update)
         .map(api::Reply::from);
-    let delete_pool = warp::delete()
+    let delete = warp::delete()
         .and(api::auth())
         .and(warp::path!("pool" / String))
         .and(warp::body::json())
-        .map(delete_pool)
+        .map(delete)
         .map(api::Reply::from);
 
-    list_pools
-        .or(get_pool)
-        .or(create_pool)
-        .or(merge_pools)
-        .or(update_pool)
-        .or(delete_pool)
+    list.or(get).or(create).or(merge).or(update).or(delete)
 }
 
-const MAX_POOLS_PER_PAGE: i64 = 50;
+const MAX_POOLS_PER_PAGE: i64 = 1000;
 
-fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
-    fields
-        .map(resource::pool::Field::create_table)
-        .transpose()
-        .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
-        .map_err(Box::from)
-}
-
-fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PoolInfo>> {
+fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PoolInfo>> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_list)?;
 
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_POOLS_PER_PAGE);
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::pool::parse_search_criteria(query.criteria())?;
@@ -103,12 +90,12 @@ fn list_pools(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Po
     })
 }
 
-fn get_pool(auth: AuthResult, pool_id: i64, query: ResourceQuery) -> ApiResult<PoolInfo> {
+fn get(auth: AuthResult, pool_id: i64, query: ResourceQuery) -> ApiResult<PoolInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_view)?;
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(conn)?;
         if !pool_exists {
@@ -127,7 +114,7 @@ struct NewPoolInfo {
     posts: Option<Vec<i64>>,
 }
 
-fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -> ApiResult<PoolInfo> {
+fn create(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -> ApiResult<PoolInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_create)?;
@@ -136,7 +123,7 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
         return Err(api::Error::NoNamesGiven(ResourceType::Pool));
     }
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let pool = conn.transaction(|conn| {
         let category_id: i64 = pool_category::table
@@ -159,7 +146,7 @@ fn create_pool(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -
     conn.transaction(|conn| PoolInfo::new(conn, pool, &fields).map_err(api::Error::from))
 }
 
-fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i64>) -> ApiResult<PoolInfo> {
+fn merge(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i64>) -> ApiResult<PoolInfo> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_merge)?;
@@ -170,7 +157,7 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
         return Err(api::Error::SelfMerge(ResourceType::Pool));
     }
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         let remove_version = pool::table.find(remove_id).select(pool::last_edit_time).first(conn)?;
@@ -206,14 +193,8 @@ fn merge_pools(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<
             .get_results(conn)?;
         update::pool::add_names(conn, merge_to_id, current_name_count, removed_names)?;
 
-        // Update last_edit_time
-        diesel::update(pool::table.find(merge_to_id))
-            .set(pool::last_edit_time.eq(DateTime::now()))
-            .execute(conn)?;
-
-        diesel::delete(pool::table.find(remove_id))
-            .execute(conn)
-            .map_err(api::Error::from)
+        diesel::delete(pool::table.find(remove_id)).execute(conn)?;
+        update::pool::last_edit_time(conn, merge_to_id)
     })?;
     conn.transaction(|conn| PoolInfo::new_from_id(conn, merge_to_id, &fields).map_err(api::Error::from))
 }
@@ -228,10 +209,10 @@ struct PoolUpdate {
     posts: Option<Vec<i64>>,
 }
 
-fn update_pool(auth: AuthResult, pool_id: i64, query: ResourceQuery, update: PoolUpdate) -> ApiResult<PoolInfo> {
+fn update(auth: AuthResult, pool_id: i64, query: ResourceQuery, update: PoolUpdate) -> ApiResult<PoolInfo> {
     let client = auth?;
     query.bump_login(client)?;
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
@@ -270,17 +251,12 @@ fn update_pool(auth: AuthResult, pool_id: i64, query: ResourceQuery, update: Poo
             update::pool::delete_posts(conn, pool_id)?;
             update::pool::add_posts(conn, pool_id, 0, posts)?;
         }
-
-        // Update last_edit_time
-        diesel::update(pool::table.find(pool_id))
-            .set(pool::last_edit_time.eq(DateTime::now()))
-            .execute(conn)
-            .map_err(api::Error::from)
+        update::pool::last_edit_time(conn, pool_id)
     })?;
     conn.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
 }
 
-fn delete_pool(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_delete)?;
 

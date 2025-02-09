@@ -72,13 +72,13 @@ pub fn generate_indexes(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) 
 
     let signature = uncompress(compressed_signature);
     let word_positions: [usize; NUM_WORDS] = Interval::new(0, signature.len() - NUM_LETTERS).linspace();
-    let words: [[u8; NUM_LETTERS]; NUM_WORDS] = core::array::from_fn(|word_index| {
+    let words: [[u8; NUM_LETTERS]; NUM_WORDS] = std::array::from_fn(|word_index| {
         let pos = word_positions[word_index];
         signature[pos..(pos + NUM_LETTERS)].try_into().unwrap()
     });
 
     const CLAMP_VALUE: i8 = NUM_REDUCED_SYMBOLS as i8 / 2;
-    core::array::from_fn(|word_index| {
+    std::array::from_fn(|word_index| {
         let word = words[word_index];
         let encoded_letters: u32 = word
             .iter()

@@ -3,7 +3,7 @@
         {
             "user": {
                 "name": "administrator",
-                "avatarUrl": "data/custom-avatars/administrator.png"
+                "avatarUrl": "data/avatars/administrator.png"
             },
             "note": "This is a test token",
             "enabled": true,

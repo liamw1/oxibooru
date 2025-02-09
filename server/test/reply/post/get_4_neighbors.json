@@ -3,7 +3,7 @@
         "id": 3,
         "user": {
             "name": "regular_user",
-            "avatarUrl": "data/custom-avatars/regular_user.png"
+            "avatarUrl": "data/avatars/regular_user.png"
         },
         "fileSize": 96468992,
         "canvasWidth": 11146,
@@ -73,7 +73,7 @@
         "favoritedBy": [
             {
                 "name": "regular_user",
-                "avatarUrl": "data/custom-avatars/regular_user.png"
+                "avatarUrl": "data/avatars/regular_user.png"
             }
         ],
         "hasCustomThumbnail": false
@@ -199,7 +199,7 @@
         "favoritedBy": [
             {
                 "name": "administrator",
-                "avatarUrl": "data/custom-avatars/administrator.png"
+                "avatarUrl": "data/avatars/administrator.png"
             }
         ],
         "hasCustomThumbnail": false

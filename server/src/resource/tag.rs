@@ -32,19 +32,18 @@ pub enum Field {
 }
 
 impl Field {
-    pub fn create_table(fields_str: &str) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
-        let mut table = FieldTable::filled(false);
-        let fields = fields_str
-            .split(',')
-            .map(Self::from_str)
-            .collect::<Result<Vec<_>, _>>()?;
-        for field in fields.into_iter() {
-            table[field] = true;
+    pub fn create_table(fields: Option<&str>) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
+        if let Some(fields_str) = fields {
+            let mut table = FieldTable::filled(false);
+            for field in fields_str.split(',') {
+                table[Self::from_str(field)?] = true;
+            }
+            Ok(table)
+        } else {
+            Ok(FieldTable::filled(true))
         }
-        Ok(table)
     }
 }
-
 #[skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

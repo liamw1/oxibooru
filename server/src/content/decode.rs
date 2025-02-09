@@ -1,8 +1,9 @@
-use crate::api::{self, ApiResult};
+use crate::api::ApiResult;
 use crate::model::enums::{MimeType, PostType};
+use crate::{api, filesystem};
 use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, Rgb, RgbImage};
 use std::io::Cursor;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use video_rs::ffmpeg::format::Pixel;
 use video_rs::ffmpeg::media::Type;
 use video_rs::Decoder;
@@ -10,7 +11,19 @@ use video_rs::Decoder;
 /// Returns a representative image for the given content.
 /// For images, this is simply the decoded image.
 /// For videos, it is the first frame of the video.
-pub fn representative_image(file_contents: &[u8], file_path: &Path, content_type: MimeType) -> ApiResult<DynamicImage> {
+pub fn representative_image(
+    file_contents: &[u8],
+    file_path: Option<PathBuf>,
+    content_type: MimeType,
+) -> ApiResult<DynamicImage> {
+    let path = match file_path {
+        Some(path) => path,
+        None => {
+            let token = filesystem::save_uploaded_file(file_contents, content_type)?;
+            filesystem::temporary_upload_filepath(&token)
+        }
+    };
+
     match PostType::from(content_type) {
         PostType::Image | PostType::Animation => {
             let image_format = content_type
@@ -18,7 +31,7 @@ pub fn representative_image(file_contents: &[u8], file_path: &Path, content_type
                 .expect("Mime type should be convertable to image format");
             image(file_contents, image_format).map_err(api::Error::from)
         }
-        PostType::Video => video_frame(file_path).map_err(api::Error::from),
+        PostType::Video => video_frame(&path).map_err(api::Error::from),
     }
 }
 
@@ -30,7 +43,7 @@ pub fn has_audio(path: &Path) -> Result<bool, video_rs::Error> {
 }
 
 /// Decodes a raw array of bytes into pixel data.
-fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
+pub fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
     let mut reader = ImageReader::new(Cursor::new(bytes));
     reader.set_format(format);
     reader.limits(image_reader_limits());

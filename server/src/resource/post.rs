@@ -1,3 +1,4 @@
+use crate::auth::header::Client;
 use crate::content::hash::PostHash;
 use crate::get_post_stats;
 use crate::model::comment::Comment;
@@ -98,16 +99,16 @@ pub enum Field {
 }
 
 impl Field {
-    pub fn create_table(fields_str: &str) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
-        let mut table = FieldTable::filled(false);
-        let fields = fields_str
-            .split(',')
-            .map(Self::from_str)
-            .collect::<Result<Vec<_>, _>>()?;
-        for field in fields.into_iter() {
-            table[field] = true;
+    pub fn create_table(fields: Option<&str>) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
+        if let Some(fields_str) = fields {
+            let mut table = FieldTable::filled(false);
+            for field in fields_str.split(',') {
+                table[Self::from_str(field)?] = true;
+            }
+            Ok(table)
+        } else {
+            Ok(FieldTable::filled(true))
         }
-        Ok(table)
     }
 }
 
@@ -153,12 +154,7 @@ pub struct PostInfo {
 }
 
 impl PostInfo {
-    pub fn new(
-        conn: &mut PgConnection,
-        client: Option<i64>,
-        post: Post,
-        fields: &FieldTable<bool>,
-    ) -> QueryResult<Self> {
+    pub fn new(conn: &mut PgConnection, client: Client, post: Post, fields: &FieldTable<bool>) -> QueryResult<Self> {
         let mut post_info = Self::new_batch(conn, client, vec![post], fields)?;
         assert_eq!(post_info.len(), 1);
         Ok(post_info.pop().unwrap())
@@ -166,7 +162,7 @@ impl PostInfo {
 
     pub fn new_from_id(
         conn: &mut PgConnection,
-        client: Option<i64>,
+        client: Client,
         post_id: i64,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
@@ -177,7 +173,7 @@ impl PostInfo {
 
     pub fn new_batch(
         conn: &mut PgConnection,
-        client: Option<i64>,
+        client: Client,
         posts: Vec<Post>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
@@ -341,7 +337,7 @@ impl PostInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        client: Option<i64>,
+        client: Client,
         post_ids: Vec<i64>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
@@ -429,7 +425,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
         .collect())
 }
 
-fn get_comments(conn: &mut PgConnection, client: Option<i64>, posts: &[Post]) -> QueryResult<Vec<Vec<CommentInfo>>> {
+fn get_comments(conn: &mut PgConnection, client: Client, posts: &[Post]) -> QueryResult<Vec<Vec<CommentInfo>>> {
     type CommentData = (Comment, i64, Option<(String, AvatarStyle)>);
     let comments: Vec<CommentData> = Comment::belonging_to(posts)
         .inner_join(comment_statistics::table)
@@ -440,6 +436,7 @@ fn get_comments(conn: &mut PgConnection, client: Option<i64>, posts: &[Post]) ->
     let comment_ids: Vec<i64> = comments.iter().map(|(comment, ..)| comment.id).collect();
 
     let client_scores: HashMap<i64, Score> = client
+        .id
         .map(|user_id| {
             comment_score::table
                 .select((comment_score::comment_id, comment_score::score))
@@ -551,8 +548,8 @@ fn get_notes(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Not
         .collect())
 }
 
-fn get_client_scores(conn: &mut PgConnection, client: Option<i64>, posts: &[Post]) -> QueryResult<Vec<Rating>> {
-    if let Some(client_id) = client {
+fn get_client_scores(conn: &mut PgConnection, client: Client, posts: &[Post]) -> QueryResult<Vec<Rating>> {
+    if let Some(client_id) = client.id {
         PostScore::belonging_to(posts)
             .filter(post_score::user_id.eq(client_id))
             .load::<PostScore>(conn)
@@ -567,8 +564,8 @@ fn get_client_scores(conn: &mut PgConnection, client: Option<i64>, posts: &[Post
     }
 }
 
-fn get_client_favorites(conn: &mut PgConnection, client: Option<i64>, posts: &[Post]) -> QueryResult<Vec<bool>> {
-    if let Some(client_id) = client {
+fn get_client_favorites(conn: &mut PgConnection, client: Client, posts: &[Post]) -> QueryResult<Vec<bool>> {
+    if let Some(client_id) = client.id {
         PostFavorite::belonging_to(posts)
             .filter(post_favorite::user_id.eq(client_id))
             .load::<PostFavorite>(conn)

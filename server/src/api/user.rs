@@ -1,75 +1,88 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, ResourceQuery};
 use crate::auth::password;
 use crate::config::RegexType;
-use crate::content::hash;
-use crate::content::thumbnail::{self, ThumbnailType};
+use crate::content::thumbnail::ThumbnailType;
+use crate::content::upload::{PartName, Upload, MAX_UPLOAD_SIZE};
+use crate::content::{hash, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
-use crate::resource::user::{FieldTable, UserInfo, Visibility};
+use crate::resource::user::{Field, UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::time::DateTime;
-use crate::{api, config, db, filesystem, resource, search};
+use crate::{api, config, db, search, update};
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use rand_core::OsRng;
 use serde::Deserialize;
+use warp::filters::multipart::FormData;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list_users = warp::get()
+    let list = warp::get()
         .and(api::auth())
         .and(warp::path!("users"))
         .and(warp::query())
-        .map(list_users)
+        .map(list)
         .map(api::Reply::from);
-    let get_user = warp::get()
+    let get = warp::get()
         .and(api::auth())
         .and(warp::path!("user" / String))
         .and(api::resource_query())
-        .map(get_user)
+        .map(get)
         .map(api::Reply::from);
-    let create_user = warp::post()
+    let create = warp::post()
         .and(api::auth())
         .and(warp::path!("users"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(create_user)
+        .map(create)
         .map(api::Reply::from);
-    let update_user = warp::put()
+    let create_multipart = warp::post()
+        .and(api::auth())
+        .and(warp::path!("users"))
+        .and(api::resource_query())
+        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
+        .then(create_multipart)
+        .map(api::Reply::from);
+    let update = warp::put()
         .and(api::auth())
         .and(warp::path!("user" / String))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(update_user)
+        .map(update)
         .map(api::Reply::from);
-    let delete_user = warp::delete()
+    let update_multipart = warp::put()
+        .and(api::auth())
+        .and(warp::path!("user" / String))
+        .and(api::resource_query())
+        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
+        .then(update_multipart)
+        .map(api::Reply::from);
+    let delete = warp::delete()
         .and(api::auth())
         .and(warp::path!("user" / String))
         .and(warp::body::json())
-        .map(delete_user)
+        .map(delete)
         .map(api::Reply::from);
 
-    list_users.or(get_user).or(create_user).or(update_user).or(delete_user)
+    list.or(get)
+        .or(create)
+        .or(create_multipart)
+        .or(update)
+        .or(update_multipart)
+        .or(delete)
 }
 
-const MAX_USERS_PER_PAGE: i64 = 50;
+const MAX_USERS_PER_PAGE: i64 = 1000;
 
-fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
-    fields
-        .map(resource::user::Field::create_table)
-        .transpose()
-        .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
-        .map_err(Box::from)
-}
-
-fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
+fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().user_list)?;
 
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_USERS_PER_PAGE);
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
@@ -96,14 +109,12 @@ fn list_users(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<Us
     })
 }
 
-fn get_user(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UserInfo> {
+fn get(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UserInfo> {
     let client = auth?;
     query.bump_login(client)?;
 
-    let client_id = client.map(|user| user.id);
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-
     db::get_connection()?.transaction(|conn| {
         let user_id = user::table
             .select(user::id)
@@ -112,7 +123,7 @@ fn get_user(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResu
             .optional()?
             .ok_or(api::Error::NotFound(ResourceType::User))?;
 
-        let viewing_self = client_id == Some(user_id);
+        let viewing_self = client.id == Some(user_id);
         if !viewing_self {
             api::verify_privilege(client, config::privileges().user_view)?;
         }
@@ -134,10 +145,10 @@ struct NewUserInfo {
     email: Option<String>,
     rank: Option<UserRank>,
     avatar_style: Option<AvatarStyle>,
-    avatar_token: Option<String>,
+    avatar_token: Option<Upload>,
 }
 
-fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
+fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
     let client = auth?;
     query.bump_login(client)?;
 
@@ -146,16 +157,17 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
         return Err(api::Error::InvalidUserRank);
     }
 
-    let required_rank = match client.is_some() {
-        true => config::privileges().user_create_any,
-        false => config::privileges().user_create_self,
+    let creating_self = client.id.is_none();
+    let required_rank = match creating_self {
+        true => config::privileges().user_create_self,
+        false => config::privileges().user_create_any,
     };
     api::verify_privilege(client, required_rank)?;
     if creation_rank > config::default_rank() {
         api::verify_privilege(client, creation_rank)?;
     }
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     api::verify_matches_regex(&user_info.name, RegexType::Username)?;
     api::verify_matches_regex(&user_info.password, RegexType::Password)?;
     api::verify_valid_email(user_info.email.as_deref())?;
@@ -172,7 +184,8 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
     };
     let custom_avatar = user_info
         .avatar_token
-        .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Avatar))
+        .as_ref()
+        .map(|upload| upload.thumbnail(ThumbnailType::Avatar))
         .transpose()?;
 
     let mut conn = db::get_connection()?;
@@ -183,17 +196,29 @@ fn create_user(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -
             .get_result(conn)?;
 
         if let Some(avatar) = custom_avatar {
-            api::verify_privilege(client, config::privileges().user_edit_any_avatar)?;
+            let required_rank = match creating_self {
+                true => config::privileges().user_edit_self_avatar,
+                false => config::privileges().user_edit_any_avatar,
+            };
+            api::verify_privilege(client, required_rank)?;
 
-            let avatar_size = filesystem::save_custom_avatar(&user_info.name, avatar)?;
-            diesel::update(user::table.find(user_id))
-                .set(user::custom_avatar_size.eq(avatar_size as i64))
-                .execute(conn)?;
+            update::user::avatar(conn, user_id, &user_info.name, avatar)?;
         }
 
         Ok::<_, api::Error>(user_id)
     })?;
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full).map_err(api::Error::from))
+}
+
+async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: FormData) -> ApiResult<UserInfo> {
+    let body = upload::extract_with_metadata(form_data, [PartName::Avatar]).await?;
+    let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
+    let mut user_info: NewUserInfo = serde_json::from_slice(&metadata)?;
+    if let [Some(avatar)] = body.files {
+        user_info.avatar_token = Some(Upload::Content(avatar));
+    }
+
+    create(auth, query, user_info)
 }
 
 #[derive(Deserialize)]
@@ -207,19 +232,19 @@ struct UserUpdate {
     email: Option<Option<String>>,
     rank: Option<UserRank>,
     avatar_style: Option<AvatarStyle>,
-    avatar_token: Option<String>,
+    avatar_token: Option<Upload>,
 }
 
-fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
+fn update(auth: AuthResult, username: String, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
     let client = auth?;
     query.bump_login(client)?;
 
-    let client_id = client.map(|user| user.id);
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let custom_avatar = update
         .avatar_token
-        .map(|token| thumbnail::create_from_token(&token, ThumbnailType::Avatar))
+        .as_ref()
+        .map(|upload| upload.thumbnail(ThumbnailType::Avatar))
         .transpose()?;
 
     let mut conn = db::get_connection()?;
@@ -230,31 +255,12 @@ fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update:
             .first(conn)?;
         api::verify_version(user_version, update.version)?;
 
-        let editing_self = client_id == Some(user_id);
+        let editing_self = client.id == Some(user_id);
         let visibility = match editing_self {
             true => Visibility::Full,
             false => Visibility::PublicOnly,
         };
 
-        if let Some(new_name) = update.name.as_deref() {
-            let required_rank = match editing_self {
-                true => config::privileges().user_edit_self_name,
-                false => config::privileges().user_edit_any_name,
-            };
-            api::verify_privilege(client, required_rank)?;
-            api::verify_matches_regex(new_name, RegexType::Username)?;
-
-            // Update first to see if new name clashes with any existing names
-            diesel::update(user::table.find(user_id))
-                .set(user::name.eq(new_name))
-                .execute(conn)?;
-
-            let old_custom_avatar_path = hash::custom_avatar_path(&username);
-            if old_custom_avatar_path.try_exists()? {
-                let new_custom_avatar_path = hash::custom_avatar_path(new_name);
-                std::fs::rename(old_custom_avatar_path, new_custom_avatar_path)?;
-            }
-        }
         if let Some(password) = update.password {
             let required_rank = match editing_self {
                 true => config::privileges().user_edit_self_pass,
@@ -313,29 +319,51 @@ fn update_user(auth: AuthResult, username: String, query: ResourceQuery, update:
             };
             api::verify_privilege(client, required_rank)?;
 
-            filesystem::delete_custom_avatar(&username)?;
-
-            let name = update.name.as_deref().unwrap_or(&username);
-            let avatar_size = filesystem::save_custom_avatar(name, avatar)?;
-            diesel::update(user::table.find(user_id))
-                .set(user::custom_avatar_size.eq(avatar_size as i64))
-                .execute(conn)?;
+            update::user::avatar(conn, user_id, &username, avatar)?;
         }
+        if let Some(new_name) = update.name.as_deref() {
+            let required_rank = match editing_self {
+                true => config::privileges().user_edit_self_name,
+                false => config::privileges().user_edit_any_name,
+            };
+            api::verify_privilege(client, required_rank)?;
+            api::verify_matches_regex(new_name, RegexType::Username)?;
 
-        // Update last_edit_time
-        diesel::update(user::table.find(user_id))
-            .set(user::last_edit_time.eq(DateTime::now()))
-            .execute(conn)?;
-        Ok::<_, api::Error>((user_id, visibility))
+            // Update first to see if new name clashes with any existing names
+            diesel::update(user::table.find(user_id))
+                .set(user::name.eq(new_name))
+                .execute(conn)?;
+
+            let old_custom_avatar_path = hash::custom_avatar_path(&username);
+            if old_custom_avatar_path.try_exists()? {
+                let new_custom_avatar_path = hash::custom_avatar_path(new_name);
+                std::fs::rename(old_custom_avatar_path, new_custom_avatar_path)?;
+            }
+        }
+        update::user::last_edit_time(conn, user_id).map(|_| (user_id, visibility))
     })?;
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from))
 }
 
-fn delete_user(auth: AuthResult, username: String, client_version: DeleteRequest) -> ApiResult<()> {
-    let client = auth?;
-    let client_id = client.map(|user| user.id);
-    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
+async fn update_multipart(
+    auth: AuthResult,
+    username: String,
+    query: ResourceQuery,
+    form_data: FormData,
+) -> ApiResult<UserInfo> {
+    let body = upload::extract_with_metadata(form_data, [PartName::Avatar]).await?;
+    let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
+    let mut user_update: UserUpdate = serde_json::from_slice(&metadata)?;
+    if let [Some(avatar)] = body.files {
+        user_update.avatar_token = Some(Upload::Content(avatar));
+    }
 
+    update(auth, username, query, user_update)
+}
+
+fn delete(auth: AuthResult, username: String, client_version: DeleteRequest) -> ApiResult<()> {
+    let client = auth?;
+    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))
@@ -343,7 +371,7 @@ fn delete_user(auth: AuthResult, username: String, client_version: DeleteRequest
             .first(conn)?;
         api::verify_version(user_version, *client_version)?;
 
-        let deleting_self = client_id == Some(user_id);
+        let deleting_self = client.id == Some(user_id);
         let required_rank = match deleting_self {
             true => config::privileges().user_delete_self,
             false => config::privileges().user_delete_any,

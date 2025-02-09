@@ -1,12 +1,21 @@
 use crate::api::ApiResult;
-use crate::auth::header::AuthUser;
+use crate::auth::header::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
+use crate::time::DateTime;
 use crate::{api, config};
 use diesel::prelude::*;
 use std::collections::HashSet;
+
+/// Updates last_edit_time of tag with given `tag_id`.
+pub fn last_edit_time(conn: &mut PgConnection, tag_id: i64) -> ApiResult<()> {
+    diesel::update(tag::table.find(tag_id))
+        .set(tag::last_edit_time.eq(DateTime::now()))
+        .execute(conn)?;
+    Ok(())
+}
 
 /// Appends `names` onto the current list of names for the tag with id `tag_id`.
 pub fn add_names(conn: &mut PgConnection, tag_id: i64, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
@@ -77,13 +86,14 @@ pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: Vec<
 /// Checks that each new name matches on the Tag regex.
 pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
-    client: Option<AuthUser>,
+    client: Client,
     names: Vec<String>,
     detect_cyclic_dependencies: bool,
 ) -> ApiResult<Vec<i64>> {
     let mut implied_ids: Vec<i64> = tag_name::table
         .select(tag_name::tag_id)
         .filter(tag_name::name.eq_any(&names))
+        .distinct()
         .load(conn)?;
     let mut all_implied_tag_ids: HashSet<i64> = implied_ids.iter().copied().collect();
 
@@ -95,6 +105,7 @@ pub fn get_or_create_tag_ids(
         implied_ids = tag_implication::table
             .select(tag_implication::child_id)
             .filter(tag_implication::parent_id.eq_any(&implied_ids))
+            .distinct()
             .load(conn)?;
         all_implied_tag_ids.extend(implied_ids.iter().copied());
     }
@@ -102,17 +113,18 @@ pub fn get_or_create_tag_ids(
         return Err(api::Error::CyclicDependency(ResourceType::TagImplication));
     }
 
+    let mut tag_ids: Vec<_> = all_implied_tag_ids.into_iter().collect();
     let existing_names: HashSet<String> = tag_name::table
         .select(tag_name::name)
-        .filter(tag_name::tag_id.eq_any(&all_implied_tag_ids))
+        .filter(tag_name::tag_id.eq_any(&tag_ids))
         .load(conn)?
         .into_iter()
+        .map(|name: String| name.to_lowercase())
         .collect();
-    let mut tag_ids: Vec<_> = all_implied_tag_ids.into_iter().collect();
 
     let new_tag_names: Vec<_> = names
         .into_iter()
-        .filter(|name| !existing_names.contains(name))
+        .filter(|name| !existing_names.contains(&name.to_lowercase()))
         .collect();
     new_tag_names
         .iter()

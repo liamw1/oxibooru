@@ -2,75 +2,62 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, ResourceQuery, UnpagedRes
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPoolCategory, PoolCategory};
-use crate::resource::pool_category::{FieldTable, PoolCategoryInfo};
+use crate::resource::pool_category::{Field, PoolCategoryInfo};
 use crate::schema::{pool, pool_category};
 use crate::time::DateTime;
-use crate::{api, config, db, resource};
+use crate::{api, config, db};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
 
 pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list_pool_categories = warp::get()
+    let list = warp::get()
         .and(api::auth())
         .and(warp::path!("pool-categories"))
         .and(api::resource_query())
-        .map(list_pool_categories)
+        .map(list)
         .map(api::Reply::from);
-    let get_pool_category = warp::get()
+    let get = warp::get()
         .and(api::auth())
         .and(warp::path!("pool-category" / String))
         .and(api::resource_query())
-        .map(get_pool_category)
+        .map(get)
         .map(api::Reply::from);
-    let create_pool_category = warp::post()
+    let create = warp::post()
         .and(api::auth())
         .and(warp::path!("pool-categories"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(create_pool_category)
+        .map(create)
         .map(api::Reply::from);
-    let update_pool_category = warp::put()
+    let update = warp::put()
         .and(api::auth())
         .and(warp::path!("pool-category" / String))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(update_pool_category)
+        .map(update)
         .map(api::Reply::from);
-    let set_default_pool_category = warp::put()
+    let set_default = warp::put()
         .and(api::auth())
         .and(warp::path!("pool-category" / String / "default"))
         .and(api::resource_query())
-        .map(set_default_pool_category)
+        .map(set_default)
         .map(api::Reply::from);
-    let delete_pool_category = warp::delete()
+    let delete = warp::delete()
         .and(api::auth())
         .and(warp::path!("pool-category" / String))
         .and(warp::body::json())
-        .map(delete_pool_category)
+        .map(delete)
         .map(api::Reply::from);
 
-    list_pool_categories
-        .or(get_pool_category)
-        .or(create_pool_category)
-        .or(update_pool_category)
-        .or(set_default_pool_category)
-        .or(delete_pool_category)
+    list.or(get).or(create).or(update).or(set_default).or(delete)
 }
 
-fn create_field_table(fields: Option<&str>) -> Result<FieldTable<bool>, Box<dyn std::error::Error>> {
-    fields
-        .map(resource::pool_category::Field::create_table)
-        .transpose()
-        .map(|opt_table| opt_table.unwrap_or(FieldTable::filled(true)))
-        .map_err(Box::from)
-}
-
-fn list_pool_categories(auth: AuthResult, query: ResourceQuery) -> ApiResult<UnpagedResponse<PoolCategoryInfo>> {
+fn list(auth: AuthResult, query: ResourceQuery) -> ApiResult<UnpagedResponse<PoolCategoryInfo>> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_list)?;
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         PoolCategoryInfo::all(conn, &fields)
             .map(|results| UnpagedResponse { results })
@@ -78,11 +65,11 @@ fn list_pool_categories(auth: AuthResult, query: ResourceQuery) -> ApiResult<Unp
     })
 }
 
-fn get_pool_category(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<PoolCategoryInfo> {
+fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_view)?;
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let category = pool_category::table
@@ -101,11 +88,7 @@ struct NewPoolCategoryInfo {
     color: String,
 }
 
-fn create_pool_category(
-    auth: AuthResult,
-    query: ResourceQuery,
-    category_info: NewPoolCategoryInfo,
-) -> ApiResult<PoolCategoryInfo> {
+fn create(auth: AuthResult, query: ResourceQuery, category_info: NewPoolCategoryInfo) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_create)?;
     api::verify_matches_regex(&category_info.name, RegexType::PoolCategory)?;
@@ -115,7 +98,7 @@ fn create_pool_category(
         color: &category_info.color,
     };
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let category = diesel::insert_into(pool_category::table)
         .values(new_category)
@@ -132,14 +115,14 @@ struct PoolCategoryUpdate {
     color: Option<String>,
 }
 
-fn update_pool_category(
+fn update(
     auth: AuthResult,
     name: String,
     query: ResourceQuery,
     update: PoolCategoryUpdate,
 ) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
@@ -171,11 +154,11 @@ fn update_pool_category(
     conn.transaction(|conn| PoolCategoryInfo::new_from_id(conn, category_id, &fields).map_err(api::Error::from))
 }
 
-fn set_default_pool_category(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<PoolCategoryInfo> {
+fn set_default(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_set_default)?;
 
-    let fields = create_field_table(query.fields())?;
+    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let new_default_category: PoolCategory = conn.transaction(|conn| {
@@ -217,7 +200,7 @@ fn set_default_pool_category(auth: AuthResult, name: String, query: ResourceQuer
     conn.transaction(|conn| PoolCategoryInfo::new(conn, new_default_category, &fields).map_err(api::Error::from))
 }
 
-fn delete_pool_category(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_delete)?;
 

@@ -2,7 +2,7 @@
     "id": 1,
     "user": {
         "name": "restricted_user",
-        "avatarUrl": "data/custom-avatars/restricted_user.png"
+        "avatarUrl": "data/avatars/restricted_user.png"
     },
     "fileSize": 5242880,
     "canvasWidth": 1980,
@@ -183,11 +183,11 @@
     "favoritedBy": [
         {
             "name": "regular_user",
-            "avatarUrl": "data/custom-avatars/regular_user.png"
+            "avatarUrl": "data/avatars/regular_user.png"
         },
         {
             "name": "restricted_user",
-            "avatarUrl": "data/custom-avatars/restricted_user.png"
+            "avatarUrl": "data/avatars/restricted_user.png"
         }
     ],
     "hasCustomThumbnail": false

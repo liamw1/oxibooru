@@ -10,7 +10,7 @@
             "text": "Cool post!",
             "user": {
                 "name": "regular_user",
-                "avatarUrl": "data/custom-avatars/regular_user.png"
+                "avatarUrl": "data/avatars/regular_user.png"
             },
             "score": 2,
             "ownScore": 0
@@ -21,7 +21,7 @@
             "text": "I don't think this uploaded correctly",
             "user": {
                 "name": "regular_user",
-                "avatarUrl": "data/custom-avatars/regular_user.png"
+                "avatarUrl": "data/avatars/regular_user.png"
             },
             "score": -4,
             "ownScore": -1

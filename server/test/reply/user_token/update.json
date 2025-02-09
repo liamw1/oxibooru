@@ -1,7 +1,7 @@
 {
     "user": {
         "name": "administrator",
-        "avatarUrl": "data/custom-avatars/administrator.png"
+        "avatarUrl": "data/avatars/administrator.png"
     },
     "note": "I'm changing this token",
     "enabled": false,

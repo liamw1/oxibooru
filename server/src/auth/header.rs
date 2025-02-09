@@ -29,20 +29,20 @@ pub enum AuthenticationError {
 }
 
 #[derive(Clone, Copy)]
-pub struct AuthUser {
-    pub id: i64,
+pub struct Client {
+    pub id: Option<i64>,
     pub rank: UserRank,
 }
 
-impl AuthUser {
-    fn new(id: i64, rank: UserRank) -> Self {
+impl Client {
+    pub fn new(id: Option<i64>, rank: UserRank) -> Self {
         Self { id, rank }
     }
 }
 
 /// Authentication can either be done by token-based authentication (reccommended)
 /// or by sending password as plaintext.
-pub fn authenticate_user(auth: String) -> Result<AuthUser, AuthenticationError> {
+pub fn authenticate_user(auth: String) -> Result<Client, AuthenticationError> {
     let (auth_type, credentials) = auth.split_once(' ').ok_or(AuthenticationError::MalformedCredentials)?;
     match auth_type {
         "Basic" => basic_access_authentication(credentials),
@@ -73,7 +73,7 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
 
 /// Checks that the given `credentials` are of the form "username:password"
 /// and that the username/password combination is valid.
-fn basic_access_authentication(credentials: &str) -> Result<AuthUser, AuthenticationError> {
+fn basic_access_authentication(credentials: &str) -> Result<Client, AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
     let mut conn = db::get_connection()?;
 
@@ -86,13 +86,13 @@ fn basic_access_authentication(credentials: &str) -> Result<AuthUser, Authentica
         .optional()?
         .ok_or(AuthenticationError::UsernamePasswordMismatch)?;
     auth::password::is_valid_password(&password_hash, &password)
-        .then_some(AuthUser::new(user_id, rank))
+        .then_some(Client::new(Some(user_id), rank))
         .ok_or(AuthenticationError::UsernamePasswordMismatch)
 }
 
 /// Checks that the given `credentials` are of the form "username:token"
 /// and that the username/token combination is valid and non-expired.
-fn token_authentication(credentials: &str) -> Result<AuthUser, AuthenticationError> {
+fn token_authentication(credentials: &str) -> Result<Client, AuthenticationError> {
     let (username, unparsed_token) = decode_credentials(credentials)?;
     let token = Uuid::parse_str(&unparsed_token)?;
 
@@ -108,6 +108,6 @@ fn token_authentication(credentials: &str) -> Result<AuthUser, AuthenticationErr
     let expired = expiration_time.as_ref().is_some_and(|&time| time < DateTime::now());
     let is_valid_token = enabled && !expired;
     is_valid_token
-        .then_some(AuthUser::new(user_id, rank))
+        .then_some(Client::new(Some(user_id), rank))
         .ok_or(AuthenticationError::InvalidToken)
 }

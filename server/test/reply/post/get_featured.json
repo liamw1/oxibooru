@@ -2,7 +2,7 @@
     "id": 1,
     "user": {
         "name": "restricted_user",
-        "avatarUrl": "data/custom-avatars/restricted_user.png"
+        "avatarUrl": "data/avatars/restricted_user.png"
     },
     "fileSize": 1048576,
     "canvasWidth": 1000,
@@ -96,7 +96,7 @@
     "favoritedBy": [
         {
             "name": "restricted_user",
-            "avatarUrl": "data/custom-avatars/restricted_user.png"
+            "avatarUrl": "data/avatars/restricted_user.png"
         }
     ],
     "hasCustomThumbnail": false

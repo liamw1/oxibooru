@@ -67,9 +67,9 @@ impl RingCache {
     fn remove(&mut self, key: &str) -> Option<CachedProperties> {
         self.data
             .iter()
-            .position(|entry| entry.0 == key)
+            .position(|(cache_key, _)| cache_key == key)
             .and_then(|pos| self.data.remove(pos))
-            .map(|entry| entry.1)
+            .map(|(_, cache_value)| cache_value)
     }
 
     fn reset(&mut self) {
@@ -116,7 +116,7 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
             }
         }
     };
-    let image = decode::representative_image(&file_contents, &temp_path, mime_type)?;
+    let image = decode::representative_image(&file_contents, Some(temp_path), mime_type)?;
 
     Ok(CachedProperties {
         token,

@@ -2,7 +2,7 @@
     "id": 4,
     "user": {
         "name": "regular_user",
-        "avatarUrl": "data/custom-avatars/regular_user.png"
+        "avatarUrl": "data/avatars/regular_user.png"
     },
     "fileSize": 1,
     "canvasWidth": 1,
@@ -47,7 +47,7 @@
     "favoritedBy": [
         {
             "name": "regular_user",
-            "avatarUrl": "data/custom-avatars/regular_user.png"
+            "avatarUrl": "data/avatars/regular_user.png"
         }
     ],
     "hasCustomThumbnail": false
