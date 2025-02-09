@@ -203,6 +203,10 @@ END;
 ALTER TABLE public."post"
 ALTER COLUMN "flags" TYPE SMALLINT USING "flags"::SMALLINT;
 
+-- Post checksums have a UNIQUE constraint in Oxibooru, so we will have to deduplicate (they will be recalculated anyway)
+UPDATE public."post"
+SET "checksum" = CONCAT(RANDOM(), "id");
+
 INSERT INTO oxi."post" ("id", "user_id", "file_size", "width", "height", "safety", "type", "mime_type", "checksum", "checksum_md5", "flags", "source", "creation_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "user_id", "file_size", "image_width", "image_height", "safety", "type", "mime-type", "checksum", "checksum_md5", "flags", "source", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."post";
 
