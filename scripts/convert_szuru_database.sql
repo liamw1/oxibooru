@@ -1,4 +1,3 @@
--- ================================== Setup ================================== --
 -- Disable triggers on tables, as they make copying data over extremely slow
 ALTER TABLE oxi."user" DISABLE TRIGGER USER;
 ALTER TABLE oxi."tag_category" DISABLE TRIGGER USER;
@@ -19,27 +18,6 @@ ALTER TABLE oxi."pool_category" DISABLE TRIGGER USER;
 ALTER TABLE oxi."pool" DISABLE TRIGGER USER;
 ALTER TABLE oxi."pool_name" DISABLE TRIGGER USER;
 ALTER TABLE oxi."pool_post" DISABLE TRIGGER USER;
-
--- Disable triggers on Szurubooru tables
-ALTER TABLE public."user" DISABLE TRIGGER ALL;
-ALTER TABLE public."tag_category" DISABLE TRIGGER ALL;
-ALTER TABLE public."tag" DISABLE TRIGGER ALL;
-ALTER TABLE public."tag_name" DISABLE TRIGGER ALL;
-ALTER TABLE public."tag_implication" DISABLE TRIGGER ALL;
-ALTER TABLE public."tag_suggestion" DISABLE TRIGGER ALL;
-ALTER TABLE public."post" DISABLE TRIGGER ALL;
-ALTER TABLE public."post_relation" DISABLE TRIGGER ALL;
-ALTER TABLE public."post_tag" DISABLE TRIGGER ALL;
-ALTER TABLE public."post_favorite" DISABLE TRIGGER ALL;
-ALTER TABLE public."post_feature" DISABLE TRIGGER ALL;
-ALTER TABLE public."post_note" DISABLE TRIGGER ALL;
-ALTER TABLE public."post_score" DISABLE TRIGGER ALL;
-ALTER TABLE public."comment" DISABLE TRIGGER ALL;
-ALTER TABLE public."comment_score" DISABLE TRIGGER ALL;
-ALTER TABLE public."pool_category" DISABLE TRIGGER ALL;
-ALTER TABLE public."pool" DISABLE TRIGGER ALL;
-ALTER TABLE public."pool_name" DISABLE TRIGGER ALL;
-ALTER TABLE public."pool_post" DISABLE TRIGGER ALL;
 
 -- ================================== Users ================================== --
 -- last_login_time is non-nullable in Oxibooru, so replace NULL values with CURRENT_TIMESTAMP
@@ -79,7 +57,6 @@ SELECT setval(pg_get_serial_sequence('oxi.user', 'id'), GREATEST((SELECT MAX("id
 -- ============================= Tag Categories ============================== --
 -- First, set category_id of tags in default category to 0 (the id of the default category in Oxibooru)
 ALTER TABLE public."tag" DROP CONSTRAINT "tag_category_id_fkey";
-
 UPDATE public."tag"
 SET "category_id" = 0
 FROM public."tag_category"
@@ -104,13 +81,6 @@ SELECT "id", "order", "name", "color", CURRENT_TIMESTAMP FROM public."tag_catego
 SELECT setval(pg_get_serial_sequence('oxi.tag_category', 'id'), GREATEST((SELECT MAX("id") FROM oxi."tag_category"), 1));
 
 -- ================================== Tags =================================== --
--- Move tags that do not have valid category_id to default category
-UPDATE public."tag"
-SET "category_id" = 0
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."tag_category" WHERE "tag_category"."id" = "tag"."category_id"
-);
-
 -- Descriptions are non-nullable in Oxibooru, so replace NULL values with empty description
 UPDATE public."tag"
 SET "description" = ''
@@ -128,12 +98,6 @@ SELECT "id", "category_id", "description", "creation_time" AT TIME ZONE 'UTC', "
 SELECT setval(pg_get_serial_sequence('oxi.tag', 'id'), GREATEST((SELECT MAX("id") FROM oxi."tag"), 1));
 
 -- ================================ Tag Names ================================ --
--- Remove tag names that do not have a valid tag_id
-DELETE FROM public."tag_name"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."tag" WHERE "tag"."id" = "tag_name"."tag_id"
-);
-
 -- Create temporary table to deduplicate case insensitive names
 CREATE TABLE "ci_tag_name" (
     "order" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
@@ -162,32 +126,10 @@ SELECT "tag_id", "order" - 1, "name" FROM "ci_tag_name";
 DROP TABLE "ci_tag_name";
 
 -- ============================ Tag Implications ============================= --
--- Remove tag implications that do not have valid parent/child ids
-DELETE FROM public."tag_implication"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."tag" WHERE "tag"."id" = "tag_implication"."parent_id"
-);
-
-DELETE FROM public."tag_implication"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."tag" WHERE "tag"."id" = "tag_implication"."child_id"
-);
-
 INSERT INTO oxi."tag_implication" ("parent_id", "child_id")
 SELECT "parent_id", "child_id" FROM public."tag_implication";
 
 -- ============================= Tag Suggestions ============================= --
--- Remove tag suggestions that do not have valid parent/child ids
-DELETE FROM public."tag_suggestion"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."tag" WHERE "tag"."id" = "tag_suggestion"."parent_id"
-);
-
-DELETE FROM public."tag_suggestion"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."tag" WHERE "tag"."id" = "tag_suggestion"."child_id"
-);
-
 INSERT INTO oxi."tag_suggestion" ("parent_id", "child_id")
 SELECT "parent_id", "child_id" FROM public."tag_suggestion";
 
@@ -272,62 +214,18 @@ SELECT "id", "user_id", "file_size", "image_width", "image_height", "safety", "t
 SELECT setval(pg_get_serial_sequence('oxi.post', 'id'), GREATEST((SELECT MAX("id") FROM oxi."post"), 1));
 
 -- ============================= Post Relations ============================== --
--- Remove post relations that do not have valid parent/child ids
-DELETE FROM public."post_relation"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."post" WHERE "post"."id" = "post_relation"."parent_id"
-);
-
-DELETE FROM public."post_relation"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."post" WHERE "post"."id" = "post_relation"."child_id"
-);
-
 INSERT INTO oxi."post_relation" ("parent_id", "child_id")
 SELECT "parent_id", "child_id" FROM public."post_relation";
 
 -- ================================ Post Tags ================================ --
--- Remove post relations that do not have valid post/tag ids
-DELETE FROM public."post_tag"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."post" WHERE "post"."id" = "post_tag"."post_id"
-);
-
-DELETE FROM public."post_tag"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."tag" WHERE "tag"."id" = "post_tag"."tag_id"
-);
-
 INSERT INTO oxi."post_tag" ("post_id", "tag_id")
 SELECT "post_id", "tag_id" FROM public."post_tag";
 
 -- ============================= Post Favorites ============================== --
--- Remove post favorites that do not have valid post/user ids
-DELETE FROM public."post_favorite"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."post" WHERE "post"."id" = "post_favorite"."post_id"
-);
-
-DELETE FROM public."post_favorite"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."user" WHERE "user"."id" = "post_favorite"."user_id"
-);
-
 INSERT INTO oxi."post_favorite" ("post_id", "user_id", "time")
 SELECT "post_id", "user_id", "time" AT TIME ZONE 'UTC' FROM public."post_favorite";
 
 -- ============================== Post Feature =============================== --
--- Remove post features that do not have valid post/user ids
-DELETE FROM public."post_feature"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."post" WHERE "post"."id" = "post_feature"."post_id"
-);
-
-DELETE FROM public."post_feature"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."user" WHERE "user"."id" = "post_feature"."user_id"
-);
-
 INSERT INTO oxi."post_feature" ("id", "post_id", "user_id", "time") OVERRIDING SYSTEM VALUE
 SELECT "id", "post_id", "user_id", "time" AT TIME ZONE 'UTC' FROM public."post_feature";
 
@@ -335,43 +233,15 @@ SELECT "id", "post_id", "user_id", "time" AT TIME ZONE 'UTC' FROM public."post_f
 SELECT setval(pg_get_serial_sequence('oxi.post_feature', 'id'), GREATEST((SELECT MAX("id") FROM oxi."post_feature"), 1));
 
 -- ================================ Post Note ================================ --
--- Remove post notes that do not have valid post ids
-DELETE FROM public."post_note"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."post" WHERE "post"."id" = "post_note"."post_id"
-);
-
 -- Converting the polygon column to REAL[][2] is surprising difficult, as entries in this
 -- column are serialized Python objects in Szurubooru. I'm skipping these for now
 -- until I figure out how to do it.
 
 -- =============================== Post Score ================================ --
--- Remove post scores that do not have valid post/user ids
-DELETE FROM public."post_score"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."post" WHERE "post"."id" = "post_score"."post_id"
-);
-
-DELETE FROM public."post_score"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."user" WHERE "user"."id" = "post_score"."user_id"
-);
-
 INSERT INTO oxi."post_score" ("post_id", "user_id", "score", "time")
 SELECT "post_id", "user_id", "score", "time" AT TIME ZONE 'UTC' FROM public."post_score";
 
 -- ================================ Comments ================================= --
--- Remove comments that do not have valid user/post ids
-DELETE FROM public."comment"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."user" WHERE "user"."id" = "comment"."user_id"
-);
-
-DELETE FROM public."comment"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."post" WHERE "post"."id" = "comment"."post_id"
-);
-
 -- Comment text is non-nullable in Oxibooru, so replace NULL values with an empty string
 UPDATE public."comment"
 SET "text" = ''
@@ -389,17 +259,6 @@ SELECT "id", "user_id", "post_id", "text", "creation_time" AT TIME ZONE 'UTC', "
 SELECT setval(pg_get_serial_sequence('oxi.comment', 'id'), GREATEST((SELECT MAX("id") FROM oxi."comment"), 1));
 
 -- ============================= Comment Scores ============================== --
--- Remove comment scores that do not have valid comment/user ids
-DELETE FROM public."comment_score"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."comment" WHERE "comment"."id" = "comment_score"."comment_id"
-);
-
-DELETE FROM public."comment_score"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."user" WHERE "user"."id" = "comment_score"."user_id"
-);
-
 INSERT INTO oxi."comment_score" ("comment_id", "user_id", "score", "time")
 SELECT "comment_id", "user_id", "score", "time" AT TIME ZONE 'UTC' FROM public."comment_score";
 
@@ -429,13 +288,6 @@ SELECT "id", "name", "color", CURRENT_TIMESTAMP FROM public."pool_category";
 SELECT setval(pg_get_serial_sequence('oxi.pool_category', 'id'), GREATEST((SELECT MAX("id") FROM oxi."pool_category"), 1));
 
 -- ================================== Pools ================================== --
--- Move tags that do not have valid category_id to default category
-UPDATE public."pool"
-SET "category_id" = 0
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."pool_category" WHERE "pool_category"."id" = "pool"."category_id"
-);
-
 -- Descriptions are non-nullable in Oxibooru, so replace NULL values with empty description
 UPDATE public."pool"
 SET "description" = ''
@@ -453,12 +305,6 @@ SELECT "id", "category_id", "description", "creation_time" AT TIME ZONE 'UTC', "
 SELECT setval(pg_get_serial_sequence('oxi.pool', 'id'), GREATEST((SELECT MAX("id") FROM oxi."pool"), 1));
 
 -- =============================== Pool Names ================================ --
--- Remove pool names that do not have a valid pool_id
-DELETE FROM public."pool_name"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."pool" WHERE "pool"."id" = "pool_name"."pool_id"
-);
-
 -- Create temporary table to deduplicate case insensitive names
 CREATE TABLE "ci_pool_name" (
     "order" INTEGER PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
@@ -487,17 +333,6 @@ SELECT "pool_id", "order" - 1, "name" FROM "ci_pool_name";
 DROP TABLE "ci_pool_name";
 
 -- =============================== Pool Posts ================================ --
--- Remove pool posts that do not have valid pool/post ids
-DELETE FROM public."pool_post"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."pool" WHERE "pool"."id" = "pool_post"."pool_id"
-);
-
-DELETE FROM public."pool_post"
-WHERE NOT EXISTS (
-    SELECT 1 FROM public."post" WHERE "post"."id" = "pool_post"."post_id"
-);
-
 INSERT INTO oxi."pool_post" ("pool_id", "post_id", "order")
 SELECT "pool_id", "post_id", "ord" FROM public."pool_post";
 
