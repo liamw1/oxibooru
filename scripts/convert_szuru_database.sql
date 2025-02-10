@@ -98,8 +98,32 @@ SELECT "id", "category_id", "description", "creation_time" AT TIME ZONE 'UTC', "
 SELECT setval(pg_get_serial_sequence('oxi.tag', 'id'), GREATEST((SELECT MAX("id") FROM oxi."tag"), 1));
 
 -- ================================ Tag Names ================================ --
+-- Create temporary table to deduplicate case insensitive names
+CREATE TABLE "ci_tag_name" (
+    "tag_id" INTEGER NOT NULL,
+    "order" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "dup_count" INTEGER NOT NULL DEFAULT 0
+);
+
+-- Add indexes or this part takes forever
+CREATE INDEX ON "ci_tag_name" (LOWER("name"));
+CREATE INDEX ON public."tag_name" (LOWER("name"));
+
+INSERT INTO "ci_tag_name" ("tag_id", "order", "name")
+SELECT "tag_id", ROW_NUMBER() OVER (PARTITION BY "tag_id" ORDER BY "ord") AS new_order, "name" FROM public."tag_name";
+
+UPDATE "ci_tag_name"
+SET "dup_count" = (SELECT COUNT(*) FROM public."tag_name" WHERE LOWER(public."tag_name"."name") = LOWER("ci_tag_name"."name"));
+
+UPDATE "ci_tag_name"
+SET "name" = CONCAT("name", '_name_modified_', "tag_id", '_', "order")
+WHERE "dup_count" > 1;
+
 INSERT INTO oxi."tag_name" ("tag_id", "order", "name")
-SELECT "tag_id", "ord", "name" FROM public."tag_name";
+SELECT "tag_id", "order" - 1, "name" FROM "ci_tag_name";
+
+DROP TABLE "ci_tag_name";
 
 -- ============================ Tag Implications ============================= --
 INSERT INTO oxi."tag_implication" ("parent_id", "child_id")
@@ -281,8 +305,32 @@ SELECT "id", "category_id", "description", "creation_time" AT TIME ZONE 'UTC', "
 SELECT setval(pg_get_serial_sequence('oxi.pool', 'id'), GREATEST((SELECT MAX("id") FROM oxi."pool"), 1));
 
 -- =============================== Pool Names ================================ --
+-- Create temporary table to deduplicate case insensitive names
+CREATE TABLE "ci_pool_name" (
+    "pool_id" INTEGER NOT NULL,
+    "order" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "dup_count" INTEGER NOT NULL DEFAULT 0
+);
+
+-- Add indexes or this part takes forever
+CREATE INDEX ON "ci_pool_name" (LOWER("name"));
+CREATE INDEX ON public."pool_name" (LOWER("name"));
+
+INSERT INTO "ci_pool_name" ("pool_id", "order", "name")
+SELECT "pool_id", ROW_NUMBER() OVER (PARTITION BY "pool_id" ORDER BY "ord") AS new_order, "name" FROM public."pool_name";
+
+UPDATE "ci_pool_name"
+SET "dup_count" = (SELECT COUNT(*) FROM public."pool_name" WHERE LOWER(public."pool_name"."name") = LOWER("ci_pool_name"."name"));
+
+UPDATE "ci_pool_name"
+SET "name" = CONCAT("name", '_name_modified_', "pool_id", '_', "order")
+WHERE "dup_count" > 1;
+
 INSERT INTO oxi."pool_name" ("pool_id", "order", "name")
-SELECT "pool_id", "ord", "name" FROM public."pool_name";
+SELECT "pool_id", "order" - 1, "name" FROM "ci_pool_name";
+
+DROP TABLE "ci_pool_name";
 
 -- =============================== Pool Posts ================================ --
 INSERT INTO oxi."pool_post" ("pool_id", "post_id", "order")
