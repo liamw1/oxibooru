@@ -13,6 +13,7 @@ use crate::time::{DateTime, Timer};
 use crate::{admin, filesystem};
 use diesel::dsl::{count, max, sum};
 use diesel::prelude::*;
+use std::ffi::OsStr;
 
 /// Renames post files and thumbnails.
 /// Useful when the content hash changes.
@@ -63,15 +64,27 @@ pub fn reset_filenames() -> std::io::Result<()> {
         let mut progress = ProgressReporter::new("Posts renamed", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::Posts))? {
             let path = entry?.path();
-            let (post_id, mime_type) = match (admin::get_post_id(&path), MimeType::from_path(&path)) {
-                (Some(id), Some(mime_type)) => (id, mime_type),
-                _ => {
-                    eprintln!("ERROR: Could not find post_id or mime_type of {path:?}");
+            let post_id = match admin::get_post_id(&path) {
+                Some(id) => id,
+                None => {
+                    eprintln!("ERROR: Could not find post_id of {path:?}");
                     continue;
                 }
             };
 
-            let new_path = PostHash::new(post_id).content_path(mime_type);
+            let new_path = if let Some(mime_type) = MimeType::from_path(&path) {
+                PostHash::new(post_id).content_path(mime_type)
+            } else {
+                match path.extension().map(OsStr::to_string_lossy) {
+                    Some(extension) => eprintln!("WARNING: Post {post_id} has unsupported file extension {extension}"),
+                    None => eprintln!("WARNING: Post {post_id} has no file extension"),
+                };
+
+                let mut new_path = PostHash::new(post_id).content_path(MimeType::Png);
+                new_path.set_extension(path.extension().unwrap_or(OsStr::new("")));
+                new_path
+            };
+
             if path != new_path {
                 std::fs::rename(path, new_path)?;
                 progress.increment();

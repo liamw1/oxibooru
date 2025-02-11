@@ -4,7 +4,6 @@ use crate::api::ApiResult;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{decode, hash, signature, thumbnail};
-use crate::model::enums::MimeType;
 use crate::model::post::{NewPostSignature, PostSignature};
 use crate::schema::{post, post_signature};
 use crate::time::Timer;
@@ -17,8 +16,16 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
     let _timer = Timer::new("recompute_checksums");
     let mut progress = ProgressReporter::new("Checksums computed", PRINT_INTERVAL);
 
-    let posts: Vec<(i64, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
-    for (post_id, mime_type) in posts.into_iter() {
+    let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
+    for post_id in post_ids.into_iter() {
+        let mime_type = match post::table.find(post_id).select(post::mime_type).first(conn) {
+            Ok(mime_type) => mime_type,
+            Err(err) => {
+                eprintln!("ERROR: Cannot retrieve MIME type for post {post_id} for reason: {err}");
+                continue;
+            }
+        };
+
         let image_path = PostHash::new(post_id).content_path(mime_type);
         let file_contents = match std::fs::read(&image_path) {
             Ok(contents) => contents,
@@ -45,7 +52,6 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
             .execute(conn)?;
         progress.increment();
     }
-
     Ok(())
 }
 
@@ -60,8 +66,16 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
 
     diesel::delete(post_signature::table).execute(conn)?;
 
-    let posts: Vec<(i64, MimeType)> = post::table.select((post::id, post::mime_type)).load(conn)?;
-    for (post_id, mime_type) in posts.into_iter() {
+    let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
+    for post_id in post_ids.into_iter() {
+        let mime_type = match post::table.find(post_id).select(post::mime_type).first(conn) {
+            Ok(mime_type) => mime_type,
+            Err(err) => {
+                eprintln!("ERROR: Cannot retrieve MIME type for post {post_id} for reason: {err}");
+                continue;
+            }
+        };
+
         let image_path = PostHash::new(post_id).content_path(mime_type);
         let file_contents = match std::fs::read(&image_path) {
             Ok(contents) => contents,
@@ -74,7 +88,7 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
         let image = match decode::representative_image(&file_contents, Some(image_path), mime_type) {
             Ok(image) => image,
             Err(err) => {
-                eprintln!("ERROR: Unable to compute signature for post {post_id} for reason: {err}");
+                eprintln!("ERROR: Unable to get representative image for post {post_id} for reason: {err}");
                 continue;
             }
         };
@@ -91,7 +105,6 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
             .execute(conn)?;
         progress.increment();
     }
-
     Ok(())
 }
 
@@ -104,8 +117,7 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> QueryResult<()> {
     let _timer = Timer::new("recompute_indexes");
 
     conn.transaction(|conn| {
-        let post_signatures: Vec<PostSignature> =
-            post_signature::table.select(PostSignature::as_select()).load(conn)?;
+        let post_signatures: Vec<_> = post_signature::table.select(PostSignature::as_select()).load(conn)?;
         let (post_ids, converted_signatures): (Vec<_>, Vec<_>) = post_signatures
             .into_iter()
             .map(|post_sig| (post_sig.post_id, signature::from_database(post_sig.signature)))
@@ -137,7 +149,6 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> QueryResult<()> {
                 .execute(conn)?;
             println!("Indexes computed: {}", (chunk_index + 1) * SIGNATURE_BATCH_SIZE);
         }
-
         Ok(())
     })
 }
@@ -160,7 +171,14 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) -> ApiResult<()> {
             }
         };
 
-        let mime_type: MimeType = post::table.find(post_id).select(post::mime_type).first(conn)?;
+        let mime_type = match post::table.find(post_id).select(post::mime_type).first(conn) {
+            Ok(mime_type) => mime_type,
+            Err(err) => {
+                eprintln!("ERROR: Cannot retrieve MIME type for post {post_id} for reason: {err}");
+                continue;
+            }
+        };
+
         let post_hash = PostHash::new(post_id);
         let content_path = post_hash.content_path(mime_type);
         let file_contents = std::fs::read(&content_path)?;
