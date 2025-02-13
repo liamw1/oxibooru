@@ -125,7 +125,7 @@ fn create(
             .get_result(conn)?;
         Ok::<_, api::Error>((user_token, avatar_style))
     })?;
-    Ok(UserTokenInfo::new(MicroUser::new(username.to_string(), avatar_style), user_token, &fields))
+    Ok(UserTokenInfo::new(MicroUser::new(username.into_owned(), avatar_style), user_token, &fields))
 }
 
 #[derive(Deserialize)]
@@ -180,7 +180,7 @@ fn update(
         let updated_user_token: UserToken = user_token.save_changes(conn)?;
         Ok::<_, api::Error>((updated_user_token, avatar_style))
     })?;
-    Ok(UserTokenInfo::new(MicroUser::new(username.to_string(), avatar_style), updated_user_token, &fields))
+    Ok(UserTokenInfo::new(MicroUser::new(username.into_owned(), avatar_style), updated_user_token, &fields))
 }
 
 fn delete(auth: AuthResult, username: String, token: Uuid) -> ApiResult<()> {

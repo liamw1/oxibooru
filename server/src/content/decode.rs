@@ -1,9 +1,12 @@
 use crate::api::ApiResult;
+use crate::content::flash;
 use crate::model::enums::{MimeType, PostType};
-use crate::{api, filesystem};
+use crate::{api, config, filesystem};
 use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, Rgb, RgbImage};
-use std::io::Cursor;
+use std::fs::File;
+use std::io::{BufReader, Cursor};
 use std::path::{Path, PathBuf};
+use swf::Tag;
 use video_rs::ffmpeg::format::Pixel;
 use video_rs::ffmpeg::media::Type;
 use video_rs::Decoder;
@@ -32,14 +35,38 @@ pub fn representative_image(
             image(file_contents, image_format).map_err(api::Error::from)
         }
         PostType::Video => video_frame(&path).map_err(api::Error::from),
+        PostType::Flash => swf_image(&path),
     }
 }
 
 /// Returns if the video at `path` has an audio channel.
-pub fn has_audio(path: &Path) -> Result<bool, video_rs::Error> {
+pub fn video_has_audio(path: &Path) -> Result<bool, video_rs::Error> {
     video_rs::ffmpeg::format::input(path)
         .map(|context| context.streams().best(Type::Audio).is_some())
         .map_err(video_rs::Error::from)
+}
+
+/// Returns if the swf at `path` has audio.
+pub fn swf_has_audio(path: &Path) -> ApiResult<bool> {
+    let file = File::open(path).unwrap();
+    let reader = BufReader::new(file);
+    let swf_buf = swf::decompress_swf(reader).unwrap();
+    let swf = swf::parse_swf(&swf_buf).expect("Failed to parse SWF");
+
+    Ok(swf
+        .tags
+        .iter()
+        .position(|tag| match tag {
+            Tag::DefineButtonSound(_)
+            | Tag::DefineSound(_)
+            | Tag::SoundStreamBlock(_)
+            | Tag::SoundStreamHead(_)
+            | Tag::SoundStreamHead2(_)
+            | Tag::StartSound(_)
+            | Tag::StartSound2 { .. } => true,
+            _ => false,
+        })
+        .is_some())
 }
 
 /// Decodes a raw array of bytes into pixel data.
@@ -80,4 +107,58 @@ fn rgb24_frame(data: &[u8], width: u32, height: u32, stride: usize) -> DynamicIm
         Rgb([data[offset], data[offset + 1], data[offset + 2]])
     });
     DynamicImage::ImageRgb8(rgb_image)
+}
+
+fn swf_image(path: &Path) -> ApiResult<DynamicImage> {
+    let file = File::open(path).unwrap();
+    let reader = BufReader::new(file);
+    let swf_buf = swf::decompress_swf(reader).unwrap();
+    let swf = swf::parse_swf(&swf_buf).expect("Failed to parse SWF");
+
+    let encoding_table = swf
+        .tags
+        .iter()
+        .find_map(|tag| {
+            if let Tag::JpegTables(table) = tag {
+                Some(table)
+            } else {
+                None
+            }
+        })
+        .copied();
+    let mut images: Vec<_> = swf
+        .tags
+        .iter()
+        .filter_map(|tag| match tag {
+            Tag::DefineBits { id: _, jpeg_data } => {
+                let jpeg_data = flash::glue_tables_to_jpeg(jpeg_data, encoding_table);
+                Some(image::load_from_memory_with_format(&jpeg_data, ImageFormat::Jpeg).map_err(flash::Error::from))
+            }
+            Tag::DefineBitsLossless(bits) => flash::decode_define_bits_lossless(bits).transpose(),
+            Tag::DefineBitsJpeg2 { id: _, jpeg_data } => Some(flash::decode_define_bits_jpeg(jpeg_data, None)),
+            Tag::DefineBitsJpeg3(bits) => Some(flash::decode_define_bits_jpeg(bits.data, Some(bits.alpha_data))),
+            _ => None,
+        })
+        .filter_map(|image_result| match image_result {
+            Ok(image) => Some(image),
+            Err(err) => {
+                eprintln!("Failure to decode flash image for reason: {err}");
+                None
+            }
+        })
+        .collect();
+
+    // Sort images in order of decreasing effective width after cropping for thumbnails
+    images.sort_by_key(|image| {
+        let thumbnail_aspect_ratio =
+            config::get().thumbnails.post_width as f32 / config::get().thumbnails.post_height as f32;
+        let image_apsect_ratio = image.width() as f32 / image.height() as f32;
+
+        let effective_width = match image_apsect_ratio > thumbnail_aspect_ratio {
+            true => (image.height() as f32 * thumbnail_aspect_ratio) as u32,
+            false => image.width(),
+        };
+        u32::MAX - effective_width
+    });
+    Ok(images.into_iter().next().unwrap())
 }

@@ -70,6 +70,7 @@ pub enum PostType {
     Image,
     Animation,
     Video,
+    Flash,
 }
 
 impl From<MimeType> for PostType {
@@ -83,6 +84,7 @@ impl From<MimeType> for PostType {
             MimeType::Mp4 => Self::Video,
             MimeType::Mov => Self::Video,
             MimeType::Webm => Self::Video,
+            MimeType::Swf => Self::Flash,
         }
     }
 }
@@ -149,6 +151,9 @@ pub enum MimeType {
     #[serde(rename = "video/webm")]
     #[strum(serialize = "video/webm")]
     Webm,
+    #[serde(rename = "application/x-shockwave-flash")]
+    #[strum(serialize = "application/x-shockwave-flash")]
+    Swf,
 }
 
 impl MimeType {
@@ -183,6 +188,7 @@ impl MimeType {
             Self::Mp4 => "mp4",
             Self::Mov => "mov",
             Self::Webm => "webm",
+            Self::Swf => "swf",
         }
     }
 
@@ -193,7 +199,7 @@ impl MimeType {
             MimeType::Jpeg => Some(ImageFormat::Jpeg),
             MimeType::Png => Some(ImageFormat::Png),
             MimeType::Webp => Some(ImageFormat::WebP),
-            MimeType::Mov | MimeType::Mp4 | MimeType::Webm => None,
+            MimeType::Mov | MimeType::Mp4 | MimeType::Webm | MimeType::Swf => None,
         }
     }
 }

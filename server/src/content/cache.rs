@@ -106,15 +106,14 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
     let mime_type = MimeType::from_extension(extension)?;
     let post_type = PostType::from(mime_type);
 
-    let flags = match post_type {
-        PostType::Image | PostType::Animation => PostFlags::new(),
-        PostType::Video => {
-            if decode::has_audio(&temp_path)? {
-                PostFlags::new_with(PostFlag::Sound)
-            } else {
-                PostFlags::new()
-            }
-        }
+    let has_sound = match post_type {
+        PostType::Image | PostType::Animation => false,
+        PostType::Video => decode::video_has_audio(&temp_path)?,
+        PostType::Flash => decode::swf_has_audio(&temp_path)?,
+    };
+    let flags = match has_sound {
+        true => PostFlags::new_with(PostFlag::Sound),
+        false => PostFlags::new(),
     };
     let image = decode::representative_image(&file_contents, Some(temp_path), mime_type)?;
 

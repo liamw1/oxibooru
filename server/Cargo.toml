@@ -1,6 +1,6 @@
 [package]
 name = "server"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -23,6 +23,8 @@ warp = "0.3.7"
 toml = "0.8.20"
 image = "0.25.5"
 video-rs = "0.10.3"
+swf = "0.2.2"
+flate2 = "1.0.35"
 hmac = "0.12.1"
 md5 = "0.7.0"
 base64 = "0.22.1"
