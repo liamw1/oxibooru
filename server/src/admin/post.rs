@@ -15,6 +15,7 @@ use diesel::prelude::*;
 pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
     let _timer = Timer::new("recompute_checksums");
     let mut progress = ProgressReporter::new("Checksums computed", PRINT_INTERVAL);
+    let mut duplicate_count = ProgressReporter::new("Duplicates found", PRINT_INTERVAL);
 
     let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
     for post_id in post_ids.into_iter() {
@@ -44,7 +45,9 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
             .first(conn)
             .optional()?;
         if let Some(dup_id) = duplicate {
-            eprintln!("ERROR: Potential duplicate post {dup_id} for post {post_id}");
+            eprintln!("WARNING: Potential duplicate post {dup_id} for post {post_id}");
+            duplicate_count.increment();
+            continue;
         }
 
         diesel::update(post::table.find(post_id))
@@ -52,6 +55,7 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> QueryResult<()> {
             .execute(conn)?;
         progress.increment();
     }
+    duplicate_count.report();
     Ok(())
 }
 

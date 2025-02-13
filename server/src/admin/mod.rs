@@ -68,8 +68,12 @@ impl ProgressReporter {
     fn increment(&mut self) {
         self.count += 1;
         if self.count > 0 && self.count % self.print_interval == 0 {
-            println!("{}: {}", self.message, self.count);
+            self.report();
         }
+    }
+
+    fn report(&self) {
+        println!("{}: {}", self.message, self.count);
     }
 }
 
