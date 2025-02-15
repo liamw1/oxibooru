@@ -8,6 +8,7 @@ use crate::model::post::{NewPostSignature, PostSignature};
 use crate::schema::{post, post_signature};
 use crate::time::Timer;
 use crate::{admin, filesystem};
+use diesel::dsl::exists;
 use diesel::prelude::*;
 
 /// Recomputes posts checksums.
@@ -68,8 +69,6 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
     let _timer = Timer::new("recompute_signatures");
     let mut progress = ProgressReporter::new("Signatures computed", PRINT_INTERVAL);
 
-    diesel::delete(post_signature::table).execute(conn)?;
-
     let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
     for post_id in post_ids.into_iter() {
         let mime_type = match post::table.find(post_id).select(post::mime_type).first(conn) {
@@ -99,14 +98,25 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
 
         let image_signature = signature::compute(&image);
         let signature_indexes = signature::generate_indexes(image_signature);
-        let new_post_signature = NewPostSignature {
-            post_id,
-            signature: &image_signature,
-            words: &signature_indexes,
-        };
-        diesel::insert_into(post_signature::table)
-            .values(new_post_signature)
-            .execute(conn)?;
+        let signature_exists: bool = diesel::select(exists(post_signature::table.find(post_id))).get_result(conn)?;
+
+        if signature_exists {
+            diesel::update(post_signature::table.find(post_id))
+                .set((
+                    post_signature::signature.eq(image_signature.as_slice()),
+                    post_signature::words.eq(signature_indexes.as_slice()),
+                ))
+                .execute(conn)?;
+        } else {
+            let new_post_signature = NewPostSignature {
+                post_id,
+                signature: &image_signature,
+                words: &signature_indexes,
+            };
+            diesel::insert_into(post_signature::table)
+                .values(new_post_signature)
+                .execute(conn)?;
+        }
         progress.increment();
     }
     Ok(())
