@@ -167,6 +167,7 @@ impl MimeType {
             "mp4" | "MP4" => Ok(Self::Mp4),
             "mov" | "MOV" => Ok(Self::Mov),
             "webm" | "WEBM" => Ok(Self::Webm),
+            "swf" | "SWF" => Ok(Self::Swf),
             _ => Err(ParseExtensionError {
                 extenstion: String::from(extension),
             }),

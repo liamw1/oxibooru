@@ -65,6 +65,10 @@ pub enum Error {
     CyclicDependency(ResourceType),
     #[error("Cannot delete default {0}")]
     DeleteDefault(ResourceType),
+    #[error("SWF has no decodable images")]
+    EmptySwf,
+    #[error("Video file has no frames")]
+    EmptyVideo,
     #[error("Expression does not match on {0} regex")]
     ExpressionFailsRegex(RegexType),
     FailedAuthentication(#[from] AuthenticationError),
@@ -107,6 +111,7 @@ pub enum Error {
     #[error("Cannot merge {0} with itself")]
     SelfMerge(ResourceType),
     StdIo(#[from] std::io::Error),
+    SwfDecoding(#[from] swf::error::Error),
     #[error("Password reset token is invalid")]
     UnauthorizedPasswordReset,
     Utf8Conversion(#[from] std::str::Utf8Error),
@@ -131,6 +136,8 @@ impl Error {
             Self::ContentTypeMismatch(..) => StatusCode::BAD_REQUEST,
             Self::CyclicDependency(_) => StatusCode::BAD_REQUEST,
             Self::DeleteDefault(_) => StatusCode::BAD_REQUEST,
+            Self::EmptySwf => StatusCode::BAD_REQUEST,
+            Self::EmptyVideo => StatusCode::BAD_REQUEST,
             Self::ExpressionFailsRegex(_) => StatusCode::BAD_GATEWAY,
             Self::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
@@ -165,6 +172,7 @@ impl Error {
             Self::Search(_) => StatusCode::BAD_REQUEST,
             Self::SelfMerge(_) => StatusCode::BAD_REQUEST,
             Self::StdIo(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::SwfDecoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
             Self::Utf8Conversion(_) => StatusCode::BAD_REQUEST,
             Self::VideoDecoding(_) => StatusCode::BAD_REQUEST,
@@ -180,6 +188,8 @@ impl Error {
             Self::ContentTypeMismatch(..) => "Content Type Mismatch",
             Self::CyclicDependency(_) => "Cyclic Dependency",
             Self::DeleteDefault(_) => "Delete Default",
+            Self::EmptySwf => "Empty SWF",
+            Self::EmptyVideo => "Empty Video",
             Self::ExpressionFailsRegex(_) => "Expression Fails Regex",
             Self::FailedAuthentication(_) => "Failed Authentication",
             Self::FailedConnection(_) => "Failed Connection",
@@ -207,6 +217,7 @@ impl Error {
             Self::Search(_) => "Search Error",
             Self::SelfMerge(_) => "Self Merge",
             Self::StdIo(_) => "IO Error",
+            Self::SwfDecoding(_) => "SWF Decoding Error",
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
             Self::Utf8Conversion(_) => "Utf8 Conversion Error",
             Self::VideoDecoding(_) => "Video Decoding Error",

@@ -340,6 +340,18 @@ impl ErrorKind for serde_json::error::Category {
     }
 }
 
+impl ErrorKind for swf::error::Error {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Avm1ParseError { .. } => "SwfAvm1ParseError",
+            Self::InvalidData(_) => "SwfInvalidData",
+            Self::SwfParseError { .. } => "SwfParseError",
+            Self::IoError(_) => "SwfIoError",
+            Self::Unsupported(_) => "SwfUnsupported",
+        }
+    }
+}
+
 impl ErrorKind for crate::api::Error {
     fn kind(&self) -> &'static str {
         match self {
@@ -349,6 +361,8 @@ impl ErrorKind for crate::api::Error {
             Self::ContentTypeMismatch(..) => "ContentTypeMismatch",
             Self::CyclicDependency(_) => "CyclicDependency",
             Self::DeleteDefault(_) => "DeleteDefault",
+            Self::EmptySwf => "EmptySwf",
+            Self::EmptyVideo => "EmptyVideo",
             Self::ExpressionFailsRegex(_) => "ExpressionFailsRegex",
             Self::FailedAuthentication(err) => err.kind(),
             Self::FailedConnection(_) => "FailedConnection",
@@ -376,6 +390,7 @@ impl ErrorKind for crate::api::Error {
             Self::Search(err) => err.kind(),
             Self::SelfMerge(_) => "SelfMerge",
             Self::StdIo(err) => err.kind().kind(),
+            Self::SwfDecoding(err) => err.kind(),
             Self::UnauthorizedPasswordReset => "UnauthorizedPasswordReset",
             Self::Utf8Conversion(_) => "Utf8ConversionError",
             Self::VideoDecoding(err) => err.kind(),

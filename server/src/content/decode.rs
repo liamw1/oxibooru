@@ -34,7 +34,9 @@ pub fn representative_image(
                 .expect("Mime type should be convertable to image format");
             image(file_contents, image_format).map_err(api::Error::from)
         }
-        PostType::Video => video_frame(&path).map_err(api::Error::from),
+        PostType::Video => video_frame(&path)
+            .map_err(api::Error::from)
+            .and_then(|frame| frame.ok_or(api::Error::EmptyVideo)),
         PostType::Flash => swf_image(&path),
     }
 }
@@ -48,25 +50,23 @@ pub fn video_has_audio(path: &Path) -> Result<bool, video_rs::Error> {
 
 /// Returns if the swf at `path` has audio.
 pub fn swf_has_audio(path: &Path) -> ApiResult<bool> {
-    let file = File::open(path).unwrap();
+    let file = File::open(path)?;
     let reader = BufReader::new(file);
-    let swf_buf = swf::decompress_swf(reader).unwrap();
-    let swf = swf::parse_swf(&swf_buf).expect("Failed to parse SWF");
+    let swf_buf = swf::decompress_swf(reader)?;
+    let swf = swf::parse_swf(&swf_buf)?;
 
-    Ok(swf
-        .tags
-        .iter()
-        .position(|tag| match tag {
+    Ok(swf.tags.iter().any(|tag| {
+        matches!(
+            tag,
             Tag::DefineButtonSound(_)
-            | Tag::DefineSound(_)
-            | Tag::SoundStreamBlock(_)
-            | Tag::SoundStreamHead(_)
-            | Tag::SoundStreamHead2(_)
-            | Tag::StartSound(_)
-            | Tag::StartSound2 { .. } => true,
-            _ => false,
-        })
-        .is_some())
+                | Tag::DefineSound(_)
+                | Tag::SoundStreamBlock(_)
+                | Tag::SoundStreamHead(_)
+                | Tag::SoundStreamHead2(_)
+                | Tag::StartSound(_)
+                | Tag::StartSound2 { .. }
+        )
+    }))
 }
 
 /// Decodes a raw array of bytes into pixel data.
@@ -78,19 +78,23 @@ pub fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
 }
 
 /// Decodes first frame of video contents.
-fn video_frame(path: &Path) -> Result<DynamicImage, video_rs::Error> {
+fn video_frame(path: &Path) -> Result<Option<DynamicImage>, video_rs::Error> {
     let mut decoder = Decoder::new(path)?;
     let frame = decoder.decode_raw()?;
+
+    if frame.planes() == 0 {
+        return Ok(None);
+    }
 
     let frame_data = frame.data(0);
     let width = frame.width();
     let height = frame.height();
     let stride = frame.stride(0);
-    Ok(match frame.format() {
+    Ok(Some(match frame.format() {
         Pixel::RGB24 => rgb24_frame(frame_data, width, height, stride),
         // There's a looooooot of pixel formats, so I'll just implementment them as they come up
         format => panic!("Video frame format {format:?} is unimplemented!"),
-    })
+    }))
 }
 
 fn image_reader_limits() -> Limits {
@@ -110,10 +114,10 @@ fn rgb24_frame(data: &[u8], width: u32, height: u32, stride: usize) -> DynamicIm
 }
 
 fn swf_image(path: &Path) -> ApiResult<DynamicImage> {
-    let file = File::open(path).unwrap();
+    let file = File::open(path)?;
     let reader = BufReader::new(file);
-    let swf_buf = swf::decompress_swf(reader).unwrap();
-    let swf = swf::parse_swf(&swf_buf).expect("Failed to parse SWF");
+    let swf_buf = swf::decompress_swf(reader)?;
+    let swf = swf::parse_swf(&swf_buf)?;
 
     let encoding_table = swf
         .tags
@@ -142,7 +146,7 @@ fn swf_image(path: &Path) -> ApiResult<DynamicImage> {
         .filter_map(|image_result| match image_result {
             Ok(image) => Some(image),
             Err(err) => {
-                eprintln!("Failure to decode flash image for reason: {err}");
+                eprintln!("ERROR: Failure to decode flash image for reason: {err}");
                 None
             }
         })
@@ -160,5 +164,5 @@ fn swf_image(path: &Path) -> ApiResult<DynamicImage> {
         };
         u32::MAX - effective_width
     });
-    Ok(images.into_iter().next().unwrap())
+    images.into_iter().next().ok_or(api::Error::EmptySwf)
 }
