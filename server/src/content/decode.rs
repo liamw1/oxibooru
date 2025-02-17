@@ -37,7 +37,10 @@ pub fn representative_image(
         PostType::Video => video_frame(&path)
             .map_err(api::Error::from)
             .and_then(|frame| frame.ok_or(api::Error::EmptyVideo)),
-        PostType::Flash => swf_image(&path),
+        PostType::Flash => match video_frame(&path) {
+            Ok(Some(image)) => Ok(image),
+            _ => swf_image(&path).and_then(|frame| frame.ok_or(api::Error::EmptySwf)),
+        },
     }
 }
 
@@ -97,23 +100,8 @@ fn video_frame(path: &Path) -> Result<Option<DynamicImage>, video_rs::Error> {
     }))
 }
 
-fn image_reader_limits() -> Limits {
-    const GB: u64 = 1024_u64.pow(3);
-
-    let mut limits = Limits::no_limits();
-    limits.max_alloc = Some(4 * GB);
-    limits
-}
-
-fn rgb24_frame(data: &[u8], width: u32, height: u32, stride: usize) -> DynamicImage {
-    let rgb_image = RgbImage::from_fn(width, height, |x, y| {
-        let offset = y as usize * stride + x as usize * 3;
-        Rgb([data[offset], data[offset + 1], data[offset + 2]])
-    });
-    DynamicImage::ImageRgb8(rgb_image)
-}
-
-fn swf_image(path: &Path) -> ApiResult<DynamicImage> {
+/// Search swf tags for the largest decodable image
+fn swf_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let swf_buf = swf::decompress_swf(reader)?;
@@ -164,5 +152,21 @@ fn swf_image(path: &Path) -> ApiResult<DynamicImage> {
         };
         u32::MAX - effective_width
     });
-    images.into_iter().next().ok_or(api::Error::EmptySwf)
+    Ok(images.into_iter().next())
+}
+
+fn image_reader_limits() -> Limits {
+    const GB: u64 = 1024_u64.pow(3);
+
+    let mut limits = Limits::no_limits();
+    limits.max_alloc = Some(4 * GB);
+    limits
+}
+
+fn rgb24_frame(data: &[u8], width: u32, height: u32, stride: usize) -> DynamicImage {
+    let rgb_image = RgbImage::from_fn(width, height, |x, y| {
+        let offset = y as usize * stride + x as usize * 3;
+        Rgb([data[offset], data[offset + 1], data[offset + 2]])
+    });
+    DynamicImage::ImageRgb8(rgb_image)
 }
