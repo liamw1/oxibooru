@@ -37,10 +37,7 @@ pub fn representative_image(
         PostType::Video => video_frame(&path)
             .map_err(api::Error::from)
             .and_then(|frame| frame.ok_or(api::Error::EmptyVideo)),
-        PostType::Flash => match video_frame(&path) {
-            Ok(Some(image)) => Ok(image),
-            _ => swf_image(&path).and_then(|frame| frame.ok_or(api::Error::EmptySwf)),
-        },
+        PostType::Flash => swf_image(&path).and_then(|frame| frame.ok_or(api::Error::EmptySwf)),
     }
 }
 
@@ -139,6 +136,12 @@ fn swf_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
             }
         })
         .collect();
+
+    // Some Flash files only have video frames, which are hard to decode.
+    // So, we feed to ffmpeg and see if it can decode a representaive frame.
+    if let Ok(Some(frame)) = video_frame(path) {
+        images.push(frame);
+    }
 
     // Sort images in order of decreasing effective width after cropping for thumbnails
     images.sort_by_key(|image| {
