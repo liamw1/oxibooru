@@ -8,7 +8,7 @@ If you're interested in migrating a Szurubooru instance to an Oxibooru one, see 
 
 ## Features
 
-- Post content: images (JPG, PNG, BMP, GIF, WEBP) and videos (MP4, MOV, WEBM)
+- Post content: images (JPG, PNG, BMP, GIF, WEBP) and videos (MP4, MOV, WEBM), Flash animations
 - Post comments
 - Post notes / annotations, including arbitrary polygons
 - Rich JSON REST API ([see documentation](doc/API.md))

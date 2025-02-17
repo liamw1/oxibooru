@@ -34,16 +34,14 @@ these are:
     
 2. **Some image formats**
     
-    Currently, Oxibooru doesn't support AVIF, HEIF, HEIC, or SWF file formats.
+    Currently, Oxibooru doesn't support AVIF, HEIF, or HEIC file formats.
     In the future, support for AVIF is very likely. HEIF and HEIC are a little
-    less likely and depends on if I can find a good crate for them. SWF is 
-    probably never going to be supported.
+    less likely and depends on if I can find a good crate for them.
 
 3. **Some post types**
 
-    Oxibooru does not currently support YouTube or Flash posts. YouTube posts
-    may be supported in the future, while Flash posts are unlikely to ever
-    see support.
+    Oxibooru does not currently support YouTube posts and is unlikely to
+    support them in the future.
 
 4. **Snapshots**
 
