@@ -1,7 +1,7 @@
 use crate::api::ApiResult;
 use crate::content::signature::COMPRESSED_SIGNATURE_SIZE;
 use crate::content::thumbnail::ThumbnailType;
-use crate::content::{decode, hash, signature, thumbnail};
+use crate::content::{decode, hash, signature, thumbnail, FileContents};
 use crate::filesystem;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
 use image::DynamicImage;
@@ -98,9 +98,9 @@ fn get_cache_guard() -> MutexGuard<'static, RingCache> {
 fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
     let temp_path = filesystem::temporary_upload_filepath(&token);
     let file_size = std::fs::metadata(&temp_path)?.len();
-    let file_contents = std::fs::read(&temp_path)?;
-    let checksum = hash::compute_checksum(&file_contents);
-    let md5_checksum = hash::compute_md5_checksum(&file_contents);
+    let data = std::fs::read(&temp_path)?;
+    let checksum = hash::compute_checksum(&data);
+    let md5_checksum = hash::compute_md5_checksum(&data);
 
     let (_uuid, extension) = token.split_once('.').unwrap();
     let mime_type = MimeType::from_extension(extension)?;
@@ -115,7 +115,9 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
         true => PostFlags::new_with(PostFlag::Sound),
         false => PostFlags::new(),
     };
-    let image = decode::representative_image(&file_contents, Some(temp_path), mime_type)?;
+
+    let file_contents = FileContents { data, mime_type };
+    let image = decode::representative_image(&file_contents, &temp_path)?;
 
     Ok(CachedProperties {
         token,

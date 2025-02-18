@@ -1,11 +1,11 @@
 use crate::api::ApiResult;
-use crate::content::flash;
-use crate::model::enums::{MimeType, PostType};
-use crate::{api, config, filesystem};
+use crate::content::{flash, FileContents};
+use crate::model::enums::PostType;
+use crate::{api, config};
 use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, Rgb, RgbImage};
 use std::fs::File;
 use std::io::{BufReader, Cursor};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use swf::Tag;
 use video_rs::ffmpeg::format::Pixel;
 use video_rs::ffmpeg::media::Type;
@@ -14,30 +14,19 @@ use video_rs::Decoder;
 /// Returns a representative image for the given content.
 /// For images, this is simply the decoded image.
 /// For videos, it is the first frame of the video.
-pub fn representative_image(
-    file_contents: &[u8],
-    file_path: Option<PathBuf>,
-    content_type: MimeType,
-) -> ApiResult<DynamicImage> {
-    let path = match file_path {
-        Some(path) => path,
-        None => {
-            let token = filesystem::save_uploaded_file(file_contents, content_type)?;
-            filesystem::temporary_upload_filepath(&token)
-        }
-    };
-
-    match PostType::from(content_type) {
+pub fn representative_image(file_contents: &FileContents, file_path: &Path) -> ApiResult<DynamicImage> {
+    match PostType::from(file_contents.mime_type) {
         PostType::Image | PostType::Animation => {
-            let image_format = content_type
+            let image_format = file_contents
+                .mime_type
                 .to_image_format()
                 .expect("Mime type should be convertable to image format");
-            image(file_contents, image_format).map_err(api::Error::from)
+            image(&file_contents.data, image_format).map_err(api::Error::from)
         }
-        PostType::Video => video_frame(&path)
+        PostType::Video => video_frame(file_path)
             .map_err(api::Error::from)
             .and_then(|frame| frame.ok_or(api::Error::EmptyVideo)),
-        PostType::Flash => swf_image(&path).and_then(|frame| frame.ok_or(api::Error::EmptySwf)),
+        PostType::Flash => swf_image(file_path).and_then(|frame| frame.ok_or(api::Error::EmptySwf)),
     }
 }
 

@@ -3,8 +3,8 @@ use crate::api::{
 };
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::upload::{PartName, Upload, MAX_UPLOAD_SIZE};
-use crate::content::{signature, upload};
+use crate::content::upload::{PartName, MAX_UPLOAD_SIZE};
+use crate::content::{signature, upload, Content, FileContents};
 use crate::filesystem::Directory;
 use crate::model::comment::NewComment;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
@@ -65,7 +65,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::path!("posts" / "reverse-search"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(reverse_search)
+        .then(reverse_search)
         .map(api::Reply::from);
     let reverse_search_multipart = warp::post()
         .and(api::auth())
@@ -79,7 +79,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::path!("posts"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(create)
+        .then(create)
         .map(api::Reply::from);
     let create_multipart = warp::post()
         .and(api::auth())
@@ -319,8 +319,11 @@ fn feature(auth: AuthResult, query: ResourceQuery, post_feature: PostFeature) ->
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct ContentToken {
-    content_token: Upload,
+struct ReverseSearchBody {
+    #[serde(skip_deserializing)]
+    content: Option<FileContents>,
+    content_token: Option<String>,
+    content_url: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -336,14 +339,20 @@ struct ReverseSearchInfo {
     similar_posts: Vec<SimilarPostInfo>,
 }
 
-fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -> ApiResult<ReverseSearchInfo> {
+async fn reverse_search(
+    auth: AuthResult,
+    query: ResourceQuery,
+    body: ReverseSearchBody,
+) -> ApiResult<ReverseSearchInfo> {
     let _timer = crate::time::Timer::new("reverse search");
     let client = auth?;
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_reverse_search)?;
 
     let fields = resource::create_table(query.fields()).map_err(Box::from)?;
-    let content_properties = token.content_token.compute_properties()?;
+    let content = Content::new(body.content, body.content_token, body.content_url)
+        .ok_or(api::Error::MissingContent(ResourceType::Post))?;
+    let content_properties = content.compute_properties().await?;
     db::get_connection()?.transaction(|conn| {
         // Check for exact match
         let exact_post = post::table
@@ -395,10 +404,12 @@ async fn reverse_search_multipart(
 ) -> ApiResult<ReverseSearchInfo> {
     let body = upload::extract_without_metadata(form_data, [PartName::Content]).await?;
     if let [Some(content)] = body.files {
-        let content_token = ContentToken {
-            content_token: Upload::Content(content),
+        let body = ReverseSearchBody {
+            content: Some(content),
+            content_token: None,
+            content_url: None,
         };
-        reverse_search(auth, query, content_token)
+        reverse_search(auth, query, body).await
     } else {
         Err(api::Error::MissingFormData)
     }
@@ -409,8 +420,14 @@ async fn reverse_search_multipart(
 #[serde(rename_all = "camelCase")]
 struct NewPostInfo {
     safety: PostSafety,
-    content_token: Option<Upload>,
-    thumbnail_token: Option<Upload>,
+    #[serde(skip_deserializing)]
+    content: Option<FileContents>,
+    content_token: Option<String>,
+    content_url: Option<String>,
+    #[serde(skip_deserializing)]
+    thumbnail: Option<FileContents>,
+    thumbnail_token: Option<String>,
+    thumbnail_url: Option<String>,
     source: Option<String>,
     relations: Option<Vec<i64>>,
     anonymous: Option<bool>,
@@ -419,7 +436,7 @@ struct NewPostInfo {
     flags: Option<Vec<PostFlag>>,
 }
 
-fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {
+async fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> ApiResult<PostInfo> {
     let client = auth?;
     let required_rank = match post_info.anonymous.unwrap_or(false) {
         true => config::privileges().post_create_anonymous,
@@ -429,16 +446,14 @@ fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> Api
     api::verify_privilege(client, required_rank)?;
 
     let fields = resource::create_table(query.fields()).map_err(Box::from)?;
-    let content_properties = if let Some(content) = post_info.content_token {
-        content.get_or_compute_properties()?
-    } else {
-        return Err(api::Error::MissingPostContent);
+    let content = Content::new(post_info.content, post_info.content_token, post_info.content_url)
+        .ok_or(api::Error::MissingContent(ResourceType::Post))?;
+    let content_properties = content.get_or_compute_properties().await?;
+
+    let custom_thumbnail = match Content::new(post_info.thumbnail, post_info.thumbnail_token, post_info.thumbnail_url) {
+        Some(content) => Some(content.thumbnail(ThumbnailType::Post).await?),
+        None => None,
     };
-    let custom_thumbnail = post_info
-        .thumbnail_token
-        .as_ref()
-        .map(|upload| upload.thumbnail(ThumbnailType::Post))
-        .transpose()?;
 
     let mut flags = content_properties.flags;
     for flag in post_info.flags.unwrap_or_default() {
@@ -514,14 +529,9 @@ async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: For
     let mut post_info: NewPostInfo = serde_json::from_slice(&metadata)?;
     let [content, thumbnail] = body.files;
 
-    if let Some(content) = content {
-        post_info.content_token = Some(Upload::Content(content));
-    }
-    if let Some(thumbnail) = thumbnail {
-        post_info.thumbnail_token = Some(Upload::Content(thumbnail));
-    }
-
-    create(auth, query, post_info)
+    post_info.content = content;
+    post_info.thumbnail = thumbnail;
+    create(auth, query, post_info).await
 }
 
 #[derive(Deserialize)]
@@ -799,8 +809,14 @@ struct PostUpdate {
     tags: Option<Vec<String>>,
     notes: Option<Vec<Note>>,
     flags: Option<Vec<PostFlag>>,
-    content_token: Option<Upload>,
-    thumbnail_token: Option<Upload>,
+    #[serde(skip_deserializing)]
+    content: Option<FileContents>,
+    content_token: Option<String>,
+    content_url: Option<String>,
+    #[serde(skip_deserializing)]
+    thumbnail: Option<FileContents>,
+    thumbnail_token: Option<String>,
+    thumbnail_url: Option<String>,
 }
 
 async fn update(auth: AuthResult, post_id: i64, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {
@@ -809,16 +825,15 @@ async fn update(auth: AuthResult, post_id: i64, query: ResourceQuery, update: Po
 
     let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let post_hash = PostHash::new(post_id);
-    let new_content = update
-        .content_token
-        .as_ref()
-        .map(Upload::get_or_compute_properties)
-        .transpose()?;
-    let custom_thumbnail = update
-        .thumbnail_token
-        .as_ref()
-        .map(|upload| upload.thumbnail(ThumbnailType::Post))
-        .transpose()?;
+
+    let new_content = match Content::new(update.content, update.content_token, update.content_url) {
+        Some(content) => Some(content.get_or_compute_properties().await?),
+        None => None,
+    };
+    let custom_thumbnail = match Content::new(update.thumbnail, update.thumbnail_token, update.thumbnail_url) {
+        Some(content) => Some(content.thumbnail(ThumbnailType::Post).await?),
+        None => None,
+    };
 
     // Updating tags of many posts simultaneously can cause deadlocks due to statistics updating,
     // so we serialize tag updates. Technically this is more pessimistic than necessary. Parallel
@@ -941,13 +956,8 @@ async fn update_multipart(
     let mut post_update: PostUpdate = serde_json::from_slice(&metadata)?;
     let [content, thumbnail] = body.files;
 
-    if let Some(content) = content {
-        post_update.content_token = Some(Upload::Content(content));
-    }
-    if let Some(thumbnail) = thumbnail {
-        post_update.thumbnail_token = Some(Upload::Content(thumbnail));
-    }
-
+    post_update.content = content;
+    post_update.thumbnail = thumbnail;
     update(auth, post_id, query, post_update).await
 }
 

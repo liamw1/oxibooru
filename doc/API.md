@@ -13,7 +13,6 @@
    - [Error handling](#error-handling)
    - [Field selecting](#field-selecting)
    - [Versioning](#versioning)
-   - [Webhooks](#webhooks)
 
 2. [API reference](#api-reference)
 

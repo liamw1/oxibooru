@@ -58,7 +58,8 @@ impl<T: Serialize> From<ApiResult<T>> for Reply {
 pub enum Error {
     BadExtension(#[from] crate::model::enums::ParseExtensionError),
     BadHash(#[from] crate::auth::HashError),
-    BadHeader(#[from] warp::http::header::ToStrError),
+    BadIncomingHeader(#[from] warp::http::header::ToStrError),
+    BadResponseHeader(#[from] reqwest::header::ToStrError),
     #[error("File of type {0} did not match request with content-type {1}")]
     ContentTypeMismatch(MimeType, String),
     #[error("Cyclic dependency detected in {0}s")]
@@ -86,14 +87,14 @@ pub enum Error {
     InvalidUserRank,
     Image(#[from] image::ImageError),
     JsonSerialization(#[from] serde_json::Error),
+    #[error("Missing {0} content")]
+    MissingContent(ResourceType),
     #[error("Form is missing content-type")]
     MissingContentType,
     #[error("Missing form data")]
     MissingFormData,
     #[error("Missing metadata form")]
     MissingMetadata,
-    #[error("Missing post content")]
-    MissingPostContent,
     #[error("Missing smtp info")]
     MissingSmtpInfo,
     #[error("User has no email")]
@@ -105,6 +106,7 @@ pub enum Error {
     NotFound(ResourceType),
     #[error("This action requires you to be logged in")]
     NotLoggedIn,
+    Request(#[from] reqwest::Error),
     #[error("Someone else modified this in the meantime. Please try again.")]
     ResourceModified,
     Search(#[from] crate::search::Error),
@@ -132,7 +134,8 @@ impl Error {
         match self {
             Self::BadExtension(_) => StatusCode::BAD_REQUEST,
             Self::BadHash(_) => StatusCode::BAD_REQUEST,
-            Self::BadHeader(_) => StatusCode::BAD_REQUEST,
+            Self::BadIncomingHeader(_) => StatusCode::BAD_REQUEST,
+            Self::BadResponseHeader(_) => StatusCode::BAD_REQUEST,
             Self::ContentTypeMismatch(..) => StatusCode::BAD_REQUEST,
             Self::CyclicDependency(_) => StatusCode::BAD_REQUEST,
             Self::DeleteDefault(_) => StatusCode::BAD_REQUEST,
@@ -158,16 +161,17 @@ impl Error {
                 Category::Io | Category::Eof => StatusCode::INTERNAL_SERVER_ERROR,
                 Category::Syntax | Category::Data => StatusCode::BAD_REQUEST,
             },
+            Self::MissingContent(_) => StatusCode::BAD_REQUEST,
             Self::MissingContentType => StatusCode::BAD_REQUEST,
             Self::MissingFormData => StatusCode::BAD_REQUEST,
             Self::MissingMetadata => StatusCode::BAD_REQUEST,
-            Self::MissingPostContent => StatusCode::BAD_REQUEST,
             Self::MissingSmtpInfo => StatusCode::INTERNAL_SERVER_ERROR,
             Self::NoEmail => StatusCode::BAD_REQUEST,
             Self::NoNamesGiven(_) => StatusCode::BAD_REQUEST,
             Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::NotLoggedIn => StatusCode::FORBIDDEN,
+            Self::Request(_) => StatusCode::BAD_REQUEST,
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::Search(_) => StatusCode::BAD_REQUEST,
             Self::SelfMerge(_) => StatusCode::BAD_REQUEST,
@@ -184,7 +188,8 @@ impl Error {
         match self {
             Self::BadExtension(_) => "Bad Extension",
             Self::BadHash(_) => "Bad Hash",
-            Self::BadHeader(_) => "Bad Header",
+            Self::BadIncomingHeader(_) => "Bad Incomding Header",
+            Self::BadResponseHeader(_) => "Bad Response Header",
             Self::ContentTypeMismatch(..) => "Content Type Mismatch",
             Self::CyclicDependency(_) => "Cyclic Dependency",
             Self::DeleteDefault(_) => "Delete Default",
@@ -203,16 +208,17 @@ impl Error {
             Self::InvalidUserRank => "Invalid User Rank",
             Self::Image(_) => "Image Error",
             Self::JsonSerialization(_) => "JSON Serialization Error",
+            Self::MissingContent(_) => "Missing Content",
             Self::MissingContentType => "Missing Content Type",
             Self::MissingFormData => "Missing Form Data",
             Self::MissingMetadata => "Missing Metadata",
-            Self::MissingPostContent => "Missing Post Content",
             Self::MissingSmtpInfo => "Missing SMTP Info",
             Self::NoEmail => "No Email",
             Self::NoNamesGiven(_) => "No Names Given",
             Self::NotAnInteger(_) => "Parse Int Error",
             Self::NotFound(_) => "Resource Not Found",
             Self::NotLoggedIn => "Not Logged In",
+            Self::Request(_) => "Request Error",
             Self::ResourceModified => "Resource Modified",
             Self::Search(_) => "Search Error",
             Self::SelfMerge(_) => "Self Merge",

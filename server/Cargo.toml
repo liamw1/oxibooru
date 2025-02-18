@@ -20,6 +20,7 @@ uuid = { version = "1.13.1", features = ["v4", "serde"] }
 blake3 = { version = "1.5.5", features = ["std", "traits-preview"] }
 argon2 = { version = "0.5.3", features = ["std"] }
 warp = "0.3.7"
+reqwest = "0.12.12"
 toml = "0.8.20"
 image = "0.25.5"
 video-rs = "0.10.3"

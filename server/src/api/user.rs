@@ -2,8 +2,8 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::ThumbnailType;
-use crate::content::upload::{PartName, Upload, MAX_UPLOAD_SIZE};
-use crate::content::{hash, upload};
+use crate::content::upload::{PartName, MAX_UPLOAD_SIZE};
+use crate::content::{hash, upload, Content, FileContents};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
 use crate::resource::user::{UserInfo, Visibility};
@@ -35,7 +35,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::path!("users"))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(create)
+        .then(create)
         .map(api::Reply::from);
     let create_multipart = warp::post()
         .and(api::auth())
@@ -49,7 +49,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
         .and(warp::path!("user" / String))
         .and(api::resource_query())
         .and(warp::body::json())
-        .map(update)
+        .then(update)
         .map(api::Reply::from);
     let update_multipart = warp::put()
         .and(api::auth())
@@ -145,10 +145,13 @@ struct NewUserInfo {
     email: Option<String>,
     rank: Option<UserRank>,
     avatar_style: Option<AvatarStyle>,
-    avatar_token: Option<Upload>,
+    #[serde(skip_deserializing)]
+    avatar: Option<FileContents>,
+    avatar_token: Option<String>,
+    avatar_url: Option<String>,
 }
 
-fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
+async fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
     let client = auth?;
     query.bump_login(client)?;
 
@@ -182,11 +185,11 @@ fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> Api
         rank: creation_rank,
         avatar_style: user_info.avatar_style.unwrap_or_default(),
     };
-    let custom_avatar = user_info
-        .avatar_token
-        .as_ref()
-        .map(|upload| upload.thumbnail(ThumbnailType::Avatar))
-        .transpose()?;
+
+    let custom_avatar = match Content::new(user_info.avatar, user_info.avatar_token, user_info.avatar_url) {
+        Some(content) => Some(content.thumbnail(ThumbnailType::Avatar).await?),
+        None => None,
+    };
 
     let mut conn = db::get_connection()?;
     let user_id = conn.transaction(|conn| {
@@ -215,10 +218,11 @@ async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: For
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut user_info: NewUserInfo = serde_json::from_slice(&metadata)?;
     if let [Some(avatar)] = body.files {
-        user_info.avatar_token = Some(Upload::Content(avatar));
+        user_info.avatar = Some(avatar);
+        create(auth, query, user_info).await
+    } else {
+        Err(api::Error::MissingFormData)
     }
-
-    create(auth, query, user_info)
 }
 
 #[derive(Deserialize)]
@@ -232,20 +236,23 @@ struct UserUpdate {
     email: Option<Option<String>>,
     rank: Option<UserRank>,
     avatar_style: Option<AvatarStyle>,
-    avatar_token: Option<Upload>,
+    #[serde(skip_deserializing)]
+    avatar: Option<FileContents>,
+    avatar_token: Option<String>,
+    avatar_url: Option<String>,
 }
 
-fn update(auth: AuthResult, username: String, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
+async fn update(auth: AuthResult, username: String, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
     let client = auth?;
     query.bump_login(client)?;
 
     let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-    let custom_avatar = update
-        .avatar_token
-        .as_ref()
-        .map(|upload| upload.thumbnail(ThumbnailType::Avatar))
-        .transpose()?;
+
+    let custom_avatar = match Content::new(update.avatar, update.avatar_token, update.avatar_url) {
+        Some(content) => Some(content.thumbnail(ThumbnailType::Avatar).await?),
+        None => None,
+    };
 
     let mut conn = db::get_connection()?;
     let (user_id, visibility) = conn.transaction(|conn| {
@@ -355,10 +362,11 @@ async fn update_multipart(
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut user_update: UserUpdate = serde_json::from_slice(&metadata)?;
     if let [Some(avatar)] = body.files {
-        user_update.avatar_token = Some(Upload::Content(avatar));
+        user_update.avatar = Some(avatar);
+        update(auth, username, query, user_update).await
+    } else {
+        Err(api::Error::MissingFormData)
     }
-
-    update(auth, username, query, user_update)
 }
 
 fn delete(auth: AuthResult, username: String, client_version: DeleteRequest) -> ApiResult<()> {

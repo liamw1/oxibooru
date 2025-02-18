@@ -3,7 +3,7 @@ use crate::admin::PRINT_INTERVAL;
 use crate::api::ApiResult;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::{decode, hash, signature, thumbnail};
+use crate::content::{decode, hash, signature, thumbnail, FileContents};
 use crate::model::post::{NewPostSignature, PostSignature};
 use crate::schema::{post, post_signature};
 use crate::time::Timer;
@@ -80,7 +80,7 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
         };
 
         let image_path = PostHash::new(post_id).content_path(mime_type);
-        let file_contents = match std::fs::read(&image_path) {
+        let data = match std::fs::read(&image_path) {
             Ok(contents) => contents,
             Err(err) => {
                 eprintln!("ERROR: Unable to read file for post {post_id} for reason: {err}");
@@ -88,7 +88,8 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> QueryResult<()> {
             }
         };
 
-        let image = match decode::representative_image(&file_contents, Some(image_path), mime_type) {
+        let file_contents = FileContents { data, mime_type };
+        let image = match decode::representative_image(&file_contents, &image_path) {
             Ok(image) => image,
             Err(err) => {
                 eprintln!("ERROR: Unable to get representative image for post {post_id} for reason: {err}");
@@ -195,9 +196,10 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) -> ApiResult<()> {
 
         let post_hash = PostHash::new(post_id);
         let content_path = post_hash.content_path(mime_type);
-        let file_contents = std::fs::read(&content_path)?;
+        let data = std::fs::read(&content_path)?;
 
-        let thumbnail = decode::representative_image(&file_contents, Some(content_path), mime_type)
+        let file_contents = FileContents { data, mime_type };
+        let thumbnail = decode::representative_image(&file_contents, &content_path)
             .map(|image| thumbnail::create(&image, ThumbnailType::Post))?;
         filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Generated)?;
 
