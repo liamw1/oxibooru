@@ -107,21 +107,14 @@ const SIGNATURE_DIGITS: usize = u64::MAX.ilog(NUM_SYMBOLS as u64) as usize - 1;
 
 type GridPoints = CartesianProduct<u32, u32, GRID_SIZE, GRID_SIZE>;
 
+/// Creates an iterator of length `N` from give iterator `iter`.
+/// Panics if the `iter` does not contain `N` elements.
 fn array_from_iter<I, T, const N: usize>(iter: I) -> [T; N]
 where
     I: Iterator<Item = T>,
-    T: Default + Copy,
+    T: std::fmt::Debug,
 {
-    let mut array = [T::default(); N];
-
-    let mut iter_len = 0; // This should be optimized away in release builds
-    for (i, iter_item) in iter.enumerate() {
-        array[i] = iter_item;
-        iter_len += 1;
-    }
-    debug_assert_eq!(iter_len, N);
-
-    array
+    iter.collect::<Vec<_>>().try_into().unwrap()
 }
 
 fn grid_square_radius(width: u32, height: u32) -> u32 {

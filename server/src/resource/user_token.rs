@@ -1,9 +1,9 @@
 use crate::model::user::UserToken;
 use crate::resource::user::MicroUser;
+use crate::resource::BoolFill;
 use crate::time::DateTime;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
-use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 use uuid::Uuid;
 
@@ -21,17 +21,9 @@ pub enum Field {
     LastUsageTime,
 }
 
-impl Field {
-    pub fn create_table(fields: Option<&str>) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
-        if let Some(fields_str) = fields {
-            let mut table = FieldTable::filled(false);
-            for field in fields_str.split(',') {
-                table[Self::from_str(field)?] = true;
-            }
-            Ok(table)
-        } else {
-            Ok(FieldTable::filled(true))
-        }
+impl BoolFill for FieldTable<bool> {
+    fn filled(val: bool) -> Self {
+        Self::filled(val)
     }
 }
 

@@ -2,10 +2,10 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, ResourceQuery, UnpagedRes
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPoolCategory, PoolCategory};
-use crate::resource::pool_category::{Field, PoolCategoryInfo};
+use crate::resource::pool_category::PoolCategoryInfo;
 use crate::schema::{pool, pool_category};
 use crate::time::DateTime;
-use crate::{api, config, db};
+use crate::{api, config, db, resource};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -57,7 +57,7 @@ fn list(auth: AuthResult, query: ResourceQuery) -> ApiResult<UnpagedResponse<Poo
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_list)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         PoolCategoryInfo::all(conn, &fields)
             .map(|results| UnpagedResponse { results })
@@ -69,7 +69,7 @@ fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<PoolCa
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_view)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let category = pool_category::table
@@ -98,7 +98,7 @@ fn create(auth: AuthResult, query: ResourceQuery, category_info: NewPoolCategory
         color: &category_info.color,
     };
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let category = diesel::insert_into(pool_category::table)
         .values(new_category)
@@ -122,7 +122,7 @@ fn update(
     update: PoolCategoryUpdate,
 ) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
@@ -158,7 +158,7 @@ fn set_default(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResul
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_set_default)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let new_default_category: PoolCategory = conn.transaction(|conn| {

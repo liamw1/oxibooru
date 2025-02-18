@@ -1,12 +1,11 @@
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
-use crate::resource;
+use crate::resource::{self, BoolFill};
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
-use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
 #[derive(Serialize)]
@@ -31,19 +30,12 @@ pub enum Field {
     Usages,
 }
 
-impl Field {
-    pub fn create_table(fields: Option<&str>) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
-        if let Some(fields_str) = fields {
-            let mut table = FieldTable::filled(false);
-            for field in fields_str.split(',') {
-                table[Self::from_str(field)?] = true;
-            }
-            Ok(table)
-        } else {
-            Ok(FieldTable::filled(true))
-        }
+impl BoolFill for FieldTable<bool> {
+    fn filled(val: bool) -> Self {
+        Self::filled(val)
     }
 }
+
 #[skip_serializing_none]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]

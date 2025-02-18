@@ -1,14 +1,13 @@
 use crate::auth::header::Client;
 use crate::model::comment::{Comment, CommentScore};
 use crate::model::enums::{AvatarStyle, Rating};
-use crate::resource;
 use crate::resource::user::MicroUser;
+use crate::resource::{self, BoolFill};
 use crate::schema::{comment, comment_score, comment_statistics, user};
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
-use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
@@ -25,17 +24,9 @@ pub enum Field {
     OwnScore,
 }
 
-impl Field {
-    pub fn create_table(fields: Option<&str>) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
-        if let Some(fields_str) = fields {
-            let mut table = FieldTable::filled(false);
-            for field in fields_str.split(',') {
-                table[Self::from_str(field)?] = true;
-            }
-            Ok(table)
-        } else {
-            Ok(FieldTable::filled(true))
-        }
+impl BoolFill for FieldTable<bool> {
+    fn filled(val: bool) -> Self {
+        Self::filled(val)
     }
 }
 

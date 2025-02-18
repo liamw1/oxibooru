@@ -3,14 +3,13 @@ use crate::get_user_stats;
 use crate::model::enums::{AvatarStyle, Score, UserRank};
 use crate::model::post::PostScore;
 use crate::model::user::User;
-use crate::resource;
+use crate::resource::{self, BoolFill};
 use crate::schema::{post_score, user, user_statistics};
 use crate::time::DateTime;
 use diesel::dsl::count_star;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
-use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
 #[derive(Serialize)]
@@ -54,17 +53,9 @@ pub enum Field {
     FavoritePostCount,
 }
 
-impl Field {
-    pub fn create_table(fields: Option<&str>) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
-        if let Some(fields_str) = fields {
-            let mut table = FieldTable::filled(false);
-            for field in fields_str.split(',') {
-                table[Self::from_str(field)?] = true;
-            }
-            Ok(table)
-        } else {
-            Ok(FieldTable::filled(true))
-        }
+impl BoolFill for FieldTable<bool> {
+    fn filled(val: bool) -> Self {
+        Self::filled(val)
     }
 }
 

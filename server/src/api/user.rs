@@ -6,10 +6,10 @@ use crate::content::upload::{PartName, Upload, MAX_UPLOAD_SIZE};
 use crate::content::{hash, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
-use crate::resource::user::{Field, UserInfo, Visibility};
+use crate::resource::user::{UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::time::DateTime;
-use crate::{api, config, db, search, update};
+use crate::{api, config, db, resource, search, update};
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
@@ -82,7 +82,7 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo
 
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_USERS_PER_PAGE);
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
@@ -113,7 +113,7 @@ fn get(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<Us
     let client = auth?;
     query.bump_login(client)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let user_id = user::table
@@ -167,7 +167,7 @@ fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> Api
         api::verify_privilege(client, creation_rank)?;
     }
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     api::verify_matches_regex(&user_info.name, RegexType::Username)?;
     api::verify_matches_regex(&user_info.password, RegexType::Password)?;
     api::verify_valid_email(user_info.email.as_deref())?;
@@ -239,7 +239,7 @@ fn update(auth: AuthResult, username: String, query: ResourceQuery, update: User
     let client = auth?;
     query.bump_login(client)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let custom_avatar = update
         .avatar_token

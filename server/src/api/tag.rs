@@ -2,10 +2,10 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery,
 use crate::model::enums::ResourceType;
 use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
-use crate::resource::tag::{Field, TagInfo};
+use crate::resource::tag::TagInfo;
 use crate::schema::{database_statistics, post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::time::DateTime;
-use crate::{api, config, db, search, update};
+use crate::{api, config, db, resource, search, update};
 use diesel::dsl::{count_star, max};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -72,7 +72,7 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>
 
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_TAGS_PER_PAGE);
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::tag::parse_search_criteria(query.criteria())?;
@@ -104,7 +104,7 @@ fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagInf
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_view)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let tag_id = tag_name::table
@@ -133,7 +133,7 @@ fn get_siblings(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResu
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_view)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let tag_id: i64 = tag::table
@@ -184,7 +184,7 @@ fn create(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> ApiRe
         return Err(api::Error::NoNamesGiven(ResourceType::Tag));
     }
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let tag_id = conn.transaction(|conn| {
         let category_id: i64 = tag_category::table
@@ -227,7 +227,7 @@ fn merge(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String
             .first(conn)
     };
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let merged_tag_id = conn.transaction(|conn| {
         let (remove_id, remove_version) = get_tag_info(conn, merge_info.remove)?;
@@ -346,7 +346,7 @@ fn update(auth: AuthResult, name: String, query: ResourceQuery, update: TagUpdat
     let client = auth?;
     query.bump_login(client)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let tag_id = conn.transaction(|conn| {

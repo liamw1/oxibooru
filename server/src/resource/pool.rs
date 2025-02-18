@@ -1,13 +1,12 @@
 use crate::content::hash::PostHash;
 use crate::model::pool::{Pool, PoolName, PoolPost};
-use crate::resource;
 use crate::resource::post::MicroPost;
+use crate::resource::{self, BoolFill};
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
-use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
 #[derive(Serialize)]
@@ -34,17 +33,9 @@ pub enum Field {
     PostCount,
 }
 
-impl Field {
-    pub fn create_table(fields: Option<&str>) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
-        if let Some(fields_str) = fields {
-            let mut table = FieldTable::filled(false);
-            for field in fields_str.split(',') {
-                table[Self::from_str(field)?] = true;
-            }
-            Ok(table)
-        } else {
-            Ok(FieldTable::filled(true))
-        }
+impl BoolFill for FieldTable<bool> {
+    fn filled(val: bool) -> Self {
+        Self::filled(val)
     }
 }
 

@@ -1,9 +1,9 @@
 use crate::api::{ApiResult, AuthResult, ResourceQuery};
 use crate::model::post::PostFeature;
-use crate::resource::post::{Field, PostInfo};
+use crate::resource::post::PostInfo;
 use crate::schema::{database_statistics, post_feature, user};
 use crate::time::DateTime;
-use crate::{api, config, db};
+use crate::{api, config, db, resource};
 use diesel::prelude::*;
 use serde::Serialize;
 use warp::{Filter, Rejection, Reply};
@@ -34,7 +34,7 @@ fn get(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
     let client = auth?;
     query.bump_login(client)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let (post_count, disk_usage) = database_statistics::table
             .select((database_statistics::post_count, database_statistics::disk_usage))

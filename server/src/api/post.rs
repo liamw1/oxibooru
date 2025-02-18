@@ -12,13 +12,13 @@ use crate::model::pool::PoolPost;
 use crate::model::post::{
     NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostRelation, PostScore, PostSignature, PostTag,
 };
-use crate::resource::post::{Field, Note, PostInfo};
+use crate::resource::post::{Note, PostInfo};
 use crate::schema::{
     comment, database_statistics, pool_post, post, post_favorite, post_feature, post_relation, post_score,
     post_signature, post_statistics, post_tag,
 };
 use crate::time::DateTime;
-use crate::{api, config, db, filesystem, search, update};
+use crate::{api, config, db, filesystem, resource, search, update};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -161,7 +161,7 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PostInfo
 
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_POSTS_PER_PAGE);
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::post::parse_search_criteria(query.criteria())?;
@@ -193,7 +193,7 @@ fn get(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<PostIn
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_view)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;
         if !post_exists {
@@ -214,7 +214,7 @@ fn get_neighbors(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiRes
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_list)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let search_criteria = search::post::parse_search_criteria(query.criteria())?;
 
     let create_post_neighbors = |mut neighbors: Vec<PostInfo>, has_previous_post: bool| {
@@ -274,7 +274,7 @@ fn get_featured(auth: AuthResult, query: ResourceQuery) -> ApiResult<Option<Post
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_view_featured)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let featured_post_id: Option<i64> = post_feature::table
             .select(post_feature::post_id)
@@ -300,7 +300,7 @@ fn feature(auth: AuthResult, query: ResourceQuery, post_feature: PostFeature) ->
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_feature)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let post_id = post_feature.id;
     let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
     let new_post_feature = NewPostFeature {
@@ -342,7 +342,7 @@ fn reverse_search(auth: AuthResult, query: ResourceQuery, token: ContentToken) -
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_reverse_search)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let content_properties = token.content_token.compute_properties()?;
     db::get_connection()?.transaction(|conn| {
         // Check for exact match
@@ -428,7 +428,7 @@ fn create(auth: AuthResult, query: ResourceQuery, post_info: NewPostInfo) -> Api
     query.bump_login(client)?;
     api::verify_privilege(client, required_rank)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let content_properties = if let Some(content) = post_info.content_token {
         content.get_or_compute_properties()?
     } else {
@@ -546,7 +546,7 @@ fn merge(auth: AuthResult, query: ResourceQuery, merge_info: PostMergeRequest) -
     let remove_hash = PostHash::new(remove_id);
     let merge_to_hash = PostHash::new(merge_to_id);
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let merged_post = conn.transaction(|conn| {
         let remove_post: Post = post::table.find(remove_id).first(conn)?;
@@ -740,7 +740,7 @@ fn favorite(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult<P
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_favorite)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
     let new_post_favorite = PostFavorite {
         post_id,
@@ -764,7 +764,7 @@ fn rate(auth: AuthResult, post_id: i64, query: ResourceQuery, rating: RatingRequ
     query.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_score)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
 
     let mut conn = db::get_connection()?;
@@ -807,7 +807,7 @@ async fn update(auth: AuthResult, post_id: i64, query: ResourceQuery, update: Po
     let client = auth?;
     query.bump_login(client)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let post_hash = PostHash::new(post_id);
     let new_content = update
         .content_token
@@ -989,7 +989,7 @@ fn unfavorite(auth: AuthResult, post_id: i64, query: ResourceQuery) -> ApiResult
     let client = auth?;
     api::verify_privilege(client, config::privileges().post_favorite)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
 
     let mut conn = db::get_connection()?;

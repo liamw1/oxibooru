@@ -2,10 +2,10 @@ use crate::api::{ApiResult, AuthResult, ResourceQuery, UnpagedResponse};
 use crate::model::enums::AvatarStyle;
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
-use crate::resource::user_token::{Field, UserTokenInfo};
+use crate::resource::user_token::UserTokenInfo;
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
-use crate::{api, config, db};
+use crate::{api, config, db, resource};
 use diesel::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -44,7 +44,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 fn list(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UnpagedResponse<UserTokenInfo>> {
     let client = auth?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
@@ -86,7 +86,7 @@ fn create(
 ) -> ApiResult<UserTokenInfo> {
     let client = auth?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     let (user_token, avatar_style) = conn.transaction(|conn| {
@@ -148,7 +148,7 @@ fn update(
 ) -> ApiResult<UserTokenInfo> {
     let client = auth?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     let (updated_user_token, avatar_style) = conn.transaction(|conn| {

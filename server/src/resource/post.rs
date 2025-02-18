@@ -6,11 +6,11 @@ use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType
 use crate::model::pool::PoolPost;
 use crate::model::post::{NewPostNote, Post, PostFavorite, PostNote, PostRelation, PostScore, PostTag};
 use crate::model::tag::TagName;
-use crate::resource;
 use crate::resource::comment::CommentInfo;
 use crate::resource::pool::MicroPool;
 use crate::resource::tag::MicroTag;
 use crate::resource::user::MicroUser;
+use crate::resource::{self, BoolFill};
 use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_relation, post_score, post_statistics, tag, tag_category, tag_name, tag_statistics, user,
@@ -20,7 +20,6 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
-use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
 #[derive(Serialize, Deserialize)]
@@ -98,17 +97,9 @@ pub enum Field {
     HasCustomThumbnail,
 }
 
-impl Field {
-    pub fn create_table(fields: Option<&str>) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
-        if let Some(fields_str) = fields {
-            let mut table = FieldTable::filled(false);
-            for field in fields_str.split(',') {
-                table[Self::from_str(field)?] = true;
-            }
-            Ok(table)
-        } else {
-            Ok(FieldTable::filled(true))
-        }
+impl BoolFill for FieldTable<bool> {
+    fn filled(val: bool) -> Self {
+        Self::filled(val)
     }
 }
 

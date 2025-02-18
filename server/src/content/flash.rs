@@ -16,6 +16,7 @@
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 // SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+use flate2::bufread::ZlibDecoder;
 use image::{DynamicImage, ImageFormat, RgbaImage};
 use std::borrow::Cow;
 use std::io::Read;
@@ -64,7 +65,7 @@ pub fn decode_define_bits_jpeg(data: &[u8], alpha_data: Option<&[u8]>) -> Result
     let format = determine_jpeg_tag_format(data);
     if format != JpegTagFormat::Jpeg && alpha_data.is_some() {
         // Only DefineBitsJPEG3 with true JPEG data should have separate alpha data.
-        eprintln!("WARNING: DefineBitsJPEG contains non-JPEG data with alpha; probably incorrect")
+        eprintln!("WARNING: DefineBitsJPEG contains non-JPEG data with alpha; probably incorrect");
     }
     match format {
         JpegTagFormat::Jpeg => decode_jpeg(data, alpha_data),
@@ -118,7 +119,7 @@ pub fn remove_invalid_jpeg_data(data: &[u8]) -> Cow<[u8]> {
 
     let mut data: Cow<[u8]> = if let Some(stripped) = data.strip_prefix(&[0xFF, EOI, 0xFF, SOI]) {
         // Common case: usually the sequence is at the beginning as the spec says, so adjust the slice to avoid a copy.
-        stripped.into()
+        Cow::Borrowed(stripped)
     } else {
         // Parse the JPEG markers searching for the 0xFFD9FFD8 marker sequence to splice out.
         // We only have to search up to the SOF0 marker.
@@ -128,7 +129,7 @@ pub fn remove_invalid_jpeg_data(data: &[u8]) -> Cow<[u8]> {
         loop {
             if jpeg_data.len() < 4 {
                 // No invalid sequence found before SOF marker, return data as-is.
-                break data.into();
+                break Cow::Borrowed(data);
             }
             let payload_len: usize = match &jpeg_data[..4] {
                 [0xFF, EOI, 0xFF, SOI] => {
@@ -136,20 +137,20 @@ pub fn remove_invalid_jpeg_data(data: &[u8]) -> Cow<[u8]> {
                     let mut out_data = Vec::with_capacity(data.len() - 4);
                     out_data.extend_from_slice(&data[..pos]);
                     out_data.extend_from_slice(&data[pos + 4..]);
-                    break out_data.into();
+                    break Cow::Owned(out_data);
                 }
                 // EOI, SOI, RST markers do not include a size.
                 [0xFF, EOI | SOI | RST0..=RST7, _, _] => 0,
                 [0xFF, SOF0, _, _] => {
                     // No invalid sequence found before SOF marker, return data as-is.
-                    break data.into();
+                    break Cow::Borrowed(data);
                 }
                 // Other tags include a length.
                 [0xFF, _, a, b] => u16::from_be_bytes([*a, *b]).into(),
                 _ => {
                     // All JPEG markers should start with 0xFF.
                     // So this is either not a JPEG, or we screwed up parsing the markers. Bail out.
-                    break data.into();
+                    break Cow::Borrowed(data);
                 }
             };
             // Advance to next JPEG marker.
@@ -192,7 +193,6 @@ fn decode_jpeg(jpeg_data: &[u8], alpha_data: Option<&[u8]>) -> Result<DynamicIma
     if let Some(alpha_data) = alpha_data {
         let decoded_data = jpeg.as_bytes();
         let alpha_data = decompress_zlib(alpha_data)?;
-
         if alpha_data.len() == decoded_data.len() / 3 {
             let rgba = decoded_data
                 .chunks_exact(3)
@@ -228,7 +228,6 @@ fn decode_jpeg(jpeg_data: &[u8], alpha_data: Option<&[u8]>) -> Result<DynamicIma
 pub fn decode_define_bits_lossless(swf_tag: &swf::DefineBitsLossless) -> Result<Option<DynamicImage>, Error> {
     // Decompress the image data (DEFLATE compression).
     let mut decoded_data = decompress_zlib(&swf_tag.data)?;
-
     let has_alpha = swf_tag.version == 2;
 
     // Swizzle/de-palettize the bitmap.
@@ -304,8 +303,7 @@ pub fn decode_define_bits_lossless(swf_tag: &swf::DefineBitsLossless) -> Result<
 /// Decodes zlib-compressed data.
 fn decompress_zlib(data: &[u8]) -> Result<Vec<u8>, Error> {
     let mut out_data = Vec::new();
-    let mut decoder = flate2::bufread::ZlibDecoder::new(data);
-    decoder
+    ZlibDecoder::new(data)
         .read_to_end(&mut out_data)
         .map_err(|_| Error::InvalidZlibCompression)?;
     out_data.shrink_to_fit();

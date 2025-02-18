@@ -2,10 +2,10 @@ use crate::api::{ApiResult, AuthResult, DeleteRequest, ResourceQuery, UnpagedRes
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTagCategory, TagCategory};
-use crate::resource::tag_category::{Field, TagCategoryInfo};
+use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
 use crate::time::DateTime;
-use crate::{api, config, db};
+use crate::{api, config, db, resource};
 use diesel::prelude::*;
 use serde::Deserialize;
 use warp::{Filter, Rejection, Reply};
@@ -57,7 +57,7 @@ fn list(auth: AuthResult, query: ResourceQuery) -> ApiResult<UnpagedResponse<Tag
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_list)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         TagCategoryInfo::all(conn, &fields)
             .map(|results| UnpagedResponse { results })
@@ -69,7 +69,7 @@ fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagCat
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_view)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let category = tag_category::table
@@ -100,7 +100,7 @@ fn create(auth: AuthResult, query: ResourceQuery, category_info: NewTagCategoryI
         color: &category_info.color,
     };
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let category = diesel::insert_into(tag_category::table)
         .values(new_category)
@@ -125,7 +125,7 @@ fn update(
     update: TagCategoryUpdate,
 ) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
@@ -173,7 +173,7 @@ fn set_default(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResul
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_set_default)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let new_default_category: TagCategory = conn.transaction(|conn| {

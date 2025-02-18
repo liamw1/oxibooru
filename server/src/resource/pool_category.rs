@@ -1,10 +1,10 @@
 use crate::model::pool::PoolCategory;
+use crate::resource::BoolFill;
 use crate::schema::{pool_category, pool_category_statistics};
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
-use std::str::FromStr;
 use strum::{EnumString, EnumTable};
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
@@ -17,17 +17,9 @@ pub enum Field {
     Default,
 }
 
-impl Field {
-    pub fn create_table(fields: Option<&str>) -> Result<FieldTable<bool>, <Self as FromStr>::Err> {
-        if let Some(fields_str) = fields {
-            let mut table = FieldTable::filled(false);
-            for field in fields_str.split(',') {
-                table[Self::from_str(field)?] = true;
-            }
-            Ok(table)
-        } else {
-            Ok(FieldTable::filled(true))
-        }
+impl BoolFill for FieldTable<bool> {
+    fn filled(val: bool) -> Self {
+        Self::filled(val)
     }
 }
 

@@ -1,10 +1,10 @@
 use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, RatingRequest, ResourceQuery};
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
-use crate::resource::comment::{CommentInfo, Field};
+use crate::resource::comment::CommentInfo;
 use crate::schema::{comment, comment_score, database_statistics};
 use crate::time::DateTime;
-use crate::{api, config, db, search};
+use crate::{api, config, db, resource, search};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
@@ -62,7 +62,7 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<CommentI
 
     let offset = query.offset.unwrap_or(0);
     let limit = std::cmp::min(query.limit.get(), MAX_COMMENTS_PER_PAGE);
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::comment::parse_search_criteria(query.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
@@ -92,7 +92,7 @@ fn get(auth: AuthResult, comment_id: i64, query: ResourceQuery) -> ApiResult<Com
     let client = auth?;
     api::verify_privilege(client, config::privileges().comment_view)?;
 
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(conn)?;
         if !comment_exists {
@@ -115,7 +115,7 @@ fn create(auth: AuthResult, query: ResourceQuery, comment_info: NewCommentInfo) 
     api::verify_privilege(client, config::privileges().comment_create)?;
 
     let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
     let new_comment = NewComment {
         user_id: Some(user_id),
         post_id: comment_info.post_id,
@@ -140,7 +140,7 @@ struct CommentUpdate {
 
 fn update(auth: AuthResult, comment_id: i64, query: ResourceQuery, update: CommentUpdate) -> ApiResult<CommentInfo> {
     let client = auth?;
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
@@ -169,7 +169,7 @@ fn rate(auth: AuthResult, comment_id: i64, query: ResourceQuery, rating: RatingR
     api::verify_privilege(client, config::privileges().comment_score)?;
 
     let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
-    let fields = Field::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
