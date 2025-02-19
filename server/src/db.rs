@@ -82,12 +82,15 @@ pub fn create_url(database_override: Option<&str>) -> String {
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 
 static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
-    let num_threads = tokio::runtime::Handle::try_current()
+    let num_tokio_threads = tokio::runtime::Handle::try_current()
         .map(|handle| handle.metrics().num_workers())
         .unwrap_or(1);
+    let num_rayon_threads = rayon::current_num_threads();
+    let num_threads = std::cmp::max(num_tokio_threads, num_rayon_threads) as u32;
+
     let manager = ConnectionManager::new(config::database_url());
     Pool::builder()
-        .max_size(num_threads as u32)
+        .max_size(num_threads)
         .max_lifetime(None)
         .idle_timeout(None)
         .test_on_check_out(true)

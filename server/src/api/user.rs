@@ -101,7 +101,7 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<UserInf
 
         let selected_users: Vec<i64> = search::user::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
-            query: params.to_query(),
+            query: params.into_query(),
             offset,
             limit,
             total,

@@ -1,16 +1,16 @@
-use crate::admin;
-use crate::api;
 use crate::api::ApiResult;
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::schema::user;
+use crate::{admin, api, db};
 use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
 use diesel::dsl::exists;
 use diesel::prelude::*;
 
 /// This function prompts the user for input again to reset passwords for specific users.
-pub fn reset_password(conn: &mut PgConnection) -> ApiResult<()> {
+pub fn reset_password() -> ApiResult<()> {
+    let mut conn = db::get_connection()?;
     let mut user_buffer = String::new();
     let mut password_buffer = String::new();
     loop {
@@ -20,7 +20,8 @@ pub fn reset_password(conn: &mut PgConnection) -> ApiResult<()> {
             break;
         }
 
-        let user_exists: bool = diesel::select(exists(user::table.filter(user::name.eq(user)))).get_result(conn)?;
+        let user_exists: bool =
+            diesel::select(exists(user::table.filter(user::name.eq(user)))).get_result(&mut conn)?;
         if !user_exists {
             eprintln!("ERROR: No user with this username exists\n");
             continue;
@@ -40,7 +41,7 @@ pub fn reset_password(conn: &mut PgConnection) -> ApiResult<()> {
         diesel::update(user::table)
             .filter(user::name.eq(user))
             .set((user::password_hash.eq(&hash), user::password_salt.eq(salt.as_str())))
-            .execute(conn)?;
+            .execute(&mut conn)?;
         println!("Password reset successful.\n");
     }
     Ok(())

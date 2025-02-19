@@ -379,7 +379,7 @@ impl PageParams {
         self.params.bump_login(user)
     }
 
-    fn to_query(self) -> Option<String> {
+    fn into_query(self) -> Option<String> {
         self.params.query
     }
 }

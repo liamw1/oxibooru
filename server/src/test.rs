@@ -812,9 +812,7 @@ mod test {
     #[test]
     #[serial]
     fn reset_statistics() -> ApiResult<()> {
-        let mut conn = get_connection()?;
-        database::reset_relation_stats(&mut conn)?;
-
+        database::reset_relation_stats()?;
         database_statistics()?;
         comment_statistics()?;
         pool_category_statistics()?;

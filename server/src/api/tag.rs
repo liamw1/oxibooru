@@ -90,7 +90,7 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<TagInfo
 
         let selected_tags: Vec<i64> = search::tag::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
-            query: params.to_query(),
+            query: params.into_query(),
             offset,
             limit,
             total,

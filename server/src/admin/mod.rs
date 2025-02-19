@@ -4,11 +4,13 @@ mod user;
 
 use crate::db;
 use diesel::prelude::*;
-use diesel::r2d2::{ConnectionManager, PooledConnection};
+use diesel::r2d2::{ConnectionManager, PoolError, PooledConnection};
 use std::io::Write;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use strum::{EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
+use thiserror::Error;
 
 pub fn enabled() -> bool {
     std::env::args().any(|arg| arg == "--admin")
@@ -37,6 +39,15 @@ pub fn command_line_mode() {
 
 const PRINT_INTERVAL: u64 = 1000;
 
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub enum DatabaseError {
+    Connection(#[from] PoolError),
+    Query(#[from] diesel::result::Error),
+}
+
+pub type DatabaseResult<T> = Result<T, DatabaseError>;
+
 #[derive(Clone, Copy, EnumString, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 enum AdminTask {
@@ -53,7 +64,7 @@ enum AdminTask {
 struct ProgressReporter {
     message: &'static str,
     print_interval: u64,
-    count: u64,
+    count: AtomicU64,
 }
 
 impl ProgressReporter {
@@ -61,19 +72,19 @@ impl ProgressReporter {
         Self {
             message,
             print_interval,
-            count: 0,
+            count: AtomicU64::new(0),
         }
     }
 
-    fn increment(&mut self) {
-        self.count += 1;
-        if self.count > 0 && self.count % self.print_interval == 0 {
+    fn increment(&self) {
+        let count = self.count.fetch_add(1, Ordering::SeqCst) + 1;
+        if count % self.print_interval == 0 {
             self.report();
         }
     }
 
     fn report(&self) {
-        println!("{}: {}", self.message, self.count);
+        println!("{}: {}", self.message, self.count.load(Ordering::SeqCst));
     }
 }
 
@@ -120,32 +131,15 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
 /// spinning up the database.
 fn run_task(task: AdminTask) -> Result<(), String> {
     println!("Starting task...");
+
     match task {
-        AdminTask::RecomputePostChecksums => {
-            let mut conn = get_connection()?;
-            post::recompute_checksums(&mut conn).map_err(|err| format!("{err}"))
-        }
-        AdminTask::RecomputePostSignatures => {
-            let mut conn = get_connection()?;
-            post::recompute_signatures(&mut conn).map_err(|err| format!("{err}"))
-        }
-        AdminTask::RecomputePostSignatureIndexes => {
-            let mut conn = get_connection()?;
-            post::recompute_indexes(&mut conn).map_err(|err| format!("{err}"))
-        }
-        AdminTask::RegenerateThumbnail => {
-            let mut conn = get_connection()?;
-            post::regenerate_thumbnail(&mut conn).map_err(|err| format!("{err}"))
-        }
-        AdminTask::ResetPassword => {
-            let mut conn = get_connection()?;
-            user::reset_password(&mut conn).map_err(|err| format!("{err}"))
-        }
+        AdminTask::RecomputePostChecksums => post::recompute_checksums().map_err(|err| format!("{err}")),
+        AdminTask::RecomputePostSignatures => post::recompute_signatures().map_err(|err| format!("{err}")),
+        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes().map_err(|err| format!("{err}")),
+        AdminTask::RegenerateThumbnail => post::regenerate_thumbnail().map_err(|err| format!("{err}")),
+        AdminTask::ResetPassword => user::reset_password().map_err(|err| format!("{err}")),
         AdminTask::ResetFilenames => database::reset_filenames().map_err(|err| format!("{err}")),
-        AdminTask::ResetStatistics => {
-            let mut conn = get_connection()?;
-            database::reset_statistics(&mut conn).map_err(|err| format!("{err}"))
-        }
+        AdminTask::ResetStatistics => database::reset_statistics().map_err(|err| format!("{err}")),
         AdminTask::ResetThumbnailSizes => {
             let mut conn = get_connection()?;
             database::reset_thumbnail_sizes(&mut conn).map_err(|err| format!("{err}"))

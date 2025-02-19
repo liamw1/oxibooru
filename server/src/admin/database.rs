@@ -10,7 +10,7 @@ use crate::schema::{
     tag_suggestion, user, user_statistics,
 };
 use crate::time::{DateTime, Timer};
-use crate::{admin, filesystem};
+use crate::{admin, db, filesystem};
 use diesel::dsl::{count, max, sum};
 use diesel::prelude::*;
 use std::ffi::OsStr;
@@ -19,9 +19,8 @@ use std::ffi::OsStr;
 /// Useful when the content hash changes.
 pub fn reset_filenames() -> std::io::Result<()> {
     let _timer = Timer::new("reset_filenames");
-
     if filesystem::path(Directory::GeneratedThumbnails).try_exists()? {
-        let mut progress = ProgressReporter::new("Generated thumbnails renamed", PRINT_INTERVAL);
+        let progress = ProgressReporter::new("Generated thumbnails renamed", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))? {
             let path = entry?.path();
             let post_id = match admin::get_post_id(&path) {
@@ -39,9 +38,8 @@ pub fn reset_filenames() -> std::io::Result<()> {
             }
         }
     }
-
     if filesystem::path(Directory::CustomThumbnails).try_exists()? {
-        let mut progress = ProgressReporter::new("Custom thumbnails renamed", PRINT_INTERVAL);
+        let progress = ProgressReporter::new("Custom thumbnails renamed", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))? {
             let path = entry?.path();
             let post_id = match admin::get_post_id(&path) {
@@ -59,9 +57,8 @@ pub fn reset_filenames() -> std::io::Result<()> {
             }
         }
     }
-
     if filesystem::path(Directory::Posts).try_exists()? {
-        let mut progress = ProgressReporter::new("Posts renamed", PRINT_INTERVAL);
+        let progress = ProgressReporter::new("Posts renamed", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::Posts))? {
             let path = entry?.path();
             let post_id = match admin::get_post_id(&path) {
@@ -91,13 +88,12 @@ pub fn reset_filenames() -> std::io::Result<()> {
             }
         }
     }
-
     Ok(())
 }
 
 pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
     if filesystem::path(Directory::Avatars).try_exists()? {
-        let mut progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
+        let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::Avatars))? {
             let path = entry?.path();
             let username = match path.file_name() {
@@ -116,9 +112,8 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
             progress.increment();
         }
     }
-
     if filesystem::path(Directory::GeneratedThumbnails).try_exists()? {
-        let mut progress = ProgressReporter::new("Generated thumbnail sizes cached", PRINT_INTERVAL);
+        let progress = ProgressReporter::new("Generated thumbnail sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))? {
             let path = entry?.path();
             let post_id = match admin::get_post_id(&path) {
@@ -137,9 +132,8 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
             progress.increment();
         }
     }
-
     if filesystem::path(Directory::CustomThumbnails).try_exists()? {
-        let mut progress = ProgressReporter::new("Custom thumbnails sizes cached", PRINT_INTERVAL);
+        let progress = ProgressReporter::new("Custom thumbnails sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))? {
             let path = entry?.path();
             let post_id = match admin::get_post_id(&path) {
@@ -158,16 +152,16 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
             progress.increment();
         }
     }
-
     Ok(())
 }
 
-pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
-    let comment_count: i64 = comment::table.count().first(conn)?;
-    let pool_count: i64 = pool::table.count().first(conn)?;
-    let post_count: i64 = post::table.count().first(conn)?;
-    let tag_count: i64 = tag::table.count().first(conn)?;
-    let user_count: i64 = user::table.count().first(conn)?;
+pub fn reset_relation_stats() -> ApiResult<()> {
+    let mut conn = db::get_connection()?;
+    let comment_count: i64 = comment::table.count().first(&mut conn)?;
+    let pool_count: i64 = pool::table.count().first(&mut conn)?;
+    let post_count: i64 = post::table.count().first(&mut conn)?;
+    let tag_count: i64 = tag::table.count().first(&mut conn)?;
+    let user_count: i64 = user::table.count().first(&mut conn)?;
     diesel::update(database_statistics::table)
         .set((
             database_statistics::comment_count.eq(comment_count),
@@ -176,18 +170,18 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
             database_statistics::tag_count.eq(tag_count),
             database_statistics::user_count.eq(user_count),
         ))
-        .execute(conn)?;
+        .execute(&mut conn)?;
 
     let comment_stats: Vec<(i64, Option<i64>)> = comment::table
         .left_join(comment_score::table)
         .group_by(comment::id)
         .select((comment::id, sum(comment_score::score).nullable()))
-        .load(conn)?;
-    let mut progress = ProgressReporter::new("Comment statistics calculated", PRINT_INTERVAL);
+        .load(&mut conn)?;
+    let progress = ProgressReporter::new("Comment statistics calculated", PRINT_INTERVAL);
     for (comment_id, score) in comment_stats {
         diesel::update(comment_statistics::table.find(comment_id))
             .set(comment_statistics::score.eq(score.unwrap_or(0)))
-            .execute(conn)?;
+            .execute(&mut conn)?;
         progress.increment();
     }
 
@@ -195,12 +189,12 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
         .left_join(pool::table)
         .group_by(pool_category::id)
         .select((pool_category::id, count(pool::id).nullable()))
-        .load(conn)?;
-    let mut progress = ProgressReporter::new("Pool category statistics calculated", PRINT_INTERVAL);
+        .load(&mut conn)?;
+    let progress = ProgressReporter::new("Pool category statistics calculated", PRINT_INTERVAL);
     for (category_id, usage_count) in pool_category_stats {
         diesel::update(pool_category_statistics::table.find(category_id))
             .set(pool_category_statistics::usage_count.eq(usage_count.unwrap_or(0)))
-            .execute(conn)?;
+            .execute(&mut conn)?;
         progress.increment();
     }
 
@@ -208,12 +202,12 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
         .left_join(pool_post::table)
         .group_by(pool::id)
         .select((pool::id, count(pool_post::post_id).nullable()))
-        .load(conn)?;
-    let mut progress = ProgressReporter::new("Pool statistics calculated", PRINT_INTERVAL);
+        .load(&mut conn)?;
+    let progress = ProgressReporter::new("Pool statistics calculated", PRINT_INTERVAL);
     for (pool_id, post_count) in pool_stats {
         diesel::update(pool_statistics::table.find(pool_id))
             .set(pool_statistics::post_count.eq(post_count.unwrap_or(0)))
-            .execute(conn)?;
+            .execute(&mut conn)?;
         progress.increment();
     }
 
@@ -221,109 +215,109 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
         .left_join(tag::table)
         .group_by(tag_category::id)
         .select((tag_category::id, count(tag::id).nullable()))
-        .load(conn)?;
-    let mut progress = ProgressReporter::new("Tag category statistics calculated", PRINT_INTERVAL);
+        .load(&mut conn)?;
+    let progress = ProgressReporter::new("Tag category statistics calculated", PRINT_INTERVAL);
     for (category_id, usage_count) in tag_category_stats {
         diesel::update(tag_category_statistics::table.find(category_id))
             .set(tag_category_statistics::usage_count.eq(usage_count.unwrap_or(0)))
-            .execute(conn)?;
+            .execute(&mut conn)?;
         progress.increment();
     }
 
-    let tag_ids: Vec<i64> = tag::table.select(tag::id).load(conn)?;
-    let mut progress = ProgressReporter::new("Tag statistics calculated", PRINT_INTERVAL);
+    let tag_ids: Vec<i64> = tag::table.select(tag::id).load(&mut conn)?;
+    let progress = ProgressReporter::new("Tag statistics calculated", PRINT_INTERVAL);
     for tag_id in tag_ids {
         let usage_count: i64 = post_tag::table
             .filter(post_tag::tag_id.eq(tag_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         let implication_count: i64 = tag_implication::table
             .filter(tag_implication::child_id.eq(tag_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         let suggestion_count: i64 = tag_suggestion::table
             .filter(tag_suggestion::child_id.eq(tag_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         diesel::update(tag_statistics::table.find(tag_id))
             .set((
                 tag_statistics::usage_count.eq(usage_count),
                 tag_statistics::implication_count.eq(implication_count),
                 tag_statistics::suggestion_count.eq(suggestion_count),
             ))
-            .execute(conn)?;
+            .execute(&mut conn)?;
         progress.increment();
     }
 
-    let user_ids: Vec<i64> = user::table.select(user::id).load(conn)?;
-    let mut progress = ProgressReporter::new("User statistics calculated", PRINT_INTERVAL);
+    let user_ids: Vec<i64> = user::table.select(user::id).load(&mut conn)?;
+    let progress = ProgressReporter::new("User statistics calculated", PRINT_INTERVAL);
     for user_id in user_ids {
         let comment_count: i64 = comment::table
             .filter(comment::user_id.eq(user_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         let favorite_count: i64 = post_favorite::table
             .filter(post_favorite::user_id.eq(user_id))
             .count()
-            .first(conn)?;
-        let upload_count: i64 = post::table.filter(post::user_id.eq(user_id)).count().first(conn)?;
+            .first(&mut conn)?;
+        let upload_count: i64 = post::table.filter(post::user_id.eq(user_id)).count().first(&mut conn)?;
         diesel::update(user_statistics::table.find(user_id))
             .set((
                 user_statistics::comment_count.eq(comment_count),
                 user_statistics::favorite_count.eq(favorite_count),
                 user_statistics::upload_count.eq(upload_count),
             ))
-            .execute(conn)?;
+            .execute(&mut conn)?;
         progress.increment();
     }
 
-    let post_ids: Vec<i64> = post::table.select(post::id).load(conn)?;
-    let mut progress = ProgressReporter::new("Post statistics calculated", PRINT_INTERVAL);
+    let post_ids: Vec<i64> = post::table.select(post::id).load(&mut conn)?;
+    let progress = ProgressReporter::new("Post statistics calculated", PRINT_INTERVAL);
     for post_id in post_ids {
         let tag_count: i64 = post_tag::table
             .filter(post_tag::post_id.eq(post_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         let pool_count: i64 = pool_post::table
             .filter(pool_post::post_id.eq(post_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         let note_count: i64 = post_note::table
             .filter(post_note::post_id.eq(post_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         let comment_count: i64 = comment::table
             .filter(comment::post_id.eq(post_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         let relation_count: i64 = post_relation::table
             .filter(post_relation::child_id.eq(post_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         let score: Option<i64> = post_score::table
             .select(sum(post_score::score))
             .filter(post_score::post_id.eq(post_id))
-            .first(conn)?;
+            .first(&mut conn)?;
         let favorite_count: i64 = post_favorite::table
             .filter(post_favorite::post_id.eq(post_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         let feature_count: i64 = post_feature::table
             .filter(post_feature::post_id.eq(post_id))
             .count()
-            .first(conn)?;
+            .first(&mut conn)?;
         let last_comment_time: Option<DateTime> = comment::table
             .select(max(comment::creation_time))
             .filter(comment::post_id.eq(post_id))
-            .first(conn)?;
+            .first(&mut conn)?;
         let last_favorite_time: Option<DateTime> = post_favorite::table
             .select(max(post_favorite::time))
             .filter(post_favorite::post_id.eq(post_id))
-            .first(conn)?;
+            .first(&mut conn)?;
         let last_feature_time: Option<DateTime> = post_feature::table
             .select(max(post_feature::time))
             .filter(post_feature::post_id.eq(post_id))
-            .first(conn)?;
+            .first(&mut conn)?;
         diesel::update(post_statistics::table.find(post_id))
             .set((
                 post_statistics::tag_count.eq(tag_count),
@@ -338,27 +332,27 @@ pub fn reset_relation_stats(conn: &mut PgConnection) -> ApiResult<()> {
                 post_statistics::last_favorite_time.eq(last_favorite_time),
                 post_statistics::last_feature_time.eq(last_feature_time),
             ))
-            .execute(conn)?;
+            .execute(&mut conn)?;
         progress.increment();
     }
-
     Ok(())
 }
 
 /// Recalculates cached file sizes, row counts, and table statistics.
 /// Useful for when the statistics become inconsistent with database
 /// or when migrating from an older version without statistics.
-pub fn reset_statistics(conn: &mut PgConnection) -> ApiResult<()> {
+pub fn reset_statistics() -> ApiResult<()> {
     let _timer = Timer::new("reset_statistics");
 
     // Disk usage will automatically be incremented via triggers as we calculate
     // content, thumbnail, and avatar sizes
+    let mut conn = db::get_connection()?;
     diesel::update(database_statistics::table)
         .set(database_statistics::disk_usage.eq(0))
-        .execute(conn)?;
+        .execute(&mut conn)?;
 
     if filesystem::path(Directory::Posts).try_exists()? {
-        let mut progress = ProgressReporter::new("Posts content sizes cached", PRINT_INTERVAL);
+        let progress = ProgressReporter::new("Posts content sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::Posts))? {
             let path = entry?.path();
             let post_id = match admin::get_post_id(&path) {
@@ -373,10 +367,10 @@ pub fn reset_statistics(conn: &mut PgConnection) -> ApiResult<()> {
             diesel::update(post::table)
                 .set(post::file_size.eq(file_size as i64))
                 .filter(post::id.eq(post_id))
-                .execute(conn)?;
+                .execute(&mut conn)?;
             progress.increment();
         }
     }
-    reset_thumbnail_sizes(conn)?;
-    reset_relation_stats(conn)
+    reset_thumbnail_sizes(&mut conn)?;
+    reset_relation_stats()
 }
