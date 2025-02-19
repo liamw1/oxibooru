@@ -2,11 +2,12 @@ use crate::api::ApiResult;
 use crate::model::enums::MimeType;
 use crate::{api, filesystem};
 use std::str::FromStr;
+use url::Url;
 
 /// Attempts to download file at the specified `url`.
 /// If successful, the file is saved in the temporary uploads directory
 /// and a content token is returned.
-pub async fn from_url(url: &str) -> ApiResult<String> {
+pub async fn from_url(url: Url) -> ApiResult<String> {
     let response = reqwest::get(url).await?;
     let response = response.error_for_status()?;
 

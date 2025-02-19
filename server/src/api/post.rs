@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 use tokio::sync::Mutex as AsyncMutex;
+use url::Url;
 use warp::multipart::FormData;
 use warp::{Filter, Rejection, Reply};
 
@@ -323,7 +324,7 @@ struct ReverseSearchBody {
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     content_token: Option<String>,
-    content_url: Option<String>,
+    content_url: Option<Url>,
 }
 
 #[derive(Serialize)]
@@ -423,11 +424,11 @@ struct NewPostInfo {
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     content_token: Option<String>,
-    content_url: Option<String>,
+    content_url: Option<Url>,
     #[serde(skip_deserializing)]
     thumbnail: Option<FileContents>,
     thumbnail_token: Option<String>,
-    thumbnail_url: Option<String>,
+    thumbnail_url: Option<Url>,
     source: Option<String>,
     relations: Option<Vec<i64>>,
     anonymous: Option<bool>,
@@ -812,11 +813,11 @@ struct PostUpdate {
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     content_token: Option<String>,
-    content_url: Option<String>,
+    content_url: Option<Url>,
     #[serde(skip_deserializing)]
     thumbnail: Option<FileContents>,
     thumbnail_token: Option<String>,
-    thumbnail_url: Option<String>,
+    thumbnail_url: Option<Url>,
 }
 
 async fn update(auth: AuthResult, post_id: i64, query: ResourceQuery, update: PostUpdate) -> ApiResult<PostInfo> {

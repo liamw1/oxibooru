@@ -3,6 +3,7 @@ use crate::content::download;
 use crate::content::upload::{self, PartName, MAX_UPLOAD_SIZE};
 use crate::{api, config};
 use serde::{Deserialize, Serialize};
+use url::Url;
 use warp::multipart::FormData;
 use warp::{Filter, Rejection, Reply};
 
@@ -27,7 +28,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct UploadBody {
-    content_url: String,
+    content_url: Url,
 }
 
 #[derive(Serialize)]
@@ -39,7 +40,7 @@ async fn upload_url(auth: AuthResult, body: UploadBody) -> ApiResult<UploadRespo
     let client = auth?;
     api::verify_privilege(client, config::privileges().upload_create)?;
 
-    let token = download::from_url(&body.content_url).await?;
+    let token = download::from_url(body.content_url).await?;
     Ok(UploadResponse { token })
 }
 

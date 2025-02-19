@@ -13,6 +13,7 @@ use crate::content::thumbnail::ThumbnailType;
 use crate::model::enums::MimeType;
 use crate::{api, filesystem};
 use image::DynamicImage;
+use url::Url;
 
 /// Stores file contents and mime type of an uploaded file.
 pub struct FileContents {
@@ -44,11 +45,11 @@ impl FileContents {
 pub enum Content {
     DirectUpload(FileContents),
     Token(String),
-    Url(String),
+    Url(Url),
 }
 
 impl Content {
-    pub fn new(direct_upload: Option<FileContents>, token: Option<String>, url: Option<String>) -> Option<Self> {
+    pub fn new(direct_upload: Option<FileContents>, token: Option<String>, url: Option<Url>) -> Option<Self> {
         match (direct_upload, token, url) {
             (Some(file), _, _) => Some(Self::DirectUpload(file)),
             (None, Some(token), _) => Some(Self::Token(token)),
@@ -61,7 +62,7 @@ impl Content {
         match self {
             Self::DirectUpload(file_contents) => file_contents.save().map_err(api::Error::from),
             Self::Token(token) => Ok(token),
-            Self::Url(url) => download::from_url(&url).await,
+            Self::Url(url) => download::from_url(url).await,
         }
     }
 

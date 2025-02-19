@@ -14,6 +14,7 @@ use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
 use diesel::prelude::*;
 use serde::Deserialize;
+use url::Url;
 use warp::filters::multipart::FormData;
 use warp::{Filter, Rejection, Reply};
 
@@ -148,7 +149,7 @@ struct NewUserInfo {
     #[serde(skip_deserializing)]
     avatar: Option<FileContents>,
     avatar_token: Option<String>,
-    avatar_url: Option<String>,
+    avatar_url: Option<Url>,
 }
 
 async fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
@@ -239,7 +240,7 @@ struct UserUpdate {
     #[serde(skip_deserializing)]
     avatar: Option<FileContents>,
     avatar_token: Option<String>,
-    avatar_url: Option<String>,
+    avatar_url: Option<Url>,
 }
 
 async fn update(auth: AuthResult, username: String, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
