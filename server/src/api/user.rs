@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, DeleteRequest, PagedQuery, PagedResponse, ResourceQuery};
+use crate::api::{ApiResult, AuthResult, DeleteBody, PageParams, PagedResponse, ResourceParams};
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::ThumbnailType;
@@ -76,17 +76,17 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 
 const MAX_USERS_PER_PAGE: i64 = 1000;
 
-fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo>> {
+fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<UserInfo>> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().user_list)?;
 
-    let offset = query.offset.unwrap_or(0);
-    let limit = std::cmp::min(query.limit.get(), MAX_USERS_PER_PAGE);
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let offset = params.offset.unwrap_or(0);
+    let limit = std::cmp::min(params.limit.get(), MAX_USERS_PER_PAGE);
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
-        let mut search_criteria = search::user::parse_search_criteria(query.criteria())?;
+        let mut search_criteria = search::user::parse_search_criteria(params.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let sql_query = search::user::build_query(&search_criteria)?;
 
@@ -101,7 +101,7 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo
 
         let selected_users: Vec<i64> = search::user::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
-            query: query.query.query,
+            query: params.to_query(),
             offset,
             limit,
             total,
@@ -110,11 +110,11 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<UserInfo
     })
 }
 
-fn get(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UserInfo> {
+fn get(auth: AuthResult, username: String, params: ResourceParams) -> ApiResult<UserInfo> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let user_id = user::table
@@ -140,7 +140,7 @@ fn get(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<Us
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct NewUserInfo {
+struct CreateBody {
     name: String,
     password: String,
     email: Option<String>,
@@ -152,11 +152,11 @@ struct NewUserInfo {
     avatar_url: Option<Url>,
 }
 
-async fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) -> ApiResult<UserInfo> {
+async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<UserInfo> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
 
-    let creation_rank = user_info.rank.unwrap_or(config::default_rank());
+    let creation_rank = body.rank.unwrap_or(config::default_rank());
     if creation_rank == UserRank::Anonymous {
         return Err(api::Error::InvalidUserRank);
     }
@@ -171,23 +171,23 @@ async fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) 
         api::verify_privilege(client, creation_rank)?;
     }
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
-    api::verify_matches_regex(&user_info.name, RegexType::Username)?;
-    api::verify_matches_regex(&user_info.password, RegexType::Password)?;
-    api::verify_valid_email(user_info.email.as_deref())?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    api::verify_matches_regex(&body.name, RegexType::Username)?;
+    api::verify_matches_regex(&body.password, RegexType::Password)?;
+    api::verify_valid_email(body.email.as_deref())?;
 
     let salt = SaltString::generate(&mut OsRng);
-    let hash = password::hash_password(&user_info.password, &salt)?;
+    let hash = password::hash_password(&body.password, &salt)?;
     let new_user = NewUser {
-        name: &user_info.name,
+        name: &body.name,
         password_hash: &hash,
         password_salt: salt.as_str(),
-        email: user_info.email.as_deref(),
+        email: body.email.as_deref(),
         rank: creation_rank,
-        avatar_style: user_info.avatar_style.unwrap_or_default(),
+        avatar_style: body.avatar_style.unwrap_or_default(),
     };
 
-    let custom_avatar = match Content::new(user_info.avatar, user_info.avatar_token, user_info.avatar_url) {
+    let custom_avatar = match Content::new(body.avatar, body.avatar_token, body.avatar_url) {
         Some(content) => Some(content.thumbnail(ThumbnailType::Avatar).await?),
         None => None,
     };
@@ -206,7 +206,7 @@ async fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) 
             };
             api::verify_privilege(client, required_rank)?;
 
-            update::user::avatar(conn, user_id, &user_info.name, avatar)?;
+            update::user::avatar(conn, user_id, &body.name, avatar)?;
         }
 
         Ok::<_, api::Error>(user_id)
@@ -214,13 +214,13 @@ async fn create(auth: AuthResult, query: ResourceQuery, user_info: NewUserInfo) 
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full).map_err(api::Error::from))
 }
 
-async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: FormData) -> ApiResult<UserInfo> {
+async fn create_multipart(auth: AuthResult, params: ResourceParams, form_data: FormData) -> ApiResult<UserInfo> {
     let body = upload::extract_with_metadata(form_data, [PartName::Avatar]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
-    let mut user_info: NewUserInfo = serde_json::from_slice(&metadata)?;
+    let mut new_user: CreateBody = serde_json::from_slice(&metadata)?;
     if let [Some(avatar)] = body.files {
-        user_info.avatar = Some(avatar);
-        create(auth, query, user_info).await
+        new_user.avatar = Some(avatar);
+        create(auth, params, new_user).await
     } else {
         Err(api::Error::MissingFormData)
     }
@@ -229,7 +229,7 @@ async fn create_multipart(auth: AuthResult, query: ResourceQuery, form_data: For
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct UserUpdate {
+struct UpdateBody {
     version: DateTime,
     name: Option<String>,
     password: Option<String>,
@@ -243,14 +243,14 @@ struct UserUpdate {
     avatar_url: Option<Url>,
 }
 
-async fn update(auth: AuthResult, username: String, query: ResourceQuery, update: UserUpdate) -> ApiResult<UserInfo> {
+async fn update(auth: AuthResult, username: String, params: ResourceParams, body: UpdateBody) -> ApiResult<UserInfo> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
-    let custom_avatar = match Content::new(update.avatar, update.avatar_token, update.avatar_url) {
+    let custom_avatar = match Content::new(body.avatar, body.avatar_token, body.avatar_url) {
         Some(content) => Some(content.thumbnail(ThumbnailType::Avatar).await?),
         None => None,
     };
@@ -261,7 +261,7 @@ async fn update(auth: AuthResult, username: String, query: ResourceQuery, update
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(&username))
             .first(conn)?;
-        api::verify_version(user_version, update.version)?;
+        api::verify_version(user_version, body.version)?;
 
         let editing_self = client.id == Some(user_id);
         let visibility = match editing_self {
@@ -269,7 +269,7 @@ async fn update(auth: AuthResult, username: String, query: ResourceQuery, update
             false => Visibility::PublicOnly,
         };
 
-        if let Some(password) = update.password {
+        if let Some(password) = body.password {
             let required_rank = match editing_self {
                 true => config::privileges().user_edit_self_pass,
                 false => config::privileges().user_edit_any_pass,
@@ -283,7 +283,7 @@ async fn update(auth: AuthResult, username: String, query: ResourceQuery, update
                 .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
                 .execute(conn)?;
         }
-        if let Some(email) = update.email {
+        if let Some(email) = body.email {
             let required_rank = match editing_self {
                 true => config::privileges().user_edit_self_email,
                 false => config::privileges().user_edit_any_email,
@@ -295,7 +295,7 @@ async fn update(auth: AuthResult, username: String, query: ResourceQuery, update
                 .set(user::email.eq(email))
                 .execute(conn)?;
         }
-        if let Some(rank) = update.rank {
+        if let Some(rank) = body.rank {
             let required_rank = match editing_self {
                 true => config::privileges().user_edit_self_rank,
                 false => config::privileges().user_edit_any_rank,
@@ -309,7 +309,7 @@ async fn update(auth: AuthResult, username: String, query: ResourceQuery, update
                 .set(user::rank.eq(rank))
                 .execute(conn)?;
         }
-        if let Some(avatar_style) = update.avatar_style {
+        if let Some(avatar_style) = body.avatar_style {
             let required_rank = match editing_self {
                 true => config::privileges().user_edit_self_avatar,
                 false => config::privileges().user_edit_any_avatar,
@@ -329,7 +329,7 @@ async fn update(auth: AuthResult, username: String, query: ResourceQuery, update
 
             update::user::avatar(conn, user_id, &username, avatar)?;
         }
-        if let Some(new_name) = update.name.as_deref() {
+        if let Some(new_name) = body.name.as_deref() {
             let required_rank = match editing_self {
                 true => config::privileges().user_edit_self_name,
                 false => config::privileges().user_edit_any_name,
@@ -356,21 +356,21 @@ async fn update(auth: AuthResult, username: String, query: ResourceQuery, update
 async fn update_multipart(
     auth: AuthResult,
     username: String,
-    query: ResourceQuery,
+    params: ResourceParams,
     form_data: FormData,
 ) -> ApiResult<UserInfo> {
     let body = upload::extract_with_metadata(form_data, [PartName::Avatar]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
-    let mut user_update: UserUpdate = serde_json::from_slice(&metadata)?;
+    let mut user_update: UpdateBody = serde_json::from_slice(&metadata)?;
     if let [Some(avatar)] = body.files {
         user_update.avatar = Some(avatar);
-        update(auth, username, query, user_update).await
+        update(auth, username, params, user_update).await
     } else {
         Err(api::Error::MissingFormData)
     }
 }
 
-fn delete(auth: AuthResult, username: String, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete(auth: AuthResult, username: String, client_version: DeleteBody) -> ApiResult<()> {
     let client = auth?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {

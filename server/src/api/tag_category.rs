@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, DeleteRequest, ResourceQuery, UnpagedResponse};
+use crate::api::{ApiResult, AuthResult, DeleteBody, ResourceParams, UnpagedResponse};
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTagCategory, TagCategory};
@@ -53,11 +53,11 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     list.or(get).or(create).or(update).or(set_default).or(delete)
 }
 
-fn list(auth: AuthResult, query: ResourceQuery) -> ApiResult<UnpagedResponse<TagCategoryInfo>> {
+fn list(auth: AuthResult, params: ResourceParams) -> ApiResult<UnpagedResponse<TagCategoryInfo>> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_list)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         TagCategoryInfo::all(conn, &fields)
             .map(|results| UnpagedResponse { results })
@@ -65,11 +65,11 @@ fn list(auth: AuthResult, query: ResourceQuery) -> ApiResult<UnpagedResponse<Tag
     })
 }
 
-fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagCategoryInfo> {
+fn get(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_view)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let category = tag_category::table
@@ -83,24 +83,24 @@ fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagCat
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct NewTagCategoryInfo {
+struct CreateBody {
     order: i32,
     name: String,
     color: String,
 }
 
-fn create(auth: AuthResult, query: ResourceQuery, category_info: NewTagCategoryInfo) -> ApiResult<TagCategoryInfo> {
+fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_create)?;
-    api::verify_matches_regex(&category_info.name, RegexType::TagCategory)?;
+    api::verify_matches_regex(&body.name, RegexType::TagCategory)?;
 
     let new_category = NewTagCategory {
-        order: category_info.order,
-        name: &category_info.name,
-        color: &category_info.color,
+        order: body.order,
+        name: &body.name,
+        color: &body.color,
     };
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let category = diesel::insert_into(tag_category::table)
         .values(new_category)
@@ -111,21 +111,16 @@ fn create(auth: AuthResult, query: ResourceQuery, category_info: NewTagCategoryI
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct TagCategoryUpdate {
+struct UpdateBody {
     version: DateTime,
     order: Option<String>, // TODO: Client sends order out as string so we convert on server, would be better to do this on client
     name: Option<String>,
     color: Option<String>,
 }
 
-fn update(
-    auth: AuthResult,
-    name: String,
-    query: ResourceQuery,
-    update: TagCategoryUpdate,
-) -> ApiResult<TagCategoryInfo> {
+fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBody) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
@@ -134,9 +129,9 @@ fn update(
             .select((tag_category::id, tag_category::last_edit_time))
             .filter(tag_category::name.eq(name))
             .first(conn)?;
-        api::verify_version(last_edit_time, update.version)?;
+        api::verify_version(last_edit_time, body.version)?;
 
-        if let Some(order) = update.order {
+        if let Some(order) = body.order {
             api::verify_privilege(client, config::privileges().tag_category_edit_order)?;
 
             let order: i32 = order.parse()?;
@@ -144,7 +139,7 @@ fn update(
                 .set(tag_category::order.eq(order))
                 .execute(conn)?;
         }
-        if let Some(name) = update.name {
+        if let Some(name) = body.name {
             api::verify_privilege(client, config::privileges().tag_category_edit_name)?;
             api::verify_matches_regex(&name, RegexType::TagCategory)?;
 
@@ -152,7 +147,7 @@ fn update(
                 .set(tag_category::name.eq(name))
                 .execute(conn)?;
         }
-        if let Some(color) = update.color {
+        if let Some(color) = body.color {
             api::verify_privilege(client, config::privileges().tag_category_edit_color)?;
 
             diesel::update(tag_category::table.find(category_id))
@@ -169,11 +164,11 @@ fn update(
     conn.transaction(|conn| TagCategoryInfo::new_from_id(conn, category_id, &fields).map_err(api::Error::from))
 }
 
-fn set_default(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagCategoryInfo> {
+fn set_default(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_set_default)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let new_default_category: TagCategory = conn.transaction(|conn| {
@@ -214,7 +209,7 @@ fn set_default(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResul
     conn.transaction(|conn| TagCategoryInfo::new(conn, new_default_category, &fields).map_err(api::Error::from))
 }
 
-fn delete(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete(auth: AuthResult, name: String, client_version: DeleteBody) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_category_delete)?;
 

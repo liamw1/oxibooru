@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, ResourceQuery};
+use crate::api::{ApiResult, AuthResult, ResourceParams};
 use crate::model::post::PostFeature;
 use crate::resource::post::PostInfo;
 use crate::schema::{database_statistics, post_feature, user};
@@ -20,7 +20,7 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 // TODO: Remove renames by changing references to these names in client
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Info {
+struct Response {
     post_count: i64,
     disk_usage: i64,
     featured_post: Option<PostInfo>,
@@ -30,11 +30,11 @@ struct Info {
     config: &'static config::PublicInfo,
 }
 
-fn get(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
+fn get(auth: AuthResult, params: ResourceParams) -> ApiResult<Response> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let (post_count, disk_usage) = database_statistics::table
             .select((database_statistics::post_count, database_statistics::disk_usage))
@@ -59,7 +59,7 @@ fn get(auth: AuthResult, query: ResourceQuery) -> ApiResult<Info> {
             .transpose()?
             .flatten();
 
-        Ok(Info {
+        Ok(Response {
             post_count,
             disk_usage,
             featured_post,

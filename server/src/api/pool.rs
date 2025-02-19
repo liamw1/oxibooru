@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
+use crate::api::{ApiResult, AuthResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::PoolInfo;
@@ -56,17 +56,17 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 
 const MAX_POOLS_PER_PAGE: i64 = 1000;
 
-fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PoolInfo>> {
+fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<PoolInfo>> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_list)?;
 
-    let offset = query.offset.unwrap_or(0);
-    let limit = std::cmp::min(query.limit.get(), MAX_POOLS_PER_PAGE);
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let offset = params.offset.unwrap_or(0);
+    let limit = std::cmp::min(params.limit.get(), MAX_POOLS_PER_PAGE);
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
-        let mut search_criteria = search::pool::parse_search_criteria(query.criteria())?;
+        let mut search_criteria = search::pool::parse_search_criteria(params.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let sql_query = search::pool::build_query(&search_criteria)?;
 
@@ -81,7 +81,7 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PoolInfo
 
         let selected_tags: Vec<i64> = search::pool::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
-            query: query.query.query,
+            query: params.to_query(),
             offset,
             limit,
             total,
@@ -90,12 +90,12 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<PoolInfo
     })
 }
 
-fn get(auth: AuthResult, pool_id: i64, query: ResourceQuery) -> ApiResult<PoolInfo> {
+fn get(auth: AuthResult, pool_id: i64, params: ResourceParams) -> ApiResult<PoolInfo> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_view)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(conn)?;
         if !pool_exists {
@@ -107,63 +107,63 @@ fn get(auth: AuthResult, pool_id: i64, query: ResourceQuery) -> ApiResult<PoolIn
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct NewPoolInfo {
+struct CreateBody {
     names: Vec<String>,
     category: String,
     description: Option<String>,
     posts: Option<Vec<i64>>,
 }
 
-fn create(auth: AuthResult, query: ResourceQuery, pool_info: NewPoolInfo) -> ApiResult<PoolInfo> {
+fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<PoolInfo> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_create)?;
 
-    if pool_info.names.is_empty() {
+    if body.names.is_empty() {
         return Err(api::Error::NoNamesGiven(ResourceType::Pool));
     }
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let pool = conn.transaction(|conn| {
         let category_id: i64 = pool_category::table
             .select(pool_category::id)
-            .filter(pool_category::name.eq(pool_info.category))
+            .filter(pool_category::name.eq(body.category))
             .first(conn)?;
         let new_pool = NewPool {
             category_id,
-            description: pool_info.description.as_deref().unwrap_or(""),
+            description: body.description.as_deref().unwrap_or(""),
         };
         let pool = diesel::insert_into(pool::table)
             .values(new_pool)
             .returning(Pool::as_returning())
             .get_result(conn)?;
 
-        update::pool::add_names(conn, pool.id, 0, pool_info.names)?;
-        update::pool::add_posts(conn, pool.id, 0, pool_info.posts.unwrap_or_default())?;
+        update::pool::add_names(conn, pool.id, 0, body.names)?;
+        update::pool::add_posts(conn, pool.id, 0, body.posts.unwrap_or_default())?;
         Ok::<_, api::Error>(pool)
     })?;
     conn.transaction(|conn| PoolInfo::new(conn, pool, &fields).map_err(api::Error::from))
 }
 
-fn merge(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i64>) -> ApiResult<PoolInfo> {
+fn merge(auth: AuthResult, params: ResourceParams, body: MergeBody<i64>) -> ApiResult<PoolInfo> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_merge)?;
 
-    let remove_id = merge_info.remove;
-    let merge_to_id = merge_info.merge_to;
+    let remove_id = body.remove;
+    let merge_to_id = body.merge_to;
     if remove_id == merge_to_id {
         return Err(api::Error::SelfMerge(ResourceType::Pool));
     }
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         let remove_version = pool::table.find(remove_id).select(pool::last_edit_time).first(conn)?;
         let merge_to_version = pool::table.find(merge_to_id).select(pool::last_edit_time).first(conn)?;
-        api::verify_version(remove_version, merge_info.remove_version)?;
-        api::verify_version(merge_to_version, merge_info.merge_to_version)?;
+        api::verify_version(remove_version, body.remove_version)?;
+        api::verify_version(merge_to_version, body.merge_to_version)?;
 
         // Merge posts
         let merge_to_pool_posts = pool_post::table
@@ -201,7 +201,7 @@ fn merge(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<i64>) 
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct PoolUpdate {
+struct UpdateBody {
     version: DateTime,
     category: Option<String>,
     description: Option<String>,
@@ -209,17 +209,17 @@ struct PoolUpdate {
     posts: Option<Vec<i64>>,
 }
 
-fn update(auth: AuthResult, pool_id: i64, query: ResourceQuery, update: PoolUpdate) -> ApiResult<PoolInfo> {
+fn update(auth: AuthResult, pool_id: i64, params: ResourceParams, body: UpdateBody) -> ApiResult<PoolInfo> {
     let client = auth?;
-    query.bump_login(client)?;
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    params.bump_login(client)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         let pool_version: DateTime = pool::table.find(pool_id).select(pool::last_edit_time).first(conn)?;
-        api::verify_version(pool_version, update.version)?;
+        api::verify_version(pool_version, body.version)?;
 
-        if let Some(category) = update.category {
+        if let Some(category) = body.category {
             api::verify_privilege(client, config::privileges().pool_edit_category)?;
 
             let category_id: i64 = pool_category::table
@@ -230,14 +230,14 @@ fn update(auth: AuthResult, pool_id: i64, query: ResourceQuery, update: PoolUpda
                 .set(pool::category_id.eq(category_id))
                 .execute(conn)?;
         }
-        if let Some(description) = update.description {
+        if let Some(description) = body.description {
             api::verify_privilege(client, config::privileges().pool_edit_description)?;
 
             diesel::update(pool::table.find(pool_id))
                 .set(pool::description.eq(description))
                 .execute(conn)?;
         }
-        if let Some(names) = update.names {
+        if let Some(names) = body.names {
             api::verify_privilege(client, config::privileges().pool_edit_name)?;
             if names.is_empty() {
                 return Err(api::Error::NoNamesGiven(ResourceType::Pool));
@@ -246,7 +246,7 @@ fn update(auth: AuthResult, pool_id: i64, query: ResourceQuery, update: PoolUpda
             update::pool::delete_names(conn, pool_id)?;
             update::pool::add_names(conn, pool_id, 0, names)?;
         }
-        if let Some(posts) = update.posts {
+        if let Some(posts) = body.posts {
             api::verify_privilege(client, config::privileges().pool_edit_post)?;
             update::pool::delete_posts(conn, pool_id)?;
             update::pool::add_posts(conn, pool_id, 0, posts)?;
@@ -256,7 +256,7 @@ fn update(auth: AuthResult, pool_id: i64, query: ResourceQuery, update: PoolUpda
     conn.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields).map_err(api::Error::from))
 }
 
-fn delete(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete(auth: AuthResult, name: String, client_version: DeleteBody) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_delete)?;
 

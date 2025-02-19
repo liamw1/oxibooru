@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, DeleteRequest, ResourceQuery, UnpagedResponse};
+use crate::api::{ApiResult, AuthResult, DeleteBody, ResourceParams, UnpagedResponse};
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPoolCategory, PoolCategory};
@@ -53,11 +53,11 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     list.or(get).or(create).or(update).or(set_default).or(delete)
 }
 
-fn list(auth: AuthResult, query: ResourceQuery) -> ApiResult<UnpagedResponse<PoolCategoryInfo>> {
+fn list(auth: AuthResult, params: ResourceParams) -> ApiResult<UnpagedResponse<PoolCategoryInfo>> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_list)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         PoolCategoryInfo::all(conn, &fields)
             .map(|results| UnpagedResponse { results })
@@ -65,11 +65,11 @@ fn list(auth: AuthResult, query: ResourceQuery) -> ApiResult<UnpagedResponse<Poo
     })
 }
 
-fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<PoolCategoryInfo> {
+fn get(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_view)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let category = pool_category::table
@@ -83,22 +83,22 @@ fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<PoolCa
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct NewPoolCategoryInfo {
+struct CreateBody {
     name: String,
     color: String,
 }
 
-fn create(auth: AuthResult, query: ResourceQuery, category_info: NewPoolCategoryInfo) -> ApiResult<PoolCategoryInfo> {
+fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_create)?;
-    api::verify_matches_regex(&category_info.name, RegexType::PoolCategory)?;
+    api::verify_matches_regex(&body.name, RegexType::PoolCategory)?;
 
     let new_category = NewPoolCategory {
-        name: &category_info.name,
-        color: &category_info.color,
+        name: &body.name,
+        color: &body.color,
     };
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let category = diesel::insert_into(pool_category::table)
         .values(new_category)
@@ -109,20 +109,15 @@ fn create(auth: AuthResult, query: ResourceQuery, category_info: NewPoolCategory
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct PoolCategoryUpdate {
+struct UpdateBody {
     version: DateTime,
     name: Option<String>,
     color: Option<String>,
 }
 
-fn update(
-    auth: AuthResult,
-    name: String,
-    query: ResourceQuery,
-    update: PoolCategoryUpdate,
-) -> ApiResult<PoolCategoryInfo> {
+fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBody) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
@@ -131,10 +126,10 @@ fn update(
             .select((pool_category::id, pool_category::last_edit_time))
             .filter(pool_category::name.eq(name))
             .first(conn)?;
-        api::verify_version(last_edit_time, update.version)?;
+        api::verify_version(last_edit_time, body.version)?;
 
         let current_time = DateTime::now();
-        if let Some(name) = update.name {
+        if let Some(name) = body.name {
             api::verify_privilege(client, config::privileges().pool_category_edit_name)?;
             api::verify_matches_regex(&name, RegexType::PoolCategory)?;
 
@@ -142,7 +137,7 @@ fn update(
                 .set((pool_category::name.eq(name), pool_category::last_edit_time.eq(current_time)))
                 .execute(conn)?;
         }
-        if let Some(color) = update.color {
+        if let Some(color) = body.color {
             api::verify_privilege(client, config::privileges().pool_category_edit_color)?;
 
             diesel::update(pool_category::table.find(category_id))
@@ -154,11 +149,11 @@ fn update(
     conn.transaction(|conn| PoolCategoryInfo::new_from_id(conn, category_id, &fields).map_err(api::Error::from))
 }
 
-fn set_default(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<PoolCategoryInfo> {
+fn set_default(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<PoolCategoryInfo> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_set_default)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let new_default_category: PoolCategory = conn.transaction(|conn| {
@@ -200,7 +195,7 @@ fn set_default(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResul
     conn.transaction(|conn| PoolCategoryInfo::new(conn, new_default_category, &fields).map_err(api::Error::from))
 }
 
-fn delete(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete(auth: AuthResult, name: String, client_version: DeleteBody) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().pool_category_delete)?;
 

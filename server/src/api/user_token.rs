@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, ResourceQuery, UnpagedResponse};
+use crate::api::{ApiResult, AuthResult, ResourceParams, UnpagedResponse};
 use crate::model::enums::AvatarStyle;
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
@@ -41,10 +41,10 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     list.or(create).or(update).or(delete)
 }
 
-fn list(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<UnpagedResponse<UserTokenInfo>> {
+fn list(auth: AuthResult, username: String, params: ResourceParams) -> ApiResult<UnpagedResponse<UserTokenInfo>> {
     let client = auth?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
@@ -72,21 +72,16 @@ fn list(auth: AuthResult, username: String, query: ResourceQuery) -> ApiResult<U
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct NewUserTokenInfo {
+struct CreateBody {
     enabled: bool,
     note: Option<String>,
     expiration_time: Option<DateTime>,
 }
 
-fn create(
-    auth: AuthResult,
-    username: String,
-    query: ResourceQuery,
-    token_info: NewUserTokenInfo,
-) -> ApiResult<UserTokenInfo> {
+fn create(auth: AuthResult, username: String, params: ResourceParams, body: CreateBody) -> ApiResult<UserTokenInfo> {
     let client = auth?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     let (user_token, avatar_style) = conn.transaction(|conn| {
@@ -115,9 +110,9 @@ fn create(
         let new_user_token = NewUserToken {
             id: Uuid::new_v4(),
             user_id,
-            note: token_info.note.as_deref(),
-            enabled: token_info.enabled,
-            expiration_time: token_info.expiration_time,
+            note: body.note.as_deref(),
+            enabled: body.enabled,
+            expiration_time: body.expiration_time,
         };
         let user_token = diesel::insert_into(user_token::table)
             .values(new_user_token)
@@ -131,7 +126,7 @@ fn create(
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct UserTokenUpdate {
+struct UpdateBody {
     version: DateTime,
     enabled: Option<bool>,
     note: Option<String>,
@@ -143,12 +138,12 @@ fn update(
     auth: AuthResult,
     username: String,
     token: Uuid,
-    query: ResourceQuery,
-    update: UserTokenUpdate,
+    params: ResourceParams,
+    body: UpdateBody,
 ) -> ApiResult<UserTokenInfo> {
     let client = auth?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
     let (updated_user_token, avatar_style) = conn.transaction(|conn| {
@@ -164,15 +159,15 @@ fn update(
         api::verify_privilege(client, required_rank)?;
 
         let mut user_token: UserToken = user_token::table.find(token).first(conn)?;
-        api::verify_version(user_token.last_edit_time, update.version)?;
+        api::verify_version(user_token.last_edit_time, body.version)?;
 
-        if let Some(enabled) = update.enabled {
+        if let Some(enabled) = body.enabled {
             user_token.enabled = enabled;
         }
-        if let Some(note) = update.note {
+        if let Some(note) = body.note {
             user_token.note = note;
         }
-        if let Some(expiration_time) = update.expiration_time {
+        if let Some(expiration_time) = body.expiration_time {
             user_token.expiration_time = expiration_time;
         }
         user_token.last_edit_time = DateTime::now();

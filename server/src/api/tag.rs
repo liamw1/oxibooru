@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, AuthResult, DeleteRequest, MergeRequest, PagedQuery, PagedResponse, ResourceQuery};
+use crate::api::{ApiResult, AuthResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::model::enums::ResourceType;
 use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
@@ -65,17 +65,17 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 const MAX_TAGS_PER_PAGE: i64 = 1000;
 const MAX_TAG_SIBLINGS: i64 = 1000;
 
-fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>> {
+fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<TagInfo>> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_list)?;
 
-    let offset = query.offset.unwrap_or(0);
-    let limit = std::cmp::min(query.limit.get(), MAX_TAGS_PER_PAGE);
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let offset = params.offset.unwrap_or(0);
+    let limit = std::cmp::min(params.limit.get(), MAX_TAGS_PER_PAGE);
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
-        let mut search_criteria = search::tag::parse_search_criteria(query.criteria())?;
+        let mut search_criteria = search::tag::parse_search_criteria(params.criteria())?;
         search_criteria.add_offset_and_limit(offset, limit);
         let sql_query = search::tag::build_query(&search_criteria)?;
 
@@ -90,7 +90,7 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>
 
         let selected_tags: Vec<i64> = search::tag::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
-            query: query.query.query,
+            query: params.to_query(),
             offset,
             limit,
             total,
@@ -99,12 +99,12 @@ fn list(auth: AuthResult, query: PagedQuery) -> ApiResult<PagedResponse<TagInfo>
     })
 }
 
-fn get(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagInfo> {
+fn get(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagInfo> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_view)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let tag_id = tag_name::table
@@ -128,12 +128,12 @@ struct TagSiblings {
     results: Vec<TagSibling>,
 }
 
-fn get_siblings(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResult<TagSiblings> {
+fn get_siblings(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagSiblings> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_view)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let tag_id: i64 = tag::table
@@ -167,7 +167,7 @@ fn get_siblings(auth: AuthResult, name: String, query: ResourceQuery) -> ApiResu
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct NewTagInfo {
+struct CreateBody {
     category: String,
     description: Option<String>,
     names: Vec<String>,
@@ -175,37 +175,37 @@ struct NewTagInfo {
     suggestions: Option<Vec<String>>,
 }
 
-fn create(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> ApiResult<TagInfo> {
+fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<TagInfo> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_create)?;
 
-    if tag_info.names.is_empty() {
+    if body.names.is_empty() {
         return Err(api::Error::NoNamesGiven(ResourceType::Tag));
     }
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let tag_id = conn.transaction(|conn| {
         let category_id: i64 = tag_category::table
             .select(tag_category::id)
-            .filter(tag_category::name.eq(tag_info.category))
+            .filter(tag_category::name.eq(body.category))
             .first(conn)?;
         let new_tag = NewTag {
             category_id,
-            description: tag_info.description.as_deref().unwrap_or(""),
+            description: body.description.as_deref().unwrap_or(""),
         };
         let tag_id: i64 = diesel::insert_into(tag::table)
             .values(new_tag)
             .returning(tag::id)
             .get_result(conn)?;
 
-        update::tag::add_names(conn, tag_id, 0, tag_info.names)?;
-        if let Some(implications) = tag_info.implications {
+        update::tag::add_names(conn, tag_id, 0, body.names)?;
+        if let Some(implications) = body.implications {
             let implied_ids = update::tag::get_or_create_tag_ids(conn, client, implications, true)?;
             update::tag::add_implications(conn, tag_id, implied_ids)?;
         }
-        if let Some(suggestions) = tag_info.suggestions {
+        if let Some(suggestions) = body.suggestions {
             let suggested_ids = update::tag::get_or_create_tag_ids(conn, client, suggestions, true)?;
             update::tag::add_suggestions(conn, tag_id, suggested_ids)?;
         }
@@ -214,9 +214,9 @@ fn create(auth: AuthResult, query: ResourceQuery, tag_info: NewTagInfo) -> ApiRe
     conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
 }
 
-fn merge(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String>) -> ApiResult<TagInfo> {
+fn merge(auth: AuthResult, params: ResourceParams, body: MergeBody<String>) -> ApiResult<TagInfo> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_merge)?;
 
     let get_tag_info = |conn: &mut PgConnection, name: String| {
@@ -227,16 +227,16 @@ fn merge(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String
             .first(conn)
     };
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let merged_tag_id = conn.transaction(|conn| {
-        let (remove_id, remove_version) = get_tag_info(conn, merge_info.remove)?;
-        let (merge_to_id, merge_to_version) = get_tag_info(conn, merge_info.merge_to)?;
+        let (remove_id, remove_version) = get_tag_info(conn, body.remove)?;
+        let (merge_to_id, merge_to_version) = get_tag_info(conn, body.merge_to)?;
         if remove_id == merge_to_id {
             return Err(api::Error::SelfMerge(ResourceType::Tag));
         }
-        api::verify_version(remove_version, merge_info.remove_version)?;
-        api::verify_version(merge_to_version, merge_info.merge_to_version)?;
+        api::verify_version(remove_version, body.remove_version)?;
+        api::verify_version(merge_to_version, body.merge_to_version)?;
 
         // Merge implications
         let involved_implications: Vec<TagImplication> = tag_implication::table
@@ -333,7 +333,7 @@ fn merge(auth: AuthResult, query: ResourceQuery, merge_info: MergeRequest<String
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct TagUpdate {
+struct UpdateBody {
     version: DateTime,
     category: Option<String>,
     description: Option<String>,
@@ -342,11 +342,11 @@ struct TagUpdate {
     suggestions: Option<Vec<String>>,
 }
 
-fn update(auth: AuthResult, name: String, query: ResourceQuery, update: TagUpdate) -> ApiResult<TagInfo> {
+fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBody) -> ApiResult<TagInfo> {
     let client = auth?;
-    query.bump_login(client)?;
+    params.bump_login(client)?;
 
-    let fields = resource::create_table(query.fields()).map_err(Box::from)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let tag_id = conn.transaction(|conn| {
@@ -355,9 +355,9 @@ fn update(auth: AuthResult, name: String, query: ResourceQuery, update: TagUpdat
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
             .first(conn)?;
-        api::verify_version(tag_version, update.version)?;
+        api::verify_version(tag_version, body.version)?;
 
-        if let Some(category) = update.category {
+        if let Some(category) = body.category {
             api::verify_privilege(client, config::privileges().tag_edit_category)?;
 
             let category_id: i64 = tag_category::table
@@ -368,14 +368,14 @@ fn update(auth: AuthResult, name: String, query: ResourceQuery, update: TagUpdat
                 .set(tag::category_id.eq(category_id))
                 .execute(conn)?;
         }
-        if let Some(description) = update.description {
+        if let Some(description) = body.description {
             api::verify_privilege(client, config::privileges().tag_edit_description)?;
 
             diesel::update(tag::table.find(tag_id))
                 .set(tag::description.eq(description))
                 .execute(conn)?;
         }
-        if let Some(names) = update.names {
+        if let Some(names) = body.names {
             api::verify_privilege(client, config::privileges().tag_edit_name)?;
             if names.is_empty() {
                 return Err(api::Error::NoNamesGiven(ResourceType::Tag));
@@ -384,7 +384,7 @@ fn update(auth: AuthResult, name: String, query: ResourceQuery, update: TagUpdat
             update::tag::delete_names(conn, tag_id)?;
             update::tag::add_names(conn, tag_id, 0, names)?;
         }
-        if let Some(implications) = update.implications {
+        if let Some(implications) = body.implications {
             api::verify_privilege(client, config::privileges().tag_edit_implication)?;
 
             let implied_ids = update::tag::get_or_create_tag_ids(conn, client, implications, true)?;
@@ -393,7 +393,7 @@ fn update(auth: AuthResult, name: String, query: ResourceQuery, update: TagUpdat
                 .execute(conn)?;
             update::tag::add_implications(conn, tag_id, implied_ids)?;
         }
-        if let Some(suggestions) = update.suggestions {
+        if let Some(suggestions) = body.suggestions {
             api::verify_privilege(client, config::privileges().tag_edit_suggestion)?;
 
             let suggested_ids = update::tag::get_or_create_tag_ids(conn, client, suggestions, true)?;
@@ -407,7 +407,7 @@ fn update(auth: AuthResult, name: String, query: ResourceQuery, update: TagUpdat
     conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
 }
 
-fn delete(auth: AuthResult, name: String, client_version: DeleteRequest) -> ApiResult<()> {
+fn delete(auth: AuthResult, name: String, client_version: DeleteBody) -> ApiResult<()> {
     let client = auth?;
     api::verify_privilege(client, config::privileges().tag_delete)?;
 

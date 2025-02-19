@@ -293,54 +293,54 @@ pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> +
 
 type AuthResult = Result<Client, AuthenticationError>;
 
-/// Represents part of a request to apply/change a score.
+/// Represents body of a request to apply/change a score.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct RatingRequest {
+struct RatingBody {
     score: Rating,
 }
 
-impl Deref for RatingRequest {
+impl Deref for RatingBody {
     type Target = Rating;
     fn deref(&self) -> &Self::Target {
         &self.score
     }
 }
 
-/// Represents part of a request to delete a resource.
+/// Represents body of a request to delete a resource.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct DeleteRequest {
+struct DeleteBody {
     version: DateTime,
 }
 
-impl Deref for DeleteRequest {
+impl Deref for DeleteBody {
     type Target = DateTime;
     fn deref(&self) -> &Self::Target {
         &self.version
     }
 }
 
-/// Represents part of a request to merge two resources.
+/// Represents body of a request to merge two resources.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct MergeRequest<T> {
+struct MergeBody<T> {
     remove: T,
     merge_to: T,
     remove_version: DateTime,
     merge_to_version: DateTime,
 }
 
-/// Represents part of a request to retrieve one or more resources.
+/// Represents parameters of a request to retrieve one or more resources.
 #[derive(Deserialize)]
-struct ResourceQuery {
+struct ResourceParams {
     query: Option<String>,
     fields: Option<String>,
     #[serde(rename = "bump-login")]
     bump_login: Option<bool>,
 }
 
-impl ResourceQuery {
+impl ResourceParams {
     fn criteria(&self) -> &str {
         self.query.as_deref().unwrap_or("")
     }
@@ -357,26 +357,30 @@ impl ResourceQuery {
     }
 }
 
-/// Represents part of a request to retrieve multiple resources, paged.
+/// Represents parameters of a request to retrieve multiple resources, paged.
 #[derive(Deserialize)]
-struct PagedQuery {
+struct PageParams {
     offset: Option<i64>,
     limit: NonZero<i64>,
     #[serde(flatten)]
-    query: ResourceQuery,
+    params: ResourceParams,
 }
 
-impl PagedQuery {
+impl PageParams {
     fn criteria(&self) -> &str {
-        self.query.criteria()
+        self.params.criteria()
     }
 
     fn fields(&self) -> Option<&str> {
-        self.query.fields()
+        self.params.fields()
     }
 
     fn bump_login(&self, user: Client) -> ApiResult<()> {
-        self.query.bump_login(user)
+        self.params.bump_login(user)
+    }
+
+    fn to_query(self) -> Option<String> {
+        self.params.query
     }
 }
 
@@ -426,8 +430,8 @@ fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {
     })
 }
 
-async fn empty_query(_err: Rejection) -> Result<(ResourceQuery,), Infallible> {
-    Ok((ResourceQuery {
+async fn empty_query(_err: Rejection) -> Result<(ResourceParams,), Infallible> {
+    Ok((ResourceParams {
         query: None,
         fields: None,
         bump_login: None,
@@ -435,8 +439,8 @@ async fn empty_query(_err: Rejection) -> Result<(ResourceQuery,), Infallible> {
 }
 
 /// Optionally serializes a resource query.
-fn resource_query() -> impl Filter<Extract = (ResourceQuery,), Error = Infallible> + Clone {
-    warp::query::<ResourceQuery>().or_else(empty_query)
+fn resource_query() -> impl Filter<Extract = (ResourceParams,), Error = Infallible> + Clone {
+    warp::query::<ResourceParams>().or_else(empty_query)
 }
 
 // Any value that is present is considered Some value, including null.
