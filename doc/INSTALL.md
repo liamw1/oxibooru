@@ -1,5 +1,5 @@
-This assumes that you have Docker (version 17.05 or greater)
-and Docker Compose (version 1.6.0 or greater) already installed.
+This assumes that you have Docker (version 19.03 or greater)
+and the Docker Compose CLI (version 1.27.0 or greater) already installed.
 
 ## Prepare things
 
@@ -41,7 +41,7 @@ and Docker Compose (version 1.6.0 or greater) already installed.
 4. **Pull the containers**
     This pulls the latest containers from docker.io:
     ```console
-    user@host:oxibooru$ docker-compose pull
+    user@host:oxibooru$ docker compose pull
     ```
     If you have modified the application's source and would like to manually
     build it, follow the instructions in [**Building**](#Building) instead,
@@ -59,11 +59,11 @@ and Docker Compose (version 1.6.0 or greater) already installed.
 
     To start all containers:
     ```console
-    user@host:oxibooru$ docker-compose up -d
+    user@host:oxibooru$ docker compose up -d
     ```
     To view/monitor the application logs:
     ```console
-    user@host:oxibooru$ docker-compose logs -f
+    user@host:oxibooru$ docker compose logs -f
     # (CTRL+C to exit)
     ```
 
@@ -73,11 +73,11 @@ and Docker Compose (version 1.6.0 or greater) already installed.
 
     First, start database container:
     ```console
-    user@host:oxibooru$ docker-compose up -d sql
+    user@host:oxibooru$ docker compose up -d sql
     ```
     Then, build the client and server containers:
     ```console
-    user@host:oxibooru$ docker-compose build
+    user@host:oxibooru$ docker compose build
     ```
 
 *Note: If your changes are not taking effect in your builds, consider building

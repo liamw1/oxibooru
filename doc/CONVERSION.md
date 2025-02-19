@@ -63,7 +63,7 @@ these are:
 
     Navigate to the Szurubooru source directory and run
     ```console
-    user@host:szuru$ docker-compose up -d sql
+    user@host:szuru$ docker compose up -d sql
     user@host:szuru$ docker exec szuru-sql-1 pg_dump -U ${SZURU_POSTGRES_USER} --no-owner --no-privileges szuru > backup.sql
     ```
     where ${SZURU_POSTGRES_USER} is the value of the POSTGRES_USER environment
@@ -73,7 +73,7 @@ these are:
     
     Navigate to the Oxibooru source directory and run
     ```console
-    user@host:oxibooru$ docker-compose up -d sql
+    user@host:oxibooru$ docker compose up -d sql
     ```
     Now move backup.sql to the Oxibooru directory, create a szuru schema in 
     the Oxibooru database and restore the Szurubooru database.
@@ -118,7 +118,7 @@ these are:
 
     Now, spin up the Oxibooru containers:
     ```console
-    user@host:oxibooru$ docker-compose up -d
+    user@host:oxibooru$ docker compose up -d
     ```
     Now, enter Oxibooru's admin cli:
     ```console
