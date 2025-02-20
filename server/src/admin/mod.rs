@@ -50,7 +50,7 @@ pub type DatabaseResult<T> = Result<T, DatabaseError>;
 
 #[derive(Clone, Copy, EnumString, EnumIter, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
-enum AdminTask {
+pub enum AdminTask {
     RecomputePostChecksums,
     RecomputePostSignatures,
     RecomputePostSignatureIndexes,

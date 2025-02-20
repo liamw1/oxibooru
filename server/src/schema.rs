@@ -36,6 +36,7 @@ diesel::table! {
         post_count -> Int8,
         tag_count -> Int8,
         user_count -> Int8,
+        signature_version -> Int4,
     }
 }
 

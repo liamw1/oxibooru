@@ -598,7 +598,7 @@ fn recreate_database() -> ApiResult<ConnectionPool> {
     diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}")).execute(&mut conn)?;
     diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
 
-    let database_url = db::create_url(Some("__test"));
+    let database_url = db::create_url(Some(DATABASE_NAME));
     let mut conn = PgConnection::establish(&database_url).unwrap();
     db::run_migrations(&mut conn);
     populate_database(&mut conn)?;

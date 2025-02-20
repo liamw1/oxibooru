@@ -24,6 +24,7 @@ async fn main() {
     if admin::enabled() {
         return admin::command_line_mode();
     }
+    db::check_signature_version();
 
     println!("Oxibooru server running on {} threads", tokio::runtime::Handle::current().metrics().num_workers());
     filesystem::purge_temporary_uploads().unwrap();

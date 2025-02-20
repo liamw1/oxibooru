@@ -20,12 +20,18 @@ pub fn reset_password() -> ApiResult<()> {
             break;
         }
 
-        let user_exists: bool =
-            diesel::select(exists(user::table.filter(user::name.eq(user)))).get_result(&mut conn)?;
-        if !user_exists {
-            eprintln!("ERROR: No user with this username exists\n");
-            continue;
-        }
+        // Check if user exists
+        match diesel::select(exists(user::table.filter(user::name.eq(user)))).get_result(&mut conn) {
+            Ok(true) => (),
+            Ok(false) => {
+                eprintln!("ERROR: No user with this username exists\n");
+                continue;
+            }
+            Err(err) => {
+                eprintln!("ERROR: Could not determine if user exists for reason: {err}\n");
+                continue;
+            }
+        };
 
         let password = admin::prompt_user_input("New password", &mut password_buffer);
         if password == "done" {
@@ -37,12 +43,23 @@ pub fn reset_password() -> ApiResult<()> {
         }
 
         let salt = SaltString::generate(&mut OsRng);
-        let hash = password::hash_password(password, &salt)?;
-        diesel::update(user::table)
+        let hash = match password::hash_password(password, &salt) {
+            Ok(hash) => hash,
+            Err(err) => {
+                eprintln!("ERROR: Could not hash password for reason: {err}\n");
+                continue;
+            }
+        };
+
+        let update_result = diesel::update(user::table)
             .filter(user::name.eq(user))
             .set((user::password_hash.eq(&hash), user::password_salt.eq(salt.as_str())))
-            .execute(&mut conn)?;
-        println!("Password reset successful.\n");
+            .execute(&mut conn);
+        if let Err(err) = update_result {
+            eprintln!("ERROR: Could not update password for reason: {err}\n");
+        } else {
+            println!("Password reset successful.\n");
+        }
     }
     Ok(())
 }

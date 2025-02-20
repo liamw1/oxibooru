@@ -1,14 +1,15 @@
 use crate::admin::{DatabaseResult, ProgressReporter, PRINT_INTERVAL};
-use crate::api::ApiResult;
 use crate::content::hash::PostHash;
+use crate::content::signature::SIGNATURE_VERSION;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{decode, hash, signature, thumbnail, FileContents};
 use crate::model::post::NewPostSignature;
-use crate::schema::{post, post_signature};
+use crate::schema::{database_statistics, post, post_signature};
 use crate::time::Timer;
 use crate::{admin, db, filesystem};
 use diesel::dsl::exists;
 use diesel::prelude::*;
+use diesel::r2d2::PoolError;
 use rayon::prelude::*;
 
 /// Recomputes posts checksums.
@@ -33,6 +34,12 @@ pub fn recompute_signatures() -> DatabaseResult<()> {
     let progress = ProgressReporter::new("Signatures computed", PRINT_INTERVAL);
 
     let post_ids: Vec<_> = post::table.select(post::id).load(&mut db::get_connection()?)?;
+
+    // Update signature version only after a successful data retrieval
+    diesel::update(database_statistics::table)
+        .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
+        .execute(&mut db::get_connection()?)?;
+
     post_ids
         .into_par_iter()
         .try_for_each(|post_id| recompute_signature(post_id, &progress))
@@ -62,7 +69,7 @@ pub fn recompute_indexes() -> DatabaseResult<()> {
 }
 
 /// This functions prompts the user for input again to regenerate specific thumbnails.
-pub fn regenerate_thumbnail() -> ApiResult<()> {
+pub fn regenerate_thumbnail() -> Result<(), PoolError> {
     let mut conn = db::get_connection()?;
     let mut buffer = String::new();
     loop {
@@ -83,20 +90,35 @@ pub fn regenerate_thumbnail() -> ApiResult<()> {
         let mime_type = match post::table.find(post_id).select(post::mime_type).first(&mut conn) {
             Ok(mime_type) => mime_type,
             Err(err) => {
-                eprintln!("ERROR: Cannot retrieve MIME type for post {post_id} for reason: {err}");
+                eprintln!("ERROR: Cannot retrieve MIME type for post {post_id} for reason: {err}\n");
                 continue;
             }
         };
 
         let post_hash = PostHash::new(post_id);
         let content_path = post_hash.content_path(mime_type);
-        let data = std::fs::read(&content_path)?;
+        let data = match std::fs::read(&content_path) {
+            Ok(data) => data,
+            Err(err) => {
+                eprintln!("ERROR: Cannot read content for post {post_id} for reason: {err}\n");
+                continue;
+            }
+        };
 
         let file_contents = FileContents { data, mime_type };
-        let thumbnail = decode::representative_image(&file_contents, &content_path)
-            .map(|image| thumbnail::create(&image, ThumbnailType::Post))?;
-        filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Generated)?;
-        println!("Thumbnail regeneration successful.\n");
+        let thumbnail = match decode::representative_image(&file_contents, &content_path) {
+            Ok(image) => thumbnail::create(&image, ThumbnailType::Post),
+            Err(err) => {
+                eprintln!("ERROR: Cannot decode content for post {post_id} for reason: {err}\n");
+                continue;
+            }
+        };
+
+        if let Err(err) = filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Generated) {
+            eprintln!("ERROR: Cannot save thumbnail for post {post_id} for reason: {err}\n");
+        } else {
+            println!("Thumbnail regeneration successful.\n");
+        }
     }
     Ok(())
 }
@@ -149,8 +171,14 @@ pub fn recompute_checksum(
 /// Recomputes signature for post with id `post_id`.
 fn recompute_signature(post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
     let mut conn = db::get_connection()?;
-    let mime_type = match post::table.find(post_id).select(post::mime_type).first(&mut conn) {
-        Ok(mime_type) => mime_type,
+    let mime_type = match post::table
+        .find(post_id)
+        .select(post::mime_type)
+        .first(&mut conn)
+        .optional()
+    {
+        Ok(Some(mime_type)) => mime_type,
+        Ok(None) => return Ok(()), // Post must have been deleted after starting task, skip
         Err(err) => {
             eprintln!("ERROR: Cannot retrieve MIME type for post {post_id} for reason: {err}");
             return Ok(());
@@ -177,25 +205,32 @@ fn recompute_signature(post_id: i64, progress: &ProgressReporter) -> DatabaseRes
 
     let image_signature = signature::compute(&image);
     let signature_indexes = signature::generate_indexes(image_signature);
-    let signature_exists: bool = diesel::select(exists(post_signature::table.find(post_id))).get_result(&mut conn)?;
+    conn.transaction(|conn| {
+        // Post may have been deleted, so make sure it still exists first
+        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;
+        if !post_exists {
+            return Ok(0);
+        }
 
-    if signature_exists {
-        diesel::update(post_signature::table.find(post_id))
-            .set((
-                post_signature::signature.eq(image_signature.as_slice()),
-                post_signature::words.eq(signature_indexes.as_slice()),
-            ))
-            .execute(&mut conn)?;
-    } else {
-        let new_post_signature = NewPostSignature {
-            post_id,
-            signature: &image_signature,
-            words: &signature_indexes,
-        };
-        diesel::insert_into(post_signature::table)
-            .values(new_post_signature)
-            .execute(&mut conn)?;
-    }
+        let signature_exists: bool = diesel::select(exists(post_signature::table.find(post_id))).get_result(conn)?;
+        if signature_exists {
+            diesel::update(post_signature::table.find(post_id))
+                .set((
+                    post_signature::signature.eq(image_signature.as_slice()),
+                    post_signature::words.eq(signature_indexes.as_slice()),
+                ))
+                .execute(conn)
+        } else {
+            let new_post_signature = NewPostSignature {
+                post_id,
+                signature: &image_signature,
+                words: &signature_indexes,
+            };
+            diesel::insert_into(post_signature::table)
+                .values(new_post_signature)
+                .execute(conn)
+        }
+    })?;
     progress.increment();
     Ok(())
 }

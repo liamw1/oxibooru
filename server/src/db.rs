@@ -1,5 +1,7 @@
-use crate::admin::database;
+use crate::admin::{database, AdminTask};
 use crate::config;
+use crate::content::signature::SIGNATURE_VERSION;
+use crate::schema::database_statistics;
 #[cfg(test)]
 use crate::test;
 use diesel::migration::Migration;
@@ -9,6 +11,7 @@ use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::borrow::Cow;
 use std::sync::LazyLock;
+use std::time::Duration;
 
 pub type Connection = PooledConnection<ConnectionManager<PgConnection>>;
 pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
@@ -77,6 +80,41 @@ pub fn create_url(database_override: Option<&str>) -> String {
         .unwrap_or_else(|| Cow::Owned(std::env::var("POSTGRES_DB").unwrap()));
 
     format!("postgres://{user}:{password}@{hostname}/{database}")
+}
+
+pub fn check_signature_version() {
+    let get_current_version = |conn: &mut PgConnection| -> i32 {
+        database_statistics::table
+            .select(database_statistics::signature_version)
+            .first(conn)
+            .unwrap()
+    };
+
+    let mut conn = get_connection().unwrap();
+    let current_version = get_current_version(&mut conn);
+    if current_version == SIGNATURE_VERSION {
+        return;
+    }
+
+    let task: &str = AdminTask::RecomputePostSignatures.into();
+    println!(
+        "ERROR: Post signatures are out of date and need to be recomputed.
+         
+         This can be done via the admin cli, which can be entered by passing
+         the --admin flag to the server executable. If you are deploying with
+         docker, you can do this with the following command:
+         
+            docker exec -it oxibooru-server-1 ./server --admin
+            
+         While in the admin cli, simply run the {task} task.
+         Once this task has started, this server instance will resume operations
+         while the signatures recompute in the background. Reverse search may be
+         inaccurate during this process, so you may wish to suspend post uploads
+         until the task completes."
+    );
+    while get_current_version(&mut conn) != SIGNATURE_VERSION {
+        std::thread::sleep(Duration::from_millis(500));
+    }
 }
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
