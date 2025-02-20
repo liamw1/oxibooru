@@ -637,7 +637,7 @@ mod test {
         let expected_tag_count: i64 = TAG_GROUPS.iter().map(|group| group.len() as i64).sum();
 
         let mut conn = get_connection()?;
-        let (id, disk_usage, comment_count, pool_count, post_count, tag_count, user_count): (
+        let (id, disk_usage, comment_count, pool_count, post_count, tag_count, user_count, _sig_version): (
             bool,
             i64,
             i64,
@@ -645,6 +645,7 @@ mod test {
             i64,
             i64,
             i64,
+            i32,
         ) = database_statistics::table.first(&mut conn)?;
 
         assert_eq!(id, true);

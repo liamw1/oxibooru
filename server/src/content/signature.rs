@@ -7,7 +7,7 @@ use num_traits::ToPrimitive;
 
 pub const NUM_WORDS: usize = 100; // Number indexes to create from signature
 pub const COMPRESSED_SIGNATURE_SIZE: usize = SIGNATURE_SIZE.div_ceil(SIGNATURE_DIGITS);
-pub const SIGNATURE_VERSION: i32 = 0;
+pub const SIGNATURE_VERSION: i32 = 1; // Bump this whenever post signatures change
 
 /// Calculates a compact "signature" for an image that can be used for similarity search.
 ///
