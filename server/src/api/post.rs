@@ -176,7 +176,7 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<PostInf
                 .first(conn)?
         };
 
-        let selected_posts: Vec<i64> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let selected_posts = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: params.into_query(),
             offset,
@@ -231,7 +231,7 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
         if search_criteria.has_sort() {
             // Most general method of retrieving neighbors
             let sql_query = search::post::build_query(client, &search_criteria)?;
-            let post_ids: Vec<i64> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+            let post_ids = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
             let post_index = post_ids.iter().position(|&id| id == post_id);
 
             let prev_post_id = post_index

@@ -77,7 +77,7 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<Comment
                 .first(conn)?
         };
 
-        let selected_comments: Vec<i64> = search::comment::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let selected_comments = search::comment::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: params.into_query(),
             offset,

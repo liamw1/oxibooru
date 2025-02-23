@@ -297,7 +297,7 @@ impl PostFlags {
 
     pub fn from_slice(flags: &[PostFlag]) -> Self {
         Self {
-            flags: flags.iter().fold(0, |flags, &flag| flags | 1 << flag as u16),
+            flags: flags.iter().fold(0, |flags, &flag| flags | (1 << flag as u16)),
         }
     }
 

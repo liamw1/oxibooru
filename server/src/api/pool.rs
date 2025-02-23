@@ -79,7 +79,7 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<PoolInf
                 .first(conn)?
         };
 
-        let selected_tags: Vec<i64> = search::pool::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let selected_tags = search::pool::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: params.into_query(),
             offset,
