@@ -237,8 +237,7 @@ are made anonymously, so time to authenticate isn't included.
     searches fast too.
     
 - Now let's try a large image so that the signature and checksum creation time 
-  dominates. Here's the results from an upload of a 92MB image of the Mona Lisa 
-  I took from [wikipedia](https://en.wikipedia.org/wiki/Mona_Lisa#/media/File:Mona_Lisa,_by_Leonardo_da_Vinci,_from_C2RMF_retouched.jpg):
+  dominates. Here's the results for a large 92MB image:
 
     | Database          | Post Creation Time (s) |
     | ----------------- | ---------------------- |
@@ -250,7 +249,7 @@ are made anonymously, so time to authenticate isn't included.
     and image signature calculated in the reverse search so that they can be
     reused in the post creation query. Without this caching, oxibooru would 
     perform about as well as szurubooru. There's probably still some room for 
-    improvement here. The runtime is a somewhat even split between the png 
+    improvement here. The runtime is a somewhat even split between the image 
     decoding, the thumbnail creation, and the image signature creation. The 
     first two are largely out of my control, but I may try playing around with 
     vectorizing and/or multithreading the post signature creation at some point.

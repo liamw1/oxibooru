@@ -151,7 +151,7 @@ these are:
     Run recompute_post_checksums and recompute_post_signatures in the admin
     cli. For databases with many posts, these functions can take a bit of time
     to complete, so be prepared for that. recompute_post_checksums runs at 
-    around 240 posts/sec and recompute_post_signatures runs at around 120 
+    around 240 posts/sec and recompute_post_signatures runs at around 150 
     posts/sec on my machine.
     ```console
     Please select a task: recompute_post_checksums

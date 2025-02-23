@@ -22,7 +22,7 @@ pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
 }
 
 /// Computes a "distance" between two images based on their signatures.
-/// Result is a number in the interval [0, 1].
+/// Result is a number in the interval \[0, 1\].
 ///
 /// The lower the number, the more similar the two images are.
 pub fn distance(
@@ -61,10 +61,11 @@ pub fn distance(
 
 /// Creates a set of indices from an image signature.
 /// The signature is divided into a set intervals called words, which are allowed to overlap.
-/// The "letters" of each word are values in the image signature, clamped between [-1, 1].
+/// The "letters" of each word are values in the image signature, clamped between \[-1, 1\].
 /// Therefore, each word can be represented by a number in base-3, which we encode into an u32
 /// (which we then convert to an i32). The highest N trits of the u32 are reserved for storing
-/// the word index, where N is the number of trits required to store NUM_WORDS.
+/// the word index, where N is the number of trits required to store NUM_WORDS. This is so we
+/// can use the `&&` array operator in Postgres to find matching indexes quickly.
 pub fn generate_indexes(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) -> [i32; NUM_WORDS] {
     const NUM_REDUCED_SYMBOLS: u32 = 3;
     const _: () = assert!(NUM_REDUCED_SYMBOLS % 2 == 1); // Number of reduced symbols must be odd
@@ -136,8 +137,9 @@ fn crop(deltas: &[u64]) -> Interval<u32> {
     Interval::new(lower as u32, upper as u32)
 }
 
-fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
-    let row_deltas: Vec<_> = (0..image.height() - 1)
+/// Computes sum of absolute differences of pixel intensities for neighboring rows.
+fn compute_row_deltas(image: &GrayImage) -> Vec<u64> {
+    (0..image.height() - 1)
         .map(|j| {
             (0..image.width())
                 .map(|i| {
@@ -147,18 +149,28 @@ fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
                 })
                 .sum()
         })
-        .collect();
-    let column_deltas: Vec<_> = (0..image.width() - 1)
-        .map(|i| {
-            (0..image.height())
-                .map(|j| {
-                    let pixel = image.get_pixel(i, j);
-                    let next_column_pixel = image.get_pixel(i + 1, j);
-                    u64::from(pixel.0[0].abs_diff(next_column_pixel.0[0]))
-                })
-                .sum()
-        })
-        .collect();
+        .collect()
+}
+
+/// Computes sum of absolute differences of pixel pixel intensities for neighboring columns.
+/// The inner loop iterates over rows instead of columns for better memory access patterns.
+fn compute_column_deltas(image: &GrayImage) -> Vec<u64> {
+    let mut deltas = vec![0; image.width() as usize - 1];
+    for j in 0..image.height() {
+        for i in 0..image.width() - 1 {
+            let pixel = image.get_pixel(i, j);
+            let next_column_pixel = image.get_pixel(i + 1, j);
+            deltas[i as usize] += u64::from(pixel.0[0].abs_diff(next_column_pixel.0[0]));
+        }
+    }
+    deltas
+}
+
+/// Determines where how the grid points should be placed on the given `image`.
+/// Returns the positions of the grid points and their size.
+fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
+    let row_deltas = compute_row_deltas(image);
+    let column_deltas = compute_column_deltas(image);
     let mut cropped_x_bounds = crop(&column_deltas);
     let mut cropped_y_bounds = crop(&row_deltas);
 
@@ -175,6 +187,8 @@ fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
     (CartesianProduct::new(x_coords, y_coords), grid_square_radius)
 }
 
+/// For a given `image`, a set of `grid_points`, and a `grid_square_radius`,
+/// computes the average intensity of pixels within each grid point.
 fn compute_intensity_matrix(
     image: &GrayImage,
     grid_points: &GridPoints,
@@ -221,6 +235,8 @@ fn compute_differences(intensity_matrix: &Array2D<u8, GRID_SIZE, GRID_SIZE>) -> 
     array_from_iter(difference_iter)
 }
 
+/// Determines the pixel intensity values that define a transition thresholds between luminance levels.
+/// Each luminance level should contain a roughly equal number of intensity values.
 fn compute_cutoffs<F: Fn(i16) -> bool>(
     differences: &[i16; SIGNATURE_SIZE],
     filter: F,
@@ -244,6 +260,8 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(
     array_from_iter(std::iter::repeat(None).take(pad_amount).chain(chunks))
 }
 
+/// The final stage of image signature generation. Maps each value in `differences` to the
+/// interval \[0, NUM_SYMBOLS\] based on their sign and relative magnitude.
 fn normalize(differences: [i16; SIGNATURE_SIZE]) -> [u8; SIGNATURE_SIZE] {
     let dark_cutoffs = compute_cutoffs(&differences, |diff: i16| diff < -IDENTICAL_TOLERANCE);
     let light_cutoffs = compute_cutoffs(&differences, |diff: i16| diff > IDENTICAL_TOLERANCE);
