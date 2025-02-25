@@ -1,5 +1,5 @@
 use crate::api::ApiResult;
-use crate::content::signature::COMPRESSED_SIGNATURE_SIZE;
+use crate::content::signature::COMPRESSED_SIGNATURE_LEN;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::{decode, hash, signature, thumbnail, FileContents};
 use crate::filesystem;
@@ -14,7 +14,7 @@ pub struct CachedProperties {
     pub token: String,
     pub checksum: String,
     pub md5_checksum: String,
-    pub signature: [i64; COMPRESSED_SIGNATURE_SIZE],
+    pub signature: [i64; COMPRESSED_SIGNATURE_LEN],
     pub thumbnail: DynamicImage,
     pub width: u32,
     pub height: u32,

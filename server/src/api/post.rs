@@ -8,7 +8,8 @@ use crate::model::comment::NewComment;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
 use crate::model::pool::PoolPost;
 use crate::model::post::{
-    NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostRelation, PostScore, PostSignature, PostTag,
+    CompressedSignature, NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostRelation, PostScore,
+    PostSignature, PostTag, SignatureIndexes,
 };
 use crate::resource::post::{Note, PostInfo};
 use crate::schema::{
@@ -373,10 +374,7 @@ async fn reverse_search(
         let mut similar_posts: Vec<_> = similar_signatures
             .into_iter()
             .filter_map(|post_signature| {
-                let distance = signature::distance(
-                    content_properties.signature,
-                    signature::from_database(post_signature.signature),
-                );
+                let distance = signature::distance(content_properties.signature, *post_signature.signature);
                 let distance_threshold = 1.0 - config::get().post_similarity_threshold;
                 (distance < distance_threshold).then_some((post_signature.post_id, distance))
             })
@@ -494,8 +492,8 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
 
         let new_post_signature = NewPostSignature {
             post_id,
-            signature: &content_properties.signature,
-            words: &signature::generate_indexes(content_properties.signature),
+            signature: content_properties.signature.into(),
+            words: signature::generate_indexes(content_properties.signature).into(),
         };
         diesel::insert_into(post_signature::table)
             .values(new_post_signature)
@@ -703,7 +701,7 @@ fn merge(auth: AuthResult, params: ResourceParams, body: PostMergeBody) -> ApiRe
 
         // If replacing content, update post signature. This needs to be done before deletion because post signatures cascade
         if body.replace_content && !cfg!(test) {
-            let (signature, indexes): (Vec<Option<i64>>, Vec<Option<i32>>) = post_signature::table
+            let (signature, indexes): (CompressedSignature, SignatureIndexes) = post_signature::table
                 .find(remove_id)
                 .select((post_signature::signature, post_signature::words))
                 .first(conn)?;
@@ -908,8 +906,8 @@ async fn update(auth: AuthResult, post_id: i64, params: ResourceParams, body: Up
                 // Update post signature
                 let new_post_signature = NewPostSignature {
                     post_id,
-                    signature: &content_properties.signature,
-                    words: &signature::generate_indexes(content_properties.signature),
+                    signature: content_properties.signature.into(),
+                    words: signature::generate_indexes(content_properties.signature).into(),
                 };
                 diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
                 diesel::insert_into(post_signature::table)

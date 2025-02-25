@@ -1,4 +1,4 @@
-use crate::content::signature::NUM_WORDS;
+use crate::content::signature::{COMPRESSED_SIGNATURE_LEN, NUM_WORDS};
 use crate::model::enums::{MimeType, PostFlags, PostSafety, PostType, Score};
 use crate::model::tag::Tag;
 use crate::model::user::User;
@@ -6,9 +6,14 @@ use crate::schema::{
     post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
 };
 use crate::time::DateTime;
-use diesel::pg::Pg;
+use byteorder::{NetworkEndian, ReadBytesExt};
+use diesel::deserialize::{self, FromSql};
+use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
-use std::option::Option;
+use diesel::serialize::{self, Output, ToSql};
+use diesel::sql_types::{Array, BigInt, Integer, Nullable};
+use diesel::{AsExpression, FromSqlRow};
+use std::ops::Deref;
 
 #[derive(Insertable)]
 #[diesel(table_name = post)]
@@ -146,13 +151,64 @@ pub struct PostScore {
     pub time: DateTime,
 }
 
+#[derive(Debug, AsExpression, FromSqlRow)]
+#[diesel(sql_type = Array<Nullable<BigInt>>)]
+pub struct CompressedSignature(pub [i64; COMPRESSED_SIGNATURE_LEN]);
+
+impl ToSql<Array<Nullable<BigInt>>, Pg> for CompressedSignature {
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        <[i64] as ToSql<Array<BigInt>, Pg>>::to_sql(self.0.as_slice(), &mut out.reborrow())
+    }
+}
+
+impl FromSql<Array<Nullable<BigInt>>, Pg> for CompressedSignature {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        deserialize_array(value).map(Self)
+    }
+}
+
+impl Deref for CompressedSignature {
+    type Target = [i64; COMPRESSED_SIGNATURE_LEN];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl From<[i64; COMPRESSED_SIGNATURE_LEN]> for CompressedSignature {
+    fn from(value: [i64; COMPRESSED_SIGNATURE_LEN]) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, AsExpression, FromSqlRow)]
+#[diesel(sql_type = Array<Nullable<Integer>>)]
+pub struct SignatureIndexes(pub [i32; NUM_WORDS]);
+
+impl ToSql<Array<Nullable<Integer>>, Pg> for SignatureIndexes {
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        <[i32] as ToSql<Array<Integer>, Pg>>::to_sql(self.0.as_slice(), &mut out.reborrow())
+    }
+}
+
+impl FromSql<Array<Nullable<Integer>>, Pg> for SignatureIndexes {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        deserialize_array(value).map(Self)
+    }
+}
+
+impl From<[i32; NUM_WORDS]> for SignatureIndexes {
+    fn from(value: [i32; NUM_WORDS]) -> Self {
+        Self(value)
+    }
+}
+
 #[derive(Insertable)]
 #[diesel(table_name = post_signature)]
 #[diesel(check_for_backend(Pg))]
-pub struct NewPostSignature<'a> {
+pub struct NewPostSignature {
     pub post_id: i64,
-    pub signature: &'a [i64],
-    pub words: &'a [i32],
+    pub signature: CompressedSignature,
+    pub words: SignatureIndexes,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]
@@ -162,7 +218,7 @@ pub struct NewPostSignature<'a> {
 #[diesel(check_for_backend(Pg))]
 pub struct PostSignature {
     pub post_id: i64,
-    pub signature: Vec<Option<i64>>,
+    pub signature: CompressedSignature,
 }
 
 impl PostSignature {
@@ -172,4 +228,42 @@ impl PostSignature {
             .filter(post_signature::words.overlaps_with(words.as_slice()))
             .load(conn)
     }
+}
+
+/// Deserializes a database query `value` into a fixed-size array of length `N`.
+///
+/// Implementation adapted from `Vec<T>::from_sql<Array<ST>>`.
+fn deserialize_array<T, const N: usize, A>(value: PgValue<'_>) -> deserialize::Result<[T; N]>
+where
+    T: Copy + Default + FromSql<A, Pg>,
+{
+    let mut bytes = value.as_bytes();
+
+    let num_dimensions = bytes.read_i32::<NetworkEndian>()?;
+    match num_dimensions {
+        0 => return Err("array was zero dimensional".into()),
+        1 => (),
+        _ => return Err("multi-dimensional arrays are not supported".into()),
+    }
+
+    let has_null = bytes.read_i32::<NetworkEndian>()? != 0;
+    if has_null {
+        return Err("found NULL value".into());
+    }
+
+    let _oid = bytes.read_i32::<NetworkEndian>()?;
+    let num_elements = bytes.read_i32::<NetworkEndian>()?;
+    let _lower_bound = bytes.read_i32::<NetworkEndian>()?;
+    if num_elements as usize != N {
+        return Err(format!("expected array of length {N} but found array of length {num_elements}").into());
+    }
+
+    let mut deserialized_array = [T::default(); N];
+    for element in deserialized_array.iter_mut() {
+        let elem_size = bytes.read_i32::<NetworkEndian>()?;
+        let (elem_bytes, new_bytes) = bytes.split_at(elem_size.try_into()?);
+        bytes = new_bytes;
+        *element = T::from_sql(PgValue::new(elem_bytes, &value))?;
+    }
+    Ok(deserialized_array)
 }

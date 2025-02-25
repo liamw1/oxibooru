@@ -3,7 +3,7 @@ use crate::content::hash::PostHash;
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{decode, hash, signature, thumbnail, FileContents};
-use crate::model::post::NewPostSignature;
+use crate::model::post::{CompressedSignature, NewPostSignature};
 use crate::schema::{database_statistics, post, post_signature};
 use crate::time::Timer;
 use crate::{admin, db, filesystem};
@@ -54,12 +54,11 @@ pub fn recompute_indexes() -> DatabaseResult<()> {
     let _timer = Timer::new("recompute_indexes");
     let progress = ProgressReporter::new("Indexes computed", PRINT_INTERVAL);
 
-    let post_signatures: Vec<(i64, Vec<Option<i64>>)> = post_signature::table
+    let post_signatures: Vec<(i64, CompressedSignature)> = post_signature::table
         .select((post_signature::post_id, post_signature::signature))
         .load(&mut db::get_connection()?)?;
     post_signatures.into_par_iter().try_for_each(|(post_id, signature)| {
-        let compressed_signature = signature::from_database(signature);
-        let indexes = signature::generate_indexes(compressed_signature);
+        let indexes = signature::generate_indexes(*signature);
         diesel::update(post_signature::table.find(post_id))
             .set(post_signature::words.eq(indexes.as_slice()))
             .execute(&mut db::get_connection()?)?;
@@ -223,8 +222,8 @@ fn recompute_signature(post_id: i64, progress: &ProgressReporter) -> DatabaseRes
         } else {
             let new_post_signature = NewPostSignature {
                 post_id,
-                signature: &image_signature,
-                words: &signature_indexes,
+                signature: image_signature.into(),
+                words: signature_indexes.into(),
             };
             diesel::insert_into(post_signature::table)
                 .values(new_post_signature)

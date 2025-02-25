@@ -6,13 +6,13 @@ use image::{DynamicImage, GrayImage};
 use num_traits::ToPrimitive;
 
 pub const NUM_WORDS: usize = 100; // Number indexes to create from signature
-pub const COMPRESSED_SIGNATURE_SIZE: usize = SIGNATURE_SIZE.div_ceil(SIGNATURE_DIGITS);
+pub const COMPRESSED_SIGNATURE_LEN: usize = SIGNATURE_LEN.div_ceil(SIGNATURE_DIGITS);
 pub const SIGNATURE_VERSION: i32 = 1; // Bump this whenever post signatures change
 
 /// Calculates a compact "signature" for an image that can be used for similarity search.
 ///
 /// Implementation follows H. Chi Wong, Marshall Bern and David Goldberg with a few tweaks
-pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
+pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_LEN] {
     let gray_image = image.to_luma8();
     let (grid_points, grid_square_radius) = compute_grid_points(&gray_image);
     let mean_matrix = compute_intensity_matrix(&gray_image, &grid_points, grid_square_radius as i32);
@@ -26,8 +26,8 @@ pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
 ///
 /// The lower the number, the more similar the two images are.
 pub fn distance(
-    compressed_signature_a: [i64; COMPRESSED_SIGNATURE_SIZE],
-    compressed_signature_b: [i64; COMPRESSED_SIGNATURE_SIZE],
+    compressed_signature_a: [i64; COMPRESSED_SIGNATURE_LEN],
+    compressed_signature_b: [i64; COMPRESSED_SIGNATURE_LEN],
 ) -> f64 {
     let signature_a = uncompress(compressed_signature_a);
     let signature_b = uncompress(compressed_signature_b);
@@ -40,7 +40,7 @@ pub fn distance(
         .sum::<i64>();
     let l2_distance = (l2_squared_distance as f64).sqrt();
 
-    let norm_squared = |signature: [u8; SIGNATURE_SIZE]| -> i64 {
+    let norm_squared = |signature: [u8; SIGNATURE_LEN]| -> i64 {
         signature
             .iter()
             .map(|&a| i64::from(a) - LUMINANCE_LEVELS as i64)
@@ -66,7 +66,7 @@ pub fn distance(
 /// (which we then convert to an i32). The highest N trits of the u32 are reserved for storing
 /// the word index, where N is the number of trits required to store NUM_WORDS. This is so we
 /// can use the `&&` array operator in Postgres to find matching indexes quickly.
-pub fn generate_indexes(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) -> [i32; NUM_WORDS] {
+pub fn generate_indexes(compressed_signature: [i64; COMPRESSED_SIGNATURE_LEN]) -> [i32; NUM_WORDS] {
     const NUM_REDUCED_SYMBOLS: u32 = 3;
     const _: () = assert!(NUM_REDUCED_SYMBOLS % 2 == 1); // Number of reduced symbols must be odd
     const NUM_WORD_DIGITS: u32 = NUM_WORDS.ilog(NUM_REDUCED_SYMBOLS as usize) + 1; // Number of trits it takes to store NUM_WORDS
@@ -93,18 +93,13 @@ pub fn generate_indexes(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) 
     })
 }
 
-/// Converts a deserialized database signature into a non-null signature array
-pub fn from_database(database_signature: Vec<Option<i64>>) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
-    array_from_iter(database_signature.into_iter().flatten())
-}
-
 const CROP_PERCENTILE: u64 = 1;
 const GRID_SIZE: usize = 9; // Size of the square grid used to compute signature
 const IDENTICAL_TOLERANCE: i16 = 1; // Pixel intensities within this distance will be treated as identical
 const LUMINANCE_LEVELS: usize = 2; // How many shades of light/dark
 const NUM_LETTERS: usize = 12; // Length of each index
 const NUM_SYMBOLS: usize = 2 * LUMINANCE_LEVELS + 1; // Number of possible values letters can take
-const SIGNATURE_SIZE: usize = 8 * (GRID_SIZE - 2).pow(2) + 20 * (GRID_SIZE - 2) + 12;
+const SIGNATURE_LEN: usize = 8 * (GRID_SIZE - 2).pow(2) + 20 * (GRID_SIZE - 2) + 12;
 const SIGNATURE_DIGITS: usize = u64::MAX.ilog(NUM_SYMBOLS as u64) as usize - 1;
 
 type GridPoints = CartesianProduct<u32, u32, GRID_SIZE, GRID_SIZE>;
@@ -219,7 +214,7 @@ fn compute_intensity_matrix(
 /// Grids squares on the boundaries of the 9x9 grid will have no neighbors, so differences between them
 /// are considered 0. However, I would think that this would increase the likelihood of random
 /// signatures matching on certain words. I've simply excluded these differences from the final signature.
-fn compute_differences(intensity_matrix: &Array2D<u8, GRID_SIZE, GRID_SIZE>) -> [i16; SIGNATURE_SIZE] {
+fn compute_differences(intensity_matrix: &Array2D<u8, GRID_SIZE, GRID_SIZE>) -> [i16; SIGNATURE_LEN] {
     let difference_iter = intensity_matrix
         .signed_indexed_iter()
         .flat_map(|(matrix_index, &center_value)| {
@@ -238,7 +233,7 @@ fn compute_differences(intensity_matrix: &Array2D<u8, GRID_SIZE, GRID_SIZE>) -> 
 /// Determines the pixel intensity values that define a transition thresholds between luminance levels.
 /// Each luminance level should contain a roughly equal number of intensity values.
 fn compute_cutoffs<F: Fn(i16) -> bool>(
-    differences: &[i16; SIGNATURE_SIZE],
+    differences: &[i16; SIGNATURE_LEN],
     filter: F,
 ) -> [Option<i16>; LUMINANCE_LEVELS] {
     let mut filtered_values = differences
@@ -262,7 +257,7 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(
 
 /// The final stage of image signature generation. Maps each value in `differences` to the
 /// interval \[0, NUM_SYMBOLS\] based on their sign and relative magnitude.
-fn normalize(differences: [i16; SIGNATURE_SIZE]) -> [u8; SIGNATURE_SIZE] {
+fn normalize(differences: [i16; SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
     let dark_cutoffs = compute_cutoffs(&differences, |diff: i16| diff < -IDENTICAL_TOLERANCE);
     let light_cutoffs = compute_cutoffs(&differences, |diff: i16| diff > IDENTICAL_TOLERANCE);
     let cutoffs: [Option<i16>; NUM_SYMBOLS] = array_from_iter(
@@ -281,7 +276,7 @@ fn normalize(differences: [i16; SIGNATURE_SIZE]) -> [u8; SIGNATURE_SIZE] {
     array_from_iter(signature_iter)
 }
 
-fn compress(uncompressed_signature: [u8; SIGNATURE_SIZE]) -> [i64; COMPRESSED_SIGNATURE_SIZE] {
+fn compress(uncompressed_signature: [u8; SIGNATURE_LEN]) -> [i64; COMPRESSED_SIGNATURE_LEN] {
     let compression_iter = uncompressed_signature.chunks(SIGNATURE_DIGITS).map(|chunk| {
         chunk
             .iter()
@@ -292,7 +287,7 @@ fn compress(uncompressed_signature: [u8; SIGNATURE_SIZE]) -> [i64; COMPRESSED_SI
     array_from_iter(compression_iter)
 }
 
-fn uncompress(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) -> [u8; SIGNATURE_SIZE] {
+fn uncompress(compressed_signature: [i64; COMPRESSED_SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
     let decompression_iter = compressed_signature
         .iter()
         .map(|&sum| sum as u64)
@@ -307,7 +302,7 @@ fn uncompress(compressed_signature: [i64; COMPRESSED_SIGNATURE_SIZE]) -> [u8; SI
             }
             word.into_iter()
         })
-        .take(SIGNATURE_SIZE);
+        .take(SIGNATURE_LEN);
     array_from_iter(decompression_iter)
 }
 
@@ -395,7 +390,7 @@ mod test {
         indexes_a.iter().zip(indexes_b.iter()).filter(|(a, b)| a == b).count()
     }
 
-    fn image_properties(asset: &str) -> ImageResult<([i64; COMPRESSED_SIGNATURE_SIZE], [i32; NUM_WORDS])> {
+    fn image_properties(asset: &str) -> ImageResult<([i64; COMPRESSED_SIGNATURE_LEN], [i32; NUM_WORDS])> {
         let signature = compute(&image::open(image_path(asset))?);
         let indexes = generate_indexes(signature);
         Ok((signature, indexes))

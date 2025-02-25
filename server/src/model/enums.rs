@@ -1,5 +1,5 @@
 use diesel::deserialize::{self, FromSql};
-use diesel::pg::Pg;
+use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::SmallInt;
 use diesel::{AsExpression, FromSqlRow};
@@ -41,23 +41,17 @@ impl Default for AvatarStyle {
     }
 }
 
-impl ToSql<SmallInt, Pg> for AvatarStyle
-where
-    i16: ToSql<SmallInt, Pg>,
-{
+impl ToSql<SmallInt, Pg> for AvatarStyle {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
         let value = *self as i16;
         <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl FromSql<SmallInt, Pg> for AvatarStyle
-where
-    i16: FromSql<SmallInt, Pg>,
-{
-    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
-        let database_value = i16::from_sql(bytes)?;
-        AvatarStyle::from_repr(database_value).ok_or(DeserializeAvatarStyleError.into())
+impl FromSql<SmallInt, Pg> for AvatarStyle {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        let database_value = i16::from_sql(value)?;
+        AvatarStyle::from_repr(database_value).ok_or("Failed to deserialize avatar style".into())
     }
 }
 
@@ -89,23 +83,17 @@ impl From<MimeType> for PostType {
     }
 }
 
-impl ToSql<SmallInt, Pg> for PostType
-where
-    i16: ToSql<SmallInt, Pg>,
-{
+impl ToSql<SmallInt, Pg> for PostType {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
         let value = *self as i16;
         <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl FromSql<SmallInt, Pg> for PostType
-where
-    i16: FromSql<SmallInt, Pg>,
-{
-    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
-        let database_value = i16::from_sql(bytes)?;
-        PostType::from_repr(database_value).ok_or(DeserializePostTypeError.into())
+impl FromSql<SmallInt, Pg> for PostType {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        let database_value = i16::from_sql(value)?;
+        PostType::from_repr(database_value).ok_or("Failed to deserialize post type".into())
     }
 }
 
@@ -205,23 +193,17 @@ impl MimeType {
     }
 }
 
-impl ToSql<SmallInt, Pg> for MimeType
-where
-    i16: ToSql<SmallInt, Pg>,
-{
+impl ToSql<SmallInt, Pg> for MimeType {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
         let value = *self as i16;
         <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl FromSql<SmallInt, Pg> for MimeType
-where
-    i16: FromSql<SmallInt, Pg>,
-{
-    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
-        let database_value = i16::from_sql(bytes)?;
-        MimeType::from_repr(database_value).ok_or(DeserializeMimeTypeError.into())
+impl FromSql<SmallInt, Pg> for MimeType {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        let database_value = i16::from_sql(value)?;
+        MimeType::from_repr(database_value).ok_or("Failed to deserialize mime type".into())
     }
 }
 
@@ -250,23 +232,17 @@ pub enum PostSafety {
     Unsafe,
 }
 
-impl ToSql<SmallInt, Pg> for PostSafety
-where
-    i16: ToSql<SmallInt, Pg>,
-{
+impl ToSql<SmallInt, Pg> for PostSafety {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
         let value = *self as i16;
         <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl FromSql<SmallInt, Pg> for PostSafety
-where
-    i16: FromSql<SmallInt, Pg>,
-{
-    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
-        let database_value = i16::from_sql(bytes)?;
-        PostSafety::from_repr(database_value).ok_or(DeserializePostSafetyError.into())
+impl FromSql<SmallInt, Pg> for PostSafety {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        let database_value = i16::from_sql(value)?;
+        PostSafety::from_repr(database_value).ok_or("Failed to deserialize post safety".into())
     }
 }
 
@@ -312,22 +288,16 @@ impl std::ops::BitOrAssign for PostFlags {
     }
 }
 
-impl ToSql<SmallInt, Pg> for PostFlags
-where
-    i16: ToSql<SmallInt, Pg>,
-{
+impl ToSql<SmallInt, Pg> for PostFlags {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
         let value = self.flags as i16;
         <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl FromSql<SmallInt, Pg> for PostFlags
-where
-    i16: FromSql<SmallInt, Pg>,
-{
-    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
-        i16::from_sql(bytes).map(|database_value| Self {
+impl FromSql<SmallInt, Pg> for PostFlags {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        i16::from_sql(value).map(|database_value| Self {
             flags: database_value as u16,
         })
     }
@@ -376,23 +346,17 @@ pub enum UserRank {
     Administrator,
 }
 
-impl ToSql<SmallInt, Pg> for UserRank
-where
-    i16: ToSql<SmallInt, Pg>,
-{
+impl ToSql<SmallInt, Pg> for UserRank {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
         let value = *self as i16;
         <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl FromSql<SmallInt, Pg> for UserRank
-where
-    i16: FromSql<SmallInt, Pg>,
-{
-    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
-        let database_value = i16::from_sql(bytes)?;
-        UserRank::from_repr(database_value).ok_or(DeserializeUserPrivilegeError.into())
+impl FromSql<SmallInt, Pg> for UserRank {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        let database_value = i16::from_sql(value)?;
+        UserRank::from_repr(database_value).ok_or("Failed to deserialize user privilege".into())
     }
 }
 
@@ -438,23 +402,17 @@ impl TryFrom<Rating> for Score {
     }
 }
 
-impl ToSql<SmallInt, Pg> for Score
-where
-    i16: ToSql<SmallInt, Pg>,
-{
+impl ToSql<SmallInt, Pg> for Score {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
         let value = *self as i16;
         <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
     }
 }
 
-impl FromSql<SmallInt, Pg> for Score
-where
-    i16: FromSql<SmallInt, Pg>,
-{
-    fn from_sql(bytes: <Pg as diesel::backend::Backend>::RawValue<'_>) -> deserialize::Result<Self> {
-        let database_value = i16::from_sql(bytes)?;
-        Score::from_repr(database_value).ok_or(DeserializeScoreError.into())
+impl FromSql<SmallInt, Pg> for Score {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        let database_value = i16::from_sql(value)?;
+        Score::from_repr(database_value).ok_or("Failed to deserialize score".into())
     }
 }
 
@@ -475,30 +433,6 @@ pub enum ResourceType {
     TagSuggestion,
     User,
 }
-
-#[derive(Debug, Error)]
-#[error("Failed to deserialize avatar style")]
-struct DeserializeAvatarStyleError;
-
-#[derive(Debug, Error)]
-#[error("Failed to deserialize post type")]
-struct DeserializePostTypeError;
-
-#[derive(Debug, Error)]
-#[error("Failed to deserialize mime type")]
-struct DeserializeMimeTypeError;
-
-#[derive(Debug, Error)]
-#[error("Failed to deserialize post safety")]
-struct DeserializePostSafetyError;
-
-#[derive(Debug, Error)]
-#[error("Failed to deserialize user privilege")]
-struct DeserializeUserPrivilegeError;
-
-#[derive(Debug, Error)]
-#[error("Failed to deserialize score")]
-struct DeserializeScoreError;
 
 #[cfg(test)]
 mod test {
