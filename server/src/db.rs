@@ -59,6 +59,14 @@ pub fn run_migrations(conn: &mut PgConnection) {
         return;
     }
 
+    // If creating the database for the first time, set post signature version
+    if migration_range.contains(&1) {
+        diesel::update(database_statistics::table)
+            .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
+            .execute(conn)
+            .unwrap();
+    }
+
     // Cache thumbnail sizes if migrating to statistics system
     if migration_range.contains(&13) {
         database::reset_thumbnail_sizes(conn).unwrap();
