@@ -58,7 +58,7 @@ pub fn recompute_indexes() -> DatabaseResult<()> {
         .select((post_signature::post_id, post_signature::signature))
         .load(&mut db::get_connection()?)?;
     post_signatures.into_par_iter().try_for_each(|(post_id, signature)| {
-        let indexes = signature::generate_indexes(*signature);
+        let indexes = signature::generate_indexes(&signature);
         diesel::update(post_signature::table.find(post_id))
             .set(post_signature::words.eq(indexes.as_slice()))
             .execute(&mut db::get_connection()?)?;
@@ -203,7 +203,7 @@ fn recompute_signature(post_id: i64, progress: &ProgressReporter) -> DatabaseRes
     };
 
     let image_signature = signature::compute(&image);
-    let signature_indexes = signature::generate_indexes(image_signature);
+    let signature_indexes = signature::generate_indexes(&image_signature);
     conn.transaction(|conn| {
         // Post may have been deleted, so make sure it still exists first
         let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;

@@ -367,21 +367,31 @@ async fn reverse_search(
             });
         }
 
-        // Search for similar images
-        let similar_signatures =
-            PostSignature::find_similar(conn, signature::generate_indexes(content_properties.signature))?;
-        println!("Found {} similar signatures", similar_signatures.len());
-        let mut similar_posts: Vec<_> = similar_signatures
+        // Search for similar images candidates
+        let similar_signature_candidates =
+            PostSignature::find_similar_candidates(conn, signature::generate_indexes(&content_properties.signature))?;
+        println!("Found {} similar signatures", similar_signature_candidates.len());
+
+        // Filter candidates based on similarity score
+        let content_signature_cache = signature::cache(&content_properties.signature);
+        let mut similar_signatures: Vec<_> = similar_signature_candidates
             .into_iter()
             .filter_map(|post_signature| {
-                let distance = signature::distance(content_properties.signature, *post_signature.signature);
+                let distance = signature::distance(&content_signature_cache, &post_signature.signature);
                 let distance_threshold = 1.0 - config::get().post_similarity_threshold;
                 (distance < distance_threshold).then_some((post_signature.post_id, distance))
             })
             .collect();
-        similar_posts.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
+        if similar_signatures.is_empty() {
+            return Ok(ReverseSearchResponse {
+                exact_post: None,
+                similar_posts: Vec::new(),
+            });
+        }
 
-        let (post_ids, distances): (Vec<_>, Vec<_>) = similar_posts.into_iter().unzip();
+        similar_signatures.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
+
+        let (post_ids, distances): (Vec<_>, Vec<_>) = similar_signatures.into_iter().unzip();
         Ok(ReverseSearchResponse {
             exact_post: None,
             similar_posts: PostInfo::new_batch_from_ids(conn, client, post_ids, &fields)?
@@ -493,7 +503,7 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
         let new_post_signature = NewPostSignature {
             post_id,
             signature: content_properties.signature.into(),
-            words: signature::generate_indexes(content_properties.signature).into(),
+            words: signature::generate_indexes(&content_properties.signature).into(),
         };
         diesel::insert_into(post_signature::table)
             .values(new_post_signature)
@@ -907,7 +917,7 @@ async fn update(auth: AuthResult, post_id: i64, params: ResourceParams, body: Up
                 let new_post_signature = NewPostSignature {
                     post_id,
                     signature: content_properties.signature.into(),
-                    words: signature::generate_indexes(content_properties.signature).into(),
+                    words: signature::generate_indexes(&content_properties.signature).into(),
                 };
                 diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
                 diesel::insert_into(post_signature::table)

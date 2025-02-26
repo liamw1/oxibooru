@@ -222,7 +222,7 @@ pub struct PostSignature {
 }
 
 impl PostSignature {
-    pub fn find_similar(conn: &mut PgConnection, words: [i32; NUM_WORDS]) -> QueryResult<Vec<Self>> {
+    pub fn find_similar_candidates(conn: &mut PgConnection, words: [i32; NUM_WORDS]) -> QueryResult<Vec<Self>> {
         post_signature::table
             .select(PostSignature::as_select())
             .filter(post_signature::words.overlaps_with(words.as_slice()))
