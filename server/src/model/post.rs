@@ -223,10 +223,15 @@ pub struct PostSignature {
 
 impl PostSignature {
     pub fn find_similar_candidates(conn: &mut PgConnection, words: [i32; NUM_WORDS]) -> QueryResult<Vec<Self>> {
-        post_signature::table
-            .select(PostSignature::as_select())
-            .filter(post_signature::words.overlaps_with(words.as_slice()))
-            .load(conn)
+        conn.transaction(|conn| {
+            // Postgres really wants to perform a seq scan here, which is much slower than
+            // an index scan. We temporarily disable seq scans to force it to use the index scan.
+            diesel::sql_query("SET LOCAL enable_seqscan=false").execute(conn)?;
+            post_signature::table
+                .select(PostSignature::as_select())
+                .filter(post_signature::words.overlaps_with(words.as_slice()))
+                .load(conn)
+        })
     }
 }
 

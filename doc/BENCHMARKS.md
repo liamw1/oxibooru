@@ -182,59 +182,27 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Total Reverse Search Time (s) |
     | ----------------- | ----------------------------- |
     | szurubooru        |                         33.86 |
-    | oxibooru          |                         16.27 |
+    | oxibooru          |                          6.54 |
     
-    Oxibooru is more than 2x faster here, so it looks like the time I spent on
-    optimizing image search paid off! However, the total runtime doesn't show
-    the full story here.
+    After a bunch of optimizations, Oxibooru is now 5x faster here! However,
+    even this doesn't show the full story.
 
-    First of all, Oxibooru is actually doing a lot more work than Szurubooru. 
-    The reverse image search method uses a two-tier approach. We have a 
-    fine-grained filter that computes the "distance" between two post 
-    signatures and a coarse-grained filter that looks up likely candidate 
-    signatures with a series of signature "words". Two signatures are considered
-    likely to be similar if they have any words in common. This is faster than 
-    computing the signature distance and can easily be done within Postgres, so 
-    we run the coarse-grained filter first so that we don't have to run every 
-    signature through the fine-grained filter. However, the coarse-grained 
-    filter is _very_ coarse. It generally passes for 5-20% of all images in the 
-    database, meaning there will be 8k-25k candidate signatures for a single 
-    reverse search. Szurubooru chooses to limit this to the 100 candidates with 
-    the most words in common. The problem with this is that as databases get 
-    larger, the likelihood of an actual match falling outside of the top 100 
-    candidate signatures increases. In oxibooru, I made the choice to evaulate 
-    _all of the candidate signatures_ against the fine-grained filter.
-    
-    Secondly, something interesting is going on when we look at the times for
-    the individual reverse search queries. Here are the first 10:
-    
-    | Image Number | Szurubooru Time (ms) | Oxibooru Time (ms) |
-    | ------------ | -------------------- | ------------------ |
-    |            1 |                  683 |               1238 |
-    |            2 |                  669 |               1217 |
-    |            3 |                  737 |               1227 |
-    |            4 |                  673 |               1136 |
-    |            5 |                  662 |               1237 |
-    |            6 |                  697 |                 82 |
-    |            7 |                  664 |                236 |
-    |            8 |                  671 |                241 |
-    |            9 |                  740 |                311 |
-    |           10 |                  666 |                199 |
-    
-    The reverse search times for szurubooru are fairly consistent, hovering 
-    around 670ms each. On the other hand, the oxibooru reverse search actually 
-    starts out 2x _slower_ than szurubooru. But after the first 5 searches, the 
-    queries suddenly speed up dramatically (3x faster than szurubooru on 
-    average) and stay that way until the end of the batch. 
-    
-    My best guess as to what's going on here is that each time a query is 
-    executed, some of the signature rows are cached. Because each request is 
-    expected to find around 20% of the signatures to be likely matches, it takes
-    ~5 requests for most of the rows to be cached. Once that happends, things 
-    can progress at reasonable speed. Perhaps there's some way of pre-loading 
-    the signature table into cache? In any case, if I can harness whatever black
-    magic is going on in Postgres, maybe I could make the first few reverse 
-    searches fast too.
+    Despite performing better, Oxibooru is actually doing a lot more work than 
+    Szurubooru. The reverse image search method uses a two-tier approach. We have 
+    a fine-grained filter that computes the "distance" between two post signatures
+    and a coarse-grained filter that looks up likely candidate signatures with a 
+    series of signature "words". Two signatures are considered likely to be similar
+    if they have any words in common. This is faster than computing the signature 
+    distance and can easily be done within Postgres, so we run the coarse-grained 
+    filter first so that we don't have to run every signature through the 
+    fine-grained filter. However, the coarse-grained filter is _very_ coarse. It 
+    generally passes for 5-20% of all images in the database, meaning there will 
+    be 8k-25k candidate signatures for a single reverse search. Szurubooru chooses 
+    to limit this to the 100 candidates with the most words in common. The problem 
+    with this is that as databases get larger, the likelihood of an actual match 
+    falling outside of the top 100 candidate signatures increases. In Oxibooru, I 
+    made the choice to evaulate _all of the candidate signatures_ against the 
+    fine-grained filter.
     
 - Now let's try a large image so that the signature and checksum creation time 
   dominates. Here's the results for a large 92MB image:
@@ -242,14 +210,10 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Post Creation Time (s) |
     | ----------------- | ---------------------- |
     | szurubooru        |                   8.68 |
-    | oxibooru          |                   4.51 |
+    | oxibooru          |                   3.88 |
     
     These times are for upload, reverse image search, and post creation. The 
-    reason oxibooru is about 2x faster here is because it caches the checksum 
-    and image signature calculated in the reverse search so that they can be
-    reused in the post creation query. Without this caching, oxibooru would 
-    perform about as well as szurubooru. There's probably still some room for 
-    improvement here. The runtime is a somewhat even split between the image 
-    decoding, the thumbnail creation, and the image signature creation. The 
-    first two are largely out of my control, but I may try playing around with 
-    vectorizing and/or multithreading the post signature creation at some point.
+    reason Oxibooru is about 2x faster here is mostly because it caches the 
+    checksum and image signature calculated in the reverse search so that they 
+    can be reused in the post creation query. Without this caching, Oxibooru would 
+    only perform slightly better than Szurubooru.
