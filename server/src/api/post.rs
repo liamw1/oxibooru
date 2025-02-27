@@ -229,7 +229,7 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
     let search_criteria = search::post::parse_search_criteria(params.criteria())?;
     db::get_connection()?.transaction(|conn| {
         const INITIAL_LIMIT: i64 = 100;
-        const LIMIT_GROWTH: i64 = 4;
+        const LIMIT_GROWTH: i64 = 8;
 
         // Handle special cases first
         if search_criteria.has_random_sort() {

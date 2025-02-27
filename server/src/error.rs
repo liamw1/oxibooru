@@ -373,6 +373,7 @@ impl ErrorKind for crate::api::Error {
             Self::InsufficientPrivileges => "InsufficientPrivileges",
             Self::InvalidEmailAddress(err) => err.kind(),
             Self::InvalidEmail(err) => err.kind(),
+            Self::InvalidHeader(_) => "InvalidHeader",
             Self::InvalidMetadataType => "InvalidMetadataType",
             Self::InvalidUserRank => "InvalidUserRank",
             Self::Image(err) => err.kind(),

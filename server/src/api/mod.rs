@@ -81,6 +81,7 @@ pub enum Error {
     InsufficientPrivileges,
     InvalidEmailAddress(#[from] lettre::address::AddressError),
     InvalidEmail(#[from] lettre::error::Error),
+    InvalidHeader(#[from] reqwest::header::InvalidHeaderValue),
     #[error("Metadata must be application/json")]
     InvalidMetadataType,
     #[error("Cannot create an anonymous user")]
@@ -154,6 +155,7 @@ impl Error {
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::InvalidEmailAddress(_) => StatusCode::BAD_REQUEST,
             Self::InvalidEmail(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InvalidHeader(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::InvalidMetadataType => StatusCode::BAD_REQUEST,
             Self::InvalidUserRank => StatusCode::BAD_REQUEST,
             Self::Image(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -204,6 +206,7 @@ impl Error {
             Self::InsufficientPrivileges => "Insufficient Privileges",
             Self::InvalidEmailAddress(_) => "Invalid Email Address",
             Self::InvalidEmail(_) => "Invalid Email",
+            Self::InvalidHeader(_) => "Invalid Header",
             Self::InvalidMetadataType => "Invalid Metadata Type",
             Self::InvalidUserRank => "Invalid User Rank",
             Self::Image(_) => "Image Error",
