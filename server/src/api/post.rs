@@ -270,8 +270,8 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
             let post_id_batch = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
 
             let post_index = post_id_batch.iter().position(|&id| id == post_id);
-            if post_id_batch.is_empty()
-                || limit == i64::MAX
+            if post_id_batch.len() < usize::try_from(limit).unwrap_or(usize::MAX)
+                || post_id_batch.len() == usize::MAX
                 || (post_index.is_some() && post_index != Some(post_id_batch.len().saturating_sub(1)))
             {
                 let prev_post_id = post_index
