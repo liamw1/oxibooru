@@ -1,8 +1,8 @@
 use crate::api::{ApiResult, AuthResult, DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::upload::{PartName, MAX_UPLOAD_SIZE};
-use crate::content::{signature, upload, Content, FileContents};
+use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
+use crate::content::{Content, FileContents, signature, upload};
 use crate::filesystem::Directory;
 use crate::model::comment::NewComment;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};

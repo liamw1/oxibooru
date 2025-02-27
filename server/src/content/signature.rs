@@ -266,8 +266,8 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(
 /// The final stage of image signature generation. Maps each value in `differences` to the
 /// interval \[0, NUM_SYMBOLS\] based on their sign and relative magnitude.
 fn normalize(differences: &[i16; SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
-    let dark_cutoffs = compute_cutoffs(&differences, |diff: i16| diff < -IDENTICAL_TOLERANCE);
-    let light_cutoffs = compute_cutoffs(&differences, |diff: i16| diff > IDENTICAL_TOLERANCE);
+    let dark_cutoffs = compute_cutoffs(differences, |diff: i16| diff < -IDENTICAL_TOLERANCE);
+    let light_cutoffs = compute_cutoffs(differences, |diff: i16| diff > IDENTICAL_TOLERANCE);
     let cutoffs: [Option<i16>; NUM_SYMBOLS] = array_from_iter(
         dark_cutoffs
             .into_iter()
@@ -298,16 +298,13 @@ fn compress(uncompressed_signature: &[u8; SIGNATURE_LEN]) -> [i64; COMPRESSED_SI
 fn uncompress(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
     // Create divisor as NonZeroU64 to guarantee compiler doesn't generate divide-by-zero check
     const DIVISOR: NonZeroU64 = NonZeroU64::new(NUM_SYMBOLS as u64).unwrap();
-    let decompression_iter = compressed_signature
-        .into_iter()
-        .map(|&sum| sum as u64)
-        .flat_map(|mut sum| {
-            (0..SIGNATURE_DIGITS).map(move |_| {
-                let letter = sum % DIVISOR;
-                sum /= DIVISOR;
-                letter as u8
-            })
-        });
+    let decompression_iter = compressed_signature.iter().map(|&sum| sum as u64).flat_map(|mut sum| {
+        (0..SIGNATURE_DIGITS).map(move |_| {
+            let letter = sum % DIVISOR;
+            sum /= DIVISOR;
+            letter as u8
+        })
+    });
     array_from_iter(decompression_iter)
 }
 

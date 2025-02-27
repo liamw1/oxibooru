@@ -433,17 +433,15 @@ fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {
     })
 }
 
-async fn empty_query(_err: Rejection) -> Result<(ResourceParams,), Infallible> {
-    Ok((ResourceParams {
-        query: None,
-        fields: None,
-        bump_login: None,
-    },))
-}
-
 /// Optionally serializes a resource query.
 fn resource_query() -> impl Filter<Extract = (ResourceParams,), Error = Infallible> + Clone {
-    warp::query::<ResourceParams>().or_else(empty_query)
+    warp::query::<ResourceParams>().or_else(async |_| {
+        Ok((ResourceParams {
+            query: None,
+            fields: None,
+            bump_login: None,
+        },))
+    })
 }
 
 // Any value that is present is considered Some value, including null.

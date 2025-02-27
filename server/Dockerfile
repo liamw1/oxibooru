@@ -1,6 +1,6 @@
 ARG DEBIAN_VERSION=12.8
-ARG RUST_VERSION=1.83
-ARG CHEF_VERSION=0.1.68
+ARG RUST_VERSION=1.85
+ARG CHEF_VERSION=0.1.71
 
 ############################## Planning Phase ##############################
 FROM lukemathwalker/cargo-chef:${CHEF_VERSION}-rust-${RUST_VERSION}-slim-bookworm AS chef
