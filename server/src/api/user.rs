@@ -2,16 +2,16 @@ use crate::api::{ApiResult, AuthResult, DeleteBody, PageParams, PagedResponse, R
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::ThumbnailType;
-use crate::content::upload::{PartName, MAX_UPLOAD_SIZE};
-use crate::content::{hash, upload, Content, FileContents};
+use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
+use crate::content::{Content, FileContents, hash, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
 use crate::resource::user::{UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
-use argon2::password_hash::rand_core::OsRng;
 use argon2::password_hash::SaltString;
+use argon2::password_hash::rand_core::OsRng;
 use diesel::prelude::*;
 use serde::Deserialize;
 use url::Url;
@@ -215,7 +215,7 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
 }
 
 async fn create_multipart(auth: AuthResult, params: ResourceParams, form_data: FormData) -> ApiResult<UserInfo> {
-    let body = upload::extract_with_metadata(form_data, [PartName::Avatar]).await?;
+    let body = upload::extract(form_data, [PartName::Avatar]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut new_user: CreateBody = serde_json::from_slice(&metadata)?;
     if let [Some(avatar)] = body.files {
@@ -359,7 +359,7 @@ async fn update_multipart(
     params: ResourceParams,
     form_data: FormData,
 ) -> ApiResult<UserInfo> {
-    let body = upload::extract_with_metadata(form_data, [PartName::Avatar]).await?;
+    let body = upload::extract(form_data, [PartName::Avatar]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut user_update: UpdateBody = serde_json::from_slice(&metadata)?;
     if let [Some(avatar)] = body.files {

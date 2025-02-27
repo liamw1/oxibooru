@@ -434,17 +434,19 @@ async fn reverse_search_multipart(
     params: ResourceParams,
     form_data: FormData,
 ) -> ApiResult<ReverseSearchResponse> {
-    let body = upload::extract_without_metadata(form_data, [PartName::Content]).await?;
-    if let [Some(content)] = body.files {
-        let body = ReverseSearchBody {
+    let body = upload::extract(form_data, [PartName::Content]).await?;
+    let reverse_search_body = if let [Some(content)] = body.files {
+        ReverseSearchBody {
             content: Some(content),
             content_token: None,
             content_url: None,
-        };
-        reverse_search(auth, params, body).await
+        }
+    } else if let Some(metadata) = body.metadata {
+        serde_json::from_slice(&metadata)?
     } else {
-        Err(api::Error::MissingFormData)
-    }
+        return Err(api::Error::MissingFormData);
+    };
+    reverse_search(auth, params, reverse_search_body).await
 }
 
 #[derive(Deserialize)]
@@ -556,7 +558,7 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
 }
 
 async fn create_multipart(auth: AuthResult, params: ResourceParams, form_data: FormData) -> ApiResult<PostInfo> {
-    let body = upload::extract_with_metadata(form_data, [PartName::Content, PartName::Thumbnail]).await?;
+    let body = upload::extract(form_data, [PartName::Content, PartName::Thumbnail]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut new_post: CreateBody = serde_json::from_slice(&metadata)?;
     let [content, thumbnail] = body.files;
@@ -983,7 +985,7 @@ async fn update_multipart(
     params: ResourceParams,
     form_data: FormData,
 ) -> ApiResult<PostInfo> {
-    let body = upload::extract_with_metadata(form_data, [PartName::Content, PartName::Thumbnail]).await?;
+    let body = upload::extract(form_data, [PartName::Content, PartName::Thumbnail]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut post_update: UpdateBody = serde_json::from_slice(&metadata)?;
     let [content, thumbnail] = body.files;
