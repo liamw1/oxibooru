@@ -75,18 +75,13 @@ pub fn get_ordered_ids(
         .load(conn);
     }
 
-    // Add default sort if none specified
-    let sorts = if search_criteria.has_sort() {
-        search_criteria.sorts.as_slice()
-    } else {
-        &[ParsedSort {
-            kind: Token::CreationTime,
-            order: Order::default(),
-        }]
-    };
-
+    let default_sort = std::iter::once(ParsedSort {
+        kind: Token::CreationTime,
+        order: Order::default(),
+    });
+    let sorts = search_criteria.sorts.iter().copied().chain(default_sort);
     let unsorted_query = unsorted_query.inner_join(pool_name::table).filter(PoolName::primary());
-    let query = sorts.iter().fold(unsorted_query, |query, sort| match sort.kind {
+    let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
         Token::CreationTime => apply_sort!(query, pool::creation_time, sort),
         Token::LastEditTime => apply_sort!(query, pool::last_edit_time, sort),
         Token::Name => apply_sort!(query, pool_name::name, sort),

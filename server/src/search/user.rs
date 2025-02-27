@@ -56,17 +56,12 @@ pub fn get_ordered_ids(
         .load(conn);
     }
 
-    // Add default sort if none specified
-    let sorts = if search_criteria.has_sort() {
-        search_criteria.sorts.as_slice()
-    } else {
-        &[ParsedSort {
-            kind: Token::Name,
-            order: Order::default(),
-        }]
-    };
-
-    let query = sorts.iter().fold(unsorted_query, |query, sort| match sort.kind {
+    let default_sort = std::iter::once(ParsedSort {
+        kind: Token::Name,
+        order: Order::default(),
+    });
+    let sorts = search_criteria.sorts.iter().copied().chain(default_sort);
+    let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
         Token::Name => apply_sort!(query, user::name, sort),
         Token::CreationTime => apply_sort!(query, user::creation_time, sort),
         Token::LastLoginTime => apply_sort!(query, user::last_login_time, sort),

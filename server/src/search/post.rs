@@ -6,7 +6,7 @@ use crate::schema::{
 };
 use crate::search::{Error, Order, ParsedSort, SearchCriteria, UnparsedFilter};
 use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
-use diesel::dsl::{count, sql, InnerJoin, IntoBoxed, LeftJoin, Select};
+use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -185,17 +185,12 @@ pub fn get_ordered_ids(
         .load(conn);
     }
 
-    // Add default sort if none specified
-    let sorts = if search_criteria.has_sort() {
-        search_criteria.sorts.as_slice()
-    } else {
-        &[ParsedSort {
-            kind: Token::Id,
-            order: Order::default(),
-        }]
-    };
-
-    let query = sorts.iter().fold(unsorted_query, |query, sort| match sort.kind {
+    let default_sort = std::iter::once(ParsedSort {
+        kind: Token::Id,
+        order: Order::default(),
+    });
+    let sorts = search_criteria.sorts.iter().copied().chain(default_sort);
+    let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
         Token::Id => apply_sort!(query, post::id, sort),
         Token::FileSize => apply_sort!(query, post::file_size, sort),
         Token::Width => apply_sort!(query, post::width, sort),
