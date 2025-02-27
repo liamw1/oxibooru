@@ -177,7 +177,7 @@ pub fn get_ordered_ids(
 ) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
     if search_criteria.random_sort {
-        define_sql_function!(fn random() -> Integer);
+        define_sql_function!(fn random() -> BigInt);
         return match search_criteria.extra_args {
             Some(args) => unsorted_query.order(random()).offset(args.offset).limit(args.limit),
             None => unsorted_query.order(random()),

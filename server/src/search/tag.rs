@@ -2,7 +2,6 @@ use crate::model::tag::TagName;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::search::{Error, Order, ParsedSort, SearchCriteria};
 use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
-use diesel::define_sql_function;
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -88,7 +87,7 @@ pub fn get_ordered_ids(
 ) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
     if search_criteria.random_sort {
-        define_sql_function!(fn random() -> Integer);
+        define_sql_function!(fn random() -> BigInt);
         return match search_criteria.extra_args {
             Some(args) => unsorted_query.order(random()).offset(args.offset).limit(args.limit),
             None => unsorted_query.order(random()),

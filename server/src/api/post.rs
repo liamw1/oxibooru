@@ -214,9 +214,6 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
     params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_list)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let search_criteria = search::post::parse_search_criteria(params.criteria())?;
-
     let create_post_neighbors = |mut neighbors: Vec<PostInfo>, has_previous_post: bool| {
         let (prev, next) = match (neighbors.pop(), neighbors.pop()) {
             (Some(second), Some(first)) => (Some(first), Some(second)),
@@ -228,26 +225,23 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
         PostNeighbors { prev, next }
     };
 
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let search_criteria = search::post::parse_search_criteria(params.criteria())?;
     db::get_connection()?.transaction(|conn| {
-        if search_criteria.has_sort() {
-            // Most general method of retrieving neighbors
-            let sql_query = search::post::build_query(client, &search_criteria)?;
-            let post_ids = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
-            let post_index = post_ids.iter().position(|&id| id == post_id);
+        const INITIAL_LIMIT: i64 = 100;
+        const LIMIT_GROWTH: i64 = 4;
 
-            let prev_post_id = post_index
-                .and_then(|index| index.checked_sub(1))
-                .and_then(|prev_index| post_ids.get(prev_index))
-                .copied();
-            let next_post_id = post_index
-                .and_then(|index| index.checked_add(1))
-                .and_then(|next_index| post_ids.get(next_index))
-                .copied();
-            let post_ids = prev_post_id.into_iter().chain(next_post_id).collect();
+        // Handle special cases first
+        if search_criteria.has_random_sort() {
+            define_sql_function!(fn random() -> BigInt);
+            let sql_query = search::post::build_query(client, &search_criteria)?;
+            let sql_query = sql_query.filter(post::id.ne(post_id)).limit(2);
+            let post_ids = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
             let post_infos = PostInfo::new_batch_from_ids(conn, client, post_ids, &fields)?;
-            Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
-        } else {
-            // Optimized neighbor retrieval for the most common use case
+            return Ok(create_post_neighbors(post_infos, true));
+        }
+        if !search_criteria.has_filter() && !search_criteria.has_sort() {
+            // Optimized neighbor retrieval for simplest use case
             let previous_post = search::post::build_query(client, &search_criteria)?
                 .select(Post::as_select())
                 .filter(post::id.gt(post_id))
@@ -264,8 +258,40 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
             let has_previous_post = previous_post.is_some();
             let posts = previous_post.into_iter().chain(next_post).collect();
             let post_infos = PostInfo::new_batch(conn, client, posts, &fields)?;
-            Ok(create_post_neighbors(post_infos, has_previous_post))
+            return Ok(create_post_neighbors(post_infos, has_previous_post));
         }
+
+        // Search for neighbors using exponentially increasing limit
+        let mut offset = 0;
+        let mut limit = INITIAL_LIMIT;
+        let (prev_post_id, next_post_id) = loop {
+            let sql_query = search::post::build_query(client, &search_criteria)?;
+            let sql_query = sql_query.offset(offset).limit(limit);
+            let post_id_batch = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+
+            let post_index = post_id_batch.iter().position(|&id| id == post_id);
+            if post_id_batch.is_empty()
+                || limit == i64::MAX
+                || (post_index.is_some() && post_index != Some(post_id_batch.len().saturating_sub(1)))
+            {
+                let prev_post_id = post_index
+                    .and_then(|index| index.checked_sub(1))
+                    .and_then(|prev_index| post_id_batch.get(prev_index))
+                    .copied();
+                let next_post_id = post_index
+                    .and_then(|index| index.checked_add(1))
+                    .and_then(|next_index| post_id_batch.get(next_index))
+                    .copied();
+                break (prev_post_id, next_post_id);
+            }
+
+            offset += limit - 2;
+            limit = limit.saturating_mul(LIMIT_GROWTH);
+        };
+
+        let post_ids = prev_post_id.into_iter().chain(next_post_id).collect();
+        let post_infos = PostInfo::new_batch_from_ids(conn, client, post_ids, &fields)?;
+        Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
     })
 }
 

@@ -98,6 +98,10 @@ where
     pub fn has_filter(&self) -> bool {
         !self.filters.is_empty()
     }
+
+    pub fn has_random_sort(&self) -> bool {
+        self.random_sort
+    }
 }
 
 #[derive(Clone, Copy)]
