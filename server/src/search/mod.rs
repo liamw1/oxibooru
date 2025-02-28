@@ -52,7 +52,7 @@ where
         let mut random_sort = false;
 
         for mut term in search_criteria.split_whitespace() {
-            let negated = term.chars().nth(0) == Some('-');
+            let negated = term.starts_with('-');
             if negated {
                 term = term.strip_prefix('-').unwrap();
             }
@@ -60,8 +60,14 @@ where
             match parse::split_once(term, ':') {
                 Some(("sort", "random")) => random_sort = true,
                 Some(("sort", value)) => {
-                    let kind = T::from_str(value)?;
-                    let order = if negated { !Order::default() } else { Order::default() };
+                    let (token, direction) = match value.split_once(',') {
+                        Some((kind, "asc")) => (kind, Order::Asc),
+                        Some((kind, "desc")) => (kind, Order::Desc),
+                        _ => (value, Order::default()),
+                    };
+
+                    let kind = T::from_str(token)?;
+                    let order = if negated { !direction } else { direction };
                     sorts.push(ParsedSort { kind, order });
                 }
                 Some((key, criteria)) => {
