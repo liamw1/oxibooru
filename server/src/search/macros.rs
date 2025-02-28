@@ -56,7 +56,7 @@ macro_rules! apply_subquery_filter {
         if $filter.negated {
             $query.filter($expression.ne_all(diesel::dsl::array($subquery)))
         } else {
-            $query.filter($expression.eq_any(diesel::dsl::array($subquery)))
+            $query.filter($expression.eq_any($subquery))
         }
     };
 }
