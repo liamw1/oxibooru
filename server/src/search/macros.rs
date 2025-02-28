@@ -54,9 +54,9 @@ macro_rules! apply_str_filter {
 macro_rules! apply_subquery_filter {
     ($query:expr, $expression:expr, $filter:expr, $subquery:expr) => {
         if $filter.negated {
-            $query.filter($expression.ne_all($subquery))
+            $query.filter($expression.ne_all(diesel::dsl::array($subquery)))
         } else {
-            $query.filter($expression.eq_any($subquery))
+            $query.filter($expression.eq_any(diesel::dsl::array($subquery)))
         }
     };
 }
