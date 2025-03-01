@@ -750,10 +750,12 @@ fn merge(auth: AuthResult, params: ResourceParams, body: PostMergeBody) -> ApiRe
 
         diesel::delete(post::table.find(remove_id)).execute(conn)?;
 
-        if body.replace_content {
+        let remove_mime_type = if body.replace_content {
             if !cfg!(test) {
                 filesystem::swap_posts(&remove_hash, remove_post.mime_type, &merge_to_hash, merge_to_post.mime_type)?;
             }
+
+            let old_mime_type = merge_to_post.mime_type;
 
             // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
             merge_to_post.file_size = remove_post.file_size;
@@ -768,11 +770,14 @@ fn merge(auth: AuthResult, params: ResourceParams, body: PostMergeBody) -> ApiRe
             merge_to_post.generated_thumbnail_size = remove_post.generated_thumbnail_size;
             merge_to_post.custom_thumbnail_size = remove_post.custom_thumbnail_size;
             merge_to_post = merge_to_post.save_changes(conn)?;
-        }
+
+            old_mime_type
+        } else {
+            remove_post.mime_type
+        };
 
         if config::get().delete_source_files && !cfg!(test) {
-            // This is the correct id and mime_type, even if replacing content :)
-            filesystem::delete_post(&remove_hash, remove_post.mime_type)?;
+            filesystem::delete_post(&remove_hash, remove_mime_type)?;
         }
         update::post::last_edit_time(conn, merge_to_id).map(|_| merge_to_post)
     })?;
