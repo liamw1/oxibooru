@@ -14,8 +14,21 @@ macro_rules! apply_filter {
 #[macro_export]
 macro_rules! apply_time_filter {
     ($query:expr, $expression:expr, $filter:expr) => {
-        $crate::search::parse::time_criteria($filter.criteria)
-            .map(|criteria| $crate::apply_criteria!($query, $expression, $filter, criteria))
+        $crate::search::parse::time_criteria($filter.criteria).map(|criteria| {
+            if let $crate::search::Criteria::Values(times) = criteria {
+                if $filter.negated {
+                    times.into_iter().fold($query, |query, time| {
+                        query.filter($expression.not_between(time, time.saturating_add(time::Duration::DAY)))
+                    })
+                } else {
+                    times.into_iter().fold($query, |query, time| {
+                        query.or_filter($expression.between(time, time.saturating_add(time::Duration::DAY)))
+                    })
+                }
+            } else {
+                $crate::apply_criteria!($query, $expression, $filter, criteria)
+            }
+        })
     };
 }
 
