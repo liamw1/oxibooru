@@ -702,7 +702,9 @@ data.
     | `relation-count`     | having given number of relations                                                        |
     | `feature-count`      | having been featured given number of times                                              |
     | `type`               | given type of posts. `<value>` can be either `image`, `animation`, `flash`, or `video`. |
-    | `content-checksum`   | having given SHA1 checksum                                                              |
+    | `content-checksum`   | having given BLAKE3 checksum                                                            |
+    | `flag`               | having given flag. `<value>` can be either `loop` or `sound`.                           |
+    | `source`             | having given source.                                                                    |
     | `file-size`          | having given file size (in bytes)                                                       |
     | `image-width`        | having given image width (where applicable)                                             |
     | `image-height`       | having given image height (where applicable)                                            |
@@ -752,6 +754,8 @@ data.
     | `relation-count`     | with most relations                              |
     | `feature-count`      | most often featured                              |
     | `type`               | grouped by content type                          |
+    | `flag`               | grouped by flags                                 |
+    | `source`             | sorted by source                                 |
     | `file-size`          | largest files first                              |
     | `image-width`        | widest images first                              |
     | `image-height`       | tallest images first                             |
@@ -2363,7 +2367,7 @@ One file together with its metadata posted to the site.
     - `"video"` - WEBM video.
     - `"flash"` - Flash animation/game.
 
-- `<checksum>`: the SHA1 file checksum.
+- `<checksum>`: the BLAKE3 file checksum.
 - `<checksum-MD5>`: the MD5 file checksum.
 - `<file-size>`: the size of the file in bytes.
 - `<canvas-width>` and `<canvas-height>`: the original width and height of the

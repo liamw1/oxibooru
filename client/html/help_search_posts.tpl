@@ -24,11 +24,11 @@
         </tr>
         <tr>
             <td><code>upload</code></td>
-            <td>alias of <code>uploader</code></td>
+            <td>alias of upload</td>
         </tr>
         <tr>
             <td><code>submit</code></td>
-            <td>alias of <code>uploader</code></td>
+            <td>alias of upload</td>
         </tr>
         <tr>
             <td><code>comment</code></td>
@@ -37,10 +37,6 @@
         <tr>
             <td><code>fav</code></td>
             <td>favorited by given user (accepts wildcards)</td>
-        </tr>
-        <tr>
-            <td><code>source</code></td>
-            <td>having given source URL (accepts wildcards)</td>
         </tr>
         <tr>
             <td><code>pool</code></td>
@@ -76,23 +72,19 @@
         </tr>
         <tr>
             <td><code>type</code></td>
-            <td>given type of posts. <code>&lt;value&gt;</code> can be either <code>image</code>, <code>animation</code> (or <code>animated</code> or <code>anim</code>), <code>flash</code> (or <code>swf</code>) or <code>video</code> (or <code>webm</code>).</td>
+            <td>given type of posts. <code>&lt;value&gt;</code> can be either <code>image</code>, <code>animation</code>, <code>flash</code>, or <code>video</code>.</td>
+        </tr>
+        <tr>
+            <td><code>content-checksum</code></td>
+            <td>having given BLAKE3 checksum</td>
         </tr>
         <tr>
             <td><code>flag</code></td>
             <td>having given flag. <code>&lt;value&gt;</code> can be either <code>loop</code> or <code>sound</code>.</td>
         </tr>
         <tr>
-            <td><code>sha1</code></td>
-            <td>having given SHA1 checksum</td>
-        </tr>
-        <tr>
-            <td><code>md5</code></td>
-            <td>having given MD5 checksum</td>
-        </tr>
-        <tr>
-            <td><code>content-checksum</code></td>
-            <td>alias of <code>sha1</code></td>
+            <td><code>source</code></td>
+            <td>having given source.</td>
         </tr>
         <tr>
             <td><code>file-size</code></td>
@@ -131,11 +123,11 @@
             <td>alias of <code>image-area</code></td>
         </tr>
         <tr>
-            <td><code>aspect-ratio</code></td>
+            <td><code>ar</code></td>
             <td>alias of <code>image-aspect-ratio</code></td>
         </tr>
         <tr>
-            <td><code>ar</code></td>
+            <td><code>aspect-ratio</code></td>
             <td>alias of <code>image-aspect-ratio</code></td>
         </tr>
         <tr>
@@ -196,7 +188,7 @@
         </tr>
         <tr>
             <td><code>safety</code></td>
-            <td>having given safety</td>
+            <td>having given safety. <code>&lt;value&gt;</code> can be either <code>safe</code>, <code>sketchy</code>, or <code>unsafe</code>.</td>
         </tr>
         <tr>
             <td><code>rating</code></td>
@@ -222,8 +214,36 @@
             <td>highest scored</td>
         </tr>
         <tr>
+            <td><code>uploader</code></td>
+            <td>uploader name alphabetically</td>
+        </tr>
+        <tr>
+            <td><code>upload</code></td>
+            <td>alias of upload</td>
+        </tr>
+        <tr>
+            <td><code>submit</code></td>
+            <td>alias of upload</td>
+        </tr>
+        <tr>
+            <td><code>pool</code></td>
+            <td>in most pools</td>
+        </tr>
+        <tr>
+            <td><code>comment</code></td>
+            <td>alias of <code>comment-count</code></td>
+        </tr>
+        <tr>
+            <td><code>fav</code></td>
+            <td>alias of <code>fav-count</code></td>
+        </tr>
+        <tr>
             <td><code>tag-count</code></td>
             <td>with most tags</td>
+        </tr>
+        <tr>
+            <td><code>tag</code></td>
+            <td>alias of <code>tag-count</code></td>
         </tr>
         <tr>
             <td><code>comment-count</code></td>
@@ -246,6 +266,18 @@
             <td>most often featured</td>
         </tr>
         <tr>
+            <td><code>type</code></td>
+            <td>grouped by content type</td>
+        </tr>
+        <tr>
+            <td><code>flag</code></td>
+            <td>grouped by flags</td>
+        </tr>
+        <tr>
+            <td><code>source</code></td>
+            <td>sorted by source</td>
+        </tr>
+        <tr>
             <td><code>file-size</code></td>
             <td>largest files first</td>
         </tr>
@@ -262,6 +294,14 @@
             <td>largest images first</td>
         </tr>
         <tr>
+            <td><code>image-aspect-ratio</code></td>
+            <td>highest aspect ratio first</td>
+        </tr>
+        <tr>
+            <td><code>image-ar</code></td>
+            <td>alias of <code>image-aspect-ratio</code></td>
+        </tr>
+        <tr>
             <td><code>width</code></td>
             <td>alias of <code>image-width</code></td>
         </tr>
@@ -274,8 +314,16 @@
             <td>alias of <code>image-area</code></td>
         </tr>
         <tr>
+            <td><code>ar</code></td>
+            <td>alias of <code>image-aspect-ratio</code></td>
+        </tr>
+        <tr>
+            <td><code>aspect-ratio</code></td>
+            <td>alias of <code>image-aspect-ratio</code></td>
+        </tr>
+        <tr>
             <td><code>creation-date</code></td>
-            <td>newest to oldest (pretty much same as <code>id</code>)</td>
+            <td>newest to oldest (pretty much same as id)</td>
         </tr>
         <tr>
             <td><code>creation-time</code></td>
@@ -291,7 +339,7 @@
         </tr>
         <tr>
             <td><code>last-edit-date</code></td>
-            <td>like <code>creation-date</code>, only looks at last edit time</td>
+            <td>like creation-date, only looks at last edit time</td>
         </tr>
         <tr>
             <td><code>last-edit-time</code></td>
@@ -328,6 +376,14 @@
         <tr>
             <td><code>feature-time</code></td>
             <td>alias of <code>feature-time</code></td>
+        </tr>
+        <tr>
+            <td><code>safety</code></td>
+            <td>most unsafe first</td>
+        </tr>
+        <tr>
+            <td><code>rating</code></td>
+            <td>alias of <code>safety</code></td>
         </tr>
     </tbody>
 </table>

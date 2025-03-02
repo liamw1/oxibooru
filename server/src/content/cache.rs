@@ -1,7 +1,7 @@
 use crate::api::ApiResult;
 use crate::content::signature::COMPRESSED_SIGNATURE_LEN;
 use crate::content::thumbnail::ThumbnailType;
-use crate::content::{decode, hash, signature, thumbnail, FileContents};
+use crate::content::{FileContents, decode, hash, signature, thumbnail};
 use crate::filesystem;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
 use image::DynamicImage;

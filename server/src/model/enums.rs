@@ -6,6 +6,7 @@ use diesel::{AsExpression, FromSqlRow};
 use image::ImageFormat;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::ops::{BitOr, BitOrAssign};
 use std::path::Path;
 use strum::{Display, EnumCount, EnumString, FromRepr, IntoStaticStr};
 use thiserror::Error;
@@ -246,12 +247,18 @@ impl FromSql<SmallInt, Pg> for PostSafety {
     }
 }
 
-#[derive(Copy, Clone, EnumCount, FromRepr, IntoStaticStr, Deserialize)]
+#[derive(Copy, Clone, EnumCount, EnumString, FromRepr, IntoStaticStr, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum PostFlag {
     Loop,
     Sound,
+}
+
+impl From<PostFlag> for u16 {
+    fn from(value: PostFlag) -> Self {
+        1 << value as u16
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, AsExpression, FromSqlRow)]
@@ -272,19 +279,28 @@ impl PostFlags {
     }
 
     pub fn from_slice(flags: &[PostFlag]) -> Self {
-        Self {
-            flags: flags.iter().fold(0, |flags, &flag| flags | (1 << flag as u16)),
-        }
-    }
-
-    pub fn add(&mut self, flag: PostFlag) {
-        self.flags |= 1 << flag as u16;
+        flags.iter().fold(Self::new(), |flags, &flag| flags | flag)
     }
 }
 
-impl std::ops::BitOrAssign for PostFlags {
-    fn bitor_assign(&mut self, rhs: Self) {
-        self.flags |= rhs.flags;
+impl From<PostFlags> for u16 {
+    fn from(value: PostFlags) -> Self {
+        value.flags
+    }
+}
+
+impl<T: Into<u16>> BitOr<T> for PostFlags {
+    type Output = Self;
+    fn bitor(self, rhs: T) -> Self::Output {
+        Self {
+            flags: self.flags | rhs.into(),
+        }
+    }
+}
+
+impl<T: Into<u16>> BitOrAssign<T> for PostFlags {
+    fn bitor_assign(&mut self, rhs: T) {
+        self.flags |= rhs.into();
     }
 }
 
