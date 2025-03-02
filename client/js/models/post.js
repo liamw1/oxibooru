@@ -38,8 +38,8 @@ class Post extends events.EventTarget {
         return this._mimeType;
     }
 
-    get checksumSHA1() {
-        return this._checksumSHA1;
+    get checksum() {
+        return this._checksum;
     }
 
     get checksumMD5() {
@@ -467,7 +467,7 @@ class Post extends events.EventTarget {
             _id: response.id,
             _type: response.type,
             _mimeType: response.mimeType,
-            _checksumSHA1: response.checksum,
+            _checksum: response.checksum,
             _checksumMD5: response.checksumMD5,
             _creationTime: response.creationTime,
             _user: response.user,

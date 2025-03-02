@@ -50,11 +50,19 @@ where
             (left, right) => Ok(Criteria::Range(left.parse().map_err(Box::from)?..right.parse().map_err(Box::from)?)),
         };
     }
+    values(filter).map(Criteria::Values)
+}
+
+/// Parses comma-separated values.
+pub fn values<T>(filter: &str) -> Result<Vec<T>, Error>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::error::Error + 'static,
+{
     filter
         .split(',')
         .map(str::parse)
         .collect::<Result<_, _>>()
-        .map(Criteria::Values)
         .map_err(Box::from)
         .map_err(Error::from)
 }

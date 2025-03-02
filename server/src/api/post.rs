@@ -488,11 +488,7 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
         Some(content) => Some(content.thumbnail(ThumbnailType::Post).await?),
         None => None,
     };
-
-    let mut flags = content_properties.flags;
-    for flag in body.flags.unwrap_or_default() {
-        flags.add(flag);
-    }
+    let flags = content_properties.flags | PostFlags::from_slice(&body.flags.unwrap_or_default());
 
     let new_post = NewPost {
         user_id: client.id,

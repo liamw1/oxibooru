@@ -1,16 +1,16 @@
 use crate::auth::header::Client;
-use crate::model::enums::{PostSafety, PostType};
+use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
 use crate::schema::{
     comment, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics, post_tag, tag_name,
     user,
 };
-use crate::search::{Error, Order, ParsedSort, SearchCriteria, UnparsedFilter};
+use crate::search::{Error, Order, ParsedSort, SearchCriteria, UnparsedFilter, parse};
 use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use diesel::sql_types::Float;
+use diesel::sql_types::{Float, SmallInt};
 use std::str::FromStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
@@ -40,6 +40,8 @@ pub enum Token {
     Safety,
     Type,
     ContentChecksum,
+    Flag,
+    Source,
     #[strum(
         serialize = "date",
         serialize = "time",
@@ -69,6 +71,7 @@ pub enum Token {
     NoteCount,
     FavCount,
     FeatureCount,
+    Score,
     #[strum(serialize = "comment-date", serialize = "comment-time")]
     CommentTime,
     #[strum(serialize = "fav-date", serialize = "fav-time")]
@@ -107,6 +110,20 @@ pub fn build_query<'a>(client: Client, search_criteria: &'a SearchCriteria<Token
             Token::AspectRatio => apply_filter!(query, aspect_ratio(), filter, f32),
             Token::Safety => apply_filter!(query, post::safety, filter, PostSafety),
             Token::Type => apply_filter!(query, post::type_, filter, PostType),
+            Token::Flag => {
+                let flags: Vec<PostFlag> = parse::values(filter.criteria)?;
+                let value = flags.into_iter().fold(PostFlags::new(), |value, flag| value | flag);
+                let bitwise_and = sql::<SmallInt>("")
+                    .bind(post::flags)
+                    .sql(" & ")
+                    .bind::<SmallInt, _>(value);
+                if filter.negated {
+                    Ok(query.filter(bitwise_and.eq(0)))
+                } else {
+                    Ok(query.filter(bitwise_and.ne(0)))
+                }
+            }
+            Token::Source => Ok(apply_str_filter!(query, post::source, filter)),
             Token::ContentChecksum => Ok(apply_str_filter!(query, post::checksum, filter)),
             Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
             Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
@@ -151,6 +168,7 @@ pub fn build_query<'a>(client: Client, search_criteria: &'a SearchCriteria<Token
             Token::NoteCount => apply_filter!(query, post_statistics::note_count, filter, i64),
             Token::FavCount => apply_filter!(query, post_statistics::favorite_count, filter, i64),
             Token::FeatureCount => apply_filter!(query, post_statistics::feature_count, filter, i64),
+            Token::Score => apply_filter!(query, post_statistics::score, filter, i64),
             Token::CommentTime => {
                 let comments = comment::table.select(comment::post_id).into_boxed();
                 let subquery = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
@@ -199,6 +217,8 @@ pub fn get_ordered_ids(
         Token::AspectRatio => apply_sort!(query, aspect_ratio(), sort),
         Token::Safety => apply_sort!(query, post::safety, sort),
         Token::Type => apply_sort!(query, post::type_, sort),
+        Token::Flag => apply_sort!(query, post::flags, sort),
+        Token::Source => apply_sort!(query, post::source, sort),
         Token::CreationTime => apply_sort!(query, post::creation_time, sort),
         Token::LastEditTime => apply_sort!(query, post::last_edit_time, sort),
         Token::Tag | Token::TagCount => apply_sort!(query, post_statistics::tag_count, sort),
@@ -209,6 +229,7 @@ pub fn get_ordered_ids(
         Token::RelationCount => apply_sort!(query, post_statistics::relation_count, sort),
         Token::NoteCount => apply_sort!(query, post_statistics::note_count, sort),
         Token::FeatureCount => apply_sort!(query, post_statistics::feature_count, sort),
+        Token::Score => apply_sort!(query, post_statistics::score, sort),
         Token::CommentTime => apply_sort!(query, post_statistics::last_comment_time, sort),
         Token::FavTime => apply_sort!(query, post_statistics::last_favorite_time, sort),
         Token::FeatureTime => apply_sort!(query, post_statistics::last_feature_time, sort),
