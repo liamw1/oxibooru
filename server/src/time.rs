@@ -56,15 +56,24 @@ impl DateTime {
         Self::now()
             .date()
             .previous_day()
-            .unwrap()
+            .unwrap_or(Date::MIN)
             .midnight()
             .assume_utc()
             .into()
     }
 
-    pub fn from_date(year: i32, month: u8, day: u8) -> Result<Self, ComponentRange> {
-        Month::try_from(month)
-            .and_then(|month| Date::from_calendar_date(year, month, day))
+    pub fn tomorrow() -> Self {
+        Self::now()
+            .date()
+            .next_day()
+            .unwrap_or(Date::MAX)
+            .midnight()
+            .assume_utc()
+            .into()
+    }
+
+    pub fn from_date(year: i32, month: Month, day: u8) -> Result<Self, ComponentRange> {
+        Date::from_calendar_date(year, month, day)
             .map(Date::midnight)
             .map(PrimitiveDateTime::assume_utc)
             .map(Self::from)

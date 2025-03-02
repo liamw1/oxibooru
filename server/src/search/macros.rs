@@ -15,19 +15,25 @@ macro_rules! apply_filter {
 macro_rules! apply_time_filter {
     ($query:expr, $expression:expr, $filter:expr) => {
         $crate::search::parse::time_criteria($filter.criteria).map(|criteria| {
-            if let $crate::search::Criteria::Values(times) = criteria {
-                if $filter.negated {
-                    times.into_iter().fold($query, |query, time| {
-                        query.filter($expression.not_between(time, time.saturating_add(time::Duration::DAY)))
-                    })
-                } else {
-                    times.into_iter().fold($query, |query, time| {
-                        query.or_filter($expression.between(time, time.saturating_add(time::Duration::DAY)))
-                    })
+            let criteria = match criteria {
+                $crate::search::Criteria::Values(times) => {
+                    return if $filter.negated {
+                        times
+                            .into_iter()
+                            .fold($query, |query, time| query.filter($expression.not_between(time.start, time.end)))
+                    } else {
+                        times
+                            .into_iter()
+                            .fold($query, |query, time| query.or_filter($expression.between(time.start, time.end)))
+                    };
                 }
-            } else {
-                $crate::apply_criteria!($query, $expression, $filter, criteria)
-            }
+                $crate::search::Criteria::GreaterEq(time) => $crate::search::Criteria::GreaterEq(time.start),
+                $crate::search::Criteria::LessEq(time) => $crate::search::Criteria::LessEq(time.start),
+                $crate::search::Criteria::Range(time_range) => {
+                    $crate::search::Criteria::Range(time_range.start.start..time_range.end.end)
+                }
+            };
+            $crate::apply_criteria!($query, $expression, $filter, criteria)
         })
     };
 }
