@@ -64,7 +64,7 @@ pub fn get_ordered_ids(
 ) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
     if search_criteria.random_sort {
-        define_sql_function!(fn random() -> Integer);
+        define_sql_function!(fn random() -> BigInt);
         return match search_criteria.extra_args {
             Some(args) => unsorted_query.order(random()).offset(args.offset).limit(args.limit),
             None => unsorted_query.order(random()),
@@ -72,17 +72,12 @@ pub fn get_ordered_ids(
         .load(conn);
     }
 
-    // Add default sort if none specified
-    let sorts = if search_criteria.has_sort() {
-        search_criteria.sorts.as_slice()
-    } else {
-        &[ParsedSort {
-            kind: Token::CreationTime,
-            order: Order::default(),
-        }]
-    };
-
-    let query = sorts.iter().fold(unsorted_query, |query, sort| match sort.kind {
+    let default_sort = std::iter::once(ParsedSort {
+        kind: Token::CreationTime,
+        order: Order::default(),
+    });
+    let sorts = search_criteria.sorts.iter().copied().chain(default_sort);
+    let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
         Token::Id => apply_sort!(query, comment::id, sort),
         Token::Post => apply_sort!(query, comment::post_id, sort),
         Token::Text => apply_sort!(query, comment::text, sort),

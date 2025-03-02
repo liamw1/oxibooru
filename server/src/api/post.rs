@@ -1,14 +1,15 @@
 use crate::api::{ApiResult, AuthResult, DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::upload::{PartName, MAX_UPLOAD_SIZE};
-use crate::content::{signature, upload, Content, FileContents};
+use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
+use crate::content::{Content, FileContents, signature, upload};
 use crate::filesystem::Directory;
 use crate::model::comment::NewComment;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
 use crate::model::pool::PoolPost;
 use crate::model::post::{
-    NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostRelation, PostScore, PostSignature, PostTag,
+    CompressedSignature, NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostRelation, PostScore,
+    PostSignature, PostTag, SignatureIndexes,
 };
 use crate::resource::post::{Note, PostInfo};
 use crate::schema::{
@@ -176,7 +177,7 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<PostInf
                 .first(conn)?
         };
 
-        let selected_posts: Vec<i64> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let selected_posts = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
         Ok(PagedResponse {
             query: params.into_query(),
             offset,
@@ -213,9 +214,6 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
     params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_list)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let search_criteria = search::post::parse_search_criteria(params.criteria())?;
-
     let create_post_neighbors = |mut neighbors: Vec<PostInfo>, has_previous_post: bool| {
         let (prev, next) = match (neighbors.pop(), neighbors.pop()) {
             (Some(second), Some(first)) => (Some(first), Some(second)),
@@ -227,26 +225,23 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
         PostNeighbors { prev, next }
     };
 
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let search_criteria = search::post::parse_search_criteria(params.criteria())?;
     db::get_connection()?.transaction(|conn| {
-        if search_criteria.has_sort() {
-            // Most general method of retrieving neighbors
-            let sql_query = search::post::build_query(client, &search_criteria)?;
-            let post_ids: Vec<i64> = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
-            let post_index = post_ids.iter().position(|&id| id == post_id);
+        const INITIAL_LIMIT: i64 = 100;
+        const LIMIT_GROWTH: i64 = 8;
 
-            let prev_post_id = post_index
-                .and_then(|index| index.checked_sub(1))
-                .and_then(|prev_index| post_ids.get(prev_index))
-                .copied();
-            let next_post_id = post_index
-                .and_then(|index| index.checked_add(1))
-                .and_then(|next_index| post_ids.get(next_index))
-                .copied();
-            let post_ids = prev_post_id.into_iter().chain(next_post_id).collect();
+        // Handle special cases first
+        if search_criteria.has_random_sort() {
+            define_sql_function!(fn random() -> BigInt);
+            let sql_query = search::post::build_query(client, &search_criteria)?;
+            let sql_query = sql_query.filter(post::id.ne(post_id)).limit(2);
+            let post_ids = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
             let post_infos = PostInfo::new_batch_from_ids(conn, client, post_ids, &fields)?;
-            Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
-        } else {
-            // Optimized neighbor retrieval for the most common use case
+            return Ok(create_post_neighbors(post_infos, true));
+        }
+        if !search_criteria.has_filter() && !search_criteria.has_sort() {
+            // Optimized neighbor retrieval for simplest use case
             let previous_post = search::post::build_query(client, &search_criteria)?
                 .select(Post::as_select())
                 .filter(post::id.gt(post_id))
@@ -263,8 +258,40 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
             let has_previous_post = previous_post.is_some();
             let posts = previous_post.into_iter().chain(next_post).collect();
             let post_infos = PostInfo::new_batch(conn, client, posts, &fields)?;
-            Ok(create_post_neighbors(post_infos, has_previous_post))
+            return Ok(create_post_neighbors(post_infos, has_previous_post));
         }
+
+        // Search for neighbors using exponentially increasing limit
+        let mut offset = 0;
+        let mut limit = INITIAL_LIMIT;
+        let (prev_post_id, next_post_id) = loop {
+            let sql_query = search::post::build_query(client, &search_criteria)?;
+            let sql_query = sql_query.offset(offset).limit(limit);
+            let post_id_batch = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+
+            let post_index = post_id_batch.iter().position(|&id| id == post_id);
+            if post_id_batch.len() < usize::try_from(limit).unwrap_or(usize::MAX)
+                || post_id_batch.len() == usize::MAX
+                || (post_index.is_some() && post_index != Some(post_id_batch.len().saturating_sub(1)))
+            {
+                let prev_post_id = post_index
+                    .and_then(|index| index.checked_sub(1))
+                    .and_then(|prev_index| post_id_batch.get(prev_index))
+                    .copied();
+                let next_post_id = post_index
+                    .and_then(|index| index.checked_add(1))
+                    .and_then(|next_index| post_id_batch.get(next_index))
+                    .copied();
+                break (prev_post_id, next_post_id);
+            }
+
+            offset += limit - 2;
+            limit = limit.saturating_mul(LIMIT_GROWTH);
+        };
+
+        let post_ids = prev_post_id.into_iter().chain(next_post_id).collect();
+        let post_infos = PostInfo::new_batch_from_ids(conn, client, post_ids, &fields)?;
+        Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
     })
 }
 
@@ -366,24 +393,31 @@ async fn reverse_search(
             });
         }
 
-        // Search for similar images
-        let similar_signatures =
-            PostSignature::find_similar(conn, signature::generate_indexes(content_properties.signature))?;
-        println!("Found {} similar signatures", similar_signatures.len());
-        let mut similar_posts: Vec<_> = similar_signatures
+        // Search for similar images candidates
+        let similar_signature_candidates =
+            PostSignature::find_similar_candidates(conn, signature::generate_indexes(&content_properties.signature))?;
+        println!("Found {} similar signatures", similar_signature_candidates.len());
+
+        // Filter candidates based on similarity score
+        let content_signature_cache = signature::cache(&content_properties.signature);
+        let mut similar_signatures: Vec<_> = similar_signature_candidates
             .into_iter()
             .filter_map(|post_signature| {
-                let distance = signature::distance(
-                    content_properties.signature,
-                    signature::from_database(post_signature.signature),
-                );
+                let distance = signature::distance(&content_signature_cache, &post_signature.signature);
                 let distance_threshold = 1.0 - config::get().post_similarity_threshold;
                 (distance < distance_threshold).then_some((post_signature.post_id, distance))
             })
             .collect();
-        similar_posts.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
+        if similar_signatures.is_empty() {
+            return Ok(ReverseSearchResponse {
+                exact_post: None,
+                similar_posts: Vec::new(),
+            });
+        }
 
-        let (post_ids, distances): (Vec<_>, Vec<_>) = similar_posts.into_iter().unzip();
+        similar_signatures.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.partial_cmp(dist_b).unwrap());
+
+        let (post_ids, distances): (Vec<_>, Vec<_>) = similar_signatures.into_iter().unzip();
         Ok(ReverseSearchResponse {
             exact_post: None,
             similar_posts: PostInfo::new_batch_from_ids(conn, client, post_ids, &fields)?
@@ -400,17 +434,19 @@ async fn reverse_search_multipart(
     params: ResourceParams,
     form_data: FormData,
 ) -> ApiResult<ReverseSearchResponse> {
-    let body = upload::extract_without_metadata(form_data, [PartName::Content]).await?;
-    if let [Some(content)] = body.files {
-        let body = ReverseSearchBody {
+    let body = upload::extract(form_data, [PartName::Content]).await?;
+    let reverse_search_body = if let [Some(content)] = body.files {
+        ReverseSearchBody {
             content: Some(content),
             content_token: None,
             content_url: None,
-        };
-        reverse_search(auth, params, body).await
+        }
+    } else if let Some(metadata) = body.metadata {
+        serde_json::from_slice(&metadata)?
     } else {
-        Err(api::Error::MissingFormData)
-    }
+        return Err(api::Error::MissingFormData);
+    };
+    reverse_search(auth, params, reverse_search_body).await
 }
 
 #[derive(Deserialize)]
@@ -494,8 +530,8 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
 
         let new_post_signature = NewPostSignature {
             post_id,
-            signature: &content_properties.signature,
-            words: &signature::generate_indexes(content_properties.signature),
+            signature: content_properties.signature.into(),
+            words: signature::generate_indexes(&content_properties.signature).into(),
         };
         diesel::insert_into(post_signature::table)
             .values(new_post_signature)
@@ -522,7 +558,7 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
 }
 
 async fn create_multipart(auth: AuthResult, params: ResourceParams, form_data: FormData) -> ApiResult<PostInfo> {
-    let body = upload::extract_with_metadata(form_data, [PartName::Content, PartName::Thumbnail]).await?;
+    let body = upload::extract(form_data, [PartName::Content, PartName::Thumbnail]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut new_post: CreateBody = serde_json::from_slice(&metadata)?;
     let [content, thumbnail] = body.files;
@@ -703,7 +739,7 @@ fn merge(auth: AuthResult, params: ResourceParams, body: PostMergeBody) -> ApiRe
 
         // If replacing content, update post signature. This needs to be done before deletion because post signatures cascade
         if body.replace_content && !cfg!(test) {
-            let (signature, indexes): (Vec<Option<i64>>, Vec<Option<i32>>) = post_signature::table
+            let (signature, indexes): (CompressedSignature, SignatureIndexes) = post_signature::table
                 .find(remove_id)
                 .select((post_signature::signature, post_signature::words))
                 .first(conn)?;
@@ -714,10 +750,12 @@ fn merge(auth: AuthResult, params: ResourceParams, body: PostMergeBody) -> ApiRe
 
         diesel::delete(post::table.find(remove_id)).execute(conn)?;
 
-        if body.replace_content {
+        let remove_mime_type = if body.replace_content {
             if !cfg!(test) {
                 filesystem::swap_posts(&remove_hash, remove_post.mime_type, &merge_to_hash, merge_to_post.mime_type)?;
             }
+
+            let old_mime_type = merge_to_post.mime_type;
 
             // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
             merge_to_post.file_size = remove_post.file_size;
@@ -732,11 +770,14 @@ fn merge(auth: AuthResult, params: ResourceParams, body: PostMergeBody) -> ApiRe
             merge_to_post.generated_thumbnail_size = remove_post.generated_thumbnail_size;
             merge_to_post.custom_thumbnail_size = remove_post.custom_thumbnail_size;
             merge_to_post = merge_to_post.save_changes(conn)?;
-        }
+
+            old_mime_type
+        } else {
+            remove_post.mime_type
+        };
 
         if config::get().delete_source_files && !cfg!(test) {
-            // This is the correct id and mime_type, even if replacing content :)
-            filesystem::delete_post(&remove_hash, remove_post.mime_type)?;
+            filesystem::delete_post(&remove_hash, remove_mime_type)?;
         }
         update::post::last_edit_time(conn, merge_to_id).map(|_| merge_to_post)
     })?;
@@ -908,8 +949,8 @@ async fn update(auth: AuthResult, post_id: i64, params: ResourceParams, body: Up
                 // Update post signature
                 let new_post_signature = NewPostSignature {
                     post_id,
-                    signature: &content_properties.signature,
-                    words: &signature::generate_indexes(content_properties.signature),
+                    signature: content_properties.signature.into(),
+                    words: signature::generate_indexes(&content_properties.signature).into(),
                 };
                 diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
                 diesel::insert_into(post_signature::table)
@@ -949,7 +990,7 @@ async fn update_multipart(
     params: ResourceParams,
     form_data: FormData,
 ) -> ApiResult<PostInfo> {
-    let body = upload::extract_with_metadata(form_data, [PartName::Content, PartName::Thumbnail]).await?;
+    let body = upload::extract(form_data, [PartName::Content, PartName::Thumbnail]).await?;
     let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
     let mut post_update: UpdateBody = serde_json::from_slice(&metadata)?;
     let [content, thumbnail] = body.files;

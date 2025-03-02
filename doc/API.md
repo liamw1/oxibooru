@@ -2645,6 +2645,11 @@ Date/time values can be of following form:
 
 Some fields, such as user names, can take wildcards (`*`).
 
+All tokens can be negated by prepending them with -.
+
+Sort style token values can be appended with ,asc or ,desc to control the sort 
+direction, which can be also controlled by negating the whole token.
+
 You can escape special characters such as `:`, `*`, and `,` by prepending them with a
 backslash: `\\`.
 

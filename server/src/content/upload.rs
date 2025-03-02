@@ -7,9 +7,9 @@ use std::ffi::OsStr;
 use std::path::Path;
 use std::str::FromStr;
 use strum::IntoStaticStr;
+use warp::Buf;
 use warp::filters::multipart::Part;
 use warp::multipart::FormData;
-use warp::Buf;
 
 pub const MAX_UPLOAD_SIZE: u64 = 4 * 1024_u64.pow(3);
 
@@ -26,19 +26,7 @@ pub struct Body<const N: usize> {
     pub metadata: Option<Vec<u8>>,
 }
 
-pub async fn extract_with_metadata<const N: usize>(form_data: FormData, parts: [PartName; N]) -> ApiResult<Body<N>> {
-    extract(form_data, parts, true).await
-}
-
-pub async fn extract_without_metadata<const N: usize>(form_data: FormData, parts: [PartName; N]) -> ApiResult<Body<N>> {
-    extract(form_data, parts, false).await
-}
-
-async fn extract<const N: usize>(
-    mut form_data: FormData,
-    parts: [PartName; N],
-    extract_metadata: bool,
-) -> ApiResult<Body<N>> {
+pub async fn extract<const N: usize>(mut form_data: FormData, parts: [PartName; N]) -> ApiResult<Body<N>> {
     let mut files = std::array::from_fn(|_| None);
     let mut metadata = None;
     while let Some(Ok(part)) = form_data.next().await {
@@ -46,7 +34,7 @@ async fn extract<const N: usize>(
             .iter()
             .map(Into::<&str>::into)
             .position(|name| part.name() == name);
-        if position.is_none() && (!extract_metadata || part.name() != "metadata") {
+        if position.is_none() && part.name() != "metadata" {
             continue;
         }
 

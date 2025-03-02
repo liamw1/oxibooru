@@ -1,7 +1,6 @@
 use crate::schema::user;
 use crate::search::{Error, Order, ParsedSort, SearchCriteria};
 use crate::{apply_sort, apply_str_filter, apply_time_filter};
-use diesel::define_sql_function;
 use diesel::dsl::{IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -49,7 +48,7 @@ pub fn get_ordered_ids(
 ) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
     if search_criteria.random_sort {
-        define_sql_function!(fn random() -> Integer);
+        define_sql_function!(fn random() -> BigInt);
         return match search_criteria.extra_args {
             Some(args) => unsorted_query.order(random()).offset(args.offset).limit(args.limit),
             None => unsorted_query.order(random()),
@@ -57,17 +56,12 @@ pub fn get_ordered_ids(
         .load(conn);
     }
 
-    // Add default sort if none specified
-    let sorts = if search_criteria.has_sort() {
-        search_criteria.sorts.as_slice()
-    } else {
-        &[ParsedSort {
-            kind: Token::Name,
-            order: Order::default(),
-        }]
-    };
-
-    let query = sorts.iter().fold(unsorted_query, |query, sort| match sort.kind {
+    let default_sort = std::iter::once(ParsedSort {
+        kind: Token::Name,
+        order: Order::default(),
+    });
+    let sorts = search_criteria.sorts.iter().copied().chain(default_sort);
+    let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
         Token::Name => apply_sort!(query, user::name, sort),
         Token::CreationTime => apply_sort!(query, user::creation_time, sort),
         Token::LastLoginTime => apply_sort!(query, user::last_login_time, sort),

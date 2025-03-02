@@ -1,6 +1,6 @@
 use crate::api::{ApiResult, AuthResult};
 use crate::content::download;
-use crate::content::upload::{self, PartName, MAX_UPLOAD_SIZE};
+use crate::content::upload::{self, MAX_UPLOAD_SIZE, PartName};
 use crate::{api, config};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -45,13 +45,16 @@ async fn upload_url(auth: AuthResult, body: UploadBody) -> ApiResult<UploadRespo
 }
 
 async fn upload_multipart(auth: AuthResult, form_data: FormData) -> ApiResult<UploadResponse> {
-    let client = auth?;
-    api::verify_privilege(client, config::privileges().upload_create)?;
-
-    let body = upload::extract_without_metadata(form_data, [PartName::Content]).await?;
+    let body = upload::extract(form_data, [PartName::Content]).await?;
     if let [Some(upload)] = body.files {
+        let client = auth?;
+        api::verify_privilege(client, config::privileges().upload_create)?;
+
         let token = upload.save()?;
         Ok(UploadResponse { token })
+    } else if let Some(metadata) = body.metadata {
+        let url_upload: UploadBody = serde_json::from_slice(&metadata)?;
+        upload_url(auth, url_upload).await
     } else {
         Err(api::Error::MissingFormData)
     }
