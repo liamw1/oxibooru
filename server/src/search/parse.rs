@@ -2,7 +2,9 @@ use crate::search::Error;
 use crate::search::{Criteria, StrCritera, TimeParsingError};
 use crate::time::DateTime;
 use std::borrow::Cow;
+use std::ops::Range;
 use std::str::FromStr;
+use time::{Date, Duration, Month, OffsetDateTime, Time};
 
 /// Splits `text` into two parts by an unescaped `delimiter`.
 pub fn split_once(text: &str, delimiter: char) -> Option<(&str, &str)> {
@@ -21,7 +23,7 @@ pub fn str_criteria(filter: &str) -> StrCritera {
 }
 
 /// Parses time-based `filter`.
-pub fn time_criteria(filter: &str) -> Result<Criteria<DateTime>, Error> {
+pub fn time_criteria(filter: &str) -> Result<Criteria<Range<DateTime>>, Error> {
     if let Some(split_str) = filter.split_once("..") {
         return match split_str {
             (left, "") => parse_time(left).map(Criteria::GreaterEq).map_err(Error::from),
@@ -147,11 +149,13 @@ fn parse_regular_str(filter: &str) -> Criteria<Cow<str>> {
 }
 
 /// Parses single `time` value.
-fn parse_time(time: &str) -> Result<DateTime, TimeParsingError> {
+/// Time values are always implicitly treated as a range of times.
+fn parse_time(time: &str) -> Result<Range<DateTime>, TimeParsingError> {
+    // Handle special cases
     if time == "today" {
-        return Ok(DateTime::today());
+        return Ok(DateTime::today()..DateTime::tomorrow());
     } else if time == "yesterday" {
-        return Ok(DateTime::yesterday());
+        return Ok(DateTime::yesterday()..DateTime::today());
     }
 
     let mut date_iterator = time.split('-');
@@ -159,13 +163,31 @@ fn parse_time(time: &str) -> Result<DateTime, TimeParsingError> {
         .next()
         .ok_or(TimeParsingError::TooFewArgs)
         .and_then(|value| value.parse().map_err(TimeParsingError::from))?;
-    let month: Option<u8> = date_iterator.next().map(|value| value.parse()).transpose()?;
+    let month = date_iterator.next().map(parse_month).transpose()?;
     let day: Option<u8> = date_iterator.next().map(|value| value.parse()).transpose()?;
     if date_iterator.next().is_some() {
         return Err(TimeParsingError::TooManyArgs);
     }
 
-    DateTime::from_date(year, month.unwrap_or(1), day.unwrap_or(1)).map_err(TimeParsingError::from)
+    let start_date =
+        DateTime::from_date(year, month.unwrap_or(Month::January), day.unwrap_or(1)).map_err(TimeParsingError::from)?;
+    let end_date = if day.is_some() {
+        start_date.saturating_add(Duration::DAY)
+    } else if let Some(month) = month {
+        let end_year = if month == Month::December { year + 1 } else { year };
+        let next_month = Date::from_calendar_date(end_year, month.next(), 1).unwrap_or(Date::MAX);
+        OffsetDateTime::new_utc(next_month, Time::MIDNIGHT)
+    } else {
+        let next_year = Date::from_calendar_date(year + 1, Month::January, 1).unwrap_or(Date::MAX);
+        OffsetDateTime::new_utc(next_year, Time::MIDNIGHT)
+    };
+
+    Ok(start_date..end_date.into())
+}
+
+fn parse_month(text: &str) -> Result<Month, TimeParsingError> {
+    let number: u8 = text.parse()?;
+    number.try_into().map_err(TimeParsingError::from)
 }
 
 #[cfg(test)]
@@ -175,12 +197,18 @@ mod test {
 
     #[test]
     fn time_parsing() -> Result<(), TimeParsingError> {
-        assert_eq!(parse_time("1970")?, DateTime::from_date(1970, 1, 1)?);
-        assert_eq!(parse_time("2024")?, DateTime::from_date(2024, 1, 1)?);
-        assert_eq!(parse_time("2024-7")?, DateTime::from_date(2024, 7, 1)?);
-        assert_eq!(parse_time("2024-7-11")?, DateTime::from_date(2024, 7, 11)?);
-        assert_eq!(parse_time("2024-07-11")?, DateTime::from_date(2024, 7, 11)?);
-        assert_eq!(parse_time("2024-2-29")?, DateTime::from_date(2024, 2, 29)?);
+        let jan = Month::January;
+        let feb = Month::February;
+        let mar = Month::March;
+        let jul = Month::July;
+        let aug = Month::August;
+
+        assert_eq!(parse_time("1970")?, DateTime::from_date(1970, jan, 1)?..DateTime::from_date(1971, jan, 1)?);
+        assert_eq!(parse_time("2024")?, DateTime::from_date(2024, jan, 1)?..DateTime::from_date(2025, jan, 1)?);
+        assert_eq!(parse_time("2024-7")?, DateTime::from_date(2024, jul, 1)?..DateTime::from_date(2024, aug, 1)?);
+        assert_eq!(parse_time("2024-7-11")?, DateTime::from_date(2024, jul, 11)?..DateTime::from_date(2024, jul, 12)?);
+        assert_eq!(parse_time("2024-07-11")?, DateTime::from_date(2024, jul, 11)?..DateTime::from_date(2024, jul, 12)?);
+        assert_eq!(parse_time("2024-2-29")?, DateTime::from_date(2024, feb, 29)?..DateTime::from_date(2024, mar, 1)?);
 
         assert!(parse_time("").is_err());
         assert!(parse_time("2000-01-01-01").is_err());
