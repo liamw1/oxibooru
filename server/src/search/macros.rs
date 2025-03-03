@@ -17,20 +17,21 @@ macro_rules! apply_time_filter {
         $crate::search::parse::time_criteria($filter.criteria).map(|criteria| {
             let criteria = match criteria {
                 $crate::search::Criteria::Values(times) => {
+                    type TimeRange = diesel::pg::sql_types::Range<diesel::sql_types::Timestamptz>;
+                    let expression = diesel::dsl::sql::<diesel::sql_types::Bool>("tstzmultirange(VARIADIC ")
+                        .bind::<diesel::sql_types::Array<TimeRange>, _>(times)
+                        .sql(") @> ")
+                        .bind($expression);
                     return if $filter.negated {
-                        times
-                            .into_iter()
-                            .fold($query, |query, time| query.filter($expression.not_between(time.start, time.end)))
+                        $query.filter(diesel::dsl::not(expression))
                     } else {
-                        times
-                            .into_iter()
-                            .fold($query, |query, time| query.or_filter($expression.between(time.start, time.end)))
+                        $query.filter(expression)
                     };
                 }
                 $crate::search::Criteria::GreaterEq(time) => $crate::search::Criteria::GreaterEq(time.start),
                 $crate::search::Criteria::LessEq(time) => $crate::search::Criteria::LessEq(time.start),
-                $crate::search::Criteria::Range(time_range) => {
-                    $crate::search::Criteria::Range(time_range.start.start..time_range.end.end)
+                $crate::search::Criteria::Range(range) => {
+                    $crate::search::Criteria::Range(range.start.start..range.end.end)
                 }
             };
             $crate::apply_criteria!($query, $expression, $filter, criteria)
