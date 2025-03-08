@@ -1,6 +1,6 @@
+use crate::math::From;
 use crate::math::interval::Interval;
 use crate::math::point::IPoint2;
-use crate::math::From;
 use crate::math::{SignedCast, UnsignedCast};
 use num_traits::int::PrimInt;
 use std::num::TryFromIntError;
@@ -128,7 +128,7 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let size = self.rect.total_points().map(usize::try_from).transpose().ok().flatten();
+        let size = self.rect.total_points().and_then(|size| usize::try_from(size).ok());
         (size.unwrap_or(usize::MAX), size)
     }
 }

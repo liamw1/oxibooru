@@ -142,14 +142,18 @@ fn crop(deltas: &[u64]) -> Interval<u32> {
 
 /// Computes sum of absolute differences of pixel intensities for neighboring rows.
 fn compute_row_deltas(image: &GrayImage) -> Vec<u64> {
-    (0..image.height() - 1)
+    let image_width = image.width() as usize;
+    let flat_samples = image.as_flat_samples();
+    (0..image.height() as usize - 1)
         .map(|j| {
-            (0..image.width())
-                .map(|i| {
-                    let pixel = image.get_pixel(i, j);
-                    let next_row_pixel = image.get_pixel(i, j + 1);
-                    u64::from(pixel.0[0].abs_diff(next_row_pixel.0[0]))
-                })
+            let row_start = j * image_width;
+            let next_row_start = (j + 1) * image_width;
+            let row = &flat_samples.as_slice()[row_start..row_start + image_width];
+            let next_row = &flat_samples.as_slice()[next_row_start..next_row_start + image_width];
+
+            row.iter()
+                .zip(next_row)
+                .map(|(pixel, &next_pixel)| u64::from(pixel.abs_diff(next_pixel)))
                 .sum()
         })
         .collect()
@@ -158,12 +162,17 @@ fn compute_row_deltas(image: &GrayImage) -> Vec<u64> {
 /// Computes sum of absolute differences of pixel pixel intensities for neighboring columns.
 /// The inner loop iterates over rows instead of columns for better memory access patterns.
 fn compute_column_deltas(image: &GrayImage) -> Vec<u64> {
-    let mut deltas = vec![0; image.width() as usize - 1];
-    for j in 0..image.height() {
-        for i in 0..image.width() - 1 {
-            let pixel = image.get_pixel(i, j);
-            let next_column_pixel = image.get_pixel(i + 1, j);
-            deltas[i as usize] += u64::from(pixel.0[0].abs_diff(next_column_pixel.0[0]));
+    let image_width = image.width() as usize;
+    let mut deltas = vec![0; image_width - 1];
+
+    let flat_samples = image.as_flat_samples();
+    for j in 0..image.height() as usize {
+        let row_start = j * image_width;
+        let row = &flat_samples.as_slice()[row_start..row_start + image_width];
+
+        for (delta, pixels) in deltas.iter_mut().zip(row.windows(2)) {
+            let [pixel, next_pixel] = pixels.try_into().unwrap();
+            *delta += u64::from(pixel.abs_diff(next_pixel));
         }
     }
     deltas
