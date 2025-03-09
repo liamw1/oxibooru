@@ -1,5 +1,6 @@
 use crate::auth::header::Client;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
+use crate::model::post::Checksum;
 use crate::schema::{
     comment, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics, post_tag, tag_name,
     user,
@@ -117,14 +118,21 @@ pub fn build_query<'a>(client: Client, search_criteria: &'a SearchCriteria<Token
                     .bind(post::flags)
                     .sql(" & ")
                     .bind::<SmallInt, _>(value);
-                if filter.negated {
-                    Ok(query.filter(bitwise_and.eq(0)))
+                Ok(if filter.negated {
+                    query.filter(bitwise_and.eq(0))
                 } else {
-                    Ok(query.filter(bitwise_and.ne(0)))
-                }
+                    query.filter(bitwise_and.ne(0))
+                })
             }
             Token::Source => Ok(apply_str_filter!(query, post::source, filter)),
-            Token::ContentChecksum => Ok(apply_str_filter!(query, post::checksum, filter)),
+            Token::ContentChecksum => {
+                let checksums: Vec<Checksum> = parse::values(filter.criteria)?;
+                Ok(if filter.negated {
+                    query.filter(post::checksum.ne_all(checksums))
+                } else {
+                    query.filter(post::checksum.eq_any(checksums))
+                })
+            }
             Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
             Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
             Token::Tag => {

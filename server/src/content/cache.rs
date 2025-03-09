@@ -12,8 +12,8 @@ use std::sync::{LazyLock, Mutex, MutexGuard};
 #[derive(Clone)]
 pub struct CachedProperties {
     pub token: String,
-    pub checksum: String,
-    pub md5_checksum: String,
+    pub checksum: Vec<u8>,
+    pub md5_checksum: [u8; 16],
     pub signature: [i64; COMPRESSED_SIGNATURE_LEN],
     pub thumbnail: DynamicImage,
     pub width: u32,

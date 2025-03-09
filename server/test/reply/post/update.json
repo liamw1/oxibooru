@@ -7,13 +7,13 @@
     "safety": "safe",
     "type": "video",
     "mimeType": "video/mp4",
-    "checksum": "5",
-    "checksumMD5": "5",
+    "checksum": "3035",
+    "checksumMD5": "3035",
     "flags": [
         "loop",
         "sound"
     ],
-    "source": null,
+    "source": "",
     "contentUrl": "data/posts/5_Tdd7ElikauHsmoXgiYwg_k7GVh3l1oDIrKJDj53Lj7Y.mp4",
     "thumbnailUrl": "data/generated-thumbnails/5_Tdd7ElikauHsmoXgiYwg_k7GVh3l1oDIrKJDj53Lj7Y.jpg",
     "tags": [

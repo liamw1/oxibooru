@@ -1,7 +1,7 @@
 use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
 use crate::{config, filesystem};
-use base64::engine::general_purpose::{STANDARD_NO_PAD, URL_SAFE_NO_PAD};
+use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::prelude::*;
 use hmac::digest::CtOutput;
 use hmac::{Mac, SimpleHmac};
@@ -74,14 +74,14 @@ pub fn custom_avatar_path(username: &str) -> PathBuf {
 /// Computes a checksum for duplicate detection. Uses raw file data instead of decoded
 /// pixel data because different compression schemes can compress identical pixel data
 /// in different ways.
-pub fn compute_checksum(content: &[u8]) -> String {
+pub fn compute_checksum(content: &[u8]) -> Vec<u8> {
     let hash = hmac_hash(content);
-    STANDARD_NO_PAD.encode(hash.into_bytes())
+    hash.into_bytes().to_vec()
 }
 
-pub fn compute_md5_checksum(content: &[u8]) -> String {
+pub fn compute_md5_checksum(content: &[u8]) -> [u8; 16] {
     let digest = md5::compute(content);
-    STANDARD_NO_PAD.encode(digest.0)
+    digest.0
 }
 
 pub fn compute_url_safe_hash(content: &str) -> String {

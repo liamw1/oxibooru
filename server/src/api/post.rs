@@ -501,7 +501,7 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
         checksum: &content_properties.checksum,
         checksum_md5: &content_properties.md5_checksum,
         flags,
-        source: body.source.as_deref(),
+        source: body.source.as_deref().unwrap_or(""),
     };
 
     let mut conn = db::get_connection()?;
@@ -838,8 +838,7 @@ fn rate(auth: AuthResult, post_id: i64, params: ResourceParams, body: RatingBody
 struct UpdateBody {
     version: DateTime,
     safety: Option<PostSafety>,
-    #[serde(default, deserialize_with = "api::deserialize_some")]
-    source: Option<Option<String>>,
+    source: Option<String>,
     relations: Option<Vec<i64>>,
     tags: Option<Vec<String>>,
     notes: Option<Vec<Note>>,

@@ -11,9 +11,27 @@ use diesel::deserialize::{self, FromSql};
 use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
 use diesel::serialize::{self, Output, ToSql};
-use diesel::sql_types::{Array, BigInt, Integer, Nullable};
+use diesel::sql_types::{Array, BigInt, Bytea, Integer, Nullable};
 use diesel::{AsExpression, FromSqlRow};
 use std::ops::Deref;
+use std::str::FromStr;
+
+#[derive(Debug, AsExpression)]
+#[diesel(sql_type = Bytea)]
+pub struct Checksum(pub Vec<u8>);
+
+impl FromStr for Checksum {
+    type Err = hex::FromHexError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        hex::decode(s).map(Self)
+    }
+}
+
+impl ToSql<Bytea, Pg> for Checksum {
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        <[u8] as ToSql<Bytea, Pg>>::to_sql(&self.0, &mut out.reborrow())
+    }
+}
 
 #[derive(Insertable)]
 #[diesel(table_name = post)]
@@ -26,10 +44,10 @@ pub struct NewPost<'a> {
     pub safety: PostSafety,
     pub type_: PostType,
     pub mime_type: MimeType,
-    pub checksum: &'a str,
-    pub checksum_md5: &'a str,
+    pub checksum: &'a [u8],
+    pub checksum_md5: &'a [u8],
     pub flags: PostFlags,
-    pub source: Option<&'a str>,
+    pub source: &'a str,
 }
 
 #[derive(AsChangeset, Associations, Identifiable, Queryable, Selectable)]
@@ -46,10 +64,10 @@ pub struct Post {
     pub safety: PostSafety,
     pub type_: PostType,
     pub mime_type: MimeType,
-    pub checksum: String,
-    pub checksum_md5: Option<String>,
+    pub checksum: Vec<u8>,
+    pub checksum_md5: Vec<u8>,
     pub flags: PostFlags,
-    pub source: Option<String>,
+    pub source: String,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
     pub generated_thumbnail_size: i64,

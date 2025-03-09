@@ -11,8 +11,8 @@
         "safety": "safe",
         "type": "image",
         "mimeType": "image/png",
-        "checksum": "3",
-        "checksumMD5": "3",
+        "checksum": "3033",
+        "checksumMD5": "3033",
         "flags": [],
         "source": "Wikipedia",
         "contentUrl": "data/posts/3_lepGa4OLoBfljP0ADMujN15ptzP-O0o4yV8_FXHuuUg.png",
@@ -87,8 +87,8 @@
         "safety": "unsafe",
         "type": "video",
         "mimeType": "video/mp4",
-        "checksum": "5",
-        "checksumMD5": "5",
+        "checksum": "3035",
+        "checksumMD5": "3035",
         "flags": [
             "sound"
         ],

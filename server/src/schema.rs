@@ -101,13 +101,10 @@ diesel::table! {
         #[sql_name = "type"]
         type_ -> Int2,
         mime_type -> Int2,
-        #[max_length = 64]
-        checksum -> Varchar,
-        #[max_length = 32]
-        checksum_md5 -> Nullable<Varchar>,
+        checksum -> Bytea,
+        checksum_md5 -> Bytea,
         flags -> Int2,
-        #[max_length = 2048]
-        source -> Nullable<Varchar>,
+        source -> Text,
         creation_time -> Timestamptz,
         last_edit_time -> Timestamptz,
         generated_thumbnail_size -> Int8,
