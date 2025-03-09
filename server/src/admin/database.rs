@@ -1,4 +1,4 @@
-use crate::admin::{ProgressReporter, PRINT_INTERVAL};
+use crate::admin::{PRINT_INTERVAL, ProgressReporter};
 use crate::api::ApiResult;
 use crate::content::hash::PostHash;
 use crate::filesystem::Directory;

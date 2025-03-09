@@ -1,7 +1,7 @@
 use crate::auth::HashError;
 use crate::config;
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::Argon2;
+use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
 use argon2::{Algorithm, Params, Version};
 use std::sync::LazyLock;
 

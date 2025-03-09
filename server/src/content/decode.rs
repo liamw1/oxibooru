@@ -1,5 +1,5 @@
 use crate::api::ApiResult;
-use crate::content::{flash, FileContents};
+use crate::content::{FileContents, flash};
 use crate::model::enums::PostType;
 use crate::{api, config};
 use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, Rgb, RgbImage};
@@ -7,9 +7,9 @@ use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::path::Path;
 use swf::Tag;
+use video_rs::Decoder;
 use video_rs::ffmpeg::format::Pixel;
 use video_rs::ffmpeg::media::Type;
-use video_rs::Decoder;
 
 /// Returns a representative image for the given content.
 /// For images, this is simply the decoded image.

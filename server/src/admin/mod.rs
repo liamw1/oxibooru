@@ -94,7 +94,9 @@ fn get_connection() -> Result<PooledConnection<ConnectionManager<PgConnection>>,
 
 fn print_info() {
     let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
-    println!("Running Oxibooru admin command line interface. Enter \"help\" for a list of commands and \"exit\" when finished.");
+    println!(
+        "Running Oxibooru admin command line interface. Enter \"help\" for a list of commands and \"exit\" when finished."
+    );
     println!("Available commands: {possible_arguments:?}\n");
 }
 

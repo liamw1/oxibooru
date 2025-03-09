@@ -1,6 +1,6 @@
 use crate::model::user::UserToken;
-use crate::resource::user::MicroUser;
 use crate::resource::BoolFill;
+use crate::resource::user::MicroUser;
 use crate::time::DateTime;
 use serde::Serialize;
 use serde_with::skip_serializing_none;

@@ -1,8 +1,8 @@
 use crate::api::ApiResult;
 use crate::model::enums::MimeType;
 use crate::{api, filesystem};
-use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE, REFERER};
 use reqwest::Client;
+use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, REFERER};
 use std::str::FromStr;
 use url::Url;
 

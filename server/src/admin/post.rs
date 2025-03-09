@@ -1,8 +1,8 @@
-use crate::admin::{DatabaseResult, ProgressReporter, PRINT_INTERVAL};
+use crate::admin::{DatabaseResult, PRINT_INTERVAL, ProgressReporter};
 use crate::content::hash::PostHash;
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::{decode, hash, signature, thumbnail, FileContents};
+use crate::content::{FileContents, decode, hash, signature, thumbnail};
 use crate::model::post::{CompressedSignature, NewPostSignature};
 use crate::schema::{database_statistics, post, post_signature};
 use crate::time::Timer;
