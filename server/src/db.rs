@@ -1,4 +1,4 @@
-use crate::admin::{database, AdminTask};
+use crate::admin::{AdminTask, database};
 use crate::config;
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::schema::database_statistics;
@@ -8,7 +8,7 @@ use diesel::migration::Migration;
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
-use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use std::borrow::Cow;
 use std::sync::LazyLock;
 use std::time::Duration;
@@ -49,7 +49,7 @@ pub fn run_migrations(conn: &mut PgConnection) {
     let migration_range = first_migration..=last_migration;
 
     // Update filenames if migrating primary keys to BIGINT
-    if migration_range.contains(&12) {
+    if migration_range.contains(&12) && !migration_range.contains(&1) {
         database::reset_filenames().unwrap();
     }
 
