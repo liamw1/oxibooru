@@ -7,11 +7,6 @@ services:
     image: oxibooru/server:latest
     build:
       context: server
-      args:
-        POSTGRES_USER:
-        POSTGRES_PASSWORD:
-        POSTGRES_DB:
-        POSTGRES_PORT:
     depends_on:
       - sql
     environment:

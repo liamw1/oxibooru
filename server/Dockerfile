@@ -19,14 +19,6 @@ RUN apt-get update && apt-get install -y clang pkg-config libssl-dev libpq-dev \
   libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
 RUN cargo install diesel_cli --no-default-features --features postgres
 
-# Run migrations
-ARG POSTGRES_USER
-ARG POSTGRES_PASSWORD
-ARG POSTGRES_PORT
-ARG POSTGRES_DB
-COPY ./migrations ./migrations
-RUN diesel migration run --database-url=postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@host.docker.internal:${POSTGRES_PORT}/${POSTGRES_DB}
-
 # Build dependencies (this will be cached for future builds)
 COPY --from=planner /opt/app/recipe.json recipe.json
 RUN cargo chef cook --release --recipe-path recipe.json

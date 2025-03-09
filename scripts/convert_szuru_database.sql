@@ -206,6 +206,24 @@ UPDATE public."post"
 SET "image_height" = 0
 WHERE "image_height" IS NULL;
 
+-- Post checksums are UNIQUE BYTEA in Oxibooru, so we have to deduplicate and convert (they will be recalculated anyway)
+UPDATE public."post"
+SET "checksum" = CONCAT(RANDOM(), "id");
+ALTER TABLE public."post"
+ALTER COLUMN "checksum" TYPE BYTEA USING "checksum"::BYTEA;
+
+-- Post MD5 checksums are non-nullable BYTEA in Oxibooru, so replace NULL values with '' and convert
+UPDATE public."post"
+SET "checksum_md5" = ''
+WHERE "checksum_md5" IS NULL;
+ALTER TABLE public."post"
+ALTER COLUMN "checksum_md5" TYPE BYTEA USING "checksum_md5"::BYTEA;
+
+-- Post sources are non-nullable in Oxibooru, so replace NULL values with ''
+UPDATE public."post"
+SET "source" = ''
+WHERE "source" IS NULL;
+
 -- last_edit_time is non-nullable in Oxibooru, so replace NULL values with CURRENT_TIMESTAMP
 UPDATE public."post"
 SET "last_edit_time" = CURRENT_TIMESTAMP
@@ -261,10 +279,6 @@ SET "flags" = CASE
 END;
 ALTER TABLE public."post"
 ALTER COLUMN "flags" TYPE SMALLINT USING "flags"::SMALLINT;
-
--- Post checksums have a UNIQUE constraint in Oxibooru, so we will have to deduplicate (they will be recalculated anyway)
-UPDATE public."post"
-SET "checksum" = CONCAT(RANDOM(), "id");
 
 INSERT INTO oxi."post" ("id", "user_id", "file_size", "width", "height", "safety", "type", "mime_type", "checksum", "checksum_md5", "flags", "source", "creation_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "user_id", "file_size", "image_width", "image_height", "safety", "type", "mime-type", "checksum", "checksum_md5", "flags", "source", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."post";
