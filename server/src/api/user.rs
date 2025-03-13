@@ -9,7 +9,7 @@ use crate::model::user::NewUser;
 use crate::resource::user::{UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::time::DateTime;
-use crate::{api, config, db, resource, search, update};
+use crate::{api, config, db, filesystem, resource, search, update};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use diesel::prelude::*;
@@ -345,7 +345,7 @@ async fn update(auth: AuthResult, username: String, params: ResourceParams, body
             let old_custom_avatar_path = hash::custom_avatar_path(&username);
             if old_custom_avatar_path.try_exists()? {
                 let new_custom_avatar_path = hash::custom_avatar_path(new_name);
-                std::fs::rename(old_custom_avatar_path, new_custom_avatar_path)?;
+                filesystem::move_file(&old_custom_avatar_path, &new_custom_avatar_path)?;
             }
         }
         update::user::last_edit_time(conn, user_id).map(|_| (user_id, visibility))

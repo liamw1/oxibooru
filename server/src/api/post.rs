@@ -536,7 +536,7 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
         // Move content to permanent location
         let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
         filesystem::create_dir(Directory::Posts)?;
-        std::fs::rename(temp_path, post_hash.content_path(content_properties.mime_type))?;
+        filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
@@ -955,7 +955,7 @@ async fn update(auth: AuthResult, post_id: i64, params: ResourceParams, body: Up
                 // Replace content
                 let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
                 filesystem::delete_content(&post_hash, old_mime_type)?;
-                std::fs::rename(temp_path, post_hash.content_path(content_properties.mime_type))?;
+                filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
                 // Replace generated thumbnail
                 filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Generated)?;
