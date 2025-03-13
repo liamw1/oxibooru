@@ -33,7 +33,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
 
             let new_path = PostHash::new(post_id).generated_thumbnail_path();
             if path != new_path {
-                std::fs::rename(path, new_path)?;
+                filesystem::move_file(&path, &new_path)?;
                 progress.increment();
             }
         }
@@ -52,7 +52,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
 
             let new_path = PostHash::new(post_id).custom_thumbnail_path();
             if path != new_path {
-                std::fs::rename(path, new_path)?;
+                filesystem::move_file(&path, &new_path)?;
                 progress.increment();
             }
         }
@@ -83,7 +83,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
             };
 
             if path != new_path {
-                std::fs::rename(path, new_path)?;
+                filesystem::move_file(&path, &new_path)?;
                 progress.increment();
             }
         }

@@ -4,6 +4,7 @@ use crate::content::thumbnail::ThumbnailCategory;
 use crate::model::enums::MimeType;
 use image::{DynamicImage, ImageResult};
 use std::ffi::OsStr;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use uuid::Uuid;
@@ -142,8 +143,8 @@ pub fn swap_posts(
     let custom_thumbnail_path_b = post_b.custom_thumbnail_path();
     match (custom_thumbnail_path_a.try_exists()?, custom_thumbnail_path_b.try_exists()?) {
         (true, true) => swap_files(&custom_thumbnail_path_a, &custom_thumbnail_path_b)?,
-        (true, false) => std::fs::rename(custom_thumbnail_path_a, custom_thumbnail_path_b)?,
-        (false, true) => std::fs::rename(custom_thumbnail_path_b, custom_thumbnail_path_a)?,
+        (true, false) => move_file(&custom_thumbnail_path_a, &custom_thumbnail_path_b)?,
+        (false, true) => move_file(&custom_thumbnail_path_b, &custom_thumbnail_path_a)?,
         (false, false) => (),
     }
 
@@ -153,8 +154,8 @@ pub fn swap_posts(
     if mime_type_a == mime_type_b {
         swap_files(&old_image_path_a, &old_image_path_b)
     } else {
-        std::fs::rename(old_image_path_a, post_b.content_path(mime_type_a))?;
-        std::fs::rename(old_image_path_b, post_a.content_path(mime_type_b))
+        move_file(&old_image_path_a, &post_b.content_path(mime_type_a))?;
+        move_file(&old_image_path_b, &post_a.content_path(mime_type_b))
     }
 }
 
@@ -166,6 +167,17 @@ pub fn create_dir(directory: Directory) -> std::io::Result<bool> {
         true => Ok(false),
         false => std::fs::create_dir(path).map(|_| true),
     }
+}
+
+/// Moves file from `from` to `to`.
+/// Tries simply renaming first and falls back to copy/remove if `from` and `to`
+/// are on different file systems.
+pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    if let Err(ErrorKind::CrossesDevices) = std::fs::rename(from, to).as_ref().map_err(std::io::Error::kind) {
+        std::fs::copy(from, to)?;
+        std::fs::remove_file(from)?;
+    }
+    Ok(())
 }
 
 /// Deletes everything in the temporary uploads directory.
@@ -194,7 +206,7 @@ static TEMPORARY_UPLOADS_DIRECTORY: LazyLock<String> =
 fn swap_files(file_a: &Path, file_b: &Path) -> std::io::Result<()> {
     let temp_path =
         Path::new(TEMPORARY_UPLOADS_DIRECTORY.as_str()).join(file_a.file_name().unwrap_or(OsStr::new("post.tmp")));
-    std::fs::rename(file_a, &temp_path)?;
-    std::fs::rename(file_b, file_a)?;
-    std::fs::rename(temp_path, file_b)
+    move_file(file_a, &temp_path)?;
+    move_file(file_b, file_a)?;
+    move_file(&temp_path, file_b)
 }
