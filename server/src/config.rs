@@ -235,7 +235,19 @@ pub fn port() -> u16 {
 }
 
 static CONFIG: LazyLock<Config> = LazyLock::new(|| {
-    let mut config: Config = toml::from_str(&std::fs::read_to_string(get_config_path()).unwrap()).unwrap();
+    let config_string = std::fs::read_to_string(get_config_path()).unwrap();
+    let mut config: Config = match toml::from_str(&config_string) {
+        Ok(parsed) => parsed,
+        Err(_) => {
+            panic!(
+                "ERROR: Could not parse config.toml.
+       
+       Please ensure that your config is formatted correctly, that each field name
+       matches the fields in config.toml.dist exactly, and that each field value
+       has the proper type.\n"
+            );
+        }
+    };
     config.public_info.can_send_mails = config.smtp.is_some();
     config
 });
