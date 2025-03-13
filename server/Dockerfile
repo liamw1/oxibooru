@@ -15,17 +15,18 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y clang pkg-config libssl-dev libpq-dev \
+RUN apt-get update && apt-get install -y clang pkg-config libpq-dev \
   libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
-RUN cargo install diesel_cli --no-default-features --features postgres
+
+COPY --from=planner /opt/app/recipe.json recipe.json
 
 # Build dependencies (this will be cached for future builds)
-COPY --from=planner /opt/app/recipe.json recipe.json
-RUN cargo chef cook --release --recipe-path recipe.json
+ARG TARGET_CPU
+RUN RUSTFLAGS="-C target-cpu=$TARGET_CPU" cargo chef cook --release --recipe-path recipe.json
 
 # Buid application
 COPY . .
-RUN cargo build --release
+RUN RUSTFLAGS="-C target-cpu=$TARGET_CPU" cargo build --release
 
 ################################# Run Phase ################################
 FROM debian:${DEBIAN_VERSION}-slim AS runtime
