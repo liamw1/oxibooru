@@ -26,6 +26,11 @@ avatar_height = 300
 post_width    = 300
 post_height   = 300
 
+# [smtp]
+# username = # example: bot
+# password = # example: groovy123
+# from     = # example: noreply@example.com
+
 [public_info]
 # Shown in the website title and on the front page
 name = "oxibooru"
@@ -43,11 +48,6 @@ tag_name_regex          = "^\\S+$"
 tag_category_name_regex = "^[^\\s%+#/]+$"
 
 # contact_email = example: bob@example.com. # Meant for manual password reset procedures
-
-# [public_info.smtp]
-# username = # example: bot
-# password = # example: groovy123
-# from     = # example: noreply@example.com
 
 [public_info.privileges]
 user_create_self           = "anonymous" # Registration permission
