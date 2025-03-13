@@ -159,7 +159,6 @@ pub struct PublicInfo {
     pub tag_name_regex: Regex,
     #[serde(with = "serde_regex")]
     pub tag_category_name_regex: Regex,
-    pub smtp: Option<SmtpInfo>,
     pub privileges: Privileges,
 }
 
@@ -178,6 +177,7 @@ pub struct Config {
     #[serde(with = "serde_regex")]
     pub pool_category_regex: Regex,
     pub thumbnails: Thumbnails,
+    pub smtp: Option<SmtpInfo>,
     pub public_info: PublicInfo,
 }
 
@@ -186,7 +186,7 @@ pub fn get() -> &'static Config {
 }
 
 pub fn smtp() -> Option<&'static SmtpInfo> {
-    CONFIG.public_info.smtp.as_ref()
+    CONFIG.smtp.as_ref()
 }
 
 pub fn privileges() -> &'static Privileges {
@@ -236,7 +236,7 @@ pub fn port() -> u16 {
 
 static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     let mut config: Config = toml::from_str(&std::fs::read_to_string(get_config_path()).unwrap()).unwrap();
-    config.public_info.can_send_mails = config.public_info.smtp.is_some();
+    config.public_info.can_send_mails = config.smtp.is_some();
     config
 });
 
