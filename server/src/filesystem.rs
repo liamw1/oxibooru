@@ -175,6 +175,11 @@ pub fn create_dir(directory: Directory) -> std::io::Result<bool> {
 pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
     if let Err(ErrorKind::CrossesDevices) = std::fs::rename(from, to).as_ref().map_err(std::io::Error::kind) {
         std::fs::copy(from, to)?;
+
+        // Copy doesn't preserve permissions, so we will have to set them for the new file
+        let metadata = std::fs::metadata(from)?;
+        std::fs::set_permissions(to, metadata.permissions())?;
+
         std::fs::remove_file(from)?;
     }
     Ok(())
