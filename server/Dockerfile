@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y libpq5 libavcodec-dev libavformat-dev l
 # Set permissions
 RUN mkdir -p /opt/app /data \
   && groupadd -g ${PGID} app \
-  && useradd -u ${PUID} -g ${PGID} -ms /bin/bash app \
+  && useradd -u ${PUID} -g ${PGID} -r -M -d /opt/app -s /sbin/nologin app \
   && chown -R app:app /opt/app /data
 
 # Copy over application binary
