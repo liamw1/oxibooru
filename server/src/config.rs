@@ -1,5 +1,6 @@
 use crate::db;
 use crate::model::enums::UserRank;
+use crate::string::SmallString;
 use lettre::message::Mailbox;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -31,8 +32,8 @@ pub struct Thumbnails {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SmtpInfo {
-    pub username: String,
-    pub password: String,
+    pub username: SmallString,
+    pub password: SmallString,
     pub from: Mailbox,
 }
 
@@ -144,10 +145,10 @@ pub struct Privileges {
 #[serde(deny_unknown_fields)]
 #[serde(rename_all(serialize = "camelCase"))]
 pub struct PublicInfo {
-    pub name: String,
+    pub name: SmallString,
     pub default_user_rank: UserRank,
     pub enable_safety: bool,
-    pub contact_email: Option<String>,
+    pub contact_email: Option<SmallString>,
     #[serde(skip_deserializing)]
     pub can_send_mails: bool,
     #[serde(with = "serde_regex")]
@@ -165,11 +166,11 @@ pub struct PublicInfo {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    data_dir: String,
-    pub data_url: String,
-    pub password_secret: String,
-    pub content_secret: String,
-    pub domain: Option<String>,
+    data_dir: SmallString,
+    pub data_url: SmallString,
+    pub password_secret: SmallString,
+    pub content_secret: SmallString,
+    pub domain: Option<SmallString>,
     pub delete_source_files: bool,
     pub post_similarity_threshold: f64,
     #[serde(with = "serde_regex")]

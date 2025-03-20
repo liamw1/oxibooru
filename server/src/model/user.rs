@@ -1,6 +1,7 @@
 use crate::content::hash;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::schema::{user, user_token};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -24,10 +25,10 @@ pub struct NewUser<'a> {
 #[diesel(check_for_backend(Pg))]
 pub struct User {
     pub id: i64,
-    pub name: String,
+    pub name: SmallString,
     pub password_hash: String,
     pub password_salt: String,
-    pub email: Option<String>,
+    pub email: Option<SmallString>,
     pub rank: UserRank,
     pub avatar_style: AvatarStyle,
     pub creation_time: DateTime,

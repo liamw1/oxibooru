@@ -2,6 +2,7 @@ use crate::api::ApiResult;
 use crate::auth::password;
 use crate::content::hash;
 use crate::schema::user;
+use crate::string::SmallString;
 use crate::{api, config, db};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
@@ -27,7 +28,10 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
     request_reset.or(reset_password)
 }
 
-fn get_user_info(conn: &mut PgConnection, identifier: &str) -> ApiResult<(i64, String, Option<String>, String)> {
+fn get_user_info(
+    conn: &mut PgConnection,
+    identifier: &str,
+) -> ApiResult<(i64, SmallString, Option<SmallString>, String)> {
     user::table
         .select((user::id, user::name, user::email, user::password_salt))
         .filter(user::name.eq(identifier).or(user::email.eq(identifier)))
@@ -61,7 +65,7 @@ fn request_reset(identifier: String) -> ApiResult<()> {
              Otherwise, please ignore this email.",
             config::get().public_info.name
         ))?;
-    let credentials = Credentials::new(smtp_info.username.clone(), smtp_info.password.clone());
+    let credentials = Credentials::new(smtp_info.username.to_string(), smtp_info.password.to_string());
 
     // Open a remote connection to gmail
     let mailer = SmtpTransport::relay("smtp.gmail.com")

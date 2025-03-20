@@ -4,6 +4,7 @@ use crate::model::enums::{AvatarStyle, Rating};
 use crate::resource::user::MicroUser;
 use crate::resource::{self, BoolFill};
 use crate::schema::{comment, comment_score, comment_statistics, user};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -119,7 +120,7 @@ fn get_owners(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         .filter(comment::id.eq_any(&comment_ids))
         .inner_join(user::table)
         .select((comment::id, user::name, user::avatar_style))
-        .load::<(i64, String, AvatarStyle)>(conn)
+        .load::<(i64, SmallString, AvatarStyle)>(conn)
         .map(|comment_info| {
             resource::order_like(comment_info, comments, |&(id, ..)| id)
                 .into_iter()

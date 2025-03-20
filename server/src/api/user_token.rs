@@ -4,6 +4,7 @@ use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
 use crate::resource::user_token::UserTokenInfo;
 use crate::schema::{user, user_token};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource};
 use diesel::prelude::*;
@@ -45,7 +46,7 @@ fn list(auth: AuthResult, username: String, params: ResourceParams) -> ApiResult
     let client = auth?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    let (avatar_style, user_tokens) = db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -57,16 +58,19 @@ fn list(auth: AuthResult, username: String, params: ResourceParams) -> ApiResult
         };
         api::verify_privilege(client, required_rank)?;
 
-        let results = user_token::table
+        user_token::table
             .filter(user_token::user_id.eq(user_id))
-            .load(conn)?
-            .into_iter()
-            .map(|user_token| {
-                UserTokenInfo::new(MicroUser::new(username.to_string(), avatar_style), user_token, &fields)
-            })
-            .collect();
-        Ok(UnpagedResponse { results })
-    })
+            .load(conn)
+            .map(|tokens| (avatar_style, tokens))
+            .map_err(api::Error::from)
+    })?;
+
+    let username = SmallString::new(username);
+    let results = user_tokens
+        .into_iter()
+        .map(|user_token| UserTokenInfo::new(MicroUser::new(username.clone(), avatar_style), user_token, &fields))
+        .collect();
+    Ok(UnpagedResponse { results })
 }
 
 #[derive(Deserialize)]
@@ -120,7 +124,7 @@ fn create(auth: AuthResult, username: String, params: ResourceParams, body: Crea
             .get_result(conn)?;
         Ok::<_, api::Error>((user_token, avatar_style))
     })?;
-    Ok(UserTokenInfo::new(MicroUser::new(username.into_owned(), avatar_style), user_token, &fields))
+    Ok(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), user_token, &fields))
 }
 
 #[derive(Deserialize)]
@@ -175,7 +179,7 @@ fn update(
         let updated_user_token: UserToken = user_token.save_changes(conn)?;
         Ok::<_, api::Error>((updated_user_token, avatar_style))
     })?;
-    Ok(UserTokenInfo::new(MicroUser::new(username.into_owned(), avatar_style), updated_user_token, &fields))
+    Ok(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), updated_user_token, &fields))
 }
 
 fn delete(auth: AuthResult, username: String, token: Uuid) -> ApiResult<()> {

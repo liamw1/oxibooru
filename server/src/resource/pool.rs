@@ -3,18 +3,20 @@ use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource::post::MicroPost;
 use crate::resource::{self, BoolFill};
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use std::rc::Rc;
 use strum::{EnumString, EnumTable};
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroPool {
     pub id: i64,
-    pub names: Vec<String>,
-    pub category: String,
+    pub names: Rc<[SmallString]>,
+    pub category: SmallString,
     pub description: String,
     pub post_count: i64,
 }
@@ -48,8 +50,8 @@ pub struct PoolInfo {
     description: Option<String>,
     creation_time: Option<DateTime>,
     last_edit_time: Option<DateTime>,
-    category: Option<String>,
-    names: Option<Vec<String>>,
+    category: Option<SmallString>,
+    names: Option<Vec<SmallString>>,
     posts: Option<Vec<MicroPost>>,
     post_count: Option<i64>,
 }
@@ -123,7 +125,7 @@ impl PoolInfo {
     }
 }
 
-fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<String>> {
+fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<SmallString>> {
     let pool_ids: Vec<_> = pools.iter().map(Identifiable::id).copied().collect();
     pool::table
         .inner_join(pool_category::table)
@@ -138,7 +140,7 @@ fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<St
         })
 }
 
-fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<String>>> {
+fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<SmallString>>> {
     Ok(PoolName::belonging_to(pools)
         .order_by(pool_name::order)
         .load::<PoolName>(conn)?

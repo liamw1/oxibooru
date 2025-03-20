@@ -4,6 +4,7 @@ use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPoolCategory, PoolCategory};
 use crate::resource::pool_category::PoolCategoryInfo;
 use crate::schema::{pool, pool_category};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource};
 use diesel::prelude::*;
@@ -84,8 +85,8 @@ fn get(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<Pool
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateBody {
-    name: String,
-    color: String,
+    name: SmallString,
+    color: SmallString,
 }
 
 fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<PoolCategoryInfo> {
@@ -111,8 +112,8 @@ fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResu
 #[serde(deny_unknown_fields)]
 struct UpdateBody {
     version: DateTime,
-    name: Option<String>,
-    color: Option<String>,
+    name: Option<SmallString>,
+    color: Option<SmallString>,
 }
 
 fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBody) -> ApiResult<PoolCategoryInfo> {
@@ -181,7 +182,7 @@ fn set_default(auth: AuthResult, name: String, params: ResourceParams) -> ApiRes
         std::mem::swap(&mut category.id, &mut old_default_category.id);
 
         // Give new default category an empty name so it doesn't violate uniqueness
-        let mut temporary_category_name = String::from("");
+        let mut temporary_category_name = SmallString::new("");
         std::mem::swap(&mut category.name, &mut temporary_category_name);
         let mut new_default_category: PoolCategory = category.save_changes(conn)?;
 

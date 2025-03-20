@@ -2,6 +2,7 @@ use crate::api::{ApiResult, AuthResult, ResourceParams};
 use crate::model::post::PostFeature;
 use crate::resource::post::PostInfo;
 use crate::schema::{database_statistics, post_feature, user};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource};
 use diesel::prelude::*;
@@ -25,7 +26,7 @@ struct Response {
     disk_usage: i64,
     featured_post: Option<PostInfo>,
     featuring_time: Option<DateTime>,
-    featuring_user: Option<String>,
+    featuring_user: Option<SmallString>,
     server_time: DateTime,
     config: &'static config::PublicInfo,
 }
@@ -47,7 +48,7 @@ fn get(auth: AuthResult, params: ResourceParams) -> ApiResult<Response> {
             .as_ref()
             .map(|feature| PostInfo::new_from_id(conn, client, feature.post_id, &fields))
             .transpose()?;
-        let featuring_user: Option<String> = latest_feature
+        let featuring_user: Option<SmallString> = latest_feature
             .as_ref()
             .map(|feature| {
                 user::table

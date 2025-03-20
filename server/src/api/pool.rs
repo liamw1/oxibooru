@@ -3,6 +3,7 @@ use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::PoolInfo;
 use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_post};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
 use diesel::dsl::{exists, max};
@@ -108,8 +109,8 @@ fn get(auth: AuthResult, pool_id: i64, params: ResourceParams) -> ApiResult<Pool
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateBody {
-    names: Vec<String>,
-    category: String,
+    names: Vec<SmallString>,
+    category: SmallString,
     description: Option<String>,
     posts: Option<Vec<i64>>,
 }
@@ -203,9 +204,9 @@ fn merge(auth: AuthResult, params: ResourceParams, body: MergeBody<i64>) -> ApiR
 #[serde(deny_unknown_fields)]
 struct UpdateBody {
     version: DateTime,
-    category: Option<String>,
+    category: Option<SmallString>,
     description: Option<String>,
-    names: Option<Vec<String>>,
+    names: Option<Vec<SmallString>>,
     posts: Option<Vec<i64>>,
 }
 

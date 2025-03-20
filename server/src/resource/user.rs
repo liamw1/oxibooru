@@ -5,6 +5,7 @@ use crate::model::post::PostScore;
 use crate::model::user::User;
 use crate::resource::{self, BoolFill};
 use crate::schema::{post_score, user, user_statistics};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::dsl::count_star;
 use diesel::prelude::*;
@@ -15,12 +16,12 @@ use strum::{EnumString, EnumTable};
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroUser {
-    name: String,
+    name: SmallString,
     avatar_url: String,
 }
 
 impl MicroUser {
-    pub fn new(name: String, avatar_style: AvatarStyle) -> Self {
+    pub fn new(name: SmallString, avatar_style: AvatarStyle) -> Self {
         let avatar_url = match avatar_style {
             AvatarStyle::Gravatar => hash::gravatar_url(&name),
             AvatarStyle::Manual => hash::custom_avatar_url(&name),
@@ -64,8 +65,8 @@ impl BoolFill for FieldTable<bool> {
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     version: Option<DateTime>,
-    name: Option<String>,
-    email: Option<PrivateData<Option<String>>>,
+    name: Option<SmallString>,
+    email: Option<PrivateData<Option<SmallString>>>,
     rank: Option<UserRank>,
     last_login_time: Option<DateTime>,
     creation_time: Option<DateTime>,

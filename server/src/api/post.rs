@@ -16,6 +16,7 @@ use crate::schema::{
     comment, database_statistics, pool_post, post, post_favorite, post_feature, post_relation, post_score,
     post_signature, post_statistics, post_tag,
 };
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, search, update};
 use diesel::dsl::exists;
@@ -163,7 +164,7 @@ const MAX_POSTS_PER_PAGE: i64 = 1000;
 /// more pessimistic than necessary, as parallel updates are safe if the sets of tags are
 /// disjoint. However, allowing disjoint tagging introduces additional complexity so it
 /// isn't being done as of now.
-async fn tagging_update<T, F>(tags: Option<&[String]>, update: F) -> ApiResult<T>
+async fn tagging_update<T, F>(tags: Option<&[SmallString]>, update: F) -> ApiResult<T>
 where
     F: FnOnce(&mut db::Connection) -> ApiResult<T>,
 {
@@ -489,7 +490,7 @@ struct CreateBody {
     source: Option<String>,
     relations: Option<Vec<i64>>,
     anonymous: Option<bool>,
-    tags: Option<Vec<String>>,
+    tags: Option<Vec<SmallString>>,
     notes: Option<Vec<Note>>,
     flags: Option<Vec<PostFlag>>,
 }
@@ -866,7 +867,7 @@ struct UpdateBody {
     safety: Option<PostSafety>,
     source: Option<String>,
     relations: Option<Vec<i64>>,
-    tags: Option<Vec<String>>,
+    tags: Option<Vec<SmallString>>,
     notes: Option<Vec<Note>>,
     flags: Option<Vec<PostFlag>>,
     #[serde(skip_deserializing)]

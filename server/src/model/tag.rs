@@ -1,4 +1,5 @@
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::dsl::sql;
 use diesel::expression::{SqlLiteral, UncheckedBind};
@@ -21,8 +22,8 @@ pub struct NewTagCategory<'a> {
 pub struct TagCategory {
     pub id: i64,
     pub order: i32,
-    pub name: String,
-    pub color: String,
+    pub name: SmallString,
+    pub color: SmallString,
     pub last_edit_time: DateTime,
 }
 
@@ -63,7 +64,7 @@ pub struct NewTagName<'a> {
 pub struct TagName {
     pub tag_id: i64,
     pub order: i32,
-    pub name: String,
+    pub name: SmallString,
 }
 
 impl TagName {

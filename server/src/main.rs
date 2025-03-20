@@ -13,6 +13,7 @@ mod model;
 mod resource;
 mod schema;
 mod search;
+mod string;
 #[cfg(test)]
 mod test;
 mod time;

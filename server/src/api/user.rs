@@ -8,6 +8,7 @@ use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
 use crate::resource::user::{UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, search, update};
 use argon2::password_hash::SaltString;
@@ -141,9 +142,9 @@ fn get(auth: AuthResult, username: String, params: ResourceParams) -> ApiResult<
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct CreateBody {
-    name: String,
-    password: String,
-    email: Option<String>,
+    name: SmallString,
+    password: SmallString,
+    email: Option<SmallString>,
     rank: Option<UserRank>,
     avatar_style: Option<AvatarStyle>,
     #[serde(skip_deserializing)]
@@ -231,10 +232,10 @@ async fn create_multipart(auth: AuthResult, params: ResourceParams, form_data: F
 #[serde(rename_all = "camelCase")]
 struct UpdateBody {
     version: DateTime,
-    name: Option<String>,
-    password: Option<String>,
+    name: Option<SmallString>,
+    password: Option<SmallString>,
     #[serde(default, deserialize_with = "api::deserialize_some")]
-    email: Option<Option<String>>,
+    email: Option<Option<SmallString>>,
     rank: Option<UserRank>,
     avatar_style: Option<AvatarStyle>,
     #[serde(skip_deserializing)]

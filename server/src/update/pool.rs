@@ -3,6 +3,7 @@ use crate::api::ApiResult;
 use crate::config::RegexType;
 use crate::model::pool::{NewPoolName, PoolPost};
 use crate::schema::{pool, pool_name, pool_post};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::prelude::*;
 
@@ -15,7 +16,12 @@ pub fn last_edit_time(conn: &mut PgConnection, pool_id: i64) -> ApiResult<()> {
 }
 
 /// Appends `names` onto the current list of names for the pool with id `pool_id`.
-pub fn add_names(conn: &mut PgConnection, pool_id: i64, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
+pub fn add_names(
+    conn: &mut PgConnection,
+    pool_id: i64,
+    current_name_count: i32,
+    names: Vec<SmallString>,
+) -> ApiResult<()> {
     names
         .iter()
         .try_for_each(|name| api::verify_matches_regex(name, RegexType::Pool))?;

@@ -1,5 +1,6 @@
 use crate::model::post::Post;
 use crate::schema::{pool, pool_category, pool_name, pool_post};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::dsl::sql;
 use diesel::expression::{SqlLiteral, UncheckedBind};
@@ -20,8 +21,8 @@ pub struct NewPoolCategory<'a> {
 #[diesel(check_for_backend(Pg))]
 pub struct PoolCategory {
     pub id: i64,
-    pub name: String,
-    pub color: String,
+    pub name: SmallString,
+    pub color: SmallString,
     pub last_edit_time: DateTime,
 }
 
@@ -62,7 +63,7 @@ pub struct NewPoolName<'a> {
 pub struct PoolName {
     pub pool_id: i64,
     pub order: i32,
-    pub name: String,
+    pub name: SmallString,
 }
 
 impl PoolName {

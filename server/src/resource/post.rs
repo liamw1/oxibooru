@@ -15,6 +15,7 @@ use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_relation, post_score, post_statistics, tag, tag_category, tag_name, tag_statistics, user,
 };
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -344,7 +345,7 @@ fn get_owners(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Option
         .filter(post::id.eq_any(&post_ids))
         .inner_join(user::table)
         .select((post::id, user::name, user::avatar_style))
-        .load::<(i64, String, AvatarStyle)>(conn)
+        .load::<(i64, SmallString, AvatarStyle)>(conn)
         .map(|post_info| {
             resource::order_like(post_info, posts, |&(id, ..)| id)
                 .into_iter()
@@ -380,12 +381,14 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
         .load(conn)?;
     let tag_ids: HashSet<i64> = post_tags.iter().map(|(post_tag, ..)| post_tag.tag_id).collect();
 
-    let tag_names: Vec<(i64, String)> = tag_name::table
+    let tag_names: Vec<(i64, SmallString)> = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(tag_ids))
-        .order((tag_name::tag_id, tag_name::order))
+        .order_by((tag_name::tag_id, tag_name::order))
         .load(conn)?;
-    let category_names: HashMap<i64, String> = tag_category::table
+    let names_map = resource::collect_names(tag_names);
+
+    let category_names: HashMap<i64, SmallString> = tag_category::table
         .select((tag_category::id, tag_category::name))
         .load(conn)?
         .into_iter()
@@ -397,19 +400,10 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
         .map(|tags_on_post| {
             tags_on_post
                 .into_iter()
-                .map(|(post_tag, category_id, usages)| {
-                    let names = tag_names
-                        .iter()
-                        .skip_while(|&&(tag_id, _)| tag_id != post_tag.tag_id)
-                        .take_while(|&&(tag_id, _)| tag_id == post_tag.tag_id)
-                        .map(|(_, name)| name)
-                        .cloned()
-                        .collect();
-                    MicroTag {
-                        names,
-                        category: category_names[&category_id].clone(),
-                        usages,
-                    }
+                .map(|(post_tag, category_id, usages)| MicroTag {
+                    names: names_map[&post_tag.tag_id].clone(),
+                    category: category_names[&category_id].clone(),
+                    usages,
                 })
                 .collect()
         })
@@ -417,7 +411,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
 }
 
 fn get_comments(conn: &mut PgConnection, client: Client, posts: &[Post]) -> QueryResult<Vec<Vec<CommentInfo>>> {
-    type CommentData = (Comment, i64, Option<(String, AvatarStyle)>);
+    type CommentData = (Comment, i64, Option<(SmallString, AvatarStyle)>);
     let comments: Vec<CommentData> = Comment::belonging_to(posts)
         .inner_join(comment_statistics::table)
         .left_join(user::table)
@@ -492,12 +486,14 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
         .load(conn)?;
     let pool_ids: HashSet<i64> = pool_posts.iter().map(|(pool_post, ..)| pool_post.pool_id).collect();
 
-    let pool_names: Vec<(i64, String)> = pool_name::table
+    let pool_names: Vec<(i64, SmallString)> = pool_name::table
         .select((pool_name::pool_id, pool_name::name))
         .filter(pool_name::pool_id.eq_any(&pool_ids))
         .order((pool_name::pool_id, pool_name::order, pool_name::name))
         .load(conn)?;
-    let category_names: HashMap<i64, String> = pool_category::table
+    let names_map = resource::collect_names(pool_names);
+
+    let category_names: HashMap<i64, SmallString> = pool_category::table
         .select((pool_category::id, pool_category::name))
         .load(conn)?
         .into_iter()
@@ -509,21 +505,12 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
         .map(|pools_on_post| {
             pools_on_post
                 .into_iter()
-                .map(|(pool_post, category_id, description, post_count)| {
-                    let names = pool_names
-                        .iter()
-                        .skip_while(|&&(pool_id, _)| pool_id != pool_post.pool_id)
-                        .take_while(|&&(pool_id, _)| pool_id == pool_post.pool_id)
-                        .map(|(_, name)| name)
-                        .cloned()
-                        .collect();
-                    MicroPool {
-                        id: pool_post.pool_id,
-                        names,
-                        category: category_names[&category_id].clone(),
-                        description,
-                        post_count,
-                    }
+                .map(|(pool_post, category_id, description, post_count)| MicroPool {
+                    id: pool_post.pool_id,
+                    names: names_map[&pool_post.pool_id].clone(),
+                    category: category_names[&category_id].clone(),
+                    description,
+                    post_count,
                 })
                 .collect()
         })
@@ -572,13 +559,13 @@ fn get_client_favorites(conn: &mut PgConnection, client: Client, posts: &[Post])
 }
 
 fn get_users_who_favorited(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroUser>>> {
-    let users_who_favorited: Vec<(i64, String, AvatarStyle)> = PostFavorite::belonging_to(posts)
+    let users_who_favorited: Vec<(i64, SmallString, AvatarStyle)> = PostFavorite::belonging_to(posts)
         .inner_join(user::table)
         .select((post_favorite::post_id, user::name, user::avatar_style))
         .order_by(user::name)
         .load(conn)?;
 
-    let mut users_grouped_by_posts: Vec<Vec<(String, AvatarStyle)>> =
+    let mut users_grouped_by_posts: Vec<Vec<(SmallString, AvatarStyle)>> =
         std::iter::repeat_with(Vec::new).take(posts.len()).collect();
     for (post_id, username, avatar_style) in users_who_favorited.into_iter() {
         let index = posts.iter().position(|post| post.id == post_id).unwrap();

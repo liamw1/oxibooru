@@ -7,8 +7,11 @@ pub mod tag_category;
 pub mod user;
 pub mod user_token;
 
-use diesel::prelude::*;
+use crate::string::SmallString;
+use diesel::Identifiable;
+use std::collections::HashMap;
 use std::ops::IndexMut;
+use std::rc::Rc;
 use std::str::FromStr;
 
 // NOTE: The more complicated queries in this module rely on the behavior of diesel's
@@ -97,4 +100,45 @@ where
         results[index] = Some(value);
     }
     results
+}
+
+/// Organizes `ordered_names` into a map between each tag's id and its names while
+/// minimizing allocations and clones. Assumes `ordered_names` is sorted by tag id
+/// and tag name order.
+fn collect_names(ordered_names: Vec<(i64, SmallString)>) -> HashMap<i64, Rc<[SmallString]>> {
+    if ordered_names.is_empty() {
+        return HashMap::new();
+    }
+
+    // Mark boundaries where names belong to single resource
+    let mut name_boundaries = vec![0];
+    for (i, window) in ordered_names.windows(2).enumerate() {
+        let curr_id = window[0].0;
+        let next_id = window[1].0;
+        if next_id != curr_id {
+            name_boundaries.push(i + 1);
+        }
+    }
+    name_boundaries.push(ordered_names.len());
+
+    // Collect resource names into names map
+    let mut name_iter = ordered_names.into_iter();
+    let mut names_map: HashMap<i64, Rc<[SmallString]>> = HashMap::new();
+    for window in name_boundaries.windows(2) {
+        let [start, end] = window.try_into().unwrap();
+        let name_count = end - start;
+
+        // Create buffer with exact capactiy so that it doesn't need to be reallocated to
+        // the correct size when moving to the Rc
+        let (id, first_name) = name_iter.next().unwrap();
+        let mut names = Vec::with_capacity(name_count);
+        names.push(first_name);
+        for _i in 1..name_count {
+            let (_, name): (i64, SmallString) = name_iter.next().unwrap();
+            names.push(name);
+        }
+
+        names_map.insert(id, Rc::from(names));
+    }
+    names_map
 }

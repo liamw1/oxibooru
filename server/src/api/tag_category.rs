@@ -4,6 +4,7 @@ use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource};
 use diesel::prelude::*;
@@ -85,8 +86,8 @@ fn get(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagC
 #[serde(deny_unknown_fields)]
 struct CreateBody {
     order: i32,
-    name: String,
-    color: String,
+    name: SmallString,
+    color: SmallString,
 }
 
 fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<TagCategoryInfo> {
@@ -113,9 +114,9 @@ fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResu
 #[serde(deny_unknown_fields)]
 struct UpdateBody {
     version: DateTime,
-    order: Option<String>, // TODO: Client sends order out as string so we convert on server, would be better to do this on client
-    name: Option<String>,
-    color: Option<String>,
+    order: Option<SmallString>, // TODO: Client sends order out as string so we convert on server, would be better to do this on client
+    name: Option<SmallString>,
+    color: Option<SmallString>,
 }
 
 fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBody) -> ApiResult<TagCategoryInfo> {
@@ -195,7 +196,7 @@ fn set_default(auth: AuthResult, name: String, params: ResourceParams) -> ApiRes
         std::mem::swap(&mut category.id, &mut old_default_category.id);
 
         // Give new default category an empty name so it doesn't violate uniqueness
-        let mut temporary_category_name = String::from("");
+        let mut temporary_category_name = SmallString::new("");
         std::mem::swap(&mut category.name, &mut temporary_category_name);
         let mut new_default_category: TagCategory = category.save_changes(conn)?;
 

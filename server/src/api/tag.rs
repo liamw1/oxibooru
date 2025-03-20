@@ -4,6 +4,7 @@ use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
 use crate::resource::tag::TagInfo;
 use crate::schema::{database_statistics, post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
 use diesel::dsl::{count_star, max};
@@ -170,9 +171,9 @@ fn get_siblings(auth: AuthResult, name: String, params: ResourceParams) -> ApiRe
 struct CreateBody {
     category: String,
     description: Option<String>,
-    names: Vec<String>,
-    implications: Option<Vec<String>>,
-    suggestions: Option<Vec<String>>,
+    names: Vec<SmallString>,
+    implications: Option<Vec<SmallString>>,
+    suggestions: Option<Vec<SmallString>>,
 }
 
 fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<TagInfo> {
@@ -335,11 +336,11 @@ fn merge(auth: AuthResult, params: ResourceParams, body: MergeBody<String>) -> A
 #[serde(deny_unknown_fields)]
 struct UpdateBody {
     version: DateTime,
-    category: Option<String>,
+    category: Option<SmallString>,
     description: Option<String>,
-    names: Option<Vec<String>>,
-    implications: Option<Vec<String>>,
-    suggestions: Option<Vec<String>>,
+    names: Option<Vec<SmallString>>,
+    implications: Option<Vec<SmallString>>,
+    suggestions: Option<Vec<SmallString>>,
 }
 
 fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBody) -> ApiResult<TagInfo> {

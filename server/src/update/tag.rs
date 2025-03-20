@@ -4,6 +4,7 @@ use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config};
 use diesel::prelude::*;
@@ -18,7 +19,12 @@ pub fn last_edit_time(conn: &mut PgConnection, tag_id: i64) -> ApiResult<()> {
 }
 
 /// Appends `names` onto the current list of names for the tag with id `tag_id`.
-pub fn add_names(conn: &mut PgConnection, tag_id: i64, current_name_count: i32, names: Vec<String>) -> ApiResult<()> {
+pub fn add_names(
+    conn: &mut PgConnection,
+    tag_id: i64,
+    current_name_count: i32,
+    names: Vec<SmallString>,
+) -> ApiResult<()> {
     names
         .iter()
         .try_for_each(|name| api::verify_matches_regex(name, RegexType::Tag))?;
@@ -87,7 +93,7 @@ pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: Vec<
 pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
     client: Client,
-    names: &[String],
+    names: &[SmallString],
     detect_cyclic_dependencies: bool,
 ) -> ApiResult<Vec<i64>> {
     let mut implied_ids: Vec<i64> = tag_name::table
@@ -119,7 +125,7 @@ pub fn get_or_create_tag_ids(
         .filter(tag_name::tag_id.eq_any(&tag_ids))
         .load(conn)?
         .into_iter()
-        .map(|name: String| name.to_lowercase())
+        .map(|name: SmallString| name.to_lowercase())
         .collect();
 
     let new_tag_names: Vec<_> = names

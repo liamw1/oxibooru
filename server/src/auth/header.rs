@@ -5,7 +5,6 @@ use crate::{auth, db};
 use base64::DecodeError;
 use base64::prelude::*;
 use diesel::prelude::*;
-use itertools::Itertools;
 use std::str::Utf8Error;
 use thiserror::Error;
 use uuid::Uuid;
@@ -60,14 +59,10 @@ pub fn credentials_for(username: &str, password: &str) -> String {
 /// `credentials` are sent base64 encoded, so this function decodes them to utf-8.
 fn decode_credentials(credentials: &str) -> Result<(String, String), AuthenticationError> {
     let decoded_credentials = BASE64_STANDARD.decode(credentials)?;
-    let utf8_encoded_credentials = decoded_credentials
-        .split(|&c| c == b':')
-        .map(std::str::from_utf8)
-        .collect::<Result<Vec<_>, _>>()?;
+    let utf8_encoded_credentials = std::str::from_utf8(&decoded_credentials)?;
     utf8_encoded_credentials
-        .into_iter()
-        .map(str::to_owned)
-        .collect_tuple()
+        .split_once(':')
+        .map(|(username, pass)| (username.to_owned(), pass.to_owned()))
         .ok_or(AuthenticationError::MalformedCredentials)
 }
 

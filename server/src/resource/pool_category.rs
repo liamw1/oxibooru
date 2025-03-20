@@ -1,6 +1,7 @@
 use crate::model::pool::PoolCategory;
 use crate::resource::BoolFill;
 use crate::schema::{pool_category, pool_category_statistics};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -27,8 +28,8 @@ impl BoolFill for FieldTable<bool> {
 #[derive(Serialize)]
 pub struct PoolCategoryInfo {
     version: Option<DateTime>,
-    name: Option<String>,
-    color: Option<String>,
+    name: Option<SmallString>,
+    color: Option<SmallString>,
     usages: Option<i64>,
     default: Option<bool>,
 }

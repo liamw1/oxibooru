@@ -95,24 +95,18 @@ impl DerefMut for DateTime {
 
 impl From<OffsetDateTime> for DateTime {
     fn from(value: OffsetDateTime) -> Self {
-        DateTime(value)
+        Self(value)
     }
 }
 
-impl ToSql<Timestamptz, Pg> for DateTime
-where
-    OffsetDateTime: ToSql<Timestamptz, Pg>,
-{
+impl ToSql<Timestamptz, Pg> for DateTime {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
         <OffsetDateTime as ToSql<Timestamptz, Pg>>::to_sql(&self.0, &mut out.reborrow())
     }
 }
 
-impl FromSql<Timestamptz, Pg> for DateTime
-where
-    OffsetDateTime: FromSql<Timestamptz, Pg>,
-{
-    fn from_sql(bytes: PgValue<'_>) -> deserialize::Result<Self> {
-        OffsetDateTime::from_sql(bytes).map(DateTime)
+impl FromSql<Timestamptz, Pg> for DateTime {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        OffsetDateTime::from_sql(value).map(DateTime)
     }
 }
