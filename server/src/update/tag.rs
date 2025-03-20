@@ -87,12 +87,12 @@ pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: Vec<
 pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
     client: Client,
-    names: Vec<String>,
+    names: &[String],
     detect_cyclic_dependencies: bool,
 ) -> ApiResult<Vec<i64>> {
     let mut implied_ids: Vec<i64> = tag_name::table
         .select(tag_name::tag_id)
-        .filter(tag_name::name.eq_any(&names))
+        .filter(tag_name::name.eq_any(names))
         .distinct()
         .load(conn)?;
     let mut all_implied_tag_ids: HashSet<i64> = implied_ids.iter().copied().collect();
@@ -123,7 +123,7 @@ pub fn get_or_create_tag_ids(
         .collect();
 
     let new_tag_names: Vec<_> = names
-        .into_iter()
+        .iter()
         .filter(|name| !existing_names.contains(&name.to_lowercase()))
         .collect();
     new_tag_names

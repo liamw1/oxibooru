@@ -202,11 +202,11 @@ fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResu
 
         update::tag::add_names(conn, tag_id, 0, body.names)?;
         if let Some(implications) = body.implications {
-            let implied_ids = update::tag::get_or_create_tag_ids(conn, client, implications, true)?;
+            let implied_ids = update::tag::get_or_create_tag_ids(conn, client, &implications, true)?;
             update::tag::add_implications(conn, tag_id, implied_ids)?;
         }
         if let Some(suggestions) = body.suggestions {
-            let suggested_ids = update::tag::get_or_create_tag_ids(conn, client, suggestions, true)?;
+            let suggested_ids = update::tag::get_or_create_tag_ids(conn, client, &suggestions, true)?;
             update::tag::add_suggestions(conn, tag_id, suggested_ids)?;
         }
         Ok::<_, api::Error>(tag_id)
@@ -387,7 +387,7 @@ fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBo
         if let Some(implications) = body.implications {
             api::verify_privilege(client, config::privileges().tag_edit_implication)?;
 
-            let implied_ids = update::tag::get_or_create_tag_ids(conn, client, implications, true)?;
+            let implied_ids = update::tag::get_or_create_tag_ids(conn, client, &implications, true)?;
             diesel::delete(tag_implication::table)
                 .filter(tag_implication::parent_id.eq(tag_id))
                 .execute(conn)?;
@@ -396,7 +396,7 @@ fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBo
         if let Some(suggestions) = body.suggestions {
             api::verify_privilege(client, config::privileges().tag_edit_suggestion)?;
 
-            let suggested_ids = update::tag::get_or_create_tag_ids(conn, client, suggestions, true)?;
+            let suggested_ids = update::tag::get_or_create_tag_ids(conn, client, &suggestions, true)?;
             diesel::delete(tag_suggestion::table)
                 .filter(tag_suggestion::parent_id.eq(tag_id))
                 .execute(conn)?;

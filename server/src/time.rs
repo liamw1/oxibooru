@@ -1,6 +1,6 @@
-use diesel::backend::Backend;
 use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::expression::AsExpression;
+use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Timestamptz;
 use serde::{Deserialize, Serialize};
@@ -99,20 +99,20 @@ impl From<OffsetDateTime> for DateTime {
     }
 }
 
-impl<DB: Backend> ToSql<Timestamptz, DB> for DateTime
+impl ToSql<Timestamptz, Pg> for DateTime
 where
-    OffsetDateTime: ToSql<diesel::sql_types::Timestamptz, DB>,
+    OffsetDateTime: ToSql<Timestamptz, Pg>,
 {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, DB>) -> serialize::Result {
-        self.0.to_sql(out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        <OffsetDateTime as ToSql<Timestamptz, Pg>>::to_sql(&self.0, &mut out.reborrow())
     }
 }
 
-impl<DB: Backend> FromSql<Timestamptz, DB> for DateTime
+impl FromSql<Timestamptz, Pg> for DateTime
 where
-    OffsetDateTime: FromSql<diesel::sql_types::Timestamptz, DB>,
+    OffsetDateTime: FromSql<Timestamptz, Pg>,
 {
-    fn from_sql(bytes: DB::RawValue<'_>) -> deserialize::Result<Self> {
+    fn from_sql(bytes: PgValue<'_>) -> deserialize::Result<Self> {
         OffsetDateTime::from_sql(bytes).map(DateTime)
     }
 }
