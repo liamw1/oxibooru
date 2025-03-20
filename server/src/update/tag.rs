@@ -120,7 +120,7 @@ pub fn get_or_create_tag_ids(
     }
 
     let mut tag_ids: Vec<_> = all_implied_tag_ids.into_iter().collect();
-    let existing_names: HashSet<String> = tag_name::table
+    let existing_names: HashSet<SmallString> = tag_name::table
         .select(tag_name::name)
         .filter(tag_name::tag_id.eq_any(&tag_ids))
         .load(conn)?

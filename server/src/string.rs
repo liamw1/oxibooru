@@ -5,13 +5,13 @@ use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::Text;
 use serde::{Deserialize, Serialize};
-use smol_str::SmolStr;
+use smol_str::{SmolStr, StrExt};
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::io::Write;
 use std::ops::Deref;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text, sql_type = Citext)]
 pub struct SmallString(SmolStr);
 
@@ -19,12 +19,22 @@ impl SmallString {
     pub fn new(text: impl AsRef<str>) -> Self {
         Self(SmolStr::new(text))
     }
+
+    pub fn to_lowercase(&self) -> Self {
+        self.to_lowercase_smolstr().into()
+    }
 }
 
 impl Deref for SmallString {
     type Target = str;
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl From<SmolStr> for SmallString {
+    fn from(value: SmolStr) -> Self {
+        Self(value)
     }
 }
 
