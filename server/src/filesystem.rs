@@ -5,6 +5,7 @@ use crate::model::enums::MimeType;
 use image::{DynamicImage, ImageResult};
 use std::ffi::OsStr;
 use std::io::ErrorKind;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use uuid::Uuid;
@@ -175,12 +176,13 @@ pub fn create_dir(directory: Directory) -> std::io::Result<bool> {
 pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
     if let Err(ErrorKind::CrossesDevices) = std::fs::rename(from, to).as_ref().map_err(std::io::Error::kind) {
         std::fs::copy(from, to)?;
-
-        // Copy doesn't preserve permissions, so we will have to set them for the new file
-        let metadata = std::fs::metadata(from)?;
-        std::fs::set_permissions(to, metadata.permissions())?;
-
         std::fs::remove_file(from)?;
+    }
+
+    // Set appropriate permissions since we usually use this function to move
+    // content to a permanent location
+    if let Err(err) = set_permissions(to) {
+        eprintln!("ERROR: Failed to set permissions for {to:?} for reason: {err}");
     }
     Ok(())
 }
@@ -214,4 +216,10 @@ fn swap_files(file_a: &Path, file_b: &Path) -> std::io::Result<()> {
     move_file(file_a, &temp_path)?;
     move_file(file_b, file_a)?;
     move_file(&temp_path, file_b)
+}
+
+fn set_permissions(path: &Path) -> std::io::Result<()> {
+    let mut permissions = std::fs::metadata(path)?.permissions();
+    permissions.set_mode(0o644);
+    std::fs::set_permissions(path, permissions)
 }
