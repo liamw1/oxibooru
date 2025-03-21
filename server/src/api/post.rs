@@ -155,6 +155,8 @@ pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone 
 
 const MAX_POSTS_PER_PAGE: i64 = 1000;
 
+static POST_TAG_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
+
 /// Runs an `update` that may add `tags` to a post as a transaction.
 ///
 /// Tagging multiple posts simultaneously can cause issues if two updates share tags.
@@ -168,8 +170,6 @@ async fn tagging_update<T, F>(tags: Option<&[SmallString]>, update: F) -> ApiRes
 where
     F: FnOnce(&mut db::Connection) -> ApiResult<T>,
 {
-    static POST_TAG_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
-
     let _lock;
     if tags.is_some() {
         _lock = POST_TAG_MUTEX.lock().await;
