@@ -5,7 +5,7 @@ use lettre::message::Mailbox;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use strum::Display;
 
@@ -258,13 +258,10 @@ fn get_config_path() -> PathBuf {
     if cfg!(test) {
         let manifest_dir =
             std::env::var("CARGO_MANIFEST_DIR").expect("Test environment should have CARGO_MANIFEST_DIR defined");
-        let mut project_path = PathBuf::from(manifest_dir);
-        project_path.push("config.toml.dist");
-        project_path
+        [&manifest_dir, "config.toml.dist"].iter().collect()
     } else {
         let exe_path = std::env::current_exe().unwrap();
-        let mut parent_path = exe_path.parent().expect("Exe path should have parent").to_owned();
-        parent_path.push("config.toml");
-        parent_path
+        let parent_path = exe_path.parent().unwrap_or(Path::new("/"));
+        [parent_path, Path::new("config.toml")].iter().collect()
     }
 }

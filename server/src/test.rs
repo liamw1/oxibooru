@@ -17,7 +17,7 @@ use crate::time::DateTime;
 use crate::{api, db};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use uuid::Uuid;
@@ -614,11 +614,9 @@ fn recreate_database() -> ApiResult<ConnectionPool> {
 }
 
 fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
-    let mut path = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    path.push("test");
-    path.push(Path::new(folder_path));
-    path.push(Path::new(relative_path));
-    path
+    let manifest_dir =
+        std::env::var("CARGO_MANIFEST_DIR").expect("Test environment should have CARGO_MANIFEST_DIR defined");
+    [&manifest_dir, "test", folder_path, relative_path].iter().collect()
 }
 
 mod test {
