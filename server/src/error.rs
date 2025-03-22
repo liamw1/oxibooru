@@ -382,7 +382,7 @@ impl ErrorKind for crate::api::Error {
             Self::DeleteDefault(_) => "DeleteDefault",
             Self::EmptySwf => "EmptySwf",
             Self::EmptyVideo => "EmptyVideo",
-            Self::ExpressionFailsRegex(_) => "ExpressionFailsRegex",
+            Self::ExpressionFailsRegex(..) => "ExpressionFailsRegex",
             Self::FailedAuthentication(err) => err.kind(),
             Self::FailedConnection(_) => "FailedConnection",
             Self::FailedEmailTransport(_) => "FailedEmailTransport",

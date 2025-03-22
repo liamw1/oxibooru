@@ -2,6 +2,7 @@ use crate::api;
 use crate::api::ApiResult;
 use crate::content::FileContents;
 use crate::model::enums::MimeType;
+use crate::string::SmallString;
 use futures::{StreamExt, TryStreamExt};
 use std::ffi::OsStr;
 use std::path::Path;
@@ -82,7 +83,7 @@ fn get_mime_type(part: &Part) -> ApiResult<MimeType> {
         (Some(ext), Some(content_type)) => {
             let mime_type = MimeType::from_extension(ext)?;
             if MimeType::from_str(content_type) != Ok(mime_type) {
-                return Err(api::Error::ContentTypeMismatch(mime_type, content_type.to_owned()));
+                return Err(api::Error::ContentTypeMismatch(mime_type, SmallString::new(content_type)));
             }
             Ok(mime_type)
         }

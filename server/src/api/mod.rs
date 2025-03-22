@@ -14,6 +14,7 @@ use crate::auth::header::{self, AuthenticationError, Client};
 use crate::config::RegexType;
 use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{config, update};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -60,8 +61,8 @@ pub enum Error {
     BadHash(#[from] crate::auth::HashError),
     BadIncomingHeader(#[from] warp::http::header::ToStrError),
     BadResponseHeader(#[from] reqwest::header::ToStrError),
-    #[error("File of type {0} did not match request with content-type {1}")]
-    ContentTypeMismatch(MimeType, String),
+    #[error("File of type {0} did not match request with content-type '{1}'")]
+    ContentTypeMismatch(MimeType, SmallString),
     #[error("Cyclic dependency detected in {0}s")]
     CyclicDependency(ResourceType),
     #[error("Cannot delete default {0}")]
@@ -70,8 +71,8 @@ pub enum Error {
     EmptySwf,
     #[error("Video file has no frames")]
     EmptyVideo,
-    #[error("Expression does not match on {0} regex")]
-    ExpressionFailsRegex(RegexType),
+    #[error("'{0}' does not match on {1} regex")]
+    ExpressionFailsRegex(SmallString, RegexType),
     FailedAuthentication(#[from] AuthenticationError),
     FailedConnection(#[from] diesel::r2d2::PoolError),
     FailedEmailTransport(#[from] lettre::transport::smtp::Error),
@@ -142,7 +143,7 @@ impl Error {
             Self::DeleteDefault(_) => StatusCode::BAD_REQUEST,
             Self::EmptySwf => StatusCode::BAD_REQUEST,
             Self::EmptyVideo => StatusCode::BAD_REQUEST,
-            Self::ExpressionFailsRegex(_) => StatusCode::BAD_GATEWAY,
+            Self::ExpressionFailsRegex(..) => StatusCode::BAD_GATEWAY,
             Self::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
                 AuthenticationError::FailedQuery(err) => query_error_status_code(err),
@@ -197,7 +198,7 @@ impl Error {
             Self::DeleteDefault(_) => "Delete Default",
             Self::EmptySwf => "Empty SWF",
             Self::EmptyVideo => "Empty Video",
-            Self::ExpressionFailsRegex(_) => "Expression Fails Regex",
+            Self::ExpressionFailsRegex(..) => "Expression Fails Regex",
             Self::FailedAuthentication(_) => "Failed Authentication",
             Self::FailedConnection(_) => "Failed Connection",
             Self::FailedEmailTransport(_) => "Failed Email Transport",
@@ -257,7 +258,7 @@ pub fn verify_matches_regex(haystack: &str, regex_type: RegexType) -> ApiResult<
     config::regex(regex_type)
         .is_match(haystack)
         .then_some(())
-        .ok_or(Error::ExpressionFailsRegex(regex_type))
+        .ok_or_else(|| Error::ExpressionFailsRegex(SmallString::new(haystack), regex_type))
 }
 
 /// Checks if `email` is a valid email.
