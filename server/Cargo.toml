@@ -16,7 +16,7 @@ strum = { version = "0.27.0", features = ["derive", "phf"] }
 time = { version = "0.3.37", features = ["serde-human-readable"] }
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
 url = { version = "2.5.4", features = ["serde"] }
-smol_str = { version = "0.3.2", features = ["serde"] }
+compact_str = { version = "0.9.0", features = ["serde"] }
 lettre = { version = "0.11.12", features = ["serde"] }
 blake3 = { version = "1.5.5", features = ["std", "traits-preview"] }
 argon2 = { version = "0.5.3", features = ["std"] }

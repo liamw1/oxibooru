@@ -14,6 +14,7 @@ use video_rs::ffmpeg::media::Type;
 /// Returns a representative image for the given content.
 /// For images, this is simply the decoded image.
 /// For videos, it is the first frame of the video.
+/// For Flash media, it is the largest image that can be decoded from the Flash tags.
 pub fn representative_image(file_contents: &FileContents, file_path: &Path) -> ApiResult<DynamicImage> {
     match PostType::from(file_contents.mime_type) {
         PostType::Image | PostType::Animation => {
@@ -26,7 +27,7 @@ pub fn representative_image(file_contents: &FileContents, file_path: &Path) -> A
         PostType::Video => video_frame(file_path)
             .map_err(api::Error::from)
             .and_then(|frame| frame.ok_or(api::Error::EmptyVideo)),
-        PostType::Flash => swf_image(file_path).and_then(|frame| frame.ok_or(api::Error::EmptySwf)),
+        PostType::Flash => flash_image(file_path).and_then(|frame| frame.ok_or(api::Error::EmptySwf)),
     }
 }
 
@@ -87,7 +88,7 @@ fn video_frame(path: &Path) -> Result<Option<DynamicImage>, video_rs::Error> {
 }
 
 /// Search swf tags for the largest decodable image
-fn swf_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
+fn flash_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let swf_buf = swf::decompress_swf(reader)?;
