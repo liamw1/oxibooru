@@ -6,7 +6,7 @@ use crate::schema::{
     user,
 };
 use crate::search::{Error, Order, ParsedSort, SearchCriteria, UnparsedFilter, parse};
-use crate::{apply_filter, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
+use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
@@ -203,12 +203,7 @@ pub fn get_ordered_ids(
 ) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
     if search_criteria.random_sort {
-        define_sql_function!(fn random() -> BigInt);
-        return match search_criteria.extra_args {
-            Some(args) => unsorted_query.order(random()).offset(args.offset).limit(args.limit),
-            None => unsorted_query.order(random()),
-        }
-        .load(conn);
+        return apply_random_sort!(unsorted_query, search_criteria).load(conn);
     }
 
     let default_sort = std::iter::once(ParsedSort {

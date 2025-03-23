@@ -258,7 +258,6 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
 
         // Handle special cases first
         if search_criteria.has_random_sort() {
-            define_sql_function!(fn random() -> BigInt);
             let sql_query = search::post::build_query(client, &search_criteria)?;
             let sql_query = sql_query.filter(post::id.ne(post_id)).limit(2);
             let post_ids = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
