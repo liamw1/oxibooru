@@ -48,9 +48,9 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       475 |
-    | oxibooru          |        99 |
+    | oxibooru          |        93 |
     
-    Oxibooru is over 4x faster here, but I admit this is a bit of an 
+    Oxibooru is over 5x faster here, but I admit this is a bit of an 
     unrealistic comparison. This query doesn't perform any field selection, so
     by default all post fields will be retrieved. A decent amount of the 
     codebase is dedicated to performing efficient queries for batch retrieval
@@ -71,7 +71,7 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |        55 |
-    | oxibooru          |        85 |
+    | oxibooru          |        88 |
 
     Now Oxibooru is about 50% _slower_ than Szurubooru. I've mostly
     spent time optimizing the more complex queries, as simple queries like 
@@ -84,9 +84,9 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       101 |
-    | oxibooru          |       125 |
+    | oxibooru          |       103 |
 
-    Oxibooru is only 25% slower here.
+    Oxibooru is roughly the same speed as Szurubooru here.
     
 - What about with a huge offset? This query is fairly challenging, not only
   because of the large offset, but also because we have to retrieve posts
@@ -97,9 +97,9 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      2490 |
-    | oxibooru          |       193 |
+    | oxibooru          |       157 |
     
-    Here Oxibooru is over 10x faster than Szurubooru! One big thing that helps 
+    Here Oxibooru is over 15x faster than Szurubooru! One big thing that helps 
     Oxibooru go fast here is that it keeps track of usage counts for each tag 
     with triggers rather than counting them every time. This does come at a 
     cost (slower updates), but I think this  trade-off is worth it for 
@@ -112,7 +112,7 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       158 |
-    | oxibooru          |       154 |
+    | oxibooru          |       161 |
     
     Szurubooru and Oxibooru perform almost identically here.
     
@@ -122,9 +122,9 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      5172 |
-    | oxibooru          |       171 |
+    | oxibooru          |       133 |
     
-    Oxibooru clocks in around 30x faster! Those cached tag usage counts
+    Oxibooru clocks in almost 40x faster! Those cached tag usage counts
     massively benefit Oxibooru here. Szurubooru counts tag usages every 
     time, so it scales poorly as the number of post tags increases.
 
@@ -136,7 +136,7 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       885 |
-    | oxibooru          |        73 |
+    | oxibooru          |        54 |
     
     I expected the performance from szurubooru to be reasonable here, but it
     turned out to be slower than the _autocomplete_ query. My best guess for
@@ -152,9 +152,9 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      6033 |
-    | oxibooru          |        88 |
+    | oxibooru          |        62 |
     
-    Oxibooru just crushes Szurubooru here. It's over 60x faster. Because
+    Oxibooru just crushes Szurubooru here. It's almost 100x faster. Because
     Oxibooru keeps track of tag usages, sorting by tag count is just as
     fast as sorting by creation time.
 
@@ -166,7 +166,7 @@ are made anonymously, so time to authenticate isn't included.
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       705 |
-    | oxibooru          |        56 |
+    | oxibooru          |        61 |
     
     This is an area where a speedup is very noticeable. You get much faster
     autocomplete feedback when using the search bar in Oxibooru.
