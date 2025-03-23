@@ -28,8 +28,8 @@ impl FromStr for Checksum {
 }
 
 impl ToSql<Bytea, Pg> for Checksum {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        <[u8] as ToSql<Bytea, Pg>>::to_sql(&self.0, &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        <[u8] as ToSql<Bytea, Pg>>::to_sql(&self.0, out)
     }
 }
 
@@ -174,8 +174,8 @@ pub struct PostScore {
 pub struct CompressedSignature(pub [i64; COMPRESSED_SIGNATURE_LEN]);
 
 impl ToSql<Array<Nullable<BigInt>>, Pg> for CompressedSignature {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        <[i64] as ToSql<Array<BigInt>, Pg>>::to_sql(self.0.as_slice(), &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        <[i64] as ToSql<Array<BigInt>, Pg>>::to_sql(self.0.as_slice(), out)
     }
 }
 
@@ -203,8 +203,8 @@ impl From<[i64; COMPRESSED_SIGNATURE_LEN]> for CompressedSignature {
 pub struct SignatureIndexes(pub [i32; NUM_WORDS]);
 
 impl ToSql<Array<Nullable<Integer>>, Pg> for SignatureIndexes {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        <[i32] as ToSql<Array<Integer>, Pg>>::to_sql(self.0.as_slice(), &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        <[i32] as ToSql<Array<Integer>, Pg>>::to_sql(self.0.as_slice(), out)
     }
 }
 

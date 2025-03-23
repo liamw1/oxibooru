@@ -43,9 +43,10 @@ impl Default for AvatarStyle {
 }
 
 impl ToSql<SmallInt, Pg> for AvatarStyle {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        let value = *self as i16;
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        // SAFETY: AvatarStyle is repr(i16) so a valid AvatarStyle is a valid i16
+        let value: &'a i16 = unsafe { &*(self as *const AvatarStyle as *const i16) };
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
     }
 }
 
@@ -85,9 +86,10 @@ impl From<MimeType> for PostType {
 }
 
 impl ToSql<SmallInt, Pg> for PostType {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        let value = *self as i16;
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        // SAFETY: PostType is repr(i16) so a valid PostType is a valid i16
+        let value: &'a i16 = unsafe { &*(self as *const PostType as *const i16) };
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
     }
 }
 
@@ -195,9 +197,10 @@ impl MimeType {
 }
 
 impl ToSql<SmallInt, Pg> for MimeType {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        let value = *self as i16;
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        // SAFETY: MimeType is repr(i16) so a valid MimeType is a valid i16
+        let value: &'a i16 = unsafe { &*(self as *const MimeType as *const i16) };
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
     }
 }
 
@@ -234,9 +237,10 @@ pub enum PostSafety {
 }
 
 impl ToSql<SmallInt, Pg> for PostSafety {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        let value = *self as i16;
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        // SAFETY: PostSafety is repr(i16) so a valid PostSafety is a valid i16
+        let value: &'a i16 = unsafe { &*(self as *const PostSafety as *const i16) };
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
     }
 }
 
@@ -305,9 +309,10 @@ impl<T: Into<u16>> BitOrAssign<T> for PostFlags {
 }
 
 impl ToSql<SmallInt, Pg> for PostFlags {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        let value = self.flags as i16;
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        // SAFETY: A u16 is always a valid i16
+        let value: &'a i16 = unsafe { &*(self.flags as *const u16 as *const i16) };
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
     }
 }
 
@@ -363,9 +368,10 @@ pub enum UserRank {
 }
 
 impl ToSql<SmallInt, Pg> for UserRank {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        let value = *self as i16;
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        // SAFETY: UserRank is repr(i16) so a valid UserRank is a valid i16
+        let value: &'a i16 = unsafe { &*(self as *const UserRank as *const i16) };
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
     }
 }
 
@@ -419,9 +425,10 @@ impl TryFrom<Rating> for Score {
 }
 
 impl ToSql<SmallInt, Pg> for Score {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        let value = *self as i16;
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(&value, &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        // SAFETY: Score is repr(i16) so a valid Score is a valid i16
+        let value: &'a i16 = unsafe { &*(self as *const Score as *const i16) };
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
     }
 }
 

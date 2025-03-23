@@ -50,14 +50,14 @@ impl Display for SmallString {
 }
 
 impl ToSql<Text, Pg> for SmallString {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        <str as ToSql<Text, Pg>>::to_sql(self.0.as_str(), &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        <str as ToSql<Text, Pg>>::to_sql(self.0.as_str(), out)
     }
 }
 
 impl ToSql<Citext, Pg> for SmallString {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        <str as ToSql<Text, Pg>>::to_sql(self.0.as_str(), &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        <str as ToSql<Citext, Pg>>::to_sql(self.0.as_str(), out)
     }
 }
 

@@ -100,8 +100,8 @@ impl From<OffsetDateTime> for DateTime {
 }
 
 impl ToSql<Timestamptz, Pg> for DateTime {
-    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        <OffsetDateTime as ToSql<Timestamptz, Pg>>::to_sql(&self.0, &mut out.reborrow())
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        <OffsetDateTime as ToSql<Timestamptz, Pg>>::to_sql(&self.0, out)
     }
 }
 

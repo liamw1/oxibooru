@@ -126,10 +126,10 @@ macro_rules! apply_random_sort {
     ($query:expr, $criteria:expr) => {
         match $criteria.extra_args {
             Some(args) => $query
-                .order(crate::resource::random())
+                .order($crate::resource::random())
                 .offset(args.offset)
                 .limit(args.limit),
-            None => $query.order(crate::resource::random()),
+            None => $query.order($crate::resource::random()),
         }
     };
 }
