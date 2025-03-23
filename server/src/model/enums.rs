@@ -311,7 +311,7 @@ impl<T: Into<u16>> BitOrAssign<T> for PostFlags {
 impl ToSql<SmallInt, Pg> for PostFlags {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
         // SAFETY: A u16 is always a valid i16
-        let value: &'a i16 = unsafe { &*(self.flags as *const u16 as *const i16) };
+        let value: &'a i16 = unsafe { &*(&self.flags as *const u16 as *const i16) };
         <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
     }
 }
