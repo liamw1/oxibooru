@@ -126,6 +126,7 @@ fn collect_names(ordered_names: Vec<(i64, SmallString)>) -> HashMap<i64, Rc<[Sma
     // Collect resource names into names map
     let mut name_iter = ordered_names.into_iter();
     let mut names_map: HashMap<i64, Rc<[SmallString]>> = HashMap::new();
+    names_map.reserve(name_boundaries.len() - 1);
     for window in name_boundaries.windows(2) {
         let [start, end] = window.try_into().unwrap();
         let name_count = end - start;
