@@ -529,6 +529,13 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
     };
 
     let post_id = tagging_update(body.tags.as_deref(), |conn| {
+        // We do this before post insertion so that the post sequence isn't incremented if it fails
+        let tag_ids = body
+            .tags
+            .as_deref()
+            .map(|names| update::tag::get_or_create_tag_ids(conn, client, names, false))
+            .transpose()?;
+
         let post_id = diesel::insert_into(post::table)
             .values(new_post)
             .returning(post::id)
@@ -536,9 +543,8 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
         let post_hash = PostHash::new(post_id);
 
         // Add tags, relations, and notes
-        if let Some(tags) = body.tags.as_deref() {
-            let tag_ids = update::tag::get_or_create_tag_ids(conn, client, tags, false)?;
-            update::post::add_tags(conn, post_id, tag_ids)?;
+        if let Some(tags) = tag_ids {
+            update::post::add_tags(conn, post_id, tags)?;
         }
         if let Some(relations) = body.relations {
             update::post::create_relations(conn, post_id, relations)?;
