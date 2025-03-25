@@ -1,5 +1,5 @@
 use crate::content::hash::PostHash;
-use crate::model::pool::{Pool, PoolName, PoolPost};
+use crate::model::pool::{Pool, PoolDescription, PoolName, PoolPost};
 use crate::resource::post::MicroPost;
 use crate::resource::{self, BoolFill};
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
@@ -17,7 +17,7 @@ pub struct MicroPool {
     pub id: i64,
     pub names: Rc<[SmallString]>,
     pub category: SmallString,
-    pub description: String,
+    pub description: PoolDescription,
     pub post_count: i64,
 }
 

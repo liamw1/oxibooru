@@ -18,7 +18,7 @@ use std::str::FromStr;
 
 #[derive(Debug, AsExpression)]
 #[diesel(sql_type = Bytea)]
-pub struct Checksum(pub Vec<u8>);
+pub struct Checksum(Vec<u8>);
 
 impl FromStr for Checksum {
     type Err = hex::FromHexError;
@@ -171,7 +171,7 @@ pub struct PostScore {
 
 #[derive(Debug, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Array<Nullable<BigInt>>)]
-pub struct CompressedSignature(pub [i64; COMPRESSED_SIGNATURE_LEN]);
+pub struct CompressedSignature([i64; COMPRESSED_SIGNATURE_LEN]);
 
 impl ToSql<Array<Nullable<BigInt>>, Pg> for CompressedSignature {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
@@ -200,7 +200,7 @@ impl From<[i64; COMPRESSED_SIGNATURE_LEN]> for CompressedSignature {
 
 #[derive(Debug, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Array<Nullable<Integer>>)]
-pub struct SignatureIndexes(pub [i32; NUM_WORDS]);
+pub struct SignatureIndexes([i32; NUM_WORDS]);
 
 impl ToSql<Array<Nullable<Integer>>, Pg> for SignatureIndexes {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {

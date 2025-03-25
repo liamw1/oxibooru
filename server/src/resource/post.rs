@@ -3,7 +3,7 @@ use crate::content::hash::PostHash;
 use crate::get_post_stats;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType, Rating, Score};
-use crate::model::pool::PoolPost;
+use crate::model::pool::{PoolDescription, PoolPost};
 use crate::model::post::{NewPostNote, Post, PostFavorite, PostNote, PostRelation, PostScore, PostTag};
 use crate::model::tag::TagName;
 use crate::resource::comment::CommentInfo;
@@ -479,9 +479,9 @@ fn get_relations(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec
 }
 
 fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroPool>>> {
-    let pool_posts: Vec<(PoolPost, i64, String, i64)> = PoolPost::belonging_to(posts)
+    let pool_posts: Vec<(PoolPost, i64, i64)> = PoolPost::belonging_to(posts)
         .inner_join(pool::table.inner_join(pool_statistics::table))
-        .select((PoolPost::as_select(), pool::category_id, pool::description, pool_statistics::post_count))
+        .select((PoolPost::as_select(), pool::category_id, pool_statistics::post_count))
         .order((pool::category_id, pool::id))
         .load(conn)?;
     let pool_ids: HashSet<i64> = pool_posts.iter().map(|(pool_post, ..)| pool_post.pool_id).collect();
@@ -498,6 +498,12 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
         .load(conn)?
         .into_iter()
         .collect();
+    let pool_descriptions: HashMap<i64, PoolDescription> = pool::table
+        .select((pool::id, pool::description))
+        .filter(pool::id.eq_any(pool_ids))
+        .load(conn)?
+        .into_iter()
+        .collect();
 
     Ok(pool_posts
         .grouped_by(posts)
@@ -505,11 +511,11 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
         .map(|pools_on_post| {
             pools_on_post
                 .into_iter()
-                .map(|(pool_post, category_id, description, post_count)| MicroPool {
+                .map(|(pool_post, category_id, post_count)| MicroPool {
                     id: pool_post.pool_id,
                     names: names_map[&pool_post.pool_id].clone(),
                     category: category_names[&category_id].clone(),
-                    description,
+                    description: pool_descriptions[&pool_post.pool_id].clone(),
                     post_count,
                 })
                 .collect()

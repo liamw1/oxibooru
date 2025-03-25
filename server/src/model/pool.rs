@@ -2,11 +2,14 @@ use crate::model::post::Post;
 use crate::schema::{pool, pool_category, pool_name, pool_post};
 use crate::string::SmallString;
 use crate::time::DateTime;
+use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::dsl::sql;
 use diesel::expression::{SqlLiteral, UncheckedBind};
-use diesel::pg::Pg;
+use diesel::pg::{Pg, PgValue};
 use diesel::prelude::*;
-use diesel::sql_types::Bool;
+use diesel::sql_types::{Bool, Text};
+use serde::Serialize;
+use std::rc::Rc;
 
 #[derive(Insertable)]
 #[diesel(table_name = pool_category)]
@@ -24,6 +27,17 @@ pub struct PoolCategory {
     pub name: SmallString,
     pub color: SmallString,
     pub last_edit_time: DateTime,
+}
+
+#[derive(Debug, Clone, FromSqlRow, Serialize)]
+#[diesel(sql_type = Text)]
+pub struct PoolDescription(Rc<str>);
+
+impl FromSql<Text, Pg> for PoolDescription {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        let string = std::str::from_utf8(value.as_bytes())?;
+        Ok(Self(Rc::from(string)))
+    }
 }
 
 #[derive(Insertable)]
