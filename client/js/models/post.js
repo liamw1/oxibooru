@@ -79,7 +79,7 @@ class Post extends events.EventTarget {
     }
 
     get sourceSplit() {
-        return this._source.split("\n");
+        return this._source.split("\n").filter((s) => s);
     }
 
     get canvasWidth() {
