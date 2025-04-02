@@ -169,6 +169,9 @@ class PostMainController extends BasePostController {
         this._view.sidebarControl.disableForm();
         this._view.sidebarControl.clearMessages();
         const post = e.detail.post;
+        if (e.detail.description !== undefined && e.detail.description !== null) {
+            post.description = e.detail.description;
+        }
         if (e.detail.safety !== undefined && e.detail.safety !== null) {
             post.safety = e.detail.safety;
         }
