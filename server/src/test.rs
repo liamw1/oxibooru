@@ -228,6 +228,7 @@ const POSTS: &[NewPost] = &[
         checksum_md5: b"01",
         flags: PostFlags::new(),
         source: "My hard drive",
+        description: "0101100010",
     },
     NewPost {
         user_id: Some(2),
@@ -241,6 +242,7 @@ const POSTS: &[NewPost] = &[
         checksum_md5: b"02",
         flags: PostFlags::new(),
         source: "",
+        description: "",
     },
     NewPost {
         user_id: Some(2),
@@ -254,6 +256,7 @@ const POSTS: &[NewPost] = &[
         checksum_md5: b"03",
         flags: PostFlags::new(),
         source: "Wikipedia",
+        description: "",
     },
     NewPost {
         user_id: Some(2),
@@ -267,6 +270,7 @@ const POSTS: &[NewPost] = &[
         checksum_md5: b"04",
         flags: PostFlags::new(),
         source: "",
+        description: "description9000",
     },
     NewPost {
         user_id: None,
@@ -280,6 +284,7 @@ const POSTS: &[NewPost] = &[
         checksum_md5: b"05",
         flags: PostFlags::new_with(PostFlag::Sound),
         source: "???",
+        description: "descriptor",
     },
 ];
 
