@@ -44,6 +44,7 @@ pub enum Token {
     ContentChecksum,
     Flag,
     Source,
+    Description,
     #[strum(
         serialize = "date",
         serialize = "time",
@@ -164,6 +165,7 @@ impl<'a> QueryBuilder<'a> {
                 Token::ContentChecksum => apply_checksum_filter(query, filter),
                 Token::Flag => apply_flag_filter(query, filter),
                 Token::Source => Ok(apply_str_filter!(query, post::source, filter)),
+                Token::Description => Ok(apply_str_filter!(query, post::description, filter)),
                 Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
                 Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
                 Token::Tag => apply_tag_filter(conn, query, filter, cache.as_mut()),
@@ -210,6 +212,7 @@ impl<'a> QueryBuilder<'a> {
             Token::Type => apply_sort!(query, post::type_, sort),
             Token::Flag => apply_sort!(query, post::flags, sort),
             Token::Source => apply_sort!(query, post::source, sort),
+            Token::Description => apply_sort!(query, post::description, sort),
             Token::CreationTime => apply_sort!(query, post::creation_time, sort),
             Token::LastEditTime => apply_sort!(query, post::last_edit_time, sort),
             Token::Tag | Token::TagCount => apply_sort!(query, post_statistics::tag_count, sort),

@@ -48,6 +48,7 @@ pub struct NewPost<'a> {
     pub checksum_md5: &'a [u8],
     pub flags: PostFlags,
     pub source: &'a str,
+    pub description: &'a str,
 }
 
 #[derive(AsChangeset, Associations, Identifiable, Queryable, Selectable)]
@@ -68,6 +69,7 @@ pub struct Post {
     pub checksum_md5: Vec<u8>,
     pub flags: PostFlags,
     pub source: String,
+    pub description: String,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
     pub generated_thumbnail_size: i64,

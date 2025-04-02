@@ -51,16 +51,19 @@
 
     <div class='content'>
         <div class='post-container'></div>
-
+        
         <% if (ctx.editMode) { %>
             <h2>Description</h2>
             <%= ctx.makeTextarea({
                 id: 'post-description',
                 value: ctx.post.description,
             }) %>
-        <% } else if (ctx.post.description != undefined) { %>
+        <% } else if (ctx.post.description != undefined && ctx.post.description != '') { %>
             <div class='description-container'>
-                <%= ctx.makeMarkdown(ctx.post.description) %>
+                <details open>
+                    <summary>Description</summary>
+                    <%= ctx.makeMarkdown(ctx.post.description) %>
+                </details>
             </div>
         <% } %>
 

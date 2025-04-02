@@ -7,7 +7,8 @@ edition = "2024"
 # Disable default-features to limit columns to 16
 #diesel = { version = "2.2.6", default-features = false, features = ["with-deprecated", "postgres", "r2d2", "time", "uuid"] }
 # Using fork until changes are merged in
-diesel = { git = "https://github.com/liamw1/diesel-CitextFix", default-features = false, features = ["with-deprecated", "postgres", "r2d2", "time", "uuid", 
+# Stepping in here, we do actually need 32 columns so I'll be adding that back in
+diesel = { git = "https://github.com/liamw1/diesel-CitextFix", default-features = false, features = ["with-deprecated", "postgres", "r2d2", "time", "uuid", "32-column-tables",
                                                                                                      "i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
 diesel_migrations = { git = "https://github.com/liamw1/diesel-CitextFix", features = ["postgres"] }
 tokio = { version = "1.43.0", features = ["full"] }
