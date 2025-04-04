@@ -211,6 +211,12 @@ function getPrettyName(tag) {
     return tag;
 }
 
+function wildcardMatch(pattern, str, sensitive = false) {
+    let w = pattern.replace(/[.+^${}()|[\]\\?]/g, "\\$&");
+    const re = new RegExp(`^${w.replace(/\(--wildcard--\)|\*/g, ".*")}$`, sensitive ? "" : "i");
+    return re.test(str);
+}
+
 module.exports = {
     range: range,
     formatRelativeTime: formatRelativeTime,
@@ -229,4 +235,5 @@ module.exports = {
     escapeSearchTerm: escapeSearchTerm,
     dataURItoBlob: dataURItoBlob,
     getPrettyName: getPrettyName,
+    wildcardMatch: wildcardMatch,
 };
