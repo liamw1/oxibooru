@@ -111,6 +111,15 @@ pub fn build_query<'a>(client: Client, search_criteria: &'a SearchCriteria<Token
             Token::AspectRatio => apply_filter!(query, aspect_ratio(), filter, f32),
             Token::Safety => apply_filter!(query, post::safety, filter, PostSafety),
             Token::Type => apply_filter!(query, post::type_, filter, PostType),
+            Token::ContentChecksum => {
+                // Checksums can only be searched by exact value(s)
+                let checksums: Vec<Checksum> = parse::values(filter.criteria)?;
+                Ok(if filter.negated {
+                    query.filter(post::checksum.ne_all(checksums))
+                } else {
+                    query.filter(post::checksum.eq_any(checksums))
+                })
+            }
             Token::Flag => {
                 let flags: Vec<PostFlag> = parse::values(filter.criteria)?;
                 let value = flags.into_iter().fold(PostFlags::new(), |value, flag| value | flag);
@@ -125,14 +134,6 @@ pub fn build_query<'a>(client: Client, search_criteria: &'a SearchCriteria<Token
                 })
             }
             Token::Source => Ok(apply_str_filter!(query, post::source, filter)),
-            Token::ContentChecksum => {
-                let checksums: Vec<Checksum> = parse::values(filter.criteria)?;
-                Ok(if filter.negated {
-                    query.filter(post::checksum.ne_all(checksums))
-                } else {
-                    query.filter(post::checksum.eq_any(checksums))
-                })
-            }
             Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
             Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
             Token::Tag => {
@@ -255,6 +256,9 @@ enum SpecialToken {
 }
 
 type Bind = UncheckedBind<SqlLiteral<Float, UncheckedBind<SqlLiteral<Float>, post::width>>, post::height>;
+
+/// Returns a SQL literal representing a post's aspect. This is used instead of
+/// `post::width / post::height` because it avoids integer truncation.
 fn aspect_ratio() -> SqlLiteral<Float, Bind> {
     sql("CAST(")
         .bind(post::width)
