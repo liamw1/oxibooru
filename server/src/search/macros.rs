@@ -1,4 +1,4 @@
-// Working with generic functions is Diesel is a nightmare, so I've created
+// Working with generic functions in Diesel is a nightmare, so I've created
 // these macros to help with dynamically adding filters to a boxed query.
 
 /// Used for applying filters on non-string non-time expressions.
@@ -73,10 +73,17 @@ macro_rules! apply_str_filter {
 #[macro_export]
 macro_rules! apply_subquery_filter {
     ($query:expr, $expression:expr, $filter:expr, $subquery:expr) => {
+        // Implementation uses a couple non-obvious optimizations that improve query plans.
+        //
+        // If not wrapped with ARRAY, negated subqueries are cripplingly slow. Not entirely sure
+        // why, as non-negated subqueries don't have this problem. In fact, adding ARRAY makes them
+        // cripplingly slow instead.
+        //
+        // For some reason, adding distinct() to the subqueries makes searches faster on average.
         if $filter.negated {
-            $query.filter($expression.ne_all(diesel::dsl::array($subquery)))
+            $query.filter($expression.ne_all(diesel::dsl::array($subquery.distinct())))
         } else {
-            $query.filter($expression.eq_any($subquery))
+            $query.filter($expression.eq_any($subquery.distinct()))
         }
     };
 }
