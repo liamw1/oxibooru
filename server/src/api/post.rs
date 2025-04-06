@@ -487,6 +487,7 @@ struct CreateBody {
     thumbnail_token: Option<String>,
     thumbnail_url: Option<Url>,
     source: Option<String>,
+    description: Option<String>,
     relations: Option<Vec<i64>>,
     anonymous: Option<bool>,
     tags: Option<Vec<SmallString>>,
@@ -526,6 +527,7 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
         checksum_md5: &content_properties.md5_checksum,
         flags,
         source: body.source.as_deref().unwrap_or(""),
+        description: body.description.as_deref().unwrap_or(""),
     };
 
     let post_id = tagging_update(body.tags.as_deref(), |conn| {
@@ -793,6 +795,7 @@ async fn merge(auth: AuthResult, params: ResourceParams, body: PostMergeBody) ->
             merge_to_post.checksum_md5 = remove_post.checksum_md5;
             merge_to_post.flags = remove_post.flags;
             merge_to_post.source = remove_post.source;
+            merge_to_post.description = remove_post.description;
             merge_to_post.generated_thumbnail_size = remove_post.generated_thumbnail_size;
             merge_to_post.custom_thumbnail_size = remove_post.custom_thumbnail_size;
             merge_to_post = merge_to_post.save_changes(conn)?;
@@ -871,6 +874,7 @@ struct UpdateBody {
     version: DateTime,
     safety: Option<PostSafety>,
     source: Option<String>,
+    description: Option<String>,
     relations: Option<Vec<i64>>,
     tags: Option<Vec<SmallString>>,
     notes: Option<Vec<Note>>,
@@ -917,6 +921,13 @@ async fn update(auth: AuthResult, post_id: i64, params: ResourceParams, body: Up
 
             diesel::update(post::table.find(post_id))
                 .set(post::source.eq(source))
+                .execute(conn)?;
+        }
+        if let Some(description) = body.description {
+            api::verify_privilege(client, config::privileges().post_edit_content)?;
+
+            diesel::update(post::table.find(post_id))
+                .set(post::description.eq(description))
                 .execute(conn)?;
         }
         if let Some(relations) = body.relations {
@@ -1077,7 +1088,7 @@ mod test {
 
     // Exclude fields that involve creation_time or last_edit_time
     const FIELDS: &str = "&fields=id,user,fileSize,canvasWidth,canvasHeight,safety,type,mimeType,checksum,checksumMd5,\
-    flags,source,contentUrl,thumbnailUrl,tags,relations,pools,notes,score,ownScore,ownFavorite,tagCount,commentCount,\
+    flags,source,description,contentUrl,thumbnailUrl,tags,relations,pools,notes,score,ownScore,ownFavorite,tagCount,commentCount,\
     relationCount,noteCount,favoriteCount,featureCount,favoritedBy,hasCustomThumbnail";
 
     #[tokio::test]
@@ -1212,6 +1223,7 @@ mod test {
         assert_ne!(new_post.checksum_md5, post.checksum_md5);
         assert_eq!(new_post.flags, post.flags);
         assert_ne!(new_post.source, post.source);
+        assert_ne!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
         Ok(reset_database())
@@ -1318,6 +1330,7 @@ mod test {
         assert_eq!(new_post.checksum_md5, post.checksum_md5);
         assert_ne!(new_post.flags, post.flags);
         assert_ne!(new_post.source, post.source);
+        assert_ne!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
         assert_ne!(new_tag_count, tag_count);
@@ -1344,6 +1357,7 @@ mod test {
         assert_eq!(new_post.checksum_md5, post.checksum_md5);
         assert_eq!(new_post.flags, post.flags);
         assert_eq!(new_post.source, post.source);
+        assert_eq!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
         assert_eq!(new_tag_count, tag_count);
