@@ -434,7 +434,6 @@ class PostEditSidebarControl extends events.EventTarget {
                     source: this._sourceInputNode
                         ? this._sourceInputNode.value
                         : undefined,
-                    
                     description: this._descriptionTextareaNode
                         ? this._descriptionTextareaNode.value
                         : undefined,
