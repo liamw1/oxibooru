@@ -1,17 +1,21 @@
+use crate::api::ApiResult;
 use crate::auth::header::Client;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
 use crate::model::post::Checksum;
 use crate::schema::{
-    comment, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics, post_tag, tag_name,
-    user,
+    comment, database_statistics, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics,
+    post_tag, tag_name, user,
 };
 use crate::search::{Error, Order, ParsedSort, SearchCriteria, UnparsedFilter, parse};
-use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
+use crate::{
+    api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter,
+};
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use diesel::sql_types::{Float, SmallInt};
+use std::collections::HashSet;
 use std::str::FromStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
@@ -82,6 +86,158 @@ pub enum Token {
     Special,
 }
 
+pub struct QueryBuilder<'a> {
+    client: Client,
+    search: SearchCriteria<'a, Token>,
+    cache: QueryCache,
+}
+
+impl<'a> QueryBuilder<'a> {
+    pub fn new(client: Client, search: SearchCriteria<'a, Token>) -> Self {
+        Self {
+            client,
+            search,
+            cache: QueryCache::new(),
+        }
+    }
+
+    pub fn criteria(&self) -> &SearchCriteria<'a, Token> {
+        &self.search
+    }
+
+    pub fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
+        self.search.set_offset_and_limit(offset, limit);
+    }
+
+    pub fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
+        if self.search.has_filter() {
+            let unsorted_query = self.build_filtered(conn)?;
+            let unsorted_query = self.apply_cache_filters(unsorted_query);
+            unsorted_query.count().first(conn)
+        } else {
+            database_statistics::table
+                .select(database_statistics::post_count)
+                .first(conn)
+        }
+        .map_err(api::Error::from)
+    }
+
+    pub fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
+        let query = self.build_filtered(conn)?;
+        let query = self.apply_cache_filters(query);
+        self.apply_sorts(query).load(conn).map_err(api::Error::from)
+    }
+
+    pub fn load_with<F>(&'a mut self, conn: &mut PgConnection, query_mod: F) -> ApiResult<Vec<i64>>
+    where
+        F: FnOnce(BoxedQuery<'a>) -> BoxedQuery<'a>,
+    {
+        let query = self.build_filtered(conn)?;
+        let query = self.apply_cache_filters(query);
+        let query = self.apply_sorts(query);
+        query_mod(query).load(conn).map_err(api::Error::from)
+    }
+
+    fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
+        let mut cache = self.cache.take_if_empty();
+        let mut query = post::table
+            .select(post::id)
+            .inner_join(post_statistics::table)
+            .left_join(user::table)
+            .into_boxed();
+        for filter in self.search.filters.iter().copied() {
+            match filter.kind {
+                Token::Id => query = apply_filter!(query, post::id, filter, i64)?,
+                Token::FileSize => query = apply_filter!(query, post::file_size, filter, i64)?,
+                Token::Width => query = apply_filter!(query, post::width, filter, i32)?,
+                Token::Height => query = apply_filter!(query, post::height, filter, i32)?,
+                Token::Area => query = apply_filter!(query, post::width * post::height, filter, i32)?,
+                Token::AspectRatio => query = apply_filter!(query, aspect_ratio(), filter, f32)?,
+                Token::Safety => query = apply_filter!(query, post::safety, filter, PostSafety)?,
+                Token::Type => query = apply_filter!(query, post::type_, filter, PostType)?,
+                Token::ContentChecksum => query = apply_checksum_filter(query, filter)?,
+                Token::Flag => query = apply_flag_filter(query, filter)?,
+                Token::Source => query = apply_str_filter!(query, post::source, filter),
+                Token::CreationTime => query = apply_time_filter!(query, post::creation_time, filter)?,
+                Token::LastEditTime => query = apply_time_filter!(query, post::last_edit_time, filter)?,
+                Token::Tag => apply_tag_filter(conn, filter, cache.as_mut())?,
+                Token::Pool => apply_pool_filter(conn, filter, cache.as_mut())?,
+                Token::Uploader => query = apply_str_filter!(query, user::name, filter),
+                Token::Fav => apply_favorite_filter(conn, filter, cache.as_mut())?,
+                Token::Comment => apply_comment_filter(conn, filter, cache.as_mut())?,
+                Token::NoteText => apply_note_text_filter(conn, filter, cache.as_mut())?,
+                Token::TagCount => query = apply_filter!(query, post_statistics::tag_count, filter, i64)?,
+                Token::CommentCount => query = apply_filter!(query, post_statistics::comment_count, filter, i64)?,
+                Token::RelationCount => query = apply_filter!(query, post_statistics::relation_count, filter, i64)?,
+                Token::NoteCount => query = apply_filter!(query, post_statistics::note_count, filter, i64)?,
+                Token::FavCount => query = apply_filter!(query, post_statistics::favorite_count, filter, i64)?,
+                Token::FeatureCount => query = apply_filter!(query, post_statistics::feature_count, filter, i64)?,
+                Token::Score => query = apply_filter!(query, post_statistics::score, filter, i64)?,
+                Token::CommentTime => apply_comment_time_filter(conn, filter, cache.as_mut())?,
+                Token::FavTime => apply_favorite_time_filter(conn, filter, cache.as_mut())?,
+                Token::FeatureTime => apply_feature_time_filter(conn, filter, cache.as_mut())?,
+                Token::Special => query = apply_special_filter(query, filter, self.client)?,
+            }
+        }
+        self.cache.replace(cache);
+        Ok(query)
+    }
+
+    fn apply_sorts(&self, unsorted_query: BoxedQuery<'a>) -> BoxedQuery<'a> {
+        // If random sort specified, no other sorts matter
+        if self.search.random_sort {
+            return apply_random_sort!(unsorted_query, self.search);
+        }
+
+        let default_sort = std::iter::once(ParsedSort {
+            kind: Token::Id,
+            order: Order::default(),
+        });
+        let sorts = self.search.sorts.iter().copied().chain(default_sort);
+        let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
+            Token::Id => apply_sort!(query, post::id, sort),
+            Token::FileSize => apply_sort!(query, post::file_size, sort),
+            Token::Width => apply_sort!(query, post::width, sort),
+            Token::Height => apply_sort!(query, post::height, sort),
+            Token::Area => apply_sort!(query, post::width * post::height, sort),
+            Token::AspectRatio => apply_sort!(query, aspect_ratio(), sort),
+            Token::Safety => apply_sort!(query, post::safety, sort),
+            Token::Type => apply_sort!(query, post::type_, sort),
+            Token::Flag => apply_sort!(query, post::flags, sort),
+            Token::Source => apply_sort!(query, post::source, sort),
+            Token::CreationTime => apply_sort!(query, post::creation_time, sort),
+            Token::LastEditTime => apply_sort!(query, post::last_edit_time, sort),
+            Token::Tag | Token::TagCount => apply_sort!(query, post_statistics::tag_count, sort),
+            Token::Pool => apply_sort!(query, post_statistics::pool_count, sort),
+            Token::Uploader => apply_sort!(query, user::name, sort),
+            Token::Fav | Token::FavCount => apply_sort!(query, post_statistics::favorite_count, sort),
+            Token::Comment | Token::CommentCount => apply_sort!(query, post_statistics::comment_count, sort),
+            Token::RelationCount => apply_sort!(query, post_statistics::relation_count, sort),
+            Token::NoteCount => apply_sort!(query, post_statistics::note_count, sort),
+            Token::FeatureCount => apply_sort!(query, post_statistics::feature_count, sort),
+            Token::Score => apply_sort!(query, post_statistics::score, sort),
+            Token::CommentTime => apply_sort!(query, post_statistics::last_comment_time, sort),
+            Token::FavTime => apply_sort!(query, post_statistics::last_favorite_time, sort),
+            Token::FeatureTime => apply_sort!(query, post_statistics::last_feature_time, sort),
+            Token::ContentChecksum | Token::NoteText | Token::Special => panic!("Invalid sort-style token!"),
+        });
+        match self.search.extra_args {
+            Some(args) => query.offset(args.offset).limit(args.limit),
+            None => query,
+        }
+    }
+
+    pub fn apply_cache_filters(&'a self, mut query: BoxedQuery<'a>) -> BoxedQuery<'a> {
+        if let Some(matching_ids) = self.cache.matches.as_ref() {
+            query = query.filter(post::id.eq_any(matching_ids));
+        }
+        if let Some(nonmatching_ids) = self.cache.nonmatches.as_ref() {
+            query = query.filter(post::id.ne_all(nonmatching_ids));
+        }
+        query
+    }
+}
+
 pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Token>, Error> {
     let criteria = SearchCriteria::new(search_criteria, Token::Tag).map_err(Box::from)?;
     for sort in criteria.sorts.iter() {
@@ -93,159 +249,6 @@ pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Tok
     Ok(criteria)
 }
 
-pub fn build_query<'a>(client: Client, search_criteria: &'a SearchCriteria<Token>) -> Result<BoxedQuery<'a>, Error> {
-    let base_query = post::table
-        .select(post::id)
-        .inner_join(post_statistics::table)
-        .left_join(user::table)
-        .into_boxed();
-    search_criteria
-        .filters
-        .iter()
-        .try_fold(base_query, |query, filter| match filter.kind {
-            Token::Id => apply_filter!(query, post::id, filter, i64),
-            Token::FileSize => apply_filter!(query, post::file_size, filter, i64),
-            Token::Width => apply_filter!(query, post::width, filter, i32),
-            Token::Height => apply_filter!(query, post::height, filter, i32),
-            Token::Area => apply_filter!(query, post::width * post::height, filter, i32),
-            Token::AspectRatio => apply_filter!(query, aspect_ratio(), filter, f32),
-            Token::Safety => apply_filter!(query, post::safety, filter, PostSafety),
-            Token::Type => apply_filter!(query, post::type_, filter, PostType),
-            Token::ContentChecksum => {
-                // Checksums can only be searched by exact value(s)
-                let checksums: Vec<Checksum> = parse::values(filter.criteria)?;
-                Ok(if filter.negated {
-                    query.filter(post::checksum.ne_all(checksums))
-                } else {
-                    query.filter(post::checksum.eq_any(checksums))
-                })
-            }
-            Token::Flag => {
-                let flags: Vec<PostFlag> = parse::values(filter.criteria)?;
-                let value = flags.into_iter().fold(PostFlags::new(), |value, flag| value | flag);
-                let bitwise_and = sql::<SmallInt>("")
-                    .bind(post::flags)
-                    .sql(" & ")
-                    .bind::<SmallInt, _>(value);
-                Ok(if filter.negated {
-                    query.filter(bitwise_and.eq(0))
-                } else {
-                    query.filter(bitwise_and.ne(0))
-                })
-            }
-            Token::Source => Ok(apply_str_filter!(query, post::source, filter)),
-            Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
-            Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
-            Token::Tag => {
-                let tags = post_tag::table
-                    .select(post_tag::post_id)
-                    .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
-                    .into_boxed();
-                let subquery = apply_str_filter!(tags, tag_name::name, filter.unnegated());
-                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
-            }
-            Token::Pool => {
-                let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
-                let subquery = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
-                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
-            }
-            Token::Uploader => Ok(apply_str_filter!(query, user::name, filter)),
-            Token::Fav => {
-                let favorites = post_favorite::table
-                    .select(post_favorite::post_id)
-                    .inner_join(user::table)
-                    .into_boxed();
-                let subquery = apply_str_filter!(favorites, user::name, filter.unnegated());
-                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
-            }
-            Token::Comment => {
-                let comments = comment::table
-                    .select(comment::post_id)
-                    .inner_join(user::table)
-                    .into_boxed();
-                let subquery = apply_str_filter!(comments, user::name, filter.unnegated());
-                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
-            }
-            Token::NoteText => {
-                let post_notes = post_note::table.select(post_note::post_id).into_boxed();
-                let subquery = apply_str_filter!(post_notes, post_note::text, filter.unnegated());
-                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
-            }
-            Token::TagCount => apply_filter!(query, post_statistics::tag_count, filter, i64),
-            Token::CommentCount => apply_filter!(query, post_statistics::comment_count, filter, i64),
-            Token::RelationCount => apply_filter!(query, post_statistics::relation_count, filter, i64),
-            Token::NoteCount => apply_filter!(query, post_statistics::note_count, filter, i64),
-            Token::FavCount => apply_filter!(query, post_statistics::favorite_count, filter, i64),
-            Token::FeatureCount => apply_filter!(query, post_statistics::feature_count, filter, i64),
-            Token::Score => apply_filter!(query, post_statistics::score, filter, i64),
-            Token::CommentTime => {
-                let comments = comment::table.select(comment::post_id).into_boxed();
-                let subquery = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
-                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
-            }
-            Token::FavTime => {
-                let post_favorites = post_favorite::table.select(post_favorite::post_id).into_boxed();
-                let subquery = apply_time_filter!(post_favorites, post_favorite::time, filter.unnegated())?;
-                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
-            }
-            Token::FeatureTime => {
-                let post_features = post_feature::table.select(post_feature::post_id).into_boxed();
-                let subquery = apply_time_filter!(post_features, post_feature::time, filter.unnegated())?;
-                Ok(apply_subquery_filter!(query, post::id, filter, subquery))
-            }
-            Token::Special => apply_special_filter(query, *filter, client),
-        })
-}
-
-pub fn get_ordered_ids(
-    conn: &mut PgConnection,
-    unsorted_query: BoxedQuery,
-    search_criteria: &SearchCriteria<Token>,
-) -> QueryResult<Vec<i64>> {
-    // If random sort specified, no other sorts matter
-    if search_criteria.random_sort {
-        return apply_random_sort!(unsorted_query, search_criteria).load(conn);
-    }
-
-    let default_sort = std::iter::once(ParsedSort {
-        kind: Token::Id,
-        order: Order::default(),
-    });
-    let sorts = search_criteria.sorts.iter().copied().chain(default_sort);
-    let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
-        Token::Id => apply_sort!(query, post::id, sort),
-        Token::FileSize => apply_sort!(query, post::file_size, sort),
-        Token::Width => apply_sort!(query, post::width, sort),
-        Token::Height => apply_sort!(query, post::height, sort),
-        Token::Area => apply_sort!(query, post::width * post::height, sort),
-        Token::AspectRatio => apply_sort!(query, aspect_ratio(), sort),
-        Token::Safety => apply_sort!(query, post::safety, sort),
-        Token::Type => apply_sort!(query, post::type_, sort),
-        Token::Flag => apply_sort!(query, post::flags, sort),
-        Token::Source => apply_sort!(query, post::source, sort),
-        Token::CreationTime => apply_sort!(query, post::creation_time, sort),
-        Token::LastEditTime => apply_sort!(query, post::last_edit_time, sort),
-        Token::Tag | Token::TagCount => apply_sort!(query, post_statistics::tag_count, sort),
-        Token::Pool => apply_sort!(query, post_statistics::pool_count, sort),
-        Token::Uploader => apply_sort!(query, user::name, sort),
-        Token::Fav | Token::FavCount => apply_sort!(query, post_statistics::favorite_count, sort),
-        Token::Comment | Token::CommentCount => apply_sort!(query, post_statistics::comment_count, sort),
-        Token::RelationCount => apply_sort!(query, post_statistics::relation_count, sort),
-        Token::NoteCount => apply_sort!(query, post_statistics::note_count, sort),
-        Token::FeatureCount => apply_sort!(query, post_statistics::feature_count, sort),
-        Token::Score => apply_sort!(query, post_statistics::score, sort),
-        Token::CommentTime => apply_sort!(query, post_statistics::last_comment_time, sort),
-        Token::FavTime => apply_sort!(query, post_statistics::last_favorite_time, sort),
-        Token::FeatureTime => apply_sort!(query, post_statistics::last_feature_time, sort),
-        Token::ContentChecksum | Token::NoteText | Token::Special => panic!("Invalid sort-style token!"),
-    });
-    match search_criteria.extra_args {
-        Some(args) => query.offset(args.offset).limit(args.limit),
-        None => query,
-    }
-    .load(conn)
-}
-
 #[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 enum SpecialToken {
@@ -253,6 +256,42 @@ enum SpecialToken {
     Disliked,
     Fav,
     Tumbleweed,
+}
+
+struct QueryCache {
+    matches: Option<HashSet<i64>>,
+    nonmatches: Option<HashSet<i64>>,
+}
+
+impl QueryCache {
+    fn new() -> Self {
+        Self {
+            matches: None,
+            nonmatches: None,
+        }
+    }
+
+    fn take_if_empty(&self) -> Option<Self> {
+        let is_empty = self.matches.is_none() && self.nonmatches.is_none();
+        is_empty.then(Self::new)
+    }
+
+    fn replace(&mut self, value: Option<Self>) {
+        if let Some(cache) = value {
+            *self = cache;
+        }
+    }
+
+    fn update(&mut self, post_ids: Vec<i64>, negated: bool) {
+        if negated {
+            self.nonmatches.get_or_insert_default().extend(post_ids);
+        } else {
+            self.matches = Some(match self.matches.as_ref() {
+                Some(matches) => post_ids.into_iter().filter(|id| matches.contains(id)).collect(),
+                None => post_ids.into_iter().collect(),
+            });
+        }
+    }
 }
 
 type Bind = UncheckedBind<SqlLiteral<Float, UncheckedBind<SqlLiteral<Float>, post::width>>, post::height>;
@@ -265,6 +304,152 @@ fn aspect_ratio() -> SqlLiteral<Float, Bind> {
         .sql(" AS REAL) / CAST(")
         .bind(post::height)
         .sql(" AS REAL)")
+}
+
+fn apply_checksum_filter<'a>(
+    query: BoxedQuery<'a>,
+    filter: UnparsedFilter<'a, Token>,
+) -> Result<BoxedQuery<'a>, Error> {
+    // Checksums can only be searched by exact value(s)
+    let checksums: Vec<Checksum> = parse::values(filter.criteria)?;
+    Ok(match filter.negated {
+        true => query.filter(post::checksum.ne_all(checksums)),
+        false => query.filter(post::checksum.eq_any(checksums)),
+    })
+}
+
+fn apply_flag_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> Result<BoxedQuery<'a>, Error> {
+    let flags: Vec<PostFlag> = parse::values(filter.criteria)?;
+    let value = flags.into_iter().fold(PostFlags::new(), |value, flag| value | flag);
+    let bitwise_and = sql::<SmallInt>("")
+        .bind(post::flags)
+        .sql(" & ")
+        .bind::<SmallInt, _>(value);
+    Ok(match filter.negated {
+        true => query.filter(bitwise_and.eq(0)),
+        false => query.filter(bitwise_and.ne(0)),
+    })
+}
+
+fn apply_tag_filter(
+    conn: &mut PgConnection,
+    filter: UnparsedFilter<Token>,
+    cache: Option<&mut QueryCache>,
+) -> ApiResult<()> {
+    if let Some(cache) = cache {
+        let post_tags = post_tag::table
+            .select(post_tag::post_id)
+            .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
+            .into_boxed();
+        let filtered_posts = apply_str_filter!(post_tags, tag_name::name, filter.unnegated());
+        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
+        cache.update(post_ids, filter.negated);
+    }
+    Ok(())
+}
+
+fn apply_pool_filter(
+    conn: &mut PgConnection,
+    filter: UnparsedFilter<Token>,
+    cache: Option<&mut QueryCache>,
+) -> ApiResult<()> {
+    if let Some(cache) = cache {
+        let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
+        let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
+        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
+        cache.update(post_ids, filter.negated);
+    }
+    Ok(())
+}
+
+fn apply_favorite_filter(
+    conn: &mut PgConnection,
+    filter: UnparsedFilter<Token>,
+    cache: Option<&mut QueryCache>,
+) -> ApiResult<()> {
+    if let Some(cache) = cache {
+        let favorites = post_favorite::table
+            .select(post_favorite::post_id)
+            .inner_join(user::table)
+            .into_boxed();
+        let filtered_posts = apply_str_filter!(favorites, user::name, filter.unnegated());
+        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
+        cache.update(post_ids, filter.negated);
+    }
+    Ok(())
+}
+
+fn apply_comment_filter(
+    conn: &mut PgConnection,
+    filter: UnparsedFilter<Token>,
+    cache: Option<&mut QueryCache>,
+) -> ApiResult<()> {
+    if let Some(cache) = cache {
+        let comments = comment::table
+            .select(comment::post_id)
+            .inner_join(user::table)
+            .into_boxed();
+        let filtered_posts = apply_str_filter!(comments, user::name, filter.unnegated());
+        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
+        cache.update(post_ids, filter.negated);
+    }
+    Ok(())
+}
+
+fn apply_note_text_filter(
+    conn: &mut PgConnection,
+    filter: UnparsedFilter<Token>,
+    cache: Option<&mut QueryCache>,
+) -> ApiResult<()> {
+    if let Some(cache) = cache {
+        let post_notes = post_note::table.select(post_note::post_id).into_boxed();
+        let filtered_posts = apply_str_filter!(post_notes, post_note::text, filter.unnegated());
+        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
+        cache.update(post_ids, filter.negated);
+    }
+    Ok(())
+}
+
+fn apply_comment_time_filter(
+    conn: &mut PgConnection,
+    filter: UnparsedFilter<Token>,
+    cache: Option<&mut QueryCache>,
+) -> ApiResult<()> {
+    if let Some(cache) = cache {
+        let comments = comment::table.select(comment::post_id).into_boxed();
+        let filtered_posts = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
+        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
+        cache.update(post_ids, filter.negated);
+    }
+    Ok(())
+}
+
+fn apply_favorite_time_filter(
+    conn: &mut PgConnection,
+    filter: UnparsedFilter<Token>,
+    cache: Option<&mut QueryCache>,
+) -> ApiResult<()> {
+    if let Some(cache) = cache {
+        let post_favorites = post_favorite::table.select(post_favorite::post_id).into_boxed();
+        let filtered_posts = apply_time_filter!(post_favorites, post_favorite::time, filter.unnegated())?;
+        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
+        cache.update(post_ids, filter.negated);
+    }
+    Ok(())
+}
+
+fn apply_feature_time_filter(
+    conn: &mut PgConnection,
+    filter: UnparsedFilter<Token>,
+    cache: Option<&mut QueryCache>,
+) -> ApiResult<()> {
+    if let Some(cache) = cache {
+        let post_features = post_feature::table.select(post_feature::post_id).into_boxed();
+        let filtered_posts = apply_time_filter!(post_features, post_feature::time, filter.unnegated())?;
+        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
+        cache.update(post_ids, filter.negated);
+    }
+    Ok(())
 }
 
 fn apply_special_filter<'a>(

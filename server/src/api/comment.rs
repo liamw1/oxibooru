@@ -65,7 +65,7 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<Comment
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::comment::parse_search_criteria(params.criteria())?;
-        search_criteria.add_offset_and_limit(offset, limit);
+        search_criteria.set_offset_and_limit(offset, limit);
         let sql_query = search::comment::build_query(&search_criteria)?;
 
         let total = if search_criteria.has_filter() {

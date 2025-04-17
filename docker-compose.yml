@@ -4,7 +4,7 @@
 # orchestration services
 services:
   server:
-    image: oxibooru/server:latest
+    image: oxibooru/server:dev
     build:
       context: server
       args: 

@@ -93,7 +93,7 @@ where
         })
     }
 
-    pub fn add_offset_and_limit(&mut self, offset: i64, limit: i64) {
+    pub fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
         self.extra_args = Some(QueryArgs { offset, limit });
     }
 

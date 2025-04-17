@@ -29,9 +29,9 @@ pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Tok
         .map_err(Error::from)
 }
 
-pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<BoxedQuery<'a>, Error> {
+pub fn build_query<'a>(search: &'a SearchCriteria<Token>) -> Result<BoxedQuery<'a>, Error> {
     let base_query = user::table.select(user::id).into_boxed();
-    search_criteria
+    search
         .filters
         .iter()
         .try_fold(base_query, |query, filter| match filter.kind {
@@ -44,24 +44,24 @@ pub fn build_query<'a>(search_criteria: &'a SearchCriteria<Token>) -> Result<Box
 pub fn get_ordered_ids(
     conn: &mut PgConnection,
     unsorted_query: BoxedQuery,
-    search_criteria: &SearchCriteria<Token>,
+    search: &SearchCriteria<Token>,
 ) -> QueryResult<Vec<i64>> {
     // If random sort specified, no other sorts matter
-    if search_criteria.random_sort {
-        return apply_random_sort!(unsorted_query, search_criteria).load(conn);
+    if search.random_sort {
+        return apply_random_sort!(unsorted_query, search).load(conn);
     }
 
     let default_sort = std::iter::once(ParsedSort {
         kind: Token::Name,
         order: Order::default(),
     });
-    let sorts = search_criteria.sorts.iter().copied().chain(default_sort);
+    let sorts = search.sorts.iter().copied().chain(default_sort);
     let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
         Token::Name => apply_sort!(query, user::name, sort),
         Token::CreationTime => apply_sort!(query, user::creation_time, sort),
         Token::LastLoginTime => apply_sort!(query, user::last_login_time, sort),
     });
-    match search_criteria.extra_args {
+    match search.extra_args {
         Some(args) => query.offset(args.offset).limit(args.limit),
         None => query,
     }

@@ -22,10 +22,9 @@ macro_rules! apply_time_filter {
                         .bind::<diesel::sql_types::Array<TimeRange>, _>(times)
                         .sql(") @> ")
                         .bind($expression);
-                    return if $filter.negated {
-                        $query.filter(diesel::dsl::not(expression))
-                    } else {
-                        $query.filter(expression)
+                    return match $filter.negated {
+                        true => $query.filter(diesel::dsl::not(expression)),
+                        false => $query.filter(expression),
                     };
                 }
                 $crate::search::Criteria::GreaterEq(time) => $crate::search::Criteria::GreaterEq(time.start),
@@ -47,13 +46,10 @@ macro_rules! apply_str_filter {
             $crate::search::StrCritera::Regular(criteria) => {
                 $crate::apply_criteria!($query, $expression, $filter, criteria)
             }
-            $crate::search::StrCritera::WildCard(pattern) => {
-                if $filter.negated {
-                    $query.filter($expression.not_like(pattern))
-                } else {
-                    $query.filter($expression.like(pattern))
-                }
-            }
+            $crate::search::StrCritera::WildCard(pattern) => match $filter.negated {
+                true => $query.filter($expression.not_like(pattern)),
+                false => $query.filter($expression.like(pattern)),
+            },
         }
     };
 }
@@ -80,10 +76,9 @@ macro_rules! apply_subquery_filter {
         // cripplingly slow instead.
         //
         // For some reason, adding distinct() to the subqueries makes searches faster on average.
-        if $filter.negated {
-            $query.filter($expression.ne_all(diesel::dsl::array($subquery.distinct())))
-        } else {
-            $query.filter($expression.eq_any($subquery.distinct()))
+        match $filter.negated {
+            true => $query.filter($expression.ne_all(diesel::dsl::array($subquery.distinct()))),
+            false => $query.filter($expression.eq_any($subquery.distinct())),
         }
     };
 }
