@@ -7,9 +7,7 @@ use crate::schema::{
     post_tag, tag_name, user,
 };
 use crate::search::{Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter, parse};
-use crate::{
-    api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter,
-};
+use crate::{api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
@@ -17,9 +15,6 @@ use diesel::prelude::*;
 use diesel::sql_types::{Float, SmallInt};
 use std::str::FromStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
-
-pub type BoxedQuery<'a> =
-    IntoBoxed<'a, LeftJoin<InnerJoin<Select<post::table, post::id>, post_statistics::table>, user::table>, Pg>;
 
 #[derive(Clone, Copy, EnumIter, EnumString, IntoStaticStr)]
 #[strum(serialize_all = "kebab-case")]
@@ -173,7 +168,7 @@ impl<'a> QueryBuilder<'a> {
                 Token::CommentTime => apply_comment_time_filter(conn, filter, cache.as_mut())?,
                 Token::FavTime => apply_favorite_time_filter(conn, filter, cache.as_mut())?,
                 Token::FeatureTime => apply_feature_time_filter(conn, filter, cache.as_mut())?,
-                Token::Special => query = apply_special_filter(query, filter, self.client)?,
+                Token::Special => apply_special_filter(conn, self.client, filter, cache.as_mut())?,
             }
         }
         self.cache.replace(cache);
@@ -224,7 +219,7 @@ impl<'a> QueryBuilder<'a> {
         }
     }
 
-    pub fn apply_cache_filters(&'a self, mut query: BoxedQuery<'a>) -> BoxedQuery<'a> {
+    fn apply_cache_filters(&'a self, mut query: BoxedQuery<'a>) -> BoxedQuery<'a> {
         if let Some(matching_ids) = self.cache.matches.as_ref() {
             query = query.filter(post::id.eq_any(matching_ids));
         }
@@ -245,6 +240,9 @@ pub fn parse_search_criteria(search_criteria: &str) -> ApiResult<SearchCriteria<
     }
     Ok(criteria)
 }
+
+type BoxedQuery<'a> =
+    IntoBoxed<'a, LeftJoin<InnerJoin<Select<post::table, post::id>, post_statistics::table>, user::table>, Pg>;
 
 #[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "kebab-case")]
@@ -410,44 +408,48 @@ fn apply_feature_time_filter(
     Ok(())
 }
 
-fn apply_special_filter<'a>(
-    query: BoxedQuery<'a>,
-    filter: UnparsedFilter<'a, Token>,
+fn apply_special_filter(
+    conn: &mut PgConnection,
     client: Client,
-) -> ApiResult<BoxedQuery<'a>> {
-    let special_token = SpecialToken::from_str(filter.criteria).map_err(Box::from)?;
-    match special_token {
-        SpecialToken::Liked => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
-            let subquery = post_score::table
-                .select(post_score::post_id)
-                .filter(post_score::user_id.eq(client_id))
-                .filter(post_score::score.eq(1));
-            apply_subquery_filter!(query, post::id, filter, subquery)
-        }),
-        SpecialToken::Disliked => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
-            let subquery = post_score::table
-                .select(post_score::post_id)
-                .filter(post_score::user_id.eq(client_id))
-                .filter(post_score::score.eq(-1));
-            apply_subquery_filter!(query, post::id, filter, subquery)
-        }),
-        SpecialToken::Fav => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
-            let subquery = post_favorite::table
-                .select(post_favorite::post_id)
-                .filter(post_favorite::user_id.eq(client_id));
-            apply_subquery_filter!(query, post::id, filter, subquery)
-        }),
-        SpecialToken::Tumbleweed => {
-            // A score of 0 doesn't necessarily mean no ratings, so we count them with a subquery
-            let subquery = post_statistics::table
-                .select(post_statistics::post_id)
-                .left_join(post_score::table.on(post_score::post_id.eq(post_statistics::post_id)))
-                .filter(post_statistics::favorite_count.eq(0))
-                .filter(post_statistics::comment_count.eq(0))
-                .group_by(post_statistics::post_id)
-                .having(count(post_score::post_id).eq(0))
-                .into_boxed();
-            Ok(apply_subquery_filter!(query, post::id, filter, subquery))
-        }
+    filter: UnparsedFilter<Token>,
+    cache: Option<&mut QueryCache>,
+) -> ApiResult<()> {
+    if let Some(cache) = cache {
+        let special_token = SpecialToken::from_str(filter.criteria).map_err(Box::from)?;
+        let post_ids: Vec<i64> = match special_token {
+            SpecialToken::Liked => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
+                post_score::table
+                    .select(post_score::post_id)
+                    .filter(post_score::user_id.eq(client_id))
+                    .filter(post_score::score.eq(1))
+                    .load(conn)
+            }),
+            SpecialToken::Disliked => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
+                post_score::table
+                    .select(post_score::post_id)
+                    .filter(post_score::user_id.eq(client_id))
+                    .filter(post_score::score.eq(-1))
+                    .load(conn)
+            }),
+            SpecialToken::Fav => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
+                post_favorite::table
+                    .select(post_favorite::post_id)
+                    .filter(post_favorite::user_id.eq(client_id))
+                    .load(conn)
+            }),
+            SpecialToken::Tumbleweed => {
+                // A score of 0 doesn't necessarily mean no ratings, so we count them with a HAVING clause
+                Ok(post_statistics::table
+                    .select(post_statistics::post_id)
+                    .left_join(post_score::table.on(post_score::post_id.eq(post_statistics::post_id)))
+                    .filter(post_statistics::favorite_count.eq(0))
+                    .filter(post_statistics::comment_count.eq(0))
+                    .group_by(post_statistics::post_id)
+                    .having(count(post_score::post_id).eq(0))
+                    .load(conn))
+            }
+        }??;
+        cache.update(post_ids, filter.negated);
     }
+    Ok(())
 }

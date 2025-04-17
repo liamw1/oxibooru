@@ -54,35 +54,6 @@ macro_rules! apply_str_filter {
     };
 }
 
-/// Used for filtering based on subqueries which establish a one-to-many or many-to-many relationship.
-///
-/// For instance, let's say we have a query to find all posts that don't have the tag "wallpaper".
-/// Dynamic joins aren't easy, so instead we use subqueries. We perform a subquery that joins the
-/// post_tag table with the tag_name table and can return a list of post_tags matching our condition.
-/// If we were to apply our filter naively, we would have a list of all post_tags associated with any
-/// tag other than "wallpaper". But this means that our query would return all posts with any tag other
-/// than "wallpaper", including posts with the tag "wallpaper"!
-///
-/// Instead, we should apply our filter without negation to the subquery, which returns post_tags
-/// associated with "wallpaper". Then, we can plug that subquery into this function which performs
-/// the negation, giving us the desired result.
-#[macro_export]
-macro_rules! apply_subquery_filter {
-    ($query:expr, $expression:expr, $filter:expr, $subquery:expr) => {
-        // Implementation uses a couple non-obvious optimizations that improve query plans.
-        //
-        // If not wrapped with ARRAY, negated subqueries are cripplingly slow. Not entirely sure
-        // why, as non-negated subqueries don't have this problem. In fact, adding ARRAY makes them
-        // cripplingly slow instead.
-        //
-        // For some reason, adding distinct() to the subqueries makes searches faster on average.
-        match $filter.negated {
-            true => $query.filter($expression.ne_all(diesel::dsl::array($subquery.distinct()))),
-            false => $query.filter($expression.eq_any($subquery.distinct())),
-        }
-    };
-}
-
 /// Applies a WHERE clause to the given `query`.
 /// The `filter` determines what operation is applied to the given `expression`.
 /// The operation is one of: eq_any, ge, le, between, ne_all, lt, gt, or not_between.

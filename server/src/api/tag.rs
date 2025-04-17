@@ -3,7 +3,8 @@ use crate::model::enums::ResourceType;
 use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
 use crate::resource::tag::TagInfo;
-use crate::schema::{database_statistics, post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::search::tag::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
@@ -78,18 +79,10 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<TagInfo
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::tag::parse_search_criteria(params.criteria())?;
         search_criteria.set_offset_and_limit(offset, limit);
-        let sql_query = search::tag::build_query(&search_criteria)?;
+        let mut query_builder = QueryBuilder::new(search_criteria);
 
-        let total = if search_criteria.has_filter() {
-            let count_query = search::tag::build_query(&search_criteria)?;
-            count_query.count().first(conn)?
-        } else {
-            database_statistics::table
-                .select(database_statistics::tag_count)
-                .first(conn)?
-        };
-
-        let selected_tags = search::tag::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let total = query_builder.count(conn)?;
+        let selected_tags = query_builder.load(conn)?;
         Ok(PagedResponse {
             query: params.into_query(),
             offset,

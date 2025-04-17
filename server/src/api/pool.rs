@@ -2,7 +2,8 @@ use crate::api::{ApiResult, AuthResult, DeleteBody, MergeBody, PageParams, Paged
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::PoolInfo;
-use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_post};
+use crate::schema::{pool, pool_category, pool_name, pool_post};
+use crate::search::pool::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource, search, update};
@@ -69,24 +70,16 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<PoolInf
     db::get_connection()?.transaction(|conn| {
         let mut search_criteria = search::pool::parse_search_criteria(params.criteria())?;
         search_criteria.set_offset_and_limit(offset, limit);
-        let sql_query = search::pool::build_query(&search_criteria)?;
+        let mut query_builder = QueryBuilder::new(search_criteria);
 
-        let total = if search_criteria.has_filter() {
-            let count_query = search::pool::build_query(&search_criteria)?;
-            count_query.count().first(conn)?
-        } else {
-            database_statistics::table
-                .select(database_statistics::pool_count)
-                .first(conn)?
-        };
-
-        let selected_tags = search::pool::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let total = query_builder.count(conn)?;
+        let selected_pools = query_builder.load(conn)?;
         Ok(PagedResponse {
             query: params.into_query(),
             offset,
             limit,
             total,
-            results: PoolInfo::new_batch_from_ids(conn, selected_tags, &fields)?,
+            results: PoolInfo::new_batch_from_ids(conn, selected_pools, &fields)?,
         })
     })
 }
