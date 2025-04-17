@@ -191,7 +191,14 @@ impl QueryCache {
 
     fn replace(&mut self, value: Option<Self>) {
         if let Some(cache) = value {
-            *self = cache;
+            let (matches, nonmatches) = match (cache.matches, cache.nonmatches) {
+                (Some(match_set), Some(nonmatch_set)) => {
+                    let set_difference = match_set.difference(&nonmatch_set).copied().collect();
+                    (Some(set_difference), None)
+                }
+                (matches, nonmatches) => (matches, nonmatches),
+            };
+            *self = Self { matches, nonmatches };
         }
     }
 
