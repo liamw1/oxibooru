@@ -6,7 +6,7 @@ use crate::schema::{
     comment, database_statistics, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics,
     post_tag, tag_name, user,
 };
-use crate::search::{Error, Order, ParsedSort, SearchCriteria, UnparsedFilter, parse};
+use crate::search::{Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter, parse};
 use crate::{
     api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter,
 };
@@ -15,7 +15,6 @@ use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use diesel::sql_types::{Float, SmallInt};
-use std::collections::HashSet;
 use std::str::FromStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
@@ -61,8 +60,6 @@ pub enum Token {
         serialize = "last-edit-time"
     )]
     LastEditTime,
-
-    // Requires join
     Tag,
     Pool,
     #[strum(serialize = "submit", serialize = "upload", serialize = "uploader")]
@@ -238,11 +235,11 @@ impl<'a> QueryBuilder<'a> {
     }
 }
 
-pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Token>, Error> {
+pub fn parse_search_criteria(search_criteria: &str) -> ApiResult<SearchCriteria<Token>> {
     let criteria = SearchCriteria::new(search_criteria, Token::Tag).map_err(Box::from)?;
     for sort in criteria.sorts.iter() {
         match sort.kind {
-            Token::ContentChecksum | Token::NoteText | Token::Special => return Err(Error::InvalidSort),
+            Token::ContentChecksum | Token::NoteText | Token::Special => return Err(api::Error::InvalidSort),
             _ => (),
         }
     }
@@ -258,42 +255,6 @@ enum SpecialToken {
     Tumbleweed,
 }
 
-struct QueryCache {
-    matches: Option<HashSet<i64>>,
-    nonmatches: Option<HashSet<i64>>,
-}
-
-impl QueryCache {
-    fn new() -> Self {
-        Self {
-            matches: None,
-            nonmatches: None,
-        }
-    }
-
-    fn take_if_empty(&self) -> Option<Self> {
-        let is_empty = self.matches.is_none() && self.nonmatches.is_none();
-        is_empty.then(Self::new)
-    }
-
-    fn replace(&mut self, value: Option<Self>) {
-        if let Some(cache) = value {
-            *self = cache;
-        }
-    }
-
-    fn update(&mut self, post_ids: Vec<i64>, negated: bool) {
-        if negated {
-            self.nonmatches.get_or_insert_default().extend(post_ids);
-        } else {
-            self.matches = Some(match self.matches.as_ref() {
-                Some(matches) => post_ids.into_iter().filter(|id| matches.contains(id)).collect(),
-                None => post_ids.into_iter().collect(),
-            });
-        }
-    }
-}
-
 type Bind = UncheckedBind<SqlLiteral<Float, UncheckedBind<SqlLiteral<Float>, post::width>>, post::height>;
 
 /// Returns a SQL literal representing a post's aspect. This is used instead of
@@ -306,10 +267,7 @@ fn aspect_ratio() -> SqlLiteral<Float, Bind> {
         .sql(" AS REAL)")
 }
 
-fn apply_checksum_filter<'a>(
-    query: BoxedQuery<'a>,
-    filter: UnparsedFilter<'a, Token>,
-) -> Result<BoxedQuery<'a>, Error> {
+fn apply_checksum_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> ApiResult<BoxedQuery<'a>> {
     // Checksums can only be searched by exact value(s)
     let checksums: Vec<Checksum> = parse::values(filter.criteria)?;
     Ok(match filter.negated {
@@ -318,7 +276,7 @@ fn apply_checksum_filter<'a>(
     })
 }
 
-fn apply_flag_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> Result<BoxedQuery<'a>, Error> {
+fn apply_flag_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> ApiResult<BoxedQuery<'a>> {
     let flags: Vec<PostFlag> = parse::values(filter.criteria)?;
     let value = flags.into_iter().fold(PostFlags::new(), |value, flag| value | flag);
     let bitwise_and = sql::<SmallInt>("")
@@ -456,24 +414,24 @@ fn apply_special_filter<'a>(
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<'a, Token>,
     client: Client,
-) -> Result<BoxedQuery<'a>, Error> {
+) -> ApiResult<BoxedQuery<'a>> {
     let special_token = SpecialToken::from_str(filter.criteria).map_err(Box::from)?;
     match special_token {
-        SpecialToken::Liked => client.id.ok_or(Error::NotLoggedIn).map(|client_id| {
+        SpecialToken::Liked => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
             let subquery = post_score::table
                 .select(post_score::post_id)
                 .filter(post_score::user_id.eq(client_id))
                 .filter(post_score::score.eq(1));
             apply_subquery_filter!(query, post::id, filter, subquery)
         }),
-        SpecialToken::Disliked => client.id.ok_or(Error::NotLoggedIn).map(|client_id| {
+        SpecialToken::Disliked => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
             let subquery = post_score::table
                 .select(post_score::post_id)
                 .filter(post_score::user_id.eq(client_id))
                 .filter(post_score::score.eq(-1));
             apply_subquery_filter!(query, post::id, filter, subquery)
         }),
-        SpecialToken::Fav => client.id.ok_or(Error::NotLoggedIn).map(|client_id| {
+        SpecialToken::Fav => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
             let subquery = post_favorite::table
                 .select(post_favorite::post_id)
                 .filter(post_favorite::user_id.eq(client_id));

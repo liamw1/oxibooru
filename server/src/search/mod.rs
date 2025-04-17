@@ -7,6 +7,7 @@ pub mod tag;
 pub mod user;
 
 use std::borrow::Cow;
+use std::collections::HashSet;
 use std::ops::{Not, Range};
 use std::str::FromStr;
 
@@ -19,17 +20,6 @@ pub enum TimeParsingError {
     TooManyArgs,
     NotAnInteger(#[from] std::num::ParseIntError),
     OutOfRange(#[from] time::error::ComponentRange),
-}
-
-#[derive(Debug, thiserror::Error)]
-#[error(transparent)]
-pub enum Error {
-    ParseFailed(#[from] Box<dyn std::error::Error>),
-    InvalidTime(#[from] TimeParsingError),
-    #[error("Invalid sort token")]
-    InvalidSort,
-    #[error("This operation requires you to be logged in")]
-    NotLoggedIn,
 }
 
 /// Stores filters, sorts, offset, and limit of a search query.
@@ -179,4 +169,40 @@ impl<T> UnparsedFilter<'_, T> {
 struct ParsedSort<T> {
     kind: T,
     order: Order,
+}
+
+struct QueryCache {
+    matches: Option<HashSet<i64>>,
+    nonmatches: Option<HashSet<i64>>,
+}
+
+impl QueryCache {
+    fn new() -> Self {
+        Self {
+            matches: None,
+            nonmatches: None,
+        }
+    }
+
+    fn take_if_empty(&self) -> Option<Self> {
+        let is_empty = self.matches.is_none() && self.nonmatches.is_none();
+        is_empty.then(Self::new)
+    }
+
+    fn replace(&mut self, value: Option<Self>) {
+        if let Some(cache) = value {
+            *self = cache;
+        }
+    }
+
+    fn update(&mut self, post_ids: Vec<i64>, negated: bool) {
+        if negated {
+            self.nonmatches.get_or_insert_default().extend(post_ids);
+        } else {
+            self.matches = Some(match self.matches.as_ref() {
+                Some(matches) => post_ids.into_iter().filter(|id| matches.contains(id)).collect(),
+                None => post_ids.into_iter().collect(),
+            });
+        }
+    }
 }

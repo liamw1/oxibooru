@@ -1,6 +1,7 @@
+use crate::api::ApiResult;
 use crate::schema::{comment, comment_statistics, user};
-use crate::search::{Error, Order, ParsedSort, SearchCriteria};
-use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
+use crate::search::{Order, ParsedSort, SearchCriteria};
+use crate::{api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -31,13 +32,13 @@ pub enum Token {
     Score,
 }
 
-pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Token>, Error> {
+pub fn parse_search_criteria(search_criteria: &str) -> ApiResult<SearchCriteria<Token>> {
     SearchCriteria::new(search_criteria, Token::Text)
         .map_err(Box::from)
-        .map_err(Error::from)
+        .map_err(api::Error::from)
 }
 
-pub fn build_query<'a>(search: &'a SearchCriteria<Token>) -> Result<BoxedQuery<'a>, Error> {
+pub fn build_query<'a>(search: &'a SearchCriteria<Token>) -> ApiResult<BoxedQuery<'a>> {
     let base_query = comment::table
         .select(comment::id)
         .inner_join(comment_statistics::table)

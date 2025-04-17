@@ -1,7 +1,10 @@
+use crate::api::ApiResult;
 use crate::model::tag::TagName;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
-use crate::search::{Error, Order, ParsedSort, SearchCriteria};
-use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter};
+use crate::search::{Order, ParsedSort, SearchCriteria};
+use crate::{
+    api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_subquery_filter, apply_time_filter,
+};
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -34,13 +37,13 @@ pub enum Token {
     HasSuggestion,
 }
 
-pub fn parse_search_criteria(search_criteria: &str) -> Result<SearchCriteria<Token>, Error> {
+pub fn parse_search_criteria(search_criteria: &str) -> ApiResult<SearchCriteria<Token>> {
     SearchCriteria::new(search_criteria, Token::Name)
         .map_err(Box::from)
-        .map_err(Error::from)
+        .map_err(api::Error::from)
 }
 
-pub fn build_query<'a>(search: &'a SearchCriteria<Token>) -> Result<BoxedQuery<'a>, Error> {
+pub fn build_query<'a>(search: &'a SearchCriteria<Token>) -> ApiResult<BoxedQuery<'a>> {
     let base_query = tag::table
         .select(tag::id)
         .inner_join(tag_statistics::table)

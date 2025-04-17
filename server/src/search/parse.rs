@@ -1,4 +1,4 @@
-use crate::search::Error;
+use crate::api::{self, ApiResult};
 use crate::search::{Criteria, StrCritera, TimeParsingError};
 use crate::time::DateTime;
 use std::borrow::Cow;
@@ -23,11 +23,11 @@ pub fn str_criteria(filter: &str) -> StrCritera {
 }
 
 /// Parses time-based `filter`.
-pub fn time_criteria(filter: &str) -> Result<Criteria<Range<DateTime>>, Error> {
+pub fn time_criteria(filter: &str) -> ApiResult<Criteria<Range<DateTime>>> {
     if let Some(split_str) = filter.split_once("..") {
         return match split_str {
-            (left, "") => parse_time(left).map(Criteria::GreaterEq).map_err(Error::from),
-            ("", right) => parse_time(right).map(Criteria::LessEq).map_err(Error::from),
+            (left, "") => parse_time(left).map(Criteria::GreaterEq).map_err(api::Error::from),
+            ("", right) => parse_time(right).map(Criteria::LessEq).map_err(api::Error::from),
             (left, right) => Ok(Criteria::Range(parse_time(left)?..parse_time(right)?)),
         };
     }
@@ -36,11 +36,11 @@ pub fn time_criteria(filter: &str) -> Result<Criteria<Range<DateTime>>, Error> {
         .map(parse_time)
         .collect::<Result<_, _>>()
         .map(Criteria::Values)
-        .map_err(Error::from)
+        .map_err(api::Error::from)
 }
 
 /// Parses a non-string non-time `filter`.
-pub fn criteria<T>(filter: &str) -> Result<Criteria<T>, Error>
+pub fn criteria<T>(filter: &str) -> ApiResult<Criteria<T>>
 where
     T: FromStr,
     <T as FromStr>::Err: std::error::Error + 'static,
@@ -56,7 +56,7 @@ where
 }
 
 /// Parses comma-separated values.
-pub fn values<T>(filter: &str) -> Result<Vec<T>, Error>
+pub fn values<T>(filter: &str) -> ApiResult<Vec<T>>
 where
     T: FromStr,
     <T as FromStr>::Err: std::error::Error + 'static,
@@ -66,7 +66,7 @@ where
         .map(str::parse)
         .collect::<Result<_, _>>()
         .map_err(Box::from)
-        .map_err(Error::from)
+        .map_err(api::Error::from)
 }
 
 /// Replaces escaped characters with unescaped ones in `text`.
@@ -220,7 +220,7 @@ mod test {
     }
 
     #[test]
-    fn criteria_parsing() -> Result<(), Error> {
+    fn criteria_parsing() -> ApiResult<()> {
         assert_eq!(split_once("a:b", ':'), Some(("a", "b")));
         assert_eq!(split_once(":b", ':'), Some(("", "b")));
         assert_eq!(split_once("a:", ':'), Some(("a", "")));

@@ -254,17 +254,6 @@ impl ErrorKind for crate::search::TimeParsingError {
     }
 }
 
-impl ErrorKind for crate::search::Error {
-    fn kind(&self) -> &'static str {
-        match self {
-            Self::ParseFailed(_) => "SearchParseFailed",
-            Self::InvalidTime(err) => err.kind(),
-            Self::InvalidSort => "InvalidSort",
-            Self::NotLoggedIn => "NotLoggedIn",
-        }
-    }
-}
-
 impl ErrorKind for video_rs::ffmpeg::Error {
     fn kind(&self) -> &'static str {
         match self {
@@ -393,6 +382,8 @@ impl ErrorKind for crate::api::Error {
             Self::InvalidEmail(err) => err.kind(),
             Self::InvalidHeader(_) => "InvalidHeader",
             Self::InvalidMetadataType => "InvalidMetadataType",
+            Self::InvalidSort => "InvalidSort",
+            Self::InvalidTime(err) => err.kind(),
             Self::InvalidUserRank => "InvalidUserRank",
             Self::Image(err) => err.kind(),
             Self::JsonSerialization(err) => err.classify().kind(),
@@ -408,7 +399,6 @@ impl ErrorKind for crate::api::Error {
             Self::NotLoggedIn => "NotLoggedIn",
             Self::Request(_) => "RequestError",
             Self::ResourceModified => "ResourceModified",
-            Self::Search(err) => err.kind(),
             Self::SelfMerge(_) => "SelfMerge",
             Self::StdIo(err) => err.kind().kind(),
             Self::SwfDecoding(err) => err.kind(),
