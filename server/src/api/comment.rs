@@ -5,7 +5,7 @@ use crate::resource::comment::CommentInfo;
 use crate::schema::{comment, comment_score};
 use crate::search::comment::QueryBuilder;
 use crate::time::DateTime;
-use crate::{api, config, db, resource, search};
+use crate::{api, config, db, resource};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
@@ -65,9 +65,8 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<Comment
     let limit = std::cmp::min(params.limit.get(), MAX_COMMENTS_PER_PAGE);
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
-        let mut search_criteria = search::comment::parse_search_criteria(params.criteria())?;
-        search_criteria.set_offset_and_limit(offset, limit);
-        let mut query_builder = QueryBuilder::new(search_criteria);
+        let mut query_builder = QueryBuilder::new(params.criteria())?;
+        query_builder.set_offset_and_limit(offset, limit);
 
         let total = query_builder.count(conn)?;
         let selected_comments = query_builder.load(conn)?;

@@ -85,12 +85,20 @@ pub struct QueryBuilder<'a> {
 }
 
 impl<'a> QueryBuilder<'a> {
-    pub fn new(client: Client, search: SearchCriteria<'a, Token>) -> Self {
-        Self {
+    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(search_criteria, Token::Tag).map_err(Box::from)?;
+        for sort in search.sorts.iter() {
+            match sort.kind {
+                Token::ContentChecksum | Token::NoteText | Token::Special => return Err(api::Error::InvalidSort),
+                _ => (),
+            }
+        }
+
+        Ok(Self {
             client,
             search,
             cache: QueryCache::new(),
-        }
+        })
     }
 
     pub fn criteria(&self) -> &SearchCriteria<'a, Token> {
@@ -131,7 +139,7 @@ impl<'a> QueryBuilder<'a> {
     }
 
     fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
-        let mut cache = self.cache.take_if_empty();
+        let mut cache = self.cache.clone_if_empty();
         let mut query = post::table
             .select(post::id)
             .inner_join(post_statistics::table)
@@ -230,17 +238,6 @@ impl<'a> QueryBuilder<'a> {
     }
 }
 
-pub fn parse_search_criteria(search_criteria: &str) -> ApiResult<SearchCriteria<Token>> {
-    let criteria = SearchCriteria::new(search_criteria, Token::Tag).map_err(Box::from)?;
-    for sort in criteria.sorts.iter() {
-        match sort.kind {
-            Token::ContentChecksum | Token::NoteText | Token::Special => return Err(api::Error::InvalidSort),
-            _ => (),
-        }
-    }
-    Ok(criteria)
-}
-
 type BoxedQuery<'a> =
     IntoBoxed<'a, LeftJoin<InnerJoin<Select<post::table, post::id>, post_statistics::table>, user::table>, Pg>;
 
@@ -267,7 +264,7 @@ fn aspect_ratio() -> SqlLiteral<Float, Bind> {
 
 fn apply_checksum_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> ApiResult<BoxedQuery<'a>> {
     // Checksums can only be searched by exact value(s)
-    let checksums: Vec<Checksum> = parse::values(filter.criteria)?;
+    let checksums: Vec<Checksum> = parse::values(filter.condition)?;
     Ok(match filter.negated {
         true => query.filter(post::checksum.ne_all(checksums)),
         false => query.filter(post::checksum.eq_any(checksums)),
@@ -275,7 +272,7 @@ fn apply_checksum_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, T
 }
 
 fn apply_flag_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> ApiResult<BoxedQuery<'a>> {
-    let flags: Vec<PostFlag> = parse::values(filter.criteria)?;
+    let flags: Vec<PostFlag> = parse::values(filter.condition)?;
     let value = flags.into_iter().fold(PostFlags::new(), |value, flag| value | flag);
     let bitwise_and = sql::<SmallInt>("")
         .bind(post::flags)
@@ -415,7 +412,7 @@ fn apply_special_filter(
     cache: Option<&mut QueryCache>,
 ) -> ApiResult<()> {
     if let Some(cache) = cache {
-        let special_token = SpecialToken::from_str(filter.criteria).map_err(Box::from)?;
+        let special_token = SpecialToken::from_str(filter.condition).map_err(Box::from)?;
         let post_ids: Vec<i64> = match special_token {
             SpecialToken::Liked => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
                 post_score::table

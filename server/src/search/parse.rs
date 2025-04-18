@@ -1,5 +1,5 @@
 use crate::api::{self, ApiResult};
-use crate::search::{Criteria, StrCritera, TimeParsingError};
+use crate::search::{Condition, StrCondition, TimeParsingError};
 use crate::time::DateTime;
 use std::borrow::Cow;
 use std::ops::Range;
@@ -13,55 +13,55 @@ pub fn split_once(text: &str, delimiter: char) -> Option<(&str, &str)> {
         .map(|(left, right)| (left, right.strip_prefix(delimiter).unwrap()))
 }
 
-/// Parses string-based `filter`.
-pub fn str_criteria(filter: &str) -> StrCritera {
-    if filter.contains('*') {
-        StrCritera::WildCard(unescape(filter).replace('*', "%").replace('_', "\\_"))
+/// Parses string-based `condition`.
+pub fn str_condition(condition: &str) -> StrCondition {
+    if condition.contains('*') {
+        StrCondition::WildCard(unescape(condition).replace('*', "%").replace('_', "\\_"))
     } else {
-        StrCritera::Regular(parse_regular_str(filter))
+        StrCondition::Regular(parse_regular_str(condition))
     }
 }
 
-/// Parses time-based `filter`.
-pub fn time_criteria(filter: &str) -> ApiResult<Criteria<Range<DateTime>>> {
-    if let Some(split_str) = filter.split_once("..") {
+/// Parses time-based `condition`.
+pub fn time_condition(condition: &str) -> ApiResult<Condition<Range<DateTime>>> {
+    if let Some(split_str) = condition.split_once("..") {
         return match split_str {
-            (left, "") => parse_time(left).map(Criteria::GreaterEq).map_err(api::Error::from),
-            ("", right) => parse_time(right).map(Criteria::LessEq).map_err(api::Error::from),
-            (left, right) => Ok(Criteria::Range(parse_time(left)?..parse_time(right)?)),
+            (left, "") => parse_time(left).map(Condition::GreaterEq).map_err(api::Error::from),
+            ("", right) => parse_time(right).map(Condition::LessEq).map_err(api::Error::from),
+            (left, right) => Ok(Condition::Range(parse_time(left)?..parse_time(right)?)),
         };
     }
-    filter
+    condition
         .split(',')
         .map(parse_time)
         .collect::<Result<_, _>>()
-        .map(Criteria::Values)
+        .map(Condition::Values)
         .map_err(api::Error::from)
 }
 
-/// Parses a non-string non-time `filter`.
-pub fn criteria<T>(filter: &str) -> ApiResult<Criteria<T>>
+/// Parses a non-string non-time `condition`.
+pub fn condition<T>(condition: &str) -> ApiResult<Condition<T>>
 where
     T: FromStr,
     <T as FromStr>::Err: std::error::Error + 'static,
 {
-    if let Some(split_str) = filter.split_once("..") {
+    if let Some(split_str) = condition.split_once("..") {
         return match split_str {
-            (left, "") => Ok(Criteria::GreaterEq(left.parse().map_err(Box::from)?)),
-            ("", right) => Ok(Criteria::LessEq(right.parse().map_err(Box::from)?)),
-            (left, right) => Ok(Criteria::Range(left.parse().map_err(Box::from)?..right.parse().map_err(Box::from)?)),
+            (left, "") => Ok(Condition::GreaterEq(left.parse().map_err(Box::from)?)),
+            ("", right) => Ok(Condition::LessEq(right.parse().map_err(Box::from)?)),
+            (left, right) => Ok(Condition::Range(left.parse().map_err(Box::from)?..right.parse().map_err(Box::from)?)),
         };
     }
-    values(filter).map(Criteria::Values)
+    values(condition).map(Condition::Values)
 }
 
 /// Parses comma-separated values.
-pub fn values<T>(filter: &str) -> ApiResult<Vec<T>>
+pub fn values<T>(condition: &str) -> ApiResult<Vec<T>>
 where
     T: FromStr,
     <T as FromStr>::Err: std::error::Error + 'static,
 {
-    filter
+    condition
         .split(',')
         .map(str::parse)
         .collect::<Result<_, _>>()
@@ -139,12 +139,12 @@ fn range_split(text: &str) -> Option<(&str, &str)> {
 }
 
 /// Parses a non-wildcard string-based `filter`.
-fn parse_regular_str(filter: &str) -> Criteria<Cow<str>> {
+fn parse_regular_str(filter: &str) -> Condition<Cow<str>> {
     match range_split(filter) {
-        Some((left, "")) => Criteria::GreaterEq(unescape(left)),
-        Some(("", right)) => Criteria::LessEq(unescape(right)),
-        Some((left, right)) => Criteria::Range(unescape(left)..unescape(right)),
-        None => Criteria::Values(split_escaped(filter, ',')),
+        Some((left, "")) => Condition::GreaterEq(unescape(left)),
+        Some(("", right)) => Condition::LessEq(unescape(right)),
+        Some((left, right)) => Condition::Range(unescape(left)..unescape(right)),
+        None => Condition::Values(split_escaped(filter, ',')),
     }
 }
 
@@ -220,36 +220,39 @@ mod test {
     }
 
     #[test]
-    fn criteria_parsing() -> ApiResult<()> {
+    fn condition_parsing() -> ApiResult<()> {
         assert_eq!(split_once("a:b", ':'), Some(("a", "b")));
         assert_eq!(split_once(":b", ':'), Some(("", "b")));
         assert_eq!(split_once("a:", ':'), Some(("a", "")));
         assert_eq!(split_once(":", ':'), Some(("", "")));
 
-        assert_eq!(criteria("1")?, Criteria::Values(vec![1]));
-        assert_eq!(criteria("-137")?, Criteria::Values(vec![-137]));
-        assert_eq!(criteria("0,1,2,3")?, Criteria::Values(vec![0, 1, 2, 3]));
-        assert_eq!(criteria("-4,-1,0,0,70,6")?, Criteria::Values(vec![-4, -1, 0, 0, 70, 6]));
-        assert_eq!(criteria("7..")?, Criteria::GreaterEq(7));
-        assert_eq!(criteria("..7")?, Criteria::LessEq(7));
-        assert_eq!(criteria("0..1")?, Criteria::Range(0..1));
-        assert_eq!(criteria("-10..5")?, Criteria::Range(-10..5));
+        assert_eq!(condition("1")?, Condition::Values(vec![1]));
+        assert_eq!(condition("-137")?, Condition::Values(vec![-137]));
+        assert_eq!(condition("0,1,2,3")?, Condition::Values(vec![0, 1, 2, 3]));
+        assert_eq!(condition("-4,-1,0,0,70,6")?, Condition::Values(vec![-4, -1, 0, 0, 70, 6]));
+        assert_eq!(condition("7..")?, Condition::GreaterEq(7));
+        assert_eq!(condition("..7")?, Condition::LessEq(7));
+        assert_eq!(condition("0..1")?, Condition::Range(0..1));
+        assert_eq!(condition("-10..5")?, Condition::Range(-10..5));
 
-        assert_eq!(str_criteria("str"), StrCritera::Regular(Criteria::Values(vec![Cow::Borrowed("str")])));
+        assert_eq!(str_condition("str"), StrCondition::Regular(Condition::Values(vec![Cow::Borrowed("str")])));
         assert_eq!(
-            str_criteria("a,b,c"),
-            StrCritera::Regular(Criteria::Values(vec![Cow::Borrowed("a"), Cow::Borrowed("b"), Cow::Borrowed("c")]))
+            str_condition("a,b,c"),
+            StrCondition::Regular(Condition::Values(vec![Cow::Borrowed("a"), Cow::Borrowed("b"), Cow::Borrowed("c")]))
         );
 
-        assert_eq!(str_criteria("a.."), StrCritera::Regular(Criteria::GreaterEq(Cow::Borrowed("a"))));
-        assert_eq!(str_criteria("..z"), StrCritera::Regular(Criteria::LessEq(Cow::Borrowed("z"))));
-        assert_eq!(str_criteria("a..z"), StrCritera::Regular(Criteria::Range(Cow::Borrowed("a")..Cow::Borrowed("z"))));
-        assert_eq!(str_criteria("*str*"), StrCritera::WildCard(String::from("%str%")));
-        assert_eq!(str_criteria("a*,*b,*c*"), StrCritera::WildCard(String::from("a%,%b,%c%")));
-        assert_eq!(str_criteria("*a..b"), StrCritera::WildCard(String::from("%a..b")));
+        assert_eq!(str_condition("a.."), StrCondition::Regular(Condition::GreaterEq(Cow::Borrowed("a"))));
+        assert_eq!(str_condition("..z"), StrCondition::Regular(Condition::LessEq(Cow::Borrowed("z"))));
+        assert_eq!(
+            str_condition("a..z"),
+            StrCondition::Regular(Condition::Range(Cow::Borrowed("a")..Cow::Borrowed("z")))
+        );
+        assert_eq!(str_condition("*str*"), StrCondition::WildCard(String::from("%str%")));
+        assert_eq!(str_condition("a*,*b,*c*"), StrCondition::WildCard(String::from("a%,%b,%c%")));
+        assert_eq!(str_condition("*a..b"), StrCondition::WildCard(String::from("%a..b")));
 
-        assert_eq!(criteria("safe")?, Criteria::Values(vec![PostSafety::Safe]));
-        assert_eq!(criteria("safe..unsafe")?, Criteria::Range(PostSafety::Safe..PostSafety::Unsafe));
+        assert_eq!(condition("safe")?, Condition::Values(vec![PostSafety::Safe]));
+        assert_eq!(condition("safe..unsafe")?, Condition::Range(PostSafety::Safe..PostSafety::Unsafe));
         Ok(())
     }
 
@@ -267,8 +270,8 @@ mod test {
 
         // Check that escaped tokens are escaped properly
         assert_eq!(
-            str_criteria("a\\,,b\\.,c\\:,d\\\\,e"),
-            StrCritera::Regular(Criteria::Values(vec![
+            str_condition("a\\,,b\\.,c\\:,d\\\\,e"),
+            StrCondition::Regular(Condition::Values(vec![
                 Cow::Borrowed("a,"),
                 Cow::Borrowed("b."),
                 Cow::Borrowed("c:"),
@@ -279,25 +282,25 @@ mod test {
 
         // Commas with an even number of backslashes behind it shouldn't be escaped
         assert_eq!(
-            str_criteria("a\\\\,b\\\\\\,c\\\\\\\\,d"),
-            StrCritera::Regular(Criteria::Values(vec![
+            str_condition("a\\\\,b\\\\\\,c\\\\\\\\,d"),
+            StrCondition::Regular(Condition::Values(vec![
                 Cow::Borrowed("a\\"),
                 Cow::Borrowed("b\\,c\\\\"),
                 Cow::Borrowed("d")
             ]))
         );
 
-        // Check that ranged criterias are escaped properly
-        assert_eq!(str_criteria("a\\..b"), StrCritera::Regular(Criteria::Values(vec![Cow::Borrowed("a..b")])));
+        // Check that ranged conditions are escaped properly
+        assert_eq!(str_condition("a\\..b"), StrCondition::Regular(Condition::Values(vec![Cow::Borrowed("a..b")])));
         assert_eq!(
-            str_criteria("a\\\\..b"),
-            StrCritera::Regular(Criteria::Range(Cow::Borrowed("a\\")..Cow::Borrowed("b")))
+            str_condition("a\\\\..b"),
+            StrCondition::Regular(Condition::Range(Cow::Borrowed("a\\")..Cow::Borrowed("b")))
         );
-        assert_eq!(str_criteria("\\..."), StrCritera::Regular(Criteria::GreaterEq(Cow::Borrowed("."))));
-        assert_eq!(str_criteria("..\\."), StrCritera::Regular(Criteria::LessEq(Cow::Borrowed("."))));
+        assert_eq!(str_condition("\\..."), StrCondition::Regular(Condition::GreaterEq(Cow::Borrowed("."))));
+        assert_eq!(str_condition("..\\."), StrCondition::Regular(Condition::LessEq(Cow::Borrowed("."))));
         assert_eq!(
-            str_criteria("\\\\..."),
-            StrCritera::Regular(Criteria::Range(Cow::Borrowed("\\")..Cow::Borrowed(".")))
+            str_condition("\\\\..."),
+            StrCondition::Regular(Condition::Range(Cow::Borrowed("\\")..Cow::Borrowed(".")))
         );
     }
 }

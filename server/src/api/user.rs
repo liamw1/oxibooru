@@ -7,10 +7,11 @@ use crate::content::{Content, FileContents, hash, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
 use crate::resource::user::{UserInfo, Visibility};
-use crate::schema::{database_statistics, user};
+use crate::schema::user;
+use crate::search::user::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, filesystem, resource, search, update};
+use crate::{api, config, db, filesystem, resource, update};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use diesel::prelude::*;
@@ -87,20 +88,11 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<UserInf
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
-        let mut search_criteria = search::user::parse_search_criteria(params.criteria())?;
-        search_criteria.set_offset_and_limit(offset, limit);
-        let sql_query = search::user::build_query(&search_criteria)?;
+        let mut query_builder = QueryBuilder::new(params.criteria())?;
+        query_builder.set_offset_and_limit(offset, limit);
 
-        let total = if search_criteria.has_filter() {
-            let count_query = search::user::build_query(&search_criteria)?;
-            count_query.count().first(conn)?
-        } else {
-            database_statistics::table
-                .select(database_statistics::user_count)
-                .first(conn)?
-        };
-
-        let selected_users = search::user::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let total = query_builder.count(conn)?;
+        let selected_users = query_builder.load(conn)?;
         Ok(PagedResponse {
             query: params.into_query(),
             offset,

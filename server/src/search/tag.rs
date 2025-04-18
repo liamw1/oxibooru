@@ -38,11 +38,16 @@ pub struct QueryBuilder<'a> {
 }
 
 impl<'a> QueryBuilder<'a> {
-    pub fn new(search: SearchCriteria<'a, Token>) -> Self {
-        Self {
+    pub fn new(search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(search_criteria, Token::Name).map_err(Box::from)?;
+        Ok(Self {
             search,
             cache: QueryCache::new(),
-        }
+        })
+    }
+
+    pub fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
+        self.search.set_offset_and_limit(offset, limit);
     }
 
     pub fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
@@ -65,7 +70,7 @@ impl<'a> QueryBuilder<'a> {
     }
 
     fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
-        let mut cache = self.cache.take_if_empty();
+        let mut cache = self.cache.clone_if_empty();
         let mut query = tag::table
             .select(tag::id)
             .inner_join(tag_statistics::table)
@@ -129,12 +134,6 @@ impl<'a> QueryBuilder<'a> {
         }
         query
     }
-}
-
-pub fn parse_search_criteria(search_criteria: &str) -> ApiResult<SearchCriteria<Token>> {
-    SearchCriteria::new(search_criteria, Token::Name)
-        .map_err(Box::from)
-        .map_err(api::Error::from)
 }
 
 type BoxedQuery<'a> =

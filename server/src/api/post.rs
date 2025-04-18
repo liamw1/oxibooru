@@ -19,7 +19,7 @@ use crate::schema::{
 use crate::search::post::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, filesystem, resource, search, update};
+use crate::{api, config, db, filesystem, resource, update};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -190,9 +190,8 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<PostInf
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
-        let mut search_criteria = search::post::parse_search_criteria(params.criteria())?;
-        search_criteria.set_offset_and_limit(offset, limit);
-        let mut query_builder = QueryBuilder::new(client, search_criteria);
+        let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+        query_builder.set_offset_and_limit(offset, limit);
 
         let total = query_builder.count(conn)?;
         let selected_posts = query_builder.load(conn)?;
@@ -244,11 +243,10 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let search_criteria = search::post::parse_search_criteria(params.criteria())?;
+    let mut query_builder = QueryBuilder::new(client, params.criteria())?;
     db::get_connection()?.transaction(|conn| {
         const INITIAL_LIMIT: i64 = 100;
         const LIMIT_GROWTH: i64 = 8;
-        let mut query_builder = QueryBuilder::new(client, search_criteria);
 
         // Handle special cases first
         if query_builder.criteria().has_random_sort() {

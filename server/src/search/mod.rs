@@ -36,11 +36,24 @@ where
     T: Copy + FromStr,
     <T as FromStr>::Err: std::error::Error,
 {
-    pub fn new(search_criteria: &'a str, anonymous_token: T) -> Result<Self, <T as FromStr>::Err> {
+    pub fn has_sort(&self) -> bool {
+        !self.sorts.is_empty() || self.random_sort
+    }
+
+    pub fn has_filter(&self) -> bool {
+        !self.filters.is_empty()
+    }
+
+    pub fn has_random_sort(&self) -> bool {
+        self.random_sort
+    }
+
+    fn new(search_criteria: &'a str, anonymous_token: T) -> Result<Self, <T as FromStr>::Err> {
         let mut filters: Vec<UnparsedFilter<T>> = Vec::new();
         let mut sorts: Vec<ParsedSort<T>> = Vec::new();
         let mut random_sort = false;
 
+        // Filters are separated by whitespace
         for mut term in search_criteria.split_whitespace() {
             let negated = term.starts_with('-');
             if negated {
@@ -60,21 +73,20 @@ where
                     let order = if negated { !direction } else { direction };
                     sorts.push(ParsedSort { kind, order });
                 }
-                Some((key, criteria)) => {
+                Some((key, condition)) => {
                     filters.push(UnparsedFilter {
                         kind: T::from_str(key)?,
-                        criteria,
+                        condition,
                         negated,
                     });
                 }
                 None => filters.push(UnparsedFilter {
                     kind: anonymous_token,
-                    criteria: term,
+                    condition: term,
                     negated,
                 }),
             }
         }
-
         Ok(Self {
             filters,
             sorts,
@@ -83,20 +95,8 @@ where
         })
     }
 
-    pub fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
+    fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
         self.extra_args = Some(QueryArgs { offset, limit });
-    }
-
-    pub fn has_sort(&self) -> bool {
-        !self.sorts.is_empty() || self.random_sort
-    }
-
-    pub fn has_filter(&self) -> bool {
-        !self.filters.is_empty()
-    }
-
-    pub fn has_random_sort(&self) -> bool {
-        self.random_sort
     }
 }
 
@@ -130,7 +130,7 @@ impl Not for Order {
 
 /// Represents a parsed filter on a column or expression.
 #[derive(Debug, PartialEq, Eq)]
-enum Criteria<V> {
+enum Condition<V> {
     Values(Vec<V>),
     GreaterEq(V),
     LessEq(V),
@@ -141,8 +141,8 @@ enum Criteria<V> {
 /// Can either be the usual filter or a wildcard filter.
 /// Only one allowed wildcard pattern per filter for now.
 #[derive(Debug, PartialEq, Eq)]
-enum StrCritera<'a> {
-    Regular(Criteria<Cow<'a, str>>),
+enum StrCondition<'a> {
+    Regular(Condition<Cow<'a, str>>),
     WildCard(String),
 }
 
@@ -150,7 +150,7 @@ enum StrCritera<'a> {
 #[derive(Clone, Copy)]
 struct UnparsedFilter<'a, T> {
     kind: T,
-    criteria: &'a str,
+    condition: &'a str,
     negated: bool,
 }
 
@@ -158,7 +158,7 @@ impl<T> UnparsedFilter<'_, T> {
     fn unnegated(self) -> Self {
         Self {
             kind: self.kind,
-            criteria: self.criteria,
+            condition: self.condition,
             negated: false,
         }
     }
@@ -171,12 +171,16 @@ struct ParsedSort<T> {
     order: Order,
 }
 
+/// A cache that stores results from what would otherwise be subqueries in preparation for a
+/// search query. This is used in place of subqueries because PostgreSQL does a poor job of
+/// optimizing queries with contain multiple subquery filters.
 struct QueryCache {
     matches: Option<HashSet<i64>>,
     nonmatches: Option<HashSet<i64>>,
 }
 
 impl QueryCache {
+    /// Creates an empty cache
     fn new() -> Self {
         Self {
             matches: None,
@@ -184,13 +188,20 @@ impl QueryCache {
         }
     }
 
-    fn take_if_empty(&self) -> Option<Self> {
+    /// Returns a new [QueryCache] if `self` is empty and [None] otherwise.
+    /// This function exists because of aliasing issues in mutable QueryBuilder functions.
+    fn clone_if_empty(&self) -> Option<Self> {
         let is_empty = self.matches.is_none() && self.nonmatches.is_none();
         is_empty.then(Self::new)
     }
 
+    /// If `value` is [Some], replaces content of `self` with a semantically equivalent [QueryCache].
+    /// Does nothing if `value` is [None].
     fn replace(&mut self, value: Option<Self>) {
         if let Some(cache) = value {
+            // If matching and nonmatching sets both exist, we can subtract the nonmatching
+            // set from the matching set and discard the nonmatching set. This makes queries
+            // that have both positive and negative conditions much faster.
             let (matches, nonmatches) = match (cache.matches, cache.nonmatches) {
                 (Some(match_set), Some(nonmatch_set)) => {
                     let set_difference = match_set.difference(&nonmatch_set).copied().collect();
@@ -202,7 +213,10 @@ impl QueryCache {
         }
     }
 
+    /// Updates `self` with a new batch of `post_ids`, which may represents
+    /// a matching (`negated = false`) or nonmatching (`negated = true`) set of posts.
     fn update(&mut self, post_ids: Vec<i64>, negated: bool) {
+        // Nonmatching sets are unioned while matching sets are intersected
         if negated {
             self.nonmatches.get_or_insert_default().extend(post_ids);
         } else {
