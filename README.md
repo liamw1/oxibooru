@@ -1,10 +1,10 @@
 # Oxibooru
 
-Oxibooru is an image board engine based on [Szurubooru](https://github.com/rr-/szurubooru).
-The backend has been entirely rewritten in Rust with a focus on performance 🚀.
+Oxibooru is an image board engine based on [Szurubooru](https://github.com/rr-/szurubooru). The backend has been entirely rewritten in Rust with a focus on performance 🚀.
 
-If you're interested in migrating a Szurubooru instance to an Oxibooru one, see the
-[conversion guide](doc/CONVERSION.md).
+If you're interested in migrating a Szurubooru instance to an Oxibooru one, see the [conversion guide](doc/CONVERSION.md). 
+
+If you're interested in contributing, see the [development guide](doc/DEV.md).
 
 ## Features
 
@@ -29,8 +29,7 @@ If you're interested in migrating a Szurubooru instance to an Oxibooru one, see 
 
 ## Installation
 
-It is recommended that you use Docker for deployment.
-[See installation instructions.](doc/INSTALL.md)
+It is recommended that you use Docker for deployment. See [installation instructions.](doc/INSTALL.md)
 
 ## License
 
