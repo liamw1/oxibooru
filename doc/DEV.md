@@ -23,6 +23,8 @@ cargo run
 Note that by default, these commands operate on the `debug` profile, which adds extra checks and symbols useful for debugging. However, `debug` is usually 10-100x slower than `release` builds. If you would like to compile the `release` profile, you can add the `--release` flag can be added to any of these commands.
 
 ### Testing
+The server-side code has a number of unit tests, most of which require a connection to the database. Make sure the PostgreSQL server is up and ready to make connections before running tests.
+
 To run all server unit tests, run
 ```console
 cargo test

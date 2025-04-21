@@ -28,8 +28,8 @@ pub enum Token {
     UsageCount,
     ImplicationCount,
     SuggestionCount,
-    HasImplication,
-    HasSuggestion,
+    Implies,
+    Suggests,
 }
 
 pub struct QueryBuilder<'a> {
@@ -88,8 +88,8 @@ impl<'a> QueryBuilder<'a> {
                 Token::UsageCount => apply_filter!(query, tag_statistics::usage_count, filter, i64),
                 Token::ImplicationCount => apply_filter!(query, tag_statistics::implication_count, filter, i64),
                 Token::SuggestionCount => apply_filter!(query, tag_statistics::suggestion_count, filter, i64),
-                Token::HasImplication => apply_has_implication_filter(conn, query, filter, cache.as_mut()),
-                Token::HasSuggestion => apply_has_suggestion_filter(conn, query, filter, cache.as_mut()),
+                Token::Implies => apply_implies_filter(conn, query, filter, cache.as_mut()),
+                Token::Suggests => apply_suggests_filter(conn, query, filter, cache.as_mut()),
             })?;
         self.cache.replace(cache);
         Ok(query)
@@ -113,10 +113,10 @@ impl<'a> QueryBuilder<'a> {
             Token::Name => apply_sort!(query, tag_name::name, sort),
             Token::Category => apply_sort!(query, tag_category::name, sort),
             Token::UsageCount => apply_sort!(query, tag_statistics::usage_count, sort),
-            Token::ImplicationCount | Token::HasImplication => {
+            Token::ImplicationCount | Token::Implies => {
                 apply_sort!(query, tag_statistics::implication_count, sort)
             }
-            Token::SuggestionCount | Token::HasSuggestion => apply_sort!(query, tag_statistics::suggestion_count, sort),
+            Token::SuggestionCount | Token::Suggests => apply_sort!(query, tag_statistics::suggestion_count, sort),
         });
         match self.search.extra_args {
             Some(args) => query.offset(args.offset).limit(args.limit),
@@ -154,7 +154,7 @@ fn apply_name_filter<'a>(
     Ok(query)
 }
 
-fn apply_has_implication_filter<'a>(
+fn apply_implies_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
@@ -172,7 +172,7 @@ fn apply_has_implication_filter<'a>(
     Ok(query)
 }
 
-fn apply_has_suggestion_filter<'a>(
+fn apply_suggests_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,

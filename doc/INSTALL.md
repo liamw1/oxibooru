@@ -1,7 +1,7 @@
 This assumes that you have Docker (version 19.03 or greater)
 and the Docker Compose CLI (version 1.27.0 or greater) already installed.
 
-## Prepare things
+## Installing
 
 1. **Download the `oxibooru` source**
     
@@ -69,16 +69,10 @@ and the Docker Compose CLI (version 1.27.0 or greater) already installed.
 
 ## Building
 
-1. **Build the containers**
-
-    First, start database container:
-    ```console
-    docker compose up -d sql
-    ```
-    Then, build the client and server containers:
-    ```console
-    docker compose build
-    ```
+To build the client and server containers, run
+```console
+docker compose build
+```
 
 *Note: If your changes are not taking effect in your builds, consider building
 with `--no-cache`.*
