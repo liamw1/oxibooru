@@ -64,20 +64,22 @@ impl<'a> QueryBuilder<'a> {
 
     fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
         let mut cache = self.cache.clone_if_empty();
-        let mut query = pool::table
+        let base_query = pool::table
             .select(pool::id)
             .inner_join(pool_statistics::table)
             .inner_join(pool_category::table)
             .into_boxed();
-        for filter in self.search.filters.iter().copied() {
-            match filter.kind {
-                Token::CreationTime => query = apply_time_filter!(query, pool::creation_time, filter)?,
-                Token::LastEditTime => query = apply_time_filter!(query, pool::last_edit_time, filter)?,
-                Token::Name => apply_name_filter(conn, filter, cache.as_mut())?,
-                Token::Category => query = apply_str_filter!(query, pool_category::name, filter),
-                Token::PostCount => query = apply_filter!(query, pool_statistics::post_count, filter, i64)?,
-            }
-        }
+        let query = self
+            .search
+            .filters
+            .iter()
+            .try_fold(base_query, |query, &filter| match filter.kind {
+                Token::CreationTime => apply_time_filter!(query, pool::creation_time, filter),
+                Token::LastEditTime => apply_time_filter!(query, pool::last_edit_time, filter),
+                Token::Name => apply_name_filter(conn, query, filter, cache.as_mut()),
+                Token::Category => Ok(apply_str_filter!(query, pool_category::name, filter)),
+                Token::PostCount => apply_filter!(query, pool_statistics::post_count, filter, i64),
+            })?;
         self.cache.replace(cache);
         Ok(query)
     }
@@ -125,16 +127,17 @@ type BoxedQuery<'a> = IntoBoxed<
     Pg,
 >;
 
-fn apply_name_filter(
+fn apply_name_filter<'a>(
     conn: &mut PgConnection,
+    query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
     cache: Option<&mut QueryCache>,
-) -> ApiResult<()> {
+) -> ApiResult<BoxedQuery<'a>> {
     if let Some(cache) = cache {
         let names = pool_name::table.select(pool_name::pool_id).into_boxed();
         let filtered_pools = apply_str_filter!(names, pool_name::name, filter.unnegated());
         let pool_ids: Vec<i64> = filtered_pools.load(conn)?;
         cache.update(pool_ids, filter.negated);
     }
-    Ok(())
+    Ok(query)
 }
