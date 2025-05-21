@@ -2,9 +2,10 @@ use crate::api::{ApiResult, AuthResult, DeleteBody, PageParams, PagedResponse, R
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::CommentInfo;
-use crate::schema::{comment, comment_score, database_statistics};
+use crate::schema::{comment, comment_score};
+use crate::search::comment::QueryBuilder;
 use crate::time::DateTime;
-use crate::{api, config, db, resource, search};
+use crate::{api, config, db, resource};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
@@ -64,20 +65,11 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<Comment
     let limit = std::cmp::min(params.limit.get(), MAX_COMMENTS_PER_PAGE);
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
-        let mut search_criteria = search::comment::parse_search_criteria(params.criteria())?;
-        search_criteria.add_offset_and_limit(offset, limit);
-        let sql_query = search::comment::build_query(&search_criteria)?;
+        let mut query_builder = QueryBuilder::new(params.criteria())?;
+        query_builder.set_offset_and_limit(offset, limit);
 
-        let total = if search_criteria.has_filter() {
-            let count_query = search::comment::build_query(&search_criteria)?;
-            count_query.count().first(conn)?
-        } else {
-            database_statistics::table
-                .select(database_statistics::comment_count)
-                .first(conn)?
-        };
-
-        let selected_comments = search::comment::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let total = query_builder.count(conn)?;
+        let selected_comments = query_builder.load(conn)?;
         Ok(PagedResponse {
             query: params.into_query(),
             offset,

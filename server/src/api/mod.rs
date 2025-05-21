@@ -85,6 +85,9 @@ pub enum Error {
     InvalidHeader(#[from] reqwest::header::InvalidHeaderValue),
     #[error("Metadata must be application/json")]
     InvalidMetadataType,
+    #[error("Invalid sort token")]
+    InvalidSort,
+    InvalidTime(#[from] crate::search::TimeParsingError),
     #[error("Cannot create an anonymous user")]
     InvalidUserRank,
     Image(#[from] image::ImageError),
@@ -111,7 +114,6 @@ pub enum Error {
     Request(#[from] reqwest::Error),
     #[error("Someone else modified this in the meantime. Please try again.")]
     ResourceModified,
-    Search(#[from] crate::search::Error),
     #[error("Cannot merge {0} with itself")]
     SelfMerge(ResourceType),
     StdIo(#[from] std::io::Error),
@@ -158,6 +160,8 @@ impl Error {
             Self::InvalidEmail(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::InvalidHeader(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::InvalidMetadataType => StatusCode::BAD_REQUEST,
+            Self::InvalidSort => StatusCode::BAD_REQUEST,
+            Self::InvalidTime(_) => StatusCode::BAD_REQUEST,
             Self::InvalidUserRank => StatusCode::BAD_REQUEST,
             Self::Image(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::JsonSerialization(err) => match err.classify() {
@@ -176,7 +180,6 @@ impl Error {
             Self::NotLoggedIn => StatusCode::FORBIDDEN,
             Self::Request(_) => StatusCode::BAD_REQUEST,
             Self::ResourceModified => StatusCode::CONFLICT,
-            Self::Search(_) => StatusCode::BAD_REQUEST,
             Self::SelfMerge(_) => StatusCode::BAD_REQUEST,
             Self::StdIo(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::SwfDecoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
@@ -209,6 +212,8 @@ impl Error {
             Self::InvalidEmail(_) => "Invalid Email",
             Self::InvalidHeader(_) => "Invalid Header",
             Self::InvalidMetadataType => "Invalid Metadata Type",
+            Self::InvalidSort => "Invalid Sort",
+            Self::InvalidTime(_) => "Invalid Time",
             Self::InvalidUserRank => "Invalid User Rank",
             Self::Image(_) => "Image Error",
             Self::JsonSerialization(_) => "JSON Serialization Error",
@@ -224,7 +229,6 @@ impl Error {
             Self::NotLoggedIn => "Not Logged In",
             Self::Request(_) => "Request Error",
             Self::ResourceModified => "Resource Modified",
-            Self::Search(_) => "Search Error",
             Self::SelfMerge(_) => "Self Merge",
             Self::StdIo(_) => "IO Error",
             Self::SwfDecoding(_) => "SWF Decoding Error",

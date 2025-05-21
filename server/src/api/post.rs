@@ -13,12 +13,13 @@ use crate::model::post::{
 };
 use crate::resource::post::{Note, PostInfo};
 use crate::schema::{
-    comment, database_statistics, pool_post, post, post_favorite, post_feature, post_relation, post_score,
-    post_signature, post_statistics, post_tag,
+    comment, pool_post, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_statistics,
+    post_tag,
 };
+use crate::search::post::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, filesystem, resource, search, update};
+use crate::{api, config, db, filesystem, resource, update};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -189,20 +190,11 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<PostInf
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     db::get_connection()?.transaction(|conn| {
-        let mut search_criteria = search::post::parse_search_criteria(params.criteria())?;
-        search_criteria.add_offset_and_limit(offset, limit);
-        let sql_query = search::post::build_query(client, &search_criteria)?;
+        let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+        query_builder.set_offset_and_limit(offset, limit);
 
-        let total = if search_criteria.has_filter() {
-            let count_query = search::post::build_query(client, &search_criteria)?;
-            count_query.count().first(conn)?
-        } else {
-            database_statistics::table
-                .select(database_statistics::post_count)
-                .first(conn)?
-        };
-
-        let selected_posts = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        let total = query_builder.count(conn)?;
+        let selected_posts = query_builder.load(conn)?;
         Ok(PagedResponse {
             query: params.into_query(),
             offset,
@@ -251,28 +243,27 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let search_criteria = search::post::parse_search_criteria(params.criteria())?;
+    let mut query_builder = QueryBuilder::new(client, params.criteria())?;
     db::get_connection()?.transaction(|conn| {
         const INITIAL_LIMIT: i64 = 100;
         const LIMIT_GROWTH: i64 = 8;
 
         // Handle special cases first
-        if search_criteria.has_random_sort() {
-            let sql_query = search::post::build_query(client, &search_criteria)?;
-            let sql_query = sql_query.filter(post::id.ne(post_id)).limit(2);
-            let post_ids = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+        if query_builder.criteria().has_random_sort() {
+            query_builder.set_offset_and_limit(0, 2);
+            let post_ids = query_builder.load_with(conn, |query| query.filter(post::id.ne(post_id)))?;
             let post_infos = PostInfo::new_batch_from_ids(conn, client, post_ids, &fields)?;
             return Ok(create_post_neighbors(post_infos, true));
         }
-        if !search_criteria.has_filter() && !search_criteria.has_sort() {
+        if !query_builder.criteria().has_filter() && !query_builder.criteria().has_sort() {
             // Optimized neighbor retrieval for simplest use case
-            let previous_post = search::post::build_query(client, &search_criteria)?
+            let previous_post = post::table
                 .select(Post::as_select())
                 .filter(post::id.gt(post_id))
                 .order_by(post::id.asc())
                 .first(conn)
                 .optional()?;
-            let next_post = search::post::build_query(client, &search_criteria)?
+            let next_post = post::table
                 .select(Post::as_select())
                 .filter(post::id.lt(post_id))
                 .order_by(post::id.desc())
@@ -289,9 +280,8 @@ fn get_neighbors(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiR
         let mut offset = 0;
         let mut limit = INITIAL_LIMIT;
         let (prev_post_id, next_post_id) = loop {
-            let sql_query = search::post::build_query(client, &search_criteria)?;
-            let sql_query = sql_query.offset(offset).limit(limit);
-            let post_id_batch = search::post::get_ordered_ids(conn, sql_query, &search_criteria)?;
+            query_builder.set_offset_and_limit(offset, limit);
+            let post_id_batch = query_builder.load(conn)?;
 
             let post_index = post_id_batch.iter().position(|&id| id == post_id);
             if post_id_batch.len() < usize::try_from(limit).unwrap_or(usize::MAX)

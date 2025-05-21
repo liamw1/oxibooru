@@ -59,11 +59,11 @@
             <td>with given number of implications</td>
         </tr>
         <tr>
-            <td><code>has-implication</code></td>
+            <td><code>implies</code></td>
             <td>having an implication with the given name (accepts wildcards)</td>
         </tr>
         <tr>
-            <td><code>has-suggestion</code></td>
+            <td><code>suggests</code></td>
             <td>having a suggestion with the given name (accepts wildcards)</td>
         </tr>
     </tbody>
@@ -130,11 +130,11 @@
             <td>with most implications first</td>
         </tr>
         <tr>
-            <td><code>has-implication</code></td>
+            <td><code>implies</code></td>
             <td>alias of <code>implication-count</code></td>
         </tr>
         <tr>
-            <td><code>has-suggestion</code></td>
+            <td><code>suggests</code></td>
             <td>alias of <code>suggestion-count</code></td>
         </tr>
     </tbody>

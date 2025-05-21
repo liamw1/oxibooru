@@ -431,8 +431,8 @@ data.
     | `post-count`        | alias of `usages`                                             |
     | `suggestion-count`  | with given number of suggestions                              |
     | `implication-count` | with given number of implications                             |
-    | `has-implication`   | having an implication with the given name (accepts wildcards) |
-    | `has-suggestion`    | having a suggestion with the given name (accepts wildcards)   |
+    | `implies`           | having an implication with the given name (accepts wildcards) |
+    | `suggests`          | having a suggestion with the given name (accepts wildcards)   |
 
     **Sort style tokens**
 
@@ -452,8 +452,8 @@ data.
     | `post-count`        | alias of `usages`            |
     | `suggestion-count`  | with most suggestions first  |
     | `implication-count` | with most implications first |
-    | `has-implication`   | alias of `implication-count` |
-    | `has-suggestion`    | alias of `suggestion-count`  |
+    | `implies`           | alias of `implication-count` |
+    | `suggests`          | alias of `suggestion-count`  |
 
     **Special tokens**
 
