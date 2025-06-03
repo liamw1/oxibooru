@@ -69,11 +69,11 @@ pub struct Post {
     pub checksum_md5: Vec<u8>,
     pub flags: PostFlags,
     pub source: String,
-    pub description: String,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
     pub generated_thumbnail_size: i64,
     pub custom_thumbnail_size: i64,
+    pub description: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Associations, Identifiable, Insertable, Queryable, Selectable)]

@@ -1,2 +1,2 @@
 ALTER TABLE "post"
-ADD "description" TEXT NOT NULL DEFAULT ''
+ADD "description" TEXT NOT NULL DEFAULT '';
