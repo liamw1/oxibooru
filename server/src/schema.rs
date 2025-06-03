@@ -105,11 +105,11 @@ diesel::table! {
         checksum_md5 -> Bytea,
         flags -> Int2,
         source -> Text,
-        description -> Text,
         creation_time -> Timestamptz,
         last_edit_time -> Timestamptz,
         generated_thumbnail_size -> Int8,
         custom_thumbnail_size -> Int8,
+        description -> Text,
     }
 }
 
