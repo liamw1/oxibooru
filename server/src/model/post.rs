@@ -48,6 +48,7 @@ pub struct NewPost<'a> {
     pub checksum_md5: &'a [u8],
     pub flags: PostFlags,
     pub source: &'a str,
+    pub description: &'a str,
 }
 
 #[derive(AsChangeset, Associations, Identifiable, Queryable, Selectable)]
@@ -72,6 +73,7 @@ pub struct Post {
     pub last_edit_time: DateTime,
     pub generated_thumbnail_size: i64,
     pub custom_thumbnail_size: i64,
+    pub description: String,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Associations, Identifiable, Insertable, Queryable, Selectable)]

@@ -477,6 +477,7 @@ struct CreateBody {
     thumbnail_token: Option<String>,
     thumbnail_url: Option<Url>,
     source: Option<String>,
+    description: Option<String>,
     relations: Option<Vec<i64>>,
     anonymous: Option<bool>,
     tags: Option<Vec<SmallString>>,
@@ -516,6 +517,7 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
         checksum_md5: &content_properties.md5_checksum,
         flags,
         source: body.source.as_deref().unwrap_or(""),
+        description: body.description.as_deref().unwrap_or(""),
     };
 
     let post_id = tagging_update(body.tags.as_deref(), |conn| {
@@ -608,9 +610,9 @@ async fn merge(auth: AuthResult, params: ResourceParams, body: PostMergeBody) ->
     let merge_to_hash = PostHash::new(merge_to_id);
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let merged_post = tagging_update(Some(&[]), |conn| {
+    tagging_update(Some(&[]), |conn| {
         let remove_post: Post = post::table.find(remove_id).first(conn)?;
-        let mut merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
+        let merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
         api::verify_version(remove_post.last_edit_time, body.post_info.remove_version)?;
         api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
 
@@ -753,6 +755,12 @@ async fn merge(auth: AuthResult, params: ResourceParams, body: PostMergeBody) ->
             .collect();
         diesel::insert_into(comment::table).values(new_comments).execute(conn)?;
 
+        // Merge descriptions
+        let merged_description = merge_to_post.description.clone() + "\n\n" + &remove_post.description;
+        diesel::update(post::table.find(merge_to_id))
+            .set(post::description.eq(merged_description.trim()))
+            .execute(conn)?;
+
         // If replacing content, update post signature. This needs to be done before deletion because post signatures cascade
         if body.replace_content && !cfg!(test) {
             let (signature, indexes): (CompressedSignature, SignatureIndexes) = post_signature::table
@@ -766,40 +774,43 @@ async fn merge(auth: AuthResult, params: ResourceParams, body: PostMergeBody) ->
 
         diesel::delete(post::table.find(remove_id)).execute(conn)?;
 
-        let remove_mime_type = if body.replace_content {
+        if body.replace_content {
             if !cfg!(test) {
                 filesystem::swap_posts(&remove_hash, remove_post.mime_type, &merge_to_hash, merge_to_post.mime_type)?;
             }
 
-            let old_mime_type = merge_to_post.mime_type;
-
             // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
-            merge_to_post.file_size = remove_post.file_size;
-            merge_to_post.width = remove_post.width;
-            merge_to_post.height = remove_post.height;
-            merge_to_post.type_ = remove_post.type_;
-            merge_to_post.mime_type = remove_post.mime_type;
-            merge_to_post.checksum = remove_post.checksum;
-            merge_to_post.checksum_md5 = remove_post.checksum_md5;
-            merge_to_post.flags = remove_post.flags;
-            merge_to_post.source = remove_post.source;
-            merge_to_post.generated_thumbnail_size = remove_post.generated_thumbnail_size;
-            merge_to_post.custom_thumbnail_size = remove_post.custom_thumbnail_size;
-            merge_to_post = merge_to_post.save_changes(conn)?;
-
-            old_mime_type
-        } else {
-            remove_post.mime_type
-        };
+            diesel::update(post::table.find(merge_to_post.id))
+                .set((
+                    post::file_size.eq(remove_post.file_size),
+                    post::width.eq(remove_post.width),
+                    post::height.eq(remove_post.height),
+                    post::type_.eq(remove_post.type_),
+                    post::mime_type.eq(remove_post.mime_type),
+                    post::checksum.eq(remove_post.checksum),
+                    post::checksum_md5.eq(remove_post.checksum_md5),
+                    post::flags.eq(remove_post.flags),
+                    post::source.eq(remove_post.source),
+                    post::generated_thumbnail_size.eq(remove_post.generated_thumbnail_size),
+                    post::custom_thumbnail_size.eq(remove_post.custom_thumbnail_size),
+                ))
+                .execute(conn)?;
+        }
 
         if config::get().delete_source_files && !cfg!(test) {
-            filesystem::delete_post(&remove_hash, remove_mime_type)?;
+            let deleted_content_type = if body.replace_content {
+                merge_to_post.mime_type
+            } else {
+                remove_post.mime_type
+            };
+            filesystem::delete_post(&remove_hash, deleted_content_type)?;
         }
-        update::post::last_edit_time(conn, merge_to_id).map(|_| merge_to_post)
+        update::post::last_edit_time(conn, merge_to_id)?;
+        Ok(())
     })
     .await?;
     db::get_connection()?
-        .transaction(|conn| PostInfo::new(conn, client, merged_post, &fields).map_err(api::Error::from))
+        .transaction(|conn| PostInfo::new_from_id(conn, client, merge_to_id, &fields).map_err(api::Error::from))
 }
 
 fn favorite(auth: AuthResult, post_id: i64, params: ResourceParams) -> ApiResult<PostInfo> {
@@ -861,6 +872,7 @@ struct UpdateBody {
     version: DateTime,
     safety: Option<PostSafety>,
     source: Option<String>,
+    description: Option<String>,
     relations: Option<Vec<i64>>,
     tags: Option<Vec<SmallString>>,
     notes: Option<Vec<Note>>,
@@ -907,6 +919,13 @@ async fn update(auth: AuthResult, post_id: i64, params: ResourceParams, body: Up
 
             diesel::update(post::table.find(post_id))
                 .set(post::source.eq(source))
+                .execute(conn)?;
+        }
+        if let Some(description) = body.description {
+            api::verify_privilege(client, config::privileges().post_edit_description)?;
+
+            diesel::update(post::table.find(post_id))
+                .set(post::description.eq(description))
                 .execute(conn)?;
         }
         if let Some(relations) = body.relations {
@@ -1067,7 +1086,7 @@ mod test {
 
     // Exclude fields that involve creation_time or last_edit_time
     const FIELDS: &str = "&fields=id,user,fileSize,canvasWidth,canvasHeight,safety,type,mimeType,checksum,checksumMd5,\
-    flags,source,contentUrl,thumbnailUrl,tags,relations,pools,notes,score,ownScore,ownFavorite,tagCount,commentCount,\
+    flags,source,description,contentUrl,thumbnailUrl,tags,relations,pools,notes,score,ownScore,ownFavorite,tagCount,commentCount,\
     relationCount,noteCount,favoriteCount,featureCount,favoritedBy,hasCustomThumbnail";
 
     #[tokio::test]
@@ -1202,6 +1221,7 @@ mod test {
         assert_ne!(new_post.checksum_md5, post.checksum_md5);
         assert_eq!(new_post.flags, post.flags);
         assert_ne!(new_post.source, post.source);
+        assert_eq!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
         Ok(reset_database())
@@ -1308,6 +1328,7 @@ mod test {
         assert_eq!(new_post.checksum_md5, post.checksum_md5);
         assert_ne!(new_post.flags, post.flags);
         assert_ne!(new_post.source, post.source);
+        assert_eq!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
         assert_ne!(new_tag_count, tag_count);
@@ -1334,6 +1355,7 @@ mod test {
         assert_eq!(new_post.checksum_md5, post.checksum_md5);
         assert_eq!(new_post.flags, post.flags);
         assert_eq!(new_post.source, post.source);
+        assert_eq!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
         assert_eq!(new_tag_count, tag_count);
