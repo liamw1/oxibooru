@@ -539,9 +539,9 @@ async fn merge(
     let merge_to_hash = PostHash::new(merge_to_id);
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let merged_post = tagging_update(Some(&[]), |conn| {
+    tagging_update(Some(&[]), |conn| {
         let remove_post: Post = post::table.find(remove_id).first(conn)?;
-        let mut merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
+        let merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
         api::verify_version(remove_post.last_edit_time, body.post_info.remove_version)?;
         api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
 
@@ -684,6 +684,12 @@ async fn merge(
             .collect();
         diesel::insert_into(comment::table).values(new_comments).execute(conn)?;
 
+        // Merge descriptions
+        let merged_description = merge_to_post.description.clone() + "\n\n" + &remove_post.description;
+        diesel::update(post::table.find(merge_to_id))
+            .set(post::description.eq(merged_description.trim()))
+            .execute(conn)?;
+
         // If replacing content, update post signature. This needs to be done before deletion because post signatures cascade
         if body.replace_content && !cfg!(test) {
             let (signature, indexes): (CompressedSignature, SignatureIndexes) = post_signature::table
@@ -697,41 +703,43 @@ async fn merge(
 
         diesel::delete(post::table.find(remove_id)).execute(conn)?;
 
-        let remove_mime_type = if body.replace_content {
+        if body.replace_content {
             if !cfg!(test) {
                 filesystem::swap_posts(&remove_hash, remove_post.mime_type, &merge_to_hash, merge_to_post.mime_type)?;
             }
 
-            let old_mime_type = merge_to_post.mime_type;
-
             // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
-            merge_to_post.file_size = remove_post.file_size;
-            merge_to_post.width = remove_post.width;
-            merge_to_post.height = remove_post.height;
-            merge_to_post.type_ = remove_post.type_;
-            merge_to_post.mime_type = remove_post.mime_type;
-            merge_to_post.checksum = remove_post.checksum;
-            merge_to_post.checksum_md5 = remove_post.checksum_md5;
-            merge_to_post.flags = remove_post.flags;
-            merge_to_post.source = remove_post.source;
-            merge_to_post.description = remove_post.description;
-            merge_to_post.generated_thumbnail_size = remove_post.generated_thumbnail_size;
-            merge_to_post.custom_thumbnail_size = remove_post.custom_thumbnail_size;
-            merge_to_post = merge_to_post.save_changes(conn)?;
-
-            old_mime_type
-        } else {
-            remove_post.mime_type
-        };
+            diesel::update(post::table.find(merge_to_post.id))
+                .set((
+                    post::file_size.eq(remove_post.file_size),
+                    post::width.eq(remove_post.width),
+                    post::height.eq(remove_post.height),
+                    post::type_.eq(remove_post.type_),
+                    post::mime_type.eq(remove_post.mime_type),
+                    post::checksum.eq(remove_post.checksum),
+                    post::checksum_md5.eq(remove_post.checksum_md5),
+                    post::flags.eq(remove_post.flags),
+                    post::source.eq(remove_post.source),
+                    post::generated_thumbnail_size.eq(remove_post.generated_thumbnail_size),
+                    post::custom_thumbnail_size.eq(remove_post.custom_thumbnail_size),
+                ))
+                .execute(conn)?;
+        }
 
         if config::get().delete_source_files && !cfg!(test) {
-            filesystem::delete_post(&remove_hash, remove_mime_type)?;
+            let deleted_content_type = if body.replace_content {
+                merge_to_post.mime_type
+            } else {
+                remove_post.mime_type
+            };
+            filesystem::delete_post(&remove_hash, deleted_content_type)?;
         }
-        update::post::last_edit_time(conn, merge_to_id).map(|_| merge_to_post)
+        update::post::last_edit_time(conn, merge_to_id)?;
+        Ok(())
     })
     .await?;
     db::get_connection()?
-        .transaction(|conn| PostInfo::new(conn, client, merged_post, &fields))
+        .transaction(|conn| PostInfo::new_from_id(conn, client, merge_to_id, &fields))
         .map(Json)
         .map_err(api::Error::from)
 }
@@ -1157,7 +1165,7 @@ mod test {
         assert_ne!(new_post.checksum_md5, post.checksum_md5);
         assert_eq!(new_post.flags, post.flags);
         assert_ne!(new_post.source, post.source);
-        assert_ne!(new_post.description, post.description);
+        assert_eq!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
         Ok(reset_database())
@@ -1264,7 +1272,7 @@ mod test {
         assert_eq!(new_post.checksum_md5, post.checksum_md5);
         assert_ne!(new_post.flags, post.flags);
         assert_ne!(new_post.source, post.source);
-        assert_ne!(new_post.description, post.description);
+        assert_eq!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
         assert_ne!(new_tag_count, tag_count);
