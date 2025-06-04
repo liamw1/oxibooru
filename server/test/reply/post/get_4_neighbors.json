@@ -15,6 +15,7 @@
         "checksumMD5": "3033",
         "flags": [],
         "source": "Wikipedia",
+        "description": "",
         "contentUrl": "data/posts/3_lepGa4OLoBfljP0ADMujN15ptzP-O0o4yV8_FXHuuUg.png",
         "thumbnailUrl": "data/generated-thumbnails/3_lepGa4OLoBfljP0ADMujN15ptzP-O0o4yV8_FXHuuUg.jpg",
         "tags": [
@@ -93,6 +94,7 @@
             "sound"
         ],
         "source": "???",
+        "description": "descriptor",
         "contentUrl": "data/posts/5_Tdd7ElikauHsmoXgiYwg_k7GVh3l1oDIrKJDj53Lj7Y.mp4",
         "thumbnailUrl": "data/generated-thumbnails/5_Tdd7ElikauHsmoXgiYwg_k7GVh3l1oDIrKJDj53Lj7Y.jpg",
         "tags": [
