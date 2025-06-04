@@ -859,7 +859,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
                 .execute(conn)?;
         }
         if let Some(description) = body.description {
-            api::verify_privilege(client, config::privileges().post_edit_content)?;
+            api::verify_privilege(client, config::privileges().post_edit_description)?;
 
             diesel::update(post::table.find(post_id))
                 .set(post::description.eq(description))
