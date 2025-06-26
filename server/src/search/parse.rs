@@ -43,7 +43,7 @@ pub fn time_condition(condition: &str) -> ApiResult<Condition<Range<DateTime>>> 
 pub fn condition<T>(condition: &str) -> ApiResult<Condition<T>>
 where
     T: FromStr,
-    <T as FromStr>::Err: std::error::Error + 'static,
+    <T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
 {
     if let Some(split_str) = condition.split_once("..") {
         return match split_str {
@@ -59,7 +59,7 @@ where
 pub fn values<T>(condition: &str) -> ApiResult<Vec<T>>
 where
     T: FromStr,
-    <T as FromStr>::Err: std::error::Error + 'static,
+    <T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
 {
     condition
         .split(',')

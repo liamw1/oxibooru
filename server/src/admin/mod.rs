@@ -2,9 +2,8 @@ pub mod database;
 mod post;
 mod user;
 
-use crate::db;
 use diesel::prelude::*;
-use diesel::r2d2::{ConnectionManager, PoolError, PooledConnection};
+use diesel::r2d2::PoolError;
 use std::io::Write;
 use std::path::Path;
 use std::str::FromStr;
@@ -16,7 +15,7 @@ pub fn enabled() -> bool {
     std::env::args().any(|arg| arg == "--admin")
 }
 
-pub fn command_line_mode() {
+pub fn command_line_mode(conn: &mut PgConnection) {
     print_info();
 
     let mut buffer = String::new();
@@ -30,7 +29,7 @@ pub fn command_line_mode() {
                 continue;
             }
         };
-        match run_task(task) {
+        match run_task(conn, task) {
             Ok(()) => println!("Task finished.\n"),
             Err(err) => eprintln!("ERROR: {err}\n"),
         }
@@ -88,10 +87,6 @@ impl ProgressReporter {
     }
 }
 
-fn get_connection() -> Result<PooledConnection<ConnectionManager<PgConnection>>, String> {
-    db::get_connection().map_err(|err| format!("Could not connect to the database: {err}"))
-}
-
 fn print_info() {
     let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
     println!(
@@ -131,21 +126,18 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
 /// Runs a single task. This function is designed to only establish a connection to the database
 /// if necessary. That way users can run tasks that don't require database connection without
 /// spinning up the database.
-fn run_task(task: AdminTask) -> Result<(), String> {
+fn run_task(conn: &mut PgConnection, task: AdminTask) -> Result<(), String> {
     println!("Starting task...");
 
     match task {
-        AdminTask::RecomputePostChecksums => post::recompute_checksums().map_err(|err| format!("{err}")),
-        AdminTask::RecomputePostSignatures => post::recompute_signatures().map_err(|err| format!("{err}")),
-        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes().map_err(|err| format!("{err}")),
-        AdminTask::RegenerateThumbnail => post::regenerate_thumbnail().map_err(|err| format!("{err}")),
+        AdminTask::RecomputePostChecksums => post::recompute_checksums(conn).map_err(|err| format!("{err}")),
+        AdminTask::RecomputePostSignatures => post::recompute_signatures(conn).map_err(|err| format!("{err}")),
+        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(conn).map_err(|err| format!("{err}")),
+        AdminTask::RegenerateThumbnail => post::regenerate_thumbnail(conn).map_err(|err| format!("{err}")),
         AdminTask::ResetPassword => user::reset_password().map_err(|err| format!("{err}")),
         AdminTask::ResetFilenames => database::reset_filenames().map_err(|err| format!("{err}")),
         AdminTask::ResetStatistics => database::reset_statistics().map_err(|err| format!("{err}")),
-        AdminTask::ResetThumbnailSizes => {
-            let mut conn = get_connection()?;
-            database::reset_thumbnail_sizes(&mut conn).map_err(|err| format!("{err}"))
-        }
+        AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(conn).map_err(|err| format!("{err}")),
     }
 }
 

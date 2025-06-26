@@ -14,12 +14,12 @@ use rayon::prelude::*;
 
 /// Recomputes posts checksums.
 /// Useful when the way we compute checksums changes.
-pub fn recompute_checksums() -> DatabaseResult<()> {
+pub fn recompute_checksums(conn: &mut PgConnection) -> DatabaseResult<()> {
     let _timer = Timer::new("recompute_checksums");
     let progress = ProgressReporter::new("Checksums computed", PRINT_INTERVAL);
     let duplicate_count = ProgressReporter::new("Duplicates found", PRINT_INTERVAL);
 
-    let post_ids: Vec<_> = post::table.select(post::id).load(&mut db::get_connection()?)?;
+    let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
     post_ids
         .into_par_iter()
         .try_for_each(|post_id| recompute_checksum(post_id, &progress, &duplicate_count))?;
@@ -29,16 +29,16 @@ pub fn recompute_checksums() -> DatabaseResult<()> {
 
 /// Recomputes both post signatures and signature indexes.
 /// Useful when the post signature parameters change.
-pub fn recompute_signatures() -> DatabaseResult<()> {
+pub fn recompute_signatures(conn: &mut PgConnection) -> DatabaseResult<()> {
     let _timer = Timer::new("recompute_signatures");
     let progress = ProgressReporter::new("Signatures computed", PRINT_INTERVAL);
 
-    let post_ids: Vec<_> = post::table.select(post::id).load(&mut db::get_connection()?)?;
+    let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
 
     // Update signature version only after a successful data retrieval
     diesel::update(database_statistics::table)
         .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
-        .execute(&mut db::get_connection()?)?;
+        .execute(conn)?;
 
     post_ids
         .into_par_iter()
@@ -50,13 +50,13 @@ pub fn recompute_signatures() -> DatabaseResult<()> {
 ///
 /// This is much faster than recomputing the signatures, as this function doesn't require
 /// reading post content from disk.
-pub fn recompute_indexes() -> DatabaseResult<()> {
+pub fn recompute_indexes(conn: &mut PgConnection) -> DatabaseResult<()> {
     let _timer = Timer::new("recompute_indexes");
     let progress = ProgressReporter::new("Indexes computed", PRINT_INTERVAL);
 
     let post_signatures: Vec<(i64, CompressedSignature)> = post_signature::table
         .select((post_signature::post_id, post_signature::signature))
-        .load(&mut db::get_connection()?)?;
+        .load(conn)?;
     post_signatures.into_par_iter().try_for_each(|(post_id, signature)| {
         let indexes = signature::generate_indexes(&signature);
         diesel::update(post_signature::table.find(post_id))
@@ -68,8 +68,7 @@ pub fn recompute_indexes() -> DatabaseResult<()> {
 }
 
 /// This functions prompts the user for input again to regenerate specific thumbnails.
-pub fn regenerate_thumbnail() -> Result<(), PoolError> {
-    let mut conn = db::get_connection()?;
+pub fn regenerate_thumbnail(conn: &mut PgConnection) -> Result<(), PoolError> {
     let mut buffer = String::new();
     loop {
         println!("Please enter the post ID you would like to generate a thumbnail for. Enter \"done\" when finished.");
@@ -86,7 +85,7 @@ pub fn regenerate_thumbnail() -> Result<(), PoolError> {
             }
         };
 
-        let mime_type = match post::table.find(post_id).select(post::mime_type).first(&mut conn) {
+        let mime_type = match post::table.find(post_id).select(post::mime_type).first(conn) {
             Ok(mime_type) => mime_type,
             Err(err) => {
                 eprintln!("ERROR: Cannot retrieve MIME type for post {post_id} for reason: {err}\n");

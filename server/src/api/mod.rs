@@ -77,7 +77,7 @@ pub enum Error {
     FailedConnection(#[from] diesel::r2d2::PoolError),
     FailedEmailTransport(#[from] lettre::transport::smtp::Error),
     FailedQuery(#[from] diesel::result::Error),
-    FromStr(#[from] Box<dyn std::error::Error>),
+    FromStr(#[from] Box<dyn std::error::Error + Send + Sync>),
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
     InvalidEmailAddress(#[from] lettre::address::AddressError),

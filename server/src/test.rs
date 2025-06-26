@@ -17,6 +17,7 @@ use crate::time::DateTime;
 use crate::{api, db};
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
+use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -593,14 +594,14 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
     Ok(())
 }
 
-fn recreate_database() -> ApiResult<ConnectionPool> {
+fn recreate_database() -> Result<ConnectionPool, Box<dyn Error + Send + Sync>> {
     let mut conn = db::get_prod_connection()?;
     diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}")).execute(&mut conn)?;
     diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
 
     let database_url = db::create_url(Some(DATABASE_NAME));
     let mut conn = PgConnection::establish(&database_url).unwrap();
-    db::run_migrations(&mut conn);
+    db::run_migrations(&mut conn)?;
     populate_database(&mut conn)?;
 
     let manager = ConnectionManager::new(database_url);

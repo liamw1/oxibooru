@@ -10,6 +10,8 @@ use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use std::borrow::Cow;
+use std::error::Error;
+use std::num::ParseIntError;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -36,41 +38,44 @@ pub fn get_prod_connection() -> ConnectionResult {
 
 /// Runs embedded migrations on the database. Used to update database for end-users who don't build server themselves.
 /// Doesn't perform any error handling, as this is meant to be run once on application start.
-pub fn run_migrations(conn: &mut PgConnection) {
-    let pending_migrations = conn.pending_migrations(MIGRATIONS).unwrap();
+pub fn run_migrations(conn: &mut PgConnection) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let pending_migrations = conn.pending_migrations(MIGRATIONS)?;
     if pending_migrations.is_empty() {
-        return;
+        return Ok(());
     }
 
-    let migration_number =
-        |migration: &dyn Migration<Pg>| -> i32 { migration.name().version().to_string().parse().unwrap() };
-    let first_migration = migration_number(pending_migrations.first().unwrap());
-    let last_migration = migration_number(pending_migrations.last().unwrap());
+    let migration_number = |migration: &dyn Migration<Pg>| -> Result<i32, ParseIntError> {
+        migration.name().version().to_string().parse()
+    };
+
+    let panic_message = "there is at least one migration";
+    let first_migration = migration_number(pending_migrations.first().expect(panic_message))?;
+    let last_migration = migration_number(pending_migrations.last().expect(panic_message))?;
     let migration_range = first_migration..=last_migration;
 
     // Update filenames if migrating primary keys to BIGINT
     if migration_range.contains(&12) && !migration_range.contains(&1) {
-        database::reset_filenames().unwrap();
+        database::reset_filenames()?;
     }
 
     println!("Running pending migrations...");
-    conn.run_pending_migrations(MIGRATIONS).unwrap();
+    conn.run_pending_migrations(MIGRATIONS)?;
     if cfg!(test) {
-        return;
+        return Ok(());
     }
 
     // If creating the database for the first time, set post signature version
     if migration_range.contains(&1) {
         diesel::update(database_statistics::table)
             .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
-            .execute(conn)
-            .unwrap();
+            .execute(conn)?;
     }
 
     // Cache thumbnail sizes if migrating to statistics system
     if migration_range.contains(&13) {
-        database::reset_thumbnail_sizes(conn).unwrap();
+        database::reset_thumbnail_sizes(conn)?;
     }
+    return Ok(());
 }
 
 /// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DATABASE`
@@ -90,18 +95,15 @@ pub fn create_url(database_override: Option<&str>) -> String {
     format!("postgres://{user}:{password}@{hostname}/{database}")
 }
 
-pub fn check_signature_version() {
-    let get_current_version = |conn: &mut PgConnection| -> i32 {
+pub fn check_signature_version(conn: &mut PgConnection) -> QueryResult<()> {
+    let mut get_current_version = || -> QueryResult<i32> {
         database_statistics::table
             .select(database_statistics::signature_version)
             .first(conn)
-            .unwrap()
     };
 
-    let mut conn = get_connection().unwrap();
-    let current_version = get_current_version(&mut conn);
-    if current_version == SIGNATURE_VERSION {
-        return;
+    if get_current_version()? == SIGNATURE_VERSION {
+        return Ok(());
     }
 
     let task: &str = AdminTask::RecomputePostSignatures.into();
@@ -121,9 +123,10 @@ pub fn check_signature_version() {
        inaccurate during this process, so you may wish to suspend post uploads
        until the task completes."
     );
-    while get_current_version(&mut conn) != SIGNATURE_VERSION {
-        std::thread::sleep(Duration::from_millis(500));
+    while get_current_version()? != SIGNATURE_VERSION {
+        std::thread::sleep(Duration::from_secs(1));
     }
+    Ok(())
 }
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
@@ -137,7 +140,7 @@ static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
 
     let manager = ConnectionManager::new(config::database_url());
     Pool::builder()
-        .max_size(num_threads)
+        .max_size(num_threads + 1)
         .max_lifetime(None)
         .idle_timeout(None)
         .test_on_check_out(true)
