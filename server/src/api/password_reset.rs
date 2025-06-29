@@ -6,26 +6,17 @@ use crate::string::SmallString;
 use crate::{api, config, db};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
+use axum::extract::Path;
+use axum::{Json, Router, routing};
 use diesel::prelude::*;
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use serde::{Deserialize, Serialize};
-use warp::{Filter, Rejection, Reply};
 
-pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let request_reset = warp::get()
-        .and(warp::path!("password-reset" / String))
-        .map(request_reset)
-        .map(api::Reply::from);
-    let reset_password = warp::post()
-        .and(warp::path!("password-reset" / String))
-        .and(warp::body::json())
-        .map(reset_password)
-        .map(api::Reply::from);
-
-    request_reset.or(reset_password)
+pub fn routes() -> Router {
+    Router::new().route("/password-reset/{identifier}", routing::get(request_reset).post(reset_password))
 }
 
 fn get_user_info(
@@ -39,7 +30,7 @@ fn get_user_info(
         .map_err(api::Error::from)
 }
 
-fn request_reset(identifier: String) -> ApiResult<()> {
+async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
     let smtp_info = config::smtp().ok_or(api::Error::MissingSmtpInfo)?;
     let identifier = percent_encoding::percent_decode_str(&identifier).decode_utf8()?;
 
@@ -74,7 +65,7 @@ fn request_reset(identifier: String) -> ApiResult<()> {
         .build();
 
     // Send the email
-    mailer.send(&email).map(|_| ()).map_err(api::Error::from)
+    mailer.send(&email).map(|_| Json(())).map_err(api::Error::from)
 }
 
 #[derive(Deserialize)]
@@ -88,7 +79,10 @@ struct NewPassword {
     password: String,
 }
 
-fn reset_password(identifier: String, confirmation: ResetToken) -> ApiResult<NewPassword> {
+async fn reset_password(
+    Path(identifier): Path<String>,
+    Json(confirmation): Json<ResetToken>,
+) -> ApiResult<Json<NewPassword>> {
     let identifier = percent_encoding::percent_decode_str(&identifier).decode_utf8()?;
 
     db::get_connection()?.transaction(|conn| {
@@ -106,8 +100,8 @@ fn reset_password(identifier: String, confirmation: ResetToken) -> ApiResult<New
             .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
             .execute(conn)?;
 
-        Ok(NewPassword {
+        Ok(Json(NewPassword {
             password: temporary_password,
-        })
+        }))
     })
 }

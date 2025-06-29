@@ -10,57 +10,35 @@ mod upload;
 mod user;
 mod user_token;
 
-use crate::auth::header::{self, AuthenticationError, Client};
+use crate::auth::Client;
+use crate::auth::header::{self, AuthenticationError};
 use crate::config::RegexType;
 use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{config, update};
+use axum::extract::Request;
+use axum::http::StatusCode;
+use axum::http::header::AUTHORIZATION;
+use axum::middleware::{self, Next};
+use axum::response::{IntoResponse, Response};
+use axum::{Json, Router};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::convert::Infallible;
 use std::num::NonZero;
 use std::ops::Deref;
-use warp::http::StatusCode;
-use warp::reply::{Json, Response, WithStatus};
-use warp::{Filter, Rejection};
+use std::time::Duration;
+use tower_http::timeout::TimeoutLayer;
+use tower_http::trace::TraceLayer;
 
 pub type ApiResult<T> = Result<T, Error>;
-
-pub enum Reply {
-    Json(Json),
-    WithStatus(WithStatus<Json>),
-}
-
-impl warp::Reply for Reply {
-    fn into_response(self) -> Response {
-        match self {
-            Self::Json(reply) => reply.into_response(),
-            Self::WithStatus(reply) => reply.into_response(),
-        }
-    }
-}
-
-impl<T: Serialize> From<ApiResult<T>> for Reply {
-    fn from(value: ApiResult<T>) -> Self {
-        match value {
-            Ok(response) => Self::Json(warp::reply::json(&response)),
-            Err(err) => {
-                eprintln!("{}: {err}", err.kind());
-                let response = warp::reply::json(&err.response());
-                Self::WithStatus(warp::reply::with_status(response, err.status_code()))
-            }
-        }
-    }
-}
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub enum Error {
     BadExtension(#[from] crate::model::enums::ParseExtensionError),
     BadHash(#[from] crate::auth::HashError),
-    BadIncomingHeader(#[from] warp::http::header::ToStrError),
-    BadResponseHeader(#[from] reqwest::header::ToStrError),
+    BadHeader(#[from] axum::http::header::ToStrError),
     #[error("File of type {0} did not match request with content-type '{1}'")]
     ContentTypeMismatch(MimeType, SmallString),
     #[error("Cyclic dependency detected in {0}s")]
@@ -102,6 +80,7 @@ pub enum Error {
     MissingMetadata,
     #[error("Missing smtp info")]
     MissingSmtpInfo,
+    Multipart(#[from] axum::extract::multipart::MultipartError),
     #[error("User has no email")]
     NoEmail,
     #[error("{0} needs at least one name")]
@@ -122,7 +101,6 @@ pub enum Error {
     UnauthorizedPasswordReset,
     Utf8Conversion(#[from] std::str::Utf8Error),
     VideoDecoding(#[from] video_rs::Error),
-    Warp(#[from] warp::Error),
 }
 
 impl Error {
@@ -138,8 +116,7 @@ impl Error {
         match self {
             Self::BadExtension(_) => StatusCode::BAD_REQUEST,
             Self::BadHash(_) => StatusCode::BAD_REQUEST,
-            Self::BadIncomingHeader(_) => StatusCode::BAD_REQUEST,
-            Self::BadResponseHeader(_) => StatusCode::BAD_REQUEST,
+            Self::BadHeader(_) => StatusCode::BAD_REQUEST,
             Self::ContentTypeMismatch(..) => StatusCode::BAD_REQUEST,
             Self::CyclicDependency(_) => StatusCode::BAD_REQUEST,
             Self::DeleteDefault(_) => StatusCode::BAD_REQUEST,
@@ -173,6 +150,7 @@ impl Error {
             Self::MissingFormData => StatusCode::BAD_REQUEST,
             Self::MissingMetadata => StatusCode::BAD_REQUEST,
             Self::MissingSmtpInfo => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Multipart(_) => StatusCode::BAD_REQUEST,
             Self::NoEmail => StatusCode::BAD_REQUEST,
             Self::NoNamesGiven(_) => StatusCode::BAD_REQUEST,
             Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
@@ -186,7 +164,6 @@ impl Error {
             Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
             Self::Utf8Conversion(_) => StatusCode::BAD_REQUEST,
             Self::VideoDecoding(_) => StatusCode::BAD_REQUEST,
-            Self::Warp(_) => StatusCode::BAD_REQUEST,
         }
     }
 
@@ -194,8 +171,7 @@ impl Error {
         match self {
             Self::BadExtension(_) => "Bad Extension",
             Self::BadHash(_) => "Bad Hash",
-            Self::BadIncomingHeader(_) => "Bad Incomding Header",
-            Self::BadResponseHeader(_) => "Bad Response Header",
+            Self::BadHeader(_) => "Bad Header",
             Self::ContentTypeMismatch(..) => "Content Type Mismatch",
             Self::CyclicDependency(_) => "Cyclic Dependency",
             Self::DeleteDefault(_) => "Delete Default",
@@ -222,6 +198,7 @@ impl Error {
             Self::MissingFormData => "Missing Form Data",
             Self::MissingMetadata => "Missing Metadata",
             Self::MissingSmtpInfo => "Missing SMTP Info",
+            Self::Multipart(_) => "Multipart/Form-Data Error",
             Self::NoEmail => "No Email",
             Self::NoNamesGiven(_) => "No Names Given",
             Self::NotAnInteger(_) => "Parse Int Error",
@@ -235,7 +212,6 @@ impl Error {
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
             Self::Utf8Conversion(_) => "Utf8 Conversion Error",
             Self::VideoDecoding(_) => "Video Decoding Error",
-            Self::Warp(_) => "Warp Error",
         }
     }
 
@@ -245,6 +221,12 @@ impl Error {
             title: self.category(),
             description: self.to_string(),
         }
+    }
+}
+
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
+        (self.status_code(), Json(self.response())).into_response()
     }
 }
 
@@ -274,32 +256,27 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
     }
 }
 
-/// Returns all possible routes for the application.
-pub fn routes() -> impl Filter<Extract = impl warp::Reply, Error = Infallible> + Clone {
-    let catch_all = warp::any().map(|| {
-        eprintln!("No endpoint for request!");
-        warp::reply::with_status("Bad Request", StatusCode::BAD_REQUEST)
-    });
-    let log = warp::filters::log::custom(|info| {
-        println!("{} {} [{}]", info.method(), info.path(), info.status());
-    });
-
-    info::routes()
-        .or(comment::routes())
-        .or(password_reset::routes())
-        .or(pool_category::routes())
-        .or(pool::routes())
-        .or(post::routes())
-        .or(tag_category::routes())
-        .or(tag::routes())
-        .or(upload::routes())
-        .or(user_token::routes())
-        .or(user::routes())
-        .or(catch_all)
-        .with(log)
+pub fn routes() -> Router {
+    Router::new()
+        .merge(comment::routes())
+        .merge(info::routes())
+        .merge(password_reset::routes())
+        .merge(pool_category::routes())
+        .merge(pool::routes())
+        .merge(post::routes())
+        .merge(tag_category::routes())
+        .merge(tag::routes())
+        .merge(upload::routes())
+        .merge(user_token::routes())
+        .merge(user::routes())
+        .layer((
+            TraceLayer::new_for_http(),
+            // Graceful shutdown will wait for outstanding requests to complete.
+            // Add a timeout so requests don't hang forever.
+            TimeoutLayer::new(Duration::from_secs(60)),
+        ))
+        .route_layer(middleware::from_fn(auth))
 }
-
-type AuthResult = Result<Client, AuthenticationError>;
 
 /// Represents body of a request to apply/change a score.
 #[derive(Deserialize)]
@@ -430,23 +407,17 @@ fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiRes
     }
 }
 
-/// Optionally extracts an authorization header from the incoming request and attempts to authenticate with it.
-fn auth() -> impl Filter<Extract = (AuthResult,), Error = Rejection> + Clone {
-    warp::header::optional("authorization").map(|maybe_auth: Option<_>| match maybe_auth {
-        Some(auth) => header::authenticate_user(auth),
-        None => Ok(Client::new(None, UserRank::Anonymous)),
-    })
-}
+async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
+    let auth_header = request.headers().get(AUTHORIZATION);
+    let client = if let Some(auth_value) = auth_header {
+        let auth_str = auth_value.to_str()?;
+        header::authenticate_user(auth_str)
+    } else {
+        Ok(Client::new(None, UserRank::Anonymous))
+    }?;
 
-/// Optionally serializes a resource query.
-fn resource_query() -> impl Filter<Extract = (ResourceParams,), Error = Infallible> + Clone {
-    warp::query::<ResourceParams>().or_else(async |_| {
-        Ok((ResourceParams {
-            query: None,
-            fields: None,
-            bump_login: None,
-        },))
-    })
+    request.extensions_mut().insert(client);
+    Ok(next.run(request).await)
 }
 
 // Any value that is present is considered Some value, including null.

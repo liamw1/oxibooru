@@ -1,4 +1,5 @@
-use crate::api::{ApiResult, AuthResult, ResourceParams, UnpagedResponse};
+use crate::api::{ApiResult, ResourceParams, UnpagedResponse};
+use crate::auth::Client;
 use crate::model::enums::AvatarStyle;
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
@@ -7,43 +8,24 @@ use crate::schema::{user, user_token};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource};
+use axum::extract::{Extension, Path, Query};
+use axum::{Json, Router, routing};
 use diesel::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
-use warp::{Filter, Rejection, Reply};
 
-pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list = warp::get()
-        .and(api::auth())
-        .and(warp::path!("user-tokens" / String))
-        .and(api::resource_query())
-        .map(list)
-        .map(api::Reply::from);
-    let create = warp::post()
-        .and(api::auth())
-        .and(warp::path!("user-token" / String))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .map(create)
-        .map(api::Reply::from);
-    let update = warp::put()
-        .and(api::auth())
-        .and(warp::path!("user-token" / String / Uuid))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .map(update)
-        .map(api::Reply::from);
-    let delete = warp::delete()
-        .and(api::auth())
-        .and(warp::path!("user-token" / String / Uuid))
-        .map(delete)
-        .map(api::Reply::from);
-
-    list.or(create).or(update).or(delete)
+pub fn routes() -> Router {
+    Router::new()
+        .route("/user-tokens/{username}", routing::get(list))
+        .route("/user-token/{username}", routing::post(create))
+        .route("/user-token/{username}/{token}", routing::put(update).delete(delete))
 }
 
-fn list(auth: AuthResult, username: String, params: ResourceParams) -> ApiResult<UnpagedResponse<UserTokenInfo>> {
-    let client = auth?;
+async fn list(
+    Extension(client): Extension<Client>,
+    Path(username): Path<String>,
+    Query(params): Query<ResourceParams>,
+) -> ApiResult<Json<UnpagedResponse<UserTokenInfo>>> {
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let (avatar_style, user_tokens) = db::get_connection()?.transaction(|conn| {
@@ -70,7 +52,7 @@ fn list(auth: AuthResult, username: String, params: ResourceParams) -> ApiResult
         .into_iter()
         .map(|user_token| UserTokenInfo::new(MicroUser::new(username.clone(), avatar_style), user_token, &fields))
         .collect();
-    Ok(UnpagedResponse { results })
+    Ok(Json(UnpagedResponse { results }))
 }
 
 #[derive(Deserialize)]
@@ -82,8 +64,12 @@ struct CreateBody {
     expiration_time: Option<DateTime>,
 }
 
-fn create(auth: AuthResult, username: String, params: ResourceParams, body: CreateBody) -> ApiResult<UserTokenInfo> {
-    let client = auth?;
+async fn create(
+    Extension(client): Extension<Client>,
+    Path(username): Path<String>,
+    Query(params): Query<ResourceParams>,
+    Json(body): Json<CreateBody>,
+) -> ApiResult<Json<UserTokenInfo>> {
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
@@ -124,7 +110,7 @@ fn create(auth: AuthResult, username: String, params: ResourceParams, body: Crea
             .get_result(conn)?;
         Ok::<_, api::Error>((user_token, avatar_style))
     })?;
-    Ok(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), user_token, &fields))
+    Ok(Json(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), user_token, &fields)))
 }
 
 #[derive(Deserialize)]
@@ -138,14 +124,12 @@ struct UpdateBody {
     expiration_time: Option<Option<DateTime>>,
 }
 
-fn update(
-    auth: AuthResult,
-    username: String,
-    token: Uuid,
-    params: ResourceParams,
-    body: UpdateBody,
-) -> ApiResult<UserTokenInfo> {
-    let client = auth?;
+async fn update(
+    Extension(client): Extension<Client>,
+    Path((username, token)): Path<(String, Uuid)>,
+    Query(params): Query<ResourceParams>,
+    Json(body): Json<UpdateBody>,
+) -> ApiResult<Json<UserTokenInfo>> {
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
@@ -179,11 +163,13 @@ fn update(
         let updated_user_token: UserToken = user_token.save_changes(conn)?;
         Ok::<_, api::Error>((updated_user_token, avatar_style))
     })?;
-    Ok(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), updated_user_token, &fields))
+    Ok(Json(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), updated_user_token, &fields)))
 }
 
-fn delete(auth: AuthResult, username: String, token: Uuid) -> ApiResult<()> {
-    let client = auth?;
+async fn delete(
+    Extension(client): Extension<Client>,
+    Path((username, token)): Path<(String, Uuid)>,
+) -> ApiResult<Json<()>> {
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let user_token_owner: i64 = user::table
@@ -200,7 +186,7 @@ fn delete(auth: AuthResult, username: String, token: Uuid) -> ApiResult<()> {
         api::verify_privilege(client, required_rank)?;
 
         diesel::delete(user_token::table.find(token)).execute(conn)?;
-        Ok(())
+        Ok(Json(()))
     })
 }
 

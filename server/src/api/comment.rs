@@ -1,4 +1,5 @@
-use crate::api::{ApiResult, AuthResult, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::api::{ApiResult, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::auth::Client;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::CommentInfo;
@@ -6,59 +7,25 @@ use crate::schema::{comment, comment_score};
 use crate::search::comment::QueryBuilder;
 use crate::time::DateTime;
 use crate::{api, config, db, resource};
+use axum::extract::{Extension, Path, Query};
+use axum::{Json, Router, routing};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
-use warp::{Filter, Rejection, Reply};
 
-pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list = warp::get()
-        .and(api::auth())
-        .and(warp::path!("comments"))
-        .and(warp::query())
-        .map(list)
-        .map(api::Reply::from);
-    let get = warp::get()
-        .and(api::auth())
-        .and(warp::path!("comment" / i64))
-        .and(api::resource_query())
-        .map(get)
-        .map(api::Reply::from);
-    let create = warp::post()
-        .and(api::auth())
-        .and(warp::path!("comments"))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .map(create)
-        .map(api::Reply::from);
-    let update = warp::put()
-        .and(api::auth())
-        .and(warp::path!("comment" / i64))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .map(update)
-        .map(api::Reply::from);
-    let rate = warp::put()
-        .and(api::auth())
-        .and(warp::path!("comment" / i64 / "score"))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .map(rate)
-        .map(api::Reply::from);
-    let delete = warp::delete()
-        .and(api::auth())
-        .and(warp::path!("comment" / i64))
-        .and(warp::body::json())
-        .map(delete)
-        .map(api::Reply::from);
-
-    list.or(get).or(create).or(update).or(rate).or(delete)
+pub fn routes() -> Router {
+    Router::new()
+        .route("/comments", routing::get(list).post(create))
+        .route("/comment/{id}", routing::get(get).put(update).delete(delete))
+        .route("/comment/{id}/score", routing::put(rate))
 }
 
 const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 
-fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<CommentInfo>> {
-    let client = auth?;
+async fn list(
+    Extension(client): Extension<Client>,
+    Query(params): Query<PageParams>,
+) -> ApiResult<Json<PagedResponse<CommentInfo>>> {
     api::verify_privilege(client, config::privileges().comment_list)?;
 
     let offset = params.offset.unwrap_or(0);
@@ -70,18 +37,21 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<Comment
 
         let total = query_builder.count(conn)?;
         let selected_comments = query_builder.load(conn)?;
-        Ok(PagedResponse {
+        Ok(Json(PagedResponse {
             query: params.into_query(),
             offset,
             limit,
             total,
             results: CommentInfo::new_batch_from_ids(conn, client, selected_comments, &fields)?,
-        })
+        }))
     })
 }
 
-fn get(auth: AuthResult, comment_id: i64, params: ResourceParams) -> ApiResult<CommentInfo> {
-    let client = auth?;
+async fn get(
+    Extension(client): Extension<Client>,
+    Path(comment_id): Path<i64>,
+    Query(params): Query<ResourceParams>,
+) -> ApiResult<Json<CommentInfo>> {
     api::verify_privilege(client, config::privileges().comment_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -90,7 +60,9 @@ fn get(auth: AuthResult, comment_id: i64, params: ResourceParams) -> ApiResult<C
         if !comment_exists {
             return Err(api::Error::NotFound(ResourceType::Comment));
         }
-        CommentInfo::new_from_id(conn, client, comment_id, &fields).map_err(api::Error::from)
+        CommentInfo::new_from_id(conn, client, comment_id, &fields)
+            .map(Json)
+            .map_err(api::Error::from)
     })
 }
 
@@ -102,8 +74,11 @@ struct CreateBody {
     text: String,
 }
 
-fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<CommentInfo> {
-    let client = auth?;
+async fn create(
+    Extension(client): Extension<Client>,
+    Query(params): Query<ResourceParams>,
+    Json(body): Json<CreateBody>,
+) -> ApiResult<Json<CommentInfo>> {
     api::verify_privilege(client, config::privileges().comment_create)?;
 
     let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
@@ -120,7 +95,9 @@ fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResu
         .values(new_comment)
         .returning(comment::id)
         .get_result(&mut conn)?;
-    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
 #[derive(Deserialize)]
@@ -130,8 +107,12 @@ struct UpdateBody {
     text: String,
 }
 
-fn update(auth: AuthResult, comment_id: i64, params: ResourceParams, body: UpdateBody) -> ApiResult<CommentInfo> {
-    let client = auth?;
+async fn update(
+    Extension(client): Extension<Client>,
+    Path(comment_id): Path<i64>,
+    Query(params): Query<ResourceParams>,
+    Json(body): Json<UpdateBody>,
+) -> ApiResult<Json<CommentInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
@@ -153,11 +134,17 @@ fn update(auth: AuthResult, comment_id: i64, params: ResourceParams, body: Updat
             .execute(conn)
             .map_err(api::Error::from)
     })?;
-    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
-fn rate(auth: AuthResult, comment_id: i64, params: ResourceParams, body: RatingBody) -> ApiResult<CommentInfo> {
-    let client = auth?;
+async fn rate(
+    Extension(client): Extension<Client>,
+    Path(comment_id): Path<i64>,
+    Query(params): Query<ResourceParams>,
+    Json(body): Json<RatingBody>,
+) -> ApiResult<Json<CommentInfo>> {
     api::verify_privilege(client, config::privileges().comment_score)?;
 
     let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
@@ -179,12 +166,16 @@ fn rate(auth: AuthResult, comment_id: i64, params: ResourceParams, body: RatingB
         }
         Ok::<_, api::Error>(())
     })?;
-    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
-fn delete(auth: AuthResult, comment_id: i64, client_version: DeleteBody) -> ApiResult<()> {
-    let client = auth?;
-
+async fn delete(
+    Extension(client): Extension<Client>,
+    Path(comment_id): Path<i64>,
+    Json(client_version): Json<DeleteBody>,
+) -> ApiResult<Json<()>> {
     db::get_connection()?.transaction(|conn| {
         let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
@@ -199,7 +190,7 @@ fn delete(auth: AuthResult, comment_id: i64, client_version: DeleteBody) -> ApiR
         api::verify_privilege(client, required_rank)?;
 
         diesel::delete(comment::table.find(comment_id)).execute(conn)?;
-        Ok(())
+        Ok(Json(()))
     })
 }
 
@@ -224,7 +215,8 @@ mod test {
         const SORT: &str = "-sort:id&limit=40";
         verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "comment/list.json").await?;
         verify_query(&format!("{QUERY}=sort:score&limit=1{FIELDS}"), "comment/list_highest_score.json").await?;
-        verify_query(&format!("{QUERY}=user:regular_user {SORT}{FIELDS}"), "comment/list_regular_user.json").await?;
+        verify_query(&format!("{QUERY}=user:regular_user {SORT}{FIELDS}"), "comment/list_regular_user.json")
+            .await?;
         verify_query(&format!("{QUERY}=text:*this* {SORT}{FIELDS}"), "comment/list_text_filter.json").await
     }
 

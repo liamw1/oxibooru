@@ -2,6 +2,7 @@
 
 mod admin;
 mod api;
+mod app;
 mod auth;
 mod config;
 mod content;
@@ -44,17 +45,8 @@ async fn main() {
         }
     }
 
-    println!("Oxibooru server running on {} threads", tokio::runtime::Handle::current().metrics().num_workers());
     filesystem::purge_temporary_uploads().unwrap();
 
-    // Run the warp server. Can be shut down gracefully with ctrl+c (SIGINT).
-    let (_addr, server) =
-        warp::serve(api::routes()).bind_with_graceful_shutdown(([0, 0, 0, 0], config::port()), async {
-            match tokio::signal::ctrl_c().await {
-                Ok(()) => println!("Stopping server..."),
-                Err(err) => eprintln!("Unable to listen for shutdown signal: {err}"),
-            };
-        });
-
-    server.await;
+    println!("Oxibooru server running on {} threads", tokio::runtime::Handle::current().metrics().num_workers());
+    app::run().await;
 }

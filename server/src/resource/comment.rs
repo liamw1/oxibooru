@@ -1,4 +1,4 @@
-use crate::auth::header::Client;
+use crate::auth::Client;
 use crate::model::comment::{Comment, CommentScore};
 use crate::model::enums::{AvatarStyle, Rating};
 use crate::resource::user::MicroUser;

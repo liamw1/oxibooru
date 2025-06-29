@@ -1,5 +1,5 @@
 use crate::api::ApiResult;
-use crate::auth::header::Client;
+use crate::auth::Client;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
 use crate::model::post::Checksum;
 use crate::schema::{

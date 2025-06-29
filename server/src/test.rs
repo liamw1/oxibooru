@@ -15,12 +15,19 @@ use crate::schema::{
 };
 use crate::time::DateTime;
 use crate::{api, db};
+use axum::ServiceExt;
+use axum::extract::Request;
+use axum::http::Method;
+use axum::http::header::AUTHORIZATION;
+use axum_test::TestServer;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
+use tower::layer::Layer;
+use tower_http::normalize_path::NormalizePathLayer;
 use uuid::Uuid;
 
 pub const TEST_PASSWORD: &str = "test_password";
@@ -69,33 +76,31 @@ pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
 }
 
 pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) -> ApiResult<()> {
-    let filter = api::routes();
+    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes());
     let (method, path) = query.split_once(' ').unwrap();
+    let method = Method::try_from(method).unwrap();
     let path = path.replace(' ', "%20"); // Percent-encode all spaces
     let credentials = header::credentials_for(user, TEST_PASSWORD);
     let basic_access_authentication = format!("Basic {credentials}");
 
-    let request = warp::test::request()
-        .header("authorization", basic_access_authentication)
-        .method(method)
-        .path(&path);
+    let server = TestServer::new(ServiceExt::<Request>::into_make_service(app)).unwrap();
+    let request = server
+        .method(method, &path)
+        .add_header(AUTHORIZATION, basic_access_authentication);
 
     // Optionally specify a body
     let body_path = body_path(relative_path);
     let reply = match body_path.try_exists()? {
-        true => {
-            let body = std::fs::read_to_string(body_path)?;
-            request.body(body).reply(&filter).await
-        }
-        false => request.reply(&filter).await,
+        true => request.json_from_file(body_path).await,
+        false => request.await,
     };
-    let actual_body = std::str::from_utf8(reply.body())?;
+    let actual_body = reply.text();
 
     let file_contents = std::fs::read_to_string(reply_path(relative_path))?;
     let expected_body: String = file_contents.split_whitespace().collect();
     let actual_body: String = actual_body.split_whitespace().collect();
 
-    assert_eq!(reply.status(), 200);
+    assert_eq!(reply.status_code(), 200);
     assert_eq!(actual_body, expected_body);
     Ok(())
 }

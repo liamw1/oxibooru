@@ -1,4 +1,5 @@
-use crate::api::{ApiResult, AuthResult, DeleteBody, ResourceParams, UnpagedResponse};
+use crate::api::{ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
+use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTagCategory, TagCategory};
@@ -7,67 +8,37 @@ use crate::schema::{tag, tag_category};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource};
+use axum::extract::{Extension, Path, Query};
+use axum::{Json, Router, routing};
 use diesel::prelude::*;
 use serde::Deserialize;
-use warp::{Filter, Rejection, Reply};
 
-pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list = warp::get()
-        .and(api::auth())
-        .and(warp::path!("tag-categories"))
-        .and(api::resource_query())
-        .map(list)
-        .map(api::Reply::from);
-    let get = warp::get()
-        .and(api::auth())
-        .and(warp::path!("tag-category" / String))
-        .and(api::resource_query())
-        .map(get)
-        .map(api::Reply::from);
-    let create = warp::post()
-        .and(api::auth())
-        .and(warp::path!("tag-categories"))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .map(create)
-        .map(api::Reply::from);
-    let update = warp::put()
-        .and(api::auth())
-        .and(warp::path!("tag-category" / String))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .map(update)
-        .map(api::Reply::from);
-    let set_default = warp::put()
-        .and(api::auth())
-        .and(warp::path!("tag-category" / String / "default"))
-        .and(api::resource_query())
-        .map(set_default)
-        .map(api::Reply::from);
-    let delete = warp::delete()
-        .and(api::auth())
-        .and(warp::path!("tag-category" / String))
-        .and(warp::body::json())
-        .map(delete)
-        .map(api::Reply::from);
-
-    list.or(get).or(create).or(update).or(set_default).or(delete)
+pub fn routes() -> Router {
+    Router::new()
+        .route("/tag-categories", routing::get(list).post(create))
+        .route("/tag-category/{name}", routing::get(get).put(update).delete(delete))
+        .route("/tag-category/{name}/default", routing::put(set_default))
 }
 
-fn list(auth: AuthResult, params: ResourceParams) -> ApiResult<UnpagedResponse<TagCategoryInfo>> {
-    let client = auth?;
+async fn list(
+    Extension(client): Extension<Client>,
+    Query(params): Query<ResourceParams>,
+) -> ApiResult<Json<UnpagedResponse<TagCategoryInfo>>> {
     api::verify_privilege(client, config::privileges().tag_category_list)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
-        TagCategoryInfo::all(conn, &fields)
-            .map(|results| UnpagedResponse { results })
-            .map_err(api::Error::from)
-    })
+    db::get_connection()?
+        .transaction(|conn| TagCategoryInfo::all(conn, &fields))
+        .map(|results| UnpagedResponse { results })
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
-fn get(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagCategoryInfo> {
-    let client = auth?;
+async fn get(
+    Extension(client): Extension<Client>,
+    Path(name): Path<String>,
+    Query(params): Query<ResourceParams>,
+) -> ApiResult<Json<TagCategoryInfo>> {
     api::verify_privilege(client, config::privileges().tag_category_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -78,7 +49,9 @@ fn get(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagC
             .first(conn)
             .optional()?
             .ok_or(api::Error::NotFound(ResourceType::TagCategory))?;
-        TagCategoryInfo::new(conn, category, &fields).map_err(api::Error::from)
+        TagCategoryInfo::new(conn, category, &fields)
+            .map(Json)
+            .map_err(api::Error::from)
     })
 }
 
@@ -90,8 +63,11 @@ struct CreateBody {
     color: SmallString,
 }
 
-fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<TagCategoryInfo> {
-    let client = auth?;
+async fn create(
+    Extension(client): Extension<Client>,
+    Query(params): Query<ResourceParams>,
+    Json(body): Json<CreateBody>,
+) -> ApiResult<Json<TagCategoryInfo>> {
     api::verify_privilege(client, config::privileges().tag_category_create)?;
     api::verify_matches_regex(&body.name, RegexType::TagCategory)?;
 
@@ -107,7 +83,9 @@ fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResu
         .values(new_category)
         .returning(TagCategory::as_returning())
         .get_result(&mut conn)?;
-    conn.transaction(|conn| TagCategoryInfo::new(conn, category, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| TagCategoryInfo::new(conn, category, &fields))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
 #[derive(Deserialize)]
@@ -119,8 +97,12 @@ struct UpdateBody {
     color: Option<SmallString>,
 }
 
-fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBody) -> ApiResult<TagCategoryInfo> {
-    let client = auth?;
+async fn update(
+    Extension(client): Extension<Client>,
+    Path(name): Path<String>,
+    Query(params): Query<ResourceParams>,
+    Json(body): Json<UpdateBody>,
+) -> ApiResult<Json<TagCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
@@ -162,11 +144,16 @@ fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBo
             .execute(conn)?;
         Ok::<_, api::Error>(category_id)
     })?;
-    conn.transaction(|conn| TagCategoryInfo::new_from_id(conn, category_id, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| TagCategoryInfo::new_from_id(conn, category_id, &fields))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
-fn set_default(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagCategoryInfo> {
-    let client = auth?;
+async fn set_default(
+    Extension(client): Extension<Client>,
+    Path(name): Path<String>,
+    Query(params): Query<ResourceParams>,
+) -> ApiResult<Json<TagCategoryInfo>> {
     api::verify_privilege(client, config::privileges().tag_category_set_default)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -207,11 +194,16 @@ fn set_default(auth: AuthResult, name: String, params: ResourceParams) -> ApiRes
         new_default_category.name = temporary_category_name;
         new_default_category.save_changes(conn)
     })?;
-    conn.transaction(|conn| TagCategoryInfo::new(conn, new_default_category, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| TagCategoryInfo::new(conn, new_default_category, &fields))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
-fn delete(auth: AuthResult, name: String, client_version: DeleteBody) -> ApiResult<()> {
-    let client = auth?;
+async fn delete(
+    Extension(client): Extension<Client>,
+    Path(name): Path<String>,
+    Json(client_version): Json<DeleteBody>,
+) -> ApiResult<Json<()>> {
     api::verify_privilege(client, config::privileges().tag_category_delete)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
@@ -226,7 +218,7 @@ fn delete(auth: AuthResult, name: String, client_version: DeleteBody) -> ApiResu
         }
 
         diesel::delete(tag_category::table.find(category_id)).execute(conn)?;
-        Ok(())
+        Ok(Json(()))
     })
 }
 
@@ -334,7 +326,8 @@ mod test {
             Ok(category_id == 0)
         };
 
-        verify_query(&format!("PUT /tag-category/{NAME}/default/?{FIELDS}"), "tag_category/set_default.json").await?;
+        verify_query(&format!("PUT /tag-category/{NAME}/default/?{FIELDS}"), "tag_category/set_default.json")
+            .await?;
 
         let mut conn = get_connection()?;
         let default = is_default(&mut conn)?;

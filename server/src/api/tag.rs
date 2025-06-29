@@ -1,4 +1,5 @@
-use crate::api::{ApiResult, AuthResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::auth::Client;
 use crate::model::enums::ResourceType;
 use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, TagImplication, TagSuggestion};
@@ -8,67 +9,28 @@ use crate::search::tag::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db, resource, update};
+use axum::extract::{Extension, Path, Query};
+use axum::{Json, Router, routing};
 use diesel::dsl::{count_star, max};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
-use warp::{Filter, Rejection, Reply};
 
-pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list = warp::get()
-        .and(api::auth())
-        .and(warp::path!("tags"))
-        .and(warp::query())
-        .map(list)
-        .map(api::Reply::from);
-    let get = warp::get()
-        .and(api::auth())
-        .and(warp::path!("tag" / String))
-        .and(api::resource_query())
-        .map(get)
-        .map(api::Reply::from);
-    let get_siblings = warp::get()
-        .and(api::auth())
-        .and(warp::path!("tag-siblings" / String))
-        .and(api::resource_query())
-        .map(get_siblings)
-        .map(api::Reply::from);
-    let create = warp::post()
-        .and(api::auth())
-        .and(warp::path!("tags"))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .map(create)
-        .map(api::Reply::from);
-    let merge = warp::post()
-        .and(api::auth())
-        .and(warp::path!("tag-merge"))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .map(merge)
-        .map(api::Reply::from);
-    let update = warp::put()
-        .and(api::auth())
-        .and(warp::path!("tag" / String))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .map(update)
-        .map(api::Reply::from);
-    let delete = warp::delete()
-        .and(api::auth())
-        .and(warp::path!("tag" / String))
-        .and(warp::body::json())
-        .map(delete)
-        .map(api::Reply::from);
-
-    list.or(get).or(get_siblings).or(create).or(merge).or(update).or(delete)
+pub fn routes() -> Router {
+    Router::new()
+        .route("/tags", routing::get(list).post(create))
+        .route("/tag/{name}", routing::get(get).put(update).delete(delete))
+        .route("/tag-siblings/{name}", routing::get(get_siblings))
+        .route("/tag-merge", routing::post(merge))
 }
 
 const MAX_TAGS_PER_PAGE: i64 = 1000;
 const MAX_TAG_SIBLINGS: i64 = 1000;
 
-fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<TagInfo>> {
-    let client = auth?;
+async fn list(
+    Extension(client): Extension<Client>,
+    Query(params): Query<PageParams>,
+) -> ApiResult<Json<PagedResponse<TagInfo>>> {
     params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_list)?;
 
@@ -82,18 +44,21 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<TagInfo
 
         let total = query_builder.count(conn)?;
         let selected_tags = query_builder.load(conn)?;
-        Ok(PagedResponse {
+        Ok(Json(PagedResponse {
             query: params.into_query(),
             offset,
             limit,
             total,
             results: TagInfo::new_batch_from_ids(conn, selected_tags, &fields)?,
-        })
+        }))
     })
 }
 
-fn get(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagInfo> {
-    let client = auth?;
+async fn get(
+    Extension(client): Extension<Client>,
+    Path(name): Path<String>,
+    Query(params): Query<ResourceParams>,
+) -> ApiResult<Json<TagInfo>> {
     params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_view)?;
 
@@ -106,7 +71,9 @@ fn get(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagI
             .first(conn)
             .optional()?
             .ok_or(api::Error::NotFound(ResourceType::Tag))?;
-        TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from)
+        TagInfo::new_from_id(conn, tag_id, &fields)
+            .map(Json)
+            .map_err(api::Error::from)
     })
 }
 
@@ -121,8 +88,11 @@ struct TagSiblings {
     results: Vec<TagSibling>,
 }
 
-fn get_siblings(auth: AuthResult, name: String, params: ResourceParams) -> ApiResult<TagSiblings> {
-    let client = auth?;
+async fn get_siblings(
+    Extension(client): Extension<Client>,
+    Path(name): Path<String>,
+    Query(params): Query<ResourceParams>,
+) -> ApiResult<Json<TagSiblings>> {
     params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_view)?;
 
@@ -154,7 +124,7 @@ fn get_siblings(auth: AuthResult, name: String, params: ResourceParams) -> ApiRe
             .zip(common_post_counts)
             .map(|(tag, occurrences)| TagSibling { tag, occurrences })
             .collect();
-        Ok(TagSiblings { results: siblings })
+        Ok(Json(TagSiblings { results: siblings }))
     })
 }
 
@@ -168,8 +138,11 @@ struct CreateBody {
     suggestions: Option<Vec<SmallString>>,
 }
 
-fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<TagInfo> {
-    let client = auth?;
+async fn create(
+    Extension(client): Extension<Client>,
+    Query(params): Query<ResourceParams>,
+    Json(body): Json<CreateBody>,
+) -> ApiResult<Json<TagInfo>> {
     params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_create)?;
 
@@ -204,11 +177,16 @@ fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResu
         }
         Ok::<_, api::Error>(tag_id)
     })?;
-    conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
-fn merge(auth: AuthResult, params: ResourceParams, body: MergeBody<String>) -> ApiResult<TagInfo> {
-    let client = auth?;
+async fn merge(
+    Extension(client): Extension<Client>,
+    Query(params): Query<ResourceParams>,
+    Json(body): Json<MergeBody<String>>,
+) -> ApiResult<Json<TagInfo>> {
     params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_merge)?;
 
@@ -321,7 +299,9 @@ fn merge(auth: AuthResult, params: ResourceParams, body: MergeBody<String>) -> A
         diesel::delete(tag::table.find(remove_id)).execute(conn)?;
         update::tag::last_edit_time(conn, merge_to_id).map(|_| merge_to_id)
     })?;
-    conn.transaction(|conn| TagInfo::new_from_id(conn, merged_tag_id, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| TagInfo::new_from_id(conn, merged_tag_id, &fields))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
 #[derive(Deserialize)]
@@ -335,8 +315,12 @@ struct UpdateBody {
     suggestions: Option<Vec<SmallString>>,
 }
 
-fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBody) -> ApiResult<TagInfo> {
-    let client = auth?;
+async fn update(
+    Extension(client): Extension<Client>,
+    Path(name): Path<String>,
+    Query(params): Query<ResourceParams>,
+    Json(body): Json<UpdateBody>,
+) -> ApiResult<Json<TagInfo>> {
     params.bump_login(client)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -397,11 +381,16 @@ fn update(auth: AuthResult, name: String, params: ResourceParams, body: UpdateBo
         }
         update::tag::last_edit_time(conn, tag_id).map(|_| tag_id)
     })?;
-    conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields).map_err(api::Error::from))
+    conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
-fn delete(auth: AuthResult, name: String, client_version: DeleteBody) -> ApiResult<()> {
-    let client = auth?;
+async fn delete(
+    Extension(client): Extension<Client>,
+    Path(name): Path<String>,
+    Json(client_version): Json<DeleteBody>,
+) -> ApiResult<Json<()>> {
     api::verify_privilege(client, config::privileges().tag_delete)?;
 
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
@@ -414,7 +403,7 @@ fn delete(auth: AuthResult, name: String, client_version: DeleteBody) -> ApiResu
         api::verify_version(tag_version, *client_version)?;
 
         diesel::delete(tag::table.find(tag_id)).execute(conn)?;
-        Ok(())
+        Ok(Json(()))
     })
 }
 
@@ -440,7 +429,8 @@ mod test {
         verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "tag/list.json").await?;
         verify_query(&format!("{QUERY}=sort:usage-count -sort:name&limit=1{FIELDS}"), "tag/list_most_used.json")
             .await?;
-        verify_query(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character.json").await?;
+        verify_query(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character.json")
+            .await?;
         verify_query(&format!("{QUERY}=*sky* {SORT}{FIELDS}"), "tag/list_has_sky_in_name.json").await?;
         Ok(())
     }

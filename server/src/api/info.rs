@@ -1,21 +1,19 @@
-use crate::api::{ApiResult, AuthResult, ResourceParams};
+use crate::api::{ApiResult, ResourceParams};
+use crate::auth::Client;
 use crate::model::post::PostFeature;
 use crate::resource::post::PostInfo;
 use crate::schema::{database_statistics, post_feature, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, resource};
+use crate::{config, db, resource};
+use axum::extract::{Extension, Query};
+use axum::response::Json;
+use axum::routing::{self, Router};
 use diesel::prelude::*;
 use serde::Serialize;
-use warp::{Filter, Rejection, Reply};
 
-pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    warp::get()
-        .and(api::auth())
-        .and(warp::path!("info"))
-        .and(api::resource_query())
-        .map(get)
-        .map(api::Reply::from)
+pub fn routes() -> Router {
+    Router::new().route("/info", routing::get(get))
 }
 
 // TODO: Remove renames by changing references to these names in client
@@ -31,8 +29,7 @@ struct Response {
     config: &'static config::PublicInfo,
 }
 
-fn get(auth: AuthResult, params: ResourceParams) -> ApiResult<Response> {
-    let client = auth?;
+async fn get(Extension(client): Extension<Client>, Query(params): Query<ResourceParams>) -> ApiResult<Json<Response>> {
     params.bump_login(client)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -60,7 +57,7 @@ fn get(auth: AuthResult, params: ResourceParams) -> ApiResult<Response> {
             .transpose()?
             .flatten();
 
-        Ok(Response {
+        Ok(Json(Response {
             post_count,
             disk_usage,
             featured_post,
@@ -68,6 +65,6 @@ fn get(auth: AuthResult, params: ResourceParams) -> ApiResult<Response> {
             featuring_user,
             server_time: DateTime::now(),
             config: &config::get().public_info,
-        })
+        }))
     })
 }

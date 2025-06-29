@@ -1,27 +1,17 @@
-use crate::api::{ApiResult, AuthResult};
-use crate::content::download;
+use crate::api::ApiResult;
+use crate::auth::Client;
 use crate::content::upload::{self, MAX_UPLOAD_SIZE, PartName};
+use crate::content::{JsonOrMultipart, download};
 use crate::{api, config};
+use axum::extract::{DefaultBodyLimit, Extension};
+use axum::{Json, Router, routing};
 use serde::{Deserialize, Serialize};
 use url::Url;
-use warp::multipart::FormData;
-use warp::{Filter, Rejection, Reply};
 
-pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let upload_url = warp::post()
-        .and(api::auth())
-        .and(warp::path!("uploads"))
-        .and(warp::body::json())
-        .then(upload_url)
-        .map(api::Reply::from);
-    let upload_multipart = warp::post()
-        .and(api::auth())
-        .and(warp::path!("uploads"))
-        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
-        .then(upload_multipart)
-        .map(api::Reply::from);
-
-    upload_url.or(upload_multipart)
+pub fn routes() -> Router {
+    Router::new()
+        .route("/uploads", routing::post(upload_handler))
+        .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
 }
 
 #[derive(Deserialize)]
@@ -36,26 +26,30 @@ struct UploadResponse {
     token: String,
 }
 
-async fn upload_url(auth: AuthResult, body: UploadBody) -> ApiResult<UploadResponse> {
-    let client = auth?;
-    api::verify_privilege(client, config::privileges().upload_create)?;
-
+async fn upload_from_url(body: UploadBody) -> ApiResult<Json<UploadResponse>> {
     let token = download::from_url(body.content_url).await?;
-    Ok(UploadResponse { token })
+    Ok(Json(UploadResponse { token }))
 }
 
-async fn upload_multipart(auth: AuthResult, form_data: FormData) -> ApiResult<UploadResponse> {
-    let body = upload::extract(form_data, [PartName::Content]).await?;
-    if let [Some(upload)] = body.files {
-        let client = auth?;
-        api::verify_privilege(client, config::privileges().upload_create)?;
+async fn upload_handler(
+    Extension(client): Extension<Client>,
+    body: JsonOrMultipart<UploadBody>,
+) -> ApiResult<Json<UploadResponse>> {
+    api::verify_privilege(client, config::privileges().upload_create)?;
 
-        let token = upload.save()?;
-        Ok(UploadResponse { token })
-    } else if let Some(metadata) = body.metadata {
-        let url_upload: UploadBody = serde_json::from_slice(&metadata)?;
-        upload_url(auth, url_upload).await
-    } else {
-        Err(api::Error::MissingFormData)
+    match body {
+        JsonOrMultipart::Json(payload) => upload_from_url(payload).await,
+        JsonOrMultipart::Multipart(payload) => {
+            let decoded_body = upload::extract(payload, [PartName::Content]).await?;
+            if let [Some(upload)] = decoded_body.files {
+                let token = upload.save()?;
+                Ok(Json(UploadResponse { token }))
+            } else if let Some(metadata) = decoded_body.metadata {
+                let url_upload: UploadBody = serde_json::from_slice(&metadata)?;
+                upload_from_url(url_upload).await
+            } else {
+                Err(api::Error::MissingFormData)
+            }
+        }
     }
 }

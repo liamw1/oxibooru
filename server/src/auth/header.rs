@@ -1,3 +1,4 @@
+use crate::auth::Client;
 use crate::model::enums::UserRank;
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
@@ -27,21 +28,9 @@ pub enum AuthenticationError {
     Utf8Conversion(#[from] Utf8Error),
 }
 
-#[derive(Clone, Copy)]
-pub struct Client {
-    pub id: Option<i64>,
-    pub rank: UserRank,
-}
-
-impl Client {
-    pub fn new(id: Option<i64>, rank: UserRank) -> Self {
-        Self { id, rank }
-    }
-}
-
-/// Authentication can either be done by token-based authentication (reccommended)
+/// Authentication can either be done by token-based authentication (recommended)
 /// or by sending password as plaintext.
-pub fn authenticate_user(auth: String) -> Result<Client, AuthenticationError> {
+pub fn authenticate_user(auth: &str) -> Result<Client, AuthenticationError> {
     let (auth_type, credentials) = auth.split_once(' ').ok_or(AuthenticationError::MalformedCredentials)?;
     match auth_type {
         "Basic" => basic_access_authentication(credentials),

@@ -364,8 +364,7 @@ impl ErrorKind for crate::api::Error {
         match self {
             Self::BadExtension(_) => "BadExtension",
             Self::BadHash(err) => err.kind(),
-            Self::BadIncomingHeader(_) => "BadIncomingHeader",
-            Self::BadResponseHeader(_) => "BadResponseHeader",
+            Self::BadHeader(_) => "BadHeader",
             Self::ContentTypeMismatch(..) => "ContentTypeMismatch",
             Self::CyclicDependency(_) => "CyclicDependency",
             Self::DeleteDefault(_) => "DeleteDefault",
@@ -393,6 +392,7 @@ impl ErrorKind for crate::api::Error {
             Self::MissingFormData => "MissingFormData",
             Self::MissingMetadata => "MissingMetadata",
             Self::MissingSmtpInfo => "MissingSmtpInfo",
+            Self::Multipart(_) => "Multipart/Form-Data",
             Self::NoNamesGiven(_) => "NoNamesGiven",
             Self::NotAnInteger(err) => err.kind().kind(),
             Self::NotFound(_) => "NotFound",
@@ -405,7 +405,6 @@ impl ErrorKind for crate::api::Error {
             Self::UnauthorizedPasswordReset => "UnauthorizedPasswordReset",
             Self::Utf8Conversion(_) => "Utf8ConversionError",
             Self::VideoDecoding(err) => err.kind(),
-            Self::Warp(_) => "WarpError",
         }
     }
 }

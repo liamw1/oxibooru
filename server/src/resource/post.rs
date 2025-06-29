@@ -1,4 +1,4 @@
-use crate::auth::header::Client;
+use crate::auth::Client;
 use crate::content::hash::PostHash;
 use crate::get_post_stats;
 use crate::model::comment::Comment;

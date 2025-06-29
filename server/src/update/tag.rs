@@ -1,5 +1,5 @@
 use crate::api::ApiResult;
-use crate::auth::header::Client;
+use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};

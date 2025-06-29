@@ -1,9 +1,10 @@
-use crate::api::{ApiResult, AuthResult, DeleteBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{ApiResult, DeleteBody, PageParams, PagedResponse, ResourceParams};
+use crate::auth::Client;
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
-use crate::content::{Content, FileContents, hash, upload};
+use crate::content::{Content, FileContents, JsonOrMultipart, hash, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::NewUser;
 use crate::resource::user::{UserInfo, Visibility};
@@ -14,72 +15,31 @@ use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, update};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
+use axum::extract::{DefaultBodyLimit, Extension, Path, Query};
+use axum::{Json, Router, routing};
 use diesel::prelude::*;
 use serde::Deserialize;
 use url::Url;
-use warp::filters::multipart::FormData;
-use warp::{Filter, Rejection, Reply};
 
-pub fn routes() -> impl Filter<Extract = impl Reply, Error = Rejection> + Clone {
-    let list = warp::get()
-        .and(api::auth())
-        .and(warp::path!("users"))
-        .and(warp::query())
-        .map(list)
-        .map(api::Reply::from);
-    let get = warp::get()
-        .and(api::auth())
-        .and(warp::path!("user" / String))
-        .and(api::resource_query())
-        .map(get)
-        .map(api::Reply::from);
-    let create = warp::post()
-        .and(api::auth())
-        .and(warp::path!("users"))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .then(create)
-        .map(api::Reply::from);
-    let create_multipart = warp::post()
-        .and(api::auth())
-        .and(warp::path!("users"))
-        .and(api::resource_query())
-        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
-        .then(create_multipart)
-        .map(api::Reply::from);
-    let update = warp::put()
-        .and(api::auth())
-        .and(warp::path!("user" / String))
-        .and(api::resource_query())
-        .and(warp::body::json())
-        .then(update)
-        .map(api::Reply::from);
-    let update_multipart = warp::put()
-        .and(api::auth())
-        .and(warp::path!("user" / String))
-        .and(api::resource_query())
-        .and(warp::filters::multipart::form().max_length(MAX_UPLOAD_SIZE))
-        .then(update_multipart)
-        .map(api::Reply::from);
-    let delete = warp::delete()
-        .and(api::auth())
-        .and(warp::path!("user" / String))
-        .and(warp::body::json())
-        .map(delete)
-        .map(api::Reply::from);
-
-    list.or(get)
-        .or(create)
-        .or(create_multipart)
-        .or(update)
-        .or(update_multipart)
-        .or(delete)
+pub fn routes() -> Router {
+    Router::new()
+        .route("/users", routing::get(list).post(create_handler))
+        .route(
+            "/user/{name}",
+            routing::get(get)
+                .put(update_handler)
+                .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
+                .delete(delete),
+        )
+        .layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
 }
 
 const MAX_USERS_PER_PAGE: i64 = 1000;
 
-fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<UserInfo>> {
-    let client = auth?;
+async fn list(
+    Extension(client): Extension<Client>,
+    Query(params): Query<PageParams>,
+) -> ApiResult<Json<PagedResponse<UserInfo>>> {
     params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().user_list)?;
 
@@ -93,18 +53,21 @@ fn list(auth: AuthResult, params: PageParams) -> ApiResult<PagedResponse<UserInf
 
         let total = query_builder.count(conn)?;
         let selected_users = query_builder.load(conn)?;
-        Ok(PagedResponse {
+        Ok(Json(PagedResponse {
             query: params.into_query(),
             offset,
             limit,
             total,
             results: UserInfo::new_batch_from_ids(conn, selected_users, &fields, Visibility::PublicOnly)?,
-        })
+        }))
     })
 }
 
-fn get(auth: AuthResult, username: String, params: ResourceParams) -> ApiResult<UserInfo> {
-    let client = auth?;
+async fn get(
+    Extension(client): Extension<Client>,
+    Path(username): Path<String>,
+    Query(params): Query<ResourceParams>,
+) -> ApiResult<Json<UserInfo>> {
     params.bump_login(client)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -126,7 +89,9 @@ fn get(auth: AuthResult, username: String, params: ResourceParams) -> ApiResult<
             true => Visibility::Full,
             false => Visibility::PublicOnly,
         };
-        UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from)
+        UserInfo::new_from_id(conn, user_id, &fields, visibility)
+            .map(Json)
+            .map_err(api::Error::from)
     })
 }
 
@@ -145,8 +110,7 @@ struct CreateBody {
     avatar_url: Option<Url>,
 }
 
-async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> ApiResult<UserInfo> {
-    let client = auth?;
+async fn create(client: Client, params: ResourceParams, body: CreateBody) -> ApiResult<Json<UserInfo>> {
     params.bump_login(client)?;
 
     let creation_rank = body.rank.unwrap_or(config::default_rank());
@@ -204,18 +168,29 @@ async fn create(auth: AuthResult, params: ResourceParams, body: CreateBody) -> A
 
         Ok::<_, api::Error>(user_id)
     })?;
-    conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full).map_err(api::Error::from))
+    conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
-async fn create_multipart(auth: AuthResult, params: ResourceParams, form_data: FormData) -> ApiResult<UserInfo> {
-    let body = upload::extract(form_data, [PartName::Avatar]).await?;
-    let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
-    let mut new_user: CreateBody = serde_json::from_slice(&metadata)?;
-    if let [Some(avatar)] = body.files {
-        new_user.avatar = Some(avatar);
-        create(auth, params, new_user).await
-    } else {
-        Err(api::Error::MissingFormData)
+async fn create_handler(
+    Extension(client): Extension<Client>,
+    Query(params): Query<ResourceParams>,
+    body: JsonOrMultipart<CreateBody>,
+) -> ApiResult<Json<UserInfo>> {
+    match body {
+        JsonOrMultipart::Json(payload) => create(client, params, payload).await,
+        JsonOrMultipart::Multipart(payload) => {
+            let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
+            let metadata = decoded_body.metadata.ok_or(api::Error::MissingMetadata)?;
+            let mut new_user: CreateBody = serde_json::from_slice(&metadata)?;
+            if let [Some(avatar)] = decoded_body.files {
+                new_user.avatar = Some(avatar);
+                create(client, params, new_user).await
+            } else {
+                Err(api::Error::MissingFormData)
+            }
+        }
     }
 }
 
@@ -236,8 +211,12 @@ struct UpdateBody {
     avatar_url: Option<Url>,
 }
 
-async fn update(auth: AuthResult, username: String, params: ResourceParams, body: UpdateBody) -> ApiResult<UserInfo> {
-    let client = auth?;
+async fn update(
+    client: Client,
+    username: String,
+    params: ResourceParams,
+    body: UpdateBody,
+) -> ApiResult<Json<UserInfo>> {
     params.bump_login(client)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -343,28 +322,38 @@ async fn update(auth: AuthResult, username: String, params: ResourceParams, body
         }
         update::user::last_edit_time(conn, user_id).map(|_| (user_id, visibility))
     })?;
-    conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility).map_err(api::Error::from))
+    conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
-async fn update_multipart(
-    auth: AuthResult,
-    username: String,
-    params: ResourceParams,
-    form_data: FormData,
-) -> ApiResult<UserInfo> {
-    let body = upload::extract(form_data, [PartName::Avatar]).await?;
-    let metadata = body.metadata.ok_or(api::Error::MissingMetadata)?;
-    let mut user_update: UpdateBody = serde_json::from_slice(&metadata)?;
-    if let [Some(avatar)] = body.files {
-        user_update.avatar = Some(avatar);
-        update(auth, username, params, user_update).await
-    } else {
-        Err(api::Error::MissingFormData)
+async fn update_handler(
+    Extension(client): Extension<Client>,
+    Path(username): Path<String>,
+    Query(params): Query<ResourceParams>,
+    body: JsonOrMultipart<UpdateBody>,
+) -> ApiResult<Json<UserInfo>> {
+    match body {
+        JsonOrMultipart::Json(payload) => update(client, username, params, payload).await,
+        JsonOrMultipart::Multipart(payload) => {
+            let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
+            let metadata = decoded_body.metadata.ok_or(api::Error::MissingMetadata)?;
+            let mut user_update: UpdateBody = serde_json::from_slice(&metadata)?;
+            if let [Some(avatar)] = decoded_body.files {
+                user_update.avatar = Some(avatar);
+                update(client, username, params, user_update).await
+            } else {
+                Err(api::Error::MissingFormData)
+            }
+        }
     }
 }
 
-fn delete(auth: AuthResult, username: String, client_version: DeleteBody) -> ApiResult<()> {
-    let client = auth?;
+async fn delete(
+    Extension(client): Extension<Client>,
+    Path(username): Path<String>,
+    Json(client_version): Json<DeleteBody>,
+) -> ApiResult<Json<()>> {
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let (user_id, user_version): (i64, DateTime) = user::table
@@ -381,7 +370,7 @@ fn delete(auth: AuthResult, username: String, client_version: DeleteBody) -> Api
         api::verify_privilege(client, required_rank)?;
 
         diesel::delete(user::table.find(user_id)).execute(conn)?;
-        Ok(())
+        Ok(Json(()))
     })
 }
 
