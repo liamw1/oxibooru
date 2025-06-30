@@ -321,8 +321,6 @@ struct MergeBody<T> {
 struct ResourceParams {
     query: Option<String>,
     fields: Option<String>,
-    #[serde(rename = "bump-login")]
-    bump_login: Option<bool>,
 }
 
 impl ResourceParams {
@@ -332,13 +330,6 @@ impl ResourceParams {
 
     fn fields(&self) -> Option<&str> {
         self.fields.as_deref()
-    }
-
-    fn bump_login(&self, client: Client) -> ApiResult<()> {
-        match (client.id, self.bump_login) {
-            (Some(user_id), Some(true)) => update::user::last_login_time(user_id),
-            _ => Ok(()),
-        }
     }
 }
 
@@ -358,10 +349,6 @@ impl PageParams {
 
     fn fields(&self) -> Option<&str> {
         self.params.fields()
-    }
-
-    fn bump_login(&self, user: Client) -> ApiResult<()> {
-        self.params.bump_login(user)
     }
 
     fn into_query(self) -> Option<String> {
@@ -415,6 +402,15 @@ async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
     } else {
         Ok(Client::new(None, UserRank::Anonymous))
     }?;
+
+    // If client is not anonymous and query contains "bump-login", update login time
+    if let Some(user_id) = client.id {
+        if let Some(query) = request.uri().query() {
+            if query.contains("bump-login") {
+                update::user::last_login_time(user_id)?;
+            }
+        }
+    }
 
     request.extensions_mut().insert(client);
     Ok(next.run(request).await)

@@ -31,7 +31,6 @@ async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<TagInfo>>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_list)?;
 
     let offset = params.offset.unwrap_or(0);
@@ -59,7 +58,6 @@ async fn get(
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -93,7 +91,6 @@ async fn get_siblings(
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagSiblings>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -143,7 +140,6 @@ async fn create(
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
 ) -> ApiResult<Json<TagInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_create)?;
 
     if body.names.is_empty() {
@@ -187,7 +183,6 @@ async fn merge(
     Query(params): Query<ResourceParams>,
     Json(body): Json<MergeBody<String>>,
 ) -> ApiResult<Json<TagInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().tag_merge)?;
 
     let get_tag_info = |conn: &mut PgConnection, name: String| {
@@ -321,8 +316,6 @@ async fn update(
     Query(params): Query<ResourceParams>,
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<TagInfo>> {
-    params.bump_login(client)?;
-
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
@@ -429,8 +422,7 @@ mod test {
         verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "tag/list.json").await?;
         verify_query(&format!("{QUERY}=sort:usage-count -sort:name&limit=1{FIELDS}"), "tag/list_most_used.json")
             .await?;
-        verify_query(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character.json")
-            .await?;
+        verify_query(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character.json").await?;
         verify_query(&format!("{QUERY}=*sky* {SORT}{FIELDS}"), "tag/list_has_sky_in_name.json").await?;
         Ok(())
     }

@@ -40,7 +40,6 @@ async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<UserInfo>>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().user_list)?;
 
     let offset = params.offset.unwrap_or(0);
@@ -68,8 +67,6 @@ async fn get(
     Path(username): Path<String>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UserInfo>> {
-    params.bump_login(client)?;
-
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
@@ -111,8 +108,6 @@ struct CreateBody {
 }
 
 async fn create(client: Client, params: ResourceParams, body: CreateBody) -> ApiResult<Json<UserInfo>> {
-    params.bump_login(client)?;
-
     let creation_rank = body.rank.unwrap_or(config::default_rank());
     if creation_rank == UserRank::Anonymous {
         return Err(api::Error::InvalidUserRank);
@@ -217,8 +212,6 @@ async fn update(
     params: ResourceParams,
     body: UpdateBody,
 ) -> ApiResult<Json<UserInfo>> {
-    params.bump_login(client)?;
-
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 

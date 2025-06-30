@@ -28,7 +28,6 @@ async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PoolInfo>>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_list)?;
 
     let offset = params.offset.unwrap_or(0);
@@ -56,7 +55,6 @@ async fn get(
     Path(pool_id): Path<i64>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<PoolInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -85,7 +83,6 @@ async fn create(
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_create)?;
 
     if body.names.is_empty() {
@@ -122,7 +119,6 @@ async fn merge(
     Query(params): Query<ResourceParams>,
     Json(body): Json<MergeBody<i64>>,
 ) -> ApiResult<Json<PoolInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().pool_merge)?;
 
     let remove_id = body.remove;
@@ -191,7 +187,6 @@ async fn update(
     Query(params): Query<ResourceParams>,
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
-    params.bump_login(client)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;

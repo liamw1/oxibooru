@@ -82,7 +82,6 @@ async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PostInfo>>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_list)?;
 
     let offset = params.offset.unwrap_or(0);
@@ -110,7 +109,6 @@ async fn get(
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<PostInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -136,7 +134,6 @@ async fn get_neighbors(
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<PostNeighbors>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_list)?;
 
     let create_post_neighbors = |mut neighbors: Vec<PostInfo>, has_previous_post: bool| {
@@ -221,7 +218,6 @@ async fn get_featured(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<Option<PostInfo>>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_view_featured)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -251,7 +247,6 @@ async fn feature(
     Query(params): Query<ResourceParams>,
     Json(body): Json<FeatureBody>,
 ) -> ApiResult<Json<PostInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_feature)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -300,7 +295,6 @@ async fn reverse_search(
     body: ReverseSearchBody,
 ) -> ApiResult<Json<ReverseSearchResponse>> {
     let _timer = crate::time::Timer::new("reverse search");
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_reverse_search)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -368,7 +362,6 @@ async fn reverse_search_handler(
     body: JsonOrMultipart<ReverseSearchBody>,
 ) -> ApiResult<Json<ReverseSearchResponse>> {
     let _timer = crate::time::Timer::new("reverse search");
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_reverse_search)?;
 
     match body {
@@ -417,7 +410,6 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         true => config::privileges().post_create_anonymous,
         false => config::privileges().post_create_identified,
     };
-    params.bump_login(client)?;
     api::verify_privilege(client, required_rank)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -537,7 +529,6 @@ async fn merge(
     Query(params): Query<ResourceParams>,
     Json(body): Json<PostMergeBody>,
 ) -> ApiResult<Json<PostInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_merge)?;
 
     let remove_id = body.post_info.remove;
@@ -750,7 +741,6 @@ async fn favorite(
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<PostInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_favorite)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -780,7 +770,6 @@ async fn rate(
     Query(params): Query<ResourceParams>,
     Json(body): Json<RatingBody>,
 ) -> ApiResult<Json<PostInfo>> {
-    params.bump_login(client)?;
     api::verify_privilege(client, config::privileges().post_score)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -830,8 +819,6 @@ struct UpdateBody {
 }
 
 async fn update(client: Client, post_id: i64, params: ResourceParams, body: UpdateBody) -> ApiResult<Json<PostInfo>> {
-    params.bump_login(client)?;
-
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let post_hash = PostHash::new(post_id);
 

@@ -30,8 +30,6 @@ struct Response {
 }
 
 async fn get(Extension(client): Extension<Client>, Query(params): Query<ResourceParams>) -> ApiResult<Json<Response>> {
-    params.bump_login(client)?;
-
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
         let (post_count, disk_usage) = database_statistics::table
