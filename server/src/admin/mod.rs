@@ -131,14 +131,14 @@ fn run_task(conn: &mut PgConnection, task: AdminTask) -> Result<(), String> {
     info!("Starting task...");
 
     match task {
-        AdminTask::RecomputePostChecksums => post::recompute_checksums(conn).map_err(|err| format!("{err}")),
-        AdminTask::RecomputePostSignatures => post::recompute_signatures(conn).map_err(|err| format!("{err}")),
-        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(conn).map_err(|err| format!("{err}")),
-        AdminTask::RegenerateThumbnail => post::regenerate_thumbnail(conn).map_err(|err| format!("{err}")),
-        AdminTask::ResetPassword => user::reset_password().map_err(|err| format!("{err}")),
-        AdminTask::ResetFilenames => database::reset_filenames().map_err(|err| format!("{err}")),
-        AdminTask::ResetStatistics => database::reset_statistics().map_err(|err| format!("{err}")),
-        AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(conn).map_err(|err| format!("{err}")),
+        AdminTask::RecomputePostChecksums => post::recompute_checksums(conn).map_err(|err| err.to_string()),
+        AdminTask::RecomputePostSignatures => post::recompute_signatures(conn).map_err(|err| err.to_string()),
+        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(conn).map_err(|err| err.to_string()),
+        AdminTask::RegenerateThumbnail => post::regenerate_thumbnail(conn).map_err(|err| err.to_string()),
+        AdminTask::ResetPassword => user::reset_password().map_err(|err| err.to_string()),
+        AdminTask::ResetFilenames => database::reset_filenames().map_err(|err| err.to_string()),
+        AdminTask::ResetStatistics => database::reset_statistics().map_err(|err| err.to_string()),
+        AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(conn).map_err(|err| err.to_string()),
     }
 }
 
