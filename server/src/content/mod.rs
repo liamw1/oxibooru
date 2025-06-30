@@ -1,12 +1,3 @@
-pub mod cache;
-pub mod decode;
-pub mod download;
-mod flash;
-pub mod hash;
-pub mod signature;
-pub mod thumbnail;
-pub mod upload;
-
 use crate::api::ApiResult;
 use crate::content::cache::CachedProperties;
 use crate::content::thumbnail::ThumbnailType;
@@ -19,6 +10,15 @@ use axum::http::header::CONTENT_TYPE;
 use axum::response::{IntoResponse, Response};
 use image::DynamicImage;
 use url::Url;
+
+pub mod cache;
+pub mod decode;
+pub mod download;
+mod flash;
+pub mod hash;
+pub mod signature;
+pub mod thumbnail;
+pub mod upload;
 
 /// Stores file contents and mime type of an uploaded file.
 pub struct FileContents {

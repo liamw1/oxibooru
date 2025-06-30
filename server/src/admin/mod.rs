@@ -1,7 +1,3 @@
-pub mod database;
-mod post;
-mod user;
-
 use diesel::prelude::*;
 use diesel::r2d2::PoolError;
 use std::io::Write;
@@ -10,6 +6,11 @@ use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use strum::{EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
 use thiserror::Error;
+use tracing::{error, info};
+
+pub mod database;
+mod post;
+mod user;
 
 pub fn enabled() -> bool {
     std::env::args().any(|arg| arg == "--admin")
@@ -25,13 +26,13 @@ pub fn command_line_mode(conn: &mut PgConnection) {
             Ok(task) => task,
             Err(_) => {
                 let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
-                eprintln!("ERROR: Command line arguments should be one of {possible_arguments:?}\n");
+                error!("Command line arguments should be one of {possible_arguments:?}\n");
                 continue;
             }
         };
         match run_task(conn, task) {
             Ok(()) => println!("Task finished.\n"),
-            Err(err) => eprintln!("ERROR: {err}\n"),
+            Err(err) => error!("{err}\n"),
         }
     }
 }
@@ -83,7 +84,7 @@ impl ProgressReporter {
     }
 
     fn report(&self) {
-        println!("{}: {}", self.message, self.count.load(Ordering::SeqCst));
+        info!("{}: {}", self.message, self.count.load(Ordering::SeqCst));
     }
 }
 
@@ -101,13 +102,13 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
     loop {
         print!("{prompt}: ");
         if let Err(err) = stdout.flush() {
-            eprintln!("ERROR: {err}\n");
+            error!("{err}\n");
             continue;
         }
 
         buffer.clear();
         if let Err(err) = stdin.read_line(buffer) {
-            eprintln!("ERROR: {err}\n");
+            error!("{err}\n");
             continue;
         }
 
@@ -127,7 +128,7 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
 /// if necessary. That way users can run tasks that don't require database connection without
 /// spinning up the database.
 fn run_task(conn: &mut PgConnection, task: AdminTask) -> Result<(), String> {
-    println!("Starting task...");
+    info!("Starting task...");
 
     match task {
         AdminTask::RecomputePostChecksums => post::recompute_checksums(conn).map_err(|err| format!("{err}")),

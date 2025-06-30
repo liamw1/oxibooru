@@ -1,15 +1,3 @@
-mod comment;
-mod info;
-mod password_reset;
-mod pool;
-mod pool_category;
-mod post;
-mod tag;
-mod tag_category;
-mod upload;
-mod user;
-mod user_token;
-
 use crate::auth::Client;
 use crate::auth::header::{self, AuthenticationError};
 use crate::config::RegexType;
@@ -30,6 +18,18 @@ use std::ops::Deref;
 use std::time::Duration;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
+
+mod comment;
+mod info;
+mod password_reset;
+mod pool;
+mod pool_category;
+mod post;
+mod tag;
+mod tag_category;
+mod upload;
+mod user;
+mod user_token;
 
 pub type ApiResult<T> = Result<T, Error>;
 

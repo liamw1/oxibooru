@@ -21,6 +21,7 @@ use image::{DynamicImage, ImageFormat, RgbaImage};
 use std::borrow::Cow;
 use std::io::Read;
 use swf::Color;
+use tracing::{error, warn};
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
@@ -65,7 +66,7 @@ pub fn decode_define_bits_jpeg(data: &[u8], alpha_data: Option<&[u8]>) -> Result
     let format = determine_jpeg_tag_format(data);
     if format != JpegTagFormat::Jpeg && alpha_data.is_some() {
         // Only DefineBitsJPEG3 with true JPEG data should have separate alpha data.
-        eprintln!("WARNING: DefineBitsJPEG contains non-JPEG data with alpha; probably incorrect");
+        warn!("DefineBitsJPEG contains non-JPEG data with alpha; probably incorrect");
     }
     match format {
         JpegTagFormat::Jpeg => decode_jpeg(data, alpha_data),
@@ -165,7 +166,7 @@ pub fn remove_invalid_jpeg_data(data: &[u8]) -> Cow<[u8]> {
     if data.ends_with(&[0xFF, EOI]) {
         data
     } else {
-        eprintln!("WARNING: JPEG is missing EOI marker and may not decode properly");
+        warn!("JPEG is missing EOI marker and may not decode properly");
         data.to_mut().extend_from_slice(&[0xFF, EOI]);
         data
     }
@@ -214,7 +215,7 @@ fn decode_jpeg(jpeg_data: &[u8], alpha_data: Option<&[u8]>) -> Result<DynamicIma
             }
         } else {
             // Size isn't correct; fallback to RGB?
-            eprintln!("ERROR: Size mismatch in DefineBitsJPEG3 alpha data");
+            error!("Size mismatch in DefineBitsJPEG3 alpha data");
         }
     }
 

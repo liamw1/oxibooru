@@ -1,8 +1,8 @@
-pub mod header;
-pub mod password;
-
 use crate::model::enums::UserRank;
 use thiserror::Error;
+
+pub mod header;
+pub mod password;
 
 #[derive(Debug, Error)]
 #[error(transparent)]

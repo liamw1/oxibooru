@@ -29,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::sync::LazyLock;
 use tokio::sync::Mutex as AsyncMutex;
+use tracing::info;
 use url::Url;
 
 pub fn routes() -> Router {
@@ -294,7 +295,6 @@ async fn reverse_search(
     params: ResourceParams,
     body: ReverseSearchBody,
 ) -> ApiResult<Json<ReverseSearchResponse>> {
-    let _timer = crate::time::Timer::new("reverse search");
     api::verify_privilege(client, config::privileges().post_reverse_search)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -303,6 +303,8 @@ async fn reverse_search(
     let content_properties = content.compute_properties().await?;
     db::get_connection()?
         .transaction(|conn| {
+            let _timer = crate::time::Timer::new("reverse search");
+
             // Check for exact match
             let exact_post = post::table
                 .filter(post::checksum.eq(content_properties.checksum))
@@ -322,7 +324,7 @@ async fn reverse_search(
                 conn,
                 signature::generate_indexes(&content_properties.signature),
             )?;
-            println!("Found {} similar signatures", similar_signature_candidates.len());
+            info!("Found {} similar signatures", similar_signature_candidates.len());
 
             // Filter candidates based on similarity score
             let content_signature_cache = signature::cache(&content_properties.signature);
@@ -361,7 +363,6 @@ async fn reverse_search_handler(
     Query(params): Query<ResourceParams>,
     body: JsonOrMultipart<ReverseSearchBody>,
 ) -> ApiResult<Json<ReverseSearchResponse>> {
-    let _timer = crate::time::Timer::new("reverse search");
     api::verify_privilege(client, config::privileges().post_reverse_search)?;
 
     match body {

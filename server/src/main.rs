@@ -1,5 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
+use tracing::error;
+
 mod admin;
 mod api;
 mod app;
@@ -22,17 +24,19 @@ mod update;
 
 #[tokio::main]
 async fn main() {
+    app::enable_tracing();
+
     // Connection is placed in scope so that it is dropped before starting server
     {
         let mut conn = match db::get_connection() {
             Ok(conn) => conn,
             Err(err) => {
-                eprintln!("Could not establish a connection to the database. Details:\n\n{err}");
+                error!("Could not establish a connection to the database. Details:\n\n{err}");
                 return;
             }
         };
         if let Err(err) = db::run_migrations(&mut conn) {
-            eprintln!("Failed to run migrations. Details:\n\n{err}");
+            error!("Failed to run migrations. Details:\n\n{err}");
             return;
         }
 
@@ -40,13 +44,11 @@ async fn main() {
             return admin::command_line_mode(&mut conn);
         }
         if let Err(err) = db::check_signature_version(&mut conn) {
-            eprintln!("An error occured while checking signature version: {err}");
+            error!("An error occured while checking signature version: {err}");
             return;
         }
     }
 
     filesystem::purge_temporary_uploads().unwrap();
-
-    println!("Oxibooru server running on {} threads", tokio::runtime::Handle::current().metrics().num_workers());
     app::run().await;
 }

@@ -7,6 +7,7 @@ use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use diesel::dsl::exists;
 use diesel::prelude::*;
+use tracing::error;
 
 /// This function prompts the user for input again to reset passwords for specific users.
 pub fn reset_password() -> ApiResult<()> {
@@ -26,11 +27,11 @@ pub fn reset_password() -> ApiResult<()> {
         match diesel::select(exists(user::table.filter(user::name.eq(user)))).get_result(&mut conn) {
             Ok(true) => (),
             Ok(false) => {
-                eprintln!("ERROR: No user with this username exists\n");
+                error!("No user with this username exists\n");
                 continue;
             }
             Err(err) => {
-                eprintln!("ERROR: Could not determine if user exists for reason: {err}\n");
+                error!("Could not determine if user exists for reason: {err}\n");
                 continue;
             }
         };
@@ -40,7 +41,7 @@ pub fn reset_password() -> ApiResult<()> {
             break;
         }
         if let Err(err) = api::verify_matches_regex(password, RegexType::Password) {
-            eprintln!("ERROR: {err}\n");
+            error!("{err}\n");
             continue;
         }
 
@@ -48,7 +49,7 @@ pub fn reset_password() -> ApiResult<()> {
         let hash = match password::hash_password(password, &salt) {
             Ok(hash) => hash,
             Err(err) => {
-                eprintln!("ERROR: Could not hash password for reason: {err}\n");
+                error!("Could not hash password for reason: {err}\n");
                 continue;
             }
         };
@@ -58,7 +59,7 @@ pub fn reset_password() -> ApiResult<()> {
             .set((user::password_hash.eq(&hash), user::password_salt.eq(salt.as_str())))
             .execute(&mut conn);
         if let Err(err) = update_result {
-            eprintln!("ERROR: Could not update password for reason: {err}\n");
+            error!("Could not update password for reason: {err}\n");
         } else {
             println!("Password reset successful.\n");
         }

@@ -242,7 +242,7 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
         Ok(parsed) => parsed,
         Err(_) => {
             panic!(
-                "ERROR: Could not parse config.toml.
+                "Could not parse config.toml.
        
        Please ensure that your config is formatted correctly, that each field name
        matches the fields in config.toml.dist exactly, and that each field value

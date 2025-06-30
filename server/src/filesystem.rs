@@ -8,6 +8,7 @@ use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
+use tracing::warn;
 use uuid::Uuid;
 
 /// Represents important data directories.
@@ -182,7 +183,7 @@ pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
     // Set appropriate permissions since we usually use this function to move
     // content to a permanent location
     if let Err(err) = set_permissions(to) {
-        eprintln!("ERROR: Failed to set permissions for {to:?} for reason: {err}");
+        warn!("Failed to set permissions for {to:?} for reason: {err}");
     }
     Ok(())
 }

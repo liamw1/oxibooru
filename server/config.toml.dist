@@ -21,9 +21,9 @@ pool_name_regex     = "^\\S+$"
 pool_category_regex = "^[^\\s%+#/]+$"
 
 # Directive for controlling log verbosity for different parts of the server
-# Valid log levels are trace, debug, info, warning, and error
+# Valid log levels are trace, debug, info, warn, and error
 # For additional options, see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
-log_filter = "server=debug,tower_http=debug,axum=trace"
+log_filter = "server=info,tower_http=debug,axum=trace"
 
 [thumbnails]
 avatar_width  = 300

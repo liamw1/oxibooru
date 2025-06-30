@@ -7,6 +7,7 @@ use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
 use image::DynamicImage;
 use std::collections::VecDeque;
 use std::sync::{LazyLock, Mutex, MutexGuard};
+use tracing::error;
 
 /// Stores properties of content that are costly to compute (usually require reading/decoding entire file).
 #[derive(Clone)]
@@ -86,7 +87,7 @@ fn get_cache_guard() -> MutexGuard<'static, RingCache> {
     match CONTENT_CACHE.lock() {
         Ok(guard) => guard,
         Err(err) => {
-            eprintln!("Content cache has been poisoned! Resetting...");
+            error!("Content cache has been poisoned! Resetting...");
             let mut guard = err.into_inner();
             guard.reset();
             guard

@@ -11,6 +11,7 @@ use diesel::dsl::exists;
 use diesel::prelude::*;
 use diesel::r2d2::PoolError;
 use rayon::prelude::*;
+use tracing::{error, warn};
 
 /// Recomputes posts checksums.
 /// Useful when the way we compute checksums changes.
@@ -80,7 +81,7 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) -> Result<(), PoolError> {
         let post_id = match user_input.parse::<i64>() {
             Ok(id) => id,
             Err(_) => {
-                eprintln!("ERROR: Post ID must be an integer\n");
+                error!("Post ID must be an integer\n");
                 continue;
             }
         };
@@ -88,7 +89,7 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) -> Result<(), PoolError> {
         let mime_type = match post::table.find(post_id).select(post::mime_type).first(conn) {
             Ok(mime_type) => mime_type,
             Err(err) => {
-                eprintln!("ERROR: Cannot retrieve MIME type for post {post_id} for reason: {err}\n");
+                error!("Cannot retrieve MIME type for post {post_id} for reason: {err}\n");
                 continue;
             }
         };
@@ -98,7 +99,7 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) -> Result<(), PoolError> {
         let data = match std::fs::read(&content_path) {
             Ok(data) => data,
             Err(err) => {
-                eprintln!("ERROR: Cannot read content for post {post_id} for reason: {err}\n");
+                error!("Cannot read content for post {post_id} for reason: {err}\n");
                 continue;
             }
         };
@@ -107,13 +108,13 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) -> Result<(), PoolError> {
         let thumbnail = match decode::representative_image(&file_contents, &content_path) {
             Ok(image) => thumbnail::create(&image, ThumbnailType::Post),
             Err(err) => {
-                eprintln!("ERROR: Cannot decode content for post {post_id} for reason: {err}\n");
+                error!("Cannot decode content for post {post_id} for reason: {err}\n");
                 continue;
             }
         };
 
         if let Err(err) = filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Generated) {
-            eprintln!("ERROR: Cannot save thumbnail for post {post_id} for reason: {err}\n");
+            error!("Cannot save thumbnail for post {post_id} for reason: {err}\n");
         } else {
             println!("Thumbnail regeneration successful.\n");
         }
@@ -131,7 +132,7 @@ pub fn recompute_checksum(
     let mime_type = match post::table.find(post_id).select(post::mime_type).first(&mut conn) {
         Ok(mime_type) => mime_type,
         Err(err) => {
-            eprintln!("ERROR: Cannot retrieve MIME type for post {post_id} for reason: {err}");
+            error!("Cannot retrieve MIME type for post {post_id} for reason: {err}");
             return Ok(());
         }
     };
@@ -140,7 +141,7 @@ pub fn recompute_checksum(
     let file_contents = match std::fs::read(&image_path) {
         Ok(contents) => contents,
         Err(err) => {
-            eprintln!("ERROR: Unable to compute checksum for post {post_id} for reason: {err}");
+            error!("Unable to compute checksum for post {post_id} for reason: {err}");
             return Ok(());
         }
     };
@@ -154,7 +155,7 @@ pub fn recompute_checksum(
         .first(&mut conn)
         .optional()?;
     if let Some(dup_id) = duplicate {
-        eprintln!("WARNING: Potential duplicate post {dup_id} for post {post_id}");
+        warn!("Potential duplicate post {dup_id} for post {post_id}");
         duplicate_count.increment();
         return Ok(());
     }
@@ -178,7 +179,7 @@ fn recompute_signature(post_id: i64, progress: &ProgressReporter) -> DatabaseRes
         Ok(Some(mime_type)) => mime_type,
         Ok(None) => return Ok(()), // Post must have been deleted after starting task, skip
         Err(err) => {
-            eprintln!("ERROR: Cannot retrieve MIME type for post {post_id} for reason: {err}");
+            error!("Cannot retrieve MIME type for post {post_id} for reason: {err}");
             return Ok(());
         }
     };
@@ -187,7 +188,7 @@ fn recompute_signature(post_id: i64, progress: &ProgressReporter) -> DatabaseRes
     let data = match std::fs::read(&image_path) {
         Ok(contents) => contents,
         Err(err) => {
-            eprintln!("ERROR: Unable to read file for post {post_id} for reason: {err}");
+            error!("Unable to read file for post {post_id} for reason: {err}");
             return Ok(());
         }
     };
@@ -196,7 +197,7 @@ fn recompute_signature(post_id: i64, progress: &ProgressReporter) -> DatabaseRes
     let image = match decode::representative_image(&file_contents, &image_path) {
         Ok(image) => image,
         Err(err) => {
-            eprintln!("ERROR: Unable to get representative image for post {post_id} for reason: {err}");
+            error!("Unable to get representative image for post {post_id} for reason: {err}");
             return Ok(());
         }
     };

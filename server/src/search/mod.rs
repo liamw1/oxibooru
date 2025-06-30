@@ -1,3 +1,8 @@
+use std::borrow::Cow;
+use std::collections::HashSet;
+use std::ops::{Not, Range};
+use std::str::FromStr;
+
 pub mod comment;
 mod macros;
 mod parse;
@@ -5,11 +10,6 @@ pub mod pool;
 pub mod post;
 pub mod tag;
 pub mod user;
-
-use std::borrow::Cow;
-use std::collections::HashSet;
-use std::ops::{Not, Range};
-use std::str::FromStr;
 
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]

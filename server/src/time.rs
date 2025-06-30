@@ -8,6 +8,7 @@ use std::ops::{Deref, DerefMut};
 use time::error::ComponentRange;
 use time::serde::rfc3339;
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime};
+use tracing::info;
 
 /// Used for timing things. Prints how long the object lived when dropped.
 pub struct Timer<'a> {
@@ -29,11 +30,11 @@ impl Drop for Timer<'_> {
         let elapsed_time = self.start.elapsed();
         let time_in_s = elapsed_time.as_secs_f64();
         match elapsed_time.as_nanos().ilog10() {
-            0..3 => println!("{} took {:.1}ns", self.name, time_in_s * 1e9),
-            3..6 => println!("{} took {:.3}μs", self.name, time_in_s * 1e6),
-            6..9 => println!("{} took {:.3}ms", self.name, time_in_s * 1e3),
-            9..12 => println!("{} took {:.3}s", self.name, time_in_s),
-            12.. => println!("{} took {:.0}s", self.name, time_in_s),
+            0..3 => info!("{} took {:.1}ns", self.name, time_in_s * 1e9),
+            3..6 => info!("{} took {:.3}μs", self.name, time_in_s * 1e6),
+            6..9 => info!("{} took {:.3}ms", self.name, time_in_s * 1e3),
+            9..12 => info!("{} took {:.3}s", self.name, time_in_s),
+            12.. => info!("{} took {:.0}s", self.name, time_in_s),
         }
     }
 }

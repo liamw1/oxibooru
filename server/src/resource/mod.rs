@@ -1,3 +1,10 @@
+use crate::string::SmallString;
+use diesel::{Identifiable, define_sql_function};
+use std::collections::HashMap;
+use std::ops::IndexMut;
+use std::rc::Rc;
+use std::str::FromStr;
+
 pub mod comment;
 pub mod pool;
 pub mod pool_category;
@@ -6,13 +13,6 @@ pub mod tag;
 pub mod tag_category;
 pub mod user;
 pub mod user_token;
-
-use crate::string::SmallString;
-use diesel::{Identifiable, define_sql_function};
-use std::collections::HashMap;
-use std::ops::IndexMut;
-use std::rc::Rc;
-use std::str::FromStr;
 
 // NOTE: The more complicated queries in this module rely on the behavior of diesel's
 // grouped_by function preserving the relative order between elements. This seems to be the

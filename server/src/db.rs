@@ -14,6 +14,7 @@ use std::error::Error;
 use std::num::ParseIntError;
 use std::sync::LazyLock;
 use std::time::Duration;
+use tracing::{error, info};
 
 pub type Connection = PooledConnection<ConnectionManager<PgConnection>>;
 pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
@@ -58,7 +59,7 @@ pub fn run_migrations(conn: &mut PgConnection) -> Result<(), Box<dyn Error + Sen
         database::reset_filenames()?;
     }
 
-    println!("Running pending migrations...");
+    info!("Running pending migrations...");
     conn.run_pending_migrations(MIGRATIONS)?;
     if cfg!(test) {
         return Ok(());
@@ -107,21 +108,21 @@ pub fn check_signature_version(conn: &mut PgConnection) -> QueryResult<()> {
     }
 
     let task: &str = AdminTask::RecomputePostSignatures.into();
-    println!(
-        "ERROR: Post signatures are out of date and need to be recomputed.
+    error!(
+        "Post signatures are out of date and need to be recomputed.
 
-       This can be done via the admin cli, which can be entered by passing
-       the --admin flag to the server executable. If you are deploying with
-       docker, you can do this by navigating to the source directory and
-       executing the following command:
-       
-          docker exec -it oxibooru-server-1 ./server --admin
-           
-       While in the admin cli, simply run the {task} task.
-       Once this task has started, this server instance will resume operations
-       while the signatures recompute in the background. Reverse search may be
-       inaccurate during this process, so you may wish to suspend post uploads
-       until the task completes."
+        This can be done via the admin cli, which can be entered by passing
+        the --admin flag to the server executable. If you are deploying with
+        docker, you can do this by navigating to the source directory and
+        executing the following command:
+        
+           docker exec -it oxibooru-server-1 ./server --admin
+            
+        While in the admin cli, simply run the {task} task.
+        Once this task has started, this server instance will resume operations
+        while the signatures recompute in the background. Reverse search may be
+        inaccurate during this process, so you may wish to suspend post uploads
+        until the task completes."
     );
     while get_current_version()? != SIGNATURE_VERSION {
         std::thread::sleep(Duration::from_secs(1));

@@ -7,6 +7,7 @@ use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::path::Path;
 use swf::Tag;
+use tracing::error;
 use video_rs::Decoder;
 use video_rs::ffmpeg::format::Pixel;
 use video_rs::ffmpeg::media::Type;
@@ -121,7 +122,7 @@ fn flash_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
         .filter_map(|image_result| match image_result {
             Ok(image) => Some(image),
             Err(err) => {
-                eprintln!("ERROR: Failure to decode flash image for reason: {err}");
+                error!("Failure to decode flash image for reason: {err}");
                 None
             }
         })

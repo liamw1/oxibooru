@@ -14,6 +14,7 @@ use crate::{admin, db, filesystem};
 use diesel::dsl::{count, max, sum};
 use diesel::prelude::*;
 use std::ffi::OsStr;
+use tracing::{error, warn};
 
 /// Renames post files and thumbnails.
 /// Useful when the content hash changes.
@@ -26,7 +27,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
             let post_id = match admin::get_post_id(&path) {
                 Some(id) => id,
                 None => {
-                    eprintln!("ERROR: Could not find post_id of {path:?}");
+                    error!("Could not find post_id of {path:?}");
                     continue;
                 }
             };
@@ -45,7 +46,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
             let post_id = match admin::get_post_id(&path) {
                 Some(id) => id,
                 None => {
-                    eprintln!("ERROR: Could not find post_id of {path:?}");
+                    error!("Could not find post_id of {path:?}");
                     continue;
                 }
             };
@@ -64,7 +65,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
             let post_id = match admin::get_post_id(&path) {
                 Some(id) => id,
                 None => {
-                    eprintln!("ERROR: Could not find post_id of {path:?}");
+                    error!("Could not find post_id of {path:?}");
                     continue;
                 }
             };
@@ -73,8 +74,8 @@ pub fn reset_filenames() -> std::io::Result<()> {
                 PostHash::new(post_id).content_path(mime_type)
             } else {
                 match path.extension().map(OsStr::to_string_lossy) {
-                    Some(extension) => eprintln!("WARNING: Post {post_id} has unsupported file extension {extension}"),
-                    None => eprintln!("WARNING: Post {post_id} has no file extension"),
+                    Some(extension) => warn!("Post {post_id} has unsupported file extension {extension}"),
+                    None => warn!("Post {post_id} has no file extension"),
                 };
 
                 let mut new_path = PostHash::new(post_id).content_path(MimeType::Png);
@@ -99,7 +100,7 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
             let username = match path.file_name() {
                 Some(name) => name.to_string_lossy(),
                 None => {
-                    eprintln!("ERROR: Unable to convert file name of {path:?} to string");
+                    error!("Unable to convert file name of {path:?} to string");
                     continue;
                 }
             };
@@ -119,7 +120,7 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
             let post_id = match admin::get_post_id(&path) {
                 Some(id) => id,
                 None => {
-                    eprintln!("ERROR: Could not find post_id of {path:?}");
+                    error!("Could not find post_id of {path:?}");
                     continue;
                 }
             };
@@ -139,7 +140,7 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
             let post_id = match admin::get_post_id(&path) {
                 Some(id) => id,
                 None => {
-                    eprintln!("ERROR: Could not find post_id of {path:?}");
+                    error!("Could not find post_id of {path:?}");
                     continue;
                 }
             };
@@ -358,7 +359,7 @@ pub fn reset_statistics() -> ApiResult<()> {
             let post_id = match admin::get_post_id(&path) {
                 Some(id) => id,
                 None => {
-                    eprintln!("ERROR: Could not find post_id of {path:?}");
+                    error!("Could not find post_id of {path:?}");
                     continue;
                 }
             };
