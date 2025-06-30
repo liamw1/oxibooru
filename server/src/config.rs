@@ -177,6 +177,7 @@ pub struct Config {
     pub pool_name_regex: Regex,
     #[serde(with = "serde_regex")]
     pub pool_category_regex: Regex,
+    pub log_filter: Option<String>,
     pub thumbnails: Thumbnails,
     pub smtp: Option<SmtpInfo>,
     pub public_info: PublicInfo,

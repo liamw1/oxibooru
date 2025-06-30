@@ -11,12 +11,13 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 pub async fn run() {
     // Enable tracing.
+    let log_filter = config::get()
+        .log_filter
+        .as_deref()
+        .unwrap_or("server=debug,tower_http=debug,axum=trace");
     tracing_subscriber::registry()
-        .with(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| format!("{}=debug,tower_http=debug,axum=trace", env!("CARGO_CRATE_NAME")).into()),
-        )
-        .with(tracing_subscriber::fmt::layer())
+        .with(EnvFilter::try_new(log_filter).unwrap())
+        .with(tracing_subscriber::fmt::layer().without_time())
         .init();
 
     let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes());

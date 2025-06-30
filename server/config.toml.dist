@@ -20,6 +20,11 @@ post_similarity_threshold = 0.55
 pool_name_regex     = "^\\S+$"
 pool_category_regex = "^[^\\s%+#/]+$"
 
+# Directive for controlling log verbosity for different parts of the server
+# Valid log levels are trace, debug, info, warning, and error
+# For additional options, see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
+log_filter = "server=debug,tower_http=debug,axum=trace"
+
 [thumbnails]
 avatar_width  = 300
 avatar_height = 300
@@ -110,14 +115,14 @@ tag_view                   = "anonymous"
 tag_merge                  = "moderator"
 tag_delete                 = "moderator"
 
-tag_category_create       = "moderator"
-tag_category_edit_name    = "moderator"
-tag_category_edit_color   = "moderator"
-tag_category_edit_order   = "moderator"
-tag_category_list         = "anonymous"
-tag_category_view         = "anonymous"
-tag_category_delete       = "moderator"
-tag_category_set_default  = "moderator"
+tag_category_create        = "moderator"
+tag_category_edit_name     = "moderator"
+tag_category_edit_color    = "moderator"
+tag_category_edit_order    = "moderator"
+tag_category_list          = "anonymous"
+tag_category_view          = "anonymous"
+tag_category_delete        = "moderator"
+tag_category_set_default   = "moderator"
 
 pool_create                = "regular"
 pool_edit_name             = "power"
@@ -129,13 +134,13 @@ pool_view                  = "anonymous"
 pool_merge                 = "moderator"
 pool_delete                = "moderator"
 
-pool_category_create      = "moderator"
-pool_category_edit_name   = "moderator"
-pool_category_edit_color  = "moderator"
-pool_category_list        = "anonymous"
-pool_category_view        = "anonymous"
-pool_category_delete      = "moderator"
-pool_category_set_default = "moderator"
+pool_category_create       = "moderator"
+pool_category_edit_name    = "moderator"
+pool_category_edit_color   = "moderator"
+pool_category_list         = "anonymous"
+pool_category_view         = "anonymous"
+pool_category_delete       = "moderator"
+pool_category_set_default  = "moderator"
 
 comment_create             = "regular"
 comment_delete_any         = "moderator"
