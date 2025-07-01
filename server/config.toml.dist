@@ -25,6 +25,11 @@ pool_category_regex = "^[^\\s%+#/]+$"
 # For additional options, see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
 log_filter = "server=info,tower_http=debug,axum=trace"
 
+# Enables/disables auto_explain in PostgreSQL
+# When enabled, causes SQL queries to be logged and explained automatically
+# This has a negative performance impact, but can be useful for debugging.
+auto_explain = false
+
 [thumbnails]
 avatar_width  = 300
 avatar_height = 300

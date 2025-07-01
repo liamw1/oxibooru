@@ -1,6 +1,7 @@
 use crate::{admin, api, config, db, filesystem};
 use axum::ServiceExt;
 use axum::extract::Request;
+use diesel::prelude::*;
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
 use tokio::signal::unix::SignalKind;
@@ -24,6 +25,16 @@ pub fn enable_tracing() {
 pub fn initialize() -> Result<(), String> {
     let mut conn = db::get_connection().map_err(|err| err.to_string())?;
     db::run_migrations(&mut conn).map_err(|err| err.to_string())?;
+
+    if config::get().auto_explain {
+        diesel::sql_query("LOAD 'auto_explain';")
+            .execute(&mut conn)
+            .and_then(|_| diesel::sql_query("SET SESSION auto_explain.log_min_duration = 0;").execute(&mut conn))
+            .and_then(|_| {
+                diesel::sql_query("SET SESSION auto_explain.log_parameter_max_length = 0;").execute(&mut conn)
+            })
+            .map_err(|err| err.to_string())?;
+    }
 
     if admin::enabled() {
         admin::command_line_mode(&mut conn);

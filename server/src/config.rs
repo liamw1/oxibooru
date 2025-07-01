@@ -178,6 +178,8 @@ pub struct Config {
     #[serde(with = "serde_regex")]
     pub pool_category_regex: Regex,
     pub log_filter: Option<String>,
+    #[serde(default)]
+    pub auto_explain: bool,
     pub thumbnails: Thumbnails,
     pub smtp: Option<SmtpInfo>,
     pub public_info: PublicInfo,
