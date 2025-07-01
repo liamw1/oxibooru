@@ -1,5 +1,5 @@
 use crate::string::SmallString;
-use diesel::{Identifiable, define_sql_function};
+use diesel::Identifiable;
 use std::collections::HashMap;
 use std::ops::IndexMut;
 use std::rc::Rc;
@@ -19,8 +19,6 @@ pub mod user_token;
 // case, and the most straightforward way of implementing the function would have this behavior,
 // but I don't see this as a guarantee anywhere in the documentation. If this changes, I'll need
 // to reimplement a similar function with this behavior.
-
-define_sql_function!(fn random() -> BigInt);
 
 pub trait BoolFill {
     fn filled(val: bool) -> Self;

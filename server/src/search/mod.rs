@@ -1,3 +1,5 @@
+use diesel::define_sql_function;
+use diesel::sql_types::SingleValue;
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::ops::{Not, Range};
@@ -99,6 +101,9 @@ where
         self.extra_args = Some(QueryArgs { offset, limit });
     }
 }
+
+define_sql_function!(fn random() -> BigInt);
+define_sql_function!(fn lower<T: SingleValue>(text: T) -> Text);
 
 #[derive(Clone, Copy)]
 struct QueryArgs {

@@ -16,7 +16,7 @@ pub fn split_once(text: &str, delimiter: char) -> Option<(&str, &str)> {
 /// Parses string-based `condition`.
 pub fn str_condition(condition: &str) -> StrCondition {
     if condition.contains('*') {
-        StrCondition::WildCard(unescape(condition).replace('*', "%").replace('_', "\\_"))
+        StrCondition::WildCard(unescape(condition).replace('*', "%").replace('_', "\\_").to_lowercase())
     } else {
         StrCondition::Regular(parse_regular_str(condition))
     }

@@ -47,8 +47,11 @@ macro_rules! apply_str_filter {
                 $crate::apply_condition!($query, $expression, $filter, condition)
             }
             $crate::search::StrCondition::WildCard(pattern) => match $filter.negated {
-                true => $query.filter($expression.not_like(pattern)),
-                false => $query.filter($expression.like(pattern)),
+                // Even though most text-based columns are CITEXT, we cast to lower
+                // here to get postgres to use TEXT index. We do this because CITEXT
+                // indexes do not work with patterns.
+                true => $query.filter($crate::search::lower($expression).not_like(pattern)),
+                false => $query.filter($crate::search::lower($expression).like(pattern)),
             },
         }
     };
@@ -72,10 +75,10 @@ macro_rules! apply_random_sort {
     ($query:expr, $criteria:expr) => {
         match $criteria.extra_args {
             Some(args) => $query
-                .order($crate::resource::random())
+                .order($crate::search::random())
                 .offset(args.offset)
                 .limit(args.limit),
-            None => $query.order($crate::resource::random()),
+            None => $query.order($crate::search::random()),
         }
     };
 }

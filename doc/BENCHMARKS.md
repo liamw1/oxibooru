@@ -28,9 +28,9 @@ These benchmarks were performed on the same database consisting of about 125k im
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       475 |
-    | oxibooru          |        93 |
+    | oxibooru          |        72 |
     
-    Oxibooru is over 5x faster here, but I admit this is a bit of an unrealistic comparison. This query doesn't perform any field selection, so by default all post fields will be retrieved. A decent amount of the codebase is dedicated to performing efficient queries for batch retrieval of resource field data, so it's no surprise that it outperforms Szurubooru here.
+    Oxibooru is over 6x faster here, but I admit this is a bit of an unrealistic comparison. This query doesn't perform any field selection, so by default all post fields will be retrieved. A decent amount of the codebase is dedicated to performing efficient queries for batch retrieval of resource field data, so it's no surprise that it outperforms Szurubooru here.
 
 - Here's a more realistic case: the query the client actually performs when viewing the first page of posts with no sort tokens or filters.
 
@@ -41,9 +41,9 @@ These benchmarks were performed on the same database consisting of about 125k im
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |        55 |
-    | oxibooru          |        88 |
+    | oxibooru          |        60 |
 
-    Now Oxibooru is about 50% _slower_ than Szurubooru. I've mostly spent time optimizing the more complex queries, as simple queries like this are already fast. I know this query could be made at least 2x faster with some conditional logic, but I haven't gotten around to adding it.
+    Now Oxibooru is about as fast as Szurubooru, maybe even slightly slower. I've mostly spent time optimizing the more complex queries, as simple queries like this are already fast. I know this query could be made at least 2x faster with some conditional logic, but I haven't gotten around to adding it.
 
 - Let's now add a negative filter for unsafe posts.
 
@@ -61,9 +61,9 @@ These benchmarks were performed on the same database consisting of about 125k im
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |      2490 |
-    | oxibooru          |       157 |
+    | oxibooru          |       125 |
     
-    Here Oxibooru is over 15x faster than Szurubooru! One big thing that helps Oxibooru go fast here is that it keeps track of usage counts for each tag with triggers rather than counting them every time. This does come at a cost (slower updates), but I think this trade-off is worth it for read-heavy applications like this.
+    Here Oxibooru is almost 20x faster than Szurubooru! One big thing that helps Oxibooru go fast here is that it keeps track of usage counts for each tag with triggers rather than counting them every time. This does come at a cost (slower updates), but I think this trade-off is worth it for read-heavy applications like this.
     
 - One very common use case is to search for posts with a particular tag. Let's search for all posts with the tag `tagme`.
 
@@ -71,9 +71,9 @@ These benchmarks were performed on the same database consisting of about 125k im
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       158 |
-    | oxibooru          |       140 |
+    | oxibooru          |       122 |
     
-    Szurubooru and Oxibooru perform similarly here.
+    Szurubooru and Oxibooru perform fairly similarly here.
     
 - Onto a more challenging query: sorting by tag count.
 
@@ -115,7 +115,7 @@ These benchmarks were performed on the same database consisting of about 125k im
     | Database          | Time (ms) |
     | ----------------- | --------- |
     | szurubooru        |       705 |
-    | oxibooru          |        61 |
+    | oxibooru          |        38 |
     
     This is an area where a speedup is very noticeable. You get much faster autocomplete feedback when using the search bar in Oxibooru.
     
