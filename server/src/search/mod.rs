@@ -178,7 +178,7 @@ struct ParsedSort<T> {
 
 /// A cache that stores results from what would otherwise be subqueries in preparation for a
 /// search query. This is used in place of subqueries because PostgreSQL does a poor job of
-/// optimizing queries with contain multiple subquery filters.
+/// optimizing queries that contain multiple subquery filters.
 struct QueryCache {
     matches: Option<HashSet<i64>>,
     nonmatches: Option<HashSet<i64>>,
