@@ -4,7 +4,10 @@ use crate::schema::{
     database_statistics, tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion,
 };
 use crate::search::{Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter};
-use crate::{api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
+use crate::{
+    api, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
+    apply_time_filter,
+};
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -147,6 +150,7 @@ fn apply_name_filter<'a>(
 ) -> ApiResult<BoxedQuery<'a>> {
     if let Some(cache) = cache {
         let names = tag_name::table.select(tag_name::tag_id).into_boxed();
+        let names = apply_distinct_if_multivalued!(names, filter);
         let filtered_tags = apply_str_filter!(names, tag_name::name, filter.unnegated());
         let tag_ids: Vec<i64> = filtered_tags.load(conn)?;
         cache.update(tag_ids, filter.negated);
@@ -165,6 +169,7 @@ fn apply_implies_filter<'a>(
             .select(tag_implication::parent_id)
             .inner_join(tag_name::table.on(tag_implication::child_id.eq(tag_name::tag_id)))
             .into_boxed();
+        let implications = apply_distinct_if_multivalued!(implications, filter);
         let filtered_tags = apply_str_filter!(implications, tag_name::name, filter.unnegated());
         let tag_ids: Vec<i64> = filtered_tags.load(conn)?;
         cache.update(tag_ids, filter.negated);
@@ -183,6 +188,7 @@ fn apply_suggests_filter<'a>(
             .select(tag_suggestion::parent_id)
             .inner_join(tag_name::table.on(tag_suggestion::child_id.eq(tag_name::tag_id)))
             .into_boxed();
+        let suggestions = apply_distinct_if_multivalued!(suggestions, filter);
         let filtered_tags = apply_str_filter!(suggestions, tag_name::name, filter.unnegated());
         let tag_ids: Vec<i64> = filtered_tags.load(conn)?;
         cache.update(tag_ids, filter.negated);

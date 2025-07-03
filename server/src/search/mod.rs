@@ -167,6 +167,11 @@ impl<T> UnparsedFilter<'_, T> {
             negated: false,
         }
     }
+
+    // Checks if condition represents multiple values (i.e. a range or wildcard pattern).
+    fn is_multivalued(self) -> bool {
+        self.condition.contains('*') || self.condition.contains("..")
+    }
 }
 
 /// Represents a parsed ordering on a column or expression.
