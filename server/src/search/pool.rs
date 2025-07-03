@@ -2,7 +2,10 @@ use crate::api::ApiResult;
 use crate::model::pool::PoolName;
 use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_statistics};
 use crate::search::{Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter};
-use crate::{api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
+use crate::{
+    api, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
+    apply_time_filter,
+};
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -135,6 +138,7 @@ fn apply_name_filter<'a>(
 ) -> ApiResult<BoxedQuery<'a>> {
     if let Some(cache) = cache {
         let names = pool_name::table.select(pool_name::pool_id).into_boxed();
+        let names = apply_distinct_if_multivalued!(names, filter);
         let filtered_pools = apply_str_filter!(names, pool_name::name, filter.unnegated());
         let pool_ids: Vec<i64> = filtered_pools.load(conn)?;
         cache.update(pool_ids, filter.negated);

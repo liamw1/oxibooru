@@ -57,6 +57,18 @@ macro_rules! apply_str_filter {
     };
 }
 
+/// Applies DISTINCT to the given `query` if the given `filter` is multivalued
+/// Intended as an optimization for some range/wildcard queries.
+#[macro_export]
+macro_rules! apply_distinct_if_multivalued {
+    ($query:expr, $filter:expr) => {
+        match $filter.is_multivalued() {
+            true => $query.distinct(),
+            false => $query,
+        }
+    };
+}
+
 /// Applies an ordering to the given `query`.
 /// Order is either ASC or DESC.
 #[macro_export]

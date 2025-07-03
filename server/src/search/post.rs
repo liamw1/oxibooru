@@ -7,7 +7,10 @@ use crate::schema::{
     post_tag, tag_name, user,
 };
 use crate::search::{Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter, parse};
-use crate::{api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
+use crate::{
+    api, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
+    apply_time_filter,
+};
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
@@ -297,6 +300,7 @@ fn apply_tag_filter<'a>(
             .select(post_tag::post_id)
             .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
             .into_boxed();
+        let post_tags = apply_distinct_if_multivalued!(post_tags, filter);
         let filtered_posts = apply_str_filter!(post_tags, tag_name::name, filter.unnegated());
         let post_ids: Vec<i64> = filtered_posts.load(conn)?;
         cache.update(post_ids, filter.negated);
@@ -312,6 +316,7 @@ fn apply_pool_filter<'a>(
 ) -> ApiResult<BoxedQuery<'a>> {
     if let Some(cache) = cache {
         let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
+        let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
         let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
         let post_ids: Vec<i64> = filtered_posts.load(conn)?;
         cache.update(post_ids, filter.negated);
@@ -330,6 +335,7 @@ fn apply_favorite_filter<'a>(
             .select(post_favorite::post_id)
             .inner_join(user::table)
             .into_boxed();
+        let favorites = apply_distinct_if_multivalued!(favorites, filter);
         let filtered_posts = apply_str_filter!(favorites, user::name, filter.unnegated());
         let post_ids: Vec<i64> = filtered_posts.load(conn)?;
         cache.update(post_ids, filter.negated);
@@ -346,6 +352,7 @@ fn apply_comment_filter<'a>(
     if let Some(cache) = cache {
         let comments = comment::table
             .select(comment::post_id)
+            .distinct()
             .inner_join(user::table)
             .into_boxed();
         let filtered_posts = apply_str_filter!(comments, user::name, filter.unnegated());
@@ -362,7 +369,7 @@ fn apply_note_text_filter<'a>(
     cache: Option<&mut QueryCache>,
 ) -> ApiResult<BoxedQuery<'a>> {
     if let Some(cache) = cache {
-        let post_notes = post_note::table.select(post_note::post_id).into_boxed();
+        let post_notes = post_note::table.select(post_note::post_id).distinct().into_boxed();
         let filtered_posts = apply_str_filter!(post_notes, post_note::text, filter.unnegated());
         let post_ids: Vec<i64> = filtered_posts.load(conn)?;
         cache.update(post_ids, filter.negated);
@@ -377,7 +384,7 @@ fn apply_comment_time_filter<'a>(
     cache: Option<&mut QueryCache>,
 ) -> ApiResult<BoxedQuery<'a>> {
     if let Some(cache) = cache {
-        let comments = comment::table.select(comment::post_id).into_boxed();
+        let comments = comment::table.select(comment::post_id).distinct().into_boxed();
         let filtered_posts = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
         let post_ids: Vec<i64> = filtered_posts.load(conn)?;
         cache.update(post_ids, filter.negated);
@@ -392,7 +399,10 @@ fn apply_favorite_time_filter<'a>(
     cache: Option<&mut QueryCache>,
 ) -> ApiResult<BoxedQuery<'a>> {
     if let Some(cache) = cache {
-        let post_favorites = post_favorite::table.select(post_favorite::post_id).into_boxed();
+        let post_favorites = post_favorite::table
+            .select(post_favorite::post_id)
+            .distinct()
+            .into_boxed();
         let filtered_posts = apply_time_filter!(post_favorites, post_favorite::time, filter.unnegated())?;
         let post_ids: Vec<i64> = filtered_posts.load(conn)?;
         cache.update(post_ids, filter.negated);
@@ -407,7 +417,10 @@ fn apply_feature_time_filter<'a>(
     cache: Option<&mut QueryCache>,
 ) -> ApiResult<BoxedQuery<'a>> {
     if let Some(cache) = cache {
-        let post_features = post_feature::table.select(post_feature::post_id).into_boxed();
+        let post_features = post_feature::table
+            .select(post_feature::post_id)
+            .distinct()
+            .into_boxed();
         let filtered_posts = apply_time_filter!(post_features, post_feature::time, filter.unnegated())?;
         let post_ids: Vec<i64> = filtered_posts.load(conn)?;
         cache.update(post_ids, filter.negated);
