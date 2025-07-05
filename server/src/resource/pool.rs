@@ -70,30 +70,15 @@ impl PoolInfo {
     }
 
     pub fn new_batch(conn: &mut PgConnection, pools: Vec<Pool>, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
+        let mut categories = resource::retrieve(fields[Field::Category], || get_categories(conn, &pools))?;
+        let mut names = resource::retrieve(fields[Field::Names], || get_names(conn, &pools))?;
+        let mut posts = resource::retrieve(fields[Field::Posts], || get_posts(conn, &pools))?;
+        let mut post_counts = resource::retrieve(fields[Field::PostCount], || get_post_counts(conn, &pools))?;
+
         let batch_size = pools.len();
-
-        let mut categories = fields[Field::Category]
-            .then(|| get_categories(conn, &pools))
-            .transpose()?
-            .unwrap_or_default();
-        resource::check_batch_results(categories.len(), batch_size);
-
-        let mut names = fields[Field::Names]
-            .then(|| get_names(conn, &pools))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(names.len(), batch_size);
-
-        let mut posts = fields[Field::Posts]
-            .then(|| get_posts(conn, &pools))
-            .transpose()?
-            .unwrap_or_default();
+        resource::check_batch_results(categories.len(), batch_size);
         resource::check_batch_results(posts.len(), batch_size);
-
-        let mut post_counts = fields[Field::PostCount]
-            .then(|| get_post_counts(conn, &pools))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(post_counts.len(), batch_size);
 
         let results = pools

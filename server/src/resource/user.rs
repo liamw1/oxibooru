@@ -4,7 +4,7 @@ use crate::model::enums::{AvatarStyle, Score, UserRank};
 use crate::model::post::PostScore;
 use crate::model::user::User;
 use crate::resource::{self, BoolFill};
-use crate::schema::{post_score, user, user_statistics};
+use crate::schema::{post_score, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::dsl::count_star;
@@ -97,36 +97,26 @@ impl UserInfo {
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Vec<Self>> {
+        use crate::schema::user_statistics::dsl::*;
+
+        let mut comment_counts =
+            resource::retrieve(fields[Field::CommentCount], || get_user_stats!(conn, &users, comment_count))?;
+        let mut upload_counts =
+            resource::retrieve(fields[Field::UploadedPostCount], || get_user_stats!(conn, &users, upload_count))?;
+        let mut like_counts = resource::retrieve(fields[Field::LikedPostCount], || {
+            get_post_score_counts(conn, &users, Score::Like, visibility)
+        })?;
+        let mut dislike_counts = resource::retrieve(fields[Field::DislikedPostCount], || {
+            get_post_score_counts(conn, &users, Score::Dislike, visibility)
+        })?;
+        let mut favorite_counts =
+            resource::retrieve(fields[Field::FavoritePostCount], || get_user_stats!(conn, &users, favorite_count))?;
+
         let batch_size = users.len();
-
-        let mut comment_counts = fields[Field::CommentCount]
-            .then(|| get_user_stats!(conn, &users, user_statistics::comment_count))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(comment_counts.len(), batch_size);
-
-        let mut upload_counts = fields[Field::UploadedPostCount]
-            .then(|| get_user_stats!(conn, &users, user_statistics::upload_count))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(upload_counts.len(), batch_size);
-
-        let mut like_counts = fields[Field::LikedPostCount]
-            .then(|| get_post_score_counts(conn, &users, Score::Like, visibility))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(like_counts.len(), batch_size);
-
-        let mut dislike_counts = fields[Field::DislikedPostCount]
-            .then(|| get_post_score_counts(conn, &users, Score::Dislike, visibility))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(dislike_counts.len(), batch_size);
-
-        let mut favorite_counts = fields[Field::FavoritePostCount]
-            .then(|| get_user_stats!(conn, &users, user_statistics::favorite_count))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(favorite_counts.len(), batch_size);
 
         let results = users
@@ -202,9 +192,9 @@ fn get_post_score_counts(
 macro_rules! get_user_stats {
     ($conn:expr, $users:expr, $column:expr) => {{
         let user_ids: Vec<_> = $users.iter().map(Identifiable::id).copied().collect();
-        user_statistics::table
-            .select((user_statistics::user_id, $column))
-            .filter(user_statistics::user_id.eq_any(&user_ids))
+        $crate::schema::user_statistics::table
+            .select(($crate::schema::user_statistics::user_id, $column))
+            .filter($crate::schema::user_statistics::user_id.eq_any(&user_ids))
             .load($conn)
             .map(|user_stats| {
                 resource::order_transformed_as(user_stats, &user_ids, |&(id, _)| id)

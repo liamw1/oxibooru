@@ -269,7 +269,7 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(
     // Cutoff array may need to be padded if there are not enough filtered values to split into LUMINANCE_LEVELS chunks
     let pad_amount = LUMINANCE_LEVELS.saturating_sub(filtered_values.len());
     let chunks = filtered_values.chunks(chunk_size).map(|chunk| chunk.last().copied());
-    array_from_iter(std::iter::repeat(None).take(pad_amount).chain(chunks))
+    array_from_iter(std::iter::repeat_n(None, pad_amount).chain(chunks))
 }
 
 /// The final stage of image signature generation. Maps each value in `differences` to the

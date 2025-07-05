@@ -1,6 +1,6 @@
 ARG DEBIAN_VERSION=12.8
-ARG RUST_VERSION=1.85
-ARG CHEF_VERSION=0.1.71
+ARG RUST_VERSION=1.88
+ARG CHEF_VERSION=0.1.72
 
 ############################## Planning Phase ##############################
 FROM lukemathwalker/cargo-chef:${CHEF_VERSION}-rust-${RUST_VERSION}-slim-bookworm AS chef
@@ -61,8 +61,8 @@ EXPOSE ${PORT}
 VOLUME ["/data/"]
 
 LABEL \
-    maintainer="" \
-    org.opencontainers.image.title="oxibooru/server" \
-    org.opencontainers.image.url="https://github.com/liamw1/oxibooru" \
-    org.opencontainers.image.source="https://github.com/liamw1/oxibooru" \
-    org.opencontainers.image.licenses="GPL-3.0"
+  maintainer="" \
+  org.opencontainers.image.title="oxibooru/server" \
+  org.opencontainers.image.url="https://github.com/liamw1/oxibooru" \
+  org.opencontainers.image.source="https://github.com/liamw1/oxibooru" \
+  org.opencontainers.image.licenses="GPL-3.0"
