@@ -64,25 +64,15 @@ impl CommentInfo {
         comments: Vec<Comment>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
+        let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, &comments))?;
+        let mut scores = resource::retrieve(fields[Field::Score], || get_scores(conn, &comments))?;
+        let mut client_scores =
+            resource::retrieve(fields[Field::OwnScore], || get_client_scores(conn, client, &comments))?;
+
         let batch_size = comments.len();
-
-        let mut owners = fields[Field::User]
-            .then(|| get_owners(conn, &comments))
-            .transpose()?
-            .unwrap_or_default();
-        resource::check_batch_results(owners.len(), batch_size);
-
-        let mut scores = fields[Field::Score]
-            .then(|| get_scores(conn, &comments))
-            .transpose()?
-            .unwrap_or_default();
-        resource::check_batch_results(scores.len(), batch_size);
-
-        let mut client_scores = fields[Field::OwnScore]
-            .then(|| get_client_scores(conn, client, &comments))
-            .transpose()?
-            .unwrap_or_default();
-        resource::check_batch_results(client_scores.len(), batch_size);
+        resource::check_batch_results(batch_size, owners.len());
+        resource::check_batch_results(batch_size, scores.len());
+        resource::check_batch_results(batch_size, client_scores.len());
 
         let results = comments
             .into_iter()

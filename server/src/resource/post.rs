@@ -13,7 +13,7 @@ use crate::resource::user::MicroUser;
 use crate::resource::{self, BoolFill};
 use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
-    post_relation, post_score, post_statistics, tag, tag_category, tag_name, tag_statistics, user,
+    post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
 };
 use crate::string::SmallString;
 use crate::time::DateTime;
@@ -169,118 +169,61 @@ impl PostInfo {
         posts: Vec<Post>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
+        use crate::schema::post_statistics::dsl::*;
+        use diesel::result::Error as QueryError;
+
+        let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, &posts))?;
+        let mut content_urls =
+            resource::retrieve(fields[Field::ContentUrl], || Ok::<_, QueryError>(get_content_urls(&posts)))?;
+        let mut thumbnail_urls =
+            resource::retrieve(fields[Field::ThumbnailUrl], || Ok::<_, QueryError>(get_thumbnail_urls(&posts)))?;
+        let mut tags = resource::retrieve(fields[Field::Tags], || get_tags(conn, &posts))?;
+        let mut comments = resource::retrieve(fields[Field::Comments], || get_comments(conn, client, &posts))?;
+        let mut relations = resource::retrieve(fields[Field::Relations], || get_relations(conn, &posts))?;
+        let mut pools = resource::retrieve(fields[Field::Pools], || get_pools(conn, &posts))?;
+        let mut notes = resource::retrieve(fields[Field::Notes], || get_notes(conn, &posts))?;
+        let mut scores = resource::retrieve(fields[Field::Score], || get_post_stats!(conn, &posts, score, i64))?;
+        let mut client_scores =
+            resource::retrieve(fields[Field::OwnScore], || get_client_scores(conn, client, &posts))?;
+        let mut client_favorites =
+            resource::retrieve(fields[Field::OwnFavorite], || get_client_favorites(conn, client, &posts))?;
+        let mut tag_counts =
+            resource::retrieve(fields[Field::TagCount], || get_post_stats!(conn, &posts, tag_count, i64))?;
+        let mut comment_counts =
+            resource::retrieve(fields[Field::CommentCount], || get_post_stats!(conn, &posts, comment_count, i64))?;
+        let mut relation_counts =
+            resource::retrieve(fields[Field::RelationCount], || get_post_stats!(conn, &posts, relation_count, i64))?;
+        let mut note_counts =
+            resource::retrieve(fields[Field::NoteCount], || get_post_stats!(conn, &posts, note_count, i64))?;
+        let mut favorite_counts =
+            resource::retrieve(fields[Field::FavoriteCount], || get_post_stats!(conn, &posts, favorite_count, i64))?;
+        let mut feature_counts =
+            resource::retrieve(fields[Field::FeatureCount], || get_post_stats!(conn, &posts, feature_count, i64))?;
+        let mut last_feature_times = resource::retrieve(fields[Field::LastFeatureTime], || {
+            get_post_stats!(conn, &posts, last_feature_time, Option<DateTime>)
+        })?;
+        let mut users_who_favorited =
+            resource::retrieve(fields[Field::FavoritedBy], || get_users_who_favorited(conn, &posts))?;
+
         let batch_size = posts.len();
-
-        let mut owners = fields[Field::User]
-            .then(|| get_owners(conn, &posts))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(owners.len(), batch_size);
-
-        let mut content_urls = fields[Field::ContentUrl]
-            .then(|| get_content_urls(&posts))
-            .unwrap_or_default();
         resource::check_batch_results(content_urls.len(), batch_size);
-
-        let mut thumbnail_urls = fields[Field::ThumbnailUrl]
-            .then(|| get_thumbnail_urls(&posts))
-            .unwrap_or_default();
         resource::check_batch_results(thumbnail_urls.len(), batch_size);
-
-        let mut tags = fields[Field::Tags]
-            .then(|| get_tags(conn, &posts))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(tags.len(), batch_size);
-
-        let mut comments = fields[Field::Comments]
-            .then(|| get_comments(conn, client, &posts))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(comments.len(), batch_size);
-
-        let mut relations = fields[Field::Relations]
-            .then(|| get_relations(conn, &posts))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(relations.len(), batch_size);
-
-        let mut pools = fields[Field::Pools]
-            .then(|| get_pools(conn, &posts))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(pools.len(), batch_size);
-
-        let mut notes = fields[Field::Notes]
-            .then(|| get_notes(conn, &posts))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(notes.len(), batch_size);
-
-        let mut scores = fields[Field::Score]
-            .then(|| get_post_stats!(conn, &posts, post_statistics::score, i64))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(scores.len(), batch_size);
-
-        let mut client_scores = fields[Field::OwnScore]
-            .then(|| get_client_scores(conn, client, &posts))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(client_scores.len(), batch_size);
-
-        let mut client_favorites = fields[Field::OwnFavorite]
-            .then(|| get_client_favorites(conn, client, &posts))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(client_favorites.len(), batch_size);
-
-        let mut tag_counts = fields[Field::TagCount]
-            .then(|| get_post_stats!(conn, &posts, post_statistics::tag_count, i64))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(tag_counts.len(), batch_size);
-
-        let mut comment_counts = fields[Field::CommentCount]
-            .then(|| get_post_stats!(conn, &posts, post_statistics::comment_count, i64))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(comment_counts.len(), batch_size);
-
-        let mut relation_counts = fields[Field::RelationCount]
-            .then(|| get_post_stats!(conn, &posts, post_statistics::relation_count, i64))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(relation_counts.len(), batch_size);
-
-        let mut note_counts = fields[Field::NoteCount]
-            .then(|| get_post_stats!(conn, &posts, post_statistics::note_count, i64))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(note_counts.len(), batch_size);
-
-        let mut favorite_counts = fields[Field::FavoriteCount]
-            .then(|| get_post_stats!(conn, &posts, post_statistics::favorite_count, i64))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(favorite_counts.len(), batch_size);
-
-        let mut feature_counts = fields[Field::FeatureCount]
-            .then(|| get_post_stats!(conn, &posts, post_statistics::feature_count, i64))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(feature_counts.len(), batch_size);
-
-        let mut last_feature_times = fields[Field::LastFeatureTime]
-            .then(|| get_post_stats!(conn, &posts, post_statistics::last_feature_time, Option<DateTime>))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(last_feature_times.len(), batch_size);
-
-        let mut users_who_favorited = fields[Field::FavoritedBy]
-            .then(|| get_users_who_favorited(conn, &posts))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(users_who_favorited.len(), batch_size);
 
         let results = posts
@@ -595,9 +538,9 @@ fn get_users_who_favorited(conn: &mut PgConnection, posts: &[Post]) -> QueryResu
 macro_rules! get_post_stats {
     ($conn:expr, $posts:expr, $column:expr, $return_type:ty) => {{
         let post_ids: Vec<_> = $posts.iter().map(Identifiable::id).copied().collect();
-        post_statistics::table
-            .select((post_statistics::post_id, $column))
-            .filter(post_statistics::post_id.eq_any(&post_ids))
+        $crate::schema::post_statistics::table
+            .select(($crate::schema::post_statistics::post_id, $column))
+            .filter($crate::schema::post_statistics::post_id.eq_any(&post_ids))
             .load($conn)
             .map(|post_stats| {
                 resource::order_transformed_as(post_stats, &post_ids, |&(id, _)| id)

@@ -76,7 +76,7 @@ pub fn run_migrations(conn: &mut PgConnection) -> Result<(), Box<dyn Error + Sen
     if migration_range.contains(&13) {
         database::reset_thumbnail_sizes(conn)?;
     }
-    return Ok(());
+    Ok(())
 }
 
 /// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DATABASE`

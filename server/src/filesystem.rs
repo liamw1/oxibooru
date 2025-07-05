@@ -70,10 +70,10 @@ pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResul
 /// Deletes custom avatar for user with name `username` from disk.
 pub fn delete_custom_avatar(username: &str) -> std::io::Result<()> {
     let custom_avatar_path = hash::custom_avatar_path(username);
-    custom_avatar_path
-        .try_exists()?
-        .then(|| std::fs::remove_file(&custom_avatar_path))
-        .unwrap_or(Ok(()))
+    match custom_avatar_path.try_exists()? {
+        true => std::fs::remove_file(&custom_avatar_path),
+        false => Ok(()),
+    }
 }
 
 /// Saves `post` `thumbnail` to disk. Can be custom or automatically generated.
@@ -109,10 +109,10 @@ pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailCategory)
         ThumbnailCategory::Generated => std::fs::remove_file(post.generated_thumbnail_path()),
         ThumbnailCategory::Custom => {
             let custom_thumbnail_path = post.custom_thumbnail_path();
-            custom_thumbnail_path
-                .try_exists()?
-                .then(|| std::fs::remove_file(&custom_thumbnail_path))
-                .unwrap_or(Ok(()))
+            match post.custom_thumbnail_path().try_exists()? {
+                true => std::fs::remove_file(&custom_thumbnail_path),
+                false => Ok(()),
+            }
         }
     }
 }

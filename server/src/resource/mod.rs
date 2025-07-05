@@ -45,6 +45,16 @@ fn check_batch_results(batch_size: usize, post_count: usize) {
     assert!(batch_size == 0 || batch_size == post_count);
 }
 
+fn retrieve<T, E, F>(enabled: bool, mut function: F) -> Result<Vec<T>, E>
+where
+    F: FnMut() -> Result<Vec<T>, E>,
+{
+    match enabled {
+        true => function(),
+        false => Ok(Vec::new()),
+    }
+}
+
 /// For a given set of resources, orders them so that their primary keys are in the same order
 /// as the order slice, which should be the same length as values.
 ///

@@ -61,36 +61,17 @@ impl TagInfo {
     }
 
     pub fn new_batch(conn: &mut PgConnection, tags: Vec<Tag>, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
+        let mut categories = resource::retrieve(fields[Field::Category], || get_categories(conn, &tags))?;
+        let mut names = resource::retrieve(fields[Field::Names], || get_names(conn, &tags))?;
+        let mut implications = resource::retrieve(fields[Field::Implications], || get_implications(conn, &tags))?;
+        let mut suggestions = resource::retrieve(fields[Field::Suggestions], || get_suggestions(conn, &tags))?;
+        let mut usages = resource::retrieve(fields[Field::Usages], || get_usages(conn, &tags))?;
+
         let batch_size = tags.len();
-
-        let mut categories = fields[Field::Category]
-            .then(|| get_categories(conn, &tags))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(categories.len(), batch_size);
-
-        let mut names = fields[Field::Names]
-            .then(|| get_names(conn, &tags))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(names.len(), batch_size);
-
-        let mut implications = fields[Field::Implications]
-            .then(|| get_implications(conn, &tags))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(implications.len(), batch_size);
-
-        let mut suggestions = fields[Field::Suggestions]
-            .then(|| get_suggestions(conn, &tags))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(suggestions.len(), batch_size);
-
-        let mut usages = fields[Field::Usages]
-            .then(|| get_usages(conn, &tags))
-            .transpose()?
-            .unwrap_or_default();
         resource::check_batch_results(usages.len(), batch_size);
 
         let results = tags

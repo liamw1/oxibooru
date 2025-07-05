@@ -169,7 +169,7 @@ impl<T> UnparsedFilter<'_, T> {
     }
 
     // Checks if condition represents multiple values (i.e. a range or wildcard pattern).
-    fn is_multivalued(self) -> bool {
+    fn is_multivalued(&self) -> bool {
         self.condition.contains('*') || self.condition.contains("..")
     }
 }
