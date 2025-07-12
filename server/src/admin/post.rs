@@ -1,4 +1,4 @@
-use crate::admin::{DatabaseResult, PRINT_INTERVAL, ProgressReporter};
+use crate::admin::{DatabaseResult, LoopState, PRINT_INTERVAL, ProgressReporter};
 use crate::content::hash::PostHash;
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
@@ -9,7 +9,6 @@ use crate::time::Timer;
 use crate::{admin, db, filesystem};
 use diesel::dsl::exists;
 use diesel::prelude::*;
-use diesel::r2d2::PoolError;
 use rayon::prelude::*;
 use tracing::{error, warn};
 
@@ -69,57 +68,38 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> DatabaseResult<()> {
 }
 
 /// This functions prompts the user for input again to regenerate specific thumbnails.
-pub fn regenerate_thumbnail(conn: &mut PgConnection) -> Result<(), PoolError> {
-    let mut buffer = String::new();
-    loop {
+pub fn regenerate_thumbnail(conn: &mut PgConnection) {
+    admin::user_input_loop(conn, |conn: &mut PgConnection, buffer: &mut String| {
         println!("Please enter the post ID you would like to generate a thumbnail for. Enter \"done\" when finished.");
-        let user_input = admin::prompt_user_input("Post ID", &mut buffer);
-        if user_input == "done" {
-            break;
+        let user_input = admin::prompt_user_input("Post ID", buffer);
+        if let Ok(state) = LoopState::try_from(user_input) {
+            return Ok(state);
         }
 
-        let post_id = match user_input.parse::<i64>() {
-            Ok(id) => id,
-            Err(_) => {
-                error!("Post ID must be an integer\n");
-                continue;
-            }
-        };
-
-        let mime_type = match post::table.find(post_id).select(post::mime_type).first(conn) {
-            Ok(mime_type) => mime_type,
-            Err(err) => {
-                error!("Cannot retrieve MIME type for post {post_id} for reason: {err}\n");
-                continue;
-            }
-        };
+        let post_id = user_input
+            .parse::<i64>()
+            .map_err(|_| String::from("Post ID must be an integer"))?;
+        let mime_type = post::table
+            .find(post_id)
+            .select(post::mime_type)
+            .first(conn)
+            .map_err(|err| format!("Cannot retrieve MIME type for post {post_id} for reason: {err}"))?;
 
         let post_hash = PostHash::new(post_id);
         let content_path = post_hash.content_path(mime_type);
-        let data = match std::fs::read(&content_path) {
-            Ok(data) => data,
-            Err(err) => {
-                error!("Cannot read content for post {post_id} for reason: {err}\n");
-                continue;
-            }
-        };
+        let data = std::fs::read(&content_path)
+            .map_err(|err| format!("Cannot read content for post {post_id} for reason: {err}"))?;
 
         let file_contents = FileContents { data, mime_type };
-        let thumbnail = match decode::representative_image(&file_contents, &content_path) {
-            Ok(image) => thumbnail::create(&image, ThumbnailType::Post),
-            Err(err) => {
-                error!("Cannot decode content for post {post_id} for reason: {err}\n");
-                continue;
-            }
-        };
+        let thumbnail = decode::representative_image(&file_contents, &content_path)
+            .map(|image| thumbnail::create(&image, ThumbnailType::Post))
+            .map_err(|err| format!("Cannot decode content for post {post_id} for reason: {err}"))?;
+        filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Generated)
+            .map_err(|err| format!("Cannot save thumbnail for post {post_id} for reason: {err}"))?;
 
-        if let Err(err) = filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Generated) {
-            error!("Cannot save thumbnail for post {post_id} for reason: {err}\n");
-        } else {
-            println!("Thumbnail regeneration successful.\n");
-        }
-    }
-    Ok(())
+        println!("Thumbnail regeneration successful.\n");
+        Ok(LoopState::Continue)
+    });
 }
 
 /// Recomputes checksum for post with id `post_id`.

@@ -19,22 +19,17 @@ pub fn enabled() -> bool {
 pub fn command_line_mode(conn: &mut PgConnection) {
     print_info();
 
-    let mut buffer = String::new();
-    loop {
-        let user_input = prompt_user_input("Please select a task", &mut buffer);
-        let task = match AdminTask::from_str(user_input) {
-            Ok(task) => task,
-            Err(_) => {
-                let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
-                error!("Command line arguments should be one of {possible_arguments:?}\n");
-                continue;
-            }
-        };
-        match run_task(conn, task) {
-            Ok(()) => println!("Task finished.\n"),
-            Err(err) => error!("{err}\n"),
-        }
-    }
+    user_input_loop(conn, |conn: &mut PgConnection, buffer: &mut String| {
+        let user_input = prompt_user_input("Please select a task", buffer);
+        let task = AdminTask::from_str(user_input).map_err(|_| {
+            let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
+            format!("Command line arguments should be one of {possible_arguments:?}")
+        })?;
+        run_task(conn, task).map_err(|err| err.to_string())?;
+
+        println!("Task finished.\n");
+        Ok(LoopState::Continue)
+    });
 }
 
 const PRINT_INTERVAL: u64 = 1000;
@@ -59,6 +54,23 @@ pub enum AdminTask {
     ResetFilenames,
     ResetStatistics,
     ResetThumbnailSizes,
+}
+
+enum LoopState {
+    Continue,
+    Stop,
+    Exit,
+}
+
+impl TryFrom<&str> for LoopState {
+    type Error = ();
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "done" => Ok(LoopState::Stop),
+            "exit" => Ok(LoopState::Exit),
+            _ => Err(()),
+        }
+    }
 }
 
 struct ProgressReporter {
@@ -113,13 +125,30 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
         }
 
         match buffer.trim() {
-            "exit" => std::process::exit(0),
             "help" => {
                 println!();
                 print_info();
                 continue;
             }
             _ => return buffer.trim(),
+        }
+    }
+}
+
+fn user_input_loop<F>(conn: &mut PgConnection, mut function: F)
+where
+    F: FnMut(&mut PgConnection, &mut String) -> Result<LoopState, String>,
+{
+    let mut buffer = String::new();
+    loop {
+        match function(conn, &mut buffer) {
+            Ok(LoopState::Continue) => continue,
+            Ok(LoopState::Stop) => break,
+            Ok(LoopState::Exit) => std::process::exit(0),
+            Err(err) => {
+                error!("{err}\n");
+                continue;
+            }
         }
     }
 }
@@ -134,8 +163,8 @@ fn run_task(conn: &mut PgConnection, task: AdminTask) -> Result<(), String> {
         AdminTask::RecomputePostChecksums => post::recompute_checksums(conn).map_err(|err| err.to_string()),
         AdminTask::RecomputePostSignatures => post::recompute_signatures(conn).map_err(|err| err.to_string()),
         AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(conn).map_err(|err| err.to_string()),
-        AdminTask::RegenerateThumbnail => post::regenerate_thumbnail(conn).map_err(|err| err.to_string()),
-        AdminTask::ResetPassword => user::reset_password().map_err(|err| err.to_string()),
+        AdminTask::RegenerateThumbnail => Ok(post::regenerate_thumbnail(conn)),
+        AdminTask::ResetPassword => Ok(user::reset_password(conn)),
         AdminTask::ResetFilenames => database::reset_filenames().map_err(|err| err.to_string()),
         AdminTask::ResetStatistics => database::reset_statistics().map_err(|err| err.to_string()),
         AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(conn).map_err(|err| err.to_string()),
