@@ -64,13 +64,10 @@ pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResul
     Ok(metadata.len())
 }
 
-/// Deletes custom avatar for user with name `username` from disk.
+/// Deletes custom avatar for user with name `username` from disk, if it exists.
 pub fn delete_custom_avatar(username: &str) -> std::io::Result<()> {
     let custom_avatar_path = hash::custom_avatar_path(username);
-    match custom_avatar_path.try_exists()? {
-        true => std::fs::remove_file(&custom_avatar_path),
-        false => Ok(()),
-    }
+    remove_if_exists(&custom_avatar_path)
 }
 
 /// Saves `post` `thumbnail` to disk. Can be custom or automatically generated.
@@ -153,9 +150,10 @@ pub fn swap_posts(
 /// Returns whether `directory` was created, or an error if one occured.
 pub fn create_dir(directory: Directory) -> std::io::Result<bool> {
     let path = path(directory);
-    match path.try_exists()? {
-        true => Ok(false),
-        false => std::fs::create_dir(path).map(|_| true),
+    match std::fs::create_dir(path) {
+        Ok(()) => Ok(true),
+        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
+        Err(err) => Err(err),
     }
 }
 
@@ -178,11 +176,8 @@ pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
 
 /// Deletes everything in the temporary uploads directory.
 pub fn purge_temporary_uploads() -> std::io::Result<()> {
-    let temp_path = path(Directory::TemporaryUploads);
-    if !temp_path.try_exists()? {
-        return Ok(());
-    }
-    for entry in std::fs::read_dir(temp_path)? {
+    create_dir(Directory::TemporaryUploads)?;
+    for entry in std::fs::read_dir(path(Directory::TemporaryUploads))? {
         let path = entry?.path();
         std::fs::remove_file(path)?;
     }
