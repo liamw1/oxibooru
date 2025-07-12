@@ -215,8 +215,7 @@ mod test {
         const SORT: &str = "-sort:id&limit=40";
         verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "comment/list.json").await?;
         verify_query(&format!("{QUERY}=sort:score&limit=1{FIELDS}"), "comment/list_highest_score.json").await?;
-        verify_query(&format!("{QUERY}=user:regular_user {SORT}{FIELDS}"), "comment/list_regular_user.json")
-            .await?;
+        verify_query(&format!("{QUERY}=user:regular_user {SORT}{FIELDS}"), "comment/list_regular_user.json").await?;
         verify_query(&format!("{QUERY}=text:*this* {SORT}{FIELDS}"), "comment/list_text_filter.json").await
     }
 

@@ -1,5 +1,6 @@
 use crate::config;
-use image::DynamicImage;
+use image::imageops::FilterType;
+use image::{DynamicImage, GenericImageView};
 
 pub enum ThumbnailType {
     Post,
@@ -11,16 +12,26 @@ pub enum ThumbnailCategory {
     Custom,
 }
 
-/// Returns a thumbnail of the given `image`. The size of the thumbnail depends on the `thumbnail_type`
-/// and the thumbnail settings in config.toml.
+/// Returns a thumbnail of the given `image`. Resizes thumbnail so that it is a small as possible
+/// while containing an area with dimensions X_width by X_height, where "X" refers to the thumbnail type.
+/// The values of X_width and X_height are read from the config.toml.
 pub fn create(image: &DynamicImage, thumbnail_type: ThumbnailType) -> DynamicImage {
-    let thumbnail_width = match thumbnail_type {
-        ThumbnailType::Post => config::get().thumbnails.post_width,
-        ThumbnailType::Avatar => config::get().thumbnails.avatar_width,
+    let (config_width, config_height) = match thumbnail_type {
+        ThumbnailType::Post => config::get().thumbnails.post_dimensions(),
+        ThumbnailType::Avatar => config::get().thumbnails.avatar_dimensions(),
     };
-    let thumbnail_height = match thumbnail_type {
-        ThumbnailType::Post => config::get().thumbnails.post_height,
-        ThumbnailType::Avatar => config::get().thumbnails.avatar_height,
+
+    let (image_width, image_height) = image.dimensions();
+    let (thumbnail_width, thumbnail_height) = if image_width > image_height {
+        // Thumbnail width is config_height * aspect_ratio
+        let width = u64::from(image_width) * u64::from(config_height) / u64::from(image_height);
+        let height = u64::from(config_height);
+        (width, height)
+    } else {
+        // Thumbnail height is config_width / aspect_ratio
+        let width = u64::from(config_width);
+        let height = u64::from(image_height) * u64::from(config_width) / u64::from(image_width);
+        (width, height)
     };
-    image.resize_to_fill(thumbnail_width, thumbnail_height, image::imageops::FilterType::Gaussian)
+    image.resize(thumbnail_width as u32, thumbnail_height as u32, FilterType::Gaussian)
 }

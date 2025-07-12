@@ -21,6 +21,10 @@ pub fn command_line_mode(conn: &mut PgConnection) {
 
     user_input_loop(conn, |conn: &mut PgConnection, buffer: &mut String| {
         let user_input = prompt_user_input("Please select a task", buffer);
+        if let Ok(state) = LoopState::try_from(user_input) {
+            return Ok(state);
+        }
+
         let task = AdminTask::from_str(user_input).map_err(|_| {
             let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
             format!("Command line arguments should be one of {possible_arguments:?}")
@@ -49,6 +53,7 @@ pub enum AdminTask {
     RecomputePostChecksums,
     RecomputePostSignatures,
     RecomputePostSignatureIndexes,
+    RegenerateThumbnails,
     RegenerateThumbnail,
     ResetPassword,
     ResetFilenames,
@@ -163,6 +168,7 @@ fn run_task(conn: &mut PgConnection, task: AdminTask) -> Result<(), String> {
         AdminTask::RecomputePostChecksums => post::recompute_checksums(conn).map_err(|err| err.to_string()),
         AdminTask::RecomputePostSignatures => post::recompute_signatures(conn).map_err(|err| err.to_string()),
         AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(conn).map_err(|err| err.to_string()),
+        AdminTask::RegenerateThumbnails => post::regenerate_thumbnails(conn).map_err(|err| err.to_string()),
         AdminTask::RegenerateThumbnail => Ok(post::regenerate_thumbnail(conn)),
         AdminTask::ResetPassword => Ok(user::reset_password(conn)),
         AdminTask::ResetFilenames => database::reset_filenames().map_err(|err| err.to_string()),
