@@ -96,19 +96,13 @@ pub fn save_post_thumbnail(
     Ok(metadata.len())
 }
 
-/// Deletes thumbnail of `post` from disk.
-/// Returns error if thumbnail does not exist and `thumbnail_type` is [ThumbnailType::Generated].
+/// Deletes thumbnail of `post` from disk, if it exists.
 pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailCategory) -> std::io::Result<()> {
-    match thumbnail_type {
-        ThumbnailCategory::Generated => std::fs::remove_file(post.generated_thumbnail_path()),
-        ThumbnailCategory::Custom => {
-            let custom_thumbnail_path = post.custom_thumbnail_path();
-            match post.custom_thumbnail_path().try_exists()? {
-                true => std::fs::remove_file(&custom_thumbnail_path),
-                false => Ok(()),
-            }
-        }
-    }
+    let thumbnail_path = match thumbnail_type {
+        ThumbnailCategory::Generated => post.generated_thumbnail_path(),
+        ThumbnailCategory::Custom => post.custom_thumbnail_path(),
+    };
+    remove_if_exists(&thumbnail_path)
 }
 
 /// Deletes `post` content from disk.
@@ -203,6 +197,17 @@ static CUSTOM_THUMBNAILS_DIRECTORY: LazyLock<String> =
     LazyLock::new(|| format!("{}/custom-thumbnails", config::data_dir()));
 static TEMPORARY_UPLOADS_DIRECTORY: LazyLock<String> =
     LazyLock::new(|| format!("{}/temporary-uploads", config::data_dir()));
+
+/// Removes `file` if it exists.
+fn remove_if_exists(file: &Path) -> std::io::Result<()> {
+    if let Err(err) = std::fs::remove_file(file)
+        && err.kind() != std::io::ErrorKind::NotFound
+    {
+        Err(err)
+    } else {
+        Ok(())
+    }
+}
 
 /// Swaps the names of two files.
 fn swap_files(file_a: &Path, file_b: &Path) -> std::io::Result<()> {

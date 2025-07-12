@@ -7,6 +7,7 @@ pub enum ThumbnailType {
     Avatar,
 }
 
+#[derive(Clone, Copy)]
 pub enum ThumbnailCategory {
     Generated,
     Custom,
