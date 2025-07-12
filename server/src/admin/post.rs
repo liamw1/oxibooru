@@ -22,7 +22,7 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> DatabaseResult<()> {
     let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
     post_ids
         .into_par_iter()
-        .try_for_each(|post_id| recompute_checksum(post_id, &progress, &duplicate_count))?;
+        .try_for_each(|post_id| recompute_checksum_in_parallel(post_id, &progress, &duplicate_count))?;
     duplicate_count.report();
     Ok(())
 }
@@ -42,7 +42,7 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> DatabaseResult<()> {
 
     post_ids
         .into_par_iter()
-        .try_for_each(|post_id| recompute_signature(post_id, &progress))
+        .try_for_each(|post_id| recompute_signature_in_parallel(post_id, &progress))
 }
 
 /// Recomputes post signature indexes.
@@ -67,7 +67,17 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> DatabaseResult<()> {
     })
 }
 
-/// This functions prompts the user for input again to regenerate specific thumbnails.
+pub fn regenerate_thumbnails(conn: &mut PgConnection) -> DatabaseResult<()> {
+    let _timer = Timer::new("regenerate_thumbnails");
+    let progress = ProgressReporter::new("Thumbnails regenerated", PRINT_INTERVAL);
+
+    let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
+    post_ids
+        .into_par_iter()
+        .try_for_each(|post_id| regenerate_thumbnail_in_parallel(post_id, &progress))
+}
+
+/// Prompts the user for input again to regenerate specific thumbnails.
 pub fn regenerate_thumbnail(conn: &mut PgConnection) {
     admin::user_input_loop(conn, |conn: &mut PgConnection, buffer: &mut String| {
         println!("Please enter the post ID you would like to generate a thumbnail for. Enter \"done\" when finished.");
@@ -102,8 +112,8 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) {
     });
 }
 
-/// Recomputes checksum for post with id `post_id`.
-pub fn recompute_checksum(
+/// Recomputes checksum for post with id `post_id`. Designed to operate in a parallel iterator.
+fn recompute_checksum_in_parallel(
     post_id: i64,
     progress: &ProgressReporter,
     duplicate_count: &ProgressReporter,
@@ -147,8 +157,8 @@ pub fn recompute_checksum(
     Ok(())
 }
 
-/// Recomputes signature for post with id `post_id`.
-fn recompute_signature(post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
+/// Recomputes signature for post with id `post_id`. Designed to operate in a parallel iterator.
+fn recompute_signature_in_parallel(post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
     let mut conn = db::get_connection()?;
     let mime_type = match post::table
         .find(post_id)
@@ -211,5 +221,38 @@ fn recompute_signature(post_id: i64, progress: &ProgressReporter) -> DatabaseRes
         }
     })?;
     progress.increment();
+    Ok(())
+}
+
+/// Regenerates thumbnail for post with id `post_id`. Designed to operate in a parallel iterator.
+fn regenerate_thumbnail_in_parallel(post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
+    let mime_type = post::table
+        .find(post_id)
+        .select(post::mime_type)
+        .first(&mut db::get_connection()?)?;
+
+    let post_hash = PostHash::new(post_id);
+    let content_path = post_hash.content_path(mime_type);
+    let data = match std::fs::read(&content_path) {
+        Ok(data) => data,
+        Err(err) => {
+            error!("Cannot read content for post {post_id} for reason: {err}");
+            return Ok(());
+        }
+    };
+
+    let file_contents = FileContents { data, mime_type };
+    let thumbnail = match decode::representative_image(&file_contents, &content_path) {
+        Ok(image) => thumbnail::create(&image, ThumbnailType::Post),
+        Err(err) => {
+            error!("Cannot decode content for post {post_id} for reason: {err}");
+            return Ok(());
+        }
+    };
+    if let Err(err) = filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Generated) {
+        error!("Cannot save thumbnail for post {post_id} for reason: {err}");
+    } else {
+        progress.increment();
+    }
     Ok(())
 }

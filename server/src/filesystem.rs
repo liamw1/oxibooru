@@ -56,9 +56,6 @@ pub fn save_uploaded_file(data: &[u8], mime_type: MimeType) -> std::io::Result<S
 /// Saves custom avatar `thumbnail` for user with name `username` to disk.
 /// Returns size of the thumbnail in bytes.
 pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResult<u64> {
-    assert_eq!(thumbnail.width(), config::get().thumbnails.avatar_width);
-    assert_eq!(thumbnail.height(), config::get().thumbnails.avatar_height);
-
     create_dir(Directory::Avatars)?;
     let avatar_path = hash::custom_avatar_path(username);
 
@@ -83,9 +80,6 @@ pub fn save_post_thumbnail(
     thumbnail: DynamicImage,
     thumbnail_type: ThumbnailCategory,
 ) -> ImageResult<u64> {
-    assert_eq!(thumbnail.width(), config::get().thumbnails.post_height);
-    assert_eq!(thumbnail.height(), config::get().thumbnails.post_height);
-
     let thumbnail_path = match thumbnail_type {
         ThumbnailCategory::Generated => {
             create_dir(Directory::GeneratedThumbnails)?;

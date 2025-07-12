@@ -30,6 +30,16 @@ pub struct Thumbnails {
     pub post_height: u32,
 }
 
+impl Thumbnails {
+    pub fn avatar_dimensions(&self) -> (u32, u32) {
+        (self.avatar_width, self.avatar_height)
+    }
+
+    pub fn post_dimensions(&self) -> (u32, u32) {
+        (self.post_width, self.post_height)
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SmtpInfo {
     pub username: SmallString,

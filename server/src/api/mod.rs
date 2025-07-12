@@ -385,13 +385,9 @@ struct ErrorResponse {
 /// Checks if `current_version` matches `client_version`.
 /// Returns error if they do not match.
 fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiResult<()> {
-    if cfg!(test) {
-        Ok(())
-    } else {
-        (current_version == client_version)
-            .then_some(())
-            .ok_or(Error::ResourceModified)
-    }
+    (cfg!(test) || current_version == client_version)
+        .then_some(())
+        .ok_or(Error::ResourceModified)
 }
 
 async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
@@ -404,12 +400,11 @@ async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
     }?;
 
     // If client is not anonymous and query contains "bump-login", update login time
-    if let Some(user_id) = client.id {
-        if let Some(query) = request.uri().query() {
-            if query.contains("bump-login") {
-                update::user::last_login_time(user_id)?;
-            }
-        }
+    if let Some(user_id) = client.id
+        && let Some(query) = request.uri().query()
+        && query.contains("bump-login")
+    {
+        update::user::last_login_time(user_id)?;
     }
 
     request.extensions_mut().insert(client);

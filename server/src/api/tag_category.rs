@@ -326,8 +326,7 @@ mod test {
             Ok(category_id == 0)
         };
 
-        verify_query(&format!("PUT /tag-category/{NAME}/default/?{FIELDS}"), "tag_category/set_default.json")
-            .await?;
+        verify_query(&format!("PUT /tag-category/{NAME}/default/?{FIELDS}"), "tag_category/set_default.json").await?;
 
         let mut conn = get_connection()?;
         let default = is_default(&mut conn)?;
