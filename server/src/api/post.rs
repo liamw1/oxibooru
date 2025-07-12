@@ -480,13 +480,9 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
-            update::post::custom_thumbnail(conn, &post_hash, thumbnail)?;
+            update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
         }
-        let generated_thumbnail_size =
-            filesystem::save_post_thumbnail(&post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
-        diesel::update(post::table.find(post_id))
-            .set(post::generated_thumbnail_size.eq(generated_thumbnail_size as i64))
-            .execute(conn)?;
+        update::post::thumbnail(conn, &post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
         Ok::<_, api::Error>(post_id)
     })
     .await?;
@@ -910,19 +906,11 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
             filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
             // Replace generated thumbnail
-            filesystem::delete_post_thumbnail(&post_hash, ThumbnailCategory::Generated)?;
-            let generated_thumbnail_size = filesystem::save_post_thumbnail(
-                &post_hash,
-                content_properties.thumbnail,
-                ThumbnailCategory::Generated,
-            )?;
-            diesel::update(post::table.find(post_id))
-                .set(post::generated_thumbnail_size.eq(generated_thumbnail_size as i64))
-                .execute(conn)?;
+            update::post::thumbnail(conn, &post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
         }
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
-            update::post::custom_thumbnail(conn, &post_hash, thumbnail)?;
+            update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
         }
         update::post::last_edit_time(conn, post_id)
     })
