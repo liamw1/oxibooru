@@ -21,6 +21,7 @@ use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
+use std::convert::Infallible;
 use strum::{EnumString, EnumTable};
 
 #[derive(Serialize, Deserialize)]
@@ -170,13 +171,14 @@ impl PostInfo {
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         use crate::schema::post_statistics::dsl::*;
-        use diesel::result::Error as QueryError;
 
         let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, &posts))?;
         let mut content_urls =
-            resource::retrieve(fields[Field::ContentUrl], || Ok::<_, QueryError>(get_content_urls(&posts)))?;
+            resource::retrieve(fields[Field::ContentUrl], || Ok::<_, Infallible>(get_content_urls(&posts)))
+                .expect("get_content_urls is infallible");
         let mut thumbnail_urls =
-            resource::retrieve(fields[Field::ThumbnailUrl], || Ok::<_, QueryError>(get_thumbnail_urls(&posts)))?;
+            resource::retrieve(fields[Field::ThumbnailUrl], || Ok::<_, Infallible>(get_thumbnail_urls(&posts)))
+                .expect("get_thumbnail_urls is infallible");
         let mut tags = resource::retrieve(fields[Field::Tags], || get_tags(conn, &posts))?;
         let mut comments = resource::retrieve(fields[Field::Comments], || get_comments(conn, client, &posts))?;
         let mut relations = resource::retrieve(fields[Field::Relations], || get_relations(conn, &posts))?;
