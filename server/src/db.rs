@@ -7,7 +7,7 @@ use crate::test;
 use diesel::migration::Migration;
 use diesel::pg::Pg;
 use diesel::prelude::*;
-use diesel::r2d2::{ConnectionManager, Pool, PoolError, PooledConnection};
+use diesel::r2d2::{ConnectionManager, CustomizeConnection, Pool, PoolError, PooledConnection};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use std::borrow::Cow;
 use std::error::Error;
@@ -145,6 +145,23 @@ static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
         .max_lifetime(None)
         .idle_timeout(None)
         .test_on_check_out(true)
+        .connection_customizer(Box::new(ConnectionInitialzier {}))
         .build(manager)
         .expect("Could not build connection pool")
 });
+
+#[derive(Debug)]
+struct ConnectionInitialzier {}
+
+impl CustomizeConnection<PgConnection, diesel::r2d2::Error> for ConnectionInitialzier {
+    fn on_acquire(&self, conn: &mut PgConnection) -> Result<(), diesel::r2d2::Error> {
+        if config::get().auto_explain {
+            diesel::sql_query("LOAD 'auto_explain';").execute(conn)?;
+            diesel::sql_query("SET SESSION auto_explain.log_min_duration = 500;").execute(conn)?;
+            diesel::sql_query("SET SESSION auto_explain.log_parameter_max_length = 0;").execute(conn)?;
+        }
+        Ok(())
+    }
+
+    fn on_release(&self, _conn: PgConnection) {}
+}
