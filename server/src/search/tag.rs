@@ -27,6 +27,7 @@ pub enum Token {
     LastEditTime,
     Name,
     Category,
+    Description,
     #[strum(serialize = "usages", serialize = "post-count", serialize = "usage-count")]
     UsageCount,
     ImplicationCount,
@@ -88,6 +89,7 @@ impl<'a> QueryBuilder<'a> {
                 Token::LastEditTime => apply_time_filter!(query, tag::last_edit_time, filter),
                 Token::Name => apply_name_filter(conn, query, filter, cache.as_mut()),
                 Token::Category => Ok(apply_str_filter!(query, tag_category::name, filter)),
+                Token::Description => Ok(apply_str_filter!(query, tag::description, filter)),
                 Token::UsageCount => apply_filter!(query, tag_statistics::usage_count, filter, i64),
                 Token::ImplicationCount => apply_filter!(query, tag_statistics::implication_count, filter, i64),
                 Token::SuggestionCount => apply_filter!(query, tag_statistics::suggestion_count, filter, i64),
@@ -115,6 +117,7 @@ impl<'a> QueryBuilder<'a> {
             Token::LastEditTime => apply_sort!(query, tag::last_edit_time, sort),
             Token::Name => apply_sort!(query, tag_name::name, sort),
             Token::Category => apply_sort!(query, tag_category::name, sort),
+            Token::Description => apply_sort!(query, tag::description, sort),
             Token::UsageCount => apply_sort!(query, tag_statistics::usage_count, sort),
             Token::ImplicationCount | Token::Implies => {
                 apply_sort!(query, tag_statistics::implication_count, sort)

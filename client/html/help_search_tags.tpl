@@ -15,6 +15,10 @@
             <td>having given category (accepts wildcards)</td>
         </tr>
         <tr>
+            <td><code>description</code></td>
+            <td>having given description (accepts wildcards)</td>
+        </tr>
+        <tr>
             <td><code>creation-date</code></td>
             <td>created at given date</td>
         </tr>
@@ -84,6 +88,10 @@
         <tr>
             <td><code>category</code></td>
             <td>category (A to Z)</td>
+        </tr>
+        <tr>
+            <td><code>description</code></td>
+            <td>description (A to Z)</td>
         </tr>
         <tr>
             <td><code>creation-date</code></td>
