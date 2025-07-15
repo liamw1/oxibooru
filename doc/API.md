@@ -420,6 +420,7 @@ data.
     | ------------------- | ------------------------------------------------------------- |
     | `name`              | having given name (accepts wildcards)                         |
     | `category`          | having given category (accepts wildcards)                     |
+    | `description`       | having given description (accepts wildcards)                  |
     | `creation-date`     | created at given date                                         |
     | `creation-time`     | alias of `creation-date`                                      |
     | `last-edit-date`    | edited at given date                                          |
@@ -441,6 +442,7 @@ data.
     | `random`            | as random as it can get      |
     | `name`              | A to Z                       |
     | `category`          | category (A to Z)            |
+    | `description`       | description (A to Z)         |
     | `creation-date`     | recently created first       |
     | `creation-time`     | alias of `creation-date`     |
     | `last-edit-date`    | recently edited first        |
