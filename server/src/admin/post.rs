@@ -1,14 +1,16 @@
-use crate::admin::{DatabaseResult, LoopState, PRINT_INTERVAL, ProgressReporter};
+use crate::admin::{DatabaseError, DatabaseResult, LoopState, PRINT_INTERVAL, ProgressReporter};
 use crate::content::hash::PostHash;
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{FileContents, decode, hash, signature, thumbnail};
+use crate::model::enums::MimeType;
 use crate::model::post::{CompressedSignature, NewPostSignature};
 use crate::schema::{database_statistics, post, post_signature};
 use crate::time::Timer;
 use crate::{admin, db, update};
 use diesel::dsl::exists;
 use diesel::prelude::*;
+use diesel::r2d2::PoolError;
 use rayon::prelude::*;
 use tracing::{error, warn};
 
@@ -22,7 +24,8 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> DatabaseResult<()> {
     let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
     post_ids
         .into_par_iter()
-        .try_for_each(|post_id| recompute_checksum_in_parallel(post_id, &progress, &duplicate_count))?;
+        .try_for_each(|post_id| recompute_checksum_in_parallel(post_id, &progress, &duplicate_count))
+        .map_err(DatabaseError::from)?;
     duplicate_count.report();
     Ok(())
 }
@@ -43,6 +46,7 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> DatabaseResult<()> {
     post_ids
         .into_par_iter()
         .try_for_each(|post_id| recompute_signature_in_parallel(post_id, &progress))
+        .map_err(DatabaseError::from)
 }
 
 /// Recomputes post signature indexes.
@@ -57,24 +61,21 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> DatabaseResult<()> {
     let post_signatures: Vec<(i64, CompressedSignature)> = post_signature::table
         .select((post_signature::post_id, post_signature::signature))
         .load(conn)?;
-    post_signatures.into_par_iter().try_for_each(|(post_id, signature)| {
-        let indexes = signature::generate_indexes(&signature);
-        diesel::update(post_signature::table.find(post_id))
-            .set(post_signature::words.eq(indexes.as_slice()))
-            .execute(&mut db::get_connection()?)?;
-        progress.increment();
-        Ok(())
-    })
+    post_signatures
+        .into_par_iter()
+        .try_for_each(|(post_id, signature)| recompute_index_in_parallel(post_id, signature, &progress))
+        .map_err(DatabaseError::from)
 }
 
 pub fn regenerate_thumbnails(conn: &mut PgConnection) -> DatabaseResult<()> {
     let _timer = Timer::new("regenerate_thumbnails");
     let progress = ProgressReporter::new("Thumbnails regenerated", PRINT_INTERVAL);
 
-    let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
+    let post_ids: Vec<_> = post::table.select((post::id, post::mime_type)).load(conn)?;
     post_ids
         .into_par_iter()
-        .try_for_each(|post_id| regenerate_thumbnail_in_parallel(post_id, &progress))
+        .try_for_each(|(post_id, mime_type)| regenerate_thumbnail_in_parallel(post_id, mime_type, &progress))
+        .map_err(DatabaseError::from)
 }
 
 /// Prompts the user for input again to regenerate specific thumbnails.
@@ -112,12 +113,30 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) {
     });
 }
 
+/// Recomputes index for post with id `post_id`. Designed to operate in a parallel iterator.
+fn recompute_index_in_parallel(
+    post_id: i64,
+    signature: CompressedSignature,
+    progress: &ProgressReporter,
+) -> Result<(), PoolError> {
+    let mut conn = db::get_connection()?;
+    let indexes = signature::generate_indexes(&signature);
+    match diesel::update(post_signature::table.find(post_id))
+        .set(post_signature::words.eq(indexes.as_slice()))
+        .execute(&mut conn)
+    {
+        Ok(_) => progress.increment(),
+        Err(err) => error!("Index update failed for post {post_id} for reason: {err}"),
+    };
+    Ok(())
+}
+
 /// Recomputes checksum for post with id `post_id`. Designed to operate in a parallel iterator.
 fn recompute_checksum_in_parallel(
     post_id: i64,
     progress: &ProgressReporter,
     duplicate_count: &ProgressReporter,
-) -> DatabaseResult<()> {
+) -> Result<(), PoolError> {
     let mut conn = db::get_connection()?;
     let mime_type = match post::table.find(post_id).select(post::mime_type).first(&mut conn) {
         Ok(mime_type) => mime_type,
@@ -138,27 +157,37 @@ fn recompute_checksum_in_parallel(
 
     let checksum = hash::compute_checksum(&file_contents);
     let md5_checksum = hash::compute_md5_checksum(&file_contents);
-    let duplicate: Option<i64> = post::table
+    let duplicate: Option<i64> = match post::table
         .select(post::id)
         .filter(post::checksum.eq(&checksum))
         .filter(post::id.ne(post_id))
         .first(&mut conn)
-        .optional()?;
+        .optional()
+    {
+        Ok(dup) => dup,
+        Err(err) => {
+            error!("Duplicate check failed for post {post_id} for reason: {err}");
+            return Ok(());
+        }
+    };
     if let Some(dup_id) = duplicate {
         warn!("Potential duplicate post {dup_id} for post {post_id}");
         duplicate_count.increment();
         return Ok(());
     }
 
-    diesel::update(post::table.find(post_id))
+    match diesel::update(post::table.find(post_id))
         .set((post::checksum.eq(checksum), post::checksum_md5.eq(md5_checksum)))
-        .execute(&mut conn)?;
-    progress.increment();
+        .execute(&mut conn)
+    {
+        Ok(_) => progress.increment(),
+        Err(err) => error!("Checksum update failed for post {post_id} for reason: {err}"),
+    };
     Ok(())
 }
 
 /// Recomputes signature for post with id `post_id`. Designed to operate in a parallel iterator.
-fn recompute_signature_in_parallel(post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
+fn recompute_signature_in_parallel(post_id: i64, progress: &ProgressReporter) -> Result<(), PoolError> {
     let mut conn = db::get_connection()?;
     let mime_type = match post::table
         .find(post_id)
@@ -194,7 +223,7 @@ fn recompute_signature_in_parallel(post_id: i64, progress: &ProgressReporter) ->
 
     let image_signature = signature::compute(&image);
     let signature_indexes = signature::generate_indexes(&image_signature);
-    conn.transaction(|conn| {
+    let transaction_result = conn.transaction(|conn| {
         // Post may have been deleted, so make sure it still exists first
         let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;
         if !post_exists {
@@ -219,15 +248,22 @@ fn recompute_signature_in_parallel(post_id: i64, progress: &ProgressReporter) ->
                 .values(new_post_signature)
                 .execute(conn)
         }
-    })?;
-    progress.increment();
+    });
+
+    match transaction_result {
+        Ok(_) => progress.increment(),
+        Err(err) => error!("Unable to update post signature for post {post_id} for reason: {err}"),
+    }
     Ok(())
 }
 
 /// Regenerates thumbnail for post with id `post_id`. Designed to operate in a parallel iterator.
-fn regenerate_thumbnail_in_parallel(post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
+fn regenerate_thumbnail_in_parallel(
+    post_id: i64,
+    mime_type: MimeType,
+    progress: &ProgressReporter,
+) -> Result<(), PoolError> {
     let mut conn = db::get_connection()?;
-    let mime_type = post::table.find(post_id).select(post::mime_type).first(&mut conn)?;
 
     let post_hash = PostHash::new(post_id);
     let content_path = post_hash.content_path(mime_type);
