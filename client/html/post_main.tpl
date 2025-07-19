@@ -68,8 +68,12 @@
         <% } %>
 
         <div class='after-mobile-controls'>
+            <% if (ctx.canCreateComments) { %>
+                <h2>Add comment</h2>
+                <div class='comment-form-container'></div>
+            <% } %>
+
             <% if (ctx.canListComments) { %>
-                <h2>Comments</h2>
                 <div class='comments-container'></div>
             <% } %>
         </div>
