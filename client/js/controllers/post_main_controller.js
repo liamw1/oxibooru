@@ -52,6 +52,7 @@ class PostMainController extends BasePostController {
                         ? aroundResponse.next.id
                         : null,
                     canEditPosts: api.hasPrivilege("post_edit"),
+                    canEditPostDescription: api.hasPrivilege("post_edit_description"),
                     canDeletePosts: api.hasPrivilege("post_delete"),
                     canFeaturePosts: api.hasPrivilege("post_feature"),
                     canListComments: api.hasPrivilege("comment_list"),
@@ -116,6 +117,12 @@ class PostMainController extends BasePostController {
                         (e) => this._evtDeleteComment(e)
                     );
                 }
+
+                if (this._view.postDescription) {
+                    this._view.postDescription.addEventListener("change", (e) =>
+                        this._evtPostChange(e)
+                    );
+                }
             },
             (error) => {
                 this._view = new EmptyView();
@@ -169,6 +176,9 @@ class PostMainController extends BasePostController {
         this._view.sidebarControl.disableForm();
         this._view.sidebarControl.clearMessages();
         const post = e.detail.post;
+        if (e.detail.description !== undefined && e.detail.description !== null) {
+            post.description = e.detail.description;
+        }
         if (e.detail.safety !== undefined && e.detail.safety !== null) {
             post.safety = e.detail.safety;
         }
@@ -186,6 +196,9 @@ class PostMainController extends BasePostController {
         }
         if (e.detail.source !== undefined && e.detail.source !== null) {
             post.source = e.detail.source;
+        }
+        if (e.detail.description !== undefined) {
+            post.description = e.detail.description;
         }
         post.save().then(
             () => {
