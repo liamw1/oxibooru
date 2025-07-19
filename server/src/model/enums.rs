@@ -367,6 +367,12 @@ pub enum UserRank {
     Administrator,
 }
 
+impl Default for UserRank {
+    fn default() -> Self {
+        UserRank::Regular
+    }
+}
+
 impl ToSql<SmallInt, Pg> for UserRank {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
         // SAFETY: UserRank is repr(i16) so a valid UserRank is a valid i16

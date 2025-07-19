@@ -46,6 +46,14 @@
         .post-content
             margin: 0
 
+    .description-container
+        background: $top-navigation-color
+        padding: 0.6em
+
+    #post-description
+        resize: vertical
+        min-height: 200px
+
     .after-mobile-controls
         width: 100%
 
@@ -56,6 +64,9 @@
                 a:not(.inactive):hover
                     background: unset
                     box-shadow: inset 0 0 0 0.3em $main-color
+
+    .description-container
+        background: $top-navigation-color-darktheme
 
 @media (max-width: 800px)
     .post-view

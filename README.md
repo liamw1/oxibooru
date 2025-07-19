@@ -10,6 +10,7 @@ If you're interested in contributing, see the [development guide](doc/DEV.md).
 
 - Post content: images (JPG, PNG, BMP, GIF, WEBP) and videos (MP4, MOV, WEBM), Flash animations
 - Post comments
+- Post descriptions
 - Post notes / annotations, including arbitrary polygons
 - Rich JSON REST API ([see documentation](doc/API.md))
 - Token based authentication for clients

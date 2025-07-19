@@ -54,6 +54,10 @@ class Post extends events.EventTarget {
         return this._user;
     }
 
+    get description() {
+        return this._description;
+    }
+
     get safety() {
         return this._safety;
     }
@@ -100,6 +104,10 @@ class Post extends events.EventTarget {
 
     get flags() {
         return this._flags;
+    }
+
+    get description() {
+        return this._description;
     }
 
     get tags() {
@@ -152,6 +160,10 @@ class Post extends events.EventTarget {
 
     set flags(value) {
         this._flags = value;
+    }
+
+    set description(value) {
+        this._description = value;
     }
 
     set safety(value) {
@@ -250,6 +262,9 @@ class Post extends events.EventTarget {
         if (anonymous === true) {
             detail.anonymous = true;
         }
+        if (this._description !== this._orig._description) {
+            detail.description = this._description;
+        }
         if (this._safety !== this._orig._safety) {
             detail.safety = this._safety;
         }
@@ -276,6 +291,9 @@ class Post extends events.EventTarget {
         }
         if (this._source !== this._orig._source) {
             detail.source = this._source;
+        }
+        if (this._description !== this._orig._description) {
+            detail.description = this._description;
         }
 
         let apiPromise = this._id
@@ -471,6 +489,7 @@ class Post extends events.EventTarget {
             _checksumMD5: response.checksumMD5,
             _creationTime: response.creationTime,
             _user: response.user,
+            _description: response.description,
             _safety: response.safety,
             _contentUrl: response.contentUrl,
             _fullContentUrl: new URL(
@@ -484,6 +503,7 @@ class Post extends events.EventTarget {
             _fileSize: response.fileSize,
 
             _flags: [...(response.flags || [])],
+            _description: response.description,
             _relations: [...(response.relations || [])],
 
             _score: response.score,

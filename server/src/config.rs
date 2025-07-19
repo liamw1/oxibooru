@@ -82,6 +82,8 @@ pub struct Privileges {
     pub post_view: UserRank,
     pub post_view_featured: UserRank,
     pub post_edit_content: UserRank,
+    #[serde(default)]
+    pub post_edit_description: UserRank,
     pub post_edit_flag: UserRank,
     pub post_edit_note: UserRank,
     pub post_edit_relation: UserRank,
