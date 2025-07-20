@@ -102,6 +102,17 @@ struct NewPassword {
     password: String,
 }
 
+/// Creates a random sequence of printable ASCII characters of the given `length`.
+fn generate_temporary_password(length: u8) -> String {
+    const NUM_CHARACTERS: u8 = b'~' - b'!';
+
+    let rng = &mut OsRng;
+    (0..length)
+        .map(|_| b'!' + (rng.next_u32() % u32::from(NUM_CHARACTERS)) as u8)
+        .map(char::from)
+        .collect()
+}
+
 async fn reset_password(
     Path(username): Path<String>,
     Json(confirmation): Json<ResetToken>,
@@ -112,8 +123,8 @@ async fn reset_password(
             return Err(api::Error::UnauthorizedPasswordReset);
         }
 
-        // TODO: Create random alphanumeric password instead of numeric
-        let temporary_password = OsRng.next_u64().to_string();
+        const TEMPORARY_PASSWORD_LENGTH: u8 = 16;
+        let temporary_password = generate_temporary_password(TEMPORARY_PASSWORD_LENGTH);
 
         let salt = SaltString::generate(&mut OsRng);
         let hash = password::hash_password(&temporary_password, &salt)?;
