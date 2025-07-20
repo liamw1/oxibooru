@@ -22,6 +22,7 @@ services:
       POSTGRES_PASSWORD:
       POSTGRES_DB:
       POSTGRES_PORT:
+      PORT:
     volumes:
       - "${MOUNT_DATA}:/data"
       - "./server/config.toml:/opt/app/config.toml"

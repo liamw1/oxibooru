@@ -54,9 +54,9 @@ COPY --from=builder /opt/app/target/release/server server
 USER app
 ENTRYPOINT ["/opt/app/server"]
 
-ARG PORT=6666
-ENV PORT=${PORT}
-EXPOSE ${PORT}
+ARG SERVER_PORT=6666
+ENV SERVER_PORT=${SERVER_PORT}
+EXPOSE ${SERVER_PORT}
 
 VOLUME ["/data/"]
 
