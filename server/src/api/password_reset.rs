@@ -9,11 +9,14 @@ use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::extract::Path;
 use axum::{Json, Router, routing};
 use diesel::prelude::*;
+use lettre::Address;
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
+use percent_encoding::NON_ALPHANUMERIC;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 pub fn routes() -> Router {
     Router::new().route("/password-reset/{identifier}", routing::get(request_reset).post(reset_password))
@@ -36,35 +39,55 @@ async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
 
     let mut conn = db::get_connection()?;
     let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;
-    let user_email_address = user_email.ok_or(api::Error::NoEmail)?;
-    let user_mailbox: Mailbox = format!("User <{user_email_address}>").parse()?;
+    let user_email = user_email.ok_or(api::Error::NoEmail)?;
+    let user_mailbox = Mailbox::new(None, Address::from_str(&user_email)?);
 
+    let domain = if let Some(domain) = config::get().domain.as_deref() {
+        domain.to_string()
+    } else if let Ok(domain) = std::env::var("HTTP_ORIGIN") {
+        domain
+    } else if let Ok(domain) = std::env::var("HTTP_REFERER") {
+        domain
+    } else if let Ok(port) = std::env::var("PORT") {
+        format!("http://localhost:{port}")
+    } else {
+        String::new()
+    };
+    let domain = domain.trim_end_matches('/');
+
+    let site_name = &config::get().public_info.name;
+    let username = percent_encoding::utf8_percent_encode(&username, NON_ALPHANUMERIC);
+    let separator = percent_encoding::percent_encode_byte(b':');
     let reset_token = hash::compute_url_safe_hash(&password_salt);
-    let domain = config::get().domain.as_deref().unwrap_or("");
-    let url = format!("{domain}/password-reset/{username}/?token={reset_token}");
+    let url = format!("{domain}/password-reset/{username}{separator}{reset_token}");
 
     let email = Message::builder()
         .from(smtp_info.from.clone())
         .to(user_mailbox)
-        .subject("Password Reset Request")
-        .header(ContentType::TEXT_PLAIN)
+        .subject(format!("Password reset for {site_name}"))
+        .header(ContentType::TEXT_HTML)
         .body(format!(
-            "Hello,
-        
-             You (or someone else) requested to reset your password on {}.\n
-             If you wish to proceed, click this link: {url}\n
-             Otherwise, please ignore this email.",
-            config::get().public_info.name
+            "<html>
+                <body>
+                    <p>Hello,</p>
+                    <p>You (or someone else) requested to reset your password on {site_name}.<br>
+                    If you wish to proceed, click this link: <a href=\"{url}\">{url}</a></p>
+                    <p>Otherwise, please ignore this email.</p>
+                </body>
+            </html>"
         ))?;
-    let credentials = Credentials::new(smtp_info.username.to_string(), smtp_info.password.to_string());
 
-    // Open a remote connection to gmail
-    let mailer = SmtpTransport::relay("smtp.gmail.com")
-        .unwrap()
-        .credentials(credentials)
-        .build();
+    // Open a remote connection to SMTP relay
+    let mut smtp_builder = SmtpTransport::relay(&smtp_info.host)?;
+    if let (Some(smtp_username), Some(smtp_password)) = (smtp_info.username.as_ref(), smtp_info.password.as_ref()) {
+        let credentials = Credentials::new(smtp_username.to_string(), smtp_password.to_string());
+        smtp_builder = smtp_builder.credentials(credentials);
+    }
+    if let Some(port) = smtp_info.port {
+        smtp_builder = smtp_builder.port(port);
+    }
+    let mailer = smtp_builder.build();
 
-    // Send the email
     mailer.send(&email).map(|_| Json(())).map_err(api::Error::from)
 }
 
@@ -80,13 +103,11 @@ struct NewPassword {
 }
 
 async fn reset_password(
-    Path(identifier): Path<String>,
+    Path(username): Path<String>,
     Json(confirmation): Json<ResetToken>,
 ) -> ApiResult<Json<NewPassword>> {
-    let identifier = percent_encoding::percent_decode_str(&identifier).decode_utf8()?;
-
     db::get_connection()?.transaction(|conn| {
-        let (user_id, _name, _email, password_salt) = get_user_info(conn, &identifier)?;
+        let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
         if confirmation.token != hash::compute_url_safe_hash(&password_salt) {
             return Err(api::Error::UnauthorizedPasswordReset);
         }

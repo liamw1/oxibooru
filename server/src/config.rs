@@ -42,8 +42,10 @@ impl Thumbnails {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SmtpInfo {
-    pub username: SmallString,
-    pub password: SmallString,
+    pub host: SmallString,
+    pub port: Option<u16>,
+    pub username: Option<SmallString>,
+    pub password: Option<SmallString>,
     pub from: Mailbox,
 }
 
@@ -244,7 +246,7 @@ pub fn database_url() -> &'static str {
 
 pub fn port() -> u16 {
     const DEFAULT_PORT: u16 = 6666;
-    std::env::var("PORT")
+    std::env::var("SERVER_PORT")
         .ok()
         .and_then(|var| var.parse().ok())
         .unwrap_or(DEFAULT_PORT)
@@ -254,14 +256,15 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     let config_string = std::fs::read_to_string(get_config_path()).unwrap();
     let mut config: Config = match toml::from_str(&config_string) {
         Ok(parsed) => parsed,
-        Err(_) => {
-            panic!(
+        Err(err) => {
+            eprintln!(
                 "Could not parse config.toml.
        
        Please ensure that your config is formatted correctly, that each field name
        matches the fields in config.toml.dist exactly, and that each field value
-       has the proper type.\n"
+       has the proper type. Details:\n\n{err}"
             );
+            std::process::exit(1)
         }
     };
     config.public_info.can_send_mails = config.smtp.is_some();
