@@ -42,6 +42,8 @@ impl Thumbnails {
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct SmtpInfo {
+    pub host: SmallString,
+    pub port: Option<u16>,
     pub username: SmallString,
     pub password: SmallString,
     pub from: Mailbox,

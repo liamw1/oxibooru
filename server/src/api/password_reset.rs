@@ -9,11 +9,13 @@ use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::extract::Path;
 use axum::{Json, Router, routing};
 use diesel::prelude::*;
+use lettre::Address;
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 pub fn routes() -> Router {
     Router::new().route("/password-reset/{identifier}", routing::get(request_reset).post(reset_password))
@@ -36,30 +38,40 @@ async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
 
     let mut conn = db::get_connection()?;
     let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;
-    let user_email_address = user_email.ok_or(api::Error::NoEmail)?;
-    let user_mailbox: Mailbox = format!("User <{user_email_address}>").parse()?;
+    let user_email = user_email.ok_or(api::Error::NoEmail)?;
+    let user_mailbox = Mailbox::new(None, Address::from_str(&user_email)?);
 
+    let domain = if let Some(domain) = config::get().domain.as_deref() {
+        domain.to_string()
+    } else if let Ok(domain) = std::env::var("HTTP_ORIGIN") {
+        domain
+    } else if let Ok(domain) = std::env::var("HTTP_REFERER") {
+        domain
+    } else {
+        String::new()
+    };
+    let domain = domain.trim_end_matches('/');
+
+    let site_name = &config::get().public_info.name;
     let reset_token = hash::compute_url_safe_hash(&password_salt);
-    let domain = config::get().domain.as_deref().unwrap_or("");
     let url = format!("{domain}/password-reset/{username}/?token={reset_token}");
 
     let email = Message::builder()
         .from(smtp_info.from.clone())
         .to(user_mailbox)
-        .subject("Password Reset Request")
+        .subject(format!("Password reset for {site_name}"))
         .header(ContentType::TEXT_PLAIN)
         .body(format!(
             "Hello,
         
-             You (or someone else) requested to reset your password on {}.\n
-             If you wish to proceed, click this link: {url}\n
-             Otherwise, please ignore this email.",
-            config::get().public_info.name
+             You (or someone else) requested to reset your password on {site_name}.
+             If you wish to proceed, click this link: {url}
+             Otherwise, please ignore this email."
         ))?;
     let credentials = Credentials::new(smtp_info.username.to_string(), smtp_info.password.to_string());
 
     // Open a remote connection to gmail
-    let mailer = SmtpTransport::relay("smtp.gmail.com")
+    let mailer = SmtpTransport::relay(&smtp_info.host)
         .unwrap()
         .credentials(credentials)
         .build();

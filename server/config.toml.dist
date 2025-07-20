@@ -37,9 +37,11 @@ post_width    = 300
 post_height   = 300
 
 # [smtp]
-# username = # example: bot
-# password = # example: groovy123
-# from     = # example: noreply@example.com
+# host = # example: "smtp.gmail.com"
+# port = # example: 25
+# username = # example: "bot"
+# password = # example: "groovy123"
+# from     = # example: "noreply@example.com"
 
 [public_info]
 # Shown in the website title and on the front page
