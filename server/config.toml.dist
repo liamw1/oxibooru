@@ -41,7 +41,7 @@ post_height   = 300
 # port = # example: 25
 # username = # example: "bot"
 # password = # example: "groovy123"
-# from     = # example: "noreply@example.com"
+# from     = # example: "App <noreply@example.com>"
 
 [public_info]
 # Shown in the website title and on the front page

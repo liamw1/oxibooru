@@ -14,7 +14,8 @@ use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
-use serde::{Deserialize, Serialize};
+use percent_encoding::NON_ALPHANUMERIC;
+use serde::Serialize;
 use std::str::FromStr;
 
 pub fn routes() -> Router {
@@ -54,7 +55,8 @@ async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
 
     let site_name = &config::get().public_info.name;
     let reset_token = hash::compute_url_safe_hash(&password_salt);
-    let url = format!("{domain}/password-reset/{username}/?token={reset_token}");
+    let url = format!("{domain}/password-reset/{username}:{reset_token}");
+    let url = percent_encoding::utf8_percent_encode(&url, NON_ALPHANUMERIC);
 
     let email = Message::builder()
         .from(smtp_info.from.clone())
@@ -80,26 +82,19 @@ async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
     mailer.send(&email).map(|_| Json(())).map_err(api::Error::from)
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ResetToken {
-    token: String,
-}
-
 #[derive(Serialize)]
 struct NewPassword {
     password: String,
 }
 
-async fn reset_password(
-    Path(identifier): Path<String>,
-    Json(confirmation): Json<ResetToken>,
-) -> ApiResult<Json<NewPassword>> {
-    let identifier = percent_encoding::percent_decode_str(&identifier).decode_utf8()?;
+async fn reset_password(Path(user_and_confirmation): Path<String>) -> ApiResult<Json<NewPassword>> {
+    let (username, confirmation) = user_and_confirmation
+        .split_once(':')
+        .unwrap_or((&user_and_confirmation, ""));
 
     db::get_connection()?.transaction(|conn| {
-        let (user_id, _name, _email, password_salt) = get_user_info(conn, &identifier)?;
-        if confirmation.token != hash::compute_url_safe_hash(&password_salt) {
+        let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
+        if confirmation != hash::compute_url_safe_hash(&password_salt) {
             return Err(api::Error::UnauthorizedPasswordReset);
         }
 
