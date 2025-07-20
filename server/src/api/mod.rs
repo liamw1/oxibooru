@@ -99,7 +99,6 @@ pub enum Error {
     SwfDecoding(#[from] swf::error::Error),
     #[error("Password reset token is invalid")]
     UnauthorizedPasswordReset,
-    Utf8Conversion(#[from] std::str::Utf8Error),
     VideoDecoding(#[from] video_rs::Error),
 }
 
@@ -162,7 +161,6 @@ impl Error {
             Self::StdIo(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::SwfDecoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
-            Self::Utf8Conversion(_) => StatusCode::BAD_REQUEST,
             Self::VideoDecoding(_) => StatusCode::BAD_REQUEST,
         }
     }
@@ -210,7 +208,6 @@ impl Error {
             Self::StdIo(_) => "IO Error",
             Self::SwfDecoding(_) => "SWF Decoding Error",
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
-            Self::Utf8Conversion(_) => "Utf8 Conversion Error",
             Self::VideoDecoding(_) => "Video Decoding Error",
         }
     }

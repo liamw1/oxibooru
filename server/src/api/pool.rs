@@ -240,7 +240,6 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, config::privileges().pool_delete)?;
 
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let (pool_id, pool_version): (i64, DateTime) = pool::table
             .select((pool::id, pool::last_edit_time))
