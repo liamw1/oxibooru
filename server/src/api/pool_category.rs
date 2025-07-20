@@ -42,7 +42,6 @@ async fn get(
     api::verify_privilege(client, config::privileges().pool_category_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let category = pool_category::table
             .filter(pool_category::name.eq(name))
@@ -101,7 +100,6 @@ async fn update(
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
     let category_id = conn.transaction(|conn| {
@@ -142,7 +140,6 @@ async fn set_default(
     api::verify_privilege(client, config::privileges().pool_category_set_default)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let new_default_category: PoolCategory = conn.transaction(|conn| {
         let mut category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
@@ -192,7 +189,6 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, config::privileges().pool_category_delete)?;
 
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let (category_id, category_version): (i64, DateTime) = pool_category::table
             .select((pool_category::id, pool_category::last_edit_time))

@@ -26,7 +26,6 @@ async fn list(
     Path(username): Path<String>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UnpagedResponse<UserTokenInfo>>> {
-    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let (avatar_style, user_tokens) = db::get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
@@ -70,7 +69,6 @@ async fn create(
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
-    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
@@ -130,7 +128,6 @@ async fn update(
     Query(params): Query<ResourceParams>,
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
-    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
@@ -170,7 +167,6 @@ async fn delete(
     Extension(client): Extension<Client>,
     Path((username, token)): Path<(String, Uuid)>,
 ) -> ApiResult<Json<()>> {
-    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let user_token_owner: i64 = user::table
             .inner_join(user_token::table)

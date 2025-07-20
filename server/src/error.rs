@@ -403,7 +403,6 @@ impl ErrorKind for crate::api::Error {
             Self::StdIo(err) => err.kind().kind(),
             Self::SwfDecoding(err) => err.kind(),
             Self::UnauthorizedPasswordReset => "UnauthorizedPasswordReset",
-            Self::Utf8Conversion(_) => "Utf8ConversionError",
             Self::VideoDecoding(err) => err.kind(),
         }
     }

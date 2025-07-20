@@ -35,7 +35,6 @@ fn get_user_info(
 
 async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
     let smtp_info = config::smtp().ok_or(api::Error::MissingSmtpInfo)?;
-    let identifier = percent_encoding::percent_decode_str(&identifier).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
     let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;

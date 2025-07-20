@@ -68,7 +68,6 @@ async fn get(
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UserInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let user_id = user::table
             .select(user::id)
@@ -213,7 +212,6 @@ async fn update(
     body: UpdateBody,
 ) -> ApiResult<Json<UserInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
 
     let custom_avatar = match Content::new(body.avatar, body.avatar_token, body.avatar_url) {
         Some(content) => Some(content.thumbnail(ThumbnailType::Avatar).await?),
@@ -347,7 +345,6 @@ async fn delete(
     Path(username): Path<String>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    let username = percent_encoding::percent_decode_str(&username).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))

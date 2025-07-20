@@ -42,7 +42,6 @@ async fn get(
     api::verify_privilege(client, config::privileges().tag_category_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let category = tag_category::table
             .filter(tag_category::name.eq(name))
@@ -104,7 +103,6 @@ async fn update(
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
 
     let mut conn = db::get_connection()?;
     let category_id = conn.transaction(|conn| {
@@ -157,7 +155,6 @@ async fn set_default(
     api::verify_privilege(client, config::privileges().tag_category_set_default)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let new_default_category: TagCategory = conn.transaction(|conn| {
         let mut category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
@@ -206,7 +203,6 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, config::privileges().tag_category_delete)?;
 
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let (category_id, category_version): (i64, DateTime) = tag_category::table
             .select((tag_category::id, tag_category::last_edit_time))

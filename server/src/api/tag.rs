@@ -61,7 +61,6 @@ async fn get(
     api::verify_privilege(client, config::privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let tag_id = tag_name::table
             .select(tag_name::tag_id)
@@ -94,7 +93,6 @@ async fn get_siblings(
     api::verify_privilege(client, config::privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let tag_id: i64 = tag::table
             .select(tag::id)
@@ -317,7 +315,6 @@ async fn update(
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<TagInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     let mut conn = db::get_connection()?;
     let tag_id = conn.transaction(|conn| {
         let (tag_id, tag_version) = tag::table
@@ -386,7 +383,6 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, config::privileges().tag_delete)?;
 
-    let name = percent_encoding::percent_decode_str(&name).decode_utf8()?;
     db::get_connection()?.transaction(|conn| {
         let (tag_id, tag_version): (i64, DateTime) = tag::table
             .select((tag::id, tag::last_edit_time))
