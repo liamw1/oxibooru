@@ -4,7 +4,7 @@
 # orchestration services
 services:
   server:
-    image: oxibooru/server:0.5.0
+    image: oxibooru/server:0.5.1
     build:
       context: server
       args: 
@@ -29,7 +29,7 @@ services:
     stop_signal: SIGINT
 
   client:
-    image: oxibooru/client:0.5.0
+    image: oxibooru/client:0.5.1
     build: client
     depends_on:
       - server
