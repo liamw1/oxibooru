@@ -1,4 +1,4 @@
-use crate::model::pool::PoolCategory;
+use crate::model::pool_category::PoolCategory;
 use crate::resource::BoolFill;
 use crate::schema::{pool_category, pool_category_statistics};
 use crate::string::SmallString;

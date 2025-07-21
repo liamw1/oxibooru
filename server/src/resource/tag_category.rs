@@ -1,4 +1,4 @@
-use crate::model::tag::TagCategory;
+use crate::model::tag_category::TagCategory;
 use crate::resource::BoolFill;
 use crate::schema::{tag_category, tag_category_statistics};
 use crate::string::SmallString;

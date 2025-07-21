@@ -4,9 +4,11 @@ use crate::db::{ConnectionPool, ConnectionResult};
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{AvatarStyle, MimeType, PostFlag, PostFlags, Score, UserRank};
 use crate::model::enums::{PostSafety, PostType};
-use crate::model::pool::{NewPool, NewPoolCategory, NewPoolName, PoolPost};
+use crate::model::pool::{NewPool, NewPoolName, PoolPost};
+use crate::model::pool_category::NewPoolCategory;
 use crate::model::post::{NewPost, NewPostFeature, NewPostNote, PostFavorite, PostRelation, PostScore, PostTag};
-use crate::model::tag::{NewTag, NewTagCategory, NewTagName, TagImplication, TagSuggestion};
+use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
+use crate::model::tag_category::NewTagCategory;
 use crate::model::user::{NewUser, NewUserToken};
 use crate::schema::{
     comment, comment_score, pool, pool_category, pool_category_statistics, pool_name, pool_post, pool_statistics, post,

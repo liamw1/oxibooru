@@ -2,7 +2,7 @@ use crate::api::{ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
 use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
-use crate::model::tag::{NewTagCategory, TagCategory};
+use crate::model::tag_category::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
 use crate::string::SmallString;
@@ -221,7 +221,7 @@ async fn delete(
 #[cfg(test)]
 mod test {
     use crate::api::ApiResult;
-    use crate::model::tag::TagCategory;
+    use crate::model::tag_category::TagCategory;
     use crate::schema::{tag_category, tag_category_statistics};
     use crate::test::*;
     use crate::time::DateTime;

@@ -23,11 +23,7 @@ Some aspects of a Szurubooru instance can't be converted to an Oxibooru instance
 
     Oxibooru does not currently support YouTube posts and is unlikely to support them in the future.
 
-4. **Snapshots**
-
-    Snapshots are not implemented in Oxibooru, and I don't have plans to implement them unless someone gives me a compelling case for them. I'm still not sure what purpose they actually served in Szurubooru. If you're a big snapshot fan then you may want to hold off on migrating.
-
-5. **Post Notes**
+4. **Post Notes**
     
     Post notes are represented very poorly in the Szurubooru database. The polygon column is stored as a serialized Python object, which makes conversion very difficult as their exact layout is both hard to determine and platform-dependent. These simply aren't handled in the conversion script at the moment due to the complexity involved.
 
