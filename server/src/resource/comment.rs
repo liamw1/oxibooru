@@ -98,8 +98,8 @@ impl CommentInfo {
         comment_ids: Vec<i64>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let unordered_posts = comment::table.filter(comment::id.eq_any(&comment_ids)).load(conn)?;
-        let comments = resource::order_as(unordered_posts, &comment_ids);
+        let unordered_comments = comment::table.filter(comment::id.eq_any(&comment_ids)).load(conn)?;
+        let comments = resource::order_as(unordered_comments, &comment_ids);
         Self::new_batch(conn, client, comments, fields)
     }
 }

@@ -27,9 +27,9 @@ pub struct ParseExtensionError {
 #[error("Cannot convert None to Score")]
 pub struct FromRatingError;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
-#[diesel(sql_type = SmallInt)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+#[diesel(sql_type = SmallInt)]
 #[repr(i16)]
 pub enum AvatarStyle {
     Gravatar,
@@ -57,10 +57,10 @@ impl FromSql<SmallInt, Pg> for AvatarStyle {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, FromRepr, EnumString, AsExpression, FromSqlRow, Serialize, Deserialize)]
-#[diesel(sql_type = SmallInt)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
+#[diesel(sql_type = SmallInt)]
 #[repr(i16)]
 pub enum PostType {
     Image,
@@ -226,9 +226,9 @@ impl FromSql<SmallInt, Pg> for MimeType {
     Serialize,
     Deserialize,
 )]
-#[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
+#[diesel(sql_type = SmallInt)]
 #[repr(i16)]
 pub enum PostSafety {
     Safe,
@@ -251,7 +251,7 @@ impl FromSql<SmallInt, Pg> for PostSafety {
     }
 }
 
-#[derive(Copy, Clone, EnumCount, EnumString, FromRepr, IntoStaticStr, Deserialize)]
+#[derive(Clone, Copy, EnumCount, EnumString, FromRepr, IntoStaticStr, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum PostFlag {
@@ -265,7 +265,7 @@ impl From<PostFlag> for u16 {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Default, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, AsExpression, FromSqlRow)]
 #[diesel(sql_type = SmallInt)]
 pub struct PostFlags {
     flags: u16, // Bit mask of possible flags
@@ -343,6 +343,7 @@ impl Serialize for PostFlags {
     Debug,
     Clone,
     Copy,
+    Default,
     PartialEq,
     Eq,
     PartialOrd,
@@ -354,23 +355,18 @@ impl Serialize for PostFlags {
     Serialize,
     Deserialize,
 )]
-#[diesel(sql_type = SmallInt)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
+#[diesel(sql_type = SmallInt)]
 #[repr(i16)]
 pub enum UserRank {
     Anonymous,
     Restricted,
+    #[default]
     Regular,
     Power,
     Moderator,
     Administrator,
-}
-
-impl Default for UserRank {
-    fn default() -> Self {
-        UserRank::Regular
-    }
 }
 
 impl ToSql<SmallInt, Pg> for UserRank {
@@ -388,7 +384,7 @@ impl FromSql<SmallInt, Pg> for UserRank {
     }
 }
 
-#[derive(Debug, Copy, Clone, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
 #[repr(i16)]
 pub enum Rating {
     Dislike = -1,
@@ -411,7 +407,7 @@ impl From<Score> for Rating {
     }
 }
 
-#[derive(Debug, Copy, Clone, FromRepr, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, Copy, FromRepr, AsExpression, FromSqlRow)]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
 pub enum Score {
@@ -445,22 +441,62 @@ impl FromSql<SmallInt, Pg> for Score {
     }
 }
 
-#[derive(Debug, Display)]
-#[strum(serialize_all = "lowercase")]
+#[derive(Debug, Clone, Copy, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[diesel(sql_type = SmallInt)]
+#[repr(i16)]
+pub enum SnapshotOperation {
+    Created,
+    Modified,
+    Merged,
+    Deleted,
+}
+
+impl ToSql<SmallInt, Pg> for SnapshotOperation {
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        // SAFETY: Score is repr(i16) so a valid SnapshotOperation is a valid i16
+        let value: &'a i16 = unsafe { &*(self as *const SnapshotOperation as *const i16) };
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    }
+}
+
+impl FromSql<SmallInt, Pg> for SnapshotOperation {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        let database_value = i16::from_sql(value)?;
+        SnapshotOperation::from_repr(database_value).ok_or("Failed to deserialize snapshot operation".into())
+    }
+}
+
+#[derive(Debug, Display, Clone, Copy, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[strum(serialize_all = "snake_case")]
+#[diesel(sql_type = SmallInt)]
+#[repr(i16)]
 pub enum ResourceType {
     Comment,
     Pool,
-    #[strum(serialize = "pool category")]
     PoolCategory,
     Post,
     Tag,
-    #[strum(serialize = "tag category")]
     TagCategory,
-    #[strum(serialize = "tag implication")]
     TagImplication,
-    #[strum(serialize = "tag suggestion")]
     TagSuggestion,
     User,
+}
+
+impl ToSql<SmallInt, Pg> for ResourceType {
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        // SAFETY: Score is repr(i16) so a valid ResourceType is a valid i16
+        let value: &'a i16 = unsafe { &*(self as *const ResourceType as *const i16) };
+        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    }
+}
+
+impl FromSql<SmallInt, Pg> for ResourceType {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        let database_value = i16::from_sql(value)?;
+        ResourceType::from_repr(database_value).ok_or("Failed to deserialize resource type".into())
+    }
 }
 
 #[cfg(test)]

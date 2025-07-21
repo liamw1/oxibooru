@@ -25,6 +25,7 @@ mod password_reset;
 mod pool;
 mod pool_category;
 mod post;
+mod snapshot;
 mod tag;
 mod tag_category;
 mod upload;
@@ -261,6 +262,7 @@ pub fn routes() -> Router {
         .merge(pool_category::routes())
         .merge(pool::routes())
         .merge(post::routes())
+        .merge(snapshot::routes())
         .merge(tag_category::routes())
         .merge(tag::routes())
         .merge(upload::routes())

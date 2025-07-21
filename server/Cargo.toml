@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 # Using fork until changes are merged in
-diesel = { git = "https://github.com/liamw1/diesel-CitextFix", features = ["postgres", "r2d2", "time", "uuid", 
+diesel = { git = "https://github.com/liamw1/diesel-CitextFix", features = ["postgres", "r2d2", "time", "uuid", "serde_json",
                                                                            "i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
 diesel_migrations = { git = "https://github.com/liamw1/diesel-CitextFix", features = ["postgres"] }
 tokio = { version = "1.43.0", features = ["full"] }
