@@ -1,6 +1,6 @@
 use crate::api;
 use crate::api::ApiResult;
-use crate::model::enums::{ResourceType, SnapshotOperation};
+use crate::model::enums::{ResourceType, ResourceOperation};
 use crate::schema::{snapshot, user};
 use crate::search::{Order, ParsedSort, SearchCriteria};
 use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
@@ -52,7 +52,7 @@ impl<'a> QueryBuilder<'a> {
             .iter()
             .try_fold(base_query, |query, filter| match filter.kind {
                 Token::User => Ok(apply_str_filter!(query, user::name, filter)),
-                Token::Operation => apply_filter!(query, snapshot::operation, filter, SnapshotOperation),
+                Token::Operation => apply_filter!(query, snapshot::operation, filter, ResourceOperation),
                 Token::ResourceType => apply_filter!(query, snapshot::resource_type, filter, ResourceType),
                 Token::ResourceId => apply_filter!(query, snapshot::resource_id, filter, i64),
                 Token::Time => apply_time_filter!(query, snapshot::creation_time, filter),

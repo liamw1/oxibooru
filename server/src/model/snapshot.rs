@@ -1,4 +1,4 @@
-use crate::model::enums::{ResourceType, SnapshotOperation};
+use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::model::user::User;
 use crate::schema::snapshot;
 use crate::time::DateTime;
@@ -11,7 +11,7 @@ use serde_json::Value;
 #[diesel(check_for_backend(Pg))]
 pub struct NewSnapshot {
     pub user_id: Option<i64>,
-    pub operation: SnapshotOperation,
+    pub operation: ResourceOperation,
     pub resource_type: ResourceType,
     pub resource_id: i64,
     pub data: Value,
@@ -24,7 +24,7 @@ pub struct NewSnapshot {
 pub struct Snapshot {
     pub id: i64,
     pub user_id: Option<i64>,
-    pub operation: SnapshotOperation,
+    pub operation: ResourceOperation,
     pub resource_type: ResourceType,
     pub resource_id: i64,
     pub data: Value,

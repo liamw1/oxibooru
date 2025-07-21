@@ -1,4 +1,4 @@
-use crate::model::enums::{ResourceType, SnapshotOperation};
+use crate::model::enums::{ResourceType, ResourceOperation};
 use crate::model::snapshot::Snapshot;
 use crate::resource;
 use crate::resource::BoolFill;
@@ -31,7 +31,7 @@ impl BoolFill for FieldTable<bool> {
 #[derive(Serialize)]
 pub struct SnapshotInfo {
     user: Option<Option<String>>,
-    operation: Option<SnapshotOperation>,
+    operation: Option<ResourceOperation>,
     #[serde(rename(serialize = "type"))]
     resource_type: Option<ResourceType>,
     #[serde(rename(serialize = "id"))]

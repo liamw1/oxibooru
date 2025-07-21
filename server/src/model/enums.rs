@@ -445,25 +445,25 @@ impl FromSql<SmallInt, Pg> for Score {
 #[serde(rename_all = "snake_case")]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
-pub enum SnapshotOperation {
+pub enum ResourceOperation {
     Created,
     Modified,
     Merged,
     Deleted,
 }
 
-impl ToSql<SmallInt, Pg> for SnapshotOperation {
+impl ToSql<SmallInt, Pg> for ResourceOperation {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        // SAFETY: Score is repr(i16) so a valid SnapshotOperation is a valid i16
-        let value: &'a i16 = unsafe { &*(self as *const SnapshotOperation as *const i16) };
+        // SAFETY: Score is repr(i16) so a valid ResourceOperation is a valid i16
+        let value: &'a i16 = unsafe { &*(self as *const ResourceOperation as *const i16) };
         <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
     }
 }
 
-impl FromSql<SmallInt, Pg> for SnapshotOperation {
+impl FromSql<SmallInt, Pg> for ResourceOperation {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(value)?;
-        SnapshotOperation::from_repr(database_value).ok_or("Failed to deserialize snapshot operation".into())
+        ResourceOperation::from_repr(database_value).ok_or("Failed to deserialize resource operation".into())
     }
 }
 
