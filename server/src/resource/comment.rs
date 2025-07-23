@@ -47,6 +47,17 @@ pub struct CommentInfo {
 }
 
 impl CommentInfo {
+    pub fn new(
+        conn: &mut PgConnection,
+        client: Client,
+        comment: Comment,
+        fields: &FieldTable<bool>,
+    ) -> QueryResult<Self> {
+        let mut comment_info = Self::new_batch(conn, client, vec![comment], fields)?;
+        assert_eq!(comment_info.len(), 1);
+        Ok(comment_info.pop().unwrap())
+    }
+
     pub fn new_from_id(
         conn: &mut PgConnection,
         client: Client,

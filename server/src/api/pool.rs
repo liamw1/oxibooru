@@ -96,14 +96,12 @@ async fn create(
             .select(pool_category::id)
             .filter(pool_category::name.eq(body.category))
             .first(conn)?;
-        let new_pool = NewPool {
+        let pool: Pool = NewPool {
             category_id,
             description: body.description.as_deref().unwrap_or(""),
-        };
-        let pool = diesel::insert_into(pool::table)
-            .values(new_pool)
-            .returning(Pool::as_returning())
-            .get_result(conn)?;
+        }
+        .insert_into(pool::table)
+        .get_result(conn)?;
 
         update::pool::add_names(conn, pool.id, 0, body.names)?;
         update::pool::add_posts(conn, pool.id, 0, body.posts.unwrap_or_default())?;

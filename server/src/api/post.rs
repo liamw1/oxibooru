@@ -259,9 +259,7 @@ async fn feature(
     };
 
     let mut conn = db::get_connection()?;
-    diesel::insert_into(post_feature::table)
-        .values(new_post_feature)
-        .execute(&mut conn)?;
+    new_post_feature.insert_into(post_feature::table).execute(&mut conn)?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, client, body.id, &fields))
         .map(Json)
         .map_err(api::Error::from)
@@ -440,7 +438,7 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         description: body.description.as_deref().unwrap_or(""),
     };
 
-    let post_id = tagging_update(body.tags.as_deref(), |conn| {
+    let post = tagging_update(body.tags.as_deref(), |conn| {
         // We do this before post insertion so that the post sequence isn't incremented if it fails
         let tag_ids = body
             .tags
@@ -448,31 +446,27 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
             .map(|names| update::tag::get_or_create_tag_ids(conn, client, names, false))
             .transpose()?;
 
-        let post_id = diesel::insert_into(post::table)
-            .values(new_post)
-            .returning(post::id)
-            .get_result(conn)?;
-        let post_hash = PostHash::new(post_id);
+        let post: Post = new_post.insert_into(post::table).get_result(conn)?;
+        let post_hash = PostHash::new(post.id);
 
         // Add tags, relations, and notes
         if let Some(tags) = tag_ids {
-            update::post::add_tags(conn, post_id, tags)?;
+            update::post::add_tags(conn, post.id, tags)?;
         }
         if let Some(relations) = body.relations {
-            update::post::create_relations(conn, post_id, relations)?;
+            update::post::create_relations(conn, post.id, relations)?;
         }
         if let Some(notes) = body.notes {
-            update::post::add_notes(conn, post_id, notes)?;
+            update::post::add_notes(conn, post.id, notes)?;
         }
 
-        let new_post_signature = NewPostSignature {
-            post_id,
+        NewPostSignature {
+            post_id: post.id,
             signature: content_properties.signature.into(),
             words: signature::generate_indexes(&content_properties.signature).into(),
-        };
-        diesel::insert_into(post_signature::table)
-            .values(new_post_signature)
-            .execute(conn)?;
+        }
+        .insert_into(post_signature::table)
+        .execute(conn)?;
 
         // Move content to permanent location
         let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
@@ -485,11 +479,11 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
             update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
         }
         update::post::thumbnail(conn, &post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
-        Ok::<_, api::Error>(post_id)
+        Ok::<_, api::Error>(post)
     })
     .await?;
     db::get_connection()?
-        .transaction(|conn| PostInfo::new_from_id(conn, client, post_id, &fields))
+        .transaction(|conn| PostInfo::new(conn, client, post, &fields))
         .map(Json)
         .map_err(api::Error::from)
 }
@@ -569,9 +563,8 @@ async fn merge(
             .filter(post_relation::parent_id.eq(merge_to_id))
             .or_filter(post_relation::child_id.eq(merge_to_id))
             .execute(conn)?;
-        diesel::insert_into(post_relation::table)
-            .values(merged_relations.into_iter().collect::<Vec<_>>())
-            .execute(conn)?;
+        let merged_relations: Vec<_> = merged_relations.into_iter().collect();
+        merged_relations.insert_into(post_relation::table).execute(conn)?;
 
         // Merge tags
         let merge_to_tags = post_tag::table
@@ -589,7 +582,7 @@ async fn merge(
                 tag_id,
             })
             .collect();
-        diesel::insert_into(post_tag::table).values(new_tags).execute(conn)?;
+        new_tags.insert_into(post_tag::table).execute(conn)?;
 
         // Merge pools
         let merge_to_pools = pool_post::table
@@ -608,7 +601,7 @@ async fn merge(
                 order,
             })
             .collect();
-        diesel::insert_into(pool_post::table).values(new_pools).execute(conn)?;
+        new_pools.insert_into(pool_post::table).execute(conn)?;
 
         // Merge scores
         let merge_to_scores = post_score::table
@@ -628,9 +621,7 @@ async fn merge(
                 time,
             })
             .collect();
-        diesel::insert_into(post_score::table)
-            .values(new_scores)
-            .execute(conn)?;
+        new_scores.insert_into(post_score::table).execute(conn)?;
 
         // Merge favorites
         let merge_to_favorites = post_favorite::table
@@ -649,9 +640,7 @@ async fn merge(
                 time,
             })
             .collect();
-        diesel::insert_into(post_favorite::table)
-            .values(new_favorites)
-            .execute(conn)?;
+        new_favorites.insert_into(post_favorite::table).execute(conn)?;
 
         // Merge features
         let new_features: Vec<_> = diesel::delete(post_feature::table.filter(post_feature::post_id.eq(remove_id)))
@@ -664,9 +653,7 @@ async fn merge(
                 time,
             })
             .collect();
-        diesel::insert_into(post_feature::table)
-            .values(new_features)
-            .execute(conn)?;
+        new_features.insert_into(post_feature::table).execute(conn)?;
 
         // Merge comments
         let removed_comments: Vec<(_, String, _)> =
@@ -682,7 +669,7 @@ async fn merge(
                 creation_time: *creation_time,
             })
             .collect();
-        diesel::insert_into(comment::table).values(new_comments).execute(conn)?;
+        new_comments.insert_into(comment::table).execute(conn)?;
 
         // Merge descriptions
         let merged_description = merge_to_post.description.clone() + "\n\n" + &remove_post.description;
@@ -762,8 +749,8 @@ async fn favorite(
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
-        diesel::insert_into(post_favorite::table)
-            .values(new_post_favorite)
+        new_post_favorite
+            .insert_into(post_favorite::table)
             .execute(conn)
             .map_err(api::Error::from)
     })?;
@@ -788,15 +775,14 @@ async fn rate(
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*body) {
-            let new_post_score = PostScore {
+            PostScore {
                 post_id,
                 user_id,
                 score,
                 time: DateTime::now(),
-            };
-            diesel::insert_into(post_score::table)
-                .values(new_post_score)
-                .execute(conn)?;
+            }
+            .insert_into(post_score::table)
+            .execute(conn)?;
         }
         Ok::<_, api::Error>(())
     })?;
@@ -915,9 +901,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
                 words: signature::generate_indexes(&content_properties.signature).into(),
             };
             diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
-            diesel::insert_into(post_signature::table)
-                .values(new_post_signature)
-                .execute(conn)?;
+            new_post_signature.insert_into(post_signature::table).execute(conn)?;
 
             // Replace content
             let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);

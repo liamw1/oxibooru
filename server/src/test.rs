@@ -350,9 +350,7 @@ fn create_tag_categories(conn: &mut PgConnection) -> QueryResult<usize> {
             color: "default",
         })
         .collect();
-    diesel::insert_into(tag_category::table)
-        .values(new_categories)
-        .execute(conn)
+    new_categories.insert_into(tag_category::table).execute(conn)
 }
 
 fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
@@ -364,10 +362,7 @@ fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
                 description: "",
             })
             .collect();
-        let tag_ids = diesel::insert_into(tag::table)
-            .values(new_tags)
-            .returning(tag::id)
-            .get_results(conn)?;
+        let tag_ids = new_tags.insert_into(tag::table).returning(tag::id).get_results(conn)?;
 
         let new_tag_names: Vec<_> = tag_ids
             .iter()
@@ -380,9 +375,7 @@ fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
                 })
             })
             .collect();
-        diesel::insert_into(tag_name::table)
-            .values(new_tag_names)
-            .execute(conn)?;
+        new_tag_names.insert_into(tag_name::table).execute(conn)?;
     }
 
     for (parent, child) in TAG_IMPLICATIONS {
@@ -396,9 +389,8 @@ fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(child))
             .first(conn)?;
-        let new_implication = TagImplication { parent_id, child_id };
-        diesel::insert_into(tag_implication::table)
-            .values(new_implication)
+        TagImplication { parent_id, child_id }
+            .insert_into(tag_implication::table)
             .execute(conn)?;
     }
     for (parent, child) in TAG_SUGGESTIONS {
@@ -412,9 +404,8 @@ fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(child))
             .first(conn)?;
-        let new_implication = TagSuggestion { parent_id, child_id };
-        diesel::insert_into(tag_suggestion::table)
-            .values(new_implication)
+        TagSuggestion { parent_id, child_id }
+            .insert_into(tag_suggestion::table)
             .execute(conn)?;
     }
     Ok(())
@@ -425,9 +416,7 @@ fn create_pool_categories(conn: &mut PgConnection) -> QueryResult<usize> {
         .iter()
         .map(|name| NewPoolCategory { name, color: "default" })
         .collect();
-    diesel::insert_into(pool_category::table)
-        .values(new_categories)
-        .execute(conn)
+    new_categories.insert_into(pool_category::table).execute(conn)
 }
 
 fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
@@ -439,8 +428,8 @@ fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
                 description: "",
             })
             .collect();
-        let pool_ids = diesel::insert_into(pool::table)
-            .values(new_pools)
+        let pool_ids = new_pools
+            .insert_into(pool::table)
             .returning(pool::id)
             .get_results(conn)?;
 
@@ -455,28 +444,25 @@ fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
                 })
             })
             .collect();
-        diesel::insert_into(pool_name::table)
-            .values(new_pool_names)
-            .execute(conn)?;
+        new_pool_names.insert_into(pool_name::table).execute(conn)?;
     }
     Ok(())
 }
 
 fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
     // Create users
-    diesel::insert_into(user::table).values(USERS).execute(conn)?;
+    USERS.insert_into(user::table).execute(conn)?;
 
     // Create user token
-    let new_user_token = NewUserToken {
+    NewUserToken {
         id: TEST_TOKEN,
         user_id: 5,
         note: Some("This is a test token"),
         enabled: true,
         expiration_time: None,
-    };
-    diesel::insert_into(user_token::table)
-        .values(new_user_token)
-        .execute(conn)?;
+    }
+    .insert_into(user_token::table)
+    .execute(conn)?;
 
     // Create tags and pools
     create_tag_categories(conn)?;
@@ -485,16 +471,14 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
     create_pools(conn)?;
 
     // Create posts
-    diesel::insert_into(post::table).values(POSTS).execute(conn)?;
+    POSTS.insert_into(post::table).execute(conn)?;
 
     // Add relations
     let new_post_relations: Vec<_> = POST_RELATIONS
         .iter()
         .flat_map(|&(id_1, id_2)| PostRelation::new_pair(id_1, id_2))
         .collect();
-    diesel::insert_into(post_relation::table)
-        .values(new_post_relations)
-        .execute(conn)?;
+    new_post_relations.insert_into(post_relation::table).execute(conn)?;
 
     // Add tags
     for (i, &tags) in POST_TAGS.iter().enumerate() {
@@ -511,9 +495,7 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
                 tag_id,
             })
             .collect();
-        diesel::insert_into(post_tag::table)
-            .values(new_post_tags)
-            .execute(conn)?;
+        new_post_tags.insert_into(post_tag::table).execute(conn)?;
     }
 
     // Add pools
@@ -523,38 +505,35 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
             .inner_join(pool_name::table)
             .filter(pool_name::name.eq(name))
             .first(conn)?;
-        let new_pool_post = PoolPost {
+        PoolPost {
             pool_id,
             post_id,
             order: i as i64,
-        };
-        diesel::insert_into(pool_post::table)
-            .values(new_pool_post)
-            .execute(conn)?;
+        }
+        .insert_into(pool_post::table)
+        .execute(conn)?;
     }
 
     // Add favorites
     for &(user_id, post_id) in POST_FAVORITES {
-        let new_post_favorite = PostFavorite {
+        PostFavorite {
             post_id,
             user_id,
             time: DateTime::now(),
-        };
-        diesel::insert_into(post_favorite::table)
-            .values(new_post_favorite)
-            .execute(conn)?;
+        }
+        .insert_into(post_favorite::table)
+        .execute(conn)?;
     }
 
     // Add features
     for &(user_id, post_id) in POST_FEATURES {
-        let new_post_feature = NewPostFeature {
+        NewPostFeature {
             user_id,
             post_id,
             time: DateTime::now(),
-        };
-        diesel::insert_into(post_feature::table)
-            .values(new_post_feature)
-            .execute(conn)?;
+        }
+        .insert_into(post_feature::table)
+        .execute(conn)?;
     }
 
     // Add scores
@@ -567,27 +546,27 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
             time: DateTime::now(),
         })
         .collect();
-    diesel::insert_into(post_score::table)
-        .values(new_scores)
-        .execute(conn)?;
+    new_scores.insert_into(post_score::table).execute(conn)?;
 
     // Add notes
-    let post_note = NewPostNote {
+    NewPostNote {
         post_id: 3,
         polygon: &[0.0, 0.0, 0.0, 1.0, 1.0, 0.0],
         text: "My favorite part",
-    };
-    diesel::insert_into(post_note::table).values(post_note).execute(conn)?;
+    }
+    .insert_into(post_note::table)
+    .execute(conn)?;
 
     // Add comments
     for &(user_id, post_id, text) in COMMENTS {
-        let new_comment = NewComment {
+        NewComment {
             user_id,
             post_id,
             text,
             creation_time: DateTime::now(),
-        };
-        diesel::insert_into(comment::table).values(new_comment).execute(conn)?;
+        }
+        .insert_into(comment::table)
+        .execute(conn)?;
     }
 
     // Add comment scores
@@ -599,9 +578,7 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
             score,
         })
         .collect();
-    diesel::insert_into(comment_score::table)
-        .values(new_comment_scores)
-        .execute(conn)?;
+    new_comment_scores.insert_into(comment_score::table).execute(conn)?;
 
     Ok(())
 }

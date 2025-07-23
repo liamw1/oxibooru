@@ -6,7 +6,7 @@ use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
 use crate::content::{Content, FileContents, JsonOrMultipart, hash, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
-use crate::model::user::NewUser;
+use crate::model::user::{NewUser, User};
 use crate::resource::user::{UserInfo, Visibility};
 use crate::schema::user;
 use crate::search::user::QueryBuilder;
@@ -144,11 +144,8 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
     };
 
     let mut conn = db::get_connection()?;
-    let user_id = conn.transaction(|conn| {
-        let user_id = diesel::insert_into(user::table)
-            .values(new_user)
-            .returning(user::id)
-            .get_result(conn)?;
+    let user = conn.transaction(|conn| {
+        let user: User = new_user.insert_into(user::table).get_result(conn)?;
 
         if let Some(avatar) = custom_avatar {
             let required_rank = match creating_self {
@@ -157,12 +154,12 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
             };
             api::verify_privilege(client, required_rank)?;
 
-            update::user::avatar(conn, user_id, &body.name, avatar)?;
+            update::user::avatar(conn, user.id, &body.name, avatar)?;
         }
 
-        Ok::<_, api::Error>(user_id)
+        Ok::<_, api::Error>(user)
     })?;
-    conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, Visibility::Full))
+    conn.transaction(|conn| UserInfo::new(conn, user, &fields, Visibility::Full))
         .map(Json)
         .map_err(api::Error::from)
 }

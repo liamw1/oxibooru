@@ -32,9 +32,7 @@ pub fn add_names(
         .map(|(i, name)| (current_name_count + i as i32, name))
         .map(|(order, name)| NewPoolName { pool_id, order, name })
         .collect();
-    diesel::insert_into(pool_name::table)
-        .values(updated_names)
-        .execute(conn)?;
+    updated_names.insert_into(pool_name::table).execute(conn)?;
     Ok(())
 }
 
@@ -58,9 +56,7 @@ pub fn add_posts(conn: &mut PgConnection, pool_id: i64, current_post_count: i64,
             order,
         })
         .collect();
-    diesel::insert_into(pool_post::table)
-        .values(new_pool_posts)
-        .execute(conn)?;
+    new_pool_posts.insert_into(pool_post::table).execute(conn)?;
     Ok(())
 }
 

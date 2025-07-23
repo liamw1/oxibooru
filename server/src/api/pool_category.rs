@@ -76,10 +76,7 @@ async fn create(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
-    let category = diesel::insert_into(pool_category::table)
-        .values(new_category)
-        .returning(PoolCategory::as_returning())
-        .get_result(&mut conn)?;
+    let category = new_category.insert_into(pool_category::table).get_result(&mut conn)?;
     conn.transaction(|conn| PoolCategoryInfo::new(conn, category, &fields))
         .map(Json)
         .map_err(api::Error::from)

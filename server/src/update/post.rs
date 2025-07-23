@@ -43,9 +43,7 @@ pub fn create_relations(conn: &mut PgConnection, post_id: i64, relations: Vec<i6
         .iter()
         .flat_map(|&other_id| PostRelation::new_pair(post_id, other_id))
         .collect();
-    diesel::insert_into(post_relation::table)
-        .values(new_relations)
-        .execute(conn)?;
+    new_relations.insert_into(post_relation::table).execute(conn)?;
     Ok(())
 }
 
@@ -61,9 +59,7 @@ pub fn delete_relations(conn: &mut PgConnection, post_id: i64) -> QueryResult<us
 /// Adds tags to the post with id `post_id`.
 pub fn add_tags(conn: &mut PgConnection, post_id: i64, tags: Vec<i64>) -> QueryResult<()> {
     let new_post_tags: Vec<_> = tags.into_iter().map(|tag_id| PostTag { post_id, tag_id }).collect();
-    diesel::insert_into(post_tag::table)
-        .values(new_post_tags)
-        .execute(conn)?;
+    new_post_tags.insert_into(post_tag::table).execute(conn)?;
     Ok(())
 }
 
@@ -78,9 +74,7 @@ pub fn delete_tags(conn: &mut PgConnection, post_id: i64) -> QueryResult<usize> 
 /// Adds notes to the post with id `post_id`.
 pub fn add_notes(conn: &mut PgConnection, post_id: i64, notes: Vec<Note>) -> QueryResult<()> {
     let new_post_notes: Vec<_> = notes.iter().map(|note| note.to_new_post_note(post_id)).collect();
-    diesel::insert_into(post_note::table)
-        .values(new_post_notes)
-        .execute(conn)?;
+    new_post_notes.insert_into(post_note::table).execute(conn)?;
     Ok(())
 }
 

@@ -18,6 +18,13 @@ pub struct NewSnapshot {
     pub data: Value,
 }
 
+impl NewSnapshot {
+    /// Inserts `self` into `snapshot` table
+    pub fn insert(self, conn: &mut PgConnection) -> QueryResult<()> {
+        self.insert_into(snapshot::table).execute(conn).map(|_| ())
+    }
+}
+
 #[derive(Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = snapshot)]

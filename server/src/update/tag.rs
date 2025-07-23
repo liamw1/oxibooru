@@ -2,11 +2,14 @@ use crate::api::ApiResult;
 use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
+use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
+use crate::schema::post_tag;
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config};
+use diesel::dsl::max;
 use diesel::prelude::*;
 use std::collections::HashSet;
 
@@ -35,7 +38,7 @@ pub fn add_names(
         .map(|(i, name)| (current_name_count + i as i32, name))
         .map(|(order, name)| NewTagName { tag_id, order, name })
         .collect();
-    diesel::insert_into(tag_name::table).values(new_names).execute(conn)?;
+    new_names.insert_into(tag_name::table).execute(conn)?;
     Ok(())
 }
 
@@ -60,9 +63,7 @@ pub fn add_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: Vec<i
                 .ok_or(api::Error::CyclicDependency(ResourceType::TagImplication))
         })
         .collect::<Result<_, _>>()?;
-    diesel::insert_into(tag_implication::table)
-        .values(new_implications)
-        .execute(conn)?;
+    new_implications.insert_into(tag_implication::table).execute(conn)?;
     Ok(())
 }
 
@@ -79,9 +80,7 @@ pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: Vec<
                 .ok_or(api::Error::CyclicDependency(ResourceType::TagSuggestion))
         })
         .collect::<Result<_, _>>()?;
-    diesel::insert_into(tag_suggestion::table)
-        .values(new_suggestions)
-        .execute(conn)?;
+    new_suggestions.insert_into(tag_suggestion::table).execute(conn)?;
     Ok(())
 }
 
@@ -140,8 +139,8 @@ pub fn get_or_create_tag_ids(
     if !new_tag_names.is_empty() {
         api::verify_privilege(client, config::privileges().tag_create)?;
 
-        let new_tag_ids: Vec<i64> = diesel::insert_into(tag::table)
-            .values(vec![NewTag::default(); new_tag_names.len()])
+        let new_tag_ids: Vec<i64> = vec![NewTag::default(); new_tag_names.len()]
+            .insert_into(tag::table)
             .returning(tag::id)
             .get_results(conn)?;
         let new_tag_names: Vec<_> = new_tag_ids
@@ -149,10 +148,96 @@ pub fn get_or_create_tag_ids(
             .zip(new_tag_names.iter())
             .map(|(&tag_id, name)| NewTagName { tag_id, order: 0, name })
             .collect();
-        diesel::insert_into(tag_name::table)
-            .values(new_tag_names)
-            .execute(conn)?;
+        new_tag_names.insert_into(tag_name::table).execute(conn)?;
         tag_ids.extend(new_tag_ids);
     }
     Ok(tag_ids)
+}
+
+pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> ApiResult<()> {
+    // Merge implications
+    let involved_implications: Vec<TagImplication> = tag_implication::table
+        .filter(tag_implication::parent_id.eq(absorbed_id))
+        .or_filter(tag_implication::child_id.eq(absorbed_id))
+        .or_filter(tag_implication::parent_id.eq(merge_to_id))
+        .or_filter(tag_implication::child_id.eq(merge_to_id))
+        .load(conn)?;
+    let merged_implications: HashSet<_> = involved_implications
+        .iter()
+        .copied()
+        .map(|mut implication| {
+            if implication.parent_id == absorbed_id {
+                implication.parent_id = merge_to_id
+            } else if implication.child_id == absorbed_id {
+                implication.child_id = merge_to_id
+            }
+            implication
+        })
+        .filter(|implication| implication.parent_id != implication.child_id)
+        .collect();
+    diesel::delete(tag_implication::table)
+        .filter(tag_implication::parent_id.eq(merge_to_id))
+        .or_filter(tag_implication::child_id.eq(merge_to_id))
+        .execute(conn)?;
+    let merged_implications: Vec<_> = merged_implications.into_iter().collect();
+    merged_implications.insert_into(tag_implication::table).execute(conn)?;
+
+    // Merge suggestions
+    let involved_suggestions: Vec<TagSuggestion> = tag_suggestion::table
+        .filter(tag_suggestion::parent_id.eq(absorbed_id))
+        .or_filter(tag_suggestion::child_id.eq(absorbed_id))
+        .or_filter(tag_suggestion::parent_id.eq(merge_to_id))
+        .or_filter(tag_suggestion::child_id.eq(merge_to_id))
+        .load(conn)?;
+    let merged_suggestions: HashSet<_> = involved_suggestions
+        .iter()
+        .copied()
+        .map(|mut suggestion| {
+            if suggestion.parent_id == absorbed_id {
+                suggestion.parent_id = merge_to_id
+            } else if suggestion.child_id == absorbed_id {
+                suggestion.child_id = merge_to_id
+            }
+            suggestion
+        })
+        .filter(|suggestion| suggestion.parent_id != suggestion.child_id)
+        .collect();
+    diesel::delete(tag_suggestion::table)
+        .filter(tag_suggestion::parent_id.eq(merge_to_id))
+        .or_filter(tag_suggestion::child_id.eq(merge_to_id))
+        .execute(conn)?;
+    let merged_suggestions: Vec<_> = merged_suggestions.into_iter().collect();
+    merged_suggestions.insert_into(tag_suggestion::table).execute(conn)?;
+
+    // Merge usages
+    let merge_to_posts = post_tag::table
+        .select(post_tag::post_id)
+        .filter(post_tag::tag_id.eq(merge_to_id))
+        .into_boxed();
+    let new_post_tags: Vec<_> = post_tag::table
+        .select(post_tag::post_id)
+        .filter(post_tag::tag_id.eq(absorbed_id))
+        .filter(post_tag::post_id.ne_all(merge_to_posts))
+        .load(conn)?
+        .into_iter()
+        .map(|post_id| PostTag {
+            post_id,
+            tag_id: merge_to_id,
+        })
+        .collect();
+    new_post_tags.insert_into(post_tag::table).execute(conn)?;
+
+    // Merge names
+    let current_name_count = tag_name::table
+        .select(max(tag_name::order) + 1)
+        .filter(tag_name::tag_id.eq(merge_to_id))
+        .first::<Option<_>>(conn)?
+        .unwrap_or(0);
+    let removed_names = diesel::delete(tag_name::table.filter(tag_name::tag_id.eq(absorbed_id)))
+        .returning(tag_name::name)
+        .get_results(conn)?;
+    add_names(conn, merge_to_id, current_name_count, removed_names)?;
+
+    diesel::delete(tag::table.find(absorbed_id)).execute(conn)?;
+    last_edit_time(conn, merge_to_id)
 }

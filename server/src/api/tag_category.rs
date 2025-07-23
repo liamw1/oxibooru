@@ -78,12 +78,8 @@ async fn create(
     };
 
     let mut conn = db::get_connection()?;
-    let category = diesel::insert_into(tag_category::table)
-        .values(new_category)
-        .returning(TagCategory::as_returning())
-        .get_result(&mut conn)?;
-    let snapshot = snapshot::tag_category::creation_snapshot(client, &category);
-    snapshot::insert_snapshot(&mut conn, snapshot);
+    let category = new_category.insert_into(tag_category::table).get_result(&mut conn)?;
+    snapshot::tag_category::creation_snapshot(client, &category).insert(&mut conn)?;
 
     conn.transaction(|conn| TagCategoryInfo::new(conn, category, &fields))
         .map(Json)
@@ -130,8 +126,7 @@ async fn update(
         if old_version != new_version {
             new_version.last_edit_time = DateTime::now();
             let _: TagCategory = new_version.save_changes(conn)?;
-            let snapshot = snapshot::tag_category::modification_snapshot(client, &old_version, &new_version);
-            snapshot::insert_snapshot(conn, snapshot);
+            snapshot::tag_category::modification_snapshot(client, &old_version, &new_version).insert(conn)?;
         }
         Ok::<_, api::Error>(old_version.id)
     })?;
@@ -204,8 +199,7 @@ async fn delete(
         }
 
         diesel::delete(tag_category::table.find(category.id)).execute(conn)?;
-        let snapshot = snapshot::tag_category::deletion_snapshot(client, &category);
-        snapshot::insert_snapshot(conn, snapshot);
+        snapshot::tag_category::deletion_snapshot(client, &category).insert(conn)?;
         Ok(Json(()))
     })
 }

@@ -14,7 +14,7 @@ pub fn modification_snapshot(client: Client, old: &TagCategory, new: &TagCategor
 
     let old_data = snapshot_data(old);
     let new_data = snapshot_data(new);
-    let data = snapshot::value_diff(&old_data, &new_data).unwrap_or_default();
+    let data = snapshot::value_diff(old_data, new_data).unwrap_or_default();
     NewSnapshot {
         user_id: client.id,
         operation: ResourceOperation::Modified,
