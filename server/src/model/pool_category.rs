@@ -12,7 +12,7 @@ pub struct NewPoolCategory<'a> {
     pub color: &'a str,
 }
 
-#[derive(AsChangeset, Identifiable, Queryable, Selectable)]
+#[derive(Clone, AsChangeset, Identifiable, Queryable, Selectable)]
 #[diesel(table_name = pool_category)]
 #[diesel(check_for_backend(Pg))]
 pub struct PoolCategory {

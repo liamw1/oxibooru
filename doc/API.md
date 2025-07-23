@@ -2611,12 +2611,13 @@ A snapshot is a version of a database resource.
 
     The values are correlated as per table below:
 
-    | `<resource-type>` | `<resource-id>`                 |
-    | ----------------- | ------------------------------- |
-    | `"tag"`           | first tag name at given time    |
-    | `"tag_category"`  | tag category name at given time |
-    | `"post"`          | post ID                         |
-    | `"pool"`          | pool ID                         |
+    | `<resource-type>` | `<resource-id>`                  |
+    | ----------------- | -------------------------------  |
+    | `"tag"`           | first tag name at given time     |
+    | `"tag_category"`  | tag category name at given time  |
+    | `"post"`          | post ID                          |
+    | `"pool"`          | pool ID                          |
+    | `"pool_category"` | pool category name at given time |
 
 - `<issuer>`: a [micro user resource](#micro-user) representing the user who
     has made the change.
@@ -2673,8 +2674,33 @@ The value can be either of structures below, depending on
         "featured": false
     }
     ```
-
+    
     `<note>`s are serialized the same way as [note resources](#note).
+
+- Pool category snapshot data (`<resource-type> = "pool_category"`)
+
+    *Example*
+
+    ```json5
+    {
+        "name":  "collection",
+        "color": "#00FF00",
+        "default": false
+    }
+    ```
+
+- Pool snapshot data (`<resource-type> = "pool"`)
+
+    *Example*
+
+    ```json5
+    {
+        "names":    ["primes", "primed", "primey"],
+        "category": "mathematical",
+        "posts":    [2, 3, 5, 7, 11, 13, 17]
+    }
+    ```
+
 
 **`<data>` field for modification snapshots**
 

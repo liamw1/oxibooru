@@ -1,9 +1,9 @@
 use crate::api::ApiResult;
+use crate::config;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::ThumbnailCategory;
 use crate::filesystem;
 use crate::model::comment::NewComment;
-use crate::model::enums::ResourceType;
 use crate::model::pool::PoolPost;
 use crate::model::post::{
     CompressedSignature, NewPostFeature, Post, PostFavorite, PostRelation, PostScore, PostTag, SignatureIndexes,
@@ -14,7 +14,6 @@ use crate::schema::{
     post_tag,
 };
 use crate::time::DateTime;
-use crate::{api, config};
 use diesel::prelude::*;
 use image::DynamicImage;
 use std::collections::HashSet;
@@ -104,10 +103,6 @@ pub fn merge(
 ) -> ApiResult<()> {
     let absorbed_id = absorbed_post.id;
     let merge_to_id = merge_to_post.id;
-    if absorbed_id == merge_to_id {
-        return Err(api::Error::SelfMerge(ResourceType::Post));
-    }
-
     let absorbed_hash = PostHash::new(absorbed_id);
     let merge_to_hash = PostHash::new(merge_to_id);
 

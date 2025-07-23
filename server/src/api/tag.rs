@@ -168,7 +168,7 @@ async fn create(
 
         let tag_data = SnapshotData {
             category,
-            names: body.names.clone(),
+            names: body.names,
             implications,
             suggestions,
         };
@@ -233,6 +233,7 @@ async fn update(
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<TagInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+
     let mut conn = db::get_connection()?;
     let tag_id = conn.transaction(|conn| {
         let old_tag: Tag = tag::table

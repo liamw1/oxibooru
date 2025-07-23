@@ -1,5 +1,7 @@
 use serde_json::{Map, Value};
 
+pub mod pool;
+pub mod pool_category;
 pub mod post;
 pub mod tag;
 pub mod tag_category;

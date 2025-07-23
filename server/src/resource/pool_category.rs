@@ -49,11 +49,6 @@ impl PoolCategoryInfo {
         })
     }
 
-    pub fn new_from_id(conn: &mut PgConnection, category_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
-        let category = pool_category::table.find(category_id).first(conn)?;
-        Self::new(conn, category, fields)
-    }
-
     pub fn all(conn: &mut PgConnection, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
         let pool_categories: Vec<(PoolCategory, i64)> = pool_category::table
             .inner_join(pool_category_statistics::table)

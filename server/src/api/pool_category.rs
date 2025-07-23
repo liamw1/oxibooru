@@ -7,7 +7,7 @@ use crate::resource::pool_category::PoolCategoryInfo;
 use crate::schema::{pool, pool_category};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, resource};
+use crate::{api, config, db, resource, snapshot};
 use axum::extract::{Extension, Path, Query};
 use axum::{Json, Router, routing};
 use diesel::prelude::*;
@@ -68,15 +68,17 @@ async fn create(
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     api::verify_privilege(client, config::privileges().pool_category_create)?;
     api::verify_matches_regex(&body.name, RegexType::PoolCategory)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let new_category = NewPoolCategory {
         name: &body.name,
         color: &body.color,
     };
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let category = new_category.insert_into(pool_category::table).get_result(&mut conn)?;
+    snapshot::pool_category::creation_snapshot(&mut conn, client, &category)?;
+
     conn.transaction(|conn| PoolCategoryInfo::new(conn, category, &fields))
         .map(Json)
         .map_err(api::Error::from)
@@ -99,32 +101,27 @@ async fn update(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
-    let category_id = conn.transaction(|conn| {
-        let (category_id, last_edit_time) = pool_category::table
-            .select((pool_category::id, pool_category::last_edit_time))
-            .filter(pool_category::name.eq(name))
-            .first(conn)?;
-        api::verify_version(last_edit_time, body.version)?;
+    let updated_category = conn.transaction(|conn| {
+        let old_category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
+        api::verify_version(old_category.last_edit_time, body.version)?;
 
-        let current_time = DateTime::now();
+        let mut new_category = old_category.clone();
         if let Some(name) = body.name {
             api::verify_privilege(client, config::privileges().pool_category_edit_name)?;
             api::verify_matches_regex(&name, RegexType::PoolCategory)?;
-
-            diesel::update(pool_category::table.find(category_id))
-                .set((pool_category::name.eq(name), pool_category::last_edit_time.eq(current_time)))
-                .execute(conn)?;
+            new_category.name = name;
         }
         if let Some(color) = body.color {
             api::verify_privilege(client, config::privileges().pool_category_edit_color)?;
-
-            diesel::update(pool_category::table.find(category_id))
-                .set((pool_category::color.eq(color), pool_category::last_edit_time.eq(current_time)))
-                .execute(conn)?;
+            new_category.color = color;
         }
-        Ok::<_, api::Error>(category_id)
+
+        new_category.last_edit_time = DateTime::now();
+        let _: PoolCategory = new_category.save_changes(conn)?;
+        snapshot::pool_category::modification_snapshot(conn, client, &old_category, &new_category)?;
+        Ok::<_, api::Error>(new_category)
     })?;
-    conn.transaction(|conn| PoolCategoryInfo::new_from_id(conn, category_id, &fields))
+    conn.transaction(|conn| PoolCategoryInfo::new(conn, updated_category, &fields))
         .map(Json)
         .map_err(api::Error::from)
 }
@@ -172,7 +169,10 @@ async fn set_default(
 
         // Give new default category back it's name
         new_default_category.name = temporary_category_name;
-        new_default_category.save_changes(conn)
+        let _: PoolCategory = new_default_category.save_changes(conn)?;
+
+        snapshot::pool_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
+        Ok::<_, api::Error>(new_default_category)
     })?;
     conn.transaction(|conn| PoolCategoryInfo::new(conn, new_default_category, &fields))
         .map(Json)
@@ -187,16 +187,14 @@ async fn delete(
     api::verify_privilege(client, config::privileges().pool_category_delete)?;
 
     db::get_connection()?.transaction(|conn| {
-        let (category_id, category_version): (i64, DateTime) = pool_category::table
-            .select((pool_category::id, pool_category::last_edit_time))
-            .filter(pool_category::name.eq(name))
-            .first(conn)?;
-        api::verify_version(category_version, *client_version)?;
-        if category_id == 0 {
+        let category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
+        api::verify_version(category.last_edit_time, *client_version)?;
+        if category.id == 0 {
             return Err(api::Error::DeleteDefault(ResourceType::PoolCategory));
         }
 
-        diesel::delete(pool_category::table.find(category_id)).execute(conn)?;
+        diesel::delete(pool_category::table.find(category.id)).execute(conn)?;
+        snapshot::pool_category::deletion_snapshot(conn, client, &category)?;
         Ok(Json(()))
     })
 }

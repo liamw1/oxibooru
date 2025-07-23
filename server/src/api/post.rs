@@ -532,6 +532,9 @@ async fn merge(
 
     let absorbed_id = body.post_info.remove;
     let merge_to_id = body.post_info.merge_to;
+    if absorbed_id == merge_to_id {
+        return Err(api::Error::SelfMerge(ResourceType::Post));
+    }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     tagging_update(Some(&[]), |conn| {

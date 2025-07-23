@@ -104,7 +104,7 @@ async fn update(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
-    let category_id = conn.transaction(|conn| {
+    let updated_category = conn.transaction(|conn| {
         let old_category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
         api::verify_version(old_category.last_edit_time, body.version)?;
 
@@ -126,9 +126,9 @@ async fn update(
         new_category.last_edit_time = DateTime::now();
         let _: TagCategory = new_category.save_changes(conn)?;
         snapshot::tag_category::modification_snapshot(conn, client, &old_category, &new_category)?;
-        Ok::<_, api::Error>(old_category.id)
+        Ok::<_, api::Error>(new_category)
     })?;
-    conn.transaction(|conn| TagCategoryInfo::new_from_id(conn, category_id, &fields))
+    conn.transaction(|conn| TagCategoryInfo::new(conn, updated_category, &fields))
         .map(Json)
         .map_err(api::Error::from)
 }
@@ -175,7 +175,7 @@ async fn set_default(
 
         // Give new default category back it's name
         new_default_category.name = temporary_category_name;
-        let new_default_category = new_default_category.save_changes(conn)?;
+        let _: TagCategory = new_default_category.save_changes(conn)?;
 
         snapshot::tag_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
         Ok::<_, api::Error>(new_default_category)

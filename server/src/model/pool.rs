@@ -31,7 +31,7 @@ pub struct NewPool<'a> {
     pub description: &'a str,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Clone, AsChangeset, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(PoolCategory, foreign_key = category_id))]
 #[diesel(table_name = pool)]
 #[diesel(check_for_backend(Pg))]
