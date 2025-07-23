@@ -79,7 +79,7 @@ async fn create(
 
     let mut conn = db::get_connection()?;
     let category = new_category.insert_into(tag_category::table).get_result(&mut conn)?;
-    snapshot::tag_category::creation_snapshot(client, &category).insert(&mut conn)?;
+    snapshot::tag_category::creation_snapshot(&mut conn, client, &category)?;
 
     conn.transaction(|conn| TagCategoryInfo::new(conn, category, &fields))
         .map(Json)
@@ -105,30 +105,28 @@ async fn update(
 
     let mut conn = db::get_connection()?;
     let category_id = conn.transaction(|conn| {
-        let old_version: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
-        api::verify_version(old_version.last_edit_time, body.version)?;
+        let old_category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        api::verify_version(old_category.last_edit_time, body.version)?;
 
-        let mut new_version = old_version.clone();
+        let mut new_category = old_category.clone();
         if let Some(order) = body.order {
             api::verify_privilege(client, config::privileges().tag_category_edit_order)?;
-            new_version.order = order.parse::<i32>()?;
+            new_category.order = order.parse::<i32>()?;
         }
         if let Some(name) = body.name {
             api::verify_privilege(client, config::privileges().tag_category_edit_name)?;
             api::verify_matches_regex(&name, RegexType::TagCategory)?;
-            new_version.name = name;
+            new_category.name = name;
         }
         if let Some(color) = body.color {
             api::verify_privilege(client, config::privileges().tag_category_edit_color)?;
-            new_version.color = color;
+            new_category.color = color;
         }
 
-        if old_version != new_version {
-            new_version.last_edit_time = DateTime::now();
-            let _: TagCategory = new_version.save_changes(conn)?;
-            snapshot::tag_category::modification_snapshot(client, &old_version, &new_version).insert(conn)?;
-        }
-        Ok::<_, api::Error>(old_version.id)
+        new_category.last_edit_time = DateTime::now();
+        let _: TagCategory = new_category.save_changes(conn)?;
+        snapshot::tag_category::modification_snapshot(conn, client, &old_category, &new_category)?;
+        Ok::<_, api::Error>(old_category.id)
     })?;
     conn.transaction(|conn| TagCategoryInfo::new_from_id(conn, category_id, &fields))
         .map(Json)
@@ -177,7 +175,10 @@ async fn set_default(
 
         // Give new default category back it's name
         new_default_category.name = temporary_category_name;
-        new_default_category.save_changes(conn)
+        let new_default_category = new_default_category.save_changes(conn)?;
+
+        snapshot::tag_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
+        Ok::<_, api::Error>(new_default_category)
     })?;
     conn.transaction(|conn| TagCategoryInfo::new(conn, new_default_category, &fields))
         .map(Json)
@@ -199,7 +200,7 @@ async fn delete(
         }
 
         diesel::delete(tag_category::table.find(category.id)).execute(conn)?;
-        snapshot::tag_category::deletion_snapshot(client, &category).insert(conn)?;
+        snapshot::tag_category::deletion_snapshot(conn, client, &category)?;
         Ok(Json(()))
     })
 }

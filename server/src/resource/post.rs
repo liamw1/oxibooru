@@ -24,7 +24,7 @@ use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use strum::{EnumString, EnumTable};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Note {
     polygon: Vec<[f32; 2]>,

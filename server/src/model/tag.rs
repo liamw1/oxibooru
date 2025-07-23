@@ -16,7 +16,7 @@ pub struct NewTag<'a> {
     pub description: &'a str,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Clone, AsChangeset, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(TagCategory, foreign_key = category_id))]
 #[diesel(table_name = tag)]
 #[diesel(check_for_backend(Pg))]

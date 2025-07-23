@@ -3,7 +3,7 @@ use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
 use crate::model::post::PostTag;
-use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
+use crate::model::tag::{NewTag, NewTagName, TagImplication, TagName, TagSuggestion};
 use crate::schema::post_tag;
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
 use crate::string::SmallString;
@@ -26,7 +26,7 @@ pub fn add_names(
     conn: &mut PgConnection,
     tag_id: i64,
     current_name_count: i32,
-    names: Vec<SmallString>,
+    names: &[SmallString],
 ) -> ApiResult<()> {
     names
         .iter()
@@ -51,10 +51,10 @@ pub fn delete_names(conn: &mut PgConnection, tag_id: i64) -> QueryResult<usize> 
 }
 
 /// Adds `implied_ids` to the list of implications for the tag with id `tag_id`.
-pub fn add_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: Vec<i64>) -> ApiResult<()> {
+pub fn add_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: &[i64]) -> ApiResult<()> {
     let new_implications: Vec<_> = implied_ids
         .into_iter()
-        .map(|child_id| {
+        .map(|&child_id| {
             (tag_id != child_id)
                 .then_some(TagImplication {
                     parent_id: tag_id,
@@ -68,10 +68,10 @@ pub fn add_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: Vec<i
 }
 
 /// Adds `suggested_ids` to the list of suggestions for the tag with id `tag_id`.
-pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: Vec<i64>) -> ApiResult<()> {
+pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i64]) -> ApiResult<()> {
     let new_suggestions: Vec<_> = suggested_ids
         .into_iter()
-        .map(|child_id| {
+        .map(|&child_id| {
             (tag_id != child_id)
                 .then_some(TagSuggestion {
                     parent_id: tag_id,
@@ -94,7 +94,7 @@ pub fn get_or_create_tag_ids(
     client: Client,
     names: &[SmallString],
     detect_cyclic_dependencies: bool,
-) -> ApiResult<Vec<i64>> {
+) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
     let mut implied_ids: Vec<i64> = tag_name::table
         .select(tag_name::tag_id)
         .filter(tag_name::name.eq_any(names))
@@ -151,7 +151,13 @@ pub fn get_or_create_tag_ids(
         new_tag_names.insert_into(tag_name::table).execute(conn)?;
         tag_ids.extend(new_tag_ids);
     }
-    Ok(tag_ids)
+
+    let primary_tag_names = tag_name::table
+        .select(tag_name::name)
+        .filter(tag_name::tag_id.eq_any(&tag_ids))
+        .filter(TagName::primary())
+        .load(conn)?;
+    Ok((tag_ids, primary_tag_names))
 }
 
 pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> ApiResult<()> {
@@ -236,7 +242,7 @@ pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> Api
     let removed_names = diesel::delete(tag_name::table.filter(tag_name::tag_id.eq(absorbed_id)))
         .returning(tag_name::name)
         .get_results(conn)?;
-    add_names(conn, merge_to_id, current_name_count, removed_names)?;
+    add_names(conn, merge_to_id, current_name_count, &removed_names)?;
 
     diesel::delete(tag::table.find(absorbed_id)).execute(conn)?;
     last_edit_time(conn, merge_to_id)

@@ -51,6 +51,12 @@ impl From<Cow<'_, str>> for SmallString {
     }
 }
 
+impl From<i64> for SmallString {
+    fn from(value: i64) -> Self {
+        value.to_string().into()
+    }
+}
+
 impl Display for SmallString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)

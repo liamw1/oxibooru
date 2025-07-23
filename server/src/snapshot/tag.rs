@@ -1,28 +1,66 @@
+use crate::api::ApiResult;
 use crate::auth::Client;
 use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::model::snapshot::NewSnapshot;
-use crate::snapshot;
+use crate::model::tag::TagName;
+use crate::schema::{tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::string::SmallString;
+use crate::{api, snapshot};
+use diesel::prelude::*;
 use serde::Serialize;
 use serde_json::json;
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct SnapshotData {
-    category: SmallString,
-    names: Vec<SmallString>,
-    implications: Vec<SmallString>,
-    suggestions: Vec<SmallString>,
+    pub category: SmallString,
+    pub names: Vec<SmallString>,
+    pub implications: Vec<SmallString>,
+    pub suggestions: Vec<SmallString>,
 }
 
-pub fn creation_snapshot(client: Client, tag_data: SnapshotData) -> serde_json::Result<NewSnapshot> {
-    unary_snapshot(client, tag_data, ResourceOperation::Created)
+impl SnapshotData {
+    pub fn retrieve(conn: &mut PgConnection, tag_id: i64, category_id: i64) -> QueryResult<Self> {
+        let category = tag_category::table
+            .find(category_id)
+            .select(tag_category::name)
+            .first(conn)?;
+        let names = tag_name::table
+            .select(tag_name::name)
+            .filter(tag_name::tag_id.eq(tag_id))
+            .filter(TagName::primary())
+            .load(conn)?;
+        let implications = tag_name::table
+            .inner_join(tag_implication::table.on(tag_name::tag_id.eq(tag_implication::child_id)))
+            .select(tag_name::name)
+            .filter(tag_implication::parent_id.eq(tag_id))
+            .filter(TagName::primary())
+            .load(conn)?;
+        let suggestions = tag_name::table
+            .inner_join(tag_suggestion::table.on(tag_name::tag_id.eq(tag_suggestion::child_id)))
+            .select(tag_name::name)
+            .filter(tag_suggestion::parent_id.eq(tag_id))
+            .filter(TagName::primary())
+            .load(conn)?;
+        Ok(Self {
+            category,
+            names,
+            implications,
+            suggestions,
+        })
+    }
 }
 
-pub fn merge_snapshot(client: Client, absorbed_tag: SmallString, merge_to_tag: SmallString) -> NewSnapshot {
-    let data = json!({
-        "type": ResourceType::Tag,
-        "id": merge_to_tag,
-    });
+pub fn creation_snapshot(conn: &mut PgConnection, client: Client, tag_data: SnapshotData) -> ApiResult<()> {
+    unary_snapshot(conn, client, tag_data, ResourceOperation::Created)
+}
+
+pub fn merge_snapshot(
+    conn: &mut PgConnection,
+    client: Client,
+    absorbed_tag: SmallString,
+    merge_to_tag: SmallString,
+) -> QueryResult<()> {
+    let data = json!([ResourceType::Tag, merge_to_tag]);
     NewSnapshot {
         user_id: client.id,
         operation: ResourceOperation::Merged,
@@ -30,38 +68,54 @@ pub fn merge_snapshot(client: Client, absorbed_tag: SmallString, merge_to_tag: S
         resource_id: absorbed_tag,
         data,
     }
+    .insert(conn)
 }
 
-pub fn modification_snapshot(client: Client, old: SnapshotData, new: SnapshotData) -> serde_json::Result<NewSnapshot> {
+pub fn modification_snapshot(
+    conn: &mut PgConnection,
+    client: Client,
+    old: SnapshotData,
+    new: SnapshotData,
+) -> ApiResult<()> {
     let resource_id = old.names.first().unwrap().clone();
 
     let old_data = serde_json::to_value(old)?;
     let new_data = serde_json::to_value(new)?;
-    let data = snapshot::value_diff(old_data, new_data).unwrap_or_default();
-    Ok(NewSnapshot {
-        user_id: client.id,
-        operation: ResourceOperation::Modified,
-        resource_type: ResourceType::Tag,
-        resource_id,
-        data,
-    })
+    if let Some(data) = snapshot::value_diff(old_data, new_data) {
+        NewSnapshot {
+            user_id: client.id,
+            operation: ResourceOperation::Modified,
+            resource_type: ResourceType::Tag,
+            resource_id,
+            data,
+        }
+        .insert(conn)?;
+    }
+    Ok(())
 }
 
-pub fn deletion_snapshot(client: Client, tag_data: SnapshotData) -> serde_json::Result<NewSnapshot> {
-    unary_snapshot(client, tag_data, ResourceOperation::Deleted)
+pub fn deletion_snapshot(conn: &mut PgConnection, client: Client, tag_data: SnapshotData) -> ApiResult<()> {
+    unary_snapshot(conn, client, tag_data, ResourceOperation::Deleted)
 }
 
 fn unary_snapshot(
+    conn: &mut PgConnection,
     client: Client,
     tag_data: SnapshotData,
     operation: ResourceOperation,
-) -> serde_json::Result<NewSnapshot> {
+) -> ApiResult<()> {
     let resource_id = tag_data.names.first().unwrap().clone();
-    serde_json::to_value(tag_data).map(|data| NewSnapshot {
-        user_id: client.id,
-        operation,
-        resource_type: ResourceType::Tag,
-        resource_id,
-        data,
-    })
+    serde_json::to_value(tag_data)
+        .map_err(api::Error::from)
+        .and_then(|data| {
+            NewSnapshot {
+                user_id: client.id,
+                operation,
+                resource_type: ResourceType::Tag,
+                resource_id,
+                data,
+            }
+            .insert(conn)
+            .map_err(api::Error::from)
+        })
 }

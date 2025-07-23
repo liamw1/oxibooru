@@ -5,9 +5,10 @@ use crate::model::tag::{NewTag, Tag};
 use crate::resource::tag::TagInfo;
 use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::search::tag::QueryBuilder;
+use crate::snapshot::tag::SnapshotData;
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, resource, update};
+use crate::{api, config, db, resource, snapshot, update};
 use axum::extract::{Extension, Path, Query};
 use axum::{Json, Router, routing};
 use diesel::dsl::count_star;
@@ -145,8 +146,8 @@ async fn create(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let tag = conn.transaction(|conn| {
-        let category_id: i64 = tag_category::table
-            .select(tag_category::id)
+        let (category_id, category): (i64, SmallString) = tag_category::table
+            .select((tag_category::id, tag_category::name))
             .filter(tag_category::name.eq(body.category))
             .first(conn)?;
         let tag: Tag = NewTag {
@@ -156,15 +157,22 @@ async fn create(
         .insert_into(tag::table)
         .get_result(conn)?;
 
-        update::tag::add_names(conn, tag.id, 0, body.names)?;
-        if let Some(implications) = body.implications {
-            let implied_ids = update::tag::get_or_create_tag_ids(conn, client, &implications, true)?;
-            update::tag::add_implications(conn, tag.id, implied_ids)?;
-        }
-        if let Some(suggestions) = body.suggestions {
-            let suggested_ids = update::tag::get_or_create_tag_ids(conn, client, &suggestions, true)?;
-            update::tag::add_suggestions(conn, tag.id, suggested_ids)?;
-        }
+        // Add names, implications, and suggestions
+        update::tag::add_names(conn, tag.id, 0, &body.names)?;
+        let (implied_ids, implications) =
+            update::tag::get_or_create_tag_ids(conn, client, body.implications.as_deref().unwrap_or_default(), true)?;
+        let (suggested_ids, suggestions) =
+            update::tag::get_or_create_tag_ids(conn, client, body.suggestions.as_deref().unwrap_or_default(), true)?;
+        update::tag::add_implications(conn, tag.id, &implied_ids)?;
+        update::tag::add_suggestions(conn, tag.id, &suggested_ids)?;
+
+        let tag_data = SnapshotData {
+            category,
+            names: body.names.clone(),
+            implications,
+            suggestions,
+        };
+        snapshot::tag::creation_snapshot(conn, client, tag_data)?;
         Ok::<_, api::Error>(tag)
     })?;
     conn.transaction(|conn| TagInfo::new(conn, tag, &fields))
@@ -175,11 +183,11 @@ async fn create(
 async fn merge(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<MergeBody<String>>,
+    Json(body): Json<MergeBody<SmallString>>,
 ) -> ApiResult<Json<TagInfo>> {
     api::verify_privilege(client, config::privileges().tag_merge)?;
 
-    let get_tag_info = |conn: &mut PgConnection, name: String| {
+    let get_tag_info = |conn: &mut PgConnection, name: &str| {
         tag::table
             .select((tag::id, tag::last_edit_time))
             .inner_join(tag_name::table)
@@ -190,15 +198,17 @@ async fn merge(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let merged_tag_id = conn.transaction(|conn| {
-        let (absorbed_id, absorbed_version) = get_tag_info(conn, body.remove)?;
-        let (merge_to_id, merge_to_version) = get_tag_info(conn, body.merge_to)?;
+        let (absorbed_id, absorbed_version) = get_tag_info(conn, &body.remove)?;
+        let (merge_to_id, merge_to_version) = get_tag_info(conn, &body.merge_to)?;
         if absorbed_id == merge_to_id {
             return Err(api::Error::SelfMerge(ResourceType::Tag));
         }
         api::verify_version(absorbed_version, body.remove_version)?;
         api::verify_version(merge_to_version, body.merge_to_version)?;
 
-        update::tag::merge(conn, absorbed_id, merge_to_id).map(|_| merge_to_id)
+        update::tag::merge(conn, absorbed_id, merge_to_id)?;
+        snapshot::tag::merge_snapshot(conn, client, body.remove, body.merge_to)?;
+        Ok::<_, api::Error>(merge_to_id)
     })?;
     conn.transaction(|conn| TagInfo::new_from_id(conn, merged_tag_id, &fields))
         .map(Json)
@@ -225,30 +235,30 @@ async fn update(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let tag_id = conn.transaction(|conn| {
-        let (tag_id, tag_version) = tag::table
-            .select((tag::id, tag::last_edit_time))
+        let old_tag: Tag = tag::table
             .inner_join(tag_name::table)
+            .select(Tag::as_select())
             .filter(tag_name::name.eq(name))
             .first(conn)?;
-        api::verify_version(tag_version, body.version)?;
+        api::verify_version(old_tag.last_edit_time, body.version)?;
+
+        let mut new_tag = old_tag.clone();
+        let old_snapshot_data = SnapshotData::retrieve(conn, old_tag.id, old_tag.category_id)?;
+        let mut new_snapshot_data = old_snapshot_data.clone();
 
         if let Some(category) = body.category {
             api::verify_privilege(client, config::privileges().tag_edit_category)?;
 
             let category_id: i64 = tag_category::table
                 .select(tag_category::id)
-                .filter(tag_category::name.eq(category))
+                .filter(tag_category::name.eq(&category))
                 .first(conn)?;
-            diesel::update(tag::table.find(tag_id))
-                .set(tag::category_id.eq(category_id))
-                .execute(conn)?;
+            new_tag.category_id = category_id;
+            new_snapshot_data.category = category;
         }
         if let Some(description) = body.description {
             api::verify_privilege(client, config::privileges().tag_edit_description)?;
-
-            diesel::update(tag::table.find(tag_id))
-                .set(tag::description.eq(description))
-                .execute(conn)?;
+            new_tag.description = description;
         }
         if let Some(names) = body.names {
             api::verify_privilege(client, config::privileges().tag_edit_name)?;
@@ -256,28 +266,35 @@ async fn update(
                 return Err(api::Error::NoNamesGiven(ResourceType::Tag));
             }
 
-            update::tag::delete_names(conn, tag_id)?;
-            update::tag::add_names(conn, tag_id, 0, names)?;
+            update::tag::delete_names(conn, old_tag.id)?;
+            update::tag::add_names(conn, old_tag.id, 0, &names)?;
+            new_snapshot_data.names = names;
         }
         if let Some(implications) = body.implications {
             api::verify_privilege(client, config::privileges().tag_edit_implication)?;
 
-            let implied_ids = update::tag::get_or_create_tag_ids(conn, client, &implications, true)?;
+            let (implied_ids, implications) = update::tag::get_or_create_tag_ids(conn, client, &implications, true)?;
             diesel::delete(tag_implication::table)
-                .filter(tag_implication::parent_id.eq(tag_id))
+                .filter(tag_implication::parent_id.eq(old_tag.id))
                 .execute(conn)?;
-            update::tag::add_implications(conn, tag_id, implied_ids)?;
+            update::tag::add_implications(conn, old_tag.id, &implied_ids)?;
+            new_snapshot_data.implications = implications;
         }
         if let Some(suggestions) = body.suggestions {
             api::verify_privilege(client, config::privileges().tag_edit_suggestion)?;
 
-            let suggested_ids = update::tag::get_or_create_tag_ids(conn, client, &suggestions, true)?;
+            let (suggested_ids, suggestions) = update::tag::get_or_create_tag_ids(conn, client, &suggestions, true)?;
             diesel::delete(tag_suggestion::table)
-                .filter(tag_suggestion::parent_id.eq(tag_id))
+                .filter(tag_suggestion::parent_id.eq(old_tag.id))
                 .execute(conn)?;
-            update::tag::add_suggestions(conn, tag_id, suggested_ids)?;
+            update::tag::add_suggestions(conn, old_tag.id, &suggested_ids)?;
+            new_snapshot_data.suggestions = suggestions;
         }
-        update::tag::last_edit_time(conn, tag_id).map(|_| tag_id)
+
+        new_tag.last_edit_time = DateTime::now();
+        let _: Tag = new_tag.save_changes(conn)?;
+        snapshot::tag::modification_snapshot(conn, client, old_snapshot_data, new_snapshot_data)?;
+        Ok::<_, api::Error>(old_tag.id)
     })?;
     conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields))
         .map(Json)
@@ -292,12 +309,15 @@ async fn delete(
     api::verify_privilege(client, config::privileges().tag_delete)?;
 
     db::get_connection()?.transaction(|conn| {
-        let (tag_id, tag_version): (i64, DateTime) = tag::table
-            .select((tag::id, tag::last_edit_time))
+        let (tag_id, category_id, tag_version): (i64, i64, DateTime) = tag::table
+            .select((tag::id, tag::category_id, tag::last_edit_time))
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
             .first(conn)?;
         api::verify_version(tag_version, *client_version)?;
+
+        let tag_data = SnapshotData::retrieve(conn, tag_id, category_id)?;
+        snapshot::tag::deletion_snapshot(conn, client, tag_data)?;
 
         diesel::delete(tag::table.find(tag_id)).execute(conn)?;
         Ok(Json(()))
