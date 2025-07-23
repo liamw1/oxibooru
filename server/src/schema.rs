@@ -193,7 +193,7 @@ diesel::table! {
         user_id -> Nullable<Int8>,
         operation -> Int2,
         resource_type -> Int2,
-        resource_id -> Int8,
+        resource_id -> Text,
         data -> Jsonb,
         creation_time -> Timestamptz,
     }

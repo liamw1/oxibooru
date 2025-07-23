@@ -24,6 +24,7 @@ use axum::http::header::AUTHORIZATION;
 use axum_test::TestServer;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, Pool};
+use serde_json::Value;
 use std::error::Error;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -96,13 +97,12 @@ pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str
         true => request.json_from_file(body_path).await,
         false => request.await,
     };
-    let actual_body = reply.text();
+    assert_eq!(reply.status_code(), 200);
 
     let file_contents = std::fs::read_to_string(reply_path(relative_path))?;
-    let expected_body: String = file_contents.split_whitespace().collect();
-    let actual_body: String = actual_body.split_whitespace().collect();
+    let expected_body: Value = serde_json::from_str(&file_contents)?;
+    let actual_body: Value = reply.json();
 
-    assert_eq!(reply.status_code(), 200);
     assert_eq!(actual_body, expected_body);
     Ok(())
 }

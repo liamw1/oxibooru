@@ -1,6 +1,7 @@
 use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::model::user::User;
 use crate::schema::snapshot;
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -13,7 +14,7 @@ pub struct NewSnapshot {
     pub user_id: Option<i64>,
     pub operation: ResourceOperation,
     pub resource_type: ResourceType,
-    pub resource_id: i64,
+    pub resource_id: SmallString,
     pub data: Value,
 }
 
@@ -26,7 +27,7 @@ pub struct Snapshot {
     pub user_id: Option<i64>,
     pub operation: ResourceOperation,
     pub resource_type: ResourceType,
-    pub resource_id: i64,
+    pub resource_id: SmallString,
     pub data: Value,
     pub creation_time: DateTime,
 }

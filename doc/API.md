@@ -2771,7 +2771,7 @@ backups.
 A tuple containing 2 elements:
 
 - resource type equivalent to `<resource-type>` of the target entity.
-- resource ID euivalen to `<resource-id>` of the target entity.
+- resource ID equivalent to `<resource-id>` of the target entity.
 
 
 ## Unpaged search result

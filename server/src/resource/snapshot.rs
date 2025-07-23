@@ -1,8 +1,10 @@
-use crate::model::enums::{ResourceType, ResourceOperation};
+use crate::model::enums::{AvatarStyle, ResourceOperation, ResourceType};
 use crate::model::snapshot::Snapshot;
 use crate::resource;
 use crate::resource::BoolFill;
+use crate::resource::user::MicroUser;
 use crate::schema::{snapshot, user};
+use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -30,12 +32,12 @@ impl BoolFill for FieldTable<bool> {
 #[skip_serializing_none]
 #[derive(Serialize)]
 pub struct SnapshotInfo {
-    user: Option<Option<String>>,
+    user: Option<Option<MicroUser>>,
     operation: Option<ResourceOperation>,
     #[serde(rename(serialize = "type"))]
     resource_type: Option<ResourceType>,
     #[serde(rename(serialize = "id"))]
-    resource_id: Option<i64>,
+    resource_id: Option<SmallString>,
     data: Option<Value>,
     time: Option<DateTime>,
 }
@@ -76,16 +78,17 @@ impl SnapshotInfo {
     }
 }
 
-fn get_users(conn: &mut PgConnection, snapshots: &[Snapshot]) -> QueryResult<Vec<Option<String>>> {
-    let snapshot_ids: Vec<_> = snapshots.iter().filter_map(|snapshot| snapshot.user_id).collect();
-    user::table
-        .select((user::id, user::name))
-        .filter(user::id.eq_any(snapshot_ids))
-        .load::<(i64, String)>(conn)
+fn get_users(conn: &mut PgConnection, snapshots: &[Snapshot]) -> QueryResult<Vec<Option<MicroUser>>> {
+    let snapshot_ids: Vec<_> = snapshots.iter().map(Identifiable::id).collect();
+    snapshot::table
+        .inner_join(user::table)
+        .select((snapshot::id, user::name, user::avatar_style))
+        .filter(snapshot::id.eq_any(snapshot_ids))
+        .load::<(i64, SmallString, AvatarStyle)>(conn)
         .map(|user_info| {
-            resource::order_like(user_info, snapshots, |&(id, _)| id)
+            resource::order_like(user_info, snapshots, |&(id, ..)| id)
                 .into_iter()
-                .map(|user_info| user_info.map(|(_, username)| username))
+                .map(|user_info| user_info.map(|(_, name, avatar_style)| MicroUser::new(name, avatar_style)))
                 .collect()
         })
 }

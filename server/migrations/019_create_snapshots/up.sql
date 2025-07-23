@@ -3,7 +3,7 @@ CREATE TABLE "snapshot" (
     "user_id" BIGINT REFERENCES "user" ON DELETE SET NULL,
     "operation" SMALLINT NOT NULL,
     "resource_type" SMALLINT NOT NULL,
-    "resource_id" BIGINT NOT NULL,
+    "resource_id" TEXT NOT NULL,
     "data" JSONB NOT NULL,
     "creation_time" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

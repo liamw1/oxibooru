@@ -1,4 +1,36 @@
-use serde_json::{Map, Number, Value};
+use crate::model::snapshot::NewSnapshot;
+use crate::schema::snapshot;
+use diesel::prelude::*;
+use serde_json::{Map, Value};
+use tracing::warn;
+
+pub mod tag_category;
+
+pub fn insert_snapshot(conn: &mut PgConnection, snapshot: NewSnapshot) {
+    if let Err(err) = diesel::insert_into(snapshot::table).values(snapshot).execute(conn) {
+        warn!("Failed to insert snapshot. Details:\n\n{err}");
+    }
+}
+
+pub fn value_diff(old: &Value, new: &Value) -> Option<Value> {
+    match (old, new) {
+        (Value::Array(old_array), Value::Array(new_array)) => array_diff(old_array, new_array),
+        (Value::Object(old_object), Value::Object(new_object)) => object_diff(old_object, new_object),
+        _ => (old != new).then(|| {
+            let is_primitive_change = value_index(old) == value_index(new) || old.is_null() || new.is_null();
+            let change_name = if is_primitive_change {
+                "primitive change"
+            } else {
+                "property changed type"
+            };
+            let change_type = ("type".into(), change_name.into());
+            let old = ("old-value".into(), old.clone());
+            let new = ("new-value".into(), new.clone());
+            let change = [change_type, old, new].into_iter().collect();
+            Value::Object(change)
+        }),
+    }
+}
 
 fn value_index(value: &Value) -> usize {
     match value {
@@ -63,26 +95,6 @@ fn object_diff(old: &Map<String, Value>, new: &Map<String, Value>) -> Option<Val
         let change = [change_type, difference].into_iter().collect();
         Value::Object(change)
     })
-}
-
-fn value_diff(old: &Value, new: &Value) -> Option<Value> {
-    match (old, new) {
-        (Value::Array(old_array), Value::Array(new_array)) => array_diff(old_array, new_array),
-        (Value::Object(old_object), Value::Object(new_object)) => object_diff(old_object, new_object),
-        _ => (old != new).then(|| {
-            let is_primitive_change = value_index(old) == value_index(new) || old.is_null() || new.is_null();
-            let change_name = if is_primitive_change {
-                "primitive change"
-            } else {
-                "property changed type"
-            };
-            let change_type = ("type".into(), change_name.into());
-            let old = ("old-value".into(), old.clone());
-            let new = ("new-value".into(), new.clone());
-            let change = [change_type, old, new].into_iter().collect();
-            Value::Object(change)
-        }),
-    }
 }
 
 #[cfg(test)]
