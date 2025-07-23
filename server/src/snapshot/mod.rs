@@ -1,4 +1,9 @@
-use serde_json::{Map, Value};
+use crate::auth::Client;
+use crate::model::enums::{ResourceOperation, ResourceType};
+use crate::model::snapshot::NewSnapshot;
+use crate::string::SmallString;
+use diesel::{PgConnection, QueryResult};
+use serde_json::{Map, Value, json};
 
 pub mod pool;
 pub mod pool_category;
@@ -95,6 +100,42 @@ fn object_diff(old: Map<String, Value>, mut new: Map<String, Value>) -> Option<V
         let change = [change_type, difference].into_iter().collect();
         Value::Object(change)
     })
+}
+
+fn set_default_snapshot(
+    conn: &mut PgConnection,
+    client: Client,
+    old_default_name: SmallString,
+    new_default_name: SmallString,
+    resource_type: ResourceType,
+) -> QueryResult<()> {
+    if old_default_name == new_default_name {
+        return Ok(());
+    }
+
+    let defaulted_data = json!({"default": true});
+    let non_defaulted_data = json!({"default": false});
+
+    let old_default_diff = value_diff(defaulted_data.clone(), non_defaulted_data.clone()).unwrap();
+    NewSnapshot {
+        user_id: client.id,
+        operation: ResourceOperation::Modified,
+        resource_type,
+        resource_id: old_default_name.clone(),
+        data: old_default_diff,
+    }
+    .insert(conn)?;
+
+    let new_default_diff = value_diff(non_defaulted_data, defaulted_data).unwrap();
+    NewSnapshot {
+        user_id: client.id,
+        operation: ResourceOperation::Modified,
+        resource_type,
+        resource_id: new_default_name.clone(),
+        data: new_default_diff,
+    }
+    .insert(conn)?;
+    Ok(())
 }
 
 #[cfg(test)]

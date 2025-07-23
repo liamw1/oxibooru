@@ -16,33 +16,13 @@ pub fn set_default_snapshot(
     old_default: &TagCategory,
     new_default: &TagCategory,
 ) -> QueryResult<()> {
-    if old_default.id == new_default.id {
-        return Ok(());
-    }
-
-    let defaulted_data = json!({"default": true});
-    let non_defaulted_data = json!({"default": false});
-
-    let old_default_diff = snapshot::value_diff(defaulted_data.clone(), non_defaulted_data.clone()).unwrap();
-    NewSnapshot {
-        user_id: client.id,
-        operation: ResourceOperation::Modified,
-        resource_type: ResourceType::TagCategory,
-        resource_id: old_default.name.clone(),
-        data: old_default_diff,
-    }
-    .insert(conn)?;
-
-    let new_default_diff = snapshot::value_diff(non_defaulted_data, defaulted_data).unwrap();
-    NewSnapshot {
-        user_id: client.id,
-        operation: ResourceOperation::Modified,
-        resource_type: ResourceType::TagCategory,
-        resource_id: new_default.name.clone(),
-        data: new_default_diff,
-    }
-    .insert(conn)?;
-    Ok(())
+    snapshot::set_default_snapshot(
+        conn,
+        client,
+        old_default.name.clone(),
+        new_default.name.clone(),
+        ResourceType::TagCategory,
+    )
 }
 
 pub fn modification_snapshot(
