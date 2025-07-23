@@ -14,6 +14,7 @@ mod model;
 mod resource;
 mod schema;
 mod search;
+mod snapshot;
 mod string;
 #[cfg(test)]
 mod test;
