@@ -418,7 +418,7 @@ mod test {
         let new_tag_count = get_tag_count(&mut conn)?;
         assert_eq!(new_tag_count, tag_count + 1);
 
-        verify_query(&format!("DELETE /tag/{name}/?{FIELDS}"), "delete.json").await?;
+        verify_query(&format!("DELETE /tag/{name}/?{FIELDS}"), "tag/delete.json").await?;
 
         let new_tag_count = get_tag_count(&mut conn)?;
         let has_tag: bool = diesel::select(exists(tag::table.find(tag_id))).get_result(&mut conn)?;

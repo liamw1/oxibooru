@@ -12,8 +12,8 @@ use crate::model::tag_category::NewTagCategory;
 use crate::model::user::{NewUser, NewUserToken};
 use crate::schema::{
     comment, comment_score, pool, pool_category, pool_category_statistics, pool_name, pool_post, pool_statistics, post,
-    post_favorite, post_feature, post_note, post_relation, post_score, post_statistics, post_tag, tag, tag_category,
-    tag_category_statistics, tag_implication, tag_name, tag_statistics, tag_suggestion, user, user_token,
+    post_favorite, post_feature, post_note, post_relation, post_score, post_statistics, post_tag, snapshot, tag,
+    tag_category, tag_category_statistics, tag_implication, tag_name, tag_statistics, tag_suggestion, user, user_token,
 };
 use crate::time::DateTime;
 use crate::{api, db};
@@ -62,16 +62,6 @@ pub fn image_path(relative_path: &str) -> PathBuf {
     asset_path("images", relative_path)
 }
 
-/// Returns path to an expected test request reply.
-pub fn reply_path(relative_path: &str) -> PathBuf {
-    asset_path("reply", relative_path)
-}
-
-/// Returns path to a test request body.
-pub fn body_path(relative_path: &str) -> PathBuf {
-    asset_path("body", relative_path)
-}
-
 /// Verifies that a given `query` matches the contents of a `reply_filepath`.
 /// `query` must be of the form `METHOD path` (e.g. `GET /post/1`).
 pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
@@ -92,14 +82,28 @@ pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str
         .add_header(AUTHORIZATION, basic_access_authentication);
 
     // Optionally specify a body
-    let body_path = body_path(relative_path);
+    let body_path = asset_path("body", relative_path);
     let reply = match body_path.try_exists()? {
         true => request.json_from_file(body_path).await,
         false => request.await,
     };
     assert_eq!(reply.status_code(), 200);
 
-    let file_contents = std::fs::read_to_string(reply_path(relative_path))?;
+    // Optionally read an expected snapshot
+    let snapshot_path = asset_path("snapshot", relative_path);
+    if snapshot_path.try_exists()? {
+        let file_contents = std::fs::read_to_string(asset_path("snapshot", relative_path))?;
+        let expected_snapshot_data: Value = serde_json::from_str(&file_contents)?;
+
+        let mut conn = get_connection()?;
+        let actual_snapshot_data: Value = snapshot::table
+            .select(snapshot::data)
+            .order_by(snapshot::id.desc())
+            .first(&mut conn)?;
+        assert_eq!(actual_snapshot_data, expected_snapshot_data);
+    }
+
+    let file_contents = std::fs::read_to_string(asset_path("reply", relative_path))?;
     let expected_body: Value = serde_json::from_str(&file_contents)?;
     let actual_body: Value = reply.json();
 

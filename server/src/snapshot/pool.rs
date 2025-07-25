@@ -1,7 +1,6 @@
 use crate::api::ApiResult;
 use crate::auth::Client;
 use crate::model::enums::{ResourceOperation, ResourceType};
-use crate::model::pool::PoolName;
 use crate::model::snapshot::NewSnapshot;
 use crate::schema::{pool_category, pool_name, pool_post};
 use crate::string::SmallString;
@@ -26,7 +25,6 @@ impl SnapshotData {
         let names = pool_name::table
             .select(pool_name::name)
             .filter(pool_name::pool_id.eq(pool_id))
-            .filter(PoolName::primary())
             .load(conn)?;
         let posts = pool_post::table
             .select(pool_post::post_id)

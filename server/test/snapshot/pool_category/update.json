@@ -1,0 +1,15 @@
+{
+    "type": "object change",
+    "value": {
+        "name": {
+            "type": "primitive change",
+            "old-value": "Style",
+            "new-value": "NewName"
+        },
+        "color": {
+            "type": "primitive change",
+            "old-value": "default",
+            "new-value": "yellow"
+        }
+    }
+}

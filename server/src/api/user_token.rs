@@ -217,7 +217,7 @@ mod test {
             .order_by(user_token::creation_time.desc())
             .first(&mut conn)?;
 
-        verify_query(&format!("DELETE /user-token/{USER}/{token}"), "delete.json").await?;
+        verify_query(&format!("DELETE /user-token/{USER}/{token}"), "user_token/delete.json").await?;
 
         let has_token: bool = diesel::select(exists(user_token::table.find(token))).get_result(&mut conn)?;
         assert!(!has_token);

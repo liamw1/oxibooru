@@ -1,0 +1,29 @@
+{
+    "type": "object change",
+    "value": {
+        "category": {
+            "type": "primitive change",
+            "old-value": "Setting",
+            "new-value": "Style"
+        },
+        "names": {
+            "type": "list change",
+            "added": [
+                "cool",
+                "nice",
+                "awesome",
+                "rad"
+            ],
+            "removed": [
+                "fantasy"
+            ]
+        },
+        "posts": {
+            "type": "list change",
+            "added": [],
+            "removed": [
+                5
+            ]
+        }
+    }
+}

@@ -427,7 +427,7 @@ mod test {
         let new_user_count = get_user_count(&mut conn)?;
         assert_eq!(new_user_count, user_count + 1);
 
-        verify_query(&format!("DELETE /user/{name}"), "delete.json").await?;
+        verify_query(&format!("DELETE /user/{name}"), "user/delete.json").await?;
 
         let new_user_count = get_user_count(&mut conn)?;
         let has_user: bool = diesel::select(exists(user::table.find(user_id))).get_result(&mut conn)?;

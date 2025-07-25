@@ -261,7 +261,7 @@ mod test {
         assert_eq!(new_category_count, category_count + 1);
         assert_eq!(usage_count, 0);
 
-        verify_query(&format!("DELETE /pool-category/{category_name}"), "delete.json").await?;
+        verify_query(&format!("DELETE /pool-category/{category_name}"), "pool_category/delete.json").await?;
 
         let new_category_count: i64 = pool_category::table.count().first(&mut conn)?;
         assert_eq!(new_category_count, category_count);

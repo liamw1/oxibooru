@@ -317,7 +317,7 @@ mod test {
         assert_eq!(new_pool_count, pool_count + 1);
         assert_eq!(post_count, 2);
 
-        verify_query(&format!("DELETE /pool/{name}/?{FIELDS}"), "delete.json").await?;
+        verify_query(&format!("DELETE /pool/{name}/?{FIELDS}"), "pool/delete.json").await?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
         let has_pool: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(&mut conn)?;

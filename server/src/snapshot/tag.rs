@@ -27,7 +27,6 @@ impl SnapshotData {
         let names = tag_name::table
             .select(tag_name::name)
             .filter(tag_name::tag_id.eq(tag_id))
-            .filter(TagName::primary())
             .load(conn)?;
         let implications = tag_name::table
             .inner_join(tag_implication::table.on(tag_name::tag_id.eq(tag_implication::child_id)))

@@ -270,7 +270,7 @@ mod test {
         assert_eq!(new_admin_comment_count, admin_comment_count + 1);
         assert_eq!(comment_score, 0);
 
-        verify_query(&format!("DELETE /comment/{comment_id}"), "delete.json").await?;
+        verify_query(&format!("DELETE /comment/{comment_id}"), "comment/delete.json").await?;
 
         let (new_comment_count, new_admin_comment_count) = get_comment_counts(&mut conn)?;
         let has_comment: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(&mut conn)?;
