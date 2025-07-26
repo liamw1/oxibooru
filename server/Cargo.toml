@@ -10,6 +10,7 @@ diesel = { git = "https://github.com/liamw1/diesel-CitextFix", features = ["post
 diesel_migrations = { git = "https://github.com/liamw1/diesel-CitextFix", features = ["postgres"] }
 tokio = { version = "1.43.0", features = ["full"] }
 axum = { version = "0.8.4", features = ["multipart"] }
+reqwest = { version ="0.12.12", features = ["json"] }
 tower-http = { version = "0.6.6", features = ["trace", "timeout", "normalize-path"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 serde = { version = "1.0.217", features = ["derive", "rc"] }
@@ -24,7 +25,6 @@ argon2 = { version = "0.5.3", features = ["std"] }
 rayon = "1.10.0"
 tower = "0.5.2"
 tracing = "0.1.41"
-reqwest = "0.12.12"
 toml = "0.8.20"
 image = "0.25.5"
 video-rs = "0.10.3"

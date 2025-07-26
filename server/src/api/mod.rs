@@ -1,15 +1,11 @@
 use crate::auth::Client;
-use crate::auth::header::{self, AuthenticationError};
-use crate::config::RegexType;
+use crate::auth::header::AuthenticationError;
+use crate::config::{self, RegexType};
 use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{config, update};
-use axum::extract::Request;
 use axum::http::StatusCode;
-use axum::http::header::AUTHORIZATION;
-use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use serde::{Deserialize, Deserializer, Serialize};
@@ -21,6 +17,7 @@ use tower_http::trace::TraceLayer;
 
 mod comment;
 mod info;
+pub mod middleware;
 mod password_reset;
 mod pool;
 mod pool_category;
@@ -274,7 +271,8 @@ pub fn routes() -> Router {
             // Add a timeout so requests don't hang forever.
             TimeoutLayer::new(Duration::from_secs(60)),
         ))
-        .route_layer(middleware::from_fn(auth))
+        .route_layer(axum::middleware::from_fn(middleware::auth))
+        .route_layer(axum::middleware::from_fn(middleware::post_to_webhooks))
 }
 
 /// Represents body of a request to apply/change a score.
@@ -387,27 +385,6 @@ fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiRes
     (cfg!(test) || current_version == client_version)
         .then_some(())
         .ok_or(Error::ResourceModified)
-}
-
-async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
-    let auth_header = request.headers().get(AUTHORIZATION);
-    let client = if let Some(auth_value) = auth_header {
-        let auth_str = auth_value.to_str()?;
-        header::authenticate_user(auth_str)
-    } else {
-        Ok(Client::new(None, UserRank::Anonymous))
-    }?;
-
-    // If client is not anonymous and query contains "bump-login", update login time
-    if let Some(user_id) = client.id
-        && let Some(query) = request.uri().query()
-        && query.contains("bump-login")
-    {
-        update::user::last_login_time(user_id)?;
-    }
-
-    request.extensions_mut().insert(client);
-    Ok(next.run(request).await)
 }
 
 // Any value that is present is considered Some value, including null.

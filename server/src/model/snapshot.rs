@@ -5,6 +5,7 @@ use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
+use serde::Serialize;
 use serde_json::Value;
 
 #[derive(Insertable)]
@@ -25,7 +26,7 @@ impl NewSnapshot {
     }
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Serialize, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = snapshot)]
 #[diesel(check_for_backend(Pg))]

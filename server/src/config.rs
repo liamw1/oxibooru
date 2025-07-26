@@ -8,6 +8,7 @@ use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use strum::Display;
+use url::Url;
 
 #[derive(Debug, Display, Clone, Copy)]
 #[strum(serialize_all = "lowercase")]
@@ -182,6 +183,8 @@ pub struct PublicInfo {
 pub struct Config {
     data_dir: SmallString,
     pub data_url: SmallString,
+    #[serde(default)]
+    pub webhooks: Vec<Url>,
     pub password_secret: SmallString,
     pub content_secret: SmallString,
     pub domain: Option<SmallString>,
