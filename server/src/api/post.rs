@@ -707,6 +707,8 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
         if let Some(content_properties) = new_content {
             api::verify_privilege(client, config::privileges().post_edit_content)?;
 
+            new_snapshot_data.checksum = hex::encode(&content_properties.checksum);
+
             // Update content metadata
             new_post.file_size = content_properties.file_size as i64;
             new_post.width = content_properties.width as i32;
