@@ -9,9 +9,9 @@
         "names": {
             "type": "list change",
             "added": [
+                "awesome",
                 "cool",
                 "nice",
-                "awesome",
                 "rad"
             ],
             "removed": [

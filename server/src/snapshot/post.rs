@@ -58,6 +58,12 @@ impl SnapshotData {
             featured: latest_feature == Some(post.id),
         })
     }
+
+    fn sort_fields(&mut self) {
+        self.tags.sort_unstable();
+        self.relations.sort_unstable();
+        self.notes.sort_unstable_by_key(|note| note.id());
+    }
 }
 
 pub fn creation_snapshot(
@@ -127,9 +133,11 @@ pub fn modification_snapshot(
     conn: &mut PgConnection,
     client: Client,
     post_id: i64,
-    old: SnapshotData,
-    new: SnapshotData,
+    mut old: SnapshotData,
+    mut new: SnapshotData,
 ) -> ApiResult<()> {
+    old.sort_fields();
+    new.sort_fields();
     let old_data = serde_json::to_value(old)?;
     let new_data = serde_json::to_value(new)?;
     if let Some(data) = snapshot::value_diff(old_data, new_data) {
@@ -158,9 +166,10 @@ pub fn unary_snapshot(
     conn: &mut PgConnection,
     client: Client,
     post_id: i64,
-    post_data: SnapshotData,
+    mut post_data: SnapshotData,
     operation: ResourceOperation,
 ) -> ApiResult<()> {
+    post_data.sort_fields();
     serde_json::to_value(post_data)
         .map_err(api::Error::from)
         .and_then(|data| {

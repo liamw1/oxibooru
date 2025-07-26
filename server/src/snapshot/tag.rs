@@ -47,6 +47,12 @@ impl SnapshotData {
             suggestions,
         })
     }
+
+    fn sort_fields(&mut self) {
+        self.names.sort_unstable();
+        self.implications.sort_unstable();
+        self.suggestions.sort_unstable();
+    }
 }
 
 pub fn creation_snapshot(conn: &mut PgConnection, client: Client, tag_data: SnapshotData) -> ApiResult<()> {
@@ -73,11 +79,13 @@ pub fn merge_snapshot(
 pub fn modification_snapshot(
     conn: &mut PgConnection,
     client: Client,
-    old: SnapshotData,
-    new: SnapshotData,
+    mut old: SnapshotData,
+    mut new: SnapshotData,
 ) -> ApiResult<()> {
     let resource_id = old.names.first().unwrap().clone();
 
+    old.sort_fields();
+    new.sort_fields();
     let old_data = serde_json::to_value(old)?;
     let new_data = serde_json::to_value(new)?;
     if let Some(data) = snapshot::value_diff(old_data, new_data) {
@@ -100,9 +108,10 @@ pub fn deletion_snapshot(conn: &mut PgConnection, client: Client, tag_data: Snap
 fn unary_snapshot(
     conn: &mut PgConnection,
     client: Client,
-    tag_data: SnapshotData,
+    mut tag_data: SnapshotData,
     operation: ResourceOperation,
 ) -> ApiResult<()> {
+    tag_data.sort_fields();
     let resource_id = tag_data.names.first().unwrap().clone();
     serde_json::to_value(tag_data)
         .map_err(api::Error::from)

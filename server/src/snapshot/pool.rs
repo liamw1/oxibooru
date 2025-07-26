@@ -32,6 +32,11 @@ impl SnapshotData {
             .load(conn)?;
         Ok(Self { category, names, posts })
     }
+
+    fn sort_fields(&mut self) {
+        self.names.sort_unstable();
+        self.posts.sort_unstable();
+    }
 }
 
 pub fn creation_snapshot(
@@ -64,9 +69,11 @@ pub fn modification_snapshot(
     conn: &mut PgConnection,
     client: Client,
     pool_id: i64,
-    old: SnapshotData,
-    new: SnapshotData,
+    mut old: SnapshotData,
+    mut new: SnapshotData,
 ) -> ApiResult<()> {
+    old.sort_fields();
+    new.sort_fields();
     let old_data = serde_json::to_value(old)?;
     let new_data = serde_json::to_value(new)?;
     if let Some(data) = snapshot::value_diff(old_data, new_data) {
@@ -95,9 +102,10 @@ fn unary_snapshot(
     conn: &mut PgConnection,
     client: Client,
     pool_id: i64,
-    pool_data: SnapshotData,
+    mut pool_data: SnapshotData,
     operation: ResourceOperation,
 ) -> ApiResult<()> {
+    pool_data.sort_fields();
     serde_json::to_value(pool_data)
         .map_err(api::Error::from)
         .and_then(|data| {

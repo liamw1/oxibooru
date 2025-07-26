@@ -13,7 +13,7 @@ use crate::resource::user::MicroUser;
 use crate::resource::{self, BoolFill};
 use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
-    post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
+    post_note, post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
 };
 use crate::string::SmallString;
 use crate::time::DateTime;
@@ -27,6 +27,8 @@ use strum::{EnumString, EnumTable};
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Note {
+    #[serde(skip)]
+    id: i64,
     polygon: Vec<[f32; 2]>,
     text: String,
 }
@@ -39,6 +41,7 @@ impl Note {
             .map(|vertex| [vertex[0].unwrap(), vertex[1].unwrap()])
             .collect();
         Self {
+            id: note.id,
             polygon,
             text: note.text,
         }
@@ -50,6 +53,10 @@ impl Note {
             polygon: self.polygon.as_flattened(),
             text: &self.text,
         }
+    }
+
+    pub fn id(&self) -> i64 {
+        self.id
     }
 }
 
@@ -473,6 +480,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
 
 fn get_notes(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Note>>> {
     Ok(PostNote::belonging_to(posts)
+        .order_by(post_note::id)
         .load(conn)?
         .grouped_by(posts)
         .into_iter()
