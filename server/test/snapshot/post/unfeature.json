@@ -1,0 +1,10 @@
+{
+    "type": "object change",
+    "value": {
+        "featured": {
+            "type": "primitive change",
+            "old-value": true,
+            "new-value": false
+        }
+    }
+}

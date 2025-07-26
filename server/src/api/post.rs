@@ -1084,7 +1084,7 @@ mod test {
         assert_eq!(new_post.checksum_md5, post.checksum_md5);
         assert_ne!(new_post.flags, post.flags);
         assert_ne!(new_post.source, post.source);
-        assert_eq!(new_post.description, post.description);
+        assert_ne!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
         assert_ne!(new_tag_count, tag_count);
