@@ -111,6 +111,7 @@ async fn create(
         update::pool::add_posts(conn, pool.id, 0, &posts)?;
 
         let pool_data = SnapshotData {
+            description: body.description.unwrap_or_default(),
             category,
             names: body.names,
             posts,
@@ -176,7 +177,7 @@ async fn update(
         api::verify_version(old_pool.last_edit_time, body.version)?;
 
         let mut new_pool = old_pool.clone();
-        let old_snapshot_data = SnapshotData::retrieve(conn, old_pool.id, old_pool.category_id)?;
+        let old_snapshot_data = SnapshotData::retrieve(conn, old_pool)?;
         let mut new_snapshot_data = old_snapshot_data.clone();
 
         if let Some(category) = body.category {
@@ -191,7 +192,8 @@ async fn update(
         }
         if let Some(description) = body.description {
             api::verify_privilege(client, config::privileges().pool_edit_description)?;
-            new_pool.description = description;
+            new_pool.description = description.clone();
+            new_snapshot_data.description = description;
         }
         if let Some(names) = body.names {
             api::verify_privilege(client, config::privileges().pool_edit_name)?;
@@ -229,14 +231,15 @@ async fn delete(
     api::verify_privilege(client, config::privileges().pool_delete)?;
 
     db::get_connection()?.transaction(|conn| {
-        let (pool_id, category_id, pool_version): (i64, i64, DateTime) = pool::table
-            .select((pool::id, pool::category_id, pool::last_edit_time))
+        let pool: Pool = pool::table
+            .select(Pool::as_select())
             .inner_join(pool_name::table)
             .filter(pool_name::name.eq(name))
             .first(conn)?;
-        api::verify_version(pool_version, *client_version)?;
+        api::verify_version(pool.last_edit_time, *client_version)?;
 
-        let pool_data = SnapshotData::retrieve(conn, pool_id, category_id)?;
+        let pool_id = pool.id;
+        let pool_data = SnapshotData::retrieve(conn, pool)?;
         snapshot::pool::deletion_snapshot(conn, client, pool_id, pool_data)?;
 
         diesel::delete(pool::table.find(pool_id)).execute(conn)?;

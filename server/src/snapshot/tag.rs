@@ -2,7 +2,7 @@ use crate::api::ApiResult;
 use crate::auth::Client;
 use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::model::snapshot::NewSnapshot;
-use crate::model::tag::TagName;
+use crate::model::tag::{Tag, TagName};
 use crate::model::tag_category::TagCategory;
 use crate::schema::{tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::string::SmallString;
@@ -13,6 +13,7 @@ use serde_json::json;
 
 #[derive(Clone, Serialize)]
 pub struct SnapshotData {
+    pub description: String,
     pub category: SmallString,
     pub names: Vec<SmallString>,
     pub implications: Vec<SmallString>,
@@ -20,28 +21,29 @@ pub struct SnapshotData {
 }
 
 impl SnapshotData {
-    pub fn retrieve(conn: &mut PgConnection, tag_id: i64, category_id: i64) -> QueryResult<Self> {
+    pub fn retrieve(conn: &mut PgConnection, tag: Tag) -> QueryResult<Self> {
         let category = tag_category::table
-            .find(category_id)
+            .find(tag.category_id)
             .select(tag_category::name)
             .first(conn)?;
         let names = tag_name::table
             .select(tag_name::name)
-            .filter(tag_name::tag_id.eq(tag_id))
+            .filter(tag_name::tag_id.eq(tag.id))
             .load(conn)?;
         let implications = tag_name::table
             .inner_join(tag_implication::table.on(tag_name::tag_id.eq(tag_implication::child_id)))
             .select(tag_name::name)
-            .filter(tag_implication::parent_id.eq(tag_id))
+            .filter(tag_implication::parent_id.eq(tag.id))
             .filter(TagName::primary())
             .load(conn)?;
         let suggestions = tag_name::table
             .inner_join(tag_suggestion::table.on(tag_name::tag_id.eq(tag_suggestion::child_id)))
             .select(tag_name::name)
-            .filter(tag_suggestion::parent_id.eq(tag_id))
+            .filter(tag_suggestion::parent_id.eq(tag.id))
             .filter(TagName::primary())
             .load(conn)?;
         Ok(Self {
+            description: tag.description,
             category,
             names,
             implications,
@@ -68,6 +70,7 @@ pub fn new_name_snapshots(conn: &mut PgConnection, client: Client, new_names: Ve
     let new_snapshots: Vec<NewSnapshot> = new_names
         .into_iter()
         .map(|name| SnapshotData {
+            description: String::new(),
             category: default_category_name.clone(),
             names: vec![name],
             implications: Vec::new(),

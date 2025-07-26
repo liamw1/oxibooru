@@ -1,6 +1,7 @@
 use crate::api::ApiResult;
 use crate::auth::Client;
 use crate::model::enums::{ResourceOperation, ResourceType};
+use crate::model::pool::Pool;
 use crate::model::snapshot::NewSnapshot;
 use crate::schema::{pool_category, pool_name, pool_post};
 use crate::string::SmallString;
@@ -11,26 +12,32 @@ use serde_json::json;
 
 #[derive(Clone, Serialize)]
 pub struct SnapshotData {
+    pub description: String,
     pub category: SmallString,
     pub names: Vec<SmallString>,
     pub posts: Vec<i64>,
 }
 
 impl SnapshotData {
-    pub fn retrieve(conn: &mut PgConnection, pool_id: i64, category_id: i64) -> QueryResult<Self> {
+    pub fn retrieve(conn: &mut PgConnection, pool: Pool) -> QueryResult<Self> {
         let category = pool_category::table
-            .find(category_id)
+            .find(pool.category_id)
             .select(pool_category::name)
             .first(conn)?;
         let names = pool_name::table
             .select(pool_name::name)
-            .filter(pool_name::pool_id.eq(pool_id))
+            .filter(pool_name::pool_id.eq(pool.id))
             .load(conn)?;
         let posts = pool_post::table
             .select(pool_post::post_id)
-            .filter(pool_post::pool_id.eq(pool_id))
+            .filter(pool_post::pool_id.eq(pool.id))
             .load(conn)?;
-        Ok(Self { category, names, posts })
+        Ok(Self {
+            description: pool.description,
+            category,
+            names,
+            posts,
+        })
     }
 
     fn sort_fields(&mut self) {

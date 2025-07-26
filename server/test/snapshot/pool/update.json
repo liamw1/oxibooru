@@ -1,6 +1,11 @@
 {
     "type": "object change",
     "value": {
+        "description": {
+            "type": "primitive change",
+            "old-value": "",
+            "new-value": "I'm updating this pool"
+        },
         "category": {
             "type": "primitive change",
             "old-value": "Setting",

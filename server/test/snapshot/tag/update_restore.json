@@ -1,6 +1,11 @@
 {
     "type": "object change",
     "value": {
+        "description": {
+            "type": "primitive change",
+            "old-value": "A big body of water",
+            "new-value": ""
+        },
         "category": {
             "type": "primitive change",
             "old-value": "default",
