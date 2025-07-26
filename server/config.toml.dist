@@ -9,6 +9,11 @@ content_secret = "change"
 data_url = "data"
 data_dir = "/data"
 
+# Webhooks to call when events occur (such as post/tag/user/etc. changes)
+# the listed urls will be called with a HTTP POST request with a payload
+# containing a snapshot resource as JSON. See doc/API.md for details
+webhooks = []
+
 # Delete thumbnails and source files on post delete
 # Original functionality is false, to mitigate the impacts of admins going on unchecked post purges
 delete_source_files = false

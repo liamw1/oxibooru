@@ -1,3 +1,4 @@
+use crate::api::middleware;
 use crate::{admin, api, config, db, filesystem};
 use axum::ServiceExt;
 use axum::extract::Request;
@@ -33,8 +34,10 @@ pub fn initialize() -> Result<(), String> {
     // We do this after admin mode check so that users can update signatures
     db::check_signature_version(&mut conn).map_err(|err| err.to_string())?;
 
+    middleware::initialize_snapshot_counter(&mut conn).map_err(|err| err.to_string())?;
+
     if let Err(err) = filesystem::purge_temporary_uploads() {
-        warn!("Failed to purge temporary files. Details:\n\n{err}");
+        warn!("Failed to purge temporary files. Details:\n{err}");
     }
     Ok(())
 }

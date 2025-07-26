@@ -1,5 +1,6 @@
+use crate::model::pool_category::PoolCategory;
 use crate::model::post::Post;
-use crate::schema::{pool, pool_category, pool_name, pool_post};
+use crate::schema::{pool, pool_name, pool_post};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::deserialize::{self, FromSql, FromSqlRow};
@@ -10,24 +11,6 @@ use diesel::prelude::*;
 use diesel::sql_types::{Bool, Text};
 use serde::Serialize;
 use std::rc::Rc;
-
-#[derive(Insertable)]
-#[diesel(table_name = pool_category)]
-#[diesel(check_for_backend(Pg))]
-pub struct NewPoolCategory<'a> {
-    pub name: &'a str,
-    pub color: &'a str,
-}
-
-#[derive(AsChangeset, Identifiable, Queryable, Selectable)]
-#[diesel(table_name = pool_category)]
-#[diesel(check_for_backend(Pg))]
-pub struct PoolCategory {
-    pub id: i64,
-    pub name: SmallString,
-    pub color: SmallString,
-    pub last_edit_time: DateTime,
-}
 
 #[derive(Debug, Clone, FromSqlRow, Serialize)]
 #[diesel(sql_type = Text)]
@@ -48,7 +31,7 @@ pub struct NewPool<'a> {
     pub description: &'a str,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Clone, AsChangeset, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(PoolCategory, foreign_key = category_id))]
 #[diesel(table_name = pool)]
 #[diesel(check_for_backend(Pg))]

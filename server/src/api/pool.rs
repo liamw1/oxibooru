@@ -3,14 +3,15 @@ use crate::auth::Client;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::PoolInfo;
-use crate::schema::{pool, pool_category, pool_name, pool_post};
+use crate::schema::{pool, pool_category, pool_name};
 use crate::search::pool::QueryBuilder;
+use crate::snapshot::pool::SnapshotData;
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, resource, update};
+use crate::{api, config, db, resource, snapshot, update};
 use axum::extract::{Extension, Path, Query};
 use axum::{Json, Router, routing};
-use diesel::dsl::{exists, max};
+use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
 
@@ -92,21 +93,30 @@ async fn create(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let pool = conn.transaction(|conn| {
-        let category_id: i64 = pool_category::table
-            .select(pool_category::id)
+        let (category_id, category): (i64, SmallString) = pool_category::table
+            .select((pool_category::id, pool_category::name))
             .filter(pool_category::name.eq(body.category))
             .first(conn)?;
-        let new_pool = NewPool {
+        let pool: Pool = NewPool {
             category_id,
             description: body.description.as_deref().unwrap_or(""),
-        };
-        let pool = diesel::insert_into(pool::table)
-            .values(new_pool)
-            .returning(Pool::as_returning())
-            .get_result(conn)?;
+        }
+        .insert_into(pool::table)
+        .get_result(conn)?;
 
-        update::pool::add_names(conn, pool.id, 0, body.names)?;
-        update::pool::add_posts(conn, pool.id, 0, body.posts.unwrap_or_default())?;
+        let posts = body.posts.unwrap_or_default();
+
+        // Add names and posts
+        update::pool::add_names(conn, pool.id, 0, &body.names)?;
+        update::pool::add_posts(conn, pool.id, 0, &posts)?;
+
+        let pool_data = SnapshotData {
+            description: body.description.unwrap_or_default(),
+            category,
+            names: body.names,
+            posts,
+        };
+        snapshot::pool::creation_snapshot(conn, client, pool.id, pool_data)?;
         Ok::<_, api::Error>(pool)
     })?;
     conn.transaction(|conn| PoolInfo::new(conn, pool, &fields))
@@ -121,50 +131,22 @@ async fn merge(
 ) -> ApiResult<Json<PoolInfo>> {
     api::verify_privilege(client, config::privileges().pool_merge)?;
 
-    let remove_id = body.remove;
+    let absorbed_id = body.remove;
     let merge_to_id = body.merge_to;
-    if remove_id == merge_to_id {
+    if absorbed_id == merge_to_id {
         return Err(api::Error::SelfMerge(ResourceType::Pool));
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
-        let remove_version = pool::table.find(remove_id).select(pool::last_edit_time).first(conn)?;
+        let remove_version = pool::table.find(absorbed_id).select(pool::last_edit_time).first(conn)?;
         let merge_to_version = pool::table.find(merge_to_id).select(pool::last_edit_time).first(conn)?;
         api::verify_version(remove_version, body.remove_version)?;
         api::verify_version(merge_to_version, body.merge_to_version)?;
 
-        // Merge posts
-        let merge_to_pool_posts = pool_post::table
-            .select(pool_post::post_id)
-            .filter(pool_post::pool_id.eq(merge_to_id))
-            .into_boxed();
-        let new_pool_posts: Vec<_> = pool_post::table
-            .select(pool_post::post_id)
-            .filter(pool_post::pool_id.eq(remove_id))
-            .filter(pool_post::post_id.ne_all(merge_to_pool_posts))
-            .order_by(pool_post::order)
-            .load(conn)?;
-        let post_count: i64 = pool_post::table
-            .filter(pool_post::pool_id.eq(merge_to_id))
-            .count()
-            .first(conn)?;
-        update::pool::add_posts(conn, merge_to_id, post_count, new_pool_posts)?;
-
-        // Merge names
-        let current_name_count = pool_name::table
-            .select(max(pool_name::order) + 1)
-            .filter(pool_name::pool_id.eq(merge_to_id))
-            .first::<Option<_>>(conn)?
-            .unwrap_or(0);
-        let removed_names = diesel::delete(pool_name::table.filter(pool_name::pool_id.eq(remove_id)))
-            .returning(pool_name::name)
-            .get_results(conn)?;
-        update::pool::add_names(conn, merge_to_id, current_name_count, removed_names)?;
-
-        diesel::delete(pool::table.find(remove_id)).execute(conn)?;
-        update::pool::last_edit_time(conn, merge_to_id)
+        update::pool::merge(conn, absorbed_id, merge_to_id)?;
+        snapshot::pool::merge_snapshot(conn, client, absorbed_id, merge_to_id).map_err(api::Error::from)
     })?;
     conn.transaction(|conn| PoolInfo::new_from_id(conn, merge_to_id, &fields))
         .map(Json)
@@ -191,26 +173,27 @@ async fn update(
 
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
-        let pool_version: DateTime = pool::table.find(pool_id).select(pool::last_edit_time).first(conn)?;
-        api::verify_version(pool_version, body.version)?;
+        let old_pool: Pool = pool::table.find(pool_id).first(conn)?;
+        api::verify_version(old_pool.last_edit_time, body.version)?;
+
+        let mut new_pool = old_pool.clone();
+        let old_snapshot_data = SnapshotData::retrieve(conn, old_pool)?;
+        let mut new_snapshot_data = old_snapshot_data.clone();
 
         if let Some(category) = body.category {
             api::verify_privilege(client, config::privileges().pool_edit_category)?;
 
             let category_id: i64 = pool_category::table
                 .select(pool_category::id)
-                .filter(pool_category::name.eq(category))
+                .filter(pool_category::name.eq(&category))
                 .first(conn)?;
-            diesel::update(pool::table.find(pool_id))
-                .set(pool::category_id.eq(category_id))
-                .execute(conn)?;
+            new_pool.category_id = category_id;
+            new_snapshot_data.category = category;
         }
         if let Some(description) = body.description {
             api::verify_privilege(client, config::privileges().pool_edit_description)?;
-
-            diesel::update(pool::table.find(pool_id))
-                .set(pool::description.eq(description))
-                .execute(conn)?;
+            new_pool.description = description.clone();
+            new_snapshot_data.description = description;
         }
         if let Some(names) = body.names {
             api::verify_privilege(client, config::privileges().pool_edit_name)?;
@@ -219,14 +202,21 @@ async fn update(
             }
 
             update::pool::delete_names(conn, pool_id)?;
-            update::pool::add_names(conn, pool_id, 0, names)?;
+            update::pool::add_names(conn, pool_id, 0, &names)?;
+            new_snapshot_data.names = names;
         }
         if let Some(posts) = body.posts {
             api::verify_privilege(client, config::privileges().pool_edit_post)?;
+
             update::pool::delete_posts(conn, pool_id)?;
-            update::pool::add_posts(conn, pool_id, 0, posts)?;
+            update::pool::add_posts(conn, pool_id, 0, &posts)?;
+            new_snapshot_data.posts = posts;
         }
-        update::pool::last_edit_time(conn, pool_id)
+
+        new_pool.last_edit_time = DateTime::now();
+        let _: Pool = new_pool.save_changes(conn)?;
+        snapshot::pool::modification_snapshot(conn, client, pool_id, old_snapshot_data, new_snapshot_data)?;
+        Ok(())
     })?;
     conn.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields))
         .map(Json)
@@ -241,12 +231,16 @@ async fn delete(
     api::verify_privilege(client, config::privileges().pool_delete)?;
 
     db::get_connection()?.transaction(|conn| {
-        let (pool_id, pool_version): (i64, DateTime) = pool::table
-            .select((pool::id, pool::last_edit_time))
+        let pool: Pool = pool::table
+            .select(Pool::as_select())
             .inner_join(pool_name::table)
             .filter(pool_name::name.eq(name))
             .first(conn)?;
-        api::verify_version(pool_version, *client_version)?;
+        api::verify_version(pool.last_edit_time, *client_version)?;
+
+        let pool_id = pool.id;
+        let pool_data = SnapshotData::retrieve(conn, pool)?;
+        snapshot::pool::deletion_snapshot(conn, client, pool_id, pool_data)?;
 
         diesel::delete(pool::table.find(pool_id)).execute(conn)?;
         Ok(Json(()))
@@ -326,7 +320,7 @@ mod test {
         assert_eq!(new_pool_count, pool_count + 1);
         assert_eq!(post_count, 2);
 
-        verify_query(&format!("DELETE /pool/{name}/?{FIELDS}"), "delete.json").await?;
+        verify_query(&format!("DELETE /pool/{name}/?{FIELDS}"), "pool/delete.json").await?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
         let has_pool: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(&mut conn)?;

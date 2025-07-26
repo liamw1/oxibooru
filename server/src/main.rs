@@ -14,6 +14,7 @@ mod model;
 mod resource;
 mod schema;
 mod search;
+mod snapshot;
 mod string;
 #[cfg(test)]
 mod test;
@@ -24,7 +25,7 @@ mod update;
 async fn main() {
     app::enable_tracing();
     if let Err(err) = app::initialize() {
-        tracing::error!("An error occurred during initialization. Details:\n\n{err}");
+        tracing::error!("An error occurred during initialization. Details:\n{err}");
         std::process::exit(1);
     }
     app::run().await;

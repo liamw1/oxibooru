@@ -47,6 +47,17 @@ pub struct CommentInfo {
 }
 
 impl CommentInfo {
+    pub fn new(
+        conn: &mut PgConnection,
+        client: Client,
+        comment: Comment,
+        fields: &FieldTable<bool>,
+    ) -> QueryResult<Self> {
+        let mut comment_info = Self::new_batch(conn, client, vec![comment], fields)?;
+        assert_eq!(comment_info.len(), 1);
+        Ok(comment_info.pop().unwrap())
+    }
+
     pub fn new_from_id(
         conn: &mut PgConnection,
         client: Client,
@@ -98,8 +109,8 @@ impl CommentInfo {
         comment_ids: Vec<i64>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let unordered_posts = comment::table.filter(comment::id.eq_any(&comment_ids)).load(conn)?;
-        let comments = resource::order_as(unordered_posts, &comment_ids);
+        let unordered_comments = comment::table.filter(comment::id.eq_any(&comment_ids)).load(conn)?;
+        let comments = resource::order_as(unordered_comments, &comment_ids);
         Self::new_batch(conn, client, comments, fields)
     }
 }

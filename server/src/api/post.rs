@@ -5,28 +5,20 @@ use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
 use crate::content::{Content, FileContents, JsonOrMultipart, signature, upload};
 use crate::filesystem::Directory;
-use crate::model::comment::NewComment;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
-use crate::model::pool::PoolPost;
-use crate::model::post::{
-    CompressedSignature, NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostRelation, PostScore,
-    PostSignature, PostTag, SignatureIndexes,
-};
+use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
 use crate::resource::post::{Note, PostInfo};
-use crate::schema::{
-    comment, pool_post, post, post_favorite, post_feature, post_relation, post_score, post_signature, post_statistics,
-    post_tag,
-};
+use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
 use crate::search::post::QueryBuilder;
+use crate::snapshot::post::SnapshotData;
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, filesystem, resource, update};
+use crate::{api, config, db, filesystem, resource, snapshot, update};
 use axum::extract::{DefaultBodyLimit, Extension, Path, Query};
 use axum::{Json, Router, routing};
 use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
 use std::sync::LazyLock;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::info;
@@ -66,12 +58,12 @@ static POST_TAG_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::n
 /// more pessimistic than necessary, as parallel updates are safe if the sets of tags are
 /// disjoint. However, allowing disjoint tagging introduces additional complexity so it
 /// isn't being done as of now.
-async fn tagging_update<T, F>(tags: Option<&[SmallString]>, update: F) -> ApiResult<T>
+async fn tagging_update<T, F>(tags_updated: bool, update: F) -> ApiResult<T>
 where
     F: FnOnce(&mut db::Connection) -> ApiResult<T>,
 {
     let _lock;
-    if tags.is_some() {
+    if tags_updated {
         _lock = POST_TAG_MUTEX.lock().await;
     }
 
@@ -259,9 +251,15 @@ async fn feature(
     };
 
     let mut conn = db::get_connection()?;
-    diesel::insert_into(post_feature::table)
-        .values(new_post_feature)
-        .execute(&mut conn)?;
+    conn.transaction(|conn| {
+        let previous_feature_id = post_feature::table
+            .select(post_feature::post_id)
+            .order_by(post_feature::time.desc())
+            .first(conn)
+            .optional()?;
+        new_post_feature.insert_into(post_feature::table).execute(conn)?;
+        snapshot::post::feature_snapshot(conn, client, previous_feature_id, body.id)
+    })?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, client, body.id, &fields))
         .map(Json)
         .map_err(api::Error::from)
@@ -440,39 +438,27 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         description: body.description.as_deref().unwrap_or(""),
     };
 
-    let post_id = tagging_update(body.tags.as_deref(), |conn| {
+    let post_id = tagging_update(body.tags.is_some(), |conn| {
         // We do this before post insertion so that the post sequence isn't incremented if it fails
-        let tag_ids = body
-            .tags
-            .as_deref()
-            .map(|names| update::tag::get_or_create_tag_ids(conn, client, names, false))
-            .transpose()?;
+        let (tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, client, body.tags.unwrap_or_default(), false)?;
+        let relations = body.relations.unwrap_or_default();
+        let notes = body.notes.unwrap_or_default();
 
-        let post_id = diesel::insert_into(post::table)
-            .values(new_post)
-            .returning(post::id)
-            .get_result(conn)?;
-        let post_hash = PostHash::new(post_id);
+        let post: Post = new_post.insert_into(post::table).get_result(conn)?;
+        let post_hash = PostHash::new(post.id);
 
         // Add tags, relations, and notes
-        if let Some(tags) = tag_ids {
-            update::post::add_tags(conn, post_id, tags)?;
-        }
-        if let Some(relations) = body.relations {
-            update::post::create_relations(conn, post_id, relations)?;
-        }
-        if let Some(notes) = body.notes {
-            update::post::add_notes(conn, post_id, notes)?;
-        }
+        update::post::add_tags(conn, post.id, &tag_ids)?;
+        update::post::create_relations(conn, post.id, &relations)?;
+        update::post::add_notes(conn, post.id, &notes)?;
 
-        let new_post_signature = NewPostSignature {
-            post_id,
+        NewPostSignature {
+            post_id: post.id,
             signature: content_properties.signature.into(),
             words: signature::generate_indexes(&content_properties.signature).into(),
-        };
-        diesel::insert_into(post_signature::table)
-            .values(new_post_signature)
-            .execute(conn)?;
+        }
+        .insert_into(post_signature::table)
+        .execute(conn)?;
 
         // Move content to permanent location
         let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
@@ -485,7 +471,20 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
             update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
         }
         update::post::thumbnail(conn, &post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
-        Ok::<_, api::Error>(post_id)
+
+        let post_data = SnapshotData {
+            safety: post.safety,
+            checksum: hex::encode(&post.checksum),
+            flags: post.flags,
+            source: post.source,
+            description: post.description,
+            tags,
+            relations,
+            notes,
+            featured: false,
+        };
+        snapshot::post::creation_snapshot(conn, client, post.id, post_data)?;
+        Ok::<_, api::Error>(post.id)
     })
     .await?;
     db::get_connection()?
@@ -530,216 +529,26 @@ async fn merge(
 ) -> ApiResult<Json<PostInfo>> {
     api::verify_privilege(client, config::privileges().post_merge)?;
 
-    let remove_id = body.post_info.remove;
+    let absorbed_id = body.post_info.remove;
     let merge_to_id = body.post_info.merge_to;
-    if remove_id == merge_to_id {
+    if absorbed_id == merge_to_id {
         return Err(api::Error::SelfMerge(ResourceType::Post));
     }
-    let remove_hash = PostHash::new(remove_id);
-    let merge_to_hash = PostHash::new(merge_to_id);
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    tagging_update(Some(&[]), |conn| {
-        let remove_post: Post = post::table.find(remove_id).first(conn)?;
+    tagging_update(true, |conn| {
+        let absorbed_post: Post = post::table.find(absorbed_id).first(conn)?;
         let merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
-        api::verify_version(remove_post.last_edit_time, body.post_info.remove_version)?;
+        api::verify_version(absorbed_post.last_edit_time, body.post_info.remove_version)?;
         api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
 
-        // Merge relations
-        let involved_relations: Vec<PostRelation> = post_relation::table
-            .filter(post_relation::parent_id.eq(remove_id))
-            .or_filter(post_relation::child_id.eq(remove_id))
-            .or_filter(post_relation::parent_id.eq(merge_to_id))
-            .or_filter(post_relation::child_id.eq(merge_to_id))
-            .load(conn)?;
-        let merged_relations: HashSet<_> = involved_relations
-            .iter()
-            .copied()
-            .map(|mut relation| {
-                if relation.parent_id == remove_id {
-                    relation.parent_id = merge_to_id
-                } else if relation.child_id == remove_id {
-                    relation.child_id = merge_to_id
-                }
-                relation
-            })
-            .filter(|relation| relation.parent_id != relation.child_id)
-            .collect();
-        diesel::delete(post_relation::table)
-            .filter(post_relation::parent_id.eq(merge_to_id))
-            .or_filter(post_relation::child_id.eq(merge_to_id))
-            .execute(conn)?;
-        diesel::insert_into(post_relation::table)
-            .values(merged_relations.into_iter().collect::<Vec<_>>())
-            .execute(conn)?;
-
-        // Merge tags
-        let merge_to_tags = post_tag::table
-            .select(post_tag::tag_id)
-            .filter(post_tag::post_id.eq(merge_to_id))
-            .into_boxed();
-        let new_tags: Vec<_> = post_tag::table
-            .select(post_tag::tag_id)
-            .filter(post_tag::post_id.eq(remove_id))
-            .filter(post_tag::tag_id.ne_all(merge_to_tags))
-            .load(conn)?
-            .into_iter()
-            .map(|tag_id| PostTag {
-                post_id: merge_to_id,
-                tag_id,
-            })
-            .collect();
-        diesel::insert_into(post_tag::table).values(new_tags).execute(conn)?;
-
-        // Merge pools
-        let merge_to_pools = pool_post::table
-            .select(pool_post::pool_id)
-            .filter(pool_post::post_id.eq(merge_to_id))
-            .into_boxed();
-        let new_pools: Vec<_> = pool_post::table
-            .select((pool_post::pool_id, pool_post::order))
-            .filter(pool_post::post_id.eq(remove_id))
-            .filter(pool_post::pool_id.ne_all(merge_to_pools))
-            .load(conn)?
-            .into_iter()
-            .map(|(pool_id, order)| PoolPost {
-                pool_id,
-                post_id: merge_to_id,
-                order,
-            })
-            .collect();
-        diesel::insert_into(pool_post::table).values(new_pools).execute(conn)?;
-
-        // Merge scores
-        let merge_to_scores = post_score::table
-            .select(post_score::user_id)
-            .filter(post_score::post_id.eq(merge_to_id))
-            .into_boxed();
-        let new_scores: Vec<_> = post_score::table
-            .select((post_score::user_id, post_score::score, post_score::time))
-            .filter(post_score::post_id.eq(remove_id))
-            .filter(post_score::user_id.ne_all(merge_to_scores))
-            .load(conn)?
-            .into_iter()
-            .map(|(user_id, score, time)| PostScore {
-                post_id: merge_to_id,
-                user_id,
-                score,
-                time,
-            })
-            .collect();
-        diesel::insert_into(post_score::table)
-            .values(new_scores)
-            .execute(conn)?;
-
-        // Merge favorites
-        let merge_to_favorites = post_favorite::table
-            .select(post_favorite::user_id)
-            .filter(post_favorite::post_id.eq(merge_to_id))
-            .into_boxed();
-        let new_favorites: Vec<_> = post_favorite::table
-            .select((post_favorite::user_id, post_favorite::time))
-            .filter(post_favorite::post_id.eq(remove_id))
-            .filter(post_favorite::user_id.ne_all(merge_to_favorites))
-            .load(conn)?
-            .into_iter()
-            .map(|(user_id, time)| PostFavorite {
-                post_id: merge_to_id,
-                user_id,
-                time,
-            })
-            .collect();
-        diesel::insert_into(post_favorite::table)
-            .values(new_favorites)
-            .execute(conn)?;
-
-        // Merge features
-        let new_features: Vec<_> = diesel::delete(post_feature::table.filter(post_feature::post_id.eq(remove_id)))
-            .returning((post_feature::user_id, post_feature::time))
-            .get_results(conn)?
-            .into_iter()
-            .map(|(user_id, time)| NewPostFeature {
-                post_id: merge_to_id,
-                user_id,
-                time,
-            })
-            .collect();
-        diesel::insert_into(post_feature::table)
-            .values(new_features)
-            .execute(conn)?;
-
-        // Merge comments
-        let removed_comments: Vec<(_, String, _)> =
-            diesel::delete(comment::table.filter(comment::post_id.eq(remove_id)))
-                .returning((comment::user_id, comment::text, comment::creation_time))
-                .get_results(conn)?;
-        let new_comments: Vec<_> = removed_comments
-            .iter()
-            .map(|(user_id, text, creation_time)| NewComment {
-                user_id: *user_id,
-                post_id: merge_to_id,
-                text,
-                creation_time: *creation_time,
-            })
-            .collect();
-        diesel::insert_into(comment::table).values(new_comments).execute(conn)?;
-
-        // Merge descriptions
-        let merged_description = merge_to_post.description.clone() + "\n\n" + &remove_post.description;
-        diesel::update(post::table.find(merge_to_id))
-            .set(post::description.eq(merged_description.trim()))
-            .execute(conn)?;
-
-        // If replacing content, update post signature. This needs to be done before deletion because post signatures cascade
-        if body.replace_content && !cfg!(test) {
-            let (signature, indexes): (CompressedSignature, SignatureIndexes) = post_signature::table
-                .find(remove_id)
-                .select((post_signature::signature, post_signature::words))
-                .first(conn)?;
-            diesel::update(post_signature::table.find(merge_to_id))
-                .set((post_signature::signature.eq(signature), post_signature::words.eq(indexes)))
-                .execute(conn)?;
-        }
-
-        diesel::delete(post::table.find(remove_id)).execute(conn)?;
-
-        if body.replace_content {
-            if !cfg!(test) {
-                filesystem::swap_posts(&remove_hash, remove_post.mime_type, &merge_to_hash, merge_to_post.mime_type)?;
-            }
-
-            // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
-            diesel::update(post::table.find(merge_to_post.id))
-                .set((
-                    post::file_size.eq(remove_post.file_size),
-                    post::width.eq(remove_post.width),
-                    post::height.eq(remove_post.height),
-                    post::type_.eq(remove_post.type_),
-                    post::mime_type.eq(remove_post.mime_type),
-                    post::checksum.eq(remove_post.checksum),
-                    post::checksum_md5.eq(remove_post.checksum_md5),
-                    post::flags.eq(remove_post.flags),
-                    post::source.eq(remove_post.source),
-                    post::generated_thumbnail_size.eq(remove_post.generated_thumbnail_size),
-                    post::custom_thumbnail_size.eq(remove_post.custom_thumbnail_size),
-                ))
-                .execute(conn)?;
-        }
-
-        if config::get().delete_source_files && !cfg!(test) {
-            let deleted_content_type = if body.replace_content {
-                merge_to_post.mime_type
-            } else {
-                remove_post.mime_type
-            };
-            filesystem::delete_post(&remove_hash, deleted_content_type)?;
-        }
-        update::post::last_edit_time(conn, merge_to_id)?;
+        update::post::merge(conn, absorbed_post, merge_to_post, body.replace_content)?;
+        snapshot::post::merge_snapshot(conn, client, absorbed_id, merge_to_id)?;
         Ok(())
     })
     .await?;
     db::get_connection()?
-        .transaction(|conn| PostInfo::new_from_id(conn, client, merge_to_id, &fields))
+        .transaction(|conn| PostInfo::new_from_id(conn, client, body.post_info.merge_to, &fields))
         .map(Json)
         .map_err(api::Error::from)
 }
@@ -762,8 +571,8 @@ async fn favorite(
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
-        diesel::insert_into(post_favorite::table)
-            .values(new_post_favorite)
+        new_post_favorite
+            .insert_into(post_favorite::table)
             .execute(conn)
             .map_err(api::Error::from)
     })?;
@@ -788,15 +597,14 @@ async fn rate(
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*body) {
-            let new_post_score = PostScore {
+            PostScore {
                 post_id,
                 user_id,
                 score,
                 time: DateTime::now(),
-            };
-            diesel::insert_into(post_score::table)
-                .values(new_post_score)
-                .execute(conn)?;
+            }
+            .insert_into(post_score::table)
+            .execute(conn)?;
         }
         Ok::<_, api::Error>(())
     })?;
@@ -840,73 +648,73 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
         None => None,
     };
 
-    tagging_update(body.tags.as_deref(), |conn| {
-        let post_version = post::table.find(post_id).select(post::last_edit_time).first(conn)?;
-        api::verify_version(post_version, body.version)?;
+    tagging_update(body.tags.is_some(), |conn| {
+        let old_post: Post = post::table.find(post_id).first(conn)?;
+        let old_mime_type = old_post.mime_type;
+        api::verify_version(old_post.last_edit_time, body.version)?;
+
+        let mut new_post = old_post.clone();
+        let old_snapshot_data = SnapshotData::retrieve(conn, old_post)?;
+        let mut new_snapshot_data = old_snapshot_data.clone();
 
         if let Some(safety) = body.safety {
             api::verify_privilege(client, config::privileges().post_edit_safety)?;
 
-            diesel::update(post::table.find(post_id))
-                .set(post::safety.eq(safety))
-                .execute(conn)?;
-        }
-        if let Some(source) = body.source {
-            api::verify_privilege(client, config::privileges().post_edit_source)?;
-
-            diesel::update(post::table.find(post_id))
-                .set(post::source.eq(source))
-                .execute(conn)?;
-        }
-        if let Some(description) = body.description {
-            api::verify_privilege(client, config::privileges().post_edit_description)?;
-
-            diesel::update(post::table.find(post_id))
-                .set(post::description.eq(description))
-                .execute(conn)?;
-        }
-        if let Some(relations) = body.relations {
-            api::verify_privilege(client, config::privileges().post_edit_relation)?;
-
-            update::post::delete_relations(conn, post_id)?;
-            update::post::create_relations(conn, post_id, relations)?;
-        }
-        if let Some(tags) = body.tags.as_deref() {
-            api::verify_privilege(client, config::privileges().post_edit_tag)?;
-
-            let updated_tag_ids = update::tag::get_or_create_tag_ids(conn, client, tags, false)?;
-            update::post::delete_tags(conn, post_id)?;
-            update::post::add_tags(conn, post_id, updated_tag_ids)?;
-        }
-        if let Some(notes) = body.notes {
-            api::verify_privilege(client, config::privileges().post_edit_note)?;
-
-            update::post::delete_notes(conn, post_id)?;
-            update::post::add_notes(conn, post_id, notes)?;
+            new_post.safety = safety;
+            new_snapshot_data.safety = safety;
         }
         if let Some(flags) = body.flags {
             api::verify_privilege(client, config::privileges().post_edit_flag)?;
 
             let updated_flags = PostFlags::from_slice(&flags);
-            diesel::update(post::table.find(post_id))
-                .set(post::flags.eq(updated_flags))
-                .execute(conn)?;
+            new_post.flags = updated_flags;
+            new_snapshot_data.flags = updated_flags;
+        }
+        if let Some(source) = body.source {
+            api::verify_privilege(client, config::privileges().post_edit_source)?;
+
+            new_post.source = source.clone();
+            new_snapshot_data.source = source;
+        }
+        if let Some(description) = body.description {
+            api::verify_privilege(client, config::privileges().post_edit_description)?;
+
+            new_post.description = description.clone();
+            new_snapshot_data.description = description;
+        }
+        if let Some(relations) = body.relations {
+            api::verify_privilege(client, config::privileges().post_edit_relation)?;
+
+            update::post::delete_relations(conn, post_id)?;
+            update::post::create_relations(conn, post_id, &relations)?;
+            new_snapshot_data.relations = relations;
+        }
+        if let Some(tags) = body.tags {
+            api::verify_privilege(client, config::privileges().post_edit_tag)?;
+
+            let (updated_tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, client, tags, false)?;
+            update::post::delete_tags(conn, post_id)?;
+            update::post::add_tags(conn, post_id, &updated_tag_ids)?;
+            new_snapshot_data.tags = tags;
+        }
+        if let Some(notes) = body.notes {
+            api::verify_privilege(client, config::privileges().post_edit_note)?;
+
+            update::post::delete_notes(conn, post_id)?;
+            update::post::add_notes(conn, post_id, &notes)?;
+            new_snapshot_data.notes = notes;
         }
         if let Some(content_properties) = new_content {
             api::verify_privilege(client, config::privileges().post_edit_content)?;
 
-            let mut post: Post = post::table.find(post_id).first(conn)?;
-            let old_mime_type = post.mime_type;
-
             // Update content metadata
-            post.file_size = content_properties.file_size as i64;
-            post.width = content_properties.width as i32;
-            post.height = content_properties.height as i32;
-            post.type_ = PostType::from(content_properties.mime_type);
-            post.mime_type = content_properties.mime_type;
-            post.checksum = content_properties.checksum;
-            post.flags |= content_properties.flags;
-            post.save_changes::<Post>(conn)?;
+            new_post.file_size = content_properties.file_size as i64;
+            new_post.width = content_properties.width as i32;
+            new_post.height = content_properties.height as i32;
+            new_post.type_ = PostType::from(content_properties.mime_type);
+            new_post.mime_type = content_properties.mime_type;
+            new_post.checksum = content_properties.checksum;
+            new_post.flags |= content_properties.flags;
 
             // Update post signature
             let new_post_signature = NewPostSignature {
@@ -915,9 +723,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
                 words: signature::generate_indexes(&content_properties.signature).into(),
             };
             diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
-            diesel::insert_into(post_signature::table)
-                .values(new_post_signature)
-                .execute(conn)?;
+            new_post_signature.insert_into(post_signature::table).execute(conn)?;
 
             // Replace content
             let temp_path = filesystem::temporary_upload_filepath(&content_properties.token);
@@ -931,7 +737,11 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
             api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
             update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
         }
-        update::post::last_edit_time(conn, post_id)
+
+        new_post.last_edit_time = DateTime::now();
+        let _: Post = new_post.save_changes(conn)?;
+        snapshot::post::modification_snapshot(conn, client, post_id, old_snapshot_data, new_snapshot_data)?;
+        Ok(())
     })
     .await?;
     db::get_connection()?
@@ -983,11 +793,12 @@ async fn delete(
 
     let mut conn = db::get_connection()?;
     let mime_type = conn.transaction(|conn| {
-        let (mime_type, post_version) = post::table
-            .find(post_id)
-            .select((post::mime_type, post::last_edit_time))
-            .first(conn)?;
-        api::verify_version(post_version, *client_version)?;
+        let post: Post = post::table.find(post_id).first(conn)?;
+        api::verify_version(post.last_edit_time, *client_version)?;
+
+        let mime_type = post.mime_type;
+        let post_data = SnapshotData::retrieve(conn, post)?;
+        snapshot::post::deletion_snapshot(conn, client, post_id, post_data)?;
 
         diesel::delete(post::table.find(post_id)).execute(conn)?;
         Ok::<_, api::Error>(mime_type)
@@ -1272,7 +1083,7 @@ mod test {
         assert_eq!(new_post.checksum_md5, post.checksum_md5);
         assert_ne!(new_post.flags, post.flags);
         assert_ne!(new_post.source, post.source);
-        assert_eq!(new_post.description, post.description);
+        assert_ne!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
         assert_ne!(new_tag_count, tag_count);

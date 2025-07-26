@@ -1,0 +1,13 @@
+{
+    "description": "This is a test pool",
+    "category": "default",
+    "names": [
+        "Name1",
+        "Name2",
+        "Name3"
+    ],
+    "posts": [
+        1,
+        5
+    ]
+}

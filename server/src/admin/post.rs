@@ -239,14 +239,13 @@ fn recompute_signature_in_parallel(post_id: i64, progress: &ProgressReporter) ->
                 ))
                 .execute(conn)
         } else {
-            let new_post_signature = NewPostSignature {
+            NewPostSignature {
                 post_id,
                 signature: image_signature.into(),
                 words: signature_indexes.into(),
-            };
-            diesel::insert_into(post_signature::table)
-                .values(new_post_signature)
-                .execute(conn)
+            }
+            .insert_into(post_signature::table)
+            .execute(conn)
         }
     });
 

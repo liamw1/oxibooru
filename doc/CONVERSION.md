@@ -4,16 +4,16 @@ All software is fallible, especially software that hasn't been extensively teste
 
 This guide assumes you have set up an Oxibooru instance already. See the [installation instructions](INSTALL.md) for more details. It also assumes the Oxibooru database is _empty_, which is the case on an initial install. Make sure that you run the server container at least once to make sure it has been installed correctly and that the migrations have been applied.
 
-The guide doesn't cover migrating the config.yaml, but the structure of the Oxibooru equivalent, config.toml, is almost identical. Just copy over the settings from the config.yaml manually if you want them.
+The guide doesn't cover migrating the `config.yaml`, but the structure of the Oxibooru equivalent, `config.toml`, is almost identical. Just copy over the settings from the config.yaml manually if you want them.
 
 If you encounter any issues during the conversion process, please open up an issue on [Github](https://github.com/liamw1/oxibooru/issues).
 
 ### Known Limitations
-Some aspects of a Szurubooru instance can't be converted to an Oxibooru instance. Depending on how you're using your database, these limitations may make total migration difficult or impossible. In order of decreasing severity, these are:
+Some aspects of a Szurubooru instance can't be converted to an Oxibooru instance. Depending on how you're using your database, these limitations may make total migration difficult or impossible.
 
 1. **Passwords**
 
-    Password hashing is done a bit differently in Oxibooru, so this unfortunately means that passwords can't be migrated over at the moment. Passwords can be reset individually via the admin cli, but this is impractical and insecure for databases with many users. If there are any such databases out there in production, it may be best to stick with Szurubooru for the forseeable future.
+    Password hashing is done a bit differently in Oxibooru, so this unfortunately means that passwords can't be migrated over at the moment. Passwords can be reset individually via the admin cli or can be reset via reset requests if SMTP information is provided in the `config.toml`.
     
 2. **Some image formats**
     
@@ -23,15 +23,9 @@ Some aspects of a Szurubooru instance can't be converted to an Oxibooru instance
 
     Oxibooru does not currently support YouTube posts and is unlikely to support them in the future.
 
-4. **Snapshots**
-
-    Snapshots are not implemented in Oxibooru, and I don't have plans to implement them unless someone gives me a compelling case for them. I'm still not sure what purpose they actually served in Szurubooru. If you're a big snapshot fan then you may want to hold off on migrating.
-
-5. **Post Notes**
-    
-    Post notes are represented very poorly in the Szurubooru database. The polygon column is stored as a serialized Python object, which makes conversion very difficult as their exact layout is both hard to determine and platform-dependent. These simply aren't handled in the conversion script at the moment due to the complexity involved.
-
 ### Let's begin
+If you're able to accept these limitations, let's start converting...
+
 1. **Create a dump of the Szurubooru database**
 
     Navigate to the Szurubooru source directory and run
@@ -56,10 +50,15 @@ Some aspects of a Szurubooru instance can't be converted to an Oxibooru instance
     Here `POSTGRES_USER` and `POSTGRES_DB` are the values of the environment variables defined in the Oxibooru `.env` file.
     
 3. **Run conversion script**
+    Some Szurubooru tables contain serialized python objects that need to be unserialized to perform the conversion. Because of this, we must enable the PL/Python procedural language in PostgreSQL. To do this, run
+    ```console
+    docker exec -i oxibooru-sql-1 bash -s < scripts/install_plpython3u.sh
+    ```
+    Now, we can run the conversion script:
     ```console
     cat scripts/convert_szuru_database.sql | docker exec -i oxibooru-sql-1 psql -U POSTGRES_USER -d POSTGRES_DB --single-transaction
     ```
-    Any errors encountered will rollback the conversion of the database. If you would like to opt-out of this behavior and attempt a partial conversion, you can omit the `--single-transaction` argument.
+    Any errors encountered will rollback the conversion of the database. If you would like to opt-out of this behavior and attempt a partial conversion, you can omit the `--single-transaction` flag.
 
     Pool and tag names are unique and case insenstive in Oxibooru, so "tag" and "Tag" can't coexist in the database. In Szurubooru, it is possible that these can coexist, although it generally tries to prevent it. In the event that your Szurubooru database contains names which only differ by case, those names will be modified to `{name}_name_modified_{tag_id}_{order}` to prevent conflicts. You can search for the affected tag/pool names by entering `*_name_modified_*` in the tag/pool search bar.
 

@@ -1,4 +1,5 @@
-use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::model::tag_category::TagCategory;
+use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::dsl::sql;
@@ -6,26 +7,6 @@ use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::prelude::*;
 use diesel::sql_types::Bool;
-
-#[derive(Insertable)]
-#[diesel(table_name = tag_category)]
-#[diesel(check_for_backend(Pg))]
-pub struct NewTagCategory<'a> {
-    pub order: i32,
-    pub name: &'a str,
-    pub color: &'a str,
-}
-
-#[derive(AsChangeset, Identifiable, Queryable, Selectable)]
-#[diesel(table_name = tag_category)]
-#[diesel(check_for_backend(Pg))]
-pub struct TagCategory {
-    pub id: i64,
-    pub order: i32,
-    pub name: SmallString,
-    pub color: SmallString,
-    pub last_edit_time: DateTime,
-}
 
 #[derive(Clone, Copy, Default, Insertable)]
 #[diesel(table_name = tag)]
@@ -35,7 +16,7 @@ pub struct NewTag<'a> {
     pub description: &'a str,
 }
 
-#[derive(Associations, Identifiable, Queryable, Selectable)]
+#[derive(Clone, AsChangeset, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(belongs_to(TagCategory, foreign_key = category_id))]
 #[diesel(table_name = tag)]
 #[diesel(check_for_backend(Pg))]

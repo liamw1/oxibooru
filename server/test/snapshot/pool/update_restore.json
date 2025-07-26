@@ -1,0 +1,34 @@
+{
+    "type": "object change",
+    "value": {
+        "description": {
+            "type": "primitive change",
+            "old-value": "I'm updating this pool",
+            "new-value": ""
+        },
+        "category": {
+            "type": "primitive change",
+            "old-value": "Style",
+            "new-value": "Setting"
+        },
+        "names": {
+            "type": "list change",
+            "added": [
+                "fantasy"
+            ],
+            "removed": [
+                "awesome",
+                "cool",
+                "nice",
+                "rad"
+            ]
+        },
+        "posts": {
+            "type": "list change",
+            "added": [
+                5
+            ],
+            "removed": []
+        }
+    }
+}

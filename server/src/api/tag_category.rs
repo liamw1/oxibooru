@@ -2,12 +2,12 @@ use crate::api::{ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
 use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
-use crate::model::tag::{NewTagCategory, TagCategory};
+use crate::model::tag_category::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, resource};
+use crate::{api, config, db, resource, snapshot};
 use axum::extract::{Extension, Path, Query};
 use axum::{Json, Router, routing};
 use diesel::prelude::*;
@@ -69,6 +69,7 @@ async fn create(
 ) -> ApiResult<Json<TagCategoryInfo>> {
     api::verify_privilege(client, config::privileges().tag_category_create)?;
     api::verify_matches_regex(&body.name, RegexType::TagCategory)?;
+    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let new_category = NewTagCategory {
         order: body.order,
@@ -76,12 +77,11 @@ async fn create(
         color: &body.color,
     };
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
-    let category = diesel::insert_into(tag_category::table)
-        .values(new_category)
-        .returning(TagCategory::as_returning())
-        .get_result(&mut conn)?;
+    let category = conn.transaction(|conn| {
+        let category = new_category.insert_into(tag_category::table).get_result(conn)?;
+        snapshot::tag_category::creation_snapshot(conn, client, &category).map(|()| category)
+    })?;
     conn.transaction(|conn| TagCategoryInfo::new(conn, category, &fields))
         .map(Json)
         .map_err(api::Error::from)
@@ -105,44 +105,31 @@ async fn update(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
-    let category_id = conn.transaction(|conn| {
-        let (category_id, last_edit_time) = tag_category::table
-            .select((tag_category::id, tag_category::last_edit_time))
-            .filter(tag_category::name.eq(name))
-            .first(conn)?;
-        api::verify_version(last_edit_time, body.version)?;
+    let updated_category = conn.transaction(|conn| {
+        let old_category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        api::verify_version(old_category.last_edit_time, body.version)?;
 
+        let mut new_category = old_category.clone();
         if let Some(order) = body.order {
             api::verify_privilege(client, config::privileges().tag_category_edit_order)?;
-
-            let order: i32 = order.parse()?;
-            diesel::update(tag_category::table.find(category_id))
-                .set(tag_category::order.eq(order))
-                .execute(conn)?;
+            new_category.order = order.parse::<i32>()?;
         }
         if let Some(name) = body.name {
             api::verify_privilege(client, config::privileges().tag_category_edit_name)?;
             api::verify_matches_regex(&name, RegexType::TagCategory)?;
-
-            diesel::update(tag_category::table.find(category_id))
-                .set(tag_category::name.eq(name))
-                .execute(conn)?;
+            new_category.name = name;
         }
         if let Some(color) = body.color {
             api::verify_privilege(client, config::privileges().tag_category_edit_color)?;
-
-            diesel::update(tag_category::table.find(category_id))
-                .set(tag_category::color.eq(color))
-                .execute(conn)?;
+            new_category.color = color;
         }
 
-        // Update last_edit_time
-        diesel::update(tag_category::table.find(category_id))
-            .set(tag_category::last_edit_time.eq(DateTime::now()))
-            .execute(conn)?;
-        Ok::<_, api::Error>(category_id)
+        new_category.last_edit_time = DateTime::now();
+        let _: TagCategory = new_category.save_changes(conn)?;
+        snapshot::tag_category::modification_snapshot(conn, client, &old_category, &new_category)?;
+        Ok::<_, api::Error>(new_category)
     })?;
-    conn.transaction(|conn| TagCategoryInfo::new_from_id(conn, category_id, &fields))
+    conn.transaction(|conn| TagCategoryInfo::new(conn, updated_category, &fields))
         .map(Json)
         .map_err(api::Error::from)
 }
@@ -158,7 +145,7 @@ async fn set_default(
     let mut conn = db::get_connection()?;
     let new_default_category: TagCategory = conn.transaction(|conn| {
         let mut category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
-        let mut old_default_category: TagCategory = tag_category::table.filter(tag_category::id.eq(0)).first(conn)?;
+        let mut old_default_category: TagCategory = tag_category::table.filter(TagCategory::default()).first(conn)?;
 
         let defaulted_tags: Vec<i64> = diesel::update(tag::table)
             .filter(tag::category_id.eq(category.id))
@@ -189,7 +176,10 @@ async fn set_default(
 
         // Give new default category back it's name
         new_default_category.name = temporary_category_name;
-        new_default_category.save_changes(conn)
+        let _: TagCategory = new_default_category.save_changes(conn)?;
+
+        snapshot::tag_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
+        Ok::<_, api::Error>(new_default_category)
     })?;
     conn.transaction(|conn| TagCategoryInfo::new(conn, new_default_category, &fields))
         .map(Json)
@@ -204,16 +194,14 @@ async fn delete(
     api::verify_privilege(client, config::privileges().tag_category_delete)?;
 
     db::get_connection()?.transaction(|conn| {
-        let (category_id, category_version): (i64, DateTime) = tag_category::table
-            .select((tag_category::id, tag_category::last_edit_time))
-            .filter(tag_category::name.eq(name))
-            .first(conn)?;
-        api::verify_version(category_version, *client_version)?;
-        if category_id == 0 {
+        let category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        api::verify_version(category.last_edit_time, *client_version)?;
+        if category.id == 0 {
             return Err(api::Error::DeleteDefault(ResourceType::TagCategory));
         }
 
-        diesel::delete(tag_category::table.find(category_id)).execute(conn)?;
+        diesel::delete(tag_category::table.find(category.id)).execute(conn)?;
+        snapshot::tag_category::deletion_snapshot(conn, client, &category)?;
         Ok(Json(()))
     })
 }
@@ -221,7 +209,7 @@ async fn delete(
 #[cfg(test)]
 mod test {
     use crate::api::ApiResult;
-    use crate::model::tag::TagCategory;
+    use crate::model::tag_category::TagCategory;
     use crate::schema::{tag_category, tag_category_statistics};
     use crate::test::*;
     use crate::time::DateTime;
@@ -280,7 +268,7 @@ mod test {
         assert_eq!(new_category_count, category_count + 1);
         assert_eq!(usage_count, 0);
 
-        verify_query(&format!("DELETE /tag-category/{category_name}"), "delete.json").await?;
+        verify_query(&format!("DELETE /tag-category/{category_name}"), "tag_category/delete.json").await?;
 
         let new_category_count: i64 = tag_category::table.count().first(&mut conn)?;
         assert_eq!(new_category_count, category_count);

@@ -5,6 +5,7 @@ use crate::model::pool::{NewPoolName, PoolPost};
 use crate::schema::{pool, pool_name, pool_post};
 use crate::string::SmallString;
 use crate::time::DateTime;
+use diesel::dsl::max;
 use diesel::prelude::*;
 
 /// Updates last_edit_time of pool with given `pool_id`.
@@ -20,7 +21,7 @@ pub fn add_names(
     conn: &mut PgConnection,
     pool_id: i64,
     current_name_count: i32,
-    names: Vec<SmallString>,
+    names: &[SmallString],
 ) -> ApiResult<()> {
     names
         .iter()
@@ -32,9 +33,7 @@ pub fn add_names(
         .map(|(i, name)| (current_name_count + i as i32, name))
         .map(|(order, name)| NewPoolName { pool_id, order, name })
         .collect();
-    diesel::insert_into(pool_name::table)
-        .values(updated_names)
-        .execute(conn)?;
+    updated_names.insert_into(pool_name::table).execute(conn)?;
     Ok(())
 }
 
@@ -47,20 +46,18 @@ pub fn delete_names(conn: &mut PgConnection, pool_id: i64) -> QueryResult<usize>
 }
 
 /// Appends `posts` onto the current list of posts in the pool with id `pool_id`.
-pub fn add_posts(conn: &mut PgConnection, pool_id: i64, current_post_count: i64, posts: Vec<i64>) -> QueryResult<()> {
+pub fn add_posts(conn: &mut PgConnection, pool_id: i64, current_post_count: i64, posts: &[i64]) -> QueryResult<()> {
     let new_pool_posts: Vec<_> = posts
         .into_iter()
         .enumerate()
         .map(|(i, post_id)| (current_post_count + i as i64, post_id))
-        .map(|(order, post_id)| PoolPost {
+        .map(|(order, &post_id)| PoolPost {
             pool_id,
             post_id,
             order,
         })
         .collect();
-    diesel::insert_into(pool_post::table)
-        .values(new_pool_posts)
-        .execute(conn)?;
+    new_pool_posts.insert_into(pool_post::table).execute(conn)?;
     Ok(())
 }
 
@@ -70,4 +67,37 @@ pub fn delete_posts(conn: &mut PgConnection, pool_id: i64) -> QueryResult<usize>
     diesel::delete(pool_post::table)
         .filter(pool_post::pool_id.eq(pool_id))
         .execute(conn)
+}
+
+pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> ApiResult<()> {
+    // Merge posts
+    let merge_to_pool_posts = pool_post::table
+        .select(pool_post::post_id)
+        .filter(pool_post::pool_id.eq(merge_to_id))
+        .into_boxed();
+    let new_pool_posts: Vec<_> = pool_post::table
+        .select(pool_post::post_id)
+        .filter(pool_post::pool_id.eq(absorbed_id))
+        .filter(pool_post::post_id.ne_all(merge_to_pool_posts))
+        .order_by(pool_post::order)
+        .load(conn)?;
+    let post_count: i64 = pool_post::table
+        .filter(pool_post::pool_id.eq(merge_to_id))
+        .count()
+        .first(conn)?;
+    add_posts(conn, merge_to_id, post_count, &new_pool_posts)?;
+
+    // Merge names
+    let current_name_count = pool_name::table
+        .select(max(pool_name::order) + 1)
+        .filter(pool_name::pool_id.eq(merge_to_id))
+        .first::<Option<_>>(conn)?
+        .unwrap_or(0);
+    let removed_names = diesel::delete(pool_name::table.filter(pool_name::pool_id.eq(absorbed_id)))
+        .returning(pool_name::name)
+        .get_results(conn)?;
+    add_names(conn, merge_to_id, current_name_count, &removed_names)?;
+
+    diesel::delete(pool::table.find(absorbed_id)).execute(conn)?;
+    last_edit_time(conn, merge_to_id)
 }

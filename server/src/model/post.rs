@@ -51,7 +51,7 @@ pub struct NewPost<'a> {
     pub description: &'a str,
 }
 
-#[derive(AsChangeset, Associations, Identifiable, Queryable, Selectable)]
+#[derive(Clone, AsChangeset, Associations, Identifiable, Queryable, Selectable)]
 #[diesel(treat_none_as_null = true)]
 #[diesel(belongs_to(User))]
 #[diesel(table_name = post)]

@@ -1,0 +1,45 @@
+{
+    "type": "object change",
+    "value": {
+        "description": {
+            "type": "primitive change",
+            "old-value": "",
+            "new-value": "A big body of water"
+        },
+        "category": {
+            "type": "primitive change",
+            "old-value": "Surroundings",
+            "new-value": "default"
+        },
+        "names": {
+            "type": "list change",
+            "added": [
+                "lake",
+                "pond"
+            ],
+            "removed": [
+                "creek",
+                "river",
+                "stream"
+            ]
+        },
+        "implications": {
+            "type": "list change",
+            "added": [
+                "new_tag"
+            ],
+            "removed": []
+        },
+        "suggestions": {
+            "type": "list change",
+            "added": [
+                "new_tag",
+                "rock",
+                "tree"
+            ],
+            "removed": [
+                "sand"
+            ]
+        }
+    }
+}
