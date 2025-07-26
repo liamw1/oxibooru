@@ -39,6 +39,8 @@ cargo test test_filter
 ```
 where only tests with `test_filter` in their name or namespace will be run. You can learn about additional test options [here](https://doc.rust-lang.org/cargo/commands/cargo-test.html).
 
+If there are any test failures, make sure to start your investigation at the first test failure. Some test failures can cause other failures due to database consistency issues.
+
 ### Linting
 After a series of changes to the code, it's good practice to run Rust's static analysis tool, `clippy`, to help catch subtle bugs and style issues. You can do this by running
 ```console

@@ -91,11 +91,8 @@ async fn create(
     };
 
     let mut conn = db::get_connection()?;
-    let comment_id: i64 = diesel::insert_into(comment::table)
-        .values(new_comment)
-        .returning(comment::id)
-        .get_result(&mut conn)?;
-    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields))
+    let comment = new_comment.insert_into(comment::table).get_result(&mut conn)?;
+    conn.transaction(|conn| CommentInfo::new(conn, client, comment, &fields))
         .map(Json)
         .map_err(api::Error::from)
 }
@@ -155,14 +152,13 @@ async fn rate(
         diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*body) {
-            let new_comment_score = NewCommentScore {
+            NewCommentScore {
                 comment_id,
                 user_id,
                 score,
-            };
-            diesel::insert_into(comment_score::table)
-                .values(new_comment_score)
-                .execute(conn)?;
+            }
+            .insert_into(comment_score::table)
+            .execute(conn)?;
         }
         Ok::<_, api::Error>(())
     })?;
@@ -274,7 +270,7 @@ mod test {
         assert_eq!(new_admin_comment_count, admin_comment_count + 1);
         assert_eq!(comment_score, 0);
 
-        verify_query(&format!("DELETE /comment/{comment_id}"), "delete.json").await?;
+        verify_query(&format!("DELETE /comment/{comment_id}"), "comment/delete.json").await?;
 
         let (new_comment_count, new_admin_comment_count) = get_comment_counts(&mut conn)?;
         let has_comment: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(&mut conn)?;

@@ -1,0 +1,40 @@
+{
+    "type": "object change",
+    "value": {
+        "category": {
+            "type": "primitive change",
+            "old-value": "default",
+            "new-value": "Surroundings"
+        },
+        "names": {
+            "type": "list change",
+            "added": [
+                "creek",
+                "river",
+                "stream"
+            ],
+            "removed": [
+                "lake",
+                "pond"
+            ]
+        },
+        "implications": {
+            "type": "list change",
+            "added": [],
+            "removed": [
+                "new_tag"
+            ]
+        },
+        "suggestions": {
+            "type": "list change",
+            "added": [
+                "sand"
+            ],
+            "removed": [
+                "new_tag",
+                "rock",
+                "tree"
+            ]
+        }
+    }
+}

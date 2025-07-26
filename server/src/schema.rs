@@ -188,6 +188,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    snapshot (id) {
+        id -> Int8,
+        user_id -> Nullable<Int8>,
+        operation -> Int2,
+        resource_type -> Int2,
+        resource_id -> Text,
+        data -> Jsonb,
+        creation_time -> Timestamptz,
+    }
+}
+
+diesel::table! {
     tag (id) {
         id -> Int8,
         category_id -> Int8,
@@ -310,6 +322,7 @@ diesel::joinable!(post_signature -> post (post_id));
 diesel::joinable!(post_statistics -> post (post_id));
 diesel::joinable!(post_tag -> post (post_id));
 diesel::joinable!(post_tag -> tag (tag_id));
+diesel::joinable!(snapshot -> user (user_id));
 diesel::joinable!(tag -> tag_category (category_id));
 diesel::joinable!(tag_category_statistics -> tag_category (category_id));
 diesel::joinable!(tag_name -> tag (tag_id));
@@ -337,6 +350,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     post_signature,
     post_statistics,
     post_tag,
+    snapshot,
     tag,
     tag_category,
     tag_category_statistics,

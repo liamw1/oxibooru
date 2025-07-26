@@ -1,4 +1,7 @@
 -- ================================== Setup ================================== --
+-- Enable PL/Python for python helper functions
+CREATE EXTENSION plpython3u;
+
 -- Disable triggers on tables, as they make copying data over extremely slow
 ALTER TABLE oxi."user" DISABLE TRIGGER USER;
 ALTER TABLE oxi."tag_category" DISABLE TRIGGER USER;
@@ -47,7 +50,7 @@ UPDATE public."user"
 SET "last_login_time" = CURRENT_TIMESTAMP
 WHERE "last_login_time" IS NULL;
 
--- Ranks in Oxibooru are represent by SMALLINT so we have to convert
+-- Ranks in Oxibooru are represented by SMALLINT so we have to convert
 UPDATE public."user"
 SET "rank" = CASE "rank"
     WHEN 'anonymous' THEN 0
@@ -60,7 +63,7 @@ END;
 ALTER TABLE public."user"
 ALTER COLUMN "rank" TYPE SMALLINT USING "rank"::SMALLINT;
 
--- Avatar styles in Oxibooru are represent by SMALLINT so we have to convert
+-- Avatar styles in Oxibooru are represented by SMALLINT so we have to convert
 UPDATE public."user"
 SET "avatar_style" = CASE "avatar_style"
     WHEN 'gravatar' THEN 0
@@ -69,6 +72,7 @@ END;
 ALTER TABLE public."user"
 ALTER COLUMN "avatar_style" TYPE SMALLINT USING "avatar_style"::SMALLINT;
 
+-- Insert into Oxibooru table
 -- Password hash and salt won't be useful in Oxibooru, but there's nothing we can really do about that
 INSERT INTO oxi."user" ("id", "name", "password_hash", "password_salt", "email", "rank", "avatar_style", "creation_time", "last_login_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "name", "password_hash", "password_salt", "email", "rank", "avatar_style", "creation_time" AT TIME ZONE 'UTC', "last_login_time" AT TIME ZONE 'UTC', CURRENT_TIMESTAMP FROM public."user";
@@ -96,6 +100,7 @@ WHERE public."tag_category"."default" = true;
 DELETE FROM public."tag_category"
 WHERE "default" = true;
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."tag_category" ("id", "order", "name", "color", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "order", "name", "color", CURRENT_TIMESTAMP FROM public."tag_category";
 
@@ -120,6 +125,7 @@ UPDATE public."tag"
 SET "last_edit_time" = CURRENT_TIMESTAMP
 WHERE "last_edit_time" IS NULL;
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."tag" ("id", "category_id", "description", "creation_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "category_id", "description", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."tag";
 
@@ -155,6 +161,7 @@ UPDATE "ci_tag_name"
 SET "name" = CONCAT("name", '_name_modified_', "tag_id", '_', "order")
 WHERE "dup_count" > 1;
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."tag_name" ("tag_id", "order", "name")
 SELECT "tag_id", "order" - 1, "name" FROM "ci_tag_name";
 
@@ -172,6 +179,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public."tag" WHERE "tag"."id" = "tag_implication"."child_id"
 );
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."tag_implication" ("parent_id", "child_id")
 SELECT "parent_id", "child_id" FROM public."tag_implication";
 
@@ -187,6 +195,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public."tag" WHERE "tag"."id" = "tag_suggestion"."child_id"
 );
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."tag_suggestion" ("parent_id", "child_id")
 SELECT "parent_id", "child_id" FROM public."tag_suggestion";
 
@@ -229,7 +238,7 @@ UPDATE public."post"
 SET "last_edit_time" = CURRENT_TIMESTAMP
 WHERE "last_edit_time" IS NULL;
 
--- Safety ratings in Oxibooru are represent by SMALLINT so we have to convert
+-- Safety ratings in Oxibooru are represented by SMALLINT so we have to convert
 UPDATE public."post"
 SET "safety" = CASE "safety"
     WHEN 'safe' THEN 0
@@ -240,7 +249,7 @@ END;
 ALTER TABLE public."post"
 ALTER COLUMN "safety" TYPE SMALLINT USING "safety"::SMALLINT;
 
--- Post types in Oxibooru are represent by SMALLINT so we have to convert
+-- Post types in Oxibooru are represented by SMALLINT so we have to convert
 UPDATE public."post"
 SET "type" = CASE
     WHEN "type" = 'image' THEN 0
@@ -251,7 +260,7 @@ END;
 ALTER TABLE public."post"
 ALTER COLUMN "type" TYPE SMALLINT USING "type"::SMALLINT;
 
--- MIME types in Oxibooru are represent by SMALLINT so we have to convert
+-- MIME types in Oxibooru are represented by SMALLINT so we have to convert
 UPDATE public."post"
 SET "mime-type" = CASE
     WHEN "mime-type" = 'image/bmp' THEN 0
@@ -267,7 +276,7 @@ END;
 ALTER TABLE public."post"
 ALTER COLUMN "mime-type" TYPE SMALLINT USING "mime-type"::SMALLINT;
 
--- Post flags in Oxibooru are represent by SMALLINT so we have to convert
+-- Post flags in Oxibooru are represented by SMALLINT so we have to convert
 UPDATE public."post"
 SET "flags" = CASE
     WHEN "flags" = NULL THEN 0
@@ -280,6 +289,7 @@ END;
 ALTER TABLE public."post"
 ALTER COLUMN "flags" TYPE SMALLINT USING "flags"::SMALLINT;
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."post" ("id", "user_id", "file_size", "width", "height", "safety", "type", "mime_type", "checksum", "checksum_md5", "flags", "source", "creation_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "user_id", "file_size", "image_width", "image_height", "safety", "type", "mime-type", "checksum", "checksum_md5", "flags", "source", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."post";
 
@@ -298,6 +308,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public."post" WHERE "post"."id" = "post_relation"."child_id"
 );
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."post_relation" ("parent_id", "child_id")
 SELECT "parent_id", "child_id" FROM public."post_relation";
 
@@ -313,6 +324,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public."tag" WHERE "tag"."id" = "post_tag"."tag_id"
 );
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."post_tag" ("post_id", "tag_id")
 SELECT "post_id", "tag_id" FROM public."post_tag";
 
@@ -328,6 +340,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public."user" WHERE "user"."id" = "post_favorite"."user_id"
 );
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."post_favorite" ("post_id", "user_id", "time")
 SELECT "post_id", "user_id", "time" AT TIME ZONE 'UTC' FROM public."post_favorite";
 
@@ -343,7 +356,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public."user" WHERE "user"."id" = "post_feature"."user_id"
 );
 
-
+-- Insert into Oxibooru table
 INSERT INTO oxi."post_feature" ("id", "post_id", "user_id", "time") OVERRIDING SYSTEM VALUE
 SELECT "id", "post_id", "user_id", "time" AT TIME ZONE 'UTC' FROM public."post_feature";
 
@@ -351,15 +364,59 @@ SELECT "id", "post_id", "user_id", "time" AT TIME ZONE 'UTC' FROM public."post_f
 SELECT setval(pg_get_serial_sequence('oxi.post_feature', 'id'), GREATEST((SELECT MAX("id") FROM oxi."post_feature"), 1));
 
 -- ================================ Post Note ================================ --
+-- Create an unpickle helper
+-- Returns 1D array because multi-dimensional arrays are not supported in diesel
+CREATE FUNCTION unpickle_to_array(raw BYTEA)
+  RETURNS REAL[]
+  LANGUAGE plpython3u
+AS $$
+import pickle
+
+# Extract bytes
+if hasattr(raw, 'tobytes'):
+    data_bytes = raw.tobytes()
+else:
+    data_bytes = raw
+
+# Unpickle into Python object
+try:
+    pts = pickle.loads(data_bytes)
+except Exception as e:
+    plpy.error(f"Could not unpickle post_note.polygon: {e!s}")
+
+# pts should be a list of [x, y] pairs; flatten into [x0, y0, x1, y1, ...]
+try:
+    flat = []
+    for p in pts:
+        if len(p) != 2:
+            raise ValueError(f"Expected 2 elements per point, got {len(p)}")
+        flat.extend([float(p[0]), float(p[1])])
+except Exception as e:
+    plpy.error(f"Invalid polygon shape: {e!s}")
+
+return flat
+$$;
+
 -- Remove post notes that do not have valid post ids
 DELETE FROM public."post_note"
 WHERE NOT EXISTS (
     SELECT 1 FROM public."post" WHERE "post"."id" = "post_note"."post_id"
 );
 
--- Converting the polygon column to REAL[][2] is surprising difficult, as entries in this
--- column are serialized Python objects in Szurubooru. I'm skipping these for now
--- until I figure out how to do it.
+-- Polygons are represented as REAL[][2] in Oxibooru, so we need to convert
+ALTER TABLE public."post_note" ADD COLUMN "shape" REAL[][2];
+
+UPDATE public."post_note"
+SET "shape" = unpickle_to_array("polygon");
+
+-- Insert into Oxibooru table
+INSERT INTO oxi."post_note" ("id", "post_id", "polygon", "text") OVERRIDING SYSTEM VALUE
+SELECT "id", "post_id", "shape", "text" FROM public."post_note";
+
+-- Update sequence
+SELECT setval(pg_get_serial_sequence('oxi.post_note', 'id'), GREATEST((SELECT MAX("id") FROM oxi."post_note"), 1));
+
+DROP FUNCTION unpickle_to_array;
 
 -- =============================== Post Score ================================ --
 -- Remove post scores that do not have valid post/user ids
@@ -373,6 +430,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public."user" WHERE "user"."id" = "post_score"."user_id"
 );
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."post_score" ("post_id", "user_id", "score", "time")
 SELECT "post_id", "user_id", "score", "time" AT TIME ZONE 'UTC' FROM public."post_score";
 
@@ -398,6 +456,7 @@ UPDATE public."comment"
 SET "last_edit_time" = CURRENT_TIMESTAMP
 WHERE "last_edit_time" IS NULL;
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."comment" ("id", "user_id", "post_id", "text", "creation_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "user_id", "post_id", "text", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."comment";
 
@@ -416,6 +475,7 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public."user" WHERE "user"."id" = "comment_score"."user_id"
 );
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."comment_score" ("comment_id", "user_id", "score", "time")
 SELECT "comment_id", "user_id", "score", "time" AT TIME ZONE 'UTC' FROM public."comment_score";
 
@@ -438,6 +498,7 @@ WHERE public."pool_category"."default" = true;
 DELETE FROM public."pool_category"
 WHERE "default" = true;
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."pool_category" ("id", "name", "color", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "name", "color", CURRENT_TIMESTAMP FROM public."pool_category";
 
@@ -462,6 +523,7 @@ UPDATE public."pool"
 SET "last_edit_time" = CURRENT_TIMESTAMP
 WHERE "last_edit_time" IS NULL;
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."pool" ("id", "category_id", "description", "creation_time", "last_edit_time") OVERRIDING SYSTEM VALUE
 SELECT "id", "category_id", "description", "creation_time" AT TIME ZONE 'UTC', "last_edit_time" AT TIME ZONE 'UTC' FROM public."pool";
 
@@ -497,6 +559,7 @@ UPDATE "ci_pool_name"
 SET "name" = CONCAT("name", '_name_modified_', "pool_id", '_', "order")
 WHERE "dup_count" > 1;
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."pool_name" ("pool_id", "order", "name")
 SELECT "pool_id", "order" - 1, "name" FROM "ci_pool_name";
 
@@ -514,8 +577,80 @@ WHERE NOT EXISTS (
     SELECT 1 FROM public."post" WHERE "post"."id" = "pool_post"."post_id"
 );
 
+-- Insert into Oxibooru table
 INSERT INTO oxi."pool_post" ("pool_id", "post_id", "order")
 SELECT "pool_id", "post_id", "ord" FROM public."pool_post";
+
+-- ================================ Snapshots ================================ --
+-- Create an unpickle helper
+CREATE FUNCTION unpickle_to_jsonb(raw BYTEA)
+  RETURNS JSONB
+  LANGUAGE plpython3u
+AS $$
+import pickle, json
+
+# raw may already be bytes, or a memoryview/buffer
+if hasattr(raw, 'tobytes'):
+    data_bytes = raw.tobytes()
+else:
+    data_bytes = raw
+
+try:
+    py_obj = pickle.loads(data_bytes)
+except Exception as e:
+    plpy.error(f"Could not unpickle snapshot data: {e!s}")
+
+# Dump to JSON text; Postgres will cast it to JSONB automatically
+return json.dumps(py_obj)
+$$;
+
+-- The resource_pkey and resource_name columns have been combined in Oxibooru, so we do that here
+UPDATE public."snapshot"
+SET "resource_name" = "resource_pkey"
+WHERE "resource_type" IN ('pool', 'post');
+
+-- Snapshot operations in Oxibooru are represented by SMALLINT so we have to convert
+UPDATE public."snapshot"
+SET "operation" = CASE
+    WHEN "operation" = 'created' THEN 0
+    WHEN "operation" = 'modified' THEN 1
+    WHEN "operation" = 'merged' THEN 2
+    WHEN "operation" = 'deleted' THEN 3
+END;
+ALTER TABLE public."snapshot"
+ALTER COLUMN "operation" TYPE SMALLINT USING "operation"::SMALLINT;
+
+-- Resource types in Oxibooru are represented by SMALLINT so we have to convert
+UPDATE public."snapshot"
+SET "resource_type" = CASE
+    WHEN "resource_type" = 'pool' THEN 1
+    WHEN "resource_type" = 'pool_category' THEN 2
+    WHEN "resource_type" = 'post' THEN 3
+    WHEN "resource_type" = 'tag' THEN 4
+    WHEN "resource_type" = 'tag_category' THEN 5
+END;
+ALTER TABLE public."snapshot"
+ALTER COLUMN "resource_type" TYPE SMALLINT USING "resource_type"::SMALLINT;
+
+-- Snapshot data is non-nullable JSONB in Oxibooru, so we need to convert
+ALTER TABLE public."snapshot" ADD COLUMN "json_data" JSONB;
+
+UPDATE public."snapshot"
+SET "json_data" = unpickle_to_jsonb("data")
+WHERE "data" IS NOT NULL;
+
+UPDATE public."snapshot"
+SET "json_data" = '{}'::JSONB
+WHERE "json_data" IS NULL;
+
+-- Insert into Oxibooru table
+INSERT INTO oxi."snapshot" ("id", "user_id", "operation", "resource_type", "resource_id", "data", "creation_time") OVERRIDING SYSTEM VALUE
+SELECT "id", "user_id", "operation", "resource_type", "resource_name", "json_data", "creation_time" AT TIME ZONE 'UTC' FROM public."snapshot";
+
+-- Update sequence
+SELECT setval(pg_get_serial_sequence('oxi.snapshot', 'id'), GREATEST((SELECT MAX("id") FROM oxi."snapshot"), 1));
+
+DROP FUNCTION unpickle_to_jsonb;
 
 -- ================================= Cleanup ================================= --
 -- Re-enable triggers
@@ -538,6 +673,9 @@ ALTER TABLE oxi."pool_category" ENABLE TRIGGER USER;
 ALTER TABLE oxi."pool" ENABLE TRIGGER USER;
 ALTER TABLE oxi."pool_name" ENABLE TRIGGER USER;
 ALTER TABLE oxi."pool_post" ENABLE TRIGGER USER;
+
+-- Drop python extension
+DROP EXTENSION plpython3u;
 
 -- Drop Szurubooru schema
 DROP SCHEMA public CASCADE;

@@ -1,4 +1,4 @@
-use crate::model::tag::TagCategory;
+use crate::model::tag_category::TagCategory;
 use crate::resource::BoolFill;
 use crate::schema::{tag_category, tag_category_statistics};
 use crate::string::SmallString;
@@ -50,11 +50,6 @@ impl TagCategoryInfo {
             order: fields[Field::Order].then_some(category.order),
             default: fields[Field::Default].then_some(category.id == 0),
         })
-    }
-
-    pub fn new_from_id(conn: &mut PgConnection, category_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
-        let category = tag_category::table.find(category_id).first(conn)?;
-        Self::new(conn, category, fields)
     }
 
     pub fn all(conn: &mut PgConnection, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {

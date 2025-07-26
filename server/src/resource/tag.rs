@@ -54,6 +54,12 @@ pub struct TagInfo {
 }
 
 impl TagInfo {
+    pub fn new(conn: &mut PgConnection, tag: Tag, fields: &FieldTable<bool>) -> QueryResult<Self> {
+        let mut tag_info = Self::new_batch(conn, vec![tag], fields)?;
+        assert_eq!(tag_info.len(), 1);
+        Ok(tag_info.pop().unwrap())
+    }
+
     pub fn new_from_id(conn: &mut PgConnection, tag_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
         let mut tag_info = Self::new_batch_from_ids(conn, vec![tag_id], fields)?;
         assert_eq!(tag_info.len(), 1);

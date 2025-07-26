@@ -9,8 +9,9 @@ use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::ops::Deref;
+use std::str::FromStr;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text, sql_type = Citext)]
 pub struct SmallString(CompactString);
 
@@ -31,6 +32,13 @@ impl Deref for SmallString {
     }
 }
 
+impl FromStr for SmallString {
+    type Err = core::convert::Infallible;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        CompactString::from_str(s).map(Self)
+    }
+}
+
 impl From<String> for SmallString {
     fn from(value: String) -> Self {
         Self::new(value)
@@ -40,6 +48,12 @@ impl From<String> for SmallString {
 impl From<Cow<'_, str>> for SmallString {
     fn from(value: Cow<str>) -> Self {
         Self::new(value)
+    }
+}
+
+impl From<i64> for SmallString {
+    fn from(value: i64) -> Self {
+        value.to_string().into()
     }
 }
 

@@ -1,0 +1,54 @@
+{
+    "type": "object change",
+    "value": {
+        "safety": {
+            "type": "primitive change",
+            "old-value": "safe",
+            "new-value": "unsafe"
+        },
+        "flags": {
+            "type": "list change",
+            "added": [],
+            "removed": [
+                "loop"
+            ]
+        },
+        "source": {
+            "type": "primitive change",
+            "old-value": "",
+            "new-value": "???"
+        },
+        "description": {
+            "type": "primitive change",
+            "old-value": "",
+            "new-value": "descriptor"
+        },
+        "tags": {
+            "type": "list change",
+            "added": [
+                "16:9_aspect_ratio",
+                "black_hat_badger",
+                "hidetaka_miyazaki",
+                "isshin_ashina",
+                "night",
+                "night_sky",
+                "sekiro",
+                "sekiro_(sekiro)"
+            ],
+            "removed": [
+                "new_tag",
+                "plant"
+            ]
+        },
+        "relations": {
+            "type": "list change",
+            "added": [
+                4
+            ],
+            "removed": [
+                1,
+                3
+            ]
+        }
+    }
+}

@@ -95,17 +95,15 @@ async fn create(
             )
             .execute(conn)?;
 
-        let new_user_token = NewUserToken {
+        let user_token = NewUserToken {
             id: Uuid::new_v4(),
             user_id,
             note: body.note.as_deref(),
             enabled: body.enabled,
             expiration_time: body.expiration_time,
-        };
-        let user_token = diesel::insert_into(user_token::table)
-            .values(new_user_token)
-            .returning(UserToken::as_returning())
-            .get_result(conn)?;
+        }
+        .insert_into(user_token::table)
+        .get_result(conn)?;
         Ok::<_, api::Error>((user_token, avatar_style))
     })?;
     Ok(Json(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), user_token, &fields)))
@@ -219,7 +217,7 @@ mod test {
             .order_by(user_token::creation_time.desc())
             .first(&mut conn)?;
 
-        verify_query(&format!("DELETE /user-token/{USER}/{token}"), "delete.json").await?;
+        verify_query(&format!("DELETE /user-token/{USER}/{token}"), "user_token/delete.json").await?;
 
         let has_token: bool = diesel::select(exists(user_token::table.find(token))).get_result(&mut conn)?;
         assert!(!has_token);

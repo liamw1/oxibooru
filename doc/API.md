@@ -80,6 +80,8 @@
     - Password reset
         - [Password reset - step 1: mail request](#password-reset---step-1-mail-request)
         - [Password reset - step 2: confirmation](#password-reset---step-2-confirmation)
+    - Snapshots
+        - [Listing snapshots](#listing-snapshots)
     - Global info
         - [Getting global info](#getting-global-info)
     - File uploads
@@ -100,6 +102,7 @@
    - [Micro pool](#micro-pool)
    - [Note](#note)
    - [Comment](#comment)
+   - [Snapshot](#snapshot)
    - [Unpaged search result](#unpaged-search-result)
    - [Paged search result](#paged-search-result)
    - [Image search result](#image-search-result)
@@ -2047,6 +2050,47 @@ data.
     Generates a new password for given user. Password is sent as plain-text, so
     it is recommended to connect through HTTPS.
 
+## Listing snapshots
+- **Request**
+
+    `GET /snapshots/?offset=<initial-pos>&limit=<page-size>&query=<query>`
+
+- **Output**
+
+    A [paged search result resource](#paged-search-result), for which
+    `<resource>` is a [snapshot resource](#snapshot).
+
+- **Errors**
+
+    - privileges are too low
+
+- **Description**
+
+    Lists recent resource snapshots.
+
+    **Anonymous tokens**
+
+    Not supported.
+
+    **Named tokens**
+
+    | `<key>`           | Description                                                      |
+    | ----------------- | ---------------------------------------------------------------- |
+    | `type`            | involving given resource type                                    |
+    | `id`              | involving given resource id                                      |
+    | `date`            | created at given date                                            |
+    | `time`            | alias of `date`                                                  |
+    | `operation`       | `modified`, `created`, `deleted` or `merged`                     |
+    | `user`            | name of the user that created given snapshot (accepts wildcards) |
+
+    **Sort style tokens**
+
+    None. The snapshots are always sorted by creation time.
+
+    **Special tokens**
+
+    None.
+
 ## Getting global info
 - **Request**
 
@@ -2532,6 +2576,228 @@ A comment under a post.
 - `<score>`: the collective score (+1/-1 rating) of the given comment.
 - `<own-score>`: the score (+1/-1 rating) of the given comment by the
   authenticated user.
+
+
+## Snapshot
+**Description**
+
+A snapshot is a version of a database resource.
+
+**Structure**
+
+```json5
+{
+    "operation": <operation>,
+    "type":      <resource-type>,
+    "id":        <resource-id>,
+    "user":      <issuer>,
+    "data":      <data>,
+    "time":      <time>
+}
+```
+
+**Field meaning**
+
+- `<operation>`: what happened to the resource.
+
+    The value can be either of values below:
+
+    - `"created"` - the resource has been created
+    - `"modified"` - the resource has been modified
+    - `"deleted"` - the resource has been deleted
+    - `"merged"` - the resource has been merged to another resource
+
+- `<resource-type>` and `<resource-id>`: the resource that was changed.
+
+    The values are correlated as per table below:
+
+    | `<resource-type>` | `<resource-id>`                  |
+    | ----------------- | -------------------------------  |
+    | `"tag"`           | first tag name at given time     |
+    | `"tag_category"`  | tag category name at given time  |
+    | `"post"`          | post ID                          |
+    | `"pool"`          | pool ID                          |
+    | `"pool_category"` | pool category name at given time |
+
+- `<issuer>`: a [micro user resource](#micro-user) representing the user who
+    has made the change.
+
+- `<data>`: the snapshot data, of which content depends on the `<operation>`.
+   More explained later.
+
+- `<time>`: when the snapshot was created (i.e. when the resource was changed),
+  formatted as per RFC 3339.
+
+**`<data>` field for creation snapshots**
+
+The value can be either of structures below, depending on
+`<resource-type>`:
+
+- Tag category snapshot data (`<resource-type> = "tag_category"`)
+
+    *Example*
+
+    ```json5
+    {
+        "name":  "character",
+        "color": "#FF0000",
+        "default": false
+    }
+    ```
+
+- Tag snapshot data (`<resource-type> = "tag"`)
+
+    *Example*
+
+    ```json5
+    {
+        "names":        ["tag1", "tag2", "tag3"],
+        "category":     "plain",
+        "implications": ["imp1", "imp2", "imp3"],
+        "suggestions":  ["sug1", "sug2", "sug3"]
+    }
+    ```
+
+- Post snapshot data (`<resource-type> = "post"`)
+
+    *Example*
+
+    ```json5
+    {
+        "source": "http://example.com/",
+        "safety": "safe",
+        "checksum": "deadbeef",
+        "tags": ["tag1", "tag2"],
+        "relations": [1, 2],
+        "notes": [<note1>, <note2>, <note3>],
+        "flags": ["loop"],
+        "featured": false
+    }
+    ```
+    
+    `<note>`s are serialized the same way as [note resources](#note).
+
+- Pool category snapshot data (`<resource-type> = "pool_category"`)
+
+    *Example*
+
+    ```json5
+    {
+        "name":  "collection",
+        "color": "#00FF00",
+        "default": false
+    }
+    ```
+
+- Pool snapshot data (`<resource-type> = "pool"`)
+
+    *Example*
+
+    ```json5
+    {
+        "names":    ["primes", "primed", "primey"],
+        "category": "mathematical",
+        "posts":    [2, 3, 5, 7, 11, 13, 17]
+    }
+    ```
+
+
+**`<data>` field for modification snapshots**
+
+The value is a property-wise recursive diff between previous version of the
+resource and its current version. Its structure is a `<dictionary-diff>` of
+dictionaries as created by creation snapshots, which is described below.
+
+`<primitive>`: any primitive (number or a string)
+
+`<anything>`: any dictionary, list or primitive
+
+`<dictionary-diff>`:
+
+```json5
+{
+    "type": "object change",
+    "value":
+    {
+        "property-of-any-type-1":
+        {
+            "type": "deleted property",
+            "value": <anything>
+        },
+        "property-of-any-type-2":
+        {
+            "type": "added property",
+            "value": <anything>
+        },
+        "primitive-property":
+        {
+            "type": "primitive change",
+            "old-value": "<primitive>",
+            "new-value": "<primitive>"
+        },
+        "list-property": <list-diff>,
+        "dictionary-property": <dictionary-diff>
+    }
+}
+```
+
+`<list-diff>`:
+
+```json5
+{
+    "type": "list change",
+    "removed": [<anything>, <anything>],
+    "added": [<anything>, <anything>]
+}
+```
+
+Example - a diff for a post that has changed source and has one note added.
+Note the similarities with the structure of post creation snapshots.
+
+```json5
+{
+    "type": "object change",
+    "value":
+    {
+        "source":
+        {
+            "type": "primitive change",
+            "old-value": None,
+            "new-value": "new source"
+        },
+        "notes":
+        {
+            "type": "list change",
+            "removed": [],
+            "added":
+            [
+                {"polygon": [[0, 0], [0, 1], [1, 1]], "text": "new note"}
+            ]
+        }
+    }
+}
+```
+
+Since the snapshot dictionaries structure is pretty immutable, you probably
+won't see `added property` or `deleted property` around. This observation holds
+true even if the way the snapshots are generated changes - szurubooru stores
+just the diffs rather than original snapshots, so it wouldn't be able to
+generate a diff against an old version.
+
+**`<data>` field for deletion snapshots**
+
+Same as creation snapshot. In emergencies, it can be used to reconstruct
+deleted entities. Please note that this does not constitute as means against
+vandalism (it's still possible to cause chaos by mass editing - this should be
+dealt with by configuring role privileges in the config) or replace database
+backups.
+
+**`<data>` field for merge snapshots**
+
+A tuple containing 2 elements:
+
+- resource type equivalent to `<resource-type>` of the target entity.
+- resource ID equivalent to `<resource-id>` of the target entity.
 
 
 ## Unpaged search result

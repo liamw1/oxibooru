@@ -1,4 +1,4 @@
-use crate::model::pool::PoolCategory;
+use crate::model::pool_category::PoolCategory;
 use crate::resource::BoolFill;
 use crate::schema::{pool_category, pool_category_statistics};
 use crate::string::SmallString;
@@ -47,11 +47,6 @@ impl PoolCategoryInfo {
             usages: fields[Field::Usages].then_some(usages),
             default: fields[Field::Default].then_some(category.id == 0),
         })
-    }
-
-    pub fn new_from_id(conn: &mut PgConnection, category_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
-        let category = pool_category::table.find(category_id).first(conn)?;
-        Self::new(conn, category, fields)
     }
 
     pub fn all(conn: &mut PgConnection, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
