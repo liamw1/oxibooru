@@ -58,12 +58,12 @@ static POST_TAG_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::n
 /// more pessimistic than necessary, as parallel updates are safe if the sets of tags are
 /// disjoint. However, allowing disjoint tagging introduces additional complexity so it
 /// isn't being done as of now.
-async fn tagging_update<T, F>(tags: Option<&[SmallString]>, update: F) -> ApiResult<T>
+async fn tagging_update<T, F>(tags_updated: bool, update: F) -> ApiResult<T>
 where
     F: FnOnce(&mut db::Connection) -> ApiResult<T>,
 {
     let _lock;
-    if tags.is_some() {
+    if tags_updated {
         _lock = POST_TAG_MUTEX.lock().await;
     }
 
@@ -438,10 +438,9 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         description: body.description.as_deref().unwrap_or(""),
     };
 
-    let post_id = tagging_update(body.tags.as_deref(), |conn| {
+    let post_id = tagging_update(body.tags.is_some(), |conn| {
         // We do this before post insertion so that the post sequence isn't incremented if it fails
-        let (tag_ids, tags) =
-            update::tag::get_or_create_tag_ids(conn, client, body.tags.as_deref().unwrap_or_default(), false)?;
+        let (tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, client, body.tags.unwrap_or_default(), false)?;
         let relations = body.relations.unwrap_or_default();
         let notes = body.notes.unwrap_or_default();
 
@@ -537,7 +536,7 @@ async fn merge(
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    tagging_update(Some(&[]), |conn| {
+    tagging_update(true, |conn| {
         let absorbed_post: Post = post::table.find(absorbed_id).first(conn)?;
         let merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
         api::verify_version(absorbed_post.last_edit_time, body.post_info.remove_version)?;
@@ -649,7 +648,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
         None => None,
     };
 
-    tagging_update(body.tags.as_deref(), |conn| {
+    tagging_update(body.tags.is_some(), |conn| {
         let old_post: Post = post::table.find(post_id).first(conn)?;
         let old_mime_type = old_post.mime_type;
         api::verify_version(old_post.last_edit_time, body.version)?;
@@ -690,7 +689,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
             update::post::create_relations(conn, post_id, &relations)?;
             new_snapshot_data.relations = relations;
         }
-        if let Some(tags) = body.tags.as_deref() {
+        if let Some(tags) = body.tags {
             api::verify_privilege(client, config::privileges().post_edit_tag)?;
 
             let (updated_tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, client, tags, false)?;

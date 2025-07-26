@@ -78,9 +78,10 @@ async fn create(
     };
 
     let mut conn = db::get_connection()?;
-    let category = new_category.insert_into(tag_category::table).get_result(&mut conn)?;
-    snapshot::tag_category::creation_snapshot(&mut conn, client, &category)?;
-
+    let category = conn.transaction(|conn| {
+        let category = new_category.insert_into(tag_category::table).get_result(conn)?;
+        snapshot::tag_category::creation_snapshot(conn, client, &category).map(|()| category)
+    })?;
     conn.transaction(|conn| TagCategoryInfo::new(conn, category, &fields))
         .map(Json)
         .map_err(api::Error::from)
@@ -144,7 +145,7 @@ async fn set_default(
     let mut conn = db::get_connection()?;
     let new_default_category: TagCategory = conn.transaction(|conn| {
         let mut category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
-        let mut old_default_category: TagCategory = tag_category::table.filter(tag_category::id.eq(0)).first(conn)?;
+        let mut old_default_category: TagCategory = tag_category::table.filter(TagCategory::default()).first(conn)?;
 
         let defaulted_tags: Vec<i64> = diesel::update(tag::table)
             .filter(tag::category_id.eq(category.id))

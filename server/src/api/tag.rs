@@ -160,9 +160,9 @@ async fn create(
         // Add names, implications, and suggestions
         update::tag::add_names(conn, tag.id, 0, &body.names)?;
         let (implied_ids, implications) =
-            update::tag::get_or_create_tag_ids(conn, client, body.implications.as_deref().unwrap_or_default(), true)?;
+            update::tag::get_or_create_tag_ids(conn, client, body.implications.unwrap_or_default(), true)?;
         let (suggested_ids, suggestions) =
-            update::tag::get_or_create_tag_ids(conn, client, body.suggestions.as_deref().unwrap_or_default(), true)?;
+            update::tag::get_or_create_tag_ids(conn, client, body.suggestions.unwrap_or_default(), true)?;
         update::tag::add_implications(conn, tag.id, &implied_ids)?;
         update::tag::add_suggestions(conn, tag.id, &suggested_ids)?;
 
@@ -274,7 +274,7 @@ async fn update(
         if let Some(implications) = body.implications {
             api::verify_privilege(client, config::privileges().tag_edit_implication)?;
 
-            let (implied_ids, implications) = update::tag::get_or_create_tag_ids(conn, client, &implications, true)?;
+            let (implied_ids, implications) = update::tag::get_or_create_tag_ids(conn, client, implications, true)?;
             diesel::delete(tag_implication::table)
                 .filter(tag_implication::parent_id.eq(old_tag.id))
                 .execute(conn)?;
@@ -284,7 +284,7 @@ async fn update(
         if let Some(suggestions) = body.suggestions {
             api::verify_privilege(client, config::privileges().tag_edit_suggestion)?;
 
-            let (suggested_ids, suggestions) = update::tag::get_or_create_tag_ids(conn, client, &suggestions, true)?;
+            let (suggested_ids, suggestions) = update::tag::get_or_create_tag_ids(conn, client, suggestions, true)?;
             diesel::delete(tag_suggestion::table)
                 .filter(tag_suggestion::parent_id.eq(old_tag.id))
                 .execute(conn)?;

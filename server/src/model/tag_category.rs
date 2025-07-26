@@ -1,8 +1,11 @@
 use crate::schema::tag_category;
 use crate::string::SmallString;
 use crate::time::DateTime;
+use diesel::dsl::sql;
+use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::prelude::*;
+use diesel::sql_types::Bool;
 
 #[derive(Insertable)]
 #[diesel(table_name = tag_category)]
@@ -22,4 +25,10 @@ pub struct TagCategory {
     pub name: SmallString,
     pub color: SmallString,
     pub last_edit_time: DateTime,
+}
+
+impl TagCategory {
+    pub fn default() -> SqlLiteral<Bool, UncheckedBind<SqlLiteral<Bool>, tag_category::id>> {
+        sql("").bind(tag_category::id).sql(" = 0")
+    }
 }

@@ -3,6 +3,7 @@ use crate::auth::Client;
 use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::model::snapshot::NewSnapshot;
 use crate::model::tag::TagName;
+use crate::model::tag_category::TagCategory;
 use crate::schema::{tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::string::SmallString;
 use crate::{api, snapshot};
@@ -57,6 +58,36 @@ impl SnapshotData {
 
 pub fn creation_snapshot(conn: &mut PgConnection, client: Client, tag_data: SnapshotData) -> ApiResult<()> {
     unary_snapshot(conn, client, tag_data, ResourceOperation::Created)
+}
+
+pub fn new_name_snapshots(conn: &mut PgConnection, client: Client, new_names: Vec<SmallString>) -> ApiResult<usize> {
+    let default_category_name: SmallString = tag_category::table
+        .select(tag_category::name)
+        .filter(TagCategory::default())
+        .first(conn)?;
+    let new_snapshots: Vec<NewSnapshot> = new_names
+        .into_iter()
+        .map(|name| SnapshotData {
+            category: default_category_name.clone(),
+            names: vec![name],
+            implications: Vec::new(),
+            suggestions: Vec::new(),
+        })
+        .map(|tag_data| {
+            let resource_id = tag_data.names.first().unwrap().clone();
+            serde_json::to_value(tag_data).map(|data| NewSnapshot {
+                user_id: client.id,
+                operation: ResourceOperation::Created,
+                resource_type: ResourceType::Tag,
+                resource_id,
+                data,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+    new_snapshots
+        .insert_into(crate::schema::snapshot::table)
+        .execute(conn)
+        .map_err(api::Error::from)
 }
 
 pub fn merge_snapshot(

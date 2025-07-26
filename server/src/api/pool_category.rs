@@ -76,9 +76,10 @@ async fn create(
     };
 
     let mut conn = db::get_connection()?;
-    let category = new_category.insert_into(pool_category::table).get_result(&mut conn)?;
-    snapshot::pool_category::creation_snapshot(&mut conn, client, &category)?;
-
+    let category = conn.transaction(|conn| {
+        let category = new_category.insert_into(pool_category::table).get_result(conn)?;
+        snapshot::pool_category::creation_snapshot(conn, client, &category).map(|()| category)
+    })?;
     conn.transaction(|conn| PoolCategoryInfo::new(conn, category, &fields))
         .map(Json)
         .map_err(api::Error::from)
@@ -138,7 +139,7 @@ async fn set_default(
     let new_default_category: PoolCategory = conn.transaction(|conn| {
         let mut category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
         let mut old_default_category: PoolCategory =
-            pool_category::table.filter(pool_category::id.eq(0)).first(conn)?;
+            pool_category::table.filter(PoolCategory::default()).first(conn)?;
 
         let defaulted_pools: Vec<i64> = diesel::update(pool::table)
             .filter(pool::category_id.eq(category.id))

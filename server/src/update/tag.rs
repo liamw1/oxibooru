@@ -8,7 +8,7 @@ use crate::schema::post_tag;
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config};
+use crate::{api, config, snapshot};
 use diesel::dsl::max;
 use diesel::prelude::*;
 use std::collections::HashSet;
@@ -92,12 +92,12 @@ pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i6
 pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
     client: Client,
-    names: &[SmallString],
+    names: Vec<SmallString>,
     detect_cyclic_dependencies: bool,
 ) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
     let mut implied_ids: Vec<i64> = tag_name::table
         .select(tag_name::tag_id)
-        .filter(tag_name::name.eq_any(names))
+        .filter(tag_name::name.eq_any(&names))
         .distinct()
         .load(conn)?;
     let mut all_implied_tag_ids: HashSet<i64> = implied_ids.iter().copied().collect();
@@ -127,28 +127,30 @@ pub fn get_or_create_tag_ids(
         .map(|name: SmallString| name.to_lowercase())
         .collect();
 
-    let new_tag_names: Vec<_> = names
-        .iter()
+    let new_names: Vec<_> = names
+        .into_iter()
         .filter(|name| !existing_names.contains(&name.to_lowercase()))
         .collect();
-    new_tag_names
+    new_names
         .iter()
         .try_for_each(|name| api::verify_matches_regex(name, RegexType::Tag))?;
 
     // Create new tags if given unique names
-    if !new_tag_names.is_empty() {
+    if !new_names.is_empty() {
         api::verify_privilege(client, config::privileges().tag_create)?;
 
-        let new_tag_ids: Vec<i64> = vec![NewTag::default(); new_tag_names.len()]
+        let new_tag_ids: Vec<i64> = vec![NewTag::default(); new_names.len()]
             .insert_into(tag::table)
             .returning(tag::id)
             .get_results(conn)?;
         let new_tag_names: Vec<_> = new_tag_ids
             .iter()
-            .zip(new_tag_names.iter())
+            .zip(new_names.iter())
             .map(|(&tag_id, name)| NewTagName { tag_id, order: 0, name })
             .collect();
         new_tag_names.insert_into(tag_name::table).execute(conn)?;
+
+        snapshot::tag::new_name_snapshots(conn, client, new_names)?;
         tag_ids.extend(new_tag_ids);
     }
 
