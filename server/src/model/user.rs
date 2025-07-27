@@ -1,7 +1,7 @@
 use crate::content::hash;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::schema::{user, user_token};
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -66,7 +66,7 @@ pub struct NewUserToken<'a> {
 pub struct UserToken {
     pub id: Uuid,
     pub user_id: i64,
-    pub note: String,
+    pub note: LargeString,
     pub enabled: bool,
     pub expiration_time: Option<DateTime>,
     pub creation_time: DateTime,

@@ -5,7 +5,7 @@ use crate::model::snapshot::NewSnapshot;
 use crate::model::tag::{Tag, TagName};
 use crate::model::tag_category::TagCategory;
 use crate::schema::{tag_category, tag_implication, tag_name, tag_suggestion};
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::{api, snapshot};
 use diesel::prelude::*;
 use serde::Serialize;
@@ -13,7 +13,7 @@ use serde_json::json;
 
 #[derive(Clone, Serialize)]
 pub struct SnapshotData {
-    pub description: String,
+    pub description: LargeString,
     pub category: SmallString,
     pub names: Vec<SmallString>,
     pub implications: Vec<SmallString>,
@@ -70,7 +70,7 @@ pub fn new_name_snapshots(conn: &mut PgConnection, client: Client, new_names: Ve
     let new_snapshots: Vec<NewSnapshot> = new_names
         .into_iter()
         .map(|name| SnapshotData {
-            description: String::new(),
+            description: LargeString::new(),
             category: default_category_name.clone(),
             names: vec![name],
             implications: Vec::new(),

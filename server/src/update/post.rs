@@ -67,7 +67,7 @@ pub fn delete_relations(conn: &mut PgConnection, post_id: i64) -> QueryResult<us
 
 /// Adds tags to the post with id `post_id`.
 pub fn add_tags(conn: &mut PgConnection, post_id: i64, tags: &[i64]) -> QueryResult<()> {
-    let new_post_tags: Vec<_> = tags.into_iter().map(|&tag_id| PostTag { post_id, tag_id }).collect();
+    let new_post_tags: Vec<_> = tags.iter().map(|&tag_id| PostTag { post_id, tag_id }).collect();
     new_post_tags.insert_into(post_tag::table).execute(conn)?;
     Ok(())
 }
@@ -238,7 +238,7 @@ pub fn merge(
     new_comments.insert_into(comment::table).execute(conn)?;
 
     // Merge descriptions
-    let merged_description = merge_to_post.description.clone() + "\n\n" + &absorbed_post.description;
+    let merged_description = merge_to_post.description.to_string() + "\n\n" + &absorbed_post.description;
     diesel::update(post::table.find(merge_to_id))
         .set(post::description.eq(merged_description.trim()))
         .execute(conn)?;

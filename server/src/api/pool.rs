@@ -6,7 +6,7 @@ use crate::resource::pool::PoolInfo;
 use crate::schema::{pool, pool_category, pool_name};
 use crate::search::pool::QueryBuilder;
 use crate::snapshot::pool::SnapshotData;
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, config, db, resource, snapshot, update};
 use axum::extract::{Extension, Path, Query};
@@ -75,7 +75,7 @@ async fn get(
 struct CreateBody {
     names: Vec<SmallString>,
     category: SmallString,
-    description: Option<String>,
+    description: Option<LargeString>,
     posts: Option<Vec<i64>>,
 }
 
@@ -158,7 +158,7 @@ async fn merge(
 struct UpdateBody {
     version: DateTime,
     category: Option<SmallString>,
-    description: Option<String>,
+    description: Option<LargeString>,
     names: Option<Vec<SmallString>>,
     posts: Option<Vec<i64>>,
 }
@@ -252,6 +252,7 @@ mod test {
     use crate::api::ApiResult;
     use crate::model::pool::Pool;
     use crate::schema::{database_statistics, pool, pool_name, pool_statistics};
+    use crate::string::SmallString;
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
@@ -307,7 +308,7 @@ mod test {
 
         verify_query(&format!("POST /pool/?{FIELDS}"), "pool/create.json").await?;
 
-        let (pool_id, name): (i64, String) = pool_name::table
+        let (pool_id, name): (i64, SmallString) = pool_name::table
             .select((pool_name::pool_id, pool_name::name))
             .order_by(pool_name::pool_id.desc())
             .first(&mut conn)?;

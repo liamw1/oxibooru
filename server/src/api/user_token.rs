@@ -5,7 +5,7 @@ use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
 use crate::resource::user_token::UserTokenInfo;
 use crate::schema::{user, user_token};
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, config, db, resource};
 use axum::extract::{Extension, Path, Query};
@@ -115,7 +115,7 @@ async fn create(
 struct UpdateBody {
     version: DateTime,
     enabled: Option<bool>,
-    note: Option<String>,
+    note: Option<LargeString>,
     #[serde(default, deserialize_with = "api::deserialize_some")]
     expiration_time: Option<Option<DateTime>>,
 }

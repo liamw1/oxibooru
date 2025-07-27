@@ -4,7 +4,7 @@ use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::model::pool::Pool;
 use crate::model::snapshot::NewSnapshot;
 use crate::schema::{pool_category, pool_name, pool_post};
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::{api, snapshot};
 use diesel::prelude::*;
 use serde::Serialize;
@@ -12,7 +12,7 @@ use serde_json::json;
 
 #[derive(Clone, Serialize)]
 pub struct SnapshotData {
-    pub description: String,
+    pub description: LargeString,
     pub category: SmallString,
     pub names: Vec<SmallString>,
     pub posts: Vec<i64>,

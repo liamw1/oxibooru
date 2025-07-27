@@ -1,9 +1,9 @@
 use crate::content::hash::PostHash;
-use crate::model::pool::{Pool, PoolDescription, PoolName, PoolPost};
+use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource::post::MicroPost;
 use crate::resource::{self, BoolFill};
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -17,7 +17,7 @@ pub struct MicroPool {
     pub id: i64,
     pub names: Rc<[SmallString]>,
     pub category: SmallString,
-    pub description: PoolDescription,
+    pub description: LargeString,
     pub post_count: i64,
 }
 
@@ -47,7 +47,7 @@ impl BoolFill for FieldTable<bool> {
 pub struct PoolInfo {
     version: Option<DateTime>,
     id: Option<i64>,
-    description: Option<String>,
+    description: Option<LargeString>,
     creation_time: Option<DateTime>,
     last_edit_time: Option<DateTime>,
     category: Option<SmallString>,

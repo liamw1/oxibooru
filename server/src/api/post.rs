@@ -11,7 +11,7 @@ use crate::resource::post::{Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
 use crate::search::post::QueryBuilder;
 use crate::snapshot::post::SnapshotData;
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, snapshot, update};
 use axum::extract::{DefaultBodyLimit, Extension, Path, Query};
@@ -619,8 +619,8 @@ async fn rate(
 struct UpdateBody {
     version: DateTime,
     safety: Option<PostSafety>,
-    source: Option<String>,
-    description: Option<String>,
+    source: Option<LargeString>,
+    description: Option<LargeString>,
     relations: Option<Vec<i64>>,
     tags: Option<Vec<SmallString>>,
     notes: Option<Vec<Note>>,

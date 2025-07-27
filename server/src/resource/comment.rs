@@ -4,7 +4,7 @@ use crate::model::enums::{AvatarStyle, Rating};
 use crate::resource::user::MicroUser;
 use crate::resource::{self, BoolFill};
 use crate::schema::{comment, comment_score, comment_statistics, user};
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -38,7 +38,7 @@ pub struct CommentInfo {
     pub version: Option<DateTime>, // TODO: Remove last_edit_time as it fills the same role as version here
     pub id: Option<i64>,
     pub post_id: Option<i64>,
-    pub text: Option<String>,
+    pub text: Option<LargeString>,
     pub creation_time: Option<DateTime>,
     pub last_edit_time: Option<DateTime>,
     pub user: Option<Option<MicroUser>>,

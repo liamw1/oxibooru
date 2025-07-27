@@ -205,6 +205,7 @@ mod test {
     use crate::api::ApiResult;
     use crate::model::pool_category::PoolCategory;
     use crate::schema::{pool_category, pool_category_statistics};
+    use crate::string::SmallString;
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::prelude::*;
@@ -248,7 +249,7 @@ mod test {
 
         verify_query(&format!("POST /pool-categories/?{FIELDS}"), "pool_category/create.json").await?;
 
-        let category_name: String = pool_category::table
+        let category_name: SmallString = pool_category::table
             .select(pool_category::name)
             .order_by(pool_category::id.desc())
             .first(&mut conn)?;

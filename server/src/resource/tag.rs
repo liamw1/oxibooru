@@ -1,7 +1,7 @@
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
 use crate::resource::{self, BoolFill};
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::Serialize;
@@ -43,7 +43,7 @@ impl BoolFill for FieldTable<bool> {
 #[serde(rename_all = "camelCase")]
 pub struct TagInfo {
     version: Option<DateTime>,
-    description: Option<String>,
+    description: Option<LargeString>,
     creation_time: Option<DateTime>,
     last_edit_time: Option<DateTime>,
     category: Option<SmallString>,

@@ -6,7 +6,7 @@ use crate::model::snapshot::NewSnapshot;
 use crate::model::tag::TagName;
 use crate::resource::post::Note;
 use crate::schema::{post_feature, post_note, post_relation, post_tag, tag_name};
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::{api, snapshot};
 use diesel::prelude::*;
 use serde::Serialize;
@@ -17,8 +17,8 @@ pub struct SnapshotData {
     pub safety: PostSafety,
     pub checksum: String,
     pub flags: PostFlags,
-    pub source: String,
-    pub description: String,
+    pub source: LargeString,
+    pub description: LargeString,
     pub tags: Vec<SmallString>,
     pub relations: Vec<i64>,
     pub notes: Vec<Note>,

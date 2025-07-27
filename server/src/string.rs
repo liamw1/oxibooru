@@ -10,6 +10,7 @@ use std::borrow::Cow;
 use std::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text, sql_type = Citext)]
@@ -81,5 +82,41 @@ where
 {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         CompactString::from_utf8(value.as_bytes()).map(Self).map_err(Box::from)
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, AsExpression, FromSqlRow)]
+#[diesel(sql_type = Text)]
+pub struct LargeString(Arc<str>);
+
+impl LargeString {
+    pub fn new() -> Self {
+        Self(Arc::from(String::new()))
+    }
+}
+
+impl Deref for LargeString {
+    type Target = str;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Display for LargeString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl FromSql<Text, Pg> for LargeString {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        let string = std::str::from_utf8(value.as_bytes())?;
+        Ok(Self(Arc::from(string)))
+    }
+}
+
+impl ToSql<Text, Pg> for LargeString {
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        <str as ToSql<Text, Pg>>::to_sql(&self.0, out)
     }
 }

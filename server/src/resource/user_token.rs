@@ -1,6 +1,7 @@
 use crate::model::user::UserToken;
 use crate::resource::BoolFill;
 use crate::resource::user::MicroUser;
+use crate::string::LargeString;
 use crate::time::DateTime;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
@@ -34,7 +35,7 @@ pub struct UserTokenInfo {
     version: Option<DateTime>,
     user: Option<MicroUser>,
     token: Option<Uuid>,
-    note: Option<String>,
+    note: Option<LargeString>,
     enabled: Option<bool>,
     expiration_time: Option<Option<DateTime>>,
     creation_time: Option<DateTime>,

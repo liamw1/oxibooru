@@ -2,6 +2,7 @@ use crate::model::enums::Score;
 use crate::model::post::Post;
 use crate::model::user::User;
 use crate::schema::{comment, comment_score};
+use crate::string::LargeString;
 use crate::time::DateTime;
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -24,7 +25,7 @@ pub struct Comment {
     pub id: i64,
     pub user_id: Option<i64>,
     pub post_id: i64,
-    pub text: String,
+    pub text: LargeString,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
 }

@@ -3,7 +3,7 @@ use crate::content::hash::PostHash;
 use crate::get_post_stats;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType, Rating, Score};
-use crate::model::pool::{PoolDescription, PoolPost};
+use crate::model::pool::PoolPost;
 use crate::model::post::{NewPostNote, Post, PostFavorite, PostNote, PostRelation, PostScore, PostTag};
 use crate::model::tag::TagName;
 use crate::resource::comment::CommentInfo;
@@ -15,7 +15,7 @@ use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_note, post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
 };
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -30,7 +30,7 @@ pub struct Note {
     #[serde(skip)]
     id: i64,
     polygon: Vec<[f32; 2]>,
-    text: String,
+    text: LargeString,
 }
 
 impl Note {
@@ -130,8 +130,8 @@ pub struct PostInfo {
     #[serde(rename = "checksumMD5")]
     checksum_md5: Option<String>,
     flags: Option<PostFlags>,
-    source: Option<String>,
-    description: Option<String>,
+    source: Option<LargeString>,
+    description: Option<LargeString>,
     creation_time: Option<DateTime>,
     last_edit_time: Option<DateTime>,
     content_url: Option<String>,
@@ -453,7 +453,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
         .load(conn)?
         .into_iter()
         .collect();
-    let pool_descriptions: HashMap<i64, PoolDescription> = pool::table
+    let pool_descriptions: HashMap<i64, LargeString> = pool::table
         .select((pool::id, pool::description))
         .filter(pool::id.eq_any(pool_ids))
         .load(conn)?

@@ -15,6 +15,7 @@ use crate::schema::{
     post_favorite, post_feature, post_note, post_relation, post_score, post_statistics, post_tag, snapshot, tag,
     tag_category, tag_category_statistics, tag_implication, tag_name, tag_statistics, tag_suggestion, user, user_token,
 };
+use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, db};
 use axum::ServiceExt;
@@ -682,13 +683,13 @@ mod test {
     #[parallel]
     fn pool_statistics() -> ApiResult<()> {
         let mut conn = get_connection()?;
-        let stats: Vec<(String, i64)> = pool_statistics::table
+        let stats: Vec<(SmallString, i64)> = pool_statistics::table
             .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool_statistics::pool_id)))
             .select((pool_name::name, pool_statistics::post_count))
             .filter(PoolName::primary())
             .load(&mut conn)?;
         for (pool_name, post_count) in stats {
-            let exepected_post_count = POOL_POSTS.iter().filter(|&&(name, _)| name == pool_name).count() as i64;
+            let exepected_post_count = POOL_POSTS.iter().filter(|&&(name, _)| *name == *pool_name).count() as i64;
             assert_eq!(post_count, exepected_post_count);
         }
         Ok(())
@@ -770,7 +771,7 @@ mod test {
     #[parallel]
     fn tag_statistics() -> ApiResult<()> {
         let mut conn = get_connection()?;
-        let stats: Vec<(String, i64)> = tag_statistics::table
+        let stats: Vec<(SmallString, i64)> = tag_statistics::table
             .inner_join(tag_name::table.on(tag_name::tag_id.eq(tag_statistics::tag_id)))
             .select((tag_name::name, tag_statistics::usage_count))
             .filter(TagName::primary())
@@ -778,7 +779,7 @@ mod test {
         for (tag_name, usage_count) in stats {
             let expected_usage_count = POST_TAGS
                 .iter()
-                .filter_map(|tags| tags.iter().find(|&&name| name == tag_name))
+                .filter_map(|tags| tags.iter().find(|&&name| *name == *tag_name))
                 .count() as i64;
             assert_eq!(usage_count, expected_usage_count);
         }

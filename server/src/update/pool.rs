@@ -48,7 +48,7 @@ pub fn delete_names(conn: &mut PgConnection, pool_id: i64) -> QueryResult<usize>
 /// Appends `posts` onto the current list of posts in the pool with id `pool_id`.
 pub fn add_posts(conn: &mut PgConnection, pool_id: i64, current_post_count: i64, posts: &[i64]) -> QueryResult<()> {
     let new_pool_posts: Vec<_> = posts
-        .into_iter()
+        .iter()
         .enumerate()
         .map(|(i, post_id)| (current_post_count + i as i64, post_id))
         .map(|(order, &post_id)| PoolPost {

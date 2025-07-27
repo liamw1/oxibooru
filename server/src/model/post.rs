@@ -5,6 +5,7 @@ use crate::model::user::User;
 use crate::schema::{
     post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_tag,
 };
+use crate::string::LargeString;
 use crate::time::DateTime;
 use byteorder::{NetworkEndian, ReadBytesExt};
 use diesel::deserialize::{self, FromSql};
@@ -68,12 +69,12 @@ pub struct Post {
     pub checksum: Vec<u8>,
     pub checksum_md5: Vec<u8>,
     pub flags: PostFlags,
-    pub source: String,
+    pub source: LargeString,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
     pub generated_thumbnail_size: i64,
     pub custom_thumbnail_size: i64,
-    pub description: String,
+    pub description: LargeString,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Associations, Identifiable, Insertable, Queryable, Selectable)]
@@ -156,7 +157,7 @@ pub struct PostNote {
     pub id: i64,
     pub post_id: i64,
     pub polygon: Vec<Option<f32>>,
-    pub text: String,
+    pub text: LargeString,
 }
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]

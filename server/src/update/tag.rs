@@ -53,7 +53,7 @@ pub fn delete_names(conn: &mut PgConnection, tag_id: i64) -> QueryResult<usize> 
 /// Adds `implied_ids` to the list of implications for the tag with id `tag_id`.
 pub fn add_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: &[i64]) -> ApiResult<()> {
     let new_implications: Vec<_> = implied_ids
-        .into_iter()
+        .iter()
         .map(|&child_id| {
             (tag_id != child_id)
                 .then_some(TagImplication {
@@ -70,7 +70,7 @@ pub fn add_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: &[i64
 /// Adds `suggested_ids` to the list of suggestions for the tag with id `tag_id`.
 pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i64]) -> ApiResult<()> {
     let new_suggestions: Vec<_> = suggested_ids
-        .into_iter()
+        .iter()
         .map(|&child_id| {
             (tag_id != child_id)
                 .then_some(TagSuggestion {

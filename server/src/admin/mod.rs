@@ -169,8 +169,14 @@ fn run_task(conn: &mut PgConnection, task: AdminTask) -> Result<(), String> {
         AdminTask::RecomputePostSignatures => post::recompute_signatures(conn).map_err(|err| err.to_string()),
         AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(conn).map_err(|err| err.to_string()),
         AdminTask::RegenerateThumbnails => post::regenerate_thumbnails(conn).map_err(|err| err.to_string()),
-        AdminTask::RegenerateThumbnail => Ok(post::regenerate_thumbnail(conn)),
-        AdminTask::ResetPassword => Ok(user::reset_password(conn)),
+        AdminTask::RegenerateThumbnail => {
+            post::regenerate_thumbnail(conn);
+            Ok(())
+        }
+        AdminTask::ResetPassword => {
+            user::reset_password(conn);
+            Ok(())
+        }
         AdminTask::ResetFilenames => database::reset_filenames().map_err(|err| err.to_string()),
         AdminTask::ResetStatistics => database::reset_statistics().map_err(|err| err.to_string()),
         AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(conn).map_err(|err| err.to_string()),

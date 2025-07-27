@@ -63,7 +63,9 @@ fn object_diff(old: Map<String, Value>, mut new: Map<String, Value>) -> Option<V
     // Check for keys added in new object
     let added_keys: Vec<_> = new
         .iter()
-        .filter_map(|(key, _)| (!old.contains_key(key)).then(|| key.clone()))
+        .map(|(key, _)| key)
+        .filter(|&key| !old.contains_key(key))
+        .cloned()
         .collect();
     let added_properties: Vec<_> = added_keys.iter().filter_map(|key| new.remove_entry(key)).collect();
 

@@ -1,6 +1,6 @@
 use crate::model::tag_category::TagCategory;
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::dsl::sql;
 use diesel::expression::{SqlLiteral, UncheckedBind};
@@ -23,7 +23,7 @@ pub struct NewTag<'a> {
 pub struct Tag {
     pub id: i64,
     pub category_id: i64,
-    pub description: String,
+    pub description: LargeString,
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
 }

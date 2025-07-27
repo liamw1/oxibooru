@@ -39,10 +39,10 @@ pub async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
 }
 
 pub async fn post_to_webhooks(request: Request, next: Next) -> ApiResult<Response> {
-    let method = request.method().clone();
+    let can_modify_database = matches!(request.method(), &Method::POST | &Method::PUT | &Method::DELETE);
     let response = next.run(request).await;
 
-    if method == Method::POST || method == Method::PUT || method == Method::DELETE {
+    if can_modify_database {
         let mut conn = db::get_connection()?;
         let last_posted_snapshot = LAST_POSTED_SNAPSHOT.load(Ordering::SeqCst);
         let new_snapshots = snapshot::table

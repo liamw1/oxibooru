@@ -6,7 +6,7 @@ use crate::resource::tag::TagInfo;
 use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::search::tag::QueryBuilder;
 use crate::snapshot::tag::SnapshotData;
-use crate::string::SmallString;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, config, db, resource, snapshot, update};
 use axum::extract::{Extension, Path, Query};
@@ -125,8 +125,8 @@ async fn get_siblings(
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct CreateBody {
-    category: String,
-    description: Option<String>,
+    category: SmallString,
+    description: Option<LargeString>,
     names: Vec<SmallString>,
     implications: Option<Vec<SmallString>>,
     suggestions: Option<Vec<SmallString>>,
@@ -221,7 +221,7 @@ async fn merge(
 struct UpdateBody {
     version: DateTime,
     category: Option<SmallString>,
-    description: Option<String>,
+    description: Option<LargeString>,
     names: Option<Vec<SmallString>>,
     implications: Option<Vec<SmallString>>,
     suggestions: Option<Vec<SmallString>>,
@@ -334,6 +334,7 @@ mod test {
     use crate::api::ApiResult;
     use crate::model::tag::Tag;
     use crate::schema::{database_statistics, tag, tag_name, tag_statistics};
+    use crate::string::SmallString;
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
@@ -414,7 +415,7 @@ mod test {
 
         verify_query(&format!("POST /tags/?{FIELDS}"), "tag/create.json").await?;
 
-        let (tag_id, name): (i64, String) = tag_name::table
+        let (tag_id, name): (i64, SmallString) = tag_name::table
             .select((tag_name::tag_id, tag_name::name))
             .order_by(tag_name::tag_id.desc())
             .first(&mut conn)?;
@@ -497,7 +498,7 @@ mod test {
 
         verify_query(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/update.json").await?;
 
-        let new_name: String = tag_name::table
+        let new_name: SmallString = tag_name::table
             .select(tag_name::name)
             .filter(tag_name::tag_id.eq(tag.id))
             .first(&mut conn)?;
