@@ -73,16 +73,13 @@ fn object_diff(old: Map<String, Value>, mut new: Map<String, Value>) -> Option<V
 
     // Check for keys present in old object
     for (key, old_value) in old {
-        let new_value = match new.remove(&key) {
-            Some(new_value) => new_value,
-            None => {
-                // Property deleted
-                let change_type = ("type".into(), "deleted property".into());
-                let value_deleted = ("value".into(), old_value);
-                let change = [change_type, value_deleted].into_iter().collect();
-                diff.insert(key, Value::Object(change));
-                continue;
-            }
+        let Some(new_value) = new.remove(&key) else {
+            // Property deleted
+            let change_type = ("type".into(), "deleted property".into());
+            let value_deleted = ("value".into(), old_value);
+            let change = [change_type, value_deleted].into_iter().collect();
+            diff.insert(key, Value::Object(change));
+            continue;
         };
 
         // Check if property changed

@@ -24,12 +24,9 @@ pub fn reset_filenames() -> std::io::Result<()> {
         let progress = ProgressReporter::new("Generated thumbnails renamed", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))? {
             let path = entry?.path();
-            let post_id = match admin::get_post_id(&path) {
-                Some(id) => id,
-                None => {
-                    error!("Could not find post_id of {path:?}");
-                    continue;
-                }
+            let Some(post_id) = admin::get_post_id(&path) else {
+                error!("Could not find post_id of {path:?}");
+                continue;
             };
 
             let new_path = PostHash::new(post_id).generated_thumbnail_path();
@@ -43,12 +40,9 @@ pub fn reset_filenames() -> std::io::Result<()> {
         let progress = ProgressReporter::new("Custom thumbnails renamed", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))? {
             let path = entry?.path();
-            let post_id = match admin::get_post_id(&path) {
-                Some(id) => id,
-                None => {
-                    error!("Could not find post_id of {path:?}");
-                    continue;
-                }
+            let Some(post_id) = admin::get_post_id(&path) else {
+                error!("Could not find post_id of {path:?}");
+                continue;
             };
 
             let new_path = PostHash::new(post_id).custom_thumbnail_path();
@@ -62,12 +56,9 @@ pub fn reset_filenames() -> std::io::Result<()> {
         let progress = ProgressReporter::new("Posts renamed", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::Posts))? {
             let path = entry?.path();
-            let post_id = match admin::get_post_id(&path) {
-                Some(id) => id,
-                None => {
-                    error!("Could not find post_id of {path:?}");
-                    continue;
-                }
+            let Some(post_id) = admin::get_post_id(&path) else {
+                error!("Could not find post_id of {path:?}");
+                continue;
             };
 
             let new_path = if let Some(mime_type) = MimeType::from_path(&path) {
@@ -97,12 +88,9 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
         let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::Avatars))? {
             let path = entry?.path();
-            let username = match path.file_name() {
-                Some(name) => name.to_string_lossy(),
-                None => {
-                    error!("Unable to convert file name of {path:?} to string");
-                    continue;
-                }
+            let Some(username) = path.file_name().map(OsStr::to_string_lossy) else {
+                error!("Unable to convert file name of {path:?} to string");
+                continue;
             };
 
             let file_size = path.metadata()?.len();
@@ -117,12 +105,9 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
         let progress = ProgressReporter::new("Generated thumbnail sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))? {
             let path = entry?.path();
-            let post_id = match admin::get_post_id(&path) {
-                Some(id) => id,
-                None => {
-                    error!("Could not find post_id of {path:?}");
-                    continue;
-                }
+            let Some(post_id) = admin::get_post_id(&path) else {
+                error!("Could not find post_id of {path:?}");
+                continue;
             };
 
             let file_size = path.metadata()?.len();
@@ -137,12 +122,9 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
         let progress = ProgressReporter::new("Custom thumbnails sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))? {
             let path = entry?.path();
-            let post_id = match admin::get_post_id(&path) {
-                Some(id) => id,
-                None => {
-                    error!("Could not find post_id of {path:?}");
-                    continue;
-                }
+            let Some(post_id) = admin::get_post_id(&path) else {
+                error!("Could not find post_id of {path:?}");
+                continue;
             };
 
             let file_size = path.metadata()?.len();
@@ -356,12 +338,9 @@ pub fn reset_statistics() -> ApiResult<()> {
         let progress = ProgressReporter::new("Posts content sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::Posts))? {
             let path = entry?.path();
-            let post_id = match admin::get_post_id(&path) {
-                Some(id) => id,
-                None => {
-                    error!("Could not find post_id of {path:?}");
-                    continue;
-                }
+            let Some(post_id) = admin::get_post_id(&path) else {
+                error!("Could not find post_id of {path:?}");
+                continue;
             };
 
             let file_size = path.metadata()?.len();

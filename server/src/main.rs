@@ -3,20 +3,22 @@
 #![allow(clippy::too_many_arguments)]
 // Gives warnings for every diesel::prelude::* import
 #![allow(clippy::wildcard_imports)]
+// Option<Option<T>> is convenient for deserializing optional nullable JSON fields
+#![allow(clippy::option_option)]
 // Buggy
 #![allow(clippy::iter_not_returning_iterator)]
 // Too subjective
-#![allow(clippy::similar_names, clippy::too_many_lines)]
+#![allow(
+    clippy::similar_names,
+    clippy::too_many_lines,
+    clippy::single_match_else,
+    clippy::match_bool
+)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
 #![allow(clippy::cast_sign_loss)]
-#![allow(clippy::match_bool)]
 #![allow(clippy::match_same_arms)]
-#![allow(clippy::single_match_else)]
-#![allow(clippy::manual_let_else)]
-#![allow(clippy::doc_markdown)]
-#![allow(clippy::option_option)]
 
 mod admin;
 mod api;
