@@ -21,7 +21,7 @@ pub struct Cache {
 pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_LEN] {
     let gray_image = image.to_luma8();
     let (grid_points, grid_square_radius) = compute_grid_points(&gray_image);
-    let mean_matrix = compute_intensity_matrix(&gray_image, &grid_points, grid_square_radius as i32);
+    let mean_matrix = compute_intensity_matrix(&gray_image, &grid_points, grid_square_radius);
     let differences = compute_differences(&mean_matrix);
     let signature = normalize(&differences);
     compress(&signature)
@@ -40,15 +40,18 @@ pub fn cache(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> Cache {
 ///
 /// The lower the number, the more similar the two images are.
 pub fn distance(signature_a_cache: &Cache, signature_b_compressed: &[i64; COMPRESSED_SIGNATURE_LEN]) -> f64 {
+    const _MAX_DISTANCE: i32 = (NUM_SYMBOLS as i32).pow(2) * SIGNATURE_LEN as i32;
+    const _: () = assert!(_MAX_DISTANCE as i64 <= i32::MAX as i64); // Ensures no i32 overflow when computing distance
+
     let signature_b = uncompress(signature_b_compressed);
-    let l2_squared_distance: i64 = signature_a_cache
+    let l2_squared_distance: i32 = signature_a_cache
         .signature
+        .map(i32::from)
         .into_iter()
-        .zip(signature_b)
-        .map(|(a, b)| (i64::from(a), i64::from(b)))
+        .zip(signature_b.map(i32::from))
         .map(|(a, b)| (a - b) * (a - b))
         .sum();
-    let l2_distance = (l2_squared_distance as f64).sqrt();
+    let l2_distance = f64::from(l2_squared_distance).sqrt();
 
     let denominator = signature_a_cache.norm + norm(&signature_b);
     if denominator == 0.0 {
@@ -83,12 +86,14 @@ pub fn generate_indexes(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) 
         let word = words[word_index];
         let encoded_letters: u32 = word
             .iter()
-            .map(|&letter| letter as i8 - LUMINANCE_LEVELS as i8)
+            .map(|&letter| letter.cast_signed() - LUMINANCE_LEVELS as i8)
             .map(|letter| letter.clamp(-CLAMP_VALUE, CLAMP_VALUE))
             .enumerate()
-            .map(|(letter_index, letter)| (letter + CLAMP_VALUE) as u32 * NUM_REDUCED_SYMBOLS.pow(letter_index as u32))
+            .map(|(letter_index, letter)| {
+                u32::from((letter + CLAMP_VALUE).cast_unsigned()) * NUM_REDUCED_SYMBOLS.pow(letter_index as u32)
+            })
             .sum();
-        (word_index as u32 + NUM_REDUCED_SYMBOLS.pow(NUM_WORD_DIGITS) * encoded_letters) as i32
+        (word_index as u32 + NUM_REDUCED_SYMBOLS.pow(NUM_WORD_DIGITS) * encoded_letters).cast_signed()
     })
 }
 
@@ -204,11 +209,12 @@ fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
 fn compute_intensity_matrix(
     image: &GrayImage,
     grid_points: &GridPoints,
-    grid_square_radius: i32,
+    grid_square_radius: u32,
 ) -> Array2D<u8, GRID_SIZE, GRID_SIZE> {
     let image_bounds = IRect::new_zero_based(image.width() - 1, image.height() - 1)
         .to_signed()
         .unwrap();
+    let grid_square_radius = i32::try_from(grid_square_radius).unwrap();
 
     let mut intensity_matrix = Array2D::new(0);
     for (matrix_index, (&pixel_i, &pixel_j)) in grid_points.indexed_iter() {
@@ -299,7 +305,8 @@ fn compress(uncompressed_signature: &[u8; SIGNATURE_LEN]) -> [i64; COMPRESSED_SI
             .iter()
             .enumerate()
             .map(|(letter_index, &letter)| u64::from(letter) * NUM_SYMBOLS.pow(letter_index as u32) as u64)
-            .sum::<u64>() as i64
+            .sum::<u64>()
+            .cast_signed()
     });
     array_from_iter(compression_iter)
 }
@@ -307,23 +314,30 @@ fn compress(uncompressed_signature: &[u8; SIGNATURE_LEN]) -> [i64; COMPRESSED_SI
 fn uncompress(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
     // Create divisor as NonZeroU64 to guarantee compiler doesn't generate divide-by-zero check
     const DIVISOR: NonZeroU64 = NonZeroU64::new(NUM_SYMBOLS as u64).unwrap();
-    let decompression_iter = compressed_signature.iter().map(|&sum| sum as u64).flat_map(|mut sum| {
-        (0..SIGNATURE_DIGITS).map(move |_| {
-            let letter = sum % DIVISOR;
-            sum /= DIVISOR;
-            letter as u8
-        })
-    });
+    let decompression_iter = compressed_signature
+        .iter()
+        .copied()
+        .map(i64::cast_unsigned)
+        .flat_map(|mut sum| {
+            (0..SIGNATURE_DIGITS).map(move |_| {
+                let letter = sum % DIVISOR;
+                sum /= DIVISOR;
+                letter as u8
+            })
+        });
     array_from_iter(decompression_iter)
 }
 
 fn norm(signature: &[u8; SIGNATURE_LEN]) -> f64 {
-    let norm_squard: i64 = signature
+    const _MAX_NORM: i32 = ((NUM_SYMBOLS as i32) / 2).pow(2) * SIGNATURE_LEN as i32;
+    const _: () = assert!(_MAX_NORM as i64 <= i32::MAX as i64); // Ensures no i32 overflow when computing norm
+
+    let norm_squard: i32 = signature
         .iter()
-        .map(|&a| i64::from(a) - LUMINANCE_LEVELS as i64)
+        .map(|&a| i32::from(a) - LUMINANCE_LEVELS as i32)
         .map(|a| a * a)
         .sum();
-    (norm_squard as f64).sqrt()
+    f64::from(norm_squard).sqrt()
 }
 
 #[cfg(test)]

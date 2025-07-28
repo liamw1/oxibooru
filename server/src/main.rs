@@ -3,21 +3,19 @@
 #![allow(clippy::too_many_arguments)]
 // Gives warnings for every diesel::prelude::* import
 #![allow(clippy::wildcard_imports)]
+// Gives warnings for integer casts in const context
+#![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 // Option<Option<T>> is convenient for deserializing optional nullable JSON fields
 #![allow(clippy::option_option)]
 // Buggy
 #![allow(clippy::iter_not_returning_iterator)]
 // Too subjective
 #![allow(
+    clippy::match_bool,
     clippy::similar_names,
-    clippy::too_many_lines,
     clippy::single_match_else,
-    clippy::match_bool
+    clippy::too_many_lines
 )]
-#![allow(clippy::cast_possible_truncation)]
-#![allow(clippy::cast_possible_wrap)]
-#![allow(clippy::cast_precision_loss)]
-#![allow(clippy::cast_sign_loss)]
 
 mod admin;
 mod api;

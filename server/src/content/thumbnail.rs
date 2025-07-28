@@ -26,14 +26,14 @@ pub fn create(image: &DynamicImage, thumbnail_type: ThumbnailType) -> DynamicIma
     let (image_width, image_height) = image.dimensions();
     let (thumbnail_width, thumbnail_height) = if image_width > image_height {
         // Thumbnail width is config_height * aspect_ratio
-        let width = u64::from(image_width) * u64::from(config_height) / u64::from(image_height);
-        let height = u64::from(config_height);
+        let width = image_width * config_height / image_height;
+        let height = config_height;
         (width, height)
     } else {
         // Thumbnail height is config_width / aspect_ratio
-        let width = u64::from(config_width);
-        let height = u64::from(image_height) * u64::from(config_width) / u64::from(image_width);
+        let width = config_width;
+        let height = image_height * config_width / image_width;
         (width, height)
     };
-    image.resize(thumbnail_width as u32, thumbnail_height as u32, FilterType::Gaussian)
+    image.resize(thumbnail_width, thumbnail_height, FilterType::Gaussian)
 }

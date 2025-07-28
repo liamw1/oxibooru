@@ -49,7 +49,7 @@ impl<T: PrimInt> Interval<T> {
     pub fn linspace<const N: usize>(self) -> [T; N] {
         let min_f64 = self.min().to_f64().unwrap();
         let max_f64 = self.max().to_f64().unwrap();
-        let num_f64 = N as f64;
+        let num_f64 = f64::from(u32::try_from(N).unwrap());
 
         let mut arr = [T::zero(); N];
         match N {
@@ -61,7 +61,8 @@ impl<T: PrimInt> Interval<T> {
             _ => {
                 let step = (max_f64 - min_f64) / (num_f64 - 1.0);
                 for (i, item) in arr.iter_mut().enumerate() {
-                    let point = (min_f64 + i as f64 * step).round();
+                    let index = f64::from(u32::try_from(i).unwrap());
+                    let point = (min_f64 + index * step).round();
                     *item = T::from(point).unwrap();
                 }
             }

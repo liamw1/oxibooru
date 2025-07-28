@@ -37,10 +37,10 @@ pub fn thumbnail(
     let thumbnail_size = filesystem::save_post_thumbnail(post_hash, thumbnail, thumbnail_type)?;
     match thumbnail_type {
         ThumbnailCategory::Generated => diesel::update(post::table.find(post_hash.id()))
-            .set(post::generated_thumbnail_size.eq(thumbnail_size as i64))
+            .set(post::generated_thumbnail_size.eq(thumbnail_size))
             .execute(conn)?,
         ThumbnailCategory::Custom => diesel::update(post::table.find(post_hash.id()))
-            .set(post::custom_thumbnail_size.eq(thumbnail_size as i64))
+            .set(post::custom_thumbnail_size.eq(thumbnail_size))
             .execute(conn)?,
     };
     Ok(())

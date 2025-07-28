@@ -17,10 +17,10 @@ pub struct CachedProperties {
     pub md5_checksum: [u8; 16],
     pub signature: [i64; COMPRESSED_SIGNATURE_LEN],
     pub thumbnail: DynamicImage,
-    pub width: u32,
-    pub height: u32,
+    pub width: i32,
+    pub height: i32,
     pub mime_type: MimeType,
-    pub file_size: u64,
+    pub file_size: i64,
     pub flags: PostFlags,
 }
 
@@ -98,7 +98,7 @@ fn get_cache_guard() -> MutexGuard<'static, RingCache> {
 /// Computes content properties without storing them in cache.
 fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
     let temp_path = filesystem::temporary_upload_filepath(&token);
-    let file_size = std::fs::metadata(&temp_path)?.len();
+    let file_size = filesystem::file_size(&temp_path)?;
     let data = std::fs::read(&temp_path)?;
     let checksum = hash::compute_checksum(&data);
     let md5_checksum = hash::compute_md5_checksum(&data);
@@ -126,8 +126,8 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
         md5_checksum,
         signature: signature::compute(&image),
         thumbnail: thumbnail::create(&image, ThumbnailType::Post),
-        width: image.width(),
-        height: image.height(),
+        width: i32::try_from(image.width()).unwrap(),
+        height: i32::try_from(image.height()).unwrap(),
         mime_type,
         file_size,
         flags,

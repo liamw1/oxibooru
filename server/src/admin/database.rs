@@ -93,9 +93,9 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
                 continue;
             };
 
-            let file_size = path.metadata()?.len();
+            let file_size = filesystem::file_size(&path)?;
             diesel::update(user::table)
-                .set(user::custom_avatar_size.eq(file_size as i64))
+                .set(user::custom_avatar_size.eq(file_size))
                 .filter(user::name.eq(username))
                 .execute(conn)?;
             progress.increment();
@@ -110,9 +110,9 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
                 continue;
             };
 
-            let file_size = path.metadata()?.len();
+            let file_size = filesystem::file_size(&path)?;
             diesel::update(post::table)
-                .set(post::generated_thumbnail_size.eq(file_size as i64))
+                .set(post::generated_thumbnail_size.eq(file_size))
                 .filter(post::id.eq(post_id))
                 .execute(conn)?;
             progress.increment();
@@ -127,9 +127,9 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
                 continue;
             };
 
-            let file_size = path.metadata()?.len();
+            let file_size = filesystem::file_size(&path)?;
             diesel::update(post::table)
-                .set(post::custom_thumbnail_size.eq(file_size as i64))
+                .set(post::custom_thumbnail_size.eq(file_size))
                 .filter(post::id.eq(post_id))
                 .execute(conn)?;
             progress.increment();
@@ -343,9 +343,9 @@ pub fn reset_statistics() -> ApiResult<()> {
                 continue;
             };
 
-            let file_size = path.metadata()?.len();
+            let file_size = filesystem::file_size(&path)?;
             diesel::update(post::table)
-                .set(post::file_size.eq(file_size as i64))
+                .set(post::file_size.eq(file_size))
                 .filter(post::id.eq(post_id))
                 .execute(&mut conn)?;
             progress.increment();

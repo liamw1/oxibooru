@@ -136,12 +136,11 @@ fn flash_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
 
     // Sort images in order of decreasing effective width after cropping for thumbnails
     images.sort_by_key(|image| {
-        let thumbnail_aspect_ratio =
-            config::get().thumbnails.post_width as f32 / config::get().thumbnails.post_height as f32;
-        let image_apsect_ratio = image.width() as f32 / image.height() as f32;
+        let (thumbnail_width, thumbnail_height) = config::get().thumbnails.post_dimensions();
 
-        let effective_width = match image_apsect_ratio > thumbnail_aspect_ratio {
-            true => (image.height() as f32 * thumbnail_aspect_ratio) as u32,
+        // Condition is equivalent to image_aspect_ratio > config_thumbnail_aspect_ratio
+        let effective_width = match image.width() * thumbnail_height > thumbnail_width * image.height() {
+            true => image.height() * thumbnail_width / thumbnail_height,
             false => image.width(),
         };
         u32::MAX - effective_width

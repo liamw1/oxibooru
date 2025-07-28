@@ -314,7 +314,7 @@ impl ToSql<SmallInt, Pg> for PostFlags {
 impl FromSql<SmallInt, Pg> for PostFlags {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         i16::from_sql(value).map(|database_value| Self {
-            flags: database_value as u16,
+            flags: database_value.cast_unsigned(),
         })
     }
 }

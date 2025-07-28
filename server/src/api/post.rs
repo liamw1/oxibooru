@@ -425,9 +425,9 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
 
     let new_post = NewPost {
         user_id: client.id,
-        file_size: content_properties.file_size as i64,
-        width: content_properties.width as i32,
-        height: content_properties.height as i32,
+        file_size: content_properties.file_size,
+        width: content_properties.width,
+        height: content_properties.height,
         safety: body.safety,
         type_: PostType::from(content_properties.mime_type),
         mime_type: content_properties.mime_type,
@@ -710,9 +710,9 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
             new_snapshot_data.checksum = hex::encode(&content_properties.checksum);
 
             // Update content metadata
-            new_post.file_size = content_properties.file_size as i64;
-            new_post.width = content_properties.width as i32;
-            new_post.height = content_properties.height as i32;
+            new_post.file_size = content_properties.file_size;
+            new_post.width = content_properties.width;
+            new_post.height = content_properties.height;
             new_post.type_ = PostType::from(content_properties.mime_type);
             new_post.mime_type = content_properties.mime_type;
             new_post.checksum = content_properties.checksum;

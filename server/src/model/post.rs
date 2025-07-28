@@ -278,7 +278,7 @@ where
     }
 
     let _oid = bytes.read_i32::<NetworkEndian>()?;
-    let num_elements = bytes.read_i32::<NetworkEndian>()?;
+    let num_elements = bytes.read_u32::<NetworkEndian>()?;
     let _lower_bound = bytes.read_i32::<NetworkEndian>()?;
     if num_elements as usize != N {
         return Err(format!("expected array of length {N} but found array of length {num_elements}").into());

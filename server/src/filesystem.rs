@@ -2,6 +2,7 @@ use crate::config;
 use crate::content::hash::{self, PostHash};
 use crate::content::thumbnail::ThumbnailCategory;
 use crate::model::enums::MimeType;
+use image::error::ImageError;
 use image::{DynamicImage, ImageResult};
 use std::ffi::OsStr;
 use std::io::ErrorKind;
@@ -42,6 +43,12 @@ pub fn temporary_upload_filepath(filename: &str) -> PathBuf {
     format!("{}/temporary-uploads/{}", config::data_dir(), filename).into()
 }
 
+/// Returns the size of the file at `path` in bytes as an i64
+pub fn file_size(path: &Path) -> std::io::Result<i64> {
+    path.metadata()
+        .map(|metadata| i64::try_from(metadata.len()).expect("File size is less than i64::MAX"))
+}
+
 /// Saves raw bytes to temporary upload folder as a `mime_type`-file to disk.
 /// Returns name of the file written.
 pub fn save_uploaded_file(data: &[u8], mime_type: MimeType) -> std::io::Result<String> {
@@ -56,13 +63,12 @@ pub fn save_uploaded_file(data: &[u8], mime_type: MimeType) -> std::io::Result<S
 
 /// Saves custom avatar `thumbnail` for user with name `username` to disk.
 /// Returns size of the thumbnail in bytes.
-pub fn save_custom_avatar(username: &str, thumbnail: &DynamicImage) -> ImageResult<u64> {
+pub fn save_custom_avatar(username: &str, thumbnail: &DynamicImage) -> ImageResult<i64> {
     create_dir(Directory::Avatars)?;
     let avatar_path = hash::custom_avatar_path(username);
 
     thumbnail.to_rgb8().save(&avatar_path)?;
-    let metadata = std::fs::metadata(avatar_path)?;
-    Ok(metadata.len())
+    file_size(&avatar_path).map_err(ImageError::from)
 }
 
 /// Deletes custom avatar for user with name `username` from disk, if it exists.
@@ -77,7 +83,7 @@ pub fn save_post_thumbnail(
     post: &PostHash,
     thumbnail: &DynamicImage,
     thumbnail_type: ThumbnailCategory,
-) -> ImageResult<u64> {
+) -> ImageResult<i64> {
     let thumbnail_path = match thumbnail_type {
         ThumbnailCategory::Generated => {
             create_dir(Directory::GeneratedThumbnails)?;
@@ -90,8 +96,7 @@ pub fn save_post_thumbnail(
     };
 
     thumbnail.to_rgb8().save(&thumbnail_path)?;
-    let metadata = std::fs::metadata(thumbnail_path)?;
-    Ok(metadata.len())
+    file_size(&thumbnail_path).map_err(ImageError::from)
 }
 
 /// Deletes thumbnail of `post` from disk, if it exists.

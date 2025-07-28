@@ -28,7 +28,7 @@ pub fn avatar(conn: &mut PgConnection, user_id: i64, name: &str, avatar: &Dynami
 
     let avatar_size = filesystem::save_custom_avatar(name, avatar)?;
     diesel::update(user::table.find(user_id))
-        .set(user::custom_avatar_size.eq(avatar_size as i64))
+        .set(user::custom_avatar_size.eq(avatar_size))
         .execute(conn)?;
     Ok(())
 }

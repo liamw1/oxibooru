@@ -107,7 +107,7 @@ fn generate_temporary_password(length: u8) -> String {
 
     let rng = &mut OsRng;
     (0..length)
-        .map(|_| b'!' + (rng.next_u32() % u32::from(NUM_CHARACTERS)) as u8)
+        .map(|_| b'!' + u8::try_from(rng.next_u32() % u32::from(NUM_CHARACTERS)).unwrap())
         .map(char::from)
         .collect()
 }
