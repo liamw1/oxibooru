@@ -111,55 +111,54 @@ impl Error {
         };
 
         match self {
-            Self::BadExtension(_) => StatusCode::BAD_REQUEST,
-            Self::BadHash(_) => StatusCode::BAD_REQUEST,
-            Self::BadHeader(_) => StatusCode::BAD_REQUEST,
-            Self::ContentTypeMismatch(..) => StatusCode::BAD_REQUEST,
-            Self::CyclicDependency(_) => StatusCode::BAD_REQUEST,
-            Self::DeleteDefault(_) => StatusCode::BAD_REQUEST,
-            Self::EmptySwf => StatusCode::BAD_REQUEST,
-            Self::EmptyVideo => StatusCode::BAD_REQUEST,
+            Self::BadExtension(_)
+            | Self::BadHash(_)
+            | Self::BadHeader(_)
+            | Self::ContentTypeMismatch(..)
+            | Self::CyclicDependency(_)
+            | Self::DeleteDefault(_)
+            | Self::EmptySwf
+            | Self::EmptyVideo
+            | Self::FromStr(_)
+            | Self::InvalidEmailAddress(_)
+            | Self::InvalidMetadataType
+            | Self::InvalidSort
+            | Self::InvalidTime(_)
+            | Self::InvalidUserRank
+            | Self::MissingContent(_)
+            | Self::MissingContentType
+            | Self::MissingFormData
+            | Self::MissingMetadata
+            | Self::Multipart(_)
+            | Self::NoEmail
+            | Self::NoNamesGiven(_)
+            | Self::NotAnInteger(_)
+            | Self::Request(_)
+            | Self::SelfMerge(_)
+            | Self::VideoDecoding(_) => StatusCode::BAD_REQUEST,
+            Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
+            Self::InsufficientPrivileges | Self::NotLoggedIn => StatusCode::FORBIDDEN,
+            Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::ResourceModified => StatusCode::CONFLICT,
+            Self::FailedEmailTransport(_)
+            | Self::InvalidEmail(_)
+            | Self::InvalidHeader(_)
+            | Self::Image(_)
+            | Self::MissingSmtpInfo
+            | Self::StdIo(_)
+            | Self::SwfDecoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::ExpressionFailsRegex(..) => StatusCode::BAD_GATEWAY,
+            Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
                 AuthenticationError::FailedQuery(err) => query_error_status_code(err),
                 _ => StatusCode::UNAUTHORIZED,
             },
-            Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
-            Self::FailedEmailTransport(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::FailedQuery(err) => query_error_status_code(err),
-            Self::FromStr(_) => StatusCode::BAD_REQUEST,
-            Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
-            Self::InvalidEmailAddress(_) => StatusCode::BAD_REQUEST,
-            Self::InvalidEmail(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::InvalidHeader(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::InvalidMetadataType => StatusCode::BAD_REQUEST,
-            Self::InvalidSort => StatusCode::BAD_REQUEST,
-            Self::InvalidTime(_) => StatusCode::BAD_REQUEST,
-            Self::InvalidUserRank => StatusCode::BAD_REQUEST,
-            Self::Image(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::JsonSerialization(err) => match err.classify() {
                 Category::Io | Category::Eof => StatusCode::INTERNAL_SERVER_ERROR,
                 Category::Syntax | Category::Data => StatusCode::BAD_REQUEST,
             },
-            Self::MissingContent(_) => StatusCode::BAD_REQUEST,
-            Self::MissingContentType => StatusCode::BAD_REQUEST,
-            Self::MissingFormData => StatusCode::BAD_REQUEST,
-            Self::MissingMetadata => StatusCode::BAD_REQUEST,
-            Self::MissingSmtpInfo => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::Multipart(_) => StatusCode::BAD_REQUEST,
-            Self::NoEmail => StatusCode::BAD_REQUEST,
-            Self::NoNamesGiven(_) => StatusCode::BAD_REQUEST,
-            Self::NotAnInteger(_) => StatusCode::BAD_REQUEST,
-            Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::NotLoggedIn => StatusCode::FORBIDDEN,
-            Self::Request(_) => StatusCode::BAD_REQUEST,
-            Self::ResourceModified => StatusCode::CONFLICT,
-            Self::SelfMerge(_) => StatusCode::BAD_REQUEST,
-            Self::StdIo(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::SwfDecoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
-            Self::VideoDecoding(_) => StatusCode::BAD_REQUEST,
+            Self::FailedQuery(err) => query_error_status_code(err),
         }
     }
 

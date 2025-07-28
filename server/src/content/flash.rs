@@ -51,11 +51,10 @@ pub enum JpegTagFormat {
 /// Determines the format of the image data in `data` from a DefineBitsJPEG2/3 tag.
 pub fn determine_jpeg_tag_format(data: &[u8]) -> JpegTagFormat {
     match data {
-        [0xff, 0xd8, ..] => JpegTagFormat::Jpeg,
-        [0xff, 0xd9, 0xff, 0xd8, ..] => JpegTagFormat::Jpeg, // Erroneous header in SWF
+        // Erroneous header in SWF
+        [0xff, 0xd9, 0xff, 0xd8, ..] | [0xff, 0xd8, ..] => JpegTagFormat::Jpeg,
         [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, ..] => JpegTagFormat::Png,
-        [0x47, 0x49, 0x46, 0x38, 0x37, 0x61, ..] => JpegTagFormat::Gif, // GIF87a
-        [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, ..] => JpegTagFormat::Gif, // GIF89a
+        [0x47, 0x49, 0x46, 0x38, 0x37 | 0x39, 0x61, ..] => JpegTagFormat::Gif, // GIF87a and GIF89a
         _ => JpegTagFormat::Unknown,
     }
 }

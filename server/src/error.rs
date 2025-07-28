@@ -88,12 +88,11 @@ impl ErrorKind for argon2::password_hash::Error {
             Self::OutputSize { .. } => "UnexpectedOutputSize",
             Self::ParamNameDuplicated => "ParamNameDuplicated",
             Self::ParamNameInvalid => "ParamNameInvalid",
-            Self::ParamValueInvalid(err) => err.kind(),
             Self::ParamsMaxExceeded => "ParamsMaxExceeded",
+            Self::ParamValueInvalid(err) | Self::SaltInvalid(err) => err.kind(),
             Self::Password => "InvalidPassword",
             Self::PhcStringField => "InvalidPhcStringField",
             Self::PhcStringTrailingData => "PhcStringTrailingData",
-            Self::SaltInvalid(err) => err.kind(),
             Self::Version => "InvalidVersion",
             _ => "UnknownArgonError",
         }

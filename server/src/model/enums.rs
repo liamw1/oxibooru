@@ -72,14 +72,9 @@ pub enum PostType {
 impl From<MimeType> for PostType {
     fn from(value: MimeType) -> Self {
         match value {
-            MimeType::Bmp => Self::Image,
+            MimeType::Bmp | MimeType::Jpeg | MimeType::Png | MimeType::Webp => Self::Image,
             MimeType::Gif => Self::Animation,
-            MimeType::Jpeg => Self::Image,
-            MimeType::Png => Self::Image,
-            MimeType::Webp => Self::Image,
-            MimeType::Mp4 => Self::Video,
-            MimeType::Mov => Self::Video,
-            MimeType::Webm => Self::Video,
+            MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Self::Video,
             MimeType::Swf => Self::Flash,
         }
     }
