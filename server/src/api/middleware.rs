@@ -88,7 +88,7 @@ fn post_snapshot(snapshot: Snapshot) {
     }
 
     let snapshot = Arc::new(snapshot);
-    for url in config::get().webhooks.iter() {
+    for url in &config::get().webhooks {
         tokio::spawn(post_to_webhook(url.clone(), snapshot.clone()));
     }
 }

@@ -175,9 +175,9 @@ pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> Api
         .copied()
         .map(|mut implication| {
             if implication.parent_id == absorbed_id {
-                implication.parent_id = merge_to_id
+                implication.parent_id = merge_to_id;
             } else if implication.child_id == absorbed_id {
-                implication.child_id = merge_to_id
+                implication.child_id = merge_to_id;
             }
             implication
         })
@@ -202,9 +202,9 @@ pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> Api
         .copied()
         .map(|mut suggestion| {
             if suggestion.parent_id == absorbed_id {
-                suggestion.parent_id = merge_to_id
+                suggestion.parent_id = merge_to_id;
             } else if suggestion.child_id == absorbed_id {
-                suggestion.child_id = merge_to_id
+                suggestion.child_id = merge_to_id;
             }
             suggestion
         })

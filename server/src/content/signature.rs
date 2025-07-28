@@ -70,6 +70,7 @@ pub fn generate_indexes(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) 
     const _: () = assert!(NUM_REDUCED_SYMBOLS % 2 == 1); // Number of reduced symbols must be odd
     const NUM_WORD_DIGITS: u32 = NUM_WORDS.ilog(NUM_REDUCED_SYMBOLS as usize) + 1; // Number of trits it takes to store NUM_WORDS
     const _: () = assert!(NUM_LETTERS as u32 + NUM_WORD_DIGITS <= u32::MAX.ilog(NUM_REDUCED_SYMBOLS)); // Make sure that information needed can't exceed u32 trits
+    const CLAMP_VALUE: i8 = NUM_REDUCED_SYMBOLS as i8 / 2;
 
     let signature = uncompress(compressed_signature);
     let word_positions: [usize; NUM_WORDS] = Interval::new(0, signature.len() - NUM_LETTERS).linspace();
@@ -78,7 +79,6 @@ pub fn generate_indexes(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) 
         signature[pos..(pos + NUM_LETTERS)].try_into().unwrap()
     });
 
-    const CLAMP_VALUE: i8 = NUM_REDUCED_SYMBOLS as i8 / 2;
     std::array::from_fn(|word_index| {
         let word = words[word_index];
         let encoded_letters: u32 = word
@@ -187,7 +187,7 @@ fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
     let mut cropped_y_bounds = crop(&row_deltas);
 
     // Compute grid square radius
-    let grid_square_size = 0.5 + std::cmp::min(cropped_x_bounds.length(), cropped_y_bounds.length()) as f64 / 20.0;
+    let grid_square_size = 0.5 + f64::from(std::cmp::min(cropped_x_bounds.length(), cropped_y_bounds.length())) / 20.0;
     let grid_square_radius = (grid_square_size / 2.0).to_u32().unwrap();
 
     // Adjust cropped bounds so that grid squares won't protrude into image borders
@@ -258,7 +258,7 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(
         .copied()
         .filter(|&diff| filter(diff))
         .collect::<Vec<_>>();
-    filtered_values.sort();
+    filtered_values.sort_unstable();
 
     let chunk_size = match filtered_values.len() % LUMINANCE_LEVELS {
         0 => filtered_values.len() / LUMINANCE_LEVELS,

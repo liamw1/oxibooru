@@ -192,7 +192,7 @@ fn get_post_score_counts(
         .map(|like_counts| {
             resource::order_like(like_counts, users, |&(id, _)| id)
                 .into_iter()
-                .map(|like_count| like_count.map(|(_, count)| count).unwrap_or(0))
+                .map(|like_count| like_count.map_or(0, |(_, count)| count))
                 .map(PrivateData::Expose)
                 .collect()
         })

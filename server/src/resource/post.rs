@@ -529,7 +529,7 @@ fn get_users_who_favorited(conn: &mut PgConnection, posts: &[Post]) -> QueryResu
 
     let mut users_grouped_by_posts: Vec<Vec<(SmallString, AvatarStyle)>> =
         std::iter::repeat_with(Vec::new).take(posts.len()).collect();
-    for (post_id, username, avatar_style) in users_who_favorited.into_iter() {
+    for (post_id, username, avatar_style) in users_who_favorited {
         let index = posts.iter().position(|post| post.id == post_id).unwrap();
         users_grouped_by_posts[index].push((username, avatar_style));
     }

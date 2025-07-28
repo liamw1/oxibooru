@@ -320,7 +320,7 @@ async fn reverse_search(
             // Search for similar images candidates
             let similar_signature_candidates = PostSignature::find_similar_candidates(
                 conn,
-                signature::generate_indexes(&content_properties.signature),
+                &signature::generate_indexes(&content_properties.signature),
             )?;
             info!("Found {} similar signatures", similar_signature_candidates.len());
 
@@ -778,6 +778,10 @@ async fn delete(
     Path(post_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
+    // Post relation cascade deletion can cause deadlocks when deleting related posts in quick
+    // succession, so we lock an aysnchronous mutex when deleting if the post has any relations.
+    static ANTI_DEADLOCK_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
+
     api::verify_privilege(client, config::privileges().post_delete)?;
 
     let relation_count: i64 = post_statistics::table
@@ -785,9 +789,6 @@ async fn delete(
         .select(post_statistics::relation_count)
         .first(&mut db::get_connection()?)?;
 
-    // Post relation cascade deletion can cause deadlocks when deleting related posts in quick
-    // succession, so we lock an aysnchronous mutex when deleting if the post has any relations.
-    static ANTI_DEADLOCK_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
     let _lock;
     if relation_count > 0 {
         _lock = ANTI_DEADLOCK_MUTEX.lock().await;

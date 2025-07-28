@@ -50,7 +50,7 @@ pub async fn extract<const N: usize>(mut form_data: Multipart, fields: [PartName
         match file_info {
             Some((index, mime_type)) => files[index] = Some(FileContents { data, mime_type }),
             None => metadata = Some(data),
-        };
+        }
     }
     Ok(Body { files, metadata })
 }
@@ -67,9 +67,7 @@ fn get_mime_type(field: &Field) -> ApiResult<MimeType> {
     let content_type = field.content_type().map(str::trim);
 
     match (extension, content_type) {
-        (Some(ext), None) | (Some(ext), Some("application/octet-stream")) => {
-            MimeType::from_extension(ext).map_err(api::Error::from)
-        }
+        (Some(ext), None | Some("application/octet-stream")) => MimeType::from_extension(ext).map_err(api::Error::from),
         (Some(ext), Some(content_type)) => {
             let mime_type = MimeType::from_extension(ext)?;
             if MimeType::from_str(content_type) != Ok(mime_type) {

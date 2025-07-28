@@ -243,7 +243,7 @@ pub struct PostSignature {
 }
 
 impl PostSignature {
-    pub fn find_similar_candidates(conn: &mut PgConnection, words: [i32; NUM_WORDS]) -> QueryResult<Vec<Self>> {
+    pub fn find_similar_candidates(conn: &mut PgConnection, words: &[i32; NUM_WORDS]) -> QueryResult<Vec<Self>> {
         conn.transaction(|conn| {
             // Postgres really wants to perform a seq scan here, which is much slower than
             // an index scan. We temporarily disable seq scans to force it to use the index scan.
@@ -285,7 +285,7 @@ where
     }
 
     let mut deserialized_array = [T::default(); N];
-    for element in deserialized_array.iter_mut() {
+    for element in &mut deserialized_array {
         let elem_size = bytes.read_i32::<NetworkEndian>()?;
         let (elem_bytes, new_bytes) = bytes.split_at(elem_size.try_into()?);
         bytes = new_bytes;

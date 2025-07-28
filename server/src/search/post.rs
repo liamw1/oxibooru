@@ -91,7 +91,7 @@ pub struct QueryBuilder<'a> {
 impl<'a> QueryBuilder<'a> {
     pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
         let search = SearchCriteria::new(search_criteria, Token::Tag).map_err(Box::from)?;
-        for sort in search.sorts.iter() {
+        for sort in &search.sorts {
             match sort.kind {
                 Token::ContentChecksum | Token::NoteText | Token::Special => return Err(api::Error::InvalidSort),
                 _ => (),

@@ -62,7 +62,7 @@ impl SnapshotData {
     fn sort_fields(&mut self) {
         self.tags.sort_unstable();
         self.relations.sort_unstable();
-        self.notes.sort_unstable_by_key(|note| note.id());
+        self.notes.sort_unstable_by_key(Note::id);
     }
 }
 

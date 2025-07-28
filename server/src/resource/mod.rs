@@ -80,10 +80,10 @@ where
         let value_id = get_id(&values[index]);
         let correct_index = order.iter().position(|&id| id == value_id).unwrap();
         assert!(correct_index >= index, "Value id is not unique");
-        if index != correct_index {
-            values.swap(index, correct_index);
-        } else {
+        if index == correct_index {
             index += 1;
+        } else {
+            values.swap(index, correct_index);
         }
     }
     values
@@ -102,7 +102,7 @@ where
     assert!(unordered_values.len() <= ordered_values.len());
 
     let mut results: Vec<Option<V>> = std::iter::repeat_with(|| None).take(ordered_values.len()).collect();
-    for value in unordered_values.into_iter() {
+    for value in unordered_values {
         let value_id = get_id(&value);
         let index = ordered_values
             .iter()

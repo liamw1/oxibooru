@@ -175,7 +175,7 @@ pub fn remove_invalid_jpeg_data(data: &[u8]) -> Cow<[u8]> {
 /// Some SWFs report unreasonable bitmap dimensions (#1191).
 /// Fail before decoding such bitmaps to avoid panics.
 fn validate_size(width: u16, height: u16) -> Result<(), Error> {
-    const INVALID_SIZE: usize = 0x8000000; // 128MB
+    const INVALID_SIZE: usize = 0x0800_0000; // 128MB
 
     let size = (width as usize).saturating_mul(height as usize);
     if size >= INVALID_SIZE {

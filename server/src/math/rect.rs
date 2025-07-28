@@ -147,7 +147,7 @@ where
         }
     }
 
-    pub fn bounds(&self) -> IRect<u32> {
+    pub fn bounds() -> IRect<u32> {
         IRect::new_zero_based(N as u32 - 1, M as u32 - 1)
     }
 
@@ -162,7 +162,7 @@ where
 
     pub fn get<I: PrimInt>(&self, index: IPoint2<I>) -> Option<T> {
         let converted_index = <IPoint2<u32> as From<IPoint2<I>>>::from(&index)?;
-        self.bounds().contains(index).then(|| self.at(converted_index))
+        Self::bounds().contains(index).then(|| self.at(converted_index))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
@@ -170,7 +170,7 @@ where
     }
 
     pub fn signed_indexed_iter(&self) -> impl Iterator<Item = (IPoint2<i32>, &T)> {
-        let signed_bounds = self.bounds().to_signed().unwrap();
+        let signed_bounds = Self::bounds().to_signed().unwrap();
         signed_bounds.iter().zip(self.iter())
     }
 }

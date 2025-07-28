@@ -133,7 +133,6 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
             "help" => {
                 println!();
                 print_info();
-                continue;
             }
             _ => return buffer.trim(),
         }
@@ -147,12 +146,11 @@ where
     let mut buffer = String::new();
     loop {
         match function(conn, &mut buffer) {
-            Ok(LoopState::Continue) => continue,
+            Ok(LoopState::Continue) => (),
             Ok(LoopState::Stop) => break,
             Ok(LoopState::Exit) => std::process::exit(0),
             Err(err) => {
                 error!("{err}\n");
-                continue;
             }
         }
     }

@@ -74,7 +74,7 @@ impl RingCache {
     }
 
     fn reset(&mut self) {
-        self.data = VecDeque::new()
+        self.data = VecDeque::new();
     }
 }
 

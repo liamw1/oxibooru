@@ -24,7 +24,7 @@ pub fn reset_password(conn: &mut PgConnection) {
             Ok(true) => (),
             Ok(false) => return Err(String::from("No user with this username exists")),
             Err(err) => return Err(format!("Could not determine if user exists for reason: {err}")),
-        };
+        }
 
         let password = admin::prompt_user_input("New password", buffer);
         if let Ok(state) = LoopState::try_from(password) {

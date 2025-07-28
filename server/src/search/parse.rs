@@ -73,7 +73,7 @@ where
 fn unescape(text: &str) -> Cow<str> {
     if text.contains('\\') {
         let mut escaped = text.starts_with('\\');
-        let start_index = if escaped { 1 } else { 0 };
+        let start_index = usize::from(escaped);
         Cow::Owned(
             text.chars()
                 .skip(start_index)
@@ -164,7 +164,7 @@ fn parse_time(time: &str) -> Result<Range<DateTime>, TimeParsingError> {
         .ok_or(TimeParsingError::TooFewArgs)
         .and_then(|value| value.parse().map_err(TimeParsingError::from))?;
     let month = date_iterator.next().map(parse_month).transpose()?;
-    let day: Option<u8> = date_iterator.next().map(|value| value.parse()).transpose()?;
+    let day: Option<u8> = date_iterator.next().map(str::parse).transpose()?;
     if date_iterator.next().is_some() {
         return Err(TimeParsingError::TooManyArgs);
     }

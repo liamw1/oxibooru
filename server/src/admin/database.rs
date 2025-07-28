@@ -76,7 +76,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
                 match path.extension().map(OsStr::to_string_lossy) {
                     Some(extension) => warn!("Post {post_id} has unsupported file extension {extension}"),
                     None => warn!("Post {post_id} has no file extension"),
-                };
+                }
 
                 let mut new_path = PostHash::new(post_id).content_path(MimeType::Png);
                 new_path.set_extension(path.extension().unwrap_or(OsStr::new("")));

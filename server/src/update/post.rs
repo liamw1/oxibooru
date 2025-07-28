@@ -118,9 +118,9 @@ pub fn merge(
         .copied()
         .map(|mut relation| {
             if relation.parent_id == absorbed_id {
-                relation.parent_id = merge_to_id
+                relation.parent_id = merge_to_id;
             } else if relation.child_id == absorbed_id {
-                relation.child_id = merge_to_id
+                relation.child_id = merge_to_id;
             }
             relation
         })

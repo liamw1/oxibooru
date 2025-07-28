@@ -127,7 +127,7 @@ fn recompute_index_in_parallel(
     {
         Ok(_) => progress.increment(),
         Err(err) => error!("Index update failed for post {post_id} for reason: {err}"),
-    };
+    }
     Ok(())
 }
 
@@ -182,7 +182,7 @@ fn recompute_checksum_in_parallel(
     {
         Ok(_) => progress.increment(),
         Err(err) => error!("Checksum update failed for post {post_id} for reason: {err}"),
-    };
+    }
     Ok(())
 }
 

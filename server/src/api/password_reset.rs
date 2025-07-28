@@ -116,13 +116,14 @@ async fn reset_password(
     Path(username): Path<String>,
     Json(confirmation): Json<ResetToken>,
 ) -> ApiResult<Json<NewPassword>> {
+    const TEMPORARY_PASSWORD_LENGTH: u8 = 16;
+
     db::get_connection()?.transaction(|conn| {
         let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
         if confirmation.token != hash::compute_url_safe_hash(&password_salt) {
             return Err(api::Error::UnauthorizedPasswordReset);
         }
 
-        const TEMPORARY_PASSWORD_LENGTH: u8 = 16;
         let temporary_password = generate_temporary_password(TEMPORARY_PASSWORD_LENGTH);
 
         let salt = SaltString::generate(&mut OsRng);

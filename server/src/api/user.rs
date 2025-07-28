@@ -308,7 +308,7 @@ async fn update(
                 filesystem::move_file(&old_custom_avatar_path, &new_custom_avatar_path)?;
             }
         }
-        update::user::last_edit_time(conn, user_id).map(|_| (user_id, visibility))
+        update::user::last_edit_time(conn, user_id).map(|()| (user_id, visibility))
     })?;
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility))
         .map(Json)

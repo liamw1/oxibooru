@@ -89,9 +89,7 @@ pub fn create_url(database_override: Option<&str>) -> String {
     let user = std::env::var("POSTGRES_USER").unwrap();
     let password = std::env::var("POSTGRES_PASSWORD").unwrap();
     let hostname = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| String::from("localhost"));
-    let database = database_override
-        .map(Cow::Borrowed)
-        .unwrap_or_else(|| Cow::Owned(std::env::var("POSTGRES_DB").unwrap()));
+    let database = database_override.map_or_else(|| Cow::Owned(std::env::var("POSTGRES_DB").unwrap()), Cow::Borrowed);
 
     format!("postgres://{user}:{password}@{hostname}/{database}")
 }
