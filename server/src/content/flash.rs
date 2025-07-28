@@ -76,8 +76,8 @@ pub fn decode_define_bits_jpeg(data: &[u8], alpha_data: Option<&[u8]>) -> Result
     }
 }
 
-/// Glues the JPEG encoding tables from a JPEGTables SWF tag to the JPEG data
-/// in a DefineBits tag, producing complete JPEG data suitable for a decoder.
+/// Glues the JPEG encoding tables from a `JPEGTables` SWF tag to the JPEG data
+/// in a `DefineBits` tag, producing complete JPEG data suitable for a decoder.
 pub fn glue_tables_to_jpeg<'a>(jpeg_data: &'a [u8], jpeg_tables: Option<&'a [u8]>) -> Cow<'a, [u8]> {
     if let Some(jpeg_tables) = jpeg_tables {
         if jpeg_tables.len() >= 2 {
@@ -95,7 +95,7 @@ pub fn glue_tables_to_jpeg<'a>(jpeg_data: &'a [u8], jpeg_tables: Option<&'a [u8]
     Cow::Borrowed(jpeg_data)
 }
 
-/// Removes potential invalid JPEG data from SWF DefineBitsJPEG tags.
+/// Removes potential invalid JPEG data from SWF `DefineBitsJPEG` tags.
 /// These bytes need to be removed for the JPEG to decode properly.
 pub fn remove_invalid_jpeg_data(data: &[u8]) -> Cow<[u8]> {
     // SWF19 errata p.138:
@@ -223,8 +223,8 @@ fn decode_jpeg(jpeg_data: &[u8], alpha_data: Option<&[u8]>) -> Result<DynamicIma
     Ok(jpeg)
 }
 
-/// Decodes the bitmap data in DefineBitsLossless tag into RGBA.
-/// DefineBitsLossless is Zlib encoded pixel data (similar to PNG), possibly
+/// Decodes the bitmap data in `DefineBitsLossless` tag into RGBA.
+/// `DefineBitsLossless` is Zlib encoded pixel data (similar to PNG), possibly
 /// palletized.
 pub fn decode_define_bits_lossless(swf_tag: &swf::DefineBitsLossless) -> Result<Option<DynamicImage>, Error> {
     // Decompress the image data (DEFLATE compression).

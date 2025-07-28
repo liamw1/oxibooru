@@ -13,7 +13,7 @@ use diesel::dsl::max;
 use diesel::prelude::*;
 use std::collections::HashSet;
 
-/// Updates last_edit_time of tag with given `tag_id`.
+/// Updates `last_edit_time` of tag with given `tag_id`.
 pub fn last_edit_time(conn: &mut PgConnection, tag_id: i64) -> ApiResult<()> {
     diesel::update(tag::table.find(tag_id))
         .set(tag::last_edit_time.eq(DateTime::now()))

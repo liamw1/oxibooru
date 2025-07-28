@@ -49,9 +49,9 @@ pub struct TagName {
 }
 
 impl TagName {
-    /// Creates an expression that filters tag_name rows to only the primary names.
+    /// Creates an expression that filters `tag_name` rows to only the primary names.
     /// This exists because certain queries are much slower when using the nearly-equivalent
-    /// tag_name::order.eq(0) (as much as 15x). Presumably this is because Diesel uses bind
+    /// `tag_name::order.eq(0)` (as much as 15x). Presumably this is because Diesel uses bind
     /// parameters and the Postgres can't optimize these queries as well when it doesn't know
     /// the exact value of `order`.
     pub fn primary() -> SqlLiteral<Bool, UncheckedBind<SqlLiteral<Bool>, tag_name::order>> {

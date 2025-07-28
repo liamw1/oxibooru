@@ -44,7 +44,7 @@ pub fn get_or_compute_properties(content_token: String) -> ApiResult<CachedPrope
     }
 }
 
-/// A simple ring buffer that stores [CachedProperties].
+/// A simple ring buffer that stores [`CachedProperties`].
 struct RingCache {
     data: VecDeque<(String, CachedProperties)>,
     max_size: usize,
@@ -78,7 +78,7 @@ impl RingCache {
     }
 }
 
-/// Returns a [MutexGuard] to content properties cache.
+/// Returns a [`MutexGuard`] to content properties cache.
 fn get_cache_guard() -> MutexGuard<'static, RingCache> {
     /// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
     const CONTENT_CACHE_SIZE: usize = 10;

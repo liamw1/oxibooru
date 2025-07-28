@@ -63,7 +63,7 @@ pub fn distance(signature_a_cache: &Cache, signature_b_compressed: &[i64; COMPRE
 /// The "letters" of each word are values in the image signature, clamped between \[-1, 1\].
 /// Therefore, each word can be represented by a number in base-3, which we encode into an u32
 /// (which we then convert to an i32). The highest N trits of the u32 are reserved for storing
-/// the word index, where N is the number of trits required to store NUM_WORDS. This is so we
+/// the word index, where N is the number of trits required to store `NUM_WORDS`. This is so we
 /// can use the `&&` array operator in Postgres to find matching indexes quickly.
 pub fn generate_indexes(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> [i32; NUM_WORDS] {
     const NUM_REDUCED_SYMBOLS: u32 = 3;
@@ -273,7 +273,7 @@ fn compute_cutoffs<F: Fn(i16) -> bool>(
 }
 
 /// The final stage of image signature generation. Maps each value in `differences` to the
-/// interval \[0, NUM_SYMBOLS\] based on their sign and relative magnitude.
+/// interval \[0, `NUM_SYMBOLS`\] based on their sign and relative magnitude.
 fn normalize(differences: &[i16; SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
     let dark_cutoffs = compute_cutoffs(differences, |diff: i16| diff < -IDENTICAL_TOLERANCE);
     let light_cutoffs = compute_cutoffs(differences, |diff: i16| diff > IDENTICAL_TOLERANCE);

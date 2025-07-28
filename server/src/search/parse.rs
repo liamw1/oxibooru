@@ -89,7 +89,7 @@ fn unescape(text: &str) -> Cow<str> {
     }
 }
 
-/// Finds the index of next unescaped `delimiter`` in `text`.
+/// Finds the index of next unescaped `delimiter` in `text`.
 fn next_split(text: &str, delimiter: char) -> Option<usize> {
     text.char_indices()
         .filter_map(|(index, c)| (c == delimiter).then_some(index))

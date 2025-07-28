@@ -183,7 +183,7 @@ struct ParsedSort<T> {
 }
 
 /// A cache that stores results from what would otherwise be subqueries in preparation for a
-/// search query. This is used in place of subqueries because PostgreSQL does a poor job of
+/// search query. This is used in place of subqueries because `PostgreSQL` does a poor job of
 /// optimizing queries that contain multiple subquery filters.
 struct QueryCache {
     matches: Option<HashSet<i64>>,
@@ -199,14 +199,14 @@ impl QueryCache {
         }
     }
 
-    /// Returns a new [QueryCache] if `self` is empty and [None] otherwise.
-    /// This function exists because of aliasing issues in mutable QueryBuilder functions.
+    /// Returns a new [`QueryCache`] if `self` is empty and [None] otherwise.
+    /// This function exists because of aliasing issues in mutable `QueryBuilder` functions.
     fn clone_if_empty(&self) -> Option<Self> {
         let is_empty = self.matches.is_none() && self.nonmatches.is_none();
         is_empty.then(Self::new)
     }
 
-    /// If `value` is [Some], replaces content of `self` with a semantically equivalent [QueryCache].
+    /// If `value` is [Some], replaces content of `self` with a semantically equivalent [`QueryCache`].
     /// Does nothing if `value` is [None].
     fn replace(&mut self, value: Option<Self>) {
         if let Some(cache) = value {

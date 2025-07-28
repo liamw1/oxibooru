@@ -18,7 +18,7 @@ use diesel::prelude::*;
 use image::DynamicImage;
 use std::collections::HashSet;
 
-/// Updates last_edit_time of post with given `post_id`.
+/// Updates `last_edit_time` of post with given `post_id`.
 pub fn last_edit_time(conn: &mut PgConnection, post_id: i64) -> ApiResult<()> {
     diesel::update(post::table.find(post_id))
         .set(post::last_edit_time.eq(DateTime::now()))

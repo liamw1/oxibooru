@@ -14,7 +14,7 @@ pub fn last_login_time(user_id: i64) -> ApiResult<()> {
     Ok(())
 }
 
-/// Updates last_edit_time of user with given `user_id`.
+/// Updates `last_edit_time` of user with given `user_id`.
 pub fn last_edit_time(conn: &mut PgConnection, user_id: i64) -> ApiResult<()> {
     diesel::update(user::table.find(user_id))
         .set(user::last_edit_time.eq(DateTime::now()))

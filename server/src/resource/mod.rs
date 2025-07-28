@@ -25,7 +25,7 @@ pub trait BoolFill {
     fn filled(val: bool) -> Self;
 }
 
-/// Creates a boolean FieldTable from an (optional) comma separated `fields` [str].
+/// Creates a boolean `FieldTable` from an (optional) comma separated `fields` [str].
 pub fn create_table<T, E>(fields: Option<&str>) -> Result<T, <E as FromStr>::Err>
 where
     T: BoolFill + IndexMut<E, Output = bool>,
@@ -59,7 +59,7 @@ where
 /// For a given set of resources, orders them so that their primary keys are in the same order
 /// as the order slice, which should be the same length as values.
 ///
-/// NOTE: This algorithm is O(n^2) in values.len(), which could be made O(n) with a HashMap implementation.
+/// NOTE: This algorithm is O(n^2) in `values.len()`, which could be made O(n) with a `HashMap` implementation.
 /// However, for small n this Vec-based implementation is probably much faster. Since we retrieve
 /// 40-50 resources at a time, I'm leaving it like this for the time being until it proves to be slow.
 fn order_as<T>(values: Vec<T>, order: &[i64]) -> Vec<T>
@@ -90,7 +90,7 @@ where
 }
 
 /// Maps a set of resources to a Vec of Options that contains these resources ordered according
-/// to the primary keys of ordered_values. If there are less unorderd_values than ordered_values,
+/// to the primary keys of `ordered_values`. If there are less `unorderd_values` than `ordered_values`,
 /// the missing values are padded as None in the resulting vector.
 ///
 /// The note in the above comment applies here as well.

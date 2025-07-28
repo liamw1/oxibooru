@@ -8,7 +8,7 @@ use crate::time::DateTime;
 use diesel::dsl::max;
 use diesel::prelude::*;
 
-/// Updates last_edit_time of pool with given `pool_id`.
+/// Updates `last_edit_time` of pool with given `pool_id`.
 pub fn last_edit_time(conn: &mut PgConnection, pool_id: i64) -> ApiResult<()> {
     diesel::update(pool::table.find(pool_id))
         .set(pool::last_edit_time.eq(DateTime::now()))
