@@ -47,7 +47,7 @@ async fn list(
             offset,
             limit,
             total,
-            results: TagInfo::new_batch_from_ids(conn, selected_tags, &fields)?,
+            results: TagInfo::new_batch_from_ids(conn, &selected_tags, &fields)?,
         }))
     })
 }
@@ -102,7 +102,7 @@ async fn get_siblings(
             .select(post_tag::post_id)
             .filter(post_tag::tag_id.eq(tag_id))
             .into_boxed();
-        let (sibling_ids, common_post_counts): (_, Vec<_>) = post_tag::table
+        let (sibling_ids, common_post_counts): (Vec<_>, Vec<_>) = post_tag::table
             .group_by(post_tag::tag_id)
             .select((post_tag::tag_id, count_star()))
             .filter(post_tag::post_id.eq_any(posts_tagged_on))
@@ -113,7 +113,7 @@ async fn get_siblings(
             .into_iter()
             .unzip();
 
-        let siblings = TagInfo::new_batch_from_ids(conn, sibling_ids, &fields)?
+        let siblings = TagInfo::new_batch_from_ids(conn, &sibling_ids, &fields)?
             .into_iter()
             .zip(common_post_counts)
             .map(|(tag, occurrences)| TagSibling { tag, occurrences })
@@ -208,7 +208,7 @@ async fn merge(
         api::verify_version(merge_to_version, body.merge_to_version)?;
 
         update::tag::merge(conn, absorbed_id, merge_to_id)?;
-        snapshot::tag::merge_snapshot(conn, client, body.remove, body.merge_to)?;
+        snapshot::tag::merge_snapshot(conn, client, body.remove, &body.merge_to)?;
         Ok::<_, api::Error>(merge_to_id)
     })?;
     conn.transaction(|conn| TagInfo::new_from_id(conn, merged_tag_id, &fields))

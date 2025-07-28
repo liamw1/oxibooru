@@ -2,6 +2,7 @@ use crate::config;
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView};
 
+#[derive(Clone, Copy)]
 pub enum ThumbnailType {
     Post,
     Avatar,

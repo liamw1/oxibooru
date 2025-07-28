@@ -69,11 +69,11 @@ impl SnapshotInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        snapshot_ids: Vec<i64>,
+        snapshot_ids: &[i64],
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let unordered_snapshots = snapshot::table.filter(snapshot::id.eq_any(&snapshot_ids)).load(conn)?;
-        let snapshots = resource::order_as(unordered_snapshots, &snapshot_ids);
+        let unordered_snapshots = snapshot::table.filter(snapshot::id.eq_any(snapshot_ids)).load(conn)?;
+        let snapshots = resource::order_as(unordered_snapshots, snapshot_ids);
         Self::new_batch(conn, snapshots, fields)
     }
 }

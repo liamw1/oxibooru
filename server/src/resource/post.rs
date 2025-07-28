@@ -168,7 +168,7 @@ impl PostInfo {
         post_id: i64,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
-        let mut post_info = Self::new_batch_from_ids(conn, client, vec![post_id], fields)?;
+        let mut post_info = Self::new_batch_from_ids(conn, client, &[post_id], fields)?;
         assert_eq!(post_info.len(), 1);
         Ok(post_info.pop().unwrap())
     }
@@ -285,11 +285,11 @@ impl PostInfo {
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
         client: Client,
-        post_ids: Vec<i64>,
+        post_ids: &[i64],
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let unordered_posts = post::table.filter(post::id.eq_any(&post_ids)).load(conn)?;
-        let posts = resource::order_as(unordered_posts, &post_ids);
+        let unordered_posts = post::table.filter(post::id.eq_any(post_ids)).load(conn)?;
+        let posts = resource::order_as(unordered_posts, post_ids);
         Self::new_batch(conn, client, posts, fields)
     }
 }

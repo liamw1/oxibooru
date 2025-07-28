@@ -63,7 +63,7 @@ pub fn recompute_indexes(conn: &mut PgConnection) -> DatabaseResult<()> {
         .load(conn)?;
     post_signatures
         .into_par_iter()
-        .try_for_each(|(post_id, signature)| recompute_index_in_parallel(post_id, signature, &progress))
+        .try_for_each(|(post_id, signature)| recompute_index_in_parallel(post_id, &signature, &progress))
         .map_err(DatabaseError::from)
 }
 
@@ -105,7 +105,7 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) {
         let thumbnail = decode::representative_image(&file_contents, &content_path)
             .map(|image| thumbnail::create(&image, ThumbnailType::Post))
             .map_err(|err| format!("Cannot decode content for post {post_id} for reason: {err}"))?;
-        update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Generated)
+        update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Generated)
             .map_err(|err| format!("Cannot save thumbnail for post {post_id} for reason: {err}"))?;
 
         println!("Thumbnail regeneration successful.\n");
@@ -116,11 +116,11 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) {
 /// Recomputes index for post with id `post_id`. Designed to operate in a parallel iterator.
 fn recompute_index_in_parallel(
     post_id: i64,
-    signature: CompressedSignature,
+    signature: &CompressedSignature,
     progress: &ProgressReporter,
 ) -> Result<(), PoolError> {
     let mut conn = db::get_connection()?;
-    let indexes = signature::generate_indexes(&signature);
+    let indexes = signature::generate_indexes(signature);
     match diesel::update(post_signature::table.find(post_id))
         .set(post_signature::words.eq(indexes.as_slice()))
         .execute(&mut conn)
@@ -282,7 +282,7 @@ fn regenerate_thumbnail_in_parallel(
             return Ok(());
         }
     };
-    if let Err(err) = update::post::thumbnail(&mut conn, &post_hash, thumbnail, ThumbnailCategory::Generated) {
+    if let Err(err) = update::post::thumbnail(&mut conn, &post_hash, &thumbnail, ThumbnailCategory::Generated) {
         error!("Cannot save thumbnail for post {post_id} for reason: {err}");
     } else {
         progress.increment();

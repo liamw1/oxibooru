@@ -64,7 +64,7 @@ impl PoolInfo {
     }
 
     pub fn new_from_id(conn: &mut PgConnection, pool_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
-        let mut pool_info = Self::new_batch_from_ids(conn, vec![pool_id], fields)?;
+        let mut pool_info = Self::new_batch_from_ids(conn, &[pool_id], fields)?;
         assert_eq!(pool_info.len(), 1);
         Ok(pool_info.pop().unwrap())
     }
@@ -101,11 +101,11 @@ impl PoolInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        pool_ids: Vec<i64>,
+        pool_ids: &[i64],
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let unordered_pools = pool::table.filter(pool::id.eq_any(&pool_ids)).load(conn)?;
-        let pools = resource::order_as(unordered_pools, &pool_ids);
+        let unordered_pools = pool::table.filter(pool::id.eq_any(pool_ids)).load(conn)?;
+        let pools = resource::order_as(unordered_pools, pool_ids);
         Self::new_batch(conn, pools, fields)
     }
 }

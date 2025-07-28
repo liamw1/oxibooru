@@ -61,7 +61,7 @@ impl TagInfo {
     }
 
     pub fn new_from_id(conn: &mut PgConnection, tag_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
-        let mut tag_info = Self::new_batch_from_ids(conn, vec![tag_id], fields)?;
+        let mut tag_info = Self::new_batch_from_ids(conn, &[tag_id], fields)?;
         assert_eq!(tag_info.len(), 1);
         Ok(tag_info.pop().unwrap())
     }
@@ -100,11 +100,11 @@ impl TagInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        tag_ids: Vec<i64>,
+        tag_ids: &[i64],
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let unordered_tags = tag::table.filter(tag::id.eq_any(&tag_ids)).load(conn)?;
-        let tags = resource::order_as(unordered_tags, &tag_ids);
+        let unordered_tags = tag::table.filter(tag::id.eq_any(tag_ids)).load(conn)?;
+        let tags = resource::order_as(unordered_tags, tag_ids);
         Self::new_batch(conn, tags, fields)
     }
 }

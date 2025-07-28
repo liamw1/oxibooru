@@ -1,6 +1,12 @@
 #![warn(clippy::pedantic)]
+// Gives warnings on EnumTables
 #![allow(clippy::too_many_arguments)]
+// Gives warnings for every diesel::prelude::* import
 #![allow(clippy::wildcard_imports)]
+// Buggy
+#![allow(clippy::iter_not_returning_iterator)]
+// Too subjective
+#![allow(clippy::similar_names, clippy::too_many_lines)]
 #![allow(clippy::cast_possible_truncation)]
 #![allow(clippy::cast_possible_wrap)]
 #![allow(clippy::cast_precision_loss)]
@@ -11,10 +17,6 @@
 #![allow(clippy::manual_let_else)]
 #![allow(clippy::doc_markdown)]
 #![allow(clippy::option_option)]
-#![allow(clippy::similar_names)]
-#![allow(clippy::too_many_lines)]
-#![allow(clippy::needless_pass_by_value)]
-#![allow(clippy::iter_not_returning_iterator)]
 
 mod admin;
 mod api;

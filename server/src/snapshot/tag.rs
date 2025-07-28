@@ -97,7 +97,7 @@ pub fn merge_snapshot(
     conn: &mut PgConnection,
     client: Client,
     absorbed_tag: SmallString,
-    merge_to_tag: SmallString,
+    merge_to_tag: &SmallString,
 ) -> QueryResult<()> {
     let data = json!([ResourceType::Tag, merge_to_tag]);
     NewSnapshot {

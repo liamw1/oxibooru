@@ -33,7 +33,7 @@ async fn list(
             offset,
             limit,
             total,
-            results: SnapshotInfo::new_batch_from_ids(conn, selected_snapshots, &fields)?,
+            results: SnapshotInfo::new_batch_from_ids(conn, &selected_snapshots, &fields)?,
         }))
     })
 }

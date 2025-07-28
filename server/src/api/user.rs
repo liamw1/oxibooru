@@ -57,7 +57,7 @@ async fn list(
             offset,
             limit,
             total,
-            results: UserInfo::new_batch_from_ids(conn, selected_users, &fields, Visibility::PublicOnly)?,
+            results: UserInfo::new_batch_from_ids(conn, &selected_users, &fields, Visibility::PublicOnly)?,
         }))
     })
 }
@@ -154,7 +154,7 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
             };
             api::verify_privilege(client, required_rank)?;
 
-            update::user::avatar(conn, user.id, &body.name, avatar)?;
+            update::user::avatar(conn, user.id, &body.name, &avatar)?;
         }
 
         Ok::<_, api::Error>(user)
@@ -287,7 +287,7 @@ async fn update(
             };
             api::verify_privilege(client, required_rank)?;
 
-            update::user::avatar(conn, user_id, &username, avatar)?;
+            update::user::avatar(conn, user_id, &username, &avatar)?;
         }
         if let Some(new_name) = body.name.as_deref() {
             let required_rank = match editing_self {

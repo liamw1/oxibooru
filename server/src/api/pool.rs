@@ -46,7 +46,7 @@ async fn list(
             offset,
             limit,
             total,
-            results: PoolInfo::new_batch_from_ids(conn, selected_pools, &fields)?,
+            results: PoolInfo::new_batch_from_ids(conn, &selected_pools, &fields)?,
         }))
     })
 }

@@ -23,7 +23,7 @@ pub fn last_edit_time(conn: &mut PgConnection, user_id: i64) -> ApiResult<()> {
 }
 
 /// Updates custom avatar for user.
-pub fn avatar(conn: &mut PgConnection, user_id: i64, name: &str, avatar: DynamicImage) -> ApiResult<()> {
+pub fn avatar(conn: &mut PgConnection, user_id: i64, name: &str, avatar: &DynamicImage) -> ApiResult<()> {
     filesystem::delete_custom_avatar(name)?;
 
     let avatar_size = filesystem::save_custom_avatar(name, avatar)?;

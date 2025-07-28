@@ -92,7 +92,7 @@ async fn list(
             offset,
             limit,
             total,
-            results: PostInfo::new_batch_from_ids(conn, client, selected_posts, &fields)?,
+            results: PostInfo::new_batch_from_ids(conn, client, &selected_posts, &fields)?,
         }))
     })
 }
@@ -150,7 +150,7 @@ async fn get_neighbors(
         if query_builder.criteria().has_random_sort() {
             query_builder.set_offset_and_limit(0, 2);
             let post_ids = query_builder.load_with(conn, |query| query.filter(post::id.ne(post_id)))?;
-            let post_infos = PostInfo::new_batch_from_ids(conn, client, post_ids, &fields)?;
+            let post_infos = PostInfo::new_batch_from_ids(conn, client, &post_ids, &fields)?;
             return Ok(create_post_neighbors(post_infos, true));
         }
         if !query_builder.criteria().has_filter() && !query_builder.criteria().has_sort() {
@@ -201,8 +201,8 @@ async fn get_neighbors(
             limit = limit.saturating_mul(LIMIT_GROWTH);
         };
 
-        let post_ids = prev_post_id.into_iter().chain(next_post_id).collect();
-        let post_infos = PostInfo::new_batch_from_ids(conn, client, post_ids, &fields)?;
+        let post_ids: Vec<_> = prev_post_id.into_iter().chain(next_post_id).collect();
+        let post_infos = PostInfo::new_batch_from_ids(conn, client, &post_ids, &fields)?;
         Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
     })
 }
@@ -346,7 +346,7 @@ async fn reverse_search(
             let (post_ids, distances): (Vec<_>, Vec<_>) = similar_signatures.into_iter().unzip();
             Ok(ReverseSearchResponse {
                 exact_post: None,
-                similar_posts: PostInfo::new_batch_from_ids(conn, client, post_ids, &fields)?
+                similar_posts: PostInfo::new_batch_from_ids(conn, client, &post_ids, &fields)?
                     .into_iter()
                     .zip(distances)
                     .map(|(post, distance)| SimilarPost { distance, post })
@@ -468,9 +468,9 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
-            update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
+            update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
         }
-        update::post::thumbnail(conn, &post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
+        update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
 
         let post_data = SnapshotData {
             safety: post.safety,
@@ -542,7 +542,7 @@ async fn merge(
         api::verify_version(absorbed_post.last_edit_time, body.post_info.remove_version)?;
         api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
 
-        update::post::merge(conn, absorbed_post, merge_to_post, body.replace_content)?;
+        update::post::merge(conn, &absorbed_post, &merge_to_post, body.replace_content)?;
         snapshot::post::merge_snapshot(conn, client, absorbed_id, merge_to_id)?;
         Ok(())
     })
@@ -733,11 +733,11 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
             filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
             // Replace generated thumbnail
-            update::post::thumbnail(conn, &post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
+            update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
         }
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client, config::privileges().post_edit_thumbnail)?;
-            update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
+            update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
         }
 
         new_post.last_edit_time = DateTime::now();

@@ -42,7 +42,7 @@ async fn list(
             offset,
             limit,
             total,
-            results: CommentInfo::new_batch_from_ids(conn, client, selected_comments, &fields)?,
+            results: CommentInfo::new_batch_from_ids(conn, client, &selected_comments, &fields)?,
         }))
     })
 }

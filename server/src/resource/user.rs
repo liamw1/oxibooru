@@ -97,7 +97,7 @@ impl UserInfo {
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Self> {
-        let mut user_info = Self::new_batch_from_ids(conn, vec![user_id], fields, visibility)?;
+        let mut user_info = Self::new_batch_from_ids(conn, &[user_id], fields, visibility)?;
         assert_eq!(user_info.len(), 1);
         Ok(user_info.pop().unwrap())
     }
@@ -157,12 +157,12 @@ impl UserInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        user_ids: Vec<i64>,
+        user_ids: &[i64],
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Vec<Self>> {
-        let unordered_users = user::table.filter(user::id.eq_any(&user_ids)).load(conn)?;
-        let users = resource::order_as(unordered_users, &user_ids);
+        let unordered_users = user::table.filter(user::id.eq_any(user_ids)).load(conn)?;
+        let users = resource::order_as(unordered_users, user_ids);
         Self::new_batch(conn, users, fields, visibility)
     }
 }

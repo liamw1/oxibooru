@@ -4,6 +4,7 @@ use crate::model::snapshot::NewSnapshot;
 use crate::string::SmallString;
 use diesel::{PgConnection, QueryResult};
 use serde_json::{Map, Value, json};
+use std::collections::HashSet;
 
 pub mod pool;
 pub mod pool_category;
@@ -42,11 +43,12 @@ fn value_index(value: &Value) -> usize {
     }
 }
 
-/// For large arrays, it may be more efficient to clone everything to two
-/// hashmaps and perform O(1) searches.
 fn array_diff(old: Vec<Value>, new: Vec<Value>) -> Option<Value> {
-    let removed: Vec<_> = old.iter().filter(|item| !new.contains(item)).cloned().collect();
-    let added: Vec<_> = new.into_iter().filter(|item| !old.contains(item)).collect();
+    let new_set: HashSet<&Value> = new.iter().collect();
+    let removed: Vec<_> = old.iter().filter(|item| !new_set.contains(item)).cloned().collect();
+
+    let old_set: HashSet<Value> = old.into_iter().collect();
+    let added: Vec<_> = new.into_iter().filter(|item| !old_set.contains(item)).collect();
 
     (!added.is_empty() || !removed.is_empty()).then(|| {
         let change_type = ("type".into(), "list change".into());
@@ -123,7 +125,7 @@ fn set_default_snapshot(
         user_id: client.id,
         operation: ResourceOperation::Modified,
         resource_type,
-        resource_id: old_default_name.clone(),
+        resource_id: old_default_name,
         data: old_default_diff,
     }
     .insert(conn)?;
@@ -133,7 +135,7 @@ fn set_default_snapshot(
         user_id: client.id,
         operation: ResourceOperation::Modified,
         resource_type,
-        resource_id: new_default_name.clone(),
+        resource_id: new_default_name,
         data: new_default_diff,
     }
     .insert(conn)?;

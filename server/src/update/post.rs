@@ -30,7 +30,7 @@ pub fn last_edit_time(conn: &mut PgConnection, post_id: i64) -> ApiResult<()> {
 pub fn thumbnail(
     conn: &mut PgConnection,
     post_hash: &PostHash,
-    thumbnail: DynamicImage,
+    thumbnail: &DynamicImage,
     thumbnail_type: ThumbnailCategory,
 ) -> ApiResult<()> {
     filesystem::delete_post_thumbnail(post_hash, thumbnail_type)?;
@@ -97,8 +97,8 @@ pub fn delete_notes(conn: &mut PgConnection, post_id: i64) -> QueryResult<usize>
 
 pub fn merge(
     conn: &mut PgConnection,
-    absorbed_post: Post,
-    merge_to_post: Post,
+    absorbed_post: &Post,
+    merge_to_post: &Post,
     replace_content: bool,
 ) -> ApiResult<()> {
     let absorbed_id = absorbed_post.id;
@@ -269,10 +269,10 @@ pub fn merge(
                 post::height.eq(absorbed_post.height),
                 post::type_.eq(absorbed_post.type_),
                 post::mime_type.eq(absorbed_post.mime_type),
-                post::checksum.eq(absorbed_post.checksum),
-                post::checksum_md5.eq(absorbed_post.checksum_md5),
+                post::checksum.eq(&absorbed_post.checksum),
+                post::checksum_md5.eq(&absorbed_post.checksum_md5),
                 post::flags.eq(absorbed_post.flags),
-                post::source.eq(absorbed_post.source),
+                post::source.eq(&absorbed_post.source),
                 post::generated_thumbnail_size.eq(absorbed_post.generated_thumbnail_size),
                 post::custom_thumbnail_size.eq(absorbed_post.custom_thumbnail_size),
             ))

@@ -12,6 +12,7 @@ use tracing::warn;
 use uuid::Uuid;
 
 /// Represents important data directories.
+#[derive(Clone, Copy)]
 pub enum Directory {
     Avatars,
     Posts,
@@ -55,7 +56,7 @@ pub fn save_uploaded_file(data: &[u8], mime_type: MimeType) -> std::io::Result<S
 
 /// Saves custom avatar `thumbnail` for user with name `username` to disk.
 /// Returns size of the thumbnail in bytes.
-pub fn save_custom_avatar(username: &str, thumbnail: DynamicImage) -> ImageResult<u64> {
+pub fn save_custom_avatar(username: &str, thumbnail: &DynamicImage) -> ImageResult<u64> {
     create_dir(Directory::Avatars)?;
     let avatar_path = hash::custom_avatar_path(username);
 
@@ -74,7 +75,7 @@ pub fn delete_custom_avatar(username: &str) -> std::io::Result<()> {
 /// Returns size of the thumbnail in bytes.
 pub fn save_post_thumbnail(
     post: &PostHash,
-    thumbnail: DynamicImage,
+    thumbnail: &DynamicImage,
     thumbnail_type: ThumbnailCategory,
 ) -> ImageResult<u64> {
     let thumbnail_path = match thumbnail_type {
