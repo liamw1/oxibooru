@@ -35,10 +35,11 @@ pub struct Note {
 
 impl Note {
     pub fn new(note: PostNote) -> Self {
+        const PANIC_MESSAGE: &str = "Polygon array should not contain NULL values";
         let polygon = note
             .polygon
             .chunks_exact(2)
-            .map(|vertex| [vertex[0].unwrap(), vertex[1].unwrap()])
+            .map(|vertex| [vertex[0].expect(PANIC_MESSAGE), vertex[1].expect(PANIC_MESSAGE)])
             .collect();
         Self {
             id: note.id,
@@ -157,9 +158,7 @@ pub struct PostInfo {
 
 impl PostInfo {
     pub fn new(conn: &mut PgConnection, client: Client, post: Post, fields: &FieldTable<bool>) -> QueryResult<Self> {
-        let mut post_info = Self::new_batch(conn, client, vec![post], fields)?;
-        assert_eq!(post_info.len(), 1);
-        Ok(post_info.pop().unwrap())
+        Self::new_batch(conn, client, vec![post], fields).map(resource::single)
     }
 
     pub fn new_from_id(
@@ -168,9 +167,7 @@ impl PostInfo {
         post_id: i64,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
-        let mut post_info = Self::new_batch_from_ids(conn, client, &[post_id], fields)?;
-        assert_eq!(post_info.len(), 1);
-        Ok(post_info.pop().unwrap())
+        Self::new_batch_from_ids(conn, client, &[post_id], fields).map(resource::single)
     }
 
     pub fn new_batch(
@@ -179,6 +176,7 @@ impl PostInfo {
         posts: Vec<Post>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
+        #[allow(clippy::wildcard_imports)]
         use crate::schema::post_statistics::dsl::*;
 
         let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, &posts))?;
@@ -521,26 +519,18 @@ fn get_client_favorites(conn: &mut PgConnection, client: Client, posts: &[Post])
 }
 
 fn get_users_who_favorited(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroUser>>> {
-    let users_who_favorited: Vec<(i64, SmallString, AvatarStyle)> = PostFavorite::belonging_to(posts)
+    let users_who_favorited: Vec<(PostFavorite, SmallString, AvatarStyle)> = PostFavorite::belonging_to(posts)
         .inner_join(user::table)
-        .select((post_favorite::post_id, user::name, user::avatar_style))
+        .select((PostFavorite::as_select(), user::name, user::avatar_style))
         .order_by(user::name)
         .load(conn)?;
-
-    let mut users_grouped_by_posts: Vec<Vec<(SmallString, AvatarStyle)>> =
-        std::iter::repeat_with(Vec::new).take(posts.len()).collect();
-    for (post_id, username, avatar_style) in users_who_favorited {
-        let index = posts.iter().position(|post| post.id == post_id).unwrap();
-        users_grouped_by_posts[index].push((username, avatar_style));
-    }
-
-    Ok(posts
-        .iter()
-        .zip(users_grouped_by_posts)
-        .map(|(_, users)| {
-            users
+    Ok(users_who_favorited
+        .grouped_by(posts)
+        .into_iter()
+        .map(|user_favorites| {
+            user_favorites
                 .into_iter()
-                .map(|(username, avatar_style)| MicroUser::new(username, avatar_style))
+                .map(|(_, username, avatar_style)| MicroUser::new(username, avatar_style))
                 .collect()
         })
         .collect())

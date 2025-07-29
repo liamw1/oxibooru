@@ -110,6 +110,7 @@ fn set_default_snapshot(
     new_default_name: SmallString,
     resource_type: ResourceType,
 ) -> QueryResult<()> {
+    const PANIC_MESSAGE: &str = "There must be a diff";
     if old_default_name == new_default_name {
         return Ok(());
     }
@@ -117,7 +118,7 @@ fn set_default_snapshot(
     let defaulted_data = json!({"default": true});
     let non_defaulted_data = json!({"default": false});
 
-    let old_default_diff = value_diff(defaulted_data.clone(), non_defaulted_data.clone()).unwrap();
+    let old_default_diff = value_diff(defaulted_data.clone(), non_defaulted_data.clone()).expect(PANIC_MESSAGE);
     NewSnapshot {
         user_id: client.id,
         operation: ResourceOperation::Modified,
@@ -127,7 +128,7 @@ fn set_default_snapshot(
     }
     .insert(conn)?;
 
-    let new_default_diff = value_diff(non_defaulted_data, defaulted_data).unwrap();
+    let new_default_diff = value_diff(non_defaulted_data, defaulted_data).expect(PANIC_MESSAGE);
     NewSnapshot {
         user_id: client.id,
         operation: ResourceOperation::Modified,

@@ -57,11 +57,11 @@ where
         let mut random_sort = false;
 
         // Filters are separated by whitespace
-        for mut term in search_criteria.split_whitespace() {
-            let negated = term.starts_with('-');
-            if negated {
-                term = term.strip_prefix('-').unwrap();
-            }
+        for term in search_criteria.split_whitespace() {
+            let (term, negated) = match term.strip_prefix('-') {
+                Some(unnegated_term) => (unnegated_term, true),
+                None => (term, false),
+            };
 
             match parse::split_once(term, ':') {
                 Some(("sort", "random")) => random_sort = true,

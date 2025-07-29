@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::ops::{BitOr, BitOrAssign};
 use std::path::Path;
-use strum::{Display, EnumCount, EnumString, FromRepr, IntoStaticStr};
+use strum::{Display, EnumCount, EnumIter, EnumString, FromRepr, IntoEnumIterator, IntoStaticStr};
 use thiserror::Error;
 
 /// In general, the order of these enums should not be changed.
@@ -246,7 +246,7 @@ impl FromSql<SmallInt, Pg> for PostSafety {
     }
 }
 
-#[derive(Clone, Copy, EnumCount, EnumString, FromRepr, IntoStaticStr, Deserialize)]
+#[derive(Clone, Copy, EnumCount, EnumIter, EnumString, FromRepr, IntoStaticStr, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum PostFlag {
@@ -326,9 +326,12 @@ impl Serialize for PostFlags {
     {
         const _: () = assert!(PostFlag::COUNT <= 16);
 
-        let flags: Vec<&'static str> = (0..PostFlag::COUNT)
-            .filter(|f| self.flags & (1 << f) != 0) // Check if flag is set
-            .map(|f| PostFlag::from_repr(f).unwrap().into())
+        let flags: Vec<&'static str> = PostFlag::iter()
+            .filter(|&flag| {
+                let bit = flag as u16;
+                self.flags & (1 << bit) != 0 // Check if flag is set
+            })
+            .map(Into::into)
             .collect();
         flags.serialize(serializer)
     }

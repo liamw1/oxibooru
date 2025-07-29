@@ -86,9 +86,7 @@ impl UserInfo {
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Self> {
-        let mut user_info = Self::new_batch(conn, vec![user], fields, visibility)?;
-        assert_eq!(user_info.len(), 1);
-        Ok(user_info.pop().unwrap())
+        Self::new_batch(conn, vec![user], fields, visibility).map(resource::single)
     }
 
     pub fn new_from_id(
@@ -97,9 +95,7 @@ impl UserInfo {
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Self> {
-        let mut user_info = Self::new_batch_from_ids(conn, &[user_id], fields, visibility)?;
-        assert_eq!(user_info.len(), 1);
-        Ok(user_info.pop().unwrap())
+        Self::new_batch_from_ids(conn, &[user_id], fields, visibility).map(resource::single)
     }
 
     pub fn new_batch(
@@ -108,6 +104,7 @@ impl UserInfo {
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Vec<Self>> {
+        #[allow(clippy::wildcard_imports)]
         use crate::schema::user_statistics::dsl::*;
 
         let mut comment_counts =

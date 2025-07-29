@@ -29,7 +29,7 @@ pub struct FileContents {
 impl FileContents {
     /// Constructs an instance from a temporary upload.
     pub fn from_token(token: &str) -> ApiResult<Self> {
-        let (_uuid, extension) = token.split_once('.').unwrap();
+        let (_uuid, extension) = token.split_once('.').unwrap_or((token, ""));
         let mime_type = MimeType::from_extension(extension)?;
 
         let temp_path = filesystem::temporary_upload_filepath(token);

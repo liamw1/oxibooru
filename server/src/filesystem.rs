@@ -46,7 +46,7 @@ pub fn temporary_upload_filepath(filename: &str) -> PathBuf {
 /// Returns the size of the file at `path` in bytes as an i64
 pub fn file_size(path: &Path) -> std::io::Result<i64> {
     path.metadata()
-        .map(|metadata| i64::try_from(metadata.len()).expect("File size is less than i64::MAX"))
+        .map(|metadata| i64::try_from(metadata.len()).expect("File size must be less than i64::MAX"))
 }
 
 /// Saves raw bytes to temporary upload folder as a `mime_type`-file to disk.

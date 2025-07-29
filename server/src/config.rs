@@ -235,8 +235,8 @@ pub fn data_dir() -> &'static str {
     static DATA_DIR: LazyLock<Cow<str>> = LazyLock::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
         Ok(_) => Cow::Borrowed(&CONFIG.data_dir),
         Err(_) => {
-            dotenvy::from_filename("../.env").unwrap();
-            Cow::Owned(std::env::var("MOUNT_DATA").unwrap())
+            dotenvy::from_filename("../.env").expect(".env must be in project root directory");
+            Cow::Owned(std::env::var("MOUNT_DATA").expect("MOUNT_DATA must be defined in .env"))
         }
     });
     &DATA_DIR
@@ -256,7 +256,7 @@ pub fn port() -> u16 {
 }
 
 static CONFIG: LazyLock<Config> = LazyLock::new(|| {
-    let config_string = std::fs::read_to_string(get_config_path()).unwrap();
+    let config_string = std::fs::read_to_string(get_config_path()).expect("config.toml must exist and be readable");
     let mut config: Config = match toml::from_str(&config_string) {
         Ok(parsed) => parsed,
         Err(err) => {
@@ -281,7 +281,7 @@ fn get_config_path() -> PathBuf {
             std::env::var("CARGO_MANIFEST_DIR").expect("Test environment should have CARGO_MANIFEST_DIR defined");
         [&manifest_dir, "config.toml.dist"].iter().collect()
     } else {
-        let exe_path = std::env::current_exe().unwrap();
+        let exe_path = std::env::current_exe().expect("Current exe path exists and is readable");
         let parent_path = exe_path.parent().unwrap_or(Path::new("/"));
         [parent_path, Path::new("config.toml")].iter().collect()
     }

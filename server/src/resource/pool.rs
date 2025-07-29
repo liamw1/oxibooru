@@ -58,15 +58,11 @@ pub struct PoolInfo {
 
 impl PoolInfo {
     pub fn new(conn: &mut PgConnection, pool: Pool, fields: &FieldTable<bool>) -> QueryResult<Self> {
-        let mut pool_info = Self::new_batch(conn, vec![pool], fields)?;
-        assert_eq!(pool_info.len(), 1);
-        Ok(pool_info.pop().unwrap())
+        Self::new_batch(conn, vec![pool], fields).map(resource::single)
     }
 
     pub fn new_from_id(conn: &mut PgConnection, pool_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
-        let mut pool_info = Self::new_batch_from_ids(conn, &[pool_id], fields)?;
-        assert_eq!(pool_info.len(), 1);
-        Ok(pool_info.pop().unwrap())
+        Self::new_batch_from_ids(conn, &[pool_id], fields).map(resource::single)
     }
 
     pub fn new_batch(conn: &mut PgConnection, pools: Vec<Pool>, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {

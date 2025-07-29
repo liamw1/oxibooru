@@ -3,7 +3,9 @@ use crate::math::interval::Interval;
 use crate::math::point::IPoint2;
 use crate::math::{SignedCast, UnsignedCast};
 use num_traits::int::PrimInt;
+use std::fmt::Debug;
 use std::num::TryFromIntError;
+use std::ops::AddAssign;
 
 /// Represents a box on a 2D integer lattice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,31 +149,40 @@ where
         }
     }
 
-    pub fn bounds() -> IRect<u32> {
-        IRect::new_zero_based(N as u32 - 1, M as u32 - 1)
+    pub fn bounds<I>() -> IRect<I>
+    where
+        I: PrimInt + TryFrom<usize>,
+        <I as TryFrom<usize>>::Error: Debug,
+    {
+        IRect::new_zero_based(I::try_from(N).unwrap() - I::one(), I::try_from(M).unwrap() - I::one())
     }
 
-    pub fn at(&self, index: IPoint2<u32>) -> T {
-        self.data[index.i as usize][index.j as usize]
+    pub fn at<I: PrimInt>(&self, index: IPoint2<I>) -> T {
+        self.data[index.i.to_usize().unwrap()][index.j.to_usize().unwrap()]
     }
 
     pub fn set_at<I: PrimInt>(&mut self, index: IPoint2<I>, value: T) {
-        let converted_index = <IPoint2<u32> as From<IPoint2<I>>>::from(&index).unwrap();
-        self.data[converted_index.i as usize][converted_index.j as usize] = value;
+        self.data[index.i.to_usize().unwrap()][index.j.to_usize().unwrap()] = value;
     }
 
-    pub fn get<I: PrimInt>(&self, index: IPoint2<I>) -> Option<T> {
-        let converted_index = <IPoint2<u32> as From<IPoint2<I>>>::from(&index)?;
-        Self::bounds().contains(index).then(|| self.at(converted_index))
+    pub fn get<I>(&self, index: IPoint2<I>) -> Option<T>
+    where
+        I: PrimInt + TryFrom<usize>,
+        <I as TryFrom<usize>>::Error: Debug,
+    {
+        Self::bounds::<I>().contains(index).then(|| self.at(index))
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &T> {
         self.data.iter().flatten()
     }
 
-    pub fn signed_indexed_iter(&self) -> impl Iterator<Item = (IPoint2<i32>, &T)> {
-        let signed_bounds = Self::bounds().to_signed().unwrap();
-        signed_bounds.iter().zip(self.iter())
+    pub fn indexed_iter<I>(&self) -> impl Iterator<Item = (IPoint2<I>, &T)>
+    where
+        I: PrimInt + TryFrom<usize> + AddAssign,
+        <I as TryFrom<usize>>::Error: Debug,
+    {
+        Self::bounds::<I>().iter().zip(self.iter())
     }
 }
 
@@ -241,7 +252,7 @@ mod test {
     #[test]
     fn array_2d() {
         let array_rect: Array2D<_, 3, 3> = Array2D::new(5);
-        assert_eq!(array_rect.at(IPoint2::zero()), 5);
+        assert_eq!(array_rect.at(IPoint2::<i32>::zero()), 5);
         assert_eq!(array_rect.at(IPoint2::new(2, 2)), 5);
     }
 }

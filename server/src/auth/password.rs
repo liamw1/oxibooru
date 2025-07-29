@@ -27,7 +27,7 @@ static ARGON_CONTEXT: LazyLock<Argon2> = LazyLock::new(|| {
         Version::default(),
         Params::default(),
     )
-    .unwrap()
+    .expect("Must be able to construct argon2 context")
 });
 
 #[cfg(test)]

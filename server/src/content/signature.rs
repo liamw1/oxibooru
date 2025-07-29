@@ -3,7 +3,6 @@ use crate::math::interval::Interval;
 use crate::math::point::IPoint2;
 use crate::math::rect::{Array2D, IRect};
 use image::{DynamicImage, GrayImage};
-use num_traits::ToPrimitive;
 use std::num::NonZeroU64;
 
 pub const NUM_WORDS: usize = 100; // Number indexes to create from signature
@@ -79,7 +78,9 @@ pub fn generate_indexes(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) 
     let word_positions: [usize; NUM_WORDS] = Interval::new(0, signature.len() - NUM_LETTERS).linspace();
     let words: [[u8; NUM_LETTERS]; NUM_WORDS] = std::array::from_fn(|word_index| {
         let pos = word_positions[word_index];
-        signature[pos..(pos + NUM_LETTERS)].try_into().unwrap()
+        signature[pos..(pos + NUM_LETTERS)]
+            .try_into()
+            .expect("Signature slice has len NUM_LETTERS")
     });
 
     std::array::from_fn(|word_index| {
@@ -176,7 +177,7 @@ fn compute_column_deltas(image: &GrayImage) -> Vec<u64> {
         let row = &flat_samples.as_slice()[row_start..row_start + image_width];
 
         for (delta, pixels) in deltas.iter_mut().zip(row.windows(2)) {
-            let [pixel, next_pixel] = pixels.try_into().unwrap();
+            let [pixel, next_pixel] = pixels.try_into().expect("Window has two elements");
             *delta += u64::from(pixel.abs_diff(next_pixel));
         }
     }
@@ -193,7 +194,7 @@ fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
 
     // Compute grid square radius
     let grid_square_size = 0.5 + f64::from(std::cmp::min(cropped_x_bounds.length(), cropped_y_bounds.length())) / 20.0;
-    let grid_square_radius = (grid_square_size / 2.0).to_u32().unwrap();
+    let grid_square_radius = (grid_square_size / 2.0) as u32;
 
     // Adjust cropped bounds so that grid squares won't protrude into image borders
     cropped_x_bounds.shrink(grid_square_radius);
@@ -228,7 +229,7 @@ fn compute_intensity_matrix(
             .map(|luma| u64::from(luma.0[0]))
             .sum::<u64>();
         let average = sum / grid_square.total_points().unwrap();
-        intensity_matrix.set_at(matrix_index, average.to_u8().unwrap());
+        intensity_matrix.set_at(matrix_index, u8::try_from(average).unwrap());
     }
     intensity_matrix
 }
@@ -239,7 +240,7 @@ fn compute_intensity_matrix(
 /// signatures matching on certain words. I've simply excluded these differences from the final signature.
 fn compute_differences(intensity_matrix: &Array2D<u8, GRID_SIZE, GRID_SIZE>) -> [i16; SIGNATURE_LEN] {
     let difference_iter = intensity_matrix
-        .signed_indexed_iter()
+        .indexed_iter::<i32>()
         .flat_map(|(matrix_index, &center_value)| {
             IRect::new_centered_square(matrix_index, 1)
                 .iter()

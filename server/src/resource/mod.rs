@@ -46,6 +46,11 @@ fn check_batch_results(batch_size: usize, post_count: usize) {
     assert!(batch_size == 0 || batch_size == post_count);
 }
 
+fn single<T>(mut batch: Vec<T>) -> T {
+    assert_eq!(batch.len(), 1);
+    batch.pop().unwrap()
+}
+
 fn retrieve<T, E, F>(enabled: bool, mut function: F) -> Result<Vec<T>, E>
 where
     F: FnMut() -> Result<Vec<T>, E>,
@@ -78,7 +83,10 @@ where
     let mut index = 0;
     while index < order.len() {
         let value_id = get_id(&values[index]);
-        let correct_index = order.iter().position(|&id| id == value_id).unwrap();
+        let correct_index = order
+            .iter()
+            .position(|&id| id == value_id)
+            .expect("`order` must contain resource id");
         assert!(correct_index >= index, "Value id is not unique");
         if index == correct_index {
             index += 1;
@@ -107,7 +115,7 @@ where
         let index = ordered_values
             .iter()
             .position(|ordered_value| *ordered_value.id() == value_id)
-            .unwrap();
+            .expect("`ordered_values` must contain resource id");
         results[index] = Some(value);
     }
     results
@@ -137,16 +145,20 @@ fn collect_names(ordered_names: Vec<(i64, SmallString)>) -> HashMap<i64, Rc<[Sma
     let mut names_map: HashMap<i64, Rc<[SmallString]>> = HashMap::new();
     names_map.reserve(name_boundaries.len() - 1);
     for window in name_boundaries.windows(2) {
-        let [start, end] = window.try_into().unwrap();
+        let [start, end] = window.try_into().expect("Window has two elements");
         let name_count = end - start;
 
         // Create buffer with exact capactiy so that it doesn't need to be reallocated to
         // the correct size when moving to the Rc
-        let (id, first_name) = name_iter.next().unwrap();
+        let (id, first_name) = name_iter
+            .next()
+            .expect("There must be at least one name in a name boundary");
         let mut names = Vec::with_capacity(name_count);
         names.push(first_name);
         for _i in 1..name_count {
-            let (_, name): (i64, SmallString) = name_iter.next().unwrap();
+            let (_, name) = name_iter
+                .next()
+                .expect("There are `name_count` names in the name boundary");
             names.push(name);
         }
 

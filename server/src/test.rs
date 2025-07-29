@@ -28,7 +28,7 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use serde_json::Value;
 use std::error::Error;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
@@ -40,13 +40,13 @@ pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZ
 pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
 
 pub fn get_connection() -> ConnectionResult {
-    let mut lock = CONNECTION_POOL.lock().unwrap();
-    match lock.as_mut() {
+    let mut guard = get_guard();
+    match guard.as_mut() {
         Some(pool) => pool.get(),
         None => {
-            let pool = recreate_database().unwrap();
+            let pool = recreate_database().expect("Test database must be constructible");
             let conn = pool.get();
-            *lock = Some(pool);
+            *guard = Some(pool);
             conn
         }
     }
@@ -54,8 +54,7 @@ pub fn get_connection() -> ConnectionResult {
 
 /// Resets the test database. Useful after operations that are hard to reverse perfectly, like merging.
 pub fn reset_database() {
-    let mut lock = CONNECTION_POOL.lock().unwrap();
-    *lock = None;
+    *get_guard() = None;
 }
 
 /// Returns path to a test image.
@@ -71,13 +70,16 @@ pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
 
 pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) -> ApiResult<()> {
     let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes());
-    let (method, path) = query.split_once(' ').unwrap();
-    let method = Method::try_from(method).unwrap();
+    let (method, path) = query
+        .split_once(' ')
+        .expect("Query string must have method and path separated by a space");
+    let method = Method::try_from(method).expect("Query string must start with a valid method");
     let path = path.replace(' ', "%20"); // Percent-encode all spaces
     let credentials = header::credentials_for(user, TEST_PASSWORD);
     let basic_access_authentication = format!("Basic {credentials}");
 
-    let server = TestServer::new(ServiceExt::<Request>::into_make_service(app)).unwrap();
+    let server =
+        TestServer::new(ServiceExt::<Request>::into_make_service(app)).expect("Test server must be constructible");
     let request = server
         .method(method, &path)
         .add_header(AUTHORIZATION, basic_access_authentication);
@@ -333,6 +335,19 @@ const COMMENT_SCORES: &[(i64, i64, Score)] = &[
 ];
 
 static CONNECTION_POOL: Mutex<Option<ConnectionPool>> = Mutex::new(None);
+
+fn get_guard() -> MutexGuard<'static, Option<ConnectionPool>> {
+    match CONNECTION_POOL.lock() {
+        Ok(guard) => guard,
+        Err(err) => {
+            // If panic occurs while holding lock, database may be in an invalid state
+            eprintln!("Test database has been poisoned! Resetting...");
+            let mut guard = err.into_inner();
+            *guard = None;
+            guard
+        }
+    }
+}
 
 const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRank) -> NewUser<'static> {
     NewUser {
@@ -594,7 +609,8 @@ fn recreate_database() -> Result<ConnectionPool, Box<dyn Error + Send + Sync>> {
     diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
 
     let database_url = db::create_url(Some(DATABASE_NAME));
-    let mut conn = PgConnection::establish(&database_url).unwrap();
+    let mut conn =
+        PgConnection::establish(&database_url).expect("Connection must be able to be established with test server");
     db::run_migrations(&mut conn)?;
     populate_database(&mut conn)?;
 
@@ -604,7 +620,7 @@ fn recreate_database() -> Result<ConnectionPool, Box<dyn Error + Send + Sync>> {
         .idle_timeout(None)
         .test_on_check_out(true)
         .build(manager)
-        .expect("Could not build connection pool");
+        .expect("Test connection pool must be constructible");
     Ok(pool)
 }
 

@@ -53,9 +53,7 @@ impl CommentInfo {
         comment: Comment,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
-        let mut comment_info = Self::new_batch(conn, client, vec![comment], fields)?;
-        assert_eq!(comment_info.len(), 1);
-        Ok(comment_info.pop().unwrap())
+        Self::new_batch(conn, client, vec![comment], fields).map(resource::single)
     }
 
     pub fn new_from_id(
@@ -64,9 +62,7 @@ impl CommentInfo {
         comment_id: i64,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
-        let mut comment_info = Self::new_batch_from_ids(conn, client, &[comment_id], fields)?;
-        assert_eq!(comment_info.len(), 1);
-        Ok(comment_info.pop().unwrap())
+        Self::new_batch_from_ids(conn, client, &[comment_id], fields).map(resource::single)
     }
 
     pub fn new_batch(

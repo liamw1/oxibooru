@@ -92,7 +92,8 @@ pub fn compute_url_safe_hash(content: &str) -> String {
 type Hmac = SimpleHmac<blake3::Hasher>;
 
 fn hmac_hash(bytes: &[u8]) -> CtOutput<Hmac> {
-    let mut mac = Hmac::new_from_slice(config::get().content_secret.as_bytes()).expect("HMAC can take key of any size");
+    let mut mac =
+        Hmac::new_from_slice(config::get().content_secret.as_bytes()).expect("HMAC should take key of any size");
     mac.update(bytes);
     mac.finalize()
 }

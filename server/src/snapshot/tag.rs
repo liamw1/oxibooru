@@ -77,7 +77,7 @@ pub fn new_name_snapshots(conn: &mut PgConnection, client: Client, new_names: Ve
             suggestions: Vec::new(),
         })
         .map(|tag_data| {
-            let resource_id = tag_data.names.first().unwrap().clone();
+            let resource_id = tag_data.names.first().expect(TAG_NAME_PANIC_MESSAGE).clone();
             serde_json::to_value(tag_data).map(|data| NewSnapshot {
                 user_id: client.id,
                 operation: ResourceOperation::Created,
@@ -116,7 +116,7 @@ pub fn modification_snapshot(
     mut old: SnapshotData,
     mut new: SnapshotData,
 ) -> ApiResult<()> {
-    let resource_id = old.names.first().unwrap().clone();
+    let resource_id = old.names.first().expect(TAG_NAME_PANIC_MESSAGE).clone();
 
     old.sort_fields();
     new.sort_fields();
@@ -146,7 +146,7 @@ fn unary_snapshot(
     operation: ResourceOperation,
 ) -> ApiResult<()> {
     tag_data.sort_fields();
-    let resource_id = tag_data.names.first().unwrap().clone();
+    let resource_id = tag_data.names.first().expect(TAG_NAME_PANIC_MESSAGE).clone();
     serde_json::to_value(tag_data)
         .map_err(api::Error::from)
         .and_then(|data| {
@@ -161,3 +161,5 @@ fn unary_snapshot(
             .map_err(api::Error::from)
         })
 }
+
+const TAG_NAME_PANIC_MESSAGE: &str = "A tag must have at least one name";

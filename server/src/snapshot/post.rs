@@ -81,6 +81,7 @@ pub fn feature_snapshot(
     old_featured_post_id: Option<i64>,
     new_featured_post_id: i64,
 ) -> QueryResult<()> {
+    const PANIC_MESSAGE: &str = "There must be a diff";
     if old_featured_post_id == Some(new_featured_post_id) {
         return Ok(());
     }
@@ -89,7 +90,8 @@ pub fn feature_snapshot(
     let not_featured_data = json!({"featured": false});
 
     if let Some(old_featured_post_id) = old_featured_post_id {
-        let old_feature_diff = snapshot::value_diff(featured_data.clone(), not_featured_data.clone()).unwrap();
+        let old_feature_diff =
+            snapshot::value_diff(featured_data.clone(), not_featured_data.clone()).expect(PANIC_MESSAGE);
         NewSnapshot {
             user_id: client.id,
             operation: ResourceOperation::Modified,
@@ -100,7 +102,7 @@ pub fn feature_snapshot(
         .insert(conn)?;
     }
 
-    let new_feature_diff = snapshot::value_diff(not_featured_data, featured_data).unwrap();
+    let new_feature_diff = snapshot::value_diff(not_featured_data, featured_data).expect(PANIC_MESSAGE);
     NewSnapshot {
         user_id: client.id,
         operation: ResourceOperation::Modified,

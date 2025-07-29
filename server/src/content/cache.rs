@@ -103,7 +103,7 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
     let checksum = hash::compute_checksum(&data);
     let md5_checksum = hash::compute_md5_checksum(&data);
 
-    let (_uuid, extension) = token.split_once('.').unwrap();
+    let (_uuid, extension) = token.split_once('.').unwrap_or((&token, ""));
     let mime_type = MimeType::from_extension(extension)?;
     let post_type = PostType::from(mime_type);
 

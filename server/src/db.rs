@@ -9,7 +9,6 @@ use diesel::pg::Pg;
 use diesel::prelude::*;
 use diesel::r2d2::{ConnectionManager, CustomizeConnection, Pool, PoolError, PooledConnection};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
-use std::borrow::Cow;
 use std::error::Error;
 use std::num::ParseIntError;
 use std::sync::LazyLock;
@@ -49,7 +48,7 @@ pub fn run_migrations(conn: &mut PgConnection) -> Result<(), Box<dyn Error + Sen
         migration.name().version().to_string().parse()
     };
 
-    let panic_message = "there is at least one migration";
+    let panic_message = "There must be at least one migration";
     let first_migration = migration_number(pending_migrations.first().expect(panic_message))?;
     let last_migration = migration_number(pending_migrations.last().expect(panic_message))?;
     let migration_range = first_migration..=last_migration;
@@ -83,13 +82,14 @@ pub fn run_migrations(conn: &mut PgConnection) -> Result<(), Box<dyn Error + Sen
 /// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DATABASE`.
 pub fn create_url(database_override: Option<&str>) -> String {
     if std::env::var("DOCKER_DEPLOYMENT").is_err() {
-        dotenvy::from_filename("../.env").unwrap();
+        dotenvy::from_filename("../.env").expect(".env must be in project root directory");
     }
 
-    let user = std::env::var("POSTGRES_USER").unwrap();
-    let password = std::env::var("POSTGRES_PASSWORD").unwrap();
+    let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER must be defined in .env");
+    let password = std::env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD must be defined in .env");
     let hostname = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| String::from("localhost"));
-    let database = database_override.map_or_else(|| Cow::Owned(std::env::var("POSTGRES_DB").unwrap()), Cow::Borrowed);
+    let database = std::env::var("POSTGRES_DB").expect("POSTGRES_DB must be defined in .env");
+    let database = database_override.unwrap_or(&database);
 
     format!("postgres://{user}:{password}@{hostname}/{database}")
 }
@@ -145,7 +145,7 @@ static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
         .test_on_check_out(true)
         .connection_customizer(Box::new(ConnectionInitialzier {}))
         .build(manager)
-        .expect("Could not build connection pool")
+        .expect("Connection pool must be constructible")
 });
 
 #[derive(Debug)]
