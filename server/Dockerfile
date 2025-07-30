@@ -15,7 +15,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 
 # Install system dependencies
-RUN apk update && apk add --no-cache pkgconfig postgresql-dev ffmpeg-dev clang-dev 
+RUN apk update && apk add --no-cache pkgconfig clang-dev postgresql-dev ffmpeg-dev
 
 COPY --from=planner /opt/app/recipe.json recipe.json
 
