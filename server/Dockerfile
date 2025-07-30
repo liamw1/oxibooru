@@ -1,9 +1,9 @@
-ARG DEBIAN_VERSION=12.8
+ARG ALPINE_VERSION=3.22
 ARG RUST_VERSION=1.88
 ARG CHEF_VERSION=0.1.72
 
 ############################## Planning Phase ##############################
-FROM lukemathwalker/cargo-chef:${CHEF_VERSION}-rust-${RUST_VERSION}-slim-bookworm AS chef
+FROM lukemathwalker/cargo-chef:${CHEF_VERSION}-rust-${RUST_VERSION}-alpine AS chef
 WORKDIR /opt/app
 
 # Create recipe of crate dependencies
@@ -15,21 +15,21 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y clang pkg-config libpq-dev \
-  libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
+RUN apk update && apk add --no-cache pkgconfig postgresql-dev ffmpeg-dev clang-dev 
 
 COPY --from=planner /opt/app/recipe.json recipe.json
 
 # Build dependencies (this will be cached for future builds)
 ARG TARGET_CPU
-RUN RUSTFLAGS="-C target-cpu=$TARGET_CPU" cargo chef cook --release --recipe-path recipe.json
+ARG CODEGEN_OPTIONS="-C target-feature=-crt-static -C target-cpu=$TARGET_CPU"
+RUN RUSTFLAGS=${CODEGEN_OPTIONS} cargo chef cook --release --recipe-path recipe.json
 
 # Buid application
 COPY . .
-RUN RUSTFLAGS="-C target-cpu=$TARGET_CPU" cargo build --release
+RUN RUSTFLAGS=${CODEGEN_OPTIONS} cargo build --release
 
 ################################# Run Phase ################################
-FROM debian:${DEBIAN_VERSION}-slim AS runtime
+FROM alpine:${ALPINE_VERSION} AS runtime
 WORKDIR /opt/app
 
 ENV RUST_BACKTRACE=full
@@ -39,13 +39,13 @@ ARG PUID=1000
 ARG PGID=1000
 
 # Install dynamic libs needed at runtime
-RUN apt-get update && apt-get install -y libpq5 libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
+RUN apk update && apk add --no-cache libpq ffmpeg-libavdevice
 
 # Set permissions
 RUN mkdir -p /opt/app /data \
-  && groupadd -g ${PGID} app \
-  && useradd -u ${PUID} -g ${PGID} -r -M -d /opt/app -s /sbin/nologin app \
-  && chown -R app:app /opt/app /data
+ && addgroup -g ${PGID} app \
+ && adduser -SDH -h /opt/app -g '' -G app -u ${PUID} app \
+ && chown -R app:app /opt/app /data
 
 # Copy over application binary
 COPY --from=builder /opt/app/target/release/server server
