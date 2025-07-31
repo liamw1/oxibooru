@@ -219,6 +219,15 @@ function matchingNames(text, names) {
     return matches;
 }
 
+function preloadPostImages(post) {
+    if (!["image", "animation"].includes(post.type)) {
+        return;
+    }
+    const img = new Image()
+    img.fetchPriority = "low";
+    img.src = post.contentUrl;
+}
+
 module.exports = {
     range: range,
     formatRelativeTime: formatRelativeTime,
@@ -239,4 +248,5 @@ module.exports = {
     getPrettyName: getPrettyName,
     wildcardMatch: wildcardMatch,
     matchingNames: matchingNames,
+    preloadPostImages: preloadPostImages,
 };
