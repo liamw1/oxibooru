@@ -3,7 +3,7 @@ use crate::auth::Client;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::PoolInfo;
-use crate::schema::{pool, pool_category, pool_name};
+use crate::schema::{pool, pool_category};
 use crate::search::pool::QueryBuilder;
 use crate::snapshot::pool::SnapshotData;
 use crate::string::{LargeString, SmallString};
@@ -225,17 +225,13 @@ async fn update(
 
 async fn delete(
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(pool_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, config::privileges().pool_delete)?;
 
     db::get_connection()?.transaction(|conn| {
-        let pool: Pool = pool::table
-            .select(Pool::as_select())
-            .inner_join(pool_name::table)
-            .filter(pool_name::name.eq(name))
-            .first(conn)?;
+        let pool: Pool = pool::table.find(pool_id).first(conn)?;
         api::verify_version(pool.last_edit_time, *client_version)?;
 
         let pool_id = pool.id;
@@ -251,8 +247,7 @@ async fn delete(
 mod test {
     use crate::api::ApiResult;
     use crate::model::pool::Pool;
-    use crate::schema::{database_statistics, pool, pool_name, pool_statistics};
-    use crate::string::SmallString;
+    use crate::schema::{database_statistics, pool, pool_statistics};
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
@@ -308,9 +303,9 @@ mod test {
 
         verify_query(&format!("POST /pool/?{FIELDS}"), "pool/create.json").await?;
 
-        let (pool_id, name): (i64, SmallString) = pool_name::table
-            .select((pool_name::pool_id, pool_name::name))
-            .order_by(pool_name::pool_id.desc())
+        let pool_id: i64 = pool::table
+            .select(pool::id)
+            .order_by(pool::id.desc())
             .first(&mut conn)?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
@@ -321,7 +316,7 @@ mod test {
         assert_eq!(new_pool_count, pool_count + 1);
         assert_eq!(post_count, 2);
 
-        verify_query(&format!("DELETE /pool/{name}/?{FIELDS}"), "pool/delete.json").await?;
+        verify_query(&format!("DELETE /pool/{pool_id}/?{FIELDS}"), "pool/delete.json").await?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
         let has_pool: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(&mut conn)?;

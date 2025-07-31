@@ -1493,7 +1493,7 @@ data.
 ## Deleting pool
 - **Request**
 
-    `DELETE /pool/<name>`
+    `DELETE /pool/<id>`
 
 - **Input**
 
