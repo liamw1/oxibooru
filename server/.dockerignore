@@ -5,9 +5,6 @@ Dockerfile
 # Config template
 config.toml.dist
 
-# Cargo lock file
-Cargo.lock
-
 # Build artifacts
 target
 
