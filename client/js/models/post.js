@@ -211,8 +211,8 @@ class Post extends events.EventTarget {
         return returnedPromise;
     }
 
-    static get(id) {
-        return api.get(uri.formatApiLink("post", id)).then((response) => {
+    static get(id, options) {
+        return api.get(uri.formatApiLink("post", id), options).then((response) => {
             return Promise.resolve(Post.fromResponse(response));
         });
     }
