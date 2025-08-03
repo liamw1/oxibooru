@@ -11,6 +11,7 @@ const PostList = require("../models/post_list.js");
 const PostMainView = require("../views/post_main_view.js");
 const BasePostController = require("./base_post_controller.js");
 const EmptyView = require("../views/empty_view.js");
+const PoolNavigatorListControl = require("../controls/pool_navigator_list_control.js");
 
 class PostMainController extends BasePostController {
     constructor(ctx, editMode) {
@@ -26,6 +27,7 @@ class PostMainController extends BasePostController {
         ]).then(
             (responses) => {
                 const [post, aroundResponse] = responses;
+                let aroundPool = null;
 
                 // remove junk from query, but save it into history so that it can
                 // be still accessed after history navigation / page refresh
@@ -39,6 +41,17 @@ class PostMainController extends BasePostController {
                         )
                         : uri.formatClientLink("post", ctx.parameters.id);
                     router.replace(url, ctx.state, false);
+                    misc.splitByWhitespace(parameters.query).forEach((item) => {
+                        const found = item.match(/^pool:([0-9]+)/i);
+                        if (found) {
+                            const activePool = parseInt(found[1]);
+                            post.pools.map((pool) => {
+                                if (pool.id == activePool) {
+                                    aroundPool = pool;
+                                }
+                            });
+                        }
+                    });
                 }
 
                 const prevPostId = aroundResponse.prev
@@ -70,6 +83,8 @@ class PostMainController extends BasePostController {
                     canFeaturePosts: api.hasPrivilege("post_feature"),
                     canListComments: api.hasPrivilege("comment_list"),
                     canCreateComments: api.hasPrivilege("comment_create"),
+                    canListPools: api.hasPrivilege("pool_list"),
+                    canViewPools: api.hasPrivilege("pool_view"),
                     parameters: parameters,
                 });
 

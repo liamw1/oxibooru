@@ -385,6 +385,10 @@
             <td><code>rating</code></td>
             <td>alias of <code>safety</code></td>
         </tr>
+        <tr>
+            <td><code>pool</code></td>
+            <td>pool order, requires pool named token</code></td>
+        </tr>
     </tbody>
 </table>
 

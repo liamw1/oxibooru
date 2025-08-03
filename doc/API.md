@@ -35,7 +35,8 @@
     - Posts
         - [Listing posts](#listing-posts)
         - [Getting post](#getting-post)
-        - [Getting around post](#getting-around-post)
+        - [Getting around posts around post](#getting-around-post)
+        - [Getting pools around post](#getting-pools-around-post)
         - [Getting featured post](#getting-featured-post)
         - [Featuring post](#featuring-post)
         - [Reverse image search](#reverse-image-search)
@@ -869,6 +870,43 @@ data.
     client. If no post is featured, `<post>` is null. Note that this method
     exists mostly for compatibility with setting featured post - most of times,
     you'd want to use query global info which contains more information.
+
+## Getting pools around post
+- **Request**
+
+    `GET /post/<id>/pools-nearby`
+
+- **Output**
+
+    ```json5
+    [
+        {
+            "pool": <pool>,
+            "firstPost": <first-post>,
+            "lastPost": <last-post>,
+            "nextPost": <next-post>,
+            "previousPost": <previous-post>
+        },
+        ...
+    ]
+    ```
+
+- **Field meaning**
+
+- `<pool>`: The associated [micro pool resource](#micro-pool).
+- `<first-post>`: A [micro post resource](#micro-post) that displays the first post in the pool.
+- `<last-post>`: A [micro post resource](#micro-post) that displays the last post in the pool.
+- `<next-post>`: A [micro post resource](#micro-post) that displays the next post in the pool.
+- `<previous-post>`: A [micro post resource](#micro-post) that displays the previous post in the pool.
+
+- **Errors**
+
+    - the post does not exist
+    - privileges are too low
+
+- **Description**
+
+    Retrieves extra information about any pools that the post is in.
 
 ## Featuring post
 - **Request**
