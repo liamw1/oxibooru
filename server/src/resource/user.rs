@@ -121,11 +121,11 @@ impl UserInfo {
             resource::retrieve(fields[Field::FavoritePostCount], || get_user_stats!(conn, &users, favorite_count))?;
 
         let batch_size = users.len();
-        resource::check_batch_results(comment_counts.len(), batch_size);
-        resource::check_batch_results(upload_counts.len(), batch_size);
-        resource::check_batch_results(like_counts.len(), batch_size);
-        resource::check_batch_results(dislike_counts.len(), batch_size);
-        resource::check_batch_results(favorite_counts.len(), batch_size);
+        resource::check_batch_results(batch_size, comment_counts.len());
+        resource::check_batch_results(batch_size, upload_counts.len());
+        resource::check_batch_results(batch_size, like_counts.len());
+        resource::check_batch_results(batch_size, dislike_counts.len());
+        resource::check_batch_results(batch_size, favorite_counts.len());
 
         let results = users
             .into_iter()

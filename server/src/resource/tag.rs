@@ -70,11 +70,11 @@ impl TagInfo {
         let mut usages = resource::retrieve(fields[Field::Usages], || get_usages(conn, &tags))?;
 
         let batch_size = tags.len();
-        resource::check_batch_results(categories.len(), batch_size);
-        resource::check_batch_results(names.len(), batch_size);
-        resource::check_batch_results(implications.len(), batch_size);
-        resource::check_batch_results(suggestions.len(), batch_size);
-        resource::check_batch_results(usages.len(), batch_size);
+        resource::check_batch_results(batch_size, categories.len());
+        resource::check_batch_results(batch_size, names.len());
+        resource::check_batch_results(batch_size, implications.len());
+        resource::check_batch_results(batch_size, suggestions.len());
+        resource::check_batch_results(batch_size, usages.len());
 
         let results = tags
             .into_iter()
@@ -143,7 +143,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
         .map(|(implication, ..)| implication.child_id)
         .collect();
 
-    let implication_names: Vec<(i64, SmallString)> = tag_name::table
+    let implication_names = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(implication_ids))
         .order_by((tag_name::tag_id, tag_name::order))
@@ -182,7 +182,7 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
         .load(conn)?;
     let suggestion_ids: HashSet<i64> = suggestions.iter().map(|(suggestion, ..)| suggestion.child_id).collect();
 
-    let suggestion_names: Vec<(i64, SmallString)> = tag_name::table
+    let suggestion_names = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(suggestion_ids))
         .order_by((tag_name::tag_id, tag_name::order))

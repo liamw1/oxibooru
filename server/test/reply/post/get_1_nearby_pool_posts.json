@@ -1,0 +1,26 @@
+[
+    {
+        "pool": {
+            "id": 2,
+            "names": [
+                "fantasy"
+            ],
+            "category": "Setting",
+            "description": "",
+            "postCount": 3
+        },
+        "firstPost": {
+            "id": 1,
+            "thumbnailUrl": "data/generated-thumbnails/1_V6zvZPXwEjHz6HXRlqdExw1vocUl4qCD_Rmey1e1x5s.jpg"
+        },
+        "lastPost": {
+            "id": 5,
+            "thumbnailUrl": "data/generated-thumbnails/5_Tdd7ElikauHsmoXgiYwg_k7GVh3l1oDIrKJDj53Lj7Y.jpg"
+        },
+        "previousPost": null,
+        "nextPost": {
+            "id": 2,
+            "thumbnailUrl": "data/generated-thumbnails/2_kCRQGRRpd3-9vUMza745KoNTxo5HF4irmNYIE8yli44.jpg"
+        }
+    }
+]

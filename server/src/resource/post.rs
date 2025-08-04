@@ -64,8 +64,17 @@ impl Note {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroPost {
-    pub id: i64,
-    pub thumbnail_url: String,
+    id: i64,
+    thumbnail_url: String,
+}
+
+impl MicroPost {
+    pub fn new(post_id: i64) -> Self {
+        Self {
+            id: post_id,
+            thumbnail_url: PostHash::new(post_id).thumbnail_url(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
@@ -215,25 +224,25 @@ impl PostInfo {
             resource::retrieve(fields[Field::FavoritedBy], || get_users_who_favorited(conn, &posts))?;
 
         let batch_size = posts.len();
-        resource::check_batch_results(owners.len(), batch_size);
-        resource::check_batch_results(content_urls.len(), batch_size);
-        resource::check_batch_results(thumbnail_urls.len(), batch_size);
-        resource::check_batch_results(tags.len(), batch_size);
-        resource::check_batch_results(comments.len(), batch_size);
-        resource::check_batch_results(relations.len(), batch_size);
-        resource::check_batch_results(pools.len(), batch_size);
-        resource::check_batch_results(notes.len(), batch_size);
-        resource::check_batch_results(scores.len(), batch_size);
-        resource::check_batch_results(client_scores.len(), batch_size);
-        resource::check_batch_results(client_favorites.len(), batch_size);
-        resource::check_batch_results(tag_counts.len(), batch_size);
-        resource::check_batch_results(comment_counts.len(), batch_size);
-        resource::check_batch_results(relation_counts.len(), batch_size);
-        resource::check_batch_results(note_counts.len(), batch_size);
-        resource::check_batch_results(favorite_counts.len(), batch_size);
-        resource::check_batch_results(feature_counts.len(), batch_size);
-        resource::check_batch_results(last_feature_times.len(), batch_size);
-        resource::check_batch_results(users_who_favorited.len(), batch_size);
+        resource::check_batch_results(batch_size, owners.len());
+        resource::check_batch_results(batch_size, content_urls.len());
+        resource::check_batch_results(batch_size, thumbnail_urls.len());
+        resource::check_batch_results(batch_size, tags.len());
+        resource::check_batch_results(batch_size, comments.len());
+        resource::check_batch_results(batch_size, relations.len());
+        resource::check_batch_results(batch_size, pools.len());
+        resource::check_batch_results(batch_size, notes.len());
+        resource::check_batch_results(batch_size, scores.len());
+        resource::check_batch_results(batch_size, client_scores.len());
+        resource::check_batch_results(batch_size, client_favorites.len());
+        resource::check_batch_results(batch_size, tag_counts.len());
+        resource::check_batch_results(batch_size, comment_counts.len());
+        resource::check_batch_results(batch_size, relation_counts.len());
+        resource::check_batch_results(batch_size, note_counts.len());
+        resource::check_batch_results(batch_size, favorite_counts.len());
+        resource::check_batch_results(batch_size, feature_counts.len());
+        resource::check_batch_results(batch_size, last_feature_times.len());
+        resource::check_batch_results(batch_size, users_who_favorited.len());
 
         let results = posts
             .into_iter()
@@ -334,7 +343,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
         .load(conn)?;
     let tag_ids: HashSet<i64> = post_tags.iter().map(|(post_tag, ..)| post_tag.tag_id).collect();
 
-    let tag_names: Vec<(i64, SmallString)> = tag_name::table
+    let tag_names = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(tag_ids))
         .order_by((tag_name::tag_id, tag_name::order))
@@ -422,10 +431,8 @@ fn get_relations(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec
         .map(|post_relations| {
             post_relations
                 .into_iter()
-                .map(|relation| MicroPost {
-                    id: relation.child_id,
-                    thumbnail_url: PostHash::new(relation.child_id).thumbnail_url(),
-                })
+                .map(|relation| relation.child_id)
+                .map(MicroPost::new)
                 .collect()
         })
         .collect())
@@ -439,7 +446,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
         .load(conn)?;
     let pool_ids: HashSet<i64> = pool_posts.iter().map(|(pool_post, ..)| pool_post.pool_id).collect();
 
-    let pool_names: Vec<(i64, SmallString)> = pool_name::table
+    let pool_names = pool_name::table
         .select((pool_name::pool_id, pool_name::name))
         .filter(pool_name::pool_id.eq_any(&pool_ids))
         .order((pool_name::pool_id, pool_name::order, pool_name::name))

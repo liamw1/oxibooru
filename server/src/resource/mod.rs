@@ -42,8 +42,8 @@ where
     }
 }
 
-fn check_batch_results(batch_size: usize, post_count: usize) {
-    assert!(batch_size == 0 || batch_size == post_count);
+fn check_batch_results(batch_size: usize, result_size: usize) {
+    assert!(result_size == 0 || result_size == batch_size);
 }
 
 fn single<T>(mut batch: Vec<T>) -> T {
@@ -121,9 +121,9 @@ where
     results
 }
 
-/// Organizes `ordered_names` into a map between each tag's id and its names while
-/// minimizing allocations and clones. Assumes `ordered_names` is sorted by tag id
-/// and tag name order.
+/// Organizes `ordered_names` into a map between each tag or pool id and its names while
+/// minimizing allocations and clones. Assumes `ordered_names` is sorted by id
+/// and name order.
 fn collect_names(ordered_names: Vec<(i64, SmallString)>) -> HashMap<i64, Rc<[SmallString]>> {
     if ordered_names.is_empty() {
         return HashMap::new();

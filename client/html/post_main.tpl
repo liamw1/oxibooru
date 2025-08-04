@@ -52,6 +52,10 @@
     <div class='content'>
         <div class='post-container'></div>
 
+        <% if (ctx.canListPools && ctx.canViewPools) { %>
+            <div class='pool-navigators-container'></div>
+        <% } %>
+
         <% if (ctx.editMode && ctx.canEditPostDescription) { %>
             <h2>Description</h2>
             <%= ctx.makeTextarea({
@@ -65,10 +69,6 @@
                     <%= ctx.makeMarkdown(ctx.post.description) %>
                 </details>
             </div>
-        <% } %>
-        
-        <% if (ctx.canListPools && ctx.canViewPools) { %>
-            <div class='pool-navigators-container'></div>
         <% } %>
 
         <div class='after-mobile-controls'>

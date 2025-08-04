@@ -7,6 +7,7 @@ use crate::content::{Content, FileContents, JsonOrMultipart, signature, upload};
 use crate::filesystem::Directory;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
+use crate::resource::pool::PoolNeighborInfo;
 use crate::resource::post::{Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
 use crate::search::post::QueryBuilder;
@@ -35,6 +36,7 @@ pub fn routes() -> Router {
                 .delete(delete),
         )
         .route("/post/{id}/around", routing::get(get_neighbors))
+        .route("/post/{id}/pools-nearby", routing::get(get_nearby_pool_posts))
         .route("/featured-post", routing::get(get_featured).post(feature))
         .route(
             "/posts/reverse-search",
@@ -129,6 +131,8 @@ async fn get_neighbors(
 ) -> ApiResult<Json<PostNeighbors>> {
     api::verify_privilege(client, config::privileges().post_list)?;
 
+    println!("{:?}", params.query);
+
     let create_post_neighbors = |mut neighbors: Vec<PostInfo>, has_previous_post: bool| {
         let (prev, next) = match (neighbors.pop(), neighbors.pop()) {
             (Some(second), Some(first)) => (Some(first), Some(second)),
@@ -205,6 +209,18 @@ async fn get_neighbors(
         let post_infos = PostInfo::new_batch_from_ids(conn, client, &post_ids, &fields)?;
         Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
     })
+}
+
+async fn get_nearby_pool_posts(
+    Extension(client): Extension<Client>,
+    Path(post_id): Path<i64>,
+) -> ApiResult<Json<Vec<PoolNeighborInfo>>> {
+    api::verify_privilege(client, config::privileges().pool_list)?;
+
+    db::get_connection()?
+        .transaction(|conn| PoolNeighborInfo::retrieve(conn, post_id))
+        .map(Json)
+        .map_err(api::Error::from)
 }
 
 async fn get_featured(
@@ -907,6 +923,13 @@ mod test {
         verify_query(&format!("GET /post/1/{QUERY}{FIELDS}"), "post/get_1_neighbors.json").await?;
         verify_query(&format!("GET /post/4/{QUERY}{FIELDS}"), "post/get_4_neighbors.json").await?;
         verify_query(&format!("GET /post/5/{QUERY}{FIELDS}"), "post/get_5_neighbors.json").await
+    }
+
+    #[tokio::test]
+    async fn get_nearby_pool_posts() -> ApiResult<()> {
+        verify_query(&format!("GET /post/1/pools-nearby"), "post/get_1_nearby_pool_posts.json").await?;
+        verify_query(&format!("GET /post/2/pools-nearby"), "post/get_2_nearby_pool_posts.json").await?;
+        verify_query(&format!("GET /post/5/pools-nearby"), "post/get_5_nearby_pool_posts.json").await
     }
 
     #[tokio::test]

@@ -27,7 +27,6 @@ class PostMainController extends BasePostController {
         ]).then(
             (responses) => {
                 const [post, aroundResponse] = responses;
-                let aroundPool = null;
 
                 // remove junk from query, but save it into history so that it can
                 // be still accessed after history navigation / page refresh
@@ -41,17 +40,6 @@ class PostMainController extends BasePostController {
                         )
                         : uri.formatClientLink("post", ctx.parameters.id);
                     router.replace(url, ctx.state, false);
-                    misc.splitByWhitespace(parameters.query).forEach((item) => {
-                        const found = item.match(/^pool:([0-9]+)/i);
-                        if (found) {
-                            const activePool = parseInt(found[1]);
-                            post.pools.map((pool) => {
-                                if (pool.id == activePool) {
-                                    aroundPool = pool;
-                                }
-                            });
-                        }
-                    });
                 }
 
                 const prevPostId = aroundResponse.prev
@@ -204,9 +192,6 @@ class PostMainController extends BasePostController {
         this._view.sidebarControl.disableForm();
         this._view.sidebarControl.clearMessages();
         const post = e.detail.post;
-        if (e.detail.description !== undefined && e.detail.description !== null) {
-            post.description = e.detail.description;
-        }
         if (e.detail.safety !== undefined && e.detail.safety !== null) {
             post.safety = e.detail.safety;
         }
@@ -225,7 +210,7 @@ class PostMainController extends BasePostController {
         if (e.detail.source !== undefined && e.detail.source !== null) {
             post.source = e.detail.source;
         }
-        if (e.detail.description !== undefined) {
+        if (e.detail.description !== undefined && e.detail.description !== null) {
             post.description = e.detail.description;
         }
         post.save().then(

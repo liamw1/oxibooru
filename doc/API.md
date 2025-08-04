@@ -36,7 +36,7 @@
         - [Listing posts](#listing-posts)
         - [Getting post](#getting-post)
         - [Getting around posts around post](#getting-around-post)
-        - [Getting pools around post](#getting-pools-around-post)
+        - [Getting pool posts around post](#getting-nearby-pool-posts)
         - [Getting featured post](#getting-featured-post)
         - [Featuring post](#featuring-post)
         - [Reverse image search](#reverse-image-search)
@@ -871,7 +871,7 @@ data.
     exists mostly for compatibility with setting featured post - most of times,
     you'd want to use query global info which contains more information.
 
-## Getting pools around post
+## Getting nearby pool posts
 - **Request**
 
     `GET /post/<id>/pools-nearby`

@@ -36,7 +36,7 @@ class Pool extends events.EventTarget {
     }
 
     get posts() {
-        return this._postsMicro || this._posts;
+        return this._posts;
     }
 
     get postCount() {
@@ -166,6 +166,7 @@ class Pool extends events.EventTarget {
     }
 
     _updateFromResponse(response) {
+        response = response.pool || response;
         const map = {
             _id: response.id,
             _version: response.version,
@@ -176,7 +177,6 @@ class Pool extends events.EventTarget {
             _creationTime: response.creationTime,
             _lastEditTime: response.lastEditTime,
             _postCount: response.postCount || 0,
-            _postsMicro: response.postsMicro,
             _firstPost: response.firstPost || null,
             _lastPost: response.lastPost || null,
             _previousPost: response.previousPost || null,
