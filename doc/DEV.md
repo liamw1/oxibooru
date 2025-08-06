@@ -1,10 +1,15 @@
 # Development Guide
-## Installing Rust
+## Installing Dependencies
 To get started it's recommended to install the Rust toolchain using [`rustup`](https://www.rust-lang.org/tools/install). If you've already installed `rustup` before, you can update with
 ```console
 rustup update
 ```
 To aid in the editing and navigating of Rust code, install `rust-analyzer` in your development environment of choice. I highly recommend turning on your editors format-on-save feature to keep the code properly formatted.
+
+Next, you'll want to install the build and runtime dependencies. On Debian-based systems, this looks something like
+```console
+sudo apt-get update && sudo apt-get install -y clang pkg-config libssl-dev libpq-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
+```
 
 ## Rust Basics
 ### Compiling
