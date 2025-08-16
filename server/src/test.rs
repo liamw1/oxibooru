@@ -17,7 +17,7 @@ use crate::schema::{
 };
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, db};
+use crate::{api, app, db};
 use axum::ServiceExt;
 use axum::extract::Request;
 use axum::http::Method;
@@ -28,10 +28,11 @@ use diesel::r2d2::{ConnectionManager, Pool};
 use serde_json::Value;
 use std::error::Error;
 use std::path::PathBuf;
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{LazyLock, Mutex, MutexGuard};
 use std::time::Duration;
 use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
+use tracing::error;
 use uuid::Uuid;
 
 pub const TEST_PASSWORD: &str = "test_password";
@@ -39,6 +40,7 @@ pub const TEST_SALT: &str = "test_salt";
 pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
 pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
 
+/// Gets a connection to the test database, identified by
 pub fn get_connection() -> ConnectionResult {
     let mut guard = get_guard();
     match guard.as_mut() {
@@ -62,25 +64,31 @@ pub fn image_path(relative_path: &str) -> PathBuf {
     asset_path("images", relative_path)
 }
 
-/// Verifies that a given `query` matches the contents of a `reply_filepath`.
-/// `query` must be of the form `METHOD path` (e.g. `GET /post/1`).
-pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
-    verify_query_with_user("administrator", query, relative_path).await
+/// Verifies that a given `request` is working correctly when authenticating
+/// as a user with `administrator` privileges. See [`verify_request_with_user`]
+/// documentation for more details.
+pub async fn verify_request(request: &str, relative_path: &str) -> ApiResult<()> {
+    verify_request_with_user("administrator", request, relative_path).await
 }
 
-pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) -> ApiResult<()> {
-    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes());
-    let (method, path) = query
+/// Verifies that the response of a given `request` matches the contents of a file
+/// located at `src/test/reply/{relative_path}`. `user` must be the name of a user
+/// in the test database with password [`TEST_PASSWORD`] and `request` must be of the form
+/// `METHOD path` (e.g. `GET /post/1`).
+///
+/// For requests that require a json body, a file containing the body can be placed
+/// at `src/test/body/{relative_path}`. For requests that create a `snapshot`, a
+/// file containing the expected snapshot data can be placed at `src/test/snapshot/{relative_path}`.
+pub async fn verify_request_with_user(user: &str, request: &str, relative_path: &str) -> ApiResult<()> {
+    let (method, path) = request
         .split_once(' ')
-        .expect("Query string must have method and path separated by a space");
-    let method = Method::try_from(method).expect("Query string must start with a valid method");
+        .expect("Request string must have method and path separated by a space");
+    let method = Method::try_from(method).expect("Request string must start with a valid method");
     let path = path.replace(' ', "%20"); // Percent-encode all spaces
     let credentials = header::credentials_for(user, TEST_PASSWORD);
     let basic_access_authentication = format!("Basic {credentials}");
 
-    let server =
-        TestServer::new(ServiceExt::<Request>::into_make_service(app)).expect("Test server must be constructible");
-    let request = server
+    let request = SERVER
         .method(method, &path)
         .add_header(AUTHORIZATION, basic_access_authentication);
 
@@ -336,12 +344,18 @@ const COMMENT_SCORES: &[(i64, i64, Score)] = &[
 
 static CONNECTION_POOL: Mutex<Option<ConnectionPool>> = Mutex::new(None);
 
+static SERVER: LazyLock<TestServer> = LazyLock::new(|| {
+    app::enable_tracing();
+    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes());
+    TestServer::new(ServiceExt::<Request>::into_make_service(app)).expect("Test server must be constructible")
+});
+
 fn get_guard() -> MutexGuard<'static, Option<ConnectionPool>> {
     match CONNECTION_POOL.lock() {
         Ok(guard) => guard,
         Err(err) => {
             // If panic occurs while holding lock, database may be in an invalid state
-            eprintln!("Test database has been poisoned! Resetting...");
+            error!("Test database has been poisoned! Resetting...");
             let mut guard = err.into_inner();
             *guard = None;
             guard

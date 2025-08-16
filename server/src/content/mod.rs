@@ -9,6 +9,7 @@ use axum::http::StatusCode;
 use axum::http::header::CONTENT_TYPE;
 use axum::response::{IntoResponse, Response};
 use image::DynamicImage;
+use std::sync::Arc;
 use url::Url;
 
 pub mod cache;
@@ -78,12 +79,12 @@ impl Content {
         decode::representative_image(&file_contents, &file_path).map(|image| thumbnail::create(&image, thumbnail_type))
     }
 
-    pub async fn compute_properties(self) -> ApiResult<CachedProperties> {
+    pub async fn compute_properties(self) -> ApiResult<Arc<CachedProperties>> {
         let token = self.save().await?;
         cache::compute_properties(token)
     }
 
-    pub async fn get_or_compute_properties(self) -> ApiResult<CachedProperties> {
+    pub async fn get_or_compute_properties(self) -> ApiResult<Arc<CachedProperties>> {
         let token = self.save().await?;
         cache::get_or_compute_properties(token)
     }

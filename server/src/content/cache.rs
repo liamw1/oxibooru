@@ -6,11 +6,10 @@ use crate::filesystem;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
 use image::DynamicImage;
 use std::collections::VecDeque;
-use std::sync::{LazyLock, Mutex, MutexGuard};
+use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use tracing::error;
 
 /// Stores properties of content that are costly to compute (usually require reading/decoding entire file).
-#[derive(Clone)]
 pub struct CachedProperties {
     pub token: String,
     pub checksum: Vec<u8>,
@@ -25,18 +24,14 @@ pub struct CachedProperties {
 }
 
 /// Computes content properties and caches them in memory.
-pub fn compute_properties(content_token: String) -> ApiResult<CachedProperties> {
+pub fn compute_properties(content_token: String) -> ApiResult<Arc<CachedProperties>> {
     let properties = compute_properties_no_cache(content_token.clone())?;
-
-    // Clone this here to make sure we aren't holding onto lock for longer than necessary
-    let properties_copy = properties.clone();
-    get_cache_guard().insert(content_token, properties_copy);
-
+    get_cache_guard().insert(content_token, properties.clone());
     Ok(properties)
 }
 
 /// Returns cached properties of content or computes them if not in cache.
-pub fn get_or_compute_properties(content_token: String) -> ApiResult<CachedProperties> {
+pub fn get_or_compute_properties(content_token: String) -> ApiResult<Arc<CachedProperties>> {
     let maybe_properties = get_cache_guard().remove(&content_token);
     match maybe_properties {
         Some(properties) => Ok(properties),
@@ -46,7 +41,7 @@ pub fn get_or_compute_properties(content_token: String) -> ApiResult<CachedPrope
 
 /// A simple ring buffer that stores [`CachedProperties`].
 struct RingCache {
-    data: VecDeque<(String, CachedProperties)>,
+    data: VecDeque<(String, Arc<CachedProperties>)>,
     max_size: usize,
 }
 
@@ -58,14 +53,14 @@ impl RingCache {
         }
     }
 
-    fn insert(&mut self, key: String, value: CachedProperties) {
+    fn insert(&mut self, key: String, value: Arc<CachedProperties>) {
         self.data.push_back((key, value));
         if self.data.len() > self.max_size {
             self.data.pop_front();
         }
     }
 
-    fn remove(&mut self, key: &str) -> Option<CachedProperties> {
+    fn remove(&mut self, key: &str) -> Option<Arc<CachedProperties>> {
         self.data
             .iter()
             .position(|(cache_key, _)| cache_key == key)
@@ -96,7 +91,7 @@ fn get_cache_guard() -> MutexGuard<'static, RingCache> {
 }
 
 /// Computes content properties without storing them in cache.
-fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
+fn compute_properties_no_cache(token: String) -> ApiResult<Arc<CachedProperties>> {
     let temp_path = filesystem::temporary_upload_filepath(&token);
     let file_size = filesystem::file_size(&temp_path)?;
     let data = std::fs::read(&temp_path)?;
@@ -120,7 +115,7 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
     let file_contents = FileContents { data, mime_type };
     let image = decode::representative_image(&file_contents, &temp_path)?;
 
-    Ok(CachedProperties {
+    Ok(Arc::new(CachedProperties {
         token,
         checksum,
         md5_checksum,
@@ -131,5 +126,5 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
         mime_type,
         file_size,
         flags,
-    })
+    }))
 }

@@ -99,15 +99,6 @@ impl ErrorKind for argon2::password_hash::Error {
     }
 }
 
-impl ErrorKind for crate::auth::HashError {
-    fn kind(&self) -> &'static str {
-        match self {
-            Self::EnvVar(err) => err.kind(),
-            Self::Hash(err) => err.kind(),
-        }
-    }
-}
-
 impl ErrorKind for diesel::result::DatabaseErrorKind {
     fn kind(&self) -> &'static str {
         match self {
@@ -166,7 +157,7 @@ impl ErrorKind for base64::DecodeError {
     }
 }
 
-impl ErrorKind for crate::auth::header::AuthenticationError {
+impl ErrorKind for crate::auth::AuthenticationError {
     fn kind(&self) -> &'static str {
         match self {
             Self::FailedConnection(_) => "FailedConnection",
@@ -176,6 +167,7 @@ impl ErrorKind for crate::auth::header::AuthenticationError {
             Self::InvalidToken => "InvalidToken",
             Self::MalformedCredentials => "MalformedCredentials",
             Self::MalformedToken(_) => "MalformedToken",
+            Self::PasswordHashing(err) => err.kind(),
             Self::UsernamePasswordMismatch => "UsernamePasswordMismatch",
             Self::Utf8Conversion(_) => "Utf8ConversionError",
         }
@@ -362,7 +354,6 @@ impl ErrorKind for crate::api::Error {
     fn kind(&self) -> &'static str {
         match self {
             Self::BadExtension(_) => "BadExtension",
-            Self::BadHash(err) => err.kind(),
             Self::BadHeader(_) => "BadHeader",
             Self::ContentTypeMismatch(..) => "ContentTypeMismatch",
             Self::CyclicDependency(_) => "CyclicDependency",

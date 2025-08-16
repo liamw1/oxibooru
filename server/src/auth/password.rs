@@ -1,4 +1,4 @@
-use crate::auth::HashError;
+use crate::auth::AuthenticationError;
 use crate::config;
 use argon2::Argon2;
 use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 /// Takes a plaintext `password` and hashes it using a cryptographically secure,
 /// memory-hard hash: Argon2id. A randomly generated `salt` is mixed in with the
 /// hash to protect against rainbow table attacks.
-pub fn hash_password(password: &str, salt: &SaltString) -> Result<String, HashError> {
+pub fn hash_password(password: &str, salt: &SaltString) -> Result<String, AuthenticationError> {
     let password_hash = ARGON_CONTEXT.hash_password(password.as_bytes(), salt)?;
     Ok(password_hash.to_string())
 }

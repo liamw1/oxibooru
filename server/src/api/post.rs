@@ -305,7 +305,7 @@ async fn reverse_search(
 
             // Check for exact match
             let exact_post = post::table
-                .filter(post::checksum.eq(content_properties.checksum))
+                .filter(post::checksum.eq(&content_properties.checksum))
                 .first(conn)
                 .optional()?;
             if exact_post.is_some() {
@@ -715,7 +715,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
             new_post.height = content_properties.height;
             new_post.type_ = PostType::from(content_properties.mime_type);
             new_post.mime_type = content_properties.mime_type;
-            new_post.checksum = content_properties.checksum;
+            new_post.checksum = content_properties.checksum.clone();
             new_post.flags |= content_properties.flags;
 
             // Update post signature
@@ -852,7 +852,7 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /posts/?query";
         const SORT: &str = "-sort:id&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "post/list.json").await?;
+        verify_request(&format!("{QUERY}={SORT}{FIELDS}"), "post/list.json").await?;
 
         // Test sorts
         for token in Token::iter() {
@@ -863,19 +863,21 @@ mod test {
             let token_str: &'static str = token.into();
             let query = format!("{QUERY}=sort:{token_str} {SORT}&fields=id");
             let path = format!("post/list_{token_str}_sorted.json");
-            verify_query(&query, &path).await?;
+            verify_request(&query, &path).await?;
         }
 
         // Test filters
-        verify_query(&format!("{QUERY}=-plant,sky,tagme {SORT}&fields=id"), "post/list_tag_filtered.json").await?;
-        verify_query(&format!("{QUERY}=-pool:2 {SORT}&fields=id"), "post/list_pool_filtered.json").await?;
-        verify_query(&format!("{QUERY}=fav:*user* {SORT}&fields=id"), "post/list_fav_filtered.json").await?;
-        verify_query(&format!("{QUERY}=-comment:*user* {SORT}&fields=id"), "post/list_comment_filtered.json").await?;
-        verify_query(&format!("{QUERY}=note-text:*fav* {SORT}&fields=id"), "post/list_note-text_filtered.json").await?;
-        verify_query(&format!("{QUERY}=special:liked {SORT}&fields=id"), "post/list_liked_filtered.json").await?;
-        verify_query(&format!("{QUERY}=special:disliked {SORT}&fields=id"), "post/list_disliked_filtered.json").await?;
-        verify_query(&format!("{QUERY}=special:fav {SORT}&fields=id"), "post/list_special-fav_filtered.json").await?;
-        verify_query(&format!("{QUERY}=special:tumbleweed {SORT}&fields=id"), "post/list_tumbleweed_filtered.json")
+        verify_request(&format!("{QUERY}=-plant,sky,tagme {SORT}&fields=id"), "post/list_tag_filtered.json").await?;
+        verify_request(&format!("{QUERY}=-pool:2 {SORT}&fields=id"), "post/list_pool_filtered.json").await?;
+        verify_request(&format!("{QUERY}=fav:*user* {SORT}&fields=id"), "post/list_fav_filtered.json").await?;
+        verify_request(&format!("{QUERY}=-comment:*user* {SORT}&fields=id"), "post/list_comment_filtered.json").await?;
+        verify_request(&format!("{QUERY}=note-text:*fav* {SORT}&fields=id"), "post/list_note-text_filtered.json")
+            .await?;
+        verify_request(&format!("{QUERY}=special:liked {SORT}&fields=id"), "post/list_liked_filtered.json").await?;
+        verify_request(&format!("{QUERY}=special:disliked {SORT}&fields=id"), "post/list_disliked_filtered.json")
+            .await?;
+        verify_request(&format!("{QUERY}=special:fav {SORT}&fields=id"), "post/list_special-fav_filtered.json").await?;
+        verify_request(&format!("{QUERY}=special:tumbleweed {SORT}&fields=id"), "post/list_tumbleweed_filtered.json")
             .await
     }
 
@@ -893,7 +895,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /post/{POST_ID}/?{FIELDS}"), "post/get.json").await?;
+        verify_request(&format!("GET /post/{POST_ID}/?{FIELDS}"), "post/get.json").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -904,15 +906,15 @@ mod test {
     #[parallel]
     async fn get_neighbors() -> ApiResult<()> {
         const QUERY: &str = "around/?query=-sort:id";
-        verify_query(&format!("GET /post/1/{QUERY}{FIELDS}"), "post/get_1_neighbors.json").await?;
-        verify_query(&format!("GET /post/4/{QUERY}{FIELDS}"), "post/get_4_neighbors.json").await?;
-        verify_query(&format!("GET /post/5/{QUERY}{FIELDS}"), "post/get_5_neighbors.json").await
+        verify_request(&format!("GET /post/1/{QUERY}{FIELDS}"), "post/get_1_neighbors.json").await?;
+        verify_request(&format!("GET /post/4/{QUERY}{FIELDS}"), "post/get_4_neighbors.json").await?;
+        verify_request(&format!("GET /post/5/{QUERY}{FIELDS}"), "post/get_5_neighbors.json").await
     }
 
     #[tokio::test]
     #[parallel]
     async fn get_featured() -> ApiResult<()> {
-        verify_query(&format!("GET /featured-post/?{FIELDS}"), "post/get_featured.json").await
+        verify_request(&format!("GET /featured-post/?{FIELDS}"), "post/get_featured.json").await
     }
 
     #[tokio::test]
@@ -930,7 +932,7 @@ mod test {
         let mut conn = get_connection()?;
         let (feature_count, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("POST /featured-post/?{FIELDS}"), "post/feature.json").await?;
+        verify_request(&format!("POST /featured-post/?{FIELDS}"), "post/feature.json").await?;
 
         let (new_feature_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_feature_count, feature_count + 1);
@@ -962,7 +964,7 @@ mod test {
         let mut conn = get_connection()?;
         let post = get_post(&mut conn)?;
 
-        verify_query(&format!("POST /post-merge/?{FIELDS}"), "post/merge.json").await?;
+        verify_request(&format!("POST /post-merge/?{FIELDS}"), "post/merge.json").await?;
 
         let has_post: bool = diesel::select(exists(post::table.find(REMOVE_ID))).get_result(&mut conn)?;
         assert!(!has_post);
@@ -1006,14 +1008,14 @@ mod test {
         let mut conn = get_connection()?;
         let (favorite_count, admin_favorite_count, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("POST /post/{POST_ID}/favorite/?{FIELDS}"), "post/favorite.json").await?;
+        verify_request(&format!("POST /post/{POST_ID}/favorite/?{FIELDS}"), "post/favorite.json").await?;
 
         let (new_favorite_count, new_admin_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_favorite_count, favorite_count + 1);
         assert_eq!(new_admin_favorite_count, admin_favorite_count + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("DELETE /post/{POST_ID}/favorite/?{FIELDS}"), "post/unfavorite.json").await?;
+        verify_request(&format!("DELETE /post/{POST_ID}/favorite/?{FIELDS}"), "post/unfavorite.json").await?;
 
         let (new_favorite_count, new_admin_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_favorite_count, favorite_count);
@@ -1037,19 +1039,19 @@ mod test {
         let mut conn = get_connection()?;
         let (score, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/like.json").await?;
+        verify_request(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/like.json").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/dislike.json").await?;
+        verify_request(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/dislike.json").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score - 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/remove_score.json").await?;
+        verify_request(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/remove_score.json").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score);
@@ -1072,7 +1074,7 @@ mod test {
         let mut conn = get_connection()?;
         let (post, tag_count, relation_count) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/update.json").await?;
+        verify_request(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/update.json").await?;
 
         let (new_post, new_tag_count, new_relation_count) = get_post_info(&mut conn)?;
         assert_eq!(new_post.user_id, post.user_id);
@@ -1092,7 +1094,7 @@ mod test {
         assert_ne!(new_tag_count, tag_count);
         assert_ne!(new_relation_count, relation_count);
 
-        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/update_restore.json").await?;
+        verify_request(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/update_restore.json").await?;
 
         let new_tag_id: i64 = tag::table
             .select(tag::id)

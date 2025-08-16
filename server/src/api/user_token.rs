@@ -202,14 +202,14 @@ mod test {
     #[parallel]
     async fn list() -> ApiResult<()> {
         const USER: &str = "administrator";
-        verify_query(&format!("GET /user-tokens/{USER}/?{FIELDS}"), "user_token/list.json").await
+        verify_request(&format!("GET /user-tokens/{USER}/?{FIELDS}"), "user_token/list.json").await
     }
 
     #[tokio::test]
     #[serial]
     async fn create() -> ApiResult<()> {
         const USER: &str = "restricted_user";
-        verify_query(&format!("POST /user-token/{USER}/?{FIELDS}"), "user_token/create.json").await?;
+        verify_request(&format!("POST /user-token/{USER}/?{FIELDS}"), "user_token/create.json").await?;
 
         let mut conn = get_connection()?;
         let token: Uuid = user_token::table
@@ -217,7 +217,7 @@ mod test {
             .order_by(user_token::creation_time.desc())
             .first(&mut conn)?;
 
-        verify_query(&format!("DELETE /user-token/{USER}/{token}"), "user_token/delete.json").await?;
+        verify_request(&format!("DELETE /user-token/{USER}/{token}"), "user_token/delete.json").await?;
 
         let has_token: bool = diesel::select(exists(user_token::table.find(token))).get_result(&mut conn)?;
         assert!(!has_token);
@@ -239,7 +239,7 @@ mod test {
         let mut conn = get_connection()?;
         let user_token = get_user_token(&mut conn)?;
 
-        verify_query(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/update.json").await?;
+        verify_request(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/update.json").await?;
 
         let new_user_token = get_user_token(&mut conn)?;
         assert_eq!(new_user_token.id, user_token.id);
@@ -250,7 +250,7 @@ mod test {
         assert!(new_user_token.last_edit_time > user_token.last_edit_time);
         assert_eq!(new_user_token.last_usage_time, user_token.last_usage_time);
 
-        verify_query(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/update_restore.json")
+        verify_request(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/update_restore.json")
             .await?;
 
         let new_user_token = get_user_token(&mut conn)?;

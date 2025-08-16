@@ -26,9 +26,19 @@ struct UploadResponse {
     token: String,
 }
 
-async fn upload_from_url(body: UploadBody) -> ApiResult<Json<UploadResponse>> {
-    let token = download::from_url(body.content_url).await?;
-    Ok(Json(UploadResponse { token }))
+impl UploadResponse {
+    fn new(token: String) -> Self {
+        Self { token }
+    }
+}
+
+async fn upload_from_url(client: Client, body: UploadBody) -> ApiResult<Json<UploadResponse>> {
+    api::verify_privilege(client, config::privileges().upload_use_downloader)?;
+
+    download::from_url(body.content_url)
+        .await
+        .map(UploadResponse::new)
+        .map(Json)
 }
 
 async fn upload_handler(
@@ -38,7 +48,7 @@ async fn upload_handler(
     api::verify_privilege(client, config::privileges().upload_create)?;
 
     match body {
-        JsonOrMultipart::Json(payload) => upload_from_url(payload).await,
+        JsonOrMultipart::Json(payload) => upload_from_url(client, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content]).await?;
             if let [Some(upload)] = decoded_body.files {
@@ -46,7 +56,7 @@ async fn upload_handler(
                 Ok(Json(UploadResponse { token }))
             } else if let Some(metadata) = decoded_body.metadata {
                 let url_upload: UploadBody = serde_json::from_slice(&metadata)?;
-                upload_from_url(url_upload).await
+                upload_from_url(client, url_upload).await
             } else {
                 Err(api::Error::MissingFormData)
             }

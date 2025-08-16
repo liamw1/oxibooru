@@ -156,9 +156,6 @@ where
     }
 }
 
-/// Runs a single task. This function is designed to only establish a connection to the database
-/// if necessary. That way users can run tasks that don't require database connection without
-/// spinning up the database.
 fn run_task(conn: &mut PgConnection, task: AdminTask) -> Result<(), String> {
     info!("Starting task...");
 

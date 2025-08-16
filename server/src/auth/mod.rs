@@ -6,9 +6,21 @@ pub mod password;
 
 #[derive(Debug, Error)]
 #[error(transparent)]
-pub enum HashError {
-    EnvVar(#[from] std::env::VarError),
-    Hash(#[from] argon2::password_hash::Error),
+pub enum AuthenticationError {
+    FailedConnection(#[from] diesel::r2d2::PoolError),
+    FailedQuery(#[from] diesel::result::Error),
+    #[error("Invalid authentication type")]
+    InvalidAuthType,
+    InvalidEncoding(#[from] base64::DecodeError),
+    #[error("Token has expired")]
+    InvalidToken,
+    #[error("Authentication credentials are malformed")]
+    MalformedCredentials,
+    MalformedToken(#[from] uuid::Error),
+    PasswordHashing(#[from] argon2::password_hash::Error),
+    #[error("Invalid username and password combination")]
+    UsernamePasswordMismatch,
+    Utf8Conversion(#[from] std::str::Utf8Error),
 }
 
 #[derive(Clone, Copy)]

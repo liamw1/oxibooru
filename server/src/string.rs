@@ -12,6 +12,8 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
 
+/// A string type that performs small string optimization (SSO). String data will be stored on the stack
+/// if it is 24 bytes or less. Good to use for text that is likely to be small, like tag and pool names.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text, sql_type = Citext)]
 pub struct SmallString(CompactString);
@@ -85,6 +87,8 @@ where
     }
 }
 
+/// A string type optimized for immutable strings which may be large, like descriptions.
+/// Stores string data in a reference-counted smart pointer to make cloning cheap.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Text)]
 pub struct LargeString(Arc<str>);

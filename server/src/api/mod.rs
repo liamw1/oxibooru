@@ -1,5 +1,5 @@
+use crate::auth::AuthenticationError;
 use crate::auth::Client;
-use crate::auth::header::AuthenticationError;
 use crate::config::{self, RegexType};
 use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
@@ -35,7 +35,6 @@ pub type ApiResult<T> = Result<T, Error>;
 #[error(transparent)]
 pub enum Error {
     BadExtension(#[from] crate::model::enums::ParseExtensionError),
-    BadHash(#[from] crate::auth::HashError),
     BadHeader(#[from] axum::http::header::ToStrError),
     #[error("File of type {0} did not match request with content-type '{1}'")]
     ContentTypeMismatch(MimeType, SmallString),
@@ -112,7 +111,6 @@ impl Error {
 
         match self {
             Self::BadExtension(_)
-            | Self::BadHash(_)
             | Self::BadHeader(_)
             | Self::ContentTypeMismatch(..)
             | Self::CyclicDependency(_)
@@ -165,7 +163,6 @@ impl Error {
     fn category(&self) -> &'static str {
         match self {
             Self::BadExtension(_) => "Bad Extension",
-            Self::BadHash(_) => "Bad Hash",
             Self::BadHeader(_) => "Bad Header",
             Self::ContentTypeMismatch(..) => "Content Type Mismatch",
             Self::CyclicDependency(_) => "Cyclic Dependency",

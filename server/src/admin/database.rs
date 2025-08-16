@@ -83,6 +83,8 @@ pub fn reset_filenames() -> std::io::Result<()> {
     Ok(())
 }
 
+/// Resets thumbnail size caches. Mainly used when migrating older
+/// databases that didn't store this information.
 pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
     if filesystem::path(Directory::Avatars).try_exists()? {
         let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
@@ -138,6 +140,8 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
     Ok(())
 }
 
+/// Resets statistics caches. Useful for correcting mistakes in statistics updating.
+/// This function can be a bit slow because it updates rows one at a time.
 pub fn reset_relation_stats() -> ApiResult<()> {
     let mut conn = db::get_connection()?;
     let comment_count: i64 = comment::table.count().first(&mut conn)?;
@@ -321,7 +325,7 @@ pub fn reset_relation_stats() -> ApiResult<()> {
     Ok(())
 }
 
-/// Recalculates cached file sizes, row counts, and table statistics.
+/// Resets file size caches, row counts, and table statistics.
 /// Useful for when the statistics become inconsistent with database
 /// or when migrating from an older version without statistics.
 pub fn reset_statistics() -> ApiResult<()> {

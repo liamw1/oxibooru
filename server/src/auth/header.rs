@@ -1,32 +1,11 @@
-use crate::auth::Client;
+use crate::auth::{AuthenticationError, Client};
 use crate::model::enums::UserRank;
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
 use crate::{auth, db};
-use base64::DecodeError;
 use base64::prelude::*;
 use diesel::prelude::*;
-use std::str::Utf8Error;
-use thiserror::Error;
 use uuid::Uuid;
-
-#[derive(Debug, Error)]
-#[error(transparent)]
-pub enum AuthenticationError {
-    FailedConnection(#[from] diesel::r2d2::PoolError),
-    FailedQuery(#[from] diesel::result::Error),
-    #[error("Invalid authentication type")]
-    InvalidAuthType,
-    InvalidEncoding(#[from] DecodeError),
-    #[error("Token has expired")]
-    InvalidToken,
-    #[error("Authentication credentials are malformed")]
-    MalformedCredentials,
-    MalformedToken(#[from] uuid::Error),
-    #[error("Invalid username and password combination")]
-    UsernamePasswordMismatch,
-    Utf8Conversion(#[from] Utf8Error),
-}
 
 /// Authentication can either be done by token-based authentication (recommended)
 /// or by sending password as plaintext.
