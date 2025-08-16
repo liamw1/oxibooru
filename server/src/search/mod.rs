@@ -57,7 +57,7 @@ where
         let mut random_sort = false;
 
         // Filters are separated by whitespace
-        for term in search_criteria.split_whitespace() {
+        for term in parse::split_unescaped_whitespace(search_criteria) {
             let (term, negated) = match term.strip_prefix('-') {
                 Some(unnegated_term) => (unnegated_term, true),
                 None => (term, false),

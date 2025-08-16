@@ -117,7 +117,7 @@ where
             return None;
         }
 
-        let result = self.current;
+        let next = self.current;
 
         if self.current.j < self.rect.max_corner().j {
             self.current.j += T::one();
@@ -126,7 +126,7 @@ where
             self.current.i += T::one();
         }
 
-        Some(result)
+        Some(next)
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

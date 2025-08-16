@@ -11,7 +11,8 @@ use crate::time::DateTime;
 use crate::{api, config, snapshot};
 use diesel::dsl::max;
 use diesel::prelude::*;
-use std::collections::HashSet;
+use std::collections::hash_map::{Entry, IntoKeys};
+use std::collections::{HashMap, HashSet};
 
 /// Updates `last_edit_time` of tag with given `tag_id`.
 pub fn last_edit_time(conn: &mut PgConnection, tag_id: i64) -> ApiResult<()> {
@@ -93,32 +94,39 @@ pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
     client: Client,
     names: Vec<SmallString>,
-    detect_cyclic_dependencies: bool,
+    detect_cycles: bool,
 ) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
     let mut implied_ids: Vec<i64> = tag_name::table
         .select(tag_name::tag_id)
         .filter(tag_name::name.eq_any(&names))
         .distinct()
         .load(conn)?;
-    let mut all_implied_tag_ids: HashSet<i64> = implied_ids.iter().copied().collect();
 
-    let mut iteration = 0;
-    let mut previous_len = 0;
-    while all_implied_tag_ids.len() != previous_len {
-        iteration += 1;
-        previous_len = all_implied_tag_ids.len();
-        implied_ids = tag_implication::table
-            .select(tag_implication::child_id)
+    // Collect implied tag ids and build dependency graph
+    let mut dependency_graph = DependencyGraph::new(&implied_ids);
+    loop {
+        let implications: Vec<TagImplication> = tag_implication::table
             .filter(tag_implication::parent_id.eq_any(&implied_ids))
             .distinct()
             .load(conn)?;
-        all_implied_tag_ids.extend(implied_ids.iter().copied());
+
+        // Remove ids we've already seen
+        let previous_len = dependency_graph.len();
+        implied_ids = implications
+            .into_iter()
+            .filter(|&implication| dependency_graph.insert(implication))
+            .map(|implication| implication.child_id)
+            .collect();
+
+        if dependency_graph.len() == previous_len {
+            break;
+        }
     }
-    if detect_cyclic_dependencies && !implied_ids.is_empty() && iteration > 1 {
+    if detect_cycles && dependency_graph.has_cycle() {
         return Err(api::Error::CyclicDependency(ResourceType::TagImplication));
     }
 
-    let mut tag_ids: Vec<_> = all_implied_tag_ids.into_iter().collect();
+    let mut tag_ids: Vec<_> = dependency_graph.into_nodes().collect();
     let existing_names: HashSet<SmallString> = tag_name::table
         .select(tag_name::name)
         .filter(tag_name::tag_id.eq_any(&tag_ids))
@@ -248,4 +256,138 @@ pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> Api
 
     diesel::delete(tag::table.find(absorbed_id)).execute(conn)?;
     last_edit_time(conn, merge_to_id)
+}
+
+enum TraversalState {
+    Visited,
+    Explored,
+}
+
+struct DependencyGraph {
+    // Maps children to parents
+    nodes: HashMap<i64, HashSet<i64>>,
+}
+
+impl DependencyGraph {
+    fn new(starting_nodes: &[i64]) -> Self {
+        Self {
+            nodes: starting_nodes.iter().map(|&tag_id| (tag_id, HashSet::new())).collect(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    fn insert(&mut self, implication: TagImplication) -> bool {
+        let parents = self.nodes.entry(implication.child_id).or_default();
+        let new_node = parents.is_empty();
+        parents.insert(implication.parent_id);
+        new_node
+    }
+
+    fn into_nodes(self) -> IntoKeys<i64, HashSet<i64>> {
+        self.nodes.into_keys()
+    }
+
+    /// Determines if depedency graph has a cycle using a depth-first search approach.
+    /// Runs in O(V + E) time where V is the number of vertices and E is the number of edges of the graph.
+    fn has_cycle(&self) -> bool {
+        let mut traversed_nodes = HashMap::new();
+        for (base_node_id, parents) in &self.nodes {
+            let mut traversal_stack = vec![(*base_node_id, parents.iter())];
+            while let Some((current_node_id, parents)) = traversal_stack.last_mut() {
+                let Some(next_node_id) = parents.next() else {
+                    // Once all parents have been traversed, mark node as explored
+                    traversed_nodes.insert(*current_node_id, TraversalState::Explored);
+                    traversal_stack.pop();
+                    continue;
+                };
+
+                match traversed_nodes.entry(*next_node_id) {
+                    Entry::Occupied(entry) => match entry.get() {
+                        TraversalState::Visited => return true,
+                        TraversalState::Explored => continue,
+                    },
+                    Entry::Vacant(entry) => entry.insert(TraversalState::Visited),
+                };
+
+                if let Some(parents) = self.nodes.get(next_node_id) {
+                    traversal_stack.push((*next_node_id, parents.iter()));
+                }
+            }
+        }
+        false
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::model::tag::TagImplication;
+
+    #[test]
+    fn trivial_graphs() {
+        let empty_graph = DependencyGraph::new(&[]);
+        assert!(!empty_graph.has_cycle());
+
+        let single_node = DependencyGraph::new(&[0]);
+        assert!(!single_node.has_cycle());
+
+        let mut trivial_cycle = DependencyGraph::new(&[0]);
+        trivial_cycle.insert(TagImplication {
+            parent_id: 0,
+            child_id: 0,
+        });
+        assert!(trivial_cycle.has_cycle());
+
+        let mut single_link = DependencyGraph::new(&[0, 1]);
+        single_link.insert(TagImplication {
+            parent_id: 1,
+            child_id: 0,
+        });
+        assert!(!single_link.has_cycle());
+
+        single_link.insert(TagImplication {
+            parent_id: 0,
+            child_id: 1,
+        });
+        assert!(single_link.has_cycle());
+    }
+
+    #[test]
+    fn dependency_graph_with_cycle() {
+        let mut graph = DependencyGraph::new(&[0]);
+        let links = [(0, 1), (1, 2), (1, 3), (3, 4), (5, 6), (5, 7), (6, 8), (6, 4), (4, 3)];
+        for (parent_id, child_id) in links {
+            graph.insert(TagImplication { parent_id, child_id });
+        }
+
+        assert!(graph.has_cycle());
+    }
+
+    #[test]
+    fn dependency_graph_without_cycle() {
+        let mut graph = DependencyGraph::new(&[0]);
+        let links = [
+            (0, 1),
+            (0, 2),
+            (0, 3),
+            (2, 5),
+            (3, 4),
+            (3, 9),
+            (4, 5),
+            (5, 6),
+            (5, 7),
+            (6, 8),
+            (7, 8),
+            (8, 9),
+            (9, 10),
+        ];
+        for (parent_id, child_id) in links {
+            graph.insert(TagImplication { parent_id, child_id });
+        }
+
+        assert!(!graph.has_cycle());
+    }
 }

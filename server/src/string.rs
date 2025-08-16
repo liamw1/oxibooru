@@ -110,7 +110,7 @@ impl Display for LargeString {
 
 impl FromSql<Text, Pg> for LargeString {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
-        let string = std::str::from_utf8(value.as_bytes())?;
+        let string = str::from_utf8(value.as_bytes())?;
         Ok(Self(Arc::from(string)))
     }
 }

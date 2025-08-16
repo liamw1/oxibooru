@@ -361,17 +361,22 @@ mod test {
 
     #[test]
     fn image_signature_regression() -> ImageResult<()> {
+        // It's important that these regression images are of a lossless format, as different
+        // decoder implementations for lossy formats (like JPEG) can vary slightly in the decoding
+        // process and don't produce byte-for-byte identical images. These slight differences carry
+        // over to the signature generation process, causing this test to fail when an decoder
+        // implementation changes.
         let (png, _) = image_properties("png.png")?;
         let (bmp, _) = image_properties("bmp.bmp")?;
-        let (jpeg, _) = image_properties("jpeg.jpg")?;
-        let (similar_jpeg, _) = image_properties("jpeg-similar.jpg")?;
+        let (image, _) = image_properties("starry_night.png")?;
+        let (image_similar, _) = image_properties("starry_night_similar.png")?;
 
         // Identical images of different formats
         assert_eq!(distance(&cache(&png), &bmp), 0.0);
         // Similar images of same format
-        assert!((distance(&cache(&jpeg), &similar_jpeg) - 0.24372455010006977).abs() < 1e-8);
+        assert!((distance(&cache(&image), &image_similar) - 0.2222814145119994).abs() < 1e-8);
         // Different images
-        assert!((distance(&cache(&png), &jpeg) - 0.7062433297659159).abs() < 1e-8);
+        assert!((distance(&cache(&png), &image) - 0.7037067060099752).abs() < 1e-8);
         Ok(())
     }
 
@@ -382,7 +387,7 @@ mod test {
         let (lisa_large_border_signature, lisa_large_border_indexes) = image_properties("lisa-large_border.jpg")?;
         let (lisa_wide_signature, lisa_wide_indexes) = image_properties("lisa-wide.jpg")?;
         let (lisa_cat_signature, lisa_cat_indexes) = image_properties("lisa-cat.jpg")?;
-        let (starry_night_signature, _starry_night_indexes) = image_properties("starry_night.jpg")?;
+        let (starry_night_signature, _starry_night_indexes) = image_properties("starry_night.png")?;
 
         let lisa_signature_cache = cache(&lisa_signature);
         assert!(distance(&lisa_signature_cache, &lisa_border_signature) < 0.2);

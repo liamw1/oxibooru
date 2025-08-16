@@ -41,16 +41,29 @@ class PostMainController extends BasePostController {
                     router.replace(url, ctx.state, false);
                 }
 
+                const prevPostId = aroundResponse.prev
+                    ? aroundResponse.prev.id
+                    : null;
+                const nextPostId = aroundResponse.next
+                    ? aroundResponse.next.id
+                    : null;
+
+                // preload nearby posts
+                if (prevPostId) {
+                    Post.get(prevPostId, { noProgress: true }).then(misc.preloadPostImages);
+                    PostList.getAround(prevPostId, parameters ? parameters.query : null, { noProgress: true });
+                }
+                if (nextPostId) {
+                    Post.get(nextPostId, { noProgress: true }).then(misc.preloadPostImages);
+                    PostList.getAround(nextPostId, parameters ? parameters.query : null, { noProgress: true });
+                }
+
                 this._post = post;
                 this._view = new PostMainView({
                     post: post,
                     editMode: editMode,
-                    prevPostId: aroundResponse.prev
-                        ? aroundResponse.prev.id
-                        : null,
-                    nextPostId: aroundResponse.next
-                        ? aroundResponse.next.id
-                        : null,
+                    prevPostId: prevPostId,
+                    nextPostId: nextPostId,
                     canEditPosts: api.hasPrivilege("post_edit"),
                     canEditPostDescription: api.hasPrivilege("post_edit_description"),
                     canDeletePosts: api.hasPrivilege("post_delete"),
@@ -294,7 +307,16 @@ module.exports = (router) => {
         if (ctx.state.parameters) {
             Object.assign(ctx.parameters, ctx.state.parameters);
         }
-        ctx.controller = new PostMainController(ctx, true);
+        const canEditPosts = api.hasPrivilege("post_edit");
+        if (canEditPosts) {
+            ctx.controller = new PostMainController(ctx, true);
+        } else {
+            router.show(uri.formatClientLink(
+                "post",
+                ctx.parameters.id,
+                ctx.parameters ? { query: ctx.parameters.query } : {}
+            ));
+        }
     });
     router.enter(["post", ":id"], (ctx, next) => {
         // restore parameters from history state

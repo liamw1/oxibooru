@@ -6,11 +6,39 @@ use std::ops::Range;
 use std::str::FromStr;
 use time::{Date, Duration, Month, OffsetDateTime, Time};
 
-/// Splits `text` into two parts by an unescaped `delimiter`.
-pub fn split_once(text: &str, delimiter: char) -> Option<(&str, &str)> {
-    next_split(text, delimiter)
+/// This can be replaced by official Pattern trait when stabilized.
+pub trait Pattern: Copy {
+    fn matches(self, c: char) -> bool;
+
+    fn func(self) -> impl Fn(char) -> bool {
+        move |c: char| self.matches(c)
+    }
+}
+
+impl Pattern for char {
+    fn matches(self, c: char) -> bool {
+        self == c
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct IsWhitespace;
+
+impl Pattern for IsWhitespace {
+    fn matches(self, c: char) -> bool {
+        c.is_whitespace()
+    }
+}
+
+pub fn split_unescaped_whitespace(text: &str) -> impl Iterator<Item = &str> {
+    SplitUnescaped::new(text, IsWhitespace).filter(|term| !term.is_empty())
+}
+
+/// Splits `text` into two parts by an unescaped character matching given `pattern`.
+pub fn split_once<P: Pattern>(text: &str, pattern: P) -> Option<(&str, &str)> {
+    next_unescaped_split(text, pattern)
         .map(|index| text.split_at(index))
-        .map(|(left, right)| (left, right.strip_prefix(delimiter).unwrap()))
+        .map(|(left, right)| (left, right.strip_prefix(pattern.func()).unwrap()))
 }
 
 /// Parses string-based `condition`.
@@ -69,6 +97,73 @@ where
         .map_err(api::Error::from)
 }
 
+struct SplitUnescaped<'a, P> {
+    text: &'a str,
+    start: usize,
+    end: usize,
+    pattern: P,
+}
+
+impl<'a, P: Pattern> SplitUnescaped<'a, P> {
+    fn new(text: &'a str, pattern: P) -> Self {
+        Self {
+            text,
+            start: 0,
+            end: next_unescaped_split(text, pattern).unwrap_or(text.len()),
+            pattern,
+        }
+    }
+}
+
+impl<'a, P: Pattern> Iterator for SplitUnescaped<'a, P> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.start >= self.text.len() {
+            return None;
+        }
+        let next = &self.text[self.start..self.end];
+
+        self.start = self.end + 1;
+        if let Some((head, remainder)) = self.text.split_at_checked(self.start) {
+            self.end = next_unescaped_split(remainder, self.pattern).unwrap_or(remainder.len()) + head.len();
+        }
+
+        Some(next)
+    }
+}
+
+fn is_unescaped(text: &str, index: usize) -> bool {
+    let backslash_count = text
+        .chars()
+        .rev()
+        .skip(text.len() - index)
+        .take_while(|&c| c == '\\')
+        .count();
+    backslash_count % 2 == 0
+}
+
+/// Finds the index of next unescaped character that matches `pattern` in `text`.
+fn next_unescaped_split<P: Pattern>(text: &str, pattern: P) -> Option<usize> {
+    text.char_indices()
+        .filter_map(|(index, c)| pattern.matches(c).then_some(index))
+        .find(|&index| is_unescaped(text, index))
+}
+
+/// Splits `text` into two parts if it contains an unescaped ".." substring.
+fn range_split(text: &str) -> Option<(&str, &str)> {
+    let split_index = text
+        .char_indices()
+        .filter(|&(_, c)| c == '.')
+        .filter_map(|(index, c)| {
+            let next_char = text.chars().nth(index + 1);
+            (c == '.' && next_char == Some('.')).then_some(index)
+        })
+        .find(|&index| is_unescaped(text, index));
+    split_index
+        .map(|index| text.split_at(index))
+        .map(|(left, right)| (left, right.strip_prefix("..").unwrap()))
+}
+
 /// Replaces escaped characters with unescaped ones in `text`.
 fn unescape(text: &str) -> Cow<str> {
     if text.contains('\\') {
@@ -89,62 +184,13 @@ fn unescape(text: &str) -> Cow<str> {
     }
 }
 
-/// Finds the index of next unescaped `delimiter` in `text`.
-fn next_split(text: &str, delimiter: char) -> Option<usize> {
-    text.char_indices()
-        .filter_map(|(index, c)| (c == delimiter).then_some(index))
-        .find(|index| {
-            let backslash_count = text
-                .chars()
-                .rev()
-                .skip(text.len() - index)
-                .take_while(|&c| c == '\\')
-                .count();
-            backslash_count % 2 == 0
-        })
-}
-
-/// Returns a vector of escaped substrings over given `text` split by the given `delimiter`.
-fn split_escaped(text: &str, delimiter: char) -> Vec<Cow<str>> {
-    let mut parts = vec![text];
-    while let Some(index) = next_split(parts.last().unwrap(), delimiter) {
-        let (left, right) = parts.last().unwrap().split_at(index);
-        *parts.last_mut().unwrap() = left;
-        parts.push(right.strip_prefix(delimiter).unwrap());
-    }
-    parts.into_iter().map(unescape).collect()
-}
-
-/// Splits `text` into two parts if it contains an unescaped ".." substring.
-fn range_split(text: &str) -> Option<(&str, &str)> {
-    let split_index = text
-        .char_indices()
-        .filter(|&(_, c)| c == '.')
-        .filter_map(|(index, c)| {
-            let next_char = text.chars().nth(index + 1);
-            (c == '.' && next_char == Some('.')).then_some(index)
-        })
-        .find(|index| {
-            let backslash_count = text
-                .chars()
-                .rev()
-                .skip(text.len() - index)
-                .take_while(|&c| c == '\\')
-                .count();
-            backslash_count % 2 == 0
-        });
-    split_index
-        .map(|index| text.split_at(index))
-        .map(|(left, right)| (left, right.strip_prefix("..").unwrap()))
-}
-
 /// Parses a non-wildcard string-based `filter`.
 fn parse_regular_str(filter: &str) -> Condition<Cow<str>> {
     match range_split(filter) {
         Some((left, "")) => Condition::GreaterEq(unescape(left)),
         Some(("", right)) => Condition::LessEq(unescape(right)),
         Some((left, right)) => Condition::Range(unescape(left)..unescape(right)),
-        None => Condition::Values(split_escaped(filter, ',')),
+        None => Condition::Values(SplitUnescaped::new(filter, ',').map(unescape).collect()),
     }
 }
 
@@ -235,18 +281,15 @@ mod test {
         assert_eq!(condition("0..1")?, Condition::Range(0..1));
         assert_eq!(condition("-10..5")?, Condition::Range(-10..5));
 
-        assert_eq!(str_condition("str"), StrCondition::Regular(Condition::Values(vec![Cow::Borrowed("str")])));
+        assert_eq!(str_condition("str"), StrCondition::Regular(Condition::Values(vec!["str".into()])));
         assert_eq!(
             str_condition("a,b,c"),
-            StrCondition::Regular(Condition::Values(vec![Cow::Borrowed("a"), Cow::Borrowed("b"), Cow::Borrowed("c")]))
+            StrCondition::Regular(Condition::Values(vec!["a".into(), "b".into(), "c".into()]))
         );
 
-        assert_eq!(str_condition("a.."), StrCondition::Regular(Condition::GreaterEq(Cow::Borrowed("a"))));
-        assert_eq!(str_condition("..z"), StrCondition::Regular(Condition::LessEq(Cow::Borrowed("z"))));
-        assert_eq!(
-            str_condition("a..z"),
-            StrCondition::Regular(Condition::Range(Cow::Borrowed("a")..Cow::Borrowed("z")))
-        );
+        assert_eq!(str_condition("a.."), StrCondition::Regular(Condition::GreaterEq("a".into())));
+        assert_eq!(str_condition("..z"), StrCondition::Regular(Condition::LessEq("z".into())));
+        assert_eq!(str_condition("a..z"), StrCondition::Regular(Condition::Range("a".into().."z".into())));
         assert_eq!(str_condition("*str*"), StrCondition::WildCard(String::from("%str%")));
         assert_eq!(str_condition("a*,*b,*c*"), StrCondition::WildCard(String::from("a%,%b,%c%")));
         assert_eq!(str_condition("*a..b"), StrCondition::WildCard(String::from("%a..b")));
@@ -254,6 +297,62 @@ mod test {
         assert_eq!(condition("safe")?, Condition::Values(vec![PostSafety::Safe]));
         assert_eq!(condition("safe..unsafe")?, Condition::Range(PostSafety::Safe..PostSafety::Unsafe));
         Ok(())
+    }
+
+    #[test]
+    fn split_unescaped() {
+        let mut without_escapes = SplitUnescaped::new("The quick brown fox jumps over the lazy dog.", IsWhitespace);
+        assert_eq!(without_escapes.next(), Some("The"));
+        assert_eq!(without_escapes.next(), Some("quick"));
+        assert_eq!(without_escapes.next(), Some("brown"));
+        assert_eq!(without_escapes.next(), Some("fox"));
+        assert_eq!(without_escapes.next(), Some("jumps"));
+        assert_eq!(without_escapes.next(), Some("over"));
+        assert_eq!(without_escapes.next(), Some("the"));
+        assert_eq!(without_escapes.next(), Some("lazy"));
+        assert_eq!(without_escapes.next(), Some("dog."));
+        assert_eq!(without_escapes.next(), None);
+
+        let mut with_escapes = SplitUnescaped::new("The quick\\ brown\\ fox jumps over the lazy\\ dog.", IsWhitespace);
+        assert_eq!(with_escapes.next(), Some("The"));
+        assert_eq!(with_escapes.next(), Some("quick\\ brown\\ fox"));
+        assert_eq!(with_escapes.next(), Some("jumps"));
+        assert_eq!(with_escapes.next(), Some("over"));
+        assert_eq!(with_escapes.next(), Some("the"));
+        assert_eq!(with_escapes.next(), Some("lazy\\ dog."));
+        assert_eq!(with_escapes.next(), None);
+
+        let mut escaped_escapes = SplitUnescaped::new("lazy\\\\ dog.", IsWhitespace);
+        assert_eq!(escaped_escapes.next(), Some("lazy\\\\"));
+        assert_eq!(escaped_escapes.next(), Some("dog."));
+        assert_eq!(escaped_escapes.next(), None);
+
+        let mut many_escapes = SplitUnescaped::new("lazy\\\\\\\\\\\\\\ dog.", IsWhitespace);
+        assert_eq!(many_escapes.next(), Some("lazy\\\\\\\\\\\\\\ dog."));
+        assert_eq!(many_escapes.next(), None);
+    }
+
+    #[test]
+    fn split_unescaped_edge_cases() {
+        let mut empty_string = SplitUnescaped::new("", IsWhitespace);
+        assert_eq!(empty_string.next(), None);
+
+        let mut only_escape = SplitUnescaped::new("\\", IsWhitespace);
+        assert_eq!(only_escape.next(), Some("\\"));
+        assert_eq!(only_escape.next(), None);
+
+        let mut only_delimiter = SplitUnescaped::new(",,,", ',');
+        assert_eq!(only_delimiter.next(), Some(""));
+        assert_eq!(only_delimiter.next(), Some(""));
+        assert_eq!(only_delimiter.next(), Some(""));
+        assert_eq!(only_delimiter.next(), None);
+
+        let mut only_whitespace = SplitUnescaped::new(" \t\r\n", IsWhitespace);
+        assert_eq!(only_whitespace.next(), Some(""));
+        assert_eq!(only_whitespace.next(), Some(""));
+        assert_eq!(only_whitespace.next(), Some(""));
+        assert_eq!(only_whitespace.next(), Some(""));
+        assert_eq!(only_whitespace.next(), None);
     }
 
     #[test]
@@ -272,35 +371,25 @@ mod test {
         assert_eq!(
             str_condition("a\\,,b\\.,c\\:,d\\\\,e"),
             StrCondition::Regular(Condition::Values(vec![
-                Cow::Borrowed("a,"),
-                Cow::Borrowed("b."),
-                Cow::Borrowed("c:"),
-                Cow::Borrowed("d\\"),
-                Cow::Borrowed("e")
+                "a,".into(),
+                "b.".into(),
+                "c:".into(),
+                "d\\".into(),
+                "e".into()
             ]))
         );
 
         // Commas with an even number of backslashes behind it shouldn't be escaped
         assert_eq!(
             str_condition("a\\\\,b\\\\\\,c\\\\\\\\,d"),
-            StrCondition::Regular(Condition::Values(vec![
-                Cow::Borrowed("a\\"),
-                Cow::Borrowed("b\\,c\\\\"),
-                Cow::Borrowed("d")
-            ]))
+            StrCondition::Regular(Condition::Values(vec!["a\\".into(), "b\\,c\\\\".into(), "d".into()]))
         );
 
         // Check that ranged conditions are escaped properly
-        assert_eq!(str_condition("a\\..b"), StrCondition::Regular(Condition::Values(vec![Cow::Borrowed("a..b")])));
-        assert_eq!(
-            str_condition("a\\\\..b"),
-            StrCondition::Regular(Condition::Range(Cow::Borrowed("a\\")..Cow::Borrowed("b")))
-        );
-        assert_eq!(str_condition("\\..."), StrCondition::Regular(Condition::GreaterEq(Cow::Borrowed("."))));
-        assert_eq!(str_condition("..\\."), StrCondition::Regular(Condition::LessEq(Cow::Borrowed("."))));
-        assert_eq!(
-            str_condition("\\\\..."),
-            StrCondition::Regular(Condition::Range(Cow::Borrowed("\\")..Cow::Borrowed(".")))
-        );
+        assert_eq!(str_condition("a\\..b"), StrCondition::Regular(Condition::Values(vec!["a..b".into()])));
+        assert_eq!(str_condition("a\\\\..b"), StrCondition::Regular(Condition::Range("a\\".into().."b".into())));
+        assert_eq!(str_condition("\\..."), StrCondition::Regular(Condition::GreaterEq(".".into())));
+        assert_eq!(str_condition("..\\."), StrCondition::Regular(Condition::LessEq(".".into())));
+        assert_eq!(str_condition("\\\\..."), StrCondition::Regular(Condition::Range("\\".into()..".".into())));
     }
 }
