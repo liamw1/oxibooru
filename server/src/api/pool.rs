@@ -11,7 +11,6 @@ use crate::time::DateTime;
 use crate::{api, config, db, resource, snapshot, update};
 use axum::extract::{Extension, Path, Query};
 use axum::{Json, Router, routing};
-use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
 
@@ -60,13 +59,12 @@ async fn get(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
-        let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(conn)?;
-        if !pool_exists {
-            return Err(api::Error::NotFound(ResourceType::Pool));
-        }
-        PoolInfo::new_from_id(conn, pool_id, &fields)
-            .map(Json)
-            .map_err(api::Error::from)
+        let pool = pool::table
+            .find(pool_id)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Pool))?;
+        PoolInfo::new(conn, pool, &fields).map(Json).map_err(api::Error::from)
     })
 }
 
@@ -96,7 +94,9 @@ async fn create(
         let (category_id, category): (i64, SmallString) = pool_category::table
             .select((pool_category::id, pool_category::name))
             .filter(pool_category::name.eq(body.category))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::PoolCategory))?;
         let pool: Pool = NewPool {
             category_id,
             description: body.description.as_deref().unwrap_or(""),
@@ -140,8 +140,18 @@ async fn merge(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
-        let remove_version = pool::table.find(absorbed_id).select(pool::last_edit_time).first(conn)?;
-        let merge_to_version = pool::table.find(merge_to_id).select(pool::last_edit_time).first(conn)?;
+        let remove_version = pool::table
+            .find(absorbed_id)
+            .select(pool::last_edit_time)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Pool))?;
+        let merge_to_version = pool::table
+            .find(merge_to_id)
+            .select(pool::last_edit_time)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Pool))?;
         api::verify_version(remove_version, body.remove_version)?;
         api::verify_version(merge_to_version, body.merge_to_version)?;
 
@@ -173,7 +183,11 @@ async fn update(
 
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
-        let old_pool: Pool = pool::table.find(pool_id).first(conn)?;
+        let old_pool: Pool = pool::table
+            .find(pool_id)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Pool))?;
         api::verify_version(old_pool.last_edit_time, body.version)?;
 
         let mut new_pool = old_pool.clone();
@@ -186,7 +200,9 @@ async fn update(
             let category_id: i64 = pool_category::table
                 .select(pool_category::id)
                 .filter(pool_category::name.eq(&category))
-                .first(conn)?;
+                .first(conn)
+                .optional()?
+                .ok_or(api::Error::NotFound(ResourceType::PoolCategory))?;
             new_pool.category_id = category_id;
             new_snapshot_data.category = category;
         }
@@ -231,7 +247,11 @@ async fn delete(
     api::verify_privilege(client, config::privileges().pool_delete)?;
 
     db::get_connection()?.transaction(|conn| {
-        let pool: Pool = pool::table.find(pool_id).first(conn)?;
+        let pool: Pool = pool::table
+            .find(pool_id)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Pool))?;
         api::verify_version(pool.last_edit_time, *client_version)?;
 
         let pool_id = pool.id;

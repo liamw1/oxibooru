@@ -9,7 +9,6 @@ use crate::time::DateTime;
 use crate::{api, config, db, resource};
 use axum::extract::{Extension, Path, Query};
 use axum::{Json, Router, routing};
-use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
 
@@ -56,11 +55,12 @@ async fn get(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
-        let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(conn)?;
-        if !comment_exists {
-            return Err(api::Error::NotFound(ResourceType::Comment));
-        }
-        CommentInfo::new_from_id(conn, client, comment_id, &fields)
+        let comment = comment::table
+            .find(comment_id)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Comment))?;
+        CommentInfo::new(conn, client, comment, &fields)
             .map(Json)
             .map_err(api::Error::from)
     })
@@ -117,7 +117,9 @@ async fn update(
         let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Comment))?;
         api::verify_version(comment_version, body.version)?;
 
         let required_rank = match client.id == comment_owner && comment_owner.is_some() {
@@ -176,7 +178,9 @@ async fn delete(
         let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Comment))?;
         api::verify_version(comment_version, *client_version)?;
 
         let required_rank = match client.id == comment_owner && comment_owner.is_some() {

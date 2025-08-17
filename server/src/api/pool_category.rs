@@ -103,7 +103,11 @@ async fn update(
 
     let mut conn = db::get_connection()?;
     let updated_category = conn.transaction(|conn| {
-        let old_category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
+        let old_category: PoolCategory = pool_category::table
+            .filter(pool_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::PoolCategory))?;
         api::verify_version(old_category.last_edit_time, body.version)?;
 
         let mut new_category = old_category.clone();
@@ -137,7 +141,11 @@ async fn set_default(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let new_default_category: PoolCategory = conn.transaction(|conn| {
-        let mut category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
+        let mut category: PoolCategory = pool_category::table
+            .filter(pool_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::PoolCategory))?;
         let mut old_default_category: PoolCategory =
             pool_category::table.filter(PoolCategory::default()).first(conn)?;
 
@@ -188,7 +196,11 @@ async fn delete(
     api::verify_privilege(client, config::privileges().pool_category_delete)?;
 
     db::get_connection()?.transaction(|conn| {
-        let category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
+        let category: PoolCategory = pool_category::table
+            .filter(pool_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::PoolCategory))?;
         api::verify_version(category.last_edit_time, *client_version)?;
         if category.id == 0 {
             return Err(api::Error::DeleteDefault(ResourceType::PoolCategory));

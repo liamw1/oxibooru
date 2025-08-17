@@ -16,7 +16,6 @@ use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, snapshot, update};
 use axum::extract::{DefaultBodyLimit, Extension, Path, Query};
 use axum::{Json, Router, routing};
-use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
@@ -106,11 +105,12 @@ async fn get(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
-        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;
-        if !post_exists {
-            return Err(api::Error::NotFound(ResourceType::Post));
-        }
-        PostInfo::new_from_id(conn, client, post_id, &fields)
+        let post = post::table
+            .find(post_id)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Post))?;
+        PostInfo::new(conn, client, post, &fields)
             .map(Json)
             .map_err(api::Error::from)
     })
@@ -537,8 +537,16 @@ async fn merge(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     tagging_update(true, |conn| {
-        let absorbed_post: Post = post::table.find(absorbed_id).first(conn)?;
-        let merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
+        let absorbed_post: Post = post::table
+            .find(absorbed_id)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Post))?;
+        let merge_to_post: Post = post::table
+            .find(merge_to_id)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Post))?;
         api::verify_version(absorbed_post.last_edit_time, body.post_info.remove_version)?;
         api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
 
@@ -649,7 +657,11 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
     };
 
     tagging_update(body.tags.is_some(), |conn| {
-        let old_post: Post = post::table.find(post_id).first(conn)?;
+        let old_post: Post = post::table
+            .find(post_id)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Post))?;
         let old_mime_type = old_post.mime_type;
         api::verify_version(old_post.last_edit_time, body.version)?;
 
@@ -715,7 +727,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
             new_post.height = content_properties.height;
             new_post.type_ = PostType::from(content_properties.mime_type);
             new_post.mime_type = content_properties.mime_type;
-            new_post.checksum = content_properties.checksum.clone();
+            new_post.checksum.clone_from(&content_properties.checksum);
             new_post.flags |= content_properties.flags;
 
             // Update post signature
@@ -796,7 +808,11 @@ async fn delete(
 
     let mut conn = db::get_connection()?;
     let mime_type = conn.transaction(|conn| {
-        let post: Post = post::table.find(post_id).first(conn)?;
+        let post: Post = post::table
+            .find(post_id)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Post))?;
         api::verify_version(post.last_edit_time, *client_version)?;
 
         let mime_type = post.mime_type;

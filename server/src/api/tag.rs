@@ -97,7 +97,9 @@ async fn get_siblings(
             .select(tag::id)
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Tag))?;
         let posts_tagged_on = post_tag::table
             .select(post_tag::post_id)
             .filter(post_tag::tag_id.eq(tag_id))
@@ -149,7 +151,9 @@ async fn create(
         let (category_id, category): (i64, SmallString) = tag_category::table
             .select((tag_category::id, tag_category::name))
             .filter(tag_category::name.eq(body.category))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::TagCategory))?;
         let tag: Tag = NewTag {
             category_id,
             description: body.description.as_deref().unwrap_or(""),
@@ -194,6 +198,8 @@ async fn merge(
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
             .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Tag))
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -241,7 +247,9 @@ async fn update(
             .inner_join(tag_name::table)
             .select(Tag::as_select())
             .filter(tag_name::name.eq(name))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Tag))?;
         let tag_id = old_tag.id;
         api::verify_version(old_tag.last_edit_time, body.version)?;
 
@@ -255,7 +263,9 @@ async fn update(
             let category_id: i64 = tag_category::table
                 .select(tag_category::id)
                 .filter(tag_category::name.eq(&category))
-                .first(conn)?;
+                .first(conn)
+                .optional()?
+                .ok_or(api::Error::NotFound(ResourceType::TagCategory))?;
             new_tag.category_id = category_id;
             new_snapshot_data.category = category;
         }
@@ -317,7 +327,9 @@ async fn delete(
             .select(Tag::as_select())
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::Tag))?;
         api::verify_version(tag.last_edit_time, *client_version)?;
 
         let tag_id = tag.id;
@@ -352,7 +364,8 @@ mod test {
         verify_request(&format!("{QUERY}={SORT}{FIELDS}"), "tag/list.json").await?;
         verify_request(&format!("{QUERY}=sort:usage-count -sort:name&limit=1{FIELDS}"), "tag/list_most_used.json")
             .await?;
-        verify_request(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character.json").await?;
+        verify_request(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character.json")
+            .await?;
         verify_request(&format!("{QUERY}=*sky* {SORT}{FIELDS}"), "tag/list_has_sky_in_name.json").await?;
         Ok(())
     }

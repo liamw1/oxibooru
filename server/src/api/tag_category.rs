@@ -106,7 +106,11 @@ async fn update(
 
     let mut conn = db::get_connection()?;
     let updated_category = conn.transaction(|conn| {
-        let old_category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        let old_category: TagCategory = tag_category::table
+            .filter(tag_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::TagCategory))?;
         api::verify_version(old_category.last_edit_time, body.version)?;
 
         let mut new_category = old_category.clone();
@@ -144,7 +148,11 @@ async fn set_default(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = db::get_connection()?;
     let new_default_category: TagCategory = conn.transaction(|conn| {
-        let mut category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        let mut category: TagCategory = tag_category::table
+            .filter(tag_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::TagCategory))?;
         let mut old_default_category: TagCategory = tag_category::table.filter(TagCategory::default()).first(conn)?;
 
         let defaulted_tags: Vec<i64> = diesel::update(tag::table)
@@ -194,7 +202,11 @@ async fn delete(
     api::verify_privilege(client, config::privileges().tag_category_delete)?;
 
     db::get_connection()?.transaction(|conn| {
-        let category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        let category: TagCategory = tag_category::table
+            .filter(tag_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::TagCategory))?;
         api::verify_version(category.last_edit_time, *client_version)?;
         if category.id == 0 {
             return Err(api::Error::DeleteDefault(ResourceType::TagCategory));

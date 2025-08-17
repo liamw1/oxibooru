@@ -275,12 +275,11 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
 });
 
 fn get_config_path() -> PathBuf {
-    // Use config.toml.dist if in test environment, config.toml if in production
-    if cfg!(test) {
-        let manifest_dir =
-            std::env::var("CARGO_MANIFEST_DIR").expect("Test environment should have CARGO_MANIFEST_DIR defined");
-        [&manifest_dir, "config.toml.dist"].iter().collect()
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        let config_file = if cfg!(test) { "config.toml.dist" } else { "config.toml" };
+        [&manifest_dir, config_file].iter().collect()
     } else {
+        assert!(!cfg!(test), "Test environment does not have CARGO_MANIFEST_DIR defined");
         let exe_path = std::env::current_exe().expect("Current exe path exists and is readable");
         let parent_path = exe_path.parent().unwrap_or(Path::new("/"));
         [parent_path, Path::new("config.toml")].iter().collect()

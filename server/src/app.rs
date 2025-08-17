@@ -14,7 +14,12 @@ use tracing_subscriber::util::SubscriberInitExt;
 
 pub fn enable_tracing() {
     const DEFAULT_DIRECTIVE: &str = "server=info,tower_http=debug,axum=trace";
-    let directive = config::get().log_filter.as_deref().unwrap_or(DEFAULT_DIRECTIVE);
+    let directive = if cfg!(test) {
+        "server=info,tower_http=info,axum=info"
+    } else {
+        config::get().log_filter.as_deref().unwrap_or(DEFAULT_DIRECTIVE)
+    };
+
     let filter = EnvFilter::try_new(directive).unwrap_or(EnvFilter::new(DEFAULT_DIRECTIVE));
     tracing_subscriber::registry()
         .with(filter)

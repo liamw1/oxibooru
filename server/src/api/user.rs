@@ -220,7 +220,9 @@ async fn update(
         let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(&username))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::User))?;
         api::verify_version(user_version, body.version)?;
 
         let editing_self = client.id == Some(user_id);
@@ -346,7 +348,9 @@ async fn delete(
         let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(username))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::User))?;
         api::verify_version(user_version, *client_version)?;
 
         let deleting_self = client.id == Some(user_id);

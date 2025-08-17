@@ -1,6 +1,7 @@
 use crate::api::ApiResult;
 use crate::auth::password;
 use crate::content::hash;
+use crate::model::enums::ResourceType;
 use crate::schema::user;
 use crate::string::SmallString;
 use crate::{api, config, db};
@@ -30,7 +31,8 @@ fn get_user_info(
         .select((user::id, user::name, user::email, user::password_salt))
         .filter(user::name.eq(identifier).or(user::email.eq(identifier)))
         .first(conn)
-        .map_err(api::Error::from)
+        .optional()?
+        .ok_or(api::Error::NotFound(ResourceType::User))
 }
 
 async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {

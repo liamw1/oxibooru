@@ -1,6 +1,6 @@
 use crate::api::{ApiResult, ResourceParams, UnpagedResponse};
 use crate::auth::Client;
-use crate::model::enums::AvatarStyle;
+use crate::model::enums::{AvatarStyle, ResourceType};
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
 use crate::resource::user_token::UserTokenInfo;
@@ -31,7 +31,9 @@ async fn list(
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::User))?;
 
         let required_rank = match client.id == Some(user_id) {
             true => config::privileges().user_token_list_self,
@@ -76,7 +78,9 @@ async fn create(
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::User))?;
 
         let required_rank = match client.id == Some(user_id) {
             true => config::privileges().user_token_create_self,
@@ -133,7 +137,9 @@ async fn update(
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::User))?;
 
         let required_rank = match client.id == Some(user_id) {
             true => config::privileges().user_token_edit_self,
@@ -141,7 +147,11 @@ async fn update(
         };
         api::verify_privilege(client, required_rank)?;
 
-        let mut user_token: UserToken = user_token::table.find(token).first(conn)?;
+        let mut user_token: UserToken = user_token::table
+            .find(token)
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::UserToken))?;
         api::verify_version(user_token.last_edit_time, body.version)?;
 
         if let Some(enabled) = body.enabled {
@@ -171,7 +181,9 @@ async fn delete(
             .select(user_token::user_id)
             .filter(user::name.eq(username))
             .filter(user_token::id.eq(token))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(api::Error::NotFound(ResourceType::UserToken))?;
 
         let required_rank = match client.id == Some(user_token_owner) {
             true => config::privileges().user_token_delete_self,
