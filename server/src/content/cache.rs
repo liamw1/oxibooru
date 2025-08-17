@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, LazyLock, Mutex, MutexGuard};
 use tracing::error;
 
-/// Stores properties of content that are costly to compute (usually require reading/decoding entire file).
+/// Stores properties of content that are costly to compute (usually requires reading/decoding entire file).
 pub struct CachedProperties {
     pub token: String,
     pub checksum: Vec<u8>,
@@ -42,24 +42,29 @@ pub fn get_or_compute_properties(content_token: String) -> ApiResult<Arc<CachedP
 /// A simple ring buffer that stores [`CachedProperties`].
 struct RingCache {
     data: VecDeque<(String, Arc<CachedProperties>)>,
-    max_size: usize,
+    capacity: usize,
 }
 
 impl RingCache {
-    fn new(max_size: usize) -> Self {
+    /// Constructs a new cache with given `capacity`.
+    fn new(capacity: usize) -> Self {
         Self {
             data: VecDeque::new(),
-            max_size,
+            capacity,
         }
     }
 
+    /// Inserts `key`-`value` pair into the cache.
+    /// If the number of elements in the cache is equal to the `capacity`,
+    /// the least-recently inserted element will be evicted.
     fn insert(&mut self, key: String, value: Arc<CachedProperties>) {
         self.data.push_back((key, value));
-        if self.data.len() > self.max_size {
+        if self.data.len() > self.capacity {
             self.data.pop_front();
         }
     }
 
+    /// Removes and returns the element with the given `key`.
     fn remove(&mut self, key: &str) -> Option<Arc<CachedProperties>> {
         self.data
             .iter()
@@ -68,6 +73,7 @@ impl RingCache {
             .map(|(_, cache_value)| cache_value)
     }
 
+    /// Destroys all elements currently in the cache.
     fn reset(&mut self) {
         self.data = VecDeque::new();
     }

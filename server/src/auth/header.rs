@@ -1,5 +1,5 @@
 use crate::auth::{AuthenticationError, Client};
-use crate::model::enums::UserRank;
+use crate::model::enums::{ResourceType, UserRank};
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
 use crate::{auth, db};
@@ -66,11 +66,13 @@ fn token_authentication(credentials: &str) -> Result<Client, AuthenticationError
         .select((user::id, user::rank, user_token::enabled, user_token::expiration_time))
         .filter(user::name.eq(username))
         .filter(user_token::id.eq(token))
-        .first(&mut conn)?;
+        .first(&mut conn)
+        .optional()?
+        .ok_or(AuthenticationError::NotFound(ResourceType::UserToken))?;
 
     let expired = expiration_time.as_ref().is_some_and(|&time| time < DateTime::now());
     let is_valid_token = enabled && !expired;
     is_valid_token
         .then_some(Client::new(Some(user_id), rank))
-        .ok_or(AuthenticationError::InvalidToken)
+        .ok_or(AuthenticationError::ExpiredToken)
 }

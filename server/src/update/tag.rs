@@ -258,27 +258,29 @@ pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> Api
     last_edit_time(conn, merge_to_id)
 }
 
-enum TraversalState {
-    Visited,
-    Explored,
-}
-
+/// Represents a relationship graph of a set of tags.
+/// May actually consist of multiple disconnected graphs.
 struct DependencyGraph {
     // Maps children to parents
     nodes: HashMap<i64, HashSet<i64>>,
 }
 
 impl DependencyGraph {
+    /// Creates a new dependency graph which is actually just a set of nodes with no connections.
     fn new(starting_nodes: &[i64]) -> Self {
         Self {
             nodes: starting_nodes.iter().map(|&tag_id| (tag_id, HashSet::new())).collect(),
         }
     }
 
+    /// Returns the number of nodes in the dependency graph.
     fn len(&self) -> usize {
         self.nodes.len()
     }
 
+    /// Inserts a new connection into the graph.
+    /// Assumes that `implication.parent_id` is already a node in the graph.
+    /// May create a new node if `implication.child_id` is not already a node.
     fn insert(&mut self, implication: TagImplication) -> bool {
         let parents = self.nodes.entry(implication.child_id).or_default();
         let new_node = parents.is_empty();
@@ -286,6 +288,7 @@ impl DependencyGraph {
         new_node
     }
 
+    /// Consumes the graph and returns the nodes.
     fn into_nodes(self) -> IntoKeys<i64, HashSet<i64>> {
         self.nodes.into_keys()
     }
@@ -293,6 +296,11 @@ impl DependencyGraph {
     /// Determines if depedency graph has a cycle using a depth-first search approach.
     /// Runs in O(V + E) time where V is the number of vertices and E is the number of edges of the graph.
     fn has_cycle(&self) -> bool {
+        enum TraversalState {
+            Visited,
+            Explored,
+        }
+
         let mut traversed_nodes = HashMap::new();
         for (base_node_id, parents) in &self.nodes {
             let mut traversal_stack = vec![(*base_node_id, parents.iter())];

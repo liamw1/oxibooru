@@ -88,7 +88,7 @@ fn video_frame(path: &Path) -> Result<Option<DynamicImage>, video_rs::Error> {
     }))
 }
 
-/// Search swf tags for the largest decodable image
+/// Search swf tags for the largest decodable image.
 fn flash_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
@@ -148,6 +148,7 @@ fn flash_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
     Ok(images.into_iter().next())
 }
 
+/// Defines upper limit on decoded image size to prevent crippling the server.
 fn image_reader_limits() -> Limits {
     const GB: u64 = 1024_u64.pow(3);
 
@@ -156,6 +157,7 @@ fn image_reader_limits() -> Limits {
     limits
 }
 
+/// Converts decoded video data into a [`DynamicImage`].
 fn rgb24_frame(data: &[u8], width: u32, height: u32, stride: usize) -> DynamicImage {
     let rgb_image = RgbImage::from_fn(width, height, |x, y| {
         let offset = y as usize * stride + x as usize * 3;

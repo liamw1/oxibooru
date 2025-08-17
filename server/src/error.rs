@@ -160,13 +160,14 @@ impl ErrorKind for base64::DecodeError {
 impl ErrorKind for crate::auth::AuthenticationError {
     fn kind(&self) -> &'static str {
         match self {
+            Self::ExpiredToken => "ExpiredToken",
             Self::FailedConnection(_) => "FailedConnection",
             Self::FailedQuery(err) => err.kind(),
             Self::InvalidAuthType => "InvalidAuthType",
             Self::InvalidEncoding(err) => err.kind(),
-            Self::InvalidToken => "InvalidToken",
             Self::MalformedCredentials => "MalformedCredentials",
             Self::MalformedToken(_) => "MalformedToken",
+            Self::NotFound(_) => "NotFound",
             Self::PasswordHashing(err) => err.kind(),
             Self::UsernamePasswordMismatch => "UsernamePasswordMismatch",
             Self::Utf8Conversion(_) => "Utf8ConversionError",

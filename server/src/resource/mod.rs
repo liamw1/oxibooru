@@ -25,7 +25,7 @@ pub trait BoolFill {
     fn filled(val: bool) -> Self;
 }
 
-/// Creates a boolean `FieldTable` from an (optional) comma separated `fields` [str].
+/// Creates a boolean `FieldTable` from an (optional) comma separated `fields` [&str].
 pub fn create_table<T, E>(fields: Option<&str>) -> Result<T, <E as FromStr>::Err>
 where
     T: BoolFill + IndexMut<E, Output = bool>,
