@@ -155,8 +155,8 @@ application/json`. An exception to this rule are requests that upload files.
 
 Requests that upload files must use `multipart/form-data` encoding. Any request
 that bundles user files, must send the request data (which is JSON) as an
-additional file with the special name of `metadata` (whereas the actual files
-must have names specific to the API that is being used.)
+additional file with the special name of `metadata` with `Content-Type: application/json`
+(whereas the actual files must have names specific to the API that is being used).
 
 Alternatively, the server can download the files from the Internet on client's
 behalf. In that case, the request doesn't need to be specially encoded in any
