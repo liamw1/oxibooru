@@ -42,7 +42,7 @@ pub fn split_once<P: Pattern>(text: &str, pattern: P) -> Option<(&str, &str)> {
 }
 
 /// Parses string-based `condition`.
-pub fn str_condition(condition: &str) -> StrCondition {
+pub fn str_condition(condition: &'_ str) -> StrCondition<'_> {
     if condition.contains('*') {
         StrCondition::WildCard(unescape(condition).replace('*', "%").replace('_', "\\_").to_lowercase())
     } else {
@@ -165,7 +165,7 @@ fn range_split(text: &str) -> Option<(&str, &str)> {
 }
 
 /// Replaces escaped characters with unescaped ones in `text`.
-fn unescape(text: &str) -> Cow<str> {
+fn unescape(text: &'_ str) -> Cow<'_, str> {
     if text.contains('\\') {
         let mut escaped = text.starts_with('\\');
         let start_index = usize::from(escaped);
@@ -185,7 +185,7 @@ fn unescape(text: &str) -> Cow<str> {
 }
 
 /// Parses a non-wildcard string-based `filter`.
-fn parse_regular_str(filter: &str) -> Condition<Cow<str>> {
+fn parse_regular_str(filter: &'_ str) -> Condition<Cow<'_, str>> {
     match range_split(filter) {
         Some((left, "")) => Condition::GreaterEq(unescape(left)),
         Some(("", right)) => Condition::LessEq(unescape(right)),

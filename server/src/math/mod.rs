@@ -5,10 +5,6 @@ pub mod interval;
 pub mod point;
 pub mod rect;
 
-pub trait From<T>: Sized {
-    fn from(value: &T) -> Option<Self>;
-}
-
 /// Useful trait for converting from unsigned to signed integer in generic context.
 pub trait SignedCast {
     type Signed;

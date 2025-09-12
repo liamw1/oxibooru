@@ -78,16 +78,16 @@ pub fn decode_define_bits_jpeg(data: &[u8], alpha_data: Option<&[u8]>) -> Result
 /// Glues the JPEG encoding tables from a `JPEGTables` SWF tag to the JPEG data
 /// in a `DefineBits` tag, producing complete JPEG data suitable for a decoder.
 pub fn glue_tables_to_jpeg<'a>(jpeg_data: &'a [u8], jpeg_tables: Option<&'a [u8]>) -> Cow<'a, [u8]> {
-    if let Some(jpeg_tables) = jpeg_tables {
-        if jpeg_tables.len() >= 2 {
-            let mut full_jpeg = Vec::with_capacity(jpeg_tables.len() + jpeg_data.len());
-            full_jpeg.extend_from_slice(&jpeg_tables[..jpeg_tables.len() - 2]);
-            if jpeg_data.len() >= 2 {
-                full_jpeg.extend_from_slice(&jpeg_data[2..]);
-            }
-
-            return Cow::Owned(full_jpeg);
+    if let Some(jpeg_tables) = jpeg_tables
+        && jpeg_tables.len() >= 2
+    {
+        let mut full_jpeg = Vec::with_capacity(jpeg_tables.len() + jpeg_data.len());
+        full_jpeg.extend_from_slice(&jpeg_tables[..jpeg_tables.len() - 2]);
+        if jpeg_data.len() >= 2 {
+            full_jpeg.extend_from_slice(&jpeg_data[2..]);
         }
+
+        return Cow::Owned(full_jpeg);
     }
 
     // No JPEG tables or not enough data; return JPEG data as is
@@ -96,7 +96,7 @@ pub fn glue_tables_to_jpeg<'a>(jpeg_data: &'a [u8], jpeg_tables: Option<&'a [u8]
 
 /// Removes potential invalid JPEG data from SWF `DefineBitsJPEG` tags.
 /// These bytes need to be removed for the JPEG to decode properly.
-pub fn remove_invalid_jpeg_data(data: &[u8]) -> Cow<[u8]> {
+pub fn remove_invalid_jpeg_data(data: &'_ [u8]) -> Cow<'_, [u8]> {
     // SWF19 errata p.138:
     // "Before version 8 of the SWF file format, SWF files could contain an erroneous header of 0xFF, 0xD9, 0xFF, 0xD8
     // before the JPEG SOI marker."

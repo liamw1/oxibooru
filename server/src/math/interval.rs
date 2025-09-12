@@ -1,4 +1,4 @@
-use crate::math::{From, SignedCast, UnsignedCast};
+use crate::math::{SignedCast, UnsignedCast};
 use num_traits::PrimInt;
 use std::num::TryFromIntError;
 
@@ -102,14 +102,6 @@ where
         let start = self.start.to_unsigned()?;
         let end = self.end.to_unsigned()?;
         Ok(Interval { start, end })
-    }
-}
-
-impl<T: PrimInt, U: PrimInt> From<Interval<U>> for Interval<T> {
-    fn from(interval: &Interval<U>) -> Option<Self> {
-        let start = T::from(interval.start)?;
-        let end = T::from(interval.end)?;
-        Some(Interval { start, end })
     }
 }
 
