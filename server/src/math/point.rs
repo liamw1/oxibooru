@@ -1,4 +1,4 @@
-use crate::math::{From, SignedCast};
+use crate::math::SignedCast;
 use num_traits::int::PrimInt;
 use std::num::TryFromIntError;
 
@@ -29,14 +29,6 @@ where
         let i = self.i.to_signed()?;
         let j = self.j.to_signed()?;
         Ok(IPoint2::new(i, j))
-    }
-}
-
-impl<T: PrimInt, U: PrimInt> From<IPoint2<U>> for IPoint2<T> {
-    fn from(point: &IPoint2<U>) -> Option<Self> {
-        let i = T::from(point.i)?;
-        let j = T::from(point.j)?;
-        Some(Self::new(i, j))
     }
 }
 

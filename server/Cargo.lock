@@ -2803,7 +2803,7 @@ dependencies = [
 
 [[package]]
 name = "server"
-version = "0.6.0"
+version = "0.6.2"
 dependencies = [
  "argon2",
  "axum",

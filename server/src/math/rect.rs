@@ -1,4 +1,3 @@
-use crate::math::From;
 use crate::math::interval::Interval;
 use crate::math::point::IPoint2;
 use crate::math::{SignedCast, UnsignedCast};
@@ -91,14 +90,6 @@ where
         let i_bounds = self.i_bounds.to_unsigned()?;
         let j_bounds = self.j_bounds.to_unsigned()?;
         Ok(IRect::new(i_bounds, j_bounds))
-    }
-}
-
-impl<T: PrimInt, U: PrimInt> From<IRect<U>> for IRect<T> {
-    fn from(rect: &IRect<U>) -> Option<Self> {
-        let i_bounds = <Interval<T> as From<Interval<U>>>::from(&rect.i_bounds)?;
-        let j_bounds = <Interval<T> as From<Interval<U>>>::from(&rect.j_bounds)?;
-        Some(Self::new(i_bounds, j_bounds))
     }
 }
 

@@ -48,7 +48,7 @@ impl Note {
         }
     }
 
-    pub fn to_new_post_note(&self, post_id: i64) -> NewPostNote {
+    pub fn to_new_post_note(&'_ self, post_id: i64) -> NewPostNote<'_> {
         NewPostNote {
             post_id,
             polygon: self.polygon.as_flattened(),
