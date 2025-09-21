@@ -366,17 +366,20 @@ mod test {
         // process and don't produce byte-for-byte identical images. These slight differences carry
         // over to the signature generation process, causing this test to fail when an decoder
         // implementation changes.
+        //
+        // Similarly, the conversion to grayscale can also introduce error. Therefore, we only use
+        // images stored with an 8-bit grayscale format to make the grayscale conversion lossless.
         let (png, _) = image_properties("png.png")?;
-        let (bmp, _) = image_properties("bmp.bmp")?;
+        let (tiff, _) = image_properties("tiff.tiff")?;
         let (image, _) = image_properties("starry_night.png")?;
         let (image_similar, _) = image_properties("starry_night_similar.png")?;
 
         // Identical images of different formats
-        assert_eq!(distance(&cache(&png), &bmp), 0.0);
+        assert_eq!(distance(&cache(&png), &tiff), 0.0);
         // Similar images of same format
-        assert!((distance(&cache(&image), &image_similar) - 0.2222814145119994).abs() < 1e-8);
+        assert!((distance(&cache(&image), &image_similar) - 0.21172875793283555).abs() < 1e-8);
         // Different images
-        assert!((distance(&cache(&png), &image) - 0.7037067060099752).abs() < 1e-8);
+        assert!((distance(&cache(&png), &image) - 0.7148876237445337).abs() < 1e-8);
         Ok(())
     }
 
