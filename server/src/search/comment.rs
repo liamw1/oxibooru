@@ -1,7 +1,7 @@
 use crate::api::ApiResult;
 use crate::auth::Client;
 use crate::schema::{comment, comment_statistics, database_statistics, user};
-use crate::search::{Order, ParsedSort, SearchCriteria};
+use crate::search::{Builder, Order, ParsedSort, SearchCriteria};
 use crate::{api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter, search};
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select};
 use diesel::pg::Pg;
@@ -29,28 +29,48 @@ pub enum Token {
 }
 
 pub struct QueryBuilder<'a> {
-    client: Client,
     search: SearchCriteria<'a, Token>,
+}
+
+impl<'a> Builder<'a> for QueryBuilder<'a> {
+    type Token = Token;
+    type BoxedQuery = BoxedQuery<'a>;
+
+    fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
+        &mut self.search
+    }
+
+    fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
+        let query = self.build_filtered()?;
+        self.get_ordered_ids(conn, query).map_err(api::Error::from)
+    }
+
+    fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
+        if self.search.has_filter() {
+            let unsorted_query = self.build_filtered()?;
+            unsorted_query.count().first(conn)
+        } else {
+            database_statistics::table
+                .select(database_statistics::comment_count)
+                .first(conn)
+        }
+        .map_err(api::Error::from)
+    }
 }
 
 impl<'a> QueryBuilder<'a> {
     pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(search_criteria, Token::Text).map_err(Box::from)?;
-        Ok(Self { client, search })
+        let search = SearchCriteria::new(client, search_criteria, Token::Text).map_err(Box::from)?;
+        Ok(Self { search })
     }
 
     pub fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
         self.search.set_offset_and_limit(offset, limit);
     }
 
-    pub fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
-        let query = self.build_filtered()?;
-        self.get_ordered_ids(conn, query).map_err(api::Error::from)
-    }
-
     pub fn list(&mut self, conn: &mut PgConnection) -> ApiResult<(i64, Vec<i64>)> {
         if self.search.random_sort {
-            search::change_seed(conn, self.client)?;
+            search::change_seed(conn, self.search.client)?;
         }
 
         let total = self.count(conn)?;
@@ -81,7 +101,7 @@ impl<'a> QueryBuilder<'a> {
     fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
-            return apply_random_sort!(conn, self.client, unsorted_query, self.search).load(conn);
+            return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
         }
 
         let default_sort = std::iter::once(ParsedSort {
@@ -103,18 +123,6 @@ impl<'a> QueryBuilder<'a> {
             None => query,
         }
         .load(conn)
-    }
-
-    fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() {
-            let unsorted_query = self.build_filtered()?;
-            unsorted_query.count().first(conn)
-        } else {
-            database_statistics::table
-                .select(database_statistics::comment_count)
-                .first(conn)
-        }
-        .map_err(api::Error::from)
     }
 }
 

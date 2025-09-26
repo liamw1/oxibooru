@@ -1,3 +1,4 @@
+use crate::api::ApiResult;
 use crate::auth::Client;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use diesel::prelude::*;
@@ -16,6 +17,29 @@ pub mod snapshot;
 pub mod tag;
 pub mod user;
 
+pub trait Builder<'a> {
+    type Token;
+    type BoxedQuery;
+
+    fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token>;
+    fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>>;
+    fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64>;
+
+    fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
+        self.criteria().set_offset_and_limit(offset, limit);
+    }
+
+    fn list(&mut self, conn: &mut PgConnection) -> ApiResult<(i64, Vec<i64>)> {
+        if self.criteria().random_sort {
+            change_seed(conn, self.criteria().client)?;
+        }
+
+        let total = self.count(conn)?;
+        let results = self.load(conn)?;
+        Ok((total, results))
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub enum TimeParsingError {
@@ -30,17 +54,14 @@ pub enum TimeParsingError {
 /// Stores filters, sorts, offset, and limit of a search query.
 /// Filters will be parsed later.
 pub struct SearchCriteria<'a, T> {
+    client: Client,
     filters: Vec<UnparsedFilter<'a, T>>,
     sorts: Vec<ParsedSort<T>>,
     random_sort: bool,
     extra_args: Option<QueryArgs>,
 }
 
-impl<'a, T> SearchCriteria<'a, T>
-where
-    T: Copy + FromStr,
-    <T as FromStr>::Err: std::error::Error,
-{
+impl<'a, T> SearchCriteria<'a, T> {
     pub fn has_sort(&self) -> bool {
         !self.sorts.is_empty() || self.random_sort
     }
@@ -49,7 +70,17 @@ where
         !self.filters.is_empty()
     }
 
-    fn new(search_criteria: &'a str, anonymous_token: T) -> Result<Self, <T as FromStr>::Err> {
+    fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
+        self.extra_args = Some(QueryArgs { offset, limit });
+    }
+}
+
+impl<'a, T> SearchCriteria<'a, T>
+where
+    T: Copy + FromStr,
+    <T as FromStr>::Err: std::error::Error,
+{
+    fn new(client: Client, search_criteria: &'a str, anonymous_token: T) -> Result<Self, <T as FromStr>::Err> {
         let mut filters: Vec<UnparsedFilter<T>> = Vec::new();
         let mut sorts: Vec<ParsedSort<T>> = Vec::new();
         let mut random_sort = false;
@@ -89,15 +120,12 @@ where
             }
         }
         Ok(Self {
+            client,
             filters,
             sorts,
             random_sort,
             extra_args: None,
         })
-    }
-
-    fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
-        self.extra_args = Some(QueryArgs { offset, limit });
     }
 }
 
