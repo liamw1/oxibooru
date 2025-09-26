@@ -1,0 +1,2 @@
+ALTER TABLE "user"
+ADD "search_seed" REAL NOT NULL DEFAULT 0.0;

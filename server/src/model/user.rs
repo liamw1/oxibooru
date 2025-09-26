@@ -36,6 +36,8 @@ pub struct User {
     pub last_edit_time: DateTime,
     #[allow(dead_code)]
     custom_avatar_size: i64,
+    #[allow(dead_code)]
+    search_seed: f32,
 }
 
 impl User {

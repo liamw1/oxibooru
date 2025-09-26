@@ -81,10 +81,15 @@ macro_rules! apply_sort {
     };
 }
 
-/// Applies random ordering to the given `query`.
+/// Applies seeded random ordering to the given `query`.
 #[macro_export]
 macro_rules! apply_random_sort {
-    ($query:expr, $criteria:expr) => {
+    ($conn:expr, $client:expr, $query:expr, $criteria:expr) => {{
+        if let Err(err) = crate::search::set_seed($conn, $client) {
+            tracing::warn!(
+                "Unable to set seed for random sort. Results may not be consistent between queries. Details:\n{err}"
+            );
+        }
         match $criteria.extra_args {
             Some(args) => $query
                 .order($crate::search::random())
@@ -92,7 +97,7 @@ macro_rules! apply_random_sort {
                 .limit(args.limit),
             None => $query.order($crate::search::random()),
         }
-    };
+    }};
 }
 
 /// Applies a WHERE clause to the given `query`.

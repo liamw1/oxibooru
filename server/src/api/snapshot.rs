@@ -23,11 +23,10 @@ async fn list(
     let limit = std::cmp::min(params.limit.get(), MAX_SNAPSHOTS_PER_PAGE);
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(params.criteria())?;
+        let mut query_builder = QueryBuilder::new(client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
-        let total = query_builder.count(conn)?;
-        let selected_snapshots = query_builder.load(conn)?;
+        let (total, selected_snapshots) = query_builder.list(conn)?;
         Ok(Json(PagedResponse {
             query: params.into_query(),
             offset,

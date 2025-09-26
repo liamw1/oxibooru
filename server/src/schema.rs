@@ -273,6 +273,7 @@ diesel::table! {
         last_login_time -> Timestamptz,
         last_edit_time -> Timestamptz,
         custom_avatar_size -> Int8,
+        search_seed -> Float4,
     }
 }
 

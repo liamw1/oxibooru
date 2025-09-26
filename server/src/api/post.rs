@@ -85,8 +85,7 @@ async fn list(
         let mut query_builder = QueryBuilder::new(client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
-        let total = query_builder.count(conn)?;
-        let selected_posts = query_builder.load(conn)?;
+        let (total, selected_posts) = query_builder.list(conn)?;
         Ok(Json(PagedResponse {
             query: params.into_query(),
             offset,
@@ -147,12 +146,6 @@ async fn get_neighbors(
         const LIMIT_GROWTH: i64 = 8;
 
         // Handle special cases first
-        if query_builder.criteria().has_random_sort() {
-            query_builder.set_offset_and_limit(0, 2);
-            let post_ids = query_builder.load_with(conn, |query| query.filter(post::id.ne(post_id)))?;
-            let post_infos = PostInfo::new_batch_from_ids(conn, client, &post_ids, &fields)?;
-            return Ok(create_post_neighbors(post_infos, true));
-        }
         if !query_builder.criteria().has_filter() && !query_builder.criteria().has_sort() {
             // Optimized neighbor retrieval for simplest use case
             let previous_post = post::table

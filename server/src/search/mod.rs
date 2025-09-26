@@ -1,5 +1,7 @@
-use diesel::define_sql_function;
-use diesel::sql_types::SingleValue;
+use crate::auth::Client;
+use argon2::password_hash::rand_core::{OsRng, RngCore};
+use diesel::prelude::*;
+use diesel::sql_types::{Float, SingleValue};
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::ops::{Not, Range};
@@ -45,10 +47,6 @@ where
 
     pub fn has_filter(&self) -> bool {
         !self.filters.is_empty()
-    }
-
-    pub fn has_random_sort(&self) -> bool {
-        self.random_sort
     }
 
     fn new(search_criteria: &'a str, anonymous_token: T) -> Result<Self, <T as FromStr>::Err> {
@@ -237,4 +235,31 @@ impl QueryCache {
             });
         }
     }
+}
+
+fn set_seed(conn: &mut PgConnection, client: Client) -> QueryResult<()> {
+    use crate::schema::user;
+
+    let seed = match client.id {
+        Some(user_id) => user::table.find(user_id).select(user::search_seed).first(conn)?,
+        None => 0.0,
+    };
+    diesel::sql_query("SELECT setseed($1);")
+        .bind::<Float, _>(seed)
+        .execute(conn)
+        .map(|_| ())
+}
+
+fn change_seed(conn: &mut PgConnection, client: Client) -> QueryResult<()> {
+    use crate::schema::user;
+
+    if let Some(user_id) = client.id {
+        let rng = &mut OsRng;
+        let random_i32 = i32::from_le_bytes(rng.next_u32().to_le_bytes());
+        let new_seed = random_i32 as f32 / i32::MAX as f32;
+        diesel::update(user::table.find(user_id))
+            .set(user::search_seed.eq(new_seed))
+            .execute(conn)?;
+    }
+    Ok(())
 }

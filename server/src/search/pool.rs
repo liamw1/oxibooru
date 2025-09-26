@@ -1,10 +1,11 @@
 use crate::api::ApiResult;
+use crate::auth::Client;
 use crate::model::pool::PoolName;
 use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_statistics};
 use crate::search::{Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter};
 use crate::{
     api, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
-    apply_time_filter,
+    apply_time_filter, search,
 };
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
@@ -29,14 +30,16 @@ pub enum Token {
 }
 
 pub struct QueryBuilder<'a> {
+    client: Client,
     search: SearchCriteria<'a, Token>,
     cache: QueryCache,
 }
 
 impl<'a> QueryBuilder<'a> {
-    pub fn new(search_criteria: &'a str) -> ApiResult<Self> {
+    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
         let search = SearchCriteria::new(search_criteria, Token::Name).map_err(Box::from)?;
         Ok(Self {
+            client,
             search,
             cache: QueryCache::new(),
         })
@@ -46,23 +49,20 @@ impl<'a> QueryBuilder<'a> {
         self.search.set_offset_and_limit(offset, limit);
     }
 
-    pub fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() {
-            let unsorted_query = self.build_filtered(conn)?;
-            let unsorted_query = self.apply_cache_filters(unsorted_query);
-            unsorted_query.count().first(conn)
-        } else {
-            database_statistics::table
-                .select(database_statistics::pool_count)
-                .first(conn)
-        }
-        .map_err(api::Error::from)
-    }
-
     pub fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
         let query = self.build_filtered(conn)?;
         let query = self.apply_cache_filters(query);
         self.get_ordered_ids(conn, query).map_err(api::Error::from)
+    }
+
+    pub fn list(&mut self, conn: &mut PgConnection) -> ApiResult<(i64, Vec<i64>)> {
+        if self.search.random_sort {
+            search::change_seed(conn, self.client)?;
+        }
+
+        let total = self.count(conn)?;
+        let results = self.load(conn)?;
+        Ok((total, results))
     }
 
     fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
@@ -90,7 +90,7 @@ impl<'a> QueryBuilder<'a> {
     fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
-            return apply_random_sort!(unsorted_query, self.search).load(conn);
+            return apply_random_sort!(conn, self.client, unsorted_query, self.search).load(conn);
         }
 
         let default_sort = std::iter::once(ParsedSort {
@@ -121,6 +121,19 @@ impl<'a> QueryBuilder<'a> {
             query = query.filter(pool::id.ne_all(nonmatching_ids));
         }
         query
+    }
+
+    fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
+        if self.search.has_filter() {
+            let unsorted_query = self.build_filtered(conn)?;
+            let unsorted_query = self.apply_cache_filters(unsorted_query);
+            unsorted_query.count().first(conn)
+        } else {
+            database_statistics::table
+                .select(database_statistics::pool_count)
+                .first(conn)
+        }
+        .map_err(api::Error::from)
     }
 }
 
