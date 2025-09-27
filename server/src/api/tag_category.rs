@@ -91,7 +91,7 @@ async fn create(
 #[serde(deny_unknown_fields)]
 struct UpdateBody {
     version: DateTime,
-    order: Option<SmallString>, // TODO: Client sends order out as string so we convert on server, would be better to do this on client
+    order: Option<i32>,
     name: Option<SmallString>,
     color: Option<SmallString>,
 }
@@ -112,7 +112,7 @@ async fn update(
         let mut new_category = old_category.clone();
         if let Some(order) = body.order {
             api::verify_privilege(client, config::privileges().tag_category_edit_order)?;
-            new_category.order = order.parse::<i32>()?;
+            new_category.order = order;
         }
         if let Some(name) = body.name {
             api::verify_privilege(client, config::privileges().tag_category_edit_name)?;
