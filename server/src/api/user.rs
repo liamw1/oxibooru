@@ -9,6 +9,7 @@ use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{UserInfo, Visibility};
 use crate::schema::user;
+use crate::search::Builder;
 use crate::search::user::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;

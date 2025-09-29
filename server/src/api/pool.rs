@@ -4,6 +4,7 @@ use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::PoolInfo;
 use crate::schema::{pool, pool_category};
+use crate::search::Builder;
 use crate::search::pool::QueryBuilder;
 use crate::snapshot::pool::SnapshotData;
 use crate::string::{LargeString, SmallString};

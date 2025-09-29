@@ -5,7 +5,7 @@ use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_st
 use crate::search::{Builder, Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter};
 use crate::{
     api, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
-    apply_time_filter, search,
+    apply_time_filter,
 };
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
@@ -69,20 +69,6 @@ impl<'a> QueryBuilder<'a> {
             search,
             cache: QueryCache::new(),
         })
-    }
-
-    pub fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
-        self.search.set_offset_and_limit(offset, limit);
-    }
-
-    pub fn list(&mut self, conn: &mut PgConnection) -> ApiResult<(i64, Vec<i64>)> {
-        if self.search.random_sort {
-            search::change_seed(conn, self.search.client)?;
-        }
-
-        let total = self.count(conn)?;
-        let results = self.load(conn)?;
-        Ok((total, results))
     }
 
     fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {

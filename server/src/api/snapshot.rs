@@ -1,6 +1,7 @@
 use crate::api::{ApiResult, PageParams, PagedResponse};
 use crate::auth::Client;
 use crate::resource::snapshot::SnapshotInfo;
+use crate::search::Builder;
 use crate::search::snapshot::QueryBuilder;
 use crate::{api, config, db, resource};
 use axum::extract::Query;

@@ -4,6 +4,7 @@ use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::CommentInfo;
 use crate::schema::{comment, comment_score};
+use crate::search::Builder;
 use crate::search::comment::QueryBuilder;
 use crate::time::DateTime;
 use crate::{api, config, db, resource};

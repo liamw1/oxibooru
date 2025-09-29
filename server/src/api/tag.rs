@@ -4,6 +4,7 @@ use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, Tag};
 use crate::resource::tag::TagInfo;
 use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::search::Builder;
 use crate::search::tag::QueryBuilder;
 use crate::snapshot::tag::SnapshotData;
 use crate::string::{LargeString, SmallString};
