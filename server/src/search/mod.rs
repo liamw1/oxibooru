@@ -61,7 +61,7 @@ pub struct SearchCriteria<'a, T> {
     extra_args: Option<QueryArgs>,
 }
 
-impl<'a, T> SearchCriteria<'a, T> {
+impl<T> SearchCriteria<'_, T> {
     pub fn has_sort(&self) -> bool {
         !self.sorts.is_empty() || self.random_sort
     }
@@ -284,9 +284,9 @@ fn change_seed(conn: &mut PgConnection, client: Client) -> QueryResult<()> {
     if let Some(user_id) = client.id {
         let rng = &mut OsRng;
         let random_i32 = i32::from_le_bytes(rng.next_u32().to_le_bytes());
-        let new_seed = random_i32 as f32 / i32::MAX as f32;
+        let new_seed = f64::from(random_i32) / f64::from(i32::MAX);
         diesel::update(user::table.find(user_id))
-            .set(user::search_seed.eq(new_seed))
+            .set(user::search_seed.eq(new_seed as f32))
             .execute(conn)?;
     }
     Ok(())

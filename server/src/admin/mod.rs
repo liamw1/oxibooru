@@ -95,7 +95,7 @@ impl ProgressReporter {
 
     fn increment(&self) {
         let count = self.count.fetch_add(1, Ordering::SeqCst) + 1;
-        if count % self.print_interval == 0 {
+        if count.is_multiple_of(self.print_interval) {
             self.report();
         }
     }

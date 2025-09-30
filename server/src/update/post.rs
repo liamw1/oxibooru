@@ -50,6 +50,7 @@ pub fn thumbnail(
 pub fn create_relations(conn: &mut PgConnection, post_id: i64, relations: &[i64]) -> QueryResult<()> {
     let new_relations: Vec<_> = relations
         .iter()
+        .filter(|&&id| id != post_id)
         .flat_map(|&other_id| PostRelation::new_pair(post_id, other_id))
         .collect();
     new_relations.insert_into(post_relation::table).execute(conn)?;
