@@ -4,7 +4,6 @@ version = "0.7.0"
 edition = "2024"
 
 [dependencies]
-# Using fork until changes are merged in
 diesel = { version = "2.3.2", features = ["postgres", "r2d2", "time", "uuid", "serde_json",
                                           "i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
 diesel_migrations = { version = "2.3.0", features = ["postgres"] }
