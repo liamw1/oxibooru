@@ -72,7 +72,7 @@ pub enum PostType {
 impl From<MimeType> for PostType {
     fn from(value: MimeType) -> Self {
         match value {
-            MimeType::Bmp | MimeType::Jpeg | MimeType::Png | MimeType::Webp => Self::Image,
+            MimeType::Avif | MimeType::Bmp | MimeType::Jpeg | MimeType::Png | MimeType::Webp => Self::Image,
             MimeType::Gif => Self::Animation,
             MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Self::Video,
             MimeType::Swf => Self::Flash,
@@ -140,11 +140,15 @@ pub enum MimeType {
     #[serde(rename = "application/x-shockwave-flash")]
     #[strum(serialize = "application/x-shockwave-flash")]
     Swf,
+    #[serde(rename = "image/avif")]
+    #[strum(serialize = "image/avif")]
+    Avif,
 }
 
 impl MimeType {
     pub fn from_extension(extension: &str) -> Result<Self, ParseExtensionError> {
         match extension {
+            "avif" | "AVIF" => Ok(Self::Avif),
             "bmp" | "BMP" => Ok(Self::Bmp),
             "gif" | "GIF" => Ok(Self::Gif),
             "jpg" | "jpeg" | "JPG" | "JPEG" => Ok(Self::Jpeg),
@@ -167,6 +171,7 @@ impl MimeType {
 
     pub fn extension(self) -> &'static str {
         match self {
+            Self::Avif => "avif",
             Self::Bmp => "bmp",
             Self::Gif => "gif",
             Self::Jpeg => "jpg",
@@ -181,6 +186,7 @@ impl MimeType {
 
     pub fn to_image_format(self) -> Option<ImageFormat> {
         match self {
+            MimeType::Avif => Some(ImageFormat::Avif),
             MimeType::Bmp => Some(ImageFormat::Bmp),
             MimeType::Gif => Some(ImageFormat::Gif),
             MimeType::Jpeg => Some(ImageFormat::Jpeg),

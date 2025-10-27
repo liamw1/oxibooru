@@ -12,6 +12,7 @@ axum = { version = "0.8.4", features = ["multipart"] }
 reqwest = { version ="0.12.12", features = ["json"] }
 tower-http = { version = "0.6.6", features = ["trace", "timeout", "normalize-path"] }
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+image = { version = "0.25.5", features = ["avif-native"] }
 serde = { version = "1.0.217", features = ["derive", "rc"] }
 strum = { version = "0.27.0", features = ["derive", "phf"] }
 time = { version = "0.3.37", features = ["serde-human-readable"] }
@@ -25,7 +26,6 @@ rayon = "1.10.0"
 tower = "0.5.2"
 tracing = "0.1.41"
 toml = "0.8.20"
-image = "0.25.5"
 video-rs = "0.10.3"
 swf = "0.2.2"
 flate2 = "1.0.35"

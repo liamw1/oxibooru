@@ -17,7 +17,7 @@ Some aspects of a Szurubooru instance can't be converted to an Oxibooru instance
     
 2. **Some image formats**
     
-    Currently, Oxibooru doesn't support AVIF, HEIF, or HEIC file formats. In the future, support for AVIF is very likely. HEIF and HEIC are a little less likely and depends on if I can find a good crate for them.
+    Currently, Oxibooru doesn't support HEIF or HEIC file formats. It's possible that they will be supported in the future if I can find good crates for them.
 
 3. **Some post types**
 

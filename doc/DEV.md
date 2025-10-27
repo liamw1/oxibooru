@@ -8,7 +8,7 @@ To aid in the editing and navigating of Rust code, install `rust-analyzer` in yo
 
 Next, you'll want to install the build and runtime dependencies. On Debian-based systems, this looks something like
 ```console
-sudo apt-get update && sudo apt-get install -y clang pkg-config libssl-dev libpq-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
+sudo apt-get update && sudo apt-get install -y clang pkg-config libssl-dev libpq-dev libdav1d-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
 ```
 
 ## Rust Basics
