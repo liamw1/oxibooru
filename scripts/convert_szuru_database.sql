@@ -272,6 +272,7 @@ SET "mime-type" = CASE
     WHEN "mime-type" = 'video/quicktime' THEN 6
     WHEN "mime-type" = 'video/webm' THEN 7
     WHEN "mime-type" = 'application/x-shockwave-flash' THEN 8
+    WHEN "mime-type" = "image/avif" THEN 9
 END;
 ALTER TABLE public."post"
 ALTER COLUMN "mime-type" TYPE SMALLINT USING "mime-type"::SMALLINT;
