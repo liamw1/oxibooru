@@ -14,7 +14,7 @@ use diesel::prelude::*;
 use std::collections::hash_map::{Entry, IntoKeys};
 use std::collections::{HashMap, HashSet};
 
-/// Updates `last_edit_time` of tag with given `tag_id`.
+/// Updates `last_edit_time` of tag associated with `tag_id`.
 pub fn last_edit_time(conn: &mut PgConnection, tag_id: i64) -> ApiResult<()> {
     diesel::update(tag::table.find(tag_id))
         .set(tag::last_edit_time.eq(DateTime::now()))
@@ -22,37 +22,20 @@ pub fn last_edit_time(conn: &mut PgConnection, tag_id: i64) -> ApiResult<()> {
     Ok(())
 }
 
-/// Appends `names` onto the current list of names for the tag with id `tag_id`.
-pub fn add_names(
-    conn: &mut PgConnection,
-    tag_id: i64,
-    current_name_count: i32,
-    names: &[SmallString],
-) -> ApiResult<()> {
+/// Replaces the current ordered list of names with `names` for tag associated with `tag_id`.
+pub fn set_names(conn: &mut PgConnection, tag_id: i64, names: &[SmallString]) -> ApiResult<()> {
     names
         .iter()
         .try_for_each(|name| api::verify_matches_regex(name, RegexType::Tag))?;
 
-    let new_names: Vec<_> = names
-        .iter()
-        .enumerate()
-        .map(|(i, name)| (current_name_count + i as i32, name))
-        .map(|(order, name)| NewTagName { tag_id, order, name })
-        .collect();
-    new_names.insert_into(tag_name::table).execute(conn)?;
-    Ok(())
-}
-
-/// Deletes all names for the tag with id `tag_id`.
-/// Returns number of names deleted.
-pub fn delete_names(conn: &mut PgConnection, tag_id: i64) -> QueryResult<usize> {
     diesel::delete(tag_name::table)
         .filter(tag_name::tag_id.eq(tag_id))
-        .execute(conn)
+        .execute(conn)?;
+    add_names(conn, tag_id, 0, names)
 }
 
-/// Adds `implied_ids` to the list of implications for the tag with id `tag_id`.
-pub fn add_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: &[i64]) -> ApiResult<()> {
+/// Replaces the current set of implications with `implied_ids` for tag associated with `tag_id`.
+pub fn set_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: &[i64]) -> ApiResult<()> {
     let new_implications: Vec<_> = implied_ids
         .iter()
         .map(|&child_id| {
@@ -64,12 +47,16 @@ pub fn add_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: &[i64
                 .ok_or(api::Error::CyclicDependency(ResourceType::TagImplication))
         })
         .collect::<Result<_, _>>()?;
+
+    diesel::delete(tag_implication::table)
+        .filter(tag_implication::parent_id.eq(tag_id))
+        .execute(conn)?;
     new_implications.insert_into(tag_implication::table).execute(conn)?;
     Ok(())
 }
 
-/// Adds `suggested_ids` to the list of suggestions for the tag with id `tag_id`.
-pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i64]) -> ApiResult<()> {
+/// Replaces the current set of suggestions with `suggested_ids` for tag associated with `tag_id`.
+pub fn set_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i64]) -> ApiResult<()> {
     let new_suggestions: Vec<_> = suggested_ids
         .iter()
         .map(|&child_id| {
@@ -81,6 +68,10 @@ pub fn add_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i6
                 .ok_or(api::Error::CyclicDependency(ResourceType::TagSuggestion))
         })
         .collect::<Result<_, _>>()?;
+
+    diesel::delete(tag_suggestion::table)
+        .filter(tag_suggestion::parent_id.eq(tag_id))
+        .execute(conn)?;
     new_suggestions.insert_into(tag_suggestion::table).execute(conn)?;
     Ok(())
 }
@@ -170,6 +161,7 @@ pub fn get_or_create_tag_ids(
     Ok((tag_ids, primary_tag_names))
 }
 
+/// Merges tag associated with `absorbed_id` to one associated with `merge_to_id`.
 pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> ApiResult<()> {
     // Merge implications
     let involved_implications: Vec<TagImplication> = tag_implication::table
@@ -319,6 +311,21 @@ impl DependencyGraph {
         }
         false
     }
+}
+
+/// Appends `names` onto the current list of names for the tag associated with `tag_id`.
+fn add_names(conn: &mut PgConnection, tag_id: i64, current_name_count: i32, names: &[SmallString]) -> ApiResult<()> {
+    let total_name_count = i32::try_from(names.len())
+        .ok()
+        .and_then(|new_name_count| current_name_count.checked_add(new_name_count))
+        .unwrap();
+    let new_names: Vec<_> = names
+        .iter()
+        .zip(current_name_count..total_name_count)
+        .map(|(name, order)| NewTagName { tag_id, order, name })
+        .collect();
+    new_names.insert_into(tag_name::table).execute(conn)?;
+    Ok(())
 }
 
 #[cfg(test)]

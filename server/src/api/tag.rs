@@ -3,7 +3,7 @@ use crate::auth::Client;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, Tag};
 use crate::resource::tag::TagInfo;
-use crate::schema::{post_tag, tag, tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::schema::{post_tag, tag, tag_category, tag_name};
 use crate::search::Builder;
 use crate::search::tag::QueryBuilder;
 use crate::snapshot::tag::SnapshotData;
@@ -158,13 +158,13 @@ async fn create(
         .get_result(conn)?;
 
         // Add names, implications, and suggestions
-        update::tag::add_names(conn, tag.id, 0, &body.names)?;
+        update::tag::set_names(conn, tag.id, &body.names)?;
         let (implied_ids, implications) =
             update::tag::get_or_create_tag_ids(conn, client, body.implications.unwrap_or_default(), true)?;
         let (suggested_ids, suggestions) =
             update::tag::get_or_create_tag_ids(conn, client, body.suggestions.unwrap_or_default(), true)?;
-        update::tag::add_implications(conn, tag.id, &implied_ids)?;
-        update::tag::add_suggestions(conn, tag.id, &suggested_ids)?;
+        update::tag::set_implications(conn, tag.id, &implied_ids)?;
+        update::tag::set_suggestions(conn, tag.id, &suggested_ids)?;
 
         let tag_data = SnapshotData {
             description: body.description.unwrap_or_default(),
@@ -270,28 +270,21 @@ async fn update(
                 return Err(api::Error::NoNamesGiven(ResourceType::Tag));
             }
 
-            update::tag::delete_names(conn, tag_id)?;
-            update::tag::add_names(conn, tag_id, 0, &names)?;
+            update::tag::set_names(conn, tag_id, &names)?;
             new_snapshot_data.names = names;
         }
         if let Some(implications) = body.implications {
             api::verify_privilege(client, config::privileges().tag_edit_implication)?;
 
             let (implied_ids, implications) = update::tag::get_or_create_tag_ids(conn, client, implications, true)?;
-            diesel::delete(tag_implication::table)
-                .filter(tag_implication::parent_id.eq(tag_id))
-                .execute(conn)?;
-            update::tag::add_implications(conn, tag_id, &implied_ids)?;
+            update::tag::set_implications(conn, tag_id, &implied_ids)?;
             new_snapshot_data.implications = implications;
         }
         if let Some(suggestions) = body.suggestions {
             api::verify_privilege(client, config::privileges().tag_edit_suggestion)?;
 
             let (suggested_ids, suggestions) = update::tag::get_or_create_tag_ids(conn, client, suggestions, true)?;
-            diesel::delete(tag_suggestion::table)
-                .filter(tag_suggestion::parent_id.eq(tag_id))
-                .execute(conn)?;
-            update::tag::add_suggestions(conn, tag_id, &suggested_ids)?;
+            update::tag::set_suggestions(conn, tag_id, &suggested_ids)?;
             new_snapshot_data.suggestions = suggestions;
         }
 

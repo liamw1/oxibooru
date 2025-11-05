@@ -106,9 +106,9 @@ async fn create(
 
         let posts = body.posts.unwrap_or_default();
 
-        // Add names and posts
-        update::pool::add_names(conn, pool.id, 0, &body.names)?;
-        update::pool::add_posts(conn, pool.id, 0, &posts)?;
+        // Set names and posts
+        update::pool::set_names(conn, pool.id, &body.names)?;
+        update::pool::set_posts(conn, pool.id, &posts)?;
 
         let pool_data = SnapshotData {
             description: body.description.unwrap_or_default(),
@@ -201,15 +201,13 @@ async fn update(
                 return Err(api::Error::NoNamesGiven(ResourceType::Pool));
             }
 
-            update::pool::delete_names(conn, pool_id)?;
-            update::pool::add_names(conn, pool_id, 0, &names)?;
+            update::pool::set_names(conn, pool_id, &names)?;
             new_snapshot_data.names = names;
         }
         if let Some(posts) = body.posts {
             api::verify_privilege(client, config::privileges().pool_edit_post)?;
 
-            update::pool::delete_posts(conn, pool_id)?;
-            update::pool::add_posts(conn, pool_id, 0, &posts)?;
+            update::pool::set_posts(conn, pool_id, &posts)?;
             new_snapshot_data.posts = posts;
         }
 

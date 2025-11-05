@@ -138,16 +138,11 @@ struct QueryArgs {
     limit: i64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Default, Clone, Copy)]
 enum Order {
     Asc,
+    #[default]
     Desc,
-}
-
-impl Default for Order {
-    fn default() -> Self {
-        Self::Desc
-    }
 }
 
 impl Not for Order {

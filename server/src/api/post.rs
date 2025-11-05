@@ -442,9 +442,9 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         let post_hash = PostHash::new(post.id);
 
         // Add tags, relations, and notes
-        update::post::add_tags(conn, post.id, &tag_ids)?;
-        update::post::create_relations(conn, post.id, &relations)?;
-        update::post::add_notes(conn, post.id, &notes)?;
+        update::post::set_tags(conn, post.id, &tag_ids)?;
+        update::post::set_relations(conn, post.id, &relations)?;
+        update::post::set_notes(conn, post.id, &notes)?;
 
         NewPostSignature {
             post_id: post.id,
@@ -679,23 +679,20 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
         if let Some(relations) = body.relations {
             api::verify_privilege(client, config::privileges().post_edit_relation)?;
 
-            update::post::delete_relations(conn, post_id)?;
-            update::post::create_relations(conn, post_id, &relations)?;
+            update::post::set_relations(conn, post_id, &relations)?;
             new_snapshot_data.relations = relations;
         }
         if let Some(tags) = body.tags {
             api::verify_privilege(client, config::privileges().post_edit_tag)?;
 
             let (updated_tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, client, tags, false)?;
-            update::post::delete_tags(conn, post_id)?;
-            update::post::add_tags(conn, post_id, &updated_tag_ids)?;
+            update::post::set_tags(conn, post_id, &updated_tag_ids)?;
             new_snapshot_data.tags = tags;
         }
         if let Some(notes) = body.notes {
             api::verify_privilege(client, config::privileges().post_edit_note)?;
 
-            update::post::delete_notes(conn, post_id)?;
-            update::post::add_notes(conn, post_id, &notes)?;
+            update::post::set_notes(conn, post_id, &notes)?;
             new_snapshot_data.notes = notes;
         }
         if let Some(content_properties) = new_content {

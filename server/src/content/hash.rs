@@ -1,8 +1,8 @@
 use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
 use crate::{config, filesystem};
+use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use base64::prelude::*;
 use hmac::digest::CtOutput;
 use hmac::{Mac, SimpleHmac};
 use std::path::PathBuf;

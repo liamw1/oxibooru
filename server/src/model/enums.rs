@@ -27,19 +27,14 @@ pub struct ParseExtensionError {
 #[error("Cannot convert None to Score")]
 pub struct FromRatingError;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
 pub enum AvatarStyle {
+    #[default]
     Gravatar,
     Manual,
-}
-
-impl Default for AvatarStyle {
-    fn default() -> Self {
-        Self::Gravatar
-    }
 }
 
 impl ToSql<SmallInt, Pg> for AvatarStyle {
@@ -388,18 +383,13 @@ impl FromSql<SmallInt, Pg> for UserRank {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, Default, Clone, Copy, Serialize_repr, Deserialize_repr)]
 #[repr(i16)]
 pub enum Rating {
     Dislike = -1,
+    #[default]
     None = 0,
     Like = 1,
-}
-
-impl Default for Rating {
-    fn default() -> Self {
-        Self::None
-    }
 }
 
 impl From<Score> for Rating {

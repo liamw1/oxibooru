@@ -29,7 +29,7 @@ pub fn command_line_mode(conn: &mut PgConnection) {
             let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
             format!("Command line arguments should be one of {possible_arguments:?}")
         })?;
-        run_task(conn, task).map_err(|err| err.to_string())?;
+        run_task(conn, task)?;
 
         println!("Task finished.\n");
         Ok(LoopState::Continue)

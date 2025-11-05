@@ -3,6 +3,7 @@ use crate::math::interval::Interval;
 use crate::math::point::IPoint2;
 use crate::math::rect::{Array2D, IRect};
 use image::{DynamicImage, GrayImage};
+use num_traits::ToPrimitive;
 use std::num::NonZeroU64;
 
 pub const NUM_WORDS: usize = 100; // Number indexes to create from signature
@@ -194,7 +195,7 @@ fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
 
     // Compute grid square radius
     let grid_square_size = 0.5 + f64::from(std::cmp::min(cropped_x_bounds.length(), cropped_y_bounds.length())) / 20.0;
-    let grid_square_radius = (grid_square_size / 2.0) as u32;
+    let grid_square_radius = (grid_square_size / 2.0).to_u32().unwrap(); // We know that 0 < grid_square_size < u32::MAX
 
     // Adjust cropped bounds so that grid squares won't protrude into image borders
     cropped_x_bounds.shrink(grid_square_radius);
