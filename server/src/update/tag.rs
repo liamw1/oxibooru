@@ -318,7 +318,7 @@ fn add_names(conn: &mut PgConnection, tag_id: i64, current_name_count: i32, name
     let total_name_count = i32::try_from(names.len())
         .ok()
         .and_then(|new_name_count| current_name_count.checked_add(new_name_count))
-        .unwrap();
+        .ok_or(api::Error::TooMany("names on tag"))?;
     let new_names: Vec<_> = names
         .iter()
         .zip(current_name_count..total_name_count)

@@ -1,5 +1,5 @@
-use crate::math::SignedCast;
 use num_traits::int::PrimInt;
+use std::convert::TryFrom;
 use std::num::TryFromIntError;
 
 /// Represents a point in 2D space.
@@ -20,15 +20,13 @@ impl<T: PrimInt> IPoint2<T> {
     }
 }
 
-impl<U> IPoint2<U>
-where
-    U: PrimInt + SignedCast,
-    <U as SignedCast>::Signed: PrimInt,
-{
-    pub fn to_signed(self) -> Result<IPoint2<U::Signed>, TryFromIntError> {
-        let i = self.i.to_signed()?;
-        let j = self.j.to_signed()?;
-        Ok(IPoint2::new(i, j))
+impl TryFrom<IPoint2<i64>> for IPoint2<u32> {
+    type Error = TryFromIntError;
+    fn try_from(value: IPoint2<i64>) -> Result<Self, Self::Error> {
+        Ok(Self {
+            j: u32::try_from(value.j)?,
+            i: u32::try_from(value.i)?,
+        })
     }
 }
 

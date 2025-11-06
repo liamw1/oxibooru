@@ -1,8 +1,6 @@
-use crate::math::{SignedCast, UnsignedCast};
 use num_traits::PrimInt;
-use std::num::TryFromIntError;
 
-/// Represents an inclusive interval.
+/// Represents an integer interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Interval<T: PrimInt> {
     start: T,
@@ -23,6 +21,11 @@ impl<T: PrimInt> Interval<T> {
 
     pub fn max(self) -> T {
         self.end - T::one()
+    }
+
+    /// Calculates the midpoint of the interval, avoiding overflow
+    pub fn midpoint(self) -> T {
+        self.start + (self.end - self.start) / (T::one() + T::one())
     }
 
     pub fn length(self) -> T {
@@ -47,27 +50,25 @@ impl<T: PrimInt> Interval<T> {
     }
 
     pub fn linspace<const N: usize>(self) -> [T; N] {
-        let min_f64 = self.min().to_f64().unwrap();
-        let max_f64 = self.max().to_f64().unwrap();
-        let num_f64 = f64::from(u32::try_from(N).unwrap());
-
-        let mut arr = [T::zero(); N];
         match N {
-            0 => (),
-            1 => {
-                let midpoint = 0.5 * min_f64 + 0.5 * max_f64;
-                arr[0] = T::from(midpoint).unwrap();
-            }
+            0 => [T::zero(); N],
+            1 => [self.midpoint(); N],
             _ => {
-                let step = (max_f64 - min_f64) / (num_f64 - 1.0);
-                for (i, item) in arr.iter_mut().enumerate() {
-                    let index = f64::from(u32::try_from(i).unwrap());
-                    let point = (min_f64 + index * step).round();
-                    *item = T::from(point).unwrap();
+                const CAST_MESSAGE: &str = "Interval should be contained within range of valid f64 values";
+                let min_f64 = self.min().to_f64().expect(CAST_MESSAGE);
+                let max_f64 = self.max().to_f64().expect(CAST_MESSAGE);
+
+                let num_u32 = u32::try_from(N).expect("N should not exceed u32::MAX");
+                let step = (max_f64 - min_f64) / (f64::from(num_u32) - 1.0);
+
+                let mut arr = [T::zero(); N];
+                for (item, index) in arr.iter_mut().zip(0..num_u32) {
+                    let point = (min_f64 + f64::from(index) * step).round();
+                    *item = T::from(point).expect("Linspace point must be within interval bounds");
                 }
+                arr
             }
         }
-        arr
     }
 
     pub fn shrink(&mut self, n: T) {
@@ -78,30 +79,6 @@ impl<T: PrimInt> Interval<T> {
             self.start = midpoint;
             self.end = midpoint + T::one();
         }
-    }
-}
-
-impl<U> Interval<U>
-where
-    U: PrimInt + SignedCast,
-    <U as SignedCast>::Signed: PrimInt,
-{
-    pub fn to_signed(self) -> Result<Interval<U::Signed>, TryFromIntError> {
-        let start = self.start.to_signed()?;
-        let end = self.end.to_signed()?;
-        Ok(Interval { start, end })
-    }
-}
-
-impl<S> Interval<S>
-where
-    S: PrimInt + UnsignedCast,
-    <S as UnsignedCast>::Unsigned: PrimInt,
-{
-    pub fn to_unsigned(self) -> Result<Interval<S::Unsigned>, TryFromIntError> {
-        let start = self.start.to_unsigned()?;
-        let end = self.end.to_unsigned()?;
-        Ok(Interval { start, end })
     }
 }
 

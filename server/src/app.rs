@@ -42,17 +42,16 @@ pub fn initialize() -> Result<(), String> {
     Ok(())
 }
 
-pub async fn run() {
+pub async fn run() -> std::io::Result<()> {
     let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes());
 
     let address = format!("0.0.0.0:{}", config::port());
-    let listener = TcpListener::bind(address).await.unwrap();
+    let listener = TcpListener::bind(address).await?;
     info!("Oxibooru server running on {} threads", Handle::current().metrics().num_workers());
-    debug!("listening on {}", listener.local_addr().unwrap());
+    debug!("listening on {}", listener.local_addr()?);
     axum::serve(listener, ServiceExt::<Request>::into_make_service(app))
         .with_graceful_shutdown(shutdown_signal())
         .await
-        .unwrap();
 }
 
 async fn shutdown_signal() {

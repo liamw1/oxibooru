@@ -278,7 +278,7 @@ fn get_config_path() -> PathBuf {
     // Use config.toml.dist if in test environment, config.toml if in production
     if cfg!(test) {
         let manifest_dir =
-            std::env::var("CARGO_MANIFEST_DIR").expect("Test environment should have CARGO_MANIFEST_DIR defined");
+            std::env::var("CARGO_MANIFEST_DIR").expect("Test environment must have CARGO_MANIFEST_DIR defined");
         [&manifest_dir, "config.toml.dist"].iter().collect()
     } else {
         let exe_path = std::env::current_exe().expect("Current exe path exists and is readable");

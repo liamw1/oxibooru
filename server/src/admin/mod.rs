@@ -27,7 +27,7 @@ pub fn command_line_mode(conn: &mut PgConnection) {
 
         let task = AdminTask::from_str(user_input).map_err(|_| {
             let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
-            format!("Command line arguments should be one of {possible_arguments:?}")
+            format!("Command line arguments must be one of {possible_arguments:?}")
         })?;
         run_task(conn, task)?;
 

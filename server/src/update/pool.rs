@@ -29,7 +29,7 @@ pub fn set_names(conn: &mut PgConnection, pool_id: i64, names: &[SmallString]) -
 }
 
 /// Replaces the current ordered list of posts with `posts` for pool associated with `pool_id`.
-pub fn set_posts(conn: &mut PgConnection, pool_id: i64, posts: &[i64]) -> QueryResult<()> {
+pub fn set_posts(conn: &mut PgConnection, pool_id: i64, posts: &[i64]) -> ApiResult<()> {
     diesel::delete(pool_post::table)
         .filter(pool_post::pool_id.eq(pool_id))
         .execute(conn)?;
@@ -75,7 +75,7 @@ fn add_names(conn: &mut PgConnection, pool_id: i64, current_name_count: i32, nam
     let total_name_count = i32::try_from(names.len())
         .ok()
         .and_then(|new_name_count| current_name_count.checked_add(new_name_count))
-        .unwrap();
+        .ok_or(api::Error::TooMany("names on pool"))?;
     let updated_names: Vec<_> = names
         .iter()
         .zip(current_name_count..total_name_count)
@@ -86,11 +86,11 @@ fn add_names(conn: &mut PgConnection, pool_id: i64, current_name_count: i32, nam
 }
 
 /// Appends `posts` onto the current list of posts in the pool associated with `pool_id`.
-fn add_posts(conn: &mut PgConnection, pool_id: i64, current_post_count: i64, posts: &[i64]) -> QueryResult<()> {
+fn add_posts(conn: &mut PgConnection, pool_id: i64, current_post_count: i64, posts: &[i64]) -> ApiResult<()> {
     let total_post_count = i64::try_from(posts.len())
         .ok()
         .and_then(|new_post_count| current_post_count.checked_add(new_post_count))
-        .unwrap();
+        .ok_or(api::Error::TooMany("posts in pool"))?;
     let new_pool_posts: Vec<_> = posts
         .iter()
         .zip(current_post_count..total_post_count)

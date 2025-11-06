@@ -95,6 +95,10 @@ pub enum Error {
     SelfMerge(ResourceType),
     StdIo(#[from] std::io::Error),
     SwfDecoding(#[from] swf::error::Error),
+    #[error("{0} is too large")]
+    TooLarge(&'static str),
+    #[error("Too many {0}")]
+    TooMany(&'static str),
     #[error("Password reset token is invalid")]
     UnauthorizedPasswordReset,
     VideoDecoding(#[from] video_rs::Error),
@@ -135,6 +139,8 @@ impl Error {
             | Self::NotAnInteger(_)
             | Self::Request(_)
             | Self::SelfMerge(_)
+            | Self::TooLarge(_)
+            | Self::TooMany(_)
             | Self::VideoDecoding(_) => StatusCode::BAD_REQUEST,
             Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
             Self::InsufficientPrivileges | Self::NotLoggedIn => StatusCode::FORBIDDEN,
@@ -204,6 +210,8 @@ impl Error {
             Self::SelfMerge(_) => "Self Merge",
             Self::StdIo(_) => "IO Error",
             Self::SwfDecoding(_) => "SWF Decoding Error",
+            Self::TooLarge(_) => "Too Large",
+            Self::TooMany(_) => "Too Many",
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
             Self::VideoDecoding(_) => "Video Decoding Error",
         }

@@ -43,5 +43,8 @@ async fn main() {
         tracing::error!("An error occurred during initialization. Details:\n{err}");
         std::process::exit(1);
     }
-    app::run().await;
+    if let Err(err) = app::run().await {
+        tracing::error!("Unable to start server. Details:\n{err}");
+        std::process::exit(1);
+    }
 }

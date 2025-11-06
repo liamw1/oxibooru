@@ -48,7 +48,7 @@ fn check_batch_results(batch_size: usize, post_count: usize) {
 
 fn single<T>(mut batch: Vec<T>) -> T {
     assert_eq!(batch.len(), 1);
-    batch.pop().unwrap()
+    batch.pop().expect("Batch contains exactly one element")
 }
 
 fn retrieve<T, E, F>(enabled: bool, mut function: F) -> Result<Vec<T>, E>

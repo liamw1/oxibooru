@@ -195,7 +195,9 @@ fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
 
     // Compute grid square radius
     let grid_square_size = 0.5 + f64::from(std::cmp::min(cropped_x_bounds.length(), cropped_y_bounds.length())) / 20.0;
-    let grid_square_radius = (grid_square_size / 2.0).to_u32().unwrap(); // We know that 0 < grid_square_size < u32::MAX
+    let grid_square_radius = (grid_square_size / 2.0)
+        .to_u32()
+        .expect("0 < grid_square_size / 2 < u32::MAX");
 
     // Adjust cropped bounds so that grid squares won't protrude into image borders
     cropped_x_bounds.shrink(grid_square_radius);
@@ -213,24 +215,21 @@ fn compute_intensity_matrix(
     grid_points: &GridPoints,
     grid_square_radius: u32,
 ) -> Array2D<u8, GRID_SIZE, GRID_SIZE> {
-    let image_bounds = IRect::new_zero_based(image.width() - 1, image.height() - 1)
-        .to_signed()
-        .unwrap();
-    let grid_square_radius = i32::try_from(grid_square_radius).unwrap();
+    let image_bounds = IRect::new_zero_based(i64::from(image.width()) - 1, i64::from(image.height()) - 1);
+    let grid_square_radius = i64::from(grid_square_radius);
 
     let mut intensity_matrix = Array2D::new(0);
     for (matrix_index, (&pixel_i, &pixel_j)) in grid_points.indexed_iter() {
-        let grid_square_center = IPoint2::new(pixel_i, pixel_j).to_signed().unwrap();
+        let grid_square_center = IPoint2::new(i64::from(pixel_i), i64::from(pixel_j));
         let grid_square = IRect::new_centered_square(grid_square_center, grid_square_radius);
         let sum = IRect::intersection(grid_square, image_bounds)
-            .to_unsigned()
-            .unwrap()
             .iter()
+            .map(|pixel_index| IPoint2::<u32>::try_from(pixel_index).expect("pixel indices should fit in u32"))
             .map(|pixel_index| image.get_pixel(pixel_index.i, pixel_index.j))
             .map(|luma| u64::from(luma.0[0]))
             .sum::<u64>();
-        let average = sum / grid_square.total_points().unwrap();
-        intensity_matrix.set_at(matrix_index, u8::try_from(average).unwrap());
+        let average = sum / grid_square.total_points().unwrap_or(u64::MAX);
+        intensity_matrix.set_at(matrix_index, u8::try_from(average).expect("Average intensity cannot exceed u8::MAX"));
     }
     intensity_matrix
 }
@@ -296,7 +295,7 @@ fn normalize(differences: &[i16; SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
         cutoffs
             .iter()
             .position(|opt_cutoff| opt_cutoff.map(|cutoff| diff <= cutoff).unwrap_or(false))
-            .expect("Expected diff to be under at least one cutoff") as u8
+            .expect("Diff must be under at least one cutoff") as u8
     });
     array_from_iter(signature_iter)
 }
@@ -315,7 +314,7 @@ fn compress(uncompressed_signature: &[u8; SIGNATURE_LEN]) -> [i64; COMPRESSED_SI
 
 fn uncompress(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
     // Create divisor as NonZeroU64 to guarantee compiler doesn't generate divide-by-zero check
-    const DIVISOR: NonZeroU64 = NonZeroU64::new(NUM_SYMBOLS as u64).unwrap();
+    const DIVISOR: NonZeroU64 = NonZeroU64::new(NUM_SYMBOLS as u64).expect("NUM_SYMBOLS is non-zero");
     let decompression_iter = compressed_signature
         .iter()
         .copied()

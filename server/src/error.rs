@@ -401,6 +401,8 @@ impl ErrorKind for crate::api::Error {
             Self::SelfMerge(_) => "SelfMerge",
             Self::StdIo(err) => err.kind().kind(),
             Self::SwfDecoding(err) => err.kind(),
+            Self::TooLarge(_) => "TooLarge",
+            Self::TooMany(_) => "TooMany",
             Self::UnauthorizedPasswordReset => "UnauthorizedPasswordReset",
             Self::VideoDecoding(err) => err.kind(),
         }

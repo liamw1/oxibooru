@@ -38,7 +38,7 @@ pub fn split_unescaped_whitespace(text: &str) -> impl Iterator<Item = &str> {
 pub fn split_once<P: Pattern>(text: &str, pattern: P) -> Option<(&str, &str)> {
     next_unescaped_split(text, pattern)
         .map(|index| text.split_at(index))
-        .map(|(left, right)| (left, right.strip_prefix(pattern.func()).unwrap()))
+        .map(|(left, right)| (left, right.strip_prefix(pattern.func()).unwrap_or_default()))
 }
 
 /// Parses string-based `condition`.
@@ -161,7 +161,7 @@ fn range_split(text: &str) -> Option<(&str, &str)> {
         .find(|&index| is_unescaped(text, index));
     split_index
         .map(|index| text.split_at(index))
-        .map(|(left, right)| (left, right.strip_prefix("..").unwrap()))
+        .map(|(left, right)| (left, right.strip_prefix("..").unwrap_or_default()))
 }
 
 /// Replaces escaped characters with unescaped ones in `text`.

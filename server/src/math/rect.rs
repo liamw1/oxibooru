@@ -1,9 +1,7 @@
 use crate::math::interval::Interval;
 use crate::math::point::IPoint2;
-use crate::math::{SignedCast, UnsignedCast};
 use num_traits::int::PrimInt;
 use std::fmt::Debug;
-use std::num::TryFromIntError;
 use std::ops::AddAssign;
 
 /// Represents a box on a 2D integer lattice.
@@ -69,30 +67,6 @@ impl<T: PrimInt> IRect<T> {
     }
 }
 
-impl<U> IRect<U>
-where
-    U: PrimInt + SignedCast,
-    <U as SignedCast>::Signed: PrimInt,
-{
-    pub fn to_signed(self) -> Result<IRect<U::Signed>, TryFromIntError> {
-        let i_bounds = self.i_bounds.to_signed()?;
-        let j_bounds = self.j_bounds.to_signed()?;
-        Ok(IRect::new(i_bounds, j_bounds))
-    }
-}
-
-impl<S> IRect<S>
-where
-    S: PrimInt + UnsignedCast,
-    <S as UnsignedCast>::Unsigned: PrimInt,
-{
-    pub fn to_unsigned(self) -> Result<IRect<S::Unsigned>, TryFromIntError> {
-        let i_bounds = self.i_bounds.to_unsigned()?;
-        let j_bounds = self.j_bounds.to_unsigned()?;
-        Ok(IRect::new(i_bounds, j_bounds))
-    }
-}
-
 pub struct IRectIter<T: PrimInt> {
     rect: IRect<T>,
     current: IPoint2<T>,
@@ -145,7 +119,10 @@ where
         I: PrimInt + TryFrom<usize>,
         <I as TryFrom<usize>>::Error: Debug,
     {
-        IRect::new_zero_based(I::try_from(N).unwrap() - I::one(), I::try_from(M).unwrap() - I::one())
+        IRect::new_zero_based(
+            I::try_from(N.saturating_sub(1)).unwrap_or(I::min_value()),
+            I::try_from(N.saturating_sub(1)).unwrap_or(I::max_value()),
+        )
     }
 
     pub fn at<I: PrimInt>(&self, index: IPoint2<I>) -> T {

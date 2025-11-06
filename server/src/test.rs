@@ -626,7 +626,7 @@ fn recreate_database() -> Result<ConnectionPool, Box<dyn Error + Send + Sync>> {
 
 fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
     let manifest_dir =
-        std::env::var("CARGO_MANIFEST_DIR").expect("Test environment should have CARGO_MANIFEST_DIR defined");
+        std::env::var("CARGO_MANIFEST_DIR").expect("Test environment must have CARGO_MANIFEST_DIR defined");
     [&manifest_dir, "test", folder_path, relative_path].iter().collect()
 }
 
