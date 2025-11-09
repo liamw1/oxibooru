@@ -425,8 +425,8 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         safety: body.safety,
         type_: PostType::from(content_properties.mime_type),
         mime_type: content_properties.mime_type,
-        checksum: &content_properties.checksum,
-        checksum_md5: &content_properties.md5_checksum,
+        checksum: content_properties.checksum,
+        checksum_md5: content_properties.md5_checksum,
         flags,
         source: body.source.as_deref().unwrap_or(""),
         description: body.description.as_deref().unwrap_or(""),
@@ -707,6 +707,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
             new_post.type_ = PostType::from(content_properties.mime_type);
             new_post.mime_type = content_properties.mime_type;
             new_post.checksum = content_properties.checksum;
+            new_post.checksum_md5 = content_properties.md5_checksum;
             new_post.flags |= content_properties.flags;
 
             // Update post signature

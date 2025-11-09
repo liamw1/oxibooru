@@ -1,4 +1,5 @@
 use crate::api::ApiResult;
+use crate::content::hash::{Checksum, Md5Checksum};
 use crate::content::signature::COMPRESSED_SIGNATURE_LEN;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::{FileContents, decode, hash, signature, thumbnail};
@@ -13,8 +14,8 @@ use tracing::error;
 #[derive(Clone)]
 pub struct CachedProperties {
     pub token: String,
-    pub checksum: Vec<u8>,
-    pub md5_checksum: [u8; 16],
+    pub checksum: Checksum,
+    pub md5_checksum: Md5Checksum,
     pub signature: [i64; COMPRESSED_SIGNATURE_LEN],
     pub thumbnail: DynamicImage,
     pub width: i32,

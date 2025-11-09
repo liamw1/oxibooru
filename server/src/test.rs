@@ -1,5 +1,6 @@
 use crate::api::ApiResult;
 use crate::auth::header;
+use crate::content::hash::{Checksum, Md5Checksum};
 use crate::db::{ConnectionPool, ConnectionResult};
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{AvatarStyle, MimeType, PostFlag, PostFlags, Score, UserRank};
@@ -239,8 +240,8 @@ const POSTS: &[NewPost] = &[
         safety: PostSafety::Safe,
         type_: PostType::Image,
         mime_type: MimeType::Jpeg,
-        checksum: b"01",
-        checksum_md5: b"01",
+        checksum: Checksum::from_bytes(b"01"),
+        checksum_md5: Md5Checksum::from_bytes(b"01"),
         flags: PostFlags::new(),
         source: "My hard drive",
         description: "0101100010",
@@ -253,8 +254,8 @@ const POSTS: &[NewPost] = &[
         safety: PostSafety::Sketchy,
         type_: PostType::Animation,
         mime_type: MimeType::Gif,
-        checksum: b"02",
-        checksum_md5: b"02",
+        checksum: Checksum::from_bytes(b"02"),
+        checksum_md5: Md5Checksum::from_bytes(b"02"),
         flags: PostFlags::new(),
         source: "",
         description: "",
@@ -267,8 +268,8 @@ const POSTS: &[NewPost] = &[
         safety: PostSafety::Safe,
         type_: PostType::Image,
         mime_type: MimeType::Png,
-        checksum: b"03",
-        checksum_md5: b"03",
+        checksum: Checksum::from_bytes(b"03"),
+        checksum_md5: Md5Checksum::from_bytes(b"03"),
         flags: PostFlags::new(),
         source: "Wikipedia",
         description: "",
@@ -281,8 +282,8 @@ const POSTS: &[NewPost] = &[
         safety: PostSafety::Safe,
         type_: PostType::Image,
         mime_type: MimeType::Bmp,
-        checksum: b"04",
-        checksum_md5: b"04",
+        checksum: Checksum::from_bytes(b"04"),
+        checksum_md5: Md5Checksum::from_bytes(b"04"),
         flags: PostFlags::new(),
         source: "",
         description: "description9000",
@@ -295,8 +296,8 @@ const POSTS: &[NewPost] = &[
         safety: PostSafety::Unsafe,
         type_: PostType::Video,
         mime_type: MimeType::Mp4,
-        checksum: b"05",
-        checksum_md5: b"05",
+        checksum: Checksum::from_bytes(b"05"),
+        checksum_md5: Md5Checksum::from_bytes(b"05"),
         flags: PostFlags::new_with(PostFlag::Sound),
         source: "???",
         description: "descriptor",

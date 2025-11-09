@@ -1,7 +1,7 @@
 use crate::api::ApiResult;
 use crate::auth::Client;
+use crate::content::hash::Checksum;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
-use crate::model::post::Checksum;
 use crate::schema::{
     comment, database_statistics, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics,
     post_tag, tag_name, user,
