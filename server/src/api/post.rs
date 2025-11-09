@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::api::{ApiResult, AppState, DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
 use crate::auth::Client;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
@@ -25,7 +25,7 @@ use tokio::sync::Mutex as AsyncMutex;
 use tracing::info;
 use url::Url;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/posts", routing::get(list).post(create_handler))
         .route(

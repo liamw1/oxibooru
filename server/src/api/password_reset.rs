@@ -1,4 +1,4 @@
-use crate::api::ApiResult;
+use crate::api::{ApiResult, AppState};
 use crate::auth::password;
 use crate::content::hash;
 use crate::schema::user;
@@ -18,7 +18,7 @@ use percent_encoding::NON_ALPHANUMERIC;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new().route("/password-reset/{identifier}", routing::get(request_reset).post(reset_password))
 }
 

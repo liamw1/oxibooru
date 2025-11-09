@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{ApiResult, AppState, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::auth::Client;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
@@ -16,7 +16,7 @@ use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/pools", routing::get(list))
         .route("/pool", routing::post(create))

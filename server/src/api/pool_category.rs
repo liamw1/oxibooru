@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
+use crate::api::{ApiResult, AppState, DeleteBody, ResourceParams, UnpagedResponse};
 use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
@@ -13,7 +13,7 @@ use axum::{Json, Router, routing};
 use diesel::prelude::*;
 use serde::Deserialize;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/pool-categories", routing::get(list).post(create))
         .route("/pool-category/{name}", routing::get(get).put(update).delete(delete))

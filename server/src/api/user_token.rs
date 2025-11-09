@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, ResourceParams, UnpagedResponse};
+use crate::api::{ApiResult, AppState, ResourceParams, UnpagedResponse};
 use crate::auth::Client;
 use crate::model::enums::AvatarStyle;
 use crate::model::user::{NewUserToken, UserToken};
@@ -14,7 +14,7 @@ use diesel::prelude::*;
 use serde::Deserialize;
 use uuid::Uuid;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/user-tokens/{username}", routing::get(list))
         .route("/user-token/{username}", routing::post(create))

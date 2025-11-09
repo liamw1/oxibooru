@@ -183,6 +183,7 @@ pub struct PublicInfo {
 pub struct Config {
     data_dir: SmallString,
     pub data_url: SmallString,
+    pub client_dir: SmallString,
     #[serde(default)]
     pub webhooks: Vec<Url>,
     pub password_secret: SmallString,

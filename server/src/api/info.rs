@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, ResourceParams};
+use crate::api::{ApiResult, AppState, ResourceParams};
 use crate::auth::Client;
 use crate::model::post::PostFeature;
 use crate::resource::post::PostInfo;
@@ -12,7 +12,7 @@ use axum::routing::{self, Router};
 use diesel::prelude::*;
 use serde::Serialize;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new().route("/info", routing::get(get))
 }
 
