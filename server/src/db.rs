@@ -1,9 +1,9 @@
 use crate::admin::{AdminTask, database};
-use crate::config;
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::schema::database_statistics;
 #[cfg(test)]
 use crate::test;
+use crate::{app, config};
 use diesel::migration::Migration;
 use diesel::pg::Pg;
 use diesel::prelude::*;
@@ -134,8 +134,7 @@ static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
     let num_tokio_threads = tokio::runtime::Handle::try_current()
         .map(|handle| handle.metrics().num_workers())
         .unwrap_or(1);
-    let num_rayon_threads = rayon::current_num_threads();
-    let num_threads = std::cmp::max(num_tokio_threads, num_rayon_threads) as u32;
+    let num_threads = std::cmp::max(num_tokio_threads, app::num_rayon_threads()) as u32;
 
     let manager = ConnectionManager::new(config::database_url());
     Pool::builder()

@@ -12,6 +12,15 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
+/// Returns the number of threads that the global rayon thread pool will
+/// be constructed with. The rayon thread pool is currently only used when
+/// executing admin commands.
+pub fn num_rayon_threads() -> usize {
+    std::thread::available_parallelism()
+        .map(|threads| std::cmp::max(threads.get() / 2, 1))
+        .unwrap_or(1)
+}
+
 pub fn enable_tracing() {
     const DEFAULT_DIRECTIVE: &str = "server=info,tower_http=debug,axum=trace";
     let directive = config::get().log_filter.as_deref().unwrap_or(DEFAULT_DIRECTIVE);

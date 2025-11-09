@@ -1,5 +1,7 @@
+use crate::app;
 use diesel::prelude::*;
 use diesel::r2d2::PoolError;
+use rayon::ThreadPoolBuilder;
 use std::io::Write;
 use std::path::Path;
 use std::str::FromStr;
@@ -19,6 +21,11 @@ pub fn enabled() -> bool {
 pub fn command_line_mode(conn: &mut PgConnection) {
     print_info();
 
+    ThreadPoolBuilder::new()
+        .num_threads(app::num_rayon_threads())
+        .build_global()
+        .expect("Must be able to configure to global rayon thread pool");
+
     user_input_loop(conn, |conn: &mut PgConnection, buffer: &mut String| {
         let user_input = prompt_user_input("Please select a task", buffer);
         if let Ok(state) = LoopState::try_from(user_input) {
@@ -36,7 +43,7 @@ pub fn command_line_mode(conn: &mut PgConnection) {
     });
 }
 
-const PRINT_INTERVAL: u64 = 1000;
+const PRINT_INTERVAL: Option<u64> = Some(1000);
 
 #[derive(Debug, Error)]
 #[error(transparent)]
@@ -80,12 +87,12 @@ impl TryFrom<&str> for LoopState {
 
 struct ProgressReporter {
     message: &'static str,
-    print_interval: u64,
+    print_interval: Option<u64>,
     count: AtomicU64,
 }
 
 impl ProgressReporter {
-    fn new(message: &'static str, print_interval: u64) -> Self {
+    fn new(message: &'static str, print_interval: Option<u64>) -> Self {
         Self {
             message,
             print_interval,
@@ -95,7 +102,9 @@ impl ProgressReporter {
 
     fn increment(&self) {
         let count = self.count.fetch_add(1, Ordering::SeqCst) + 1;
-        if count.is_multiple_of(self.print_interval) {
+        if let Some(print_interval) = self.print_interval
+            && count.is_multiple_of(print_interval)
+        {
             self.report();
         }
     }
@@ -108,7 +117,9 @@ impl ProgressReporter {
 fn print_info() {
     let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
     println!(
-        "Running Oxibooru admin command line interface. Enter \"help\" for a list of commands and \"exit\" when finished."
+        "Running Oxibooru admin command line interface on {} threads.
+        Enter \"help\" for a list of commands and \"exit\" when finished.",
+        app::num_rayon_threads()
     );
     println!("Available commands: {possible_arguments:?}\n");
 }

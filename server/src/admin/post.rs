@@ -38,7 +38,9 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> DatabaseResult<()> {
 
     let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
 
-    // Update signature version only after a successful data retrieval
+    // Update signature version only after a successful data retrieval.
+    // We do this before actually recomputing signatures so that server
+    // can continue running during computation.
     diesel::update(database_statistics::table)
         .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
         .execute(conn)?;
