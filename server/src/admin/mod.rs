@@ -14,6 +14,31 @@ pub mod database;
 mod post;
 mod user;
 
+pub type DatabaseResult<T> = Result<T, DatabaseError>;
+
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub enum DatabaseError {
+    Connection(#[from] PoolError),
+    Query(#[from] diesel::result::Error),
+    Io(#[from] std::io::Error),
+}
+
+#[derive(Clone, Copy, EnumString, EnumIter, IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum AdminTask {
+    CheckPostIntegrity,
+    RecomputePostChecksums,
+    RecomputePostSignatures,
+    RecomputePostSignatureIndexes,
+    RegenerateThumbnails,
+    RegenerateThumbnail,
+    ResetPassword,
+    ResetFilenames,
+    ResetStatistics,
+    ResetThumbnailSizes,
+}
+
 pub fn enabled() -> bool {
     std::env::args().any(|arg| arg == "--admin")
 }
@@ -36,7 +61,7 @@ pub fn command_line_mode(conn: &mut PgConnection) {
             let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
             format!("Command line arguments must be one of {possible_arguments:?}")
         })?;
-        run_task(conn, task)?;
+        run_task(conn, task).map_err(|err| err.to_string())?;
 
         println!("Task finished.\n");
         Ok(LoopState::Continue)
@@ -44,29 +69,6 @@ pub fn command_line_mode(conn: &mut PgConnection) {
 }
 
 const PRINT_INTERVAL: Option<u64> = Some(1000);
-
-#[derive(Debug, Error)]
-#[error(transparent)]
-pub enum DatabaseError {
-    Connection(#[from] PoolError),
-    Query(#[from] diesel::result::Error),
-}
-
-pub type DatabaseResult<T> = Result<T, DatabaseError>;
-
-#[derive(Clone, Copy, EnumString, EnumIter, IntoStaticStr)]
-#[strum(serialize_all = "snake_case")]
-pub enum AdminTask {
-    RecomputePostChecksums,
-    RecomputePostSignatures,
-    RecomputePostSignatureIndexes,
-    RegenerateThumbnails,
-    RegenerateThumbnail,
-    ResetPassword,
-    ResetFilenames,
-    ResetStatistics,
-    ResetThumbnailSizes,
-}
 
 enum LoopState {
     Continue,
@@ -170,14 +172,15 @@ where
 /// Runs a single task. This function is designed to only establish a connection to the database
 /// if necessary. That way users can run tasks that don't require database connection without
 /// spinning up the database.
-fn run_task(conn: &mut PgConnection, task: AdminTask) -> Result<(), String> {
+fn run_task(conn: &mut PgConnection, task: AdminTask) -> DatabaseResult<()> {
     info!("Starting task...");
 
     match task {
-        AdminTask::RecomputePostChecksums => post::recompute_checksums(conn).map_err(|err| err.to_string()),
-        AdminTask::RecomputePostSignatures => post::recompute_signatures(conn).map_err(|err| err.to_string()),
-        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(conn).map_err(|err| err.to_string()),
-        AdminTask::RegenerateThumbnails => post::regenerate_thumbnails(conn).map_err(|err| err.to_string()),
+        AdminTask::CheckPostIntegrity => post::check_integrity(conn),
+        AdminTask::RecomputePostChecksums => post::recompute_checksums(conn),
+        AdminTask::RecomputePostSignatures => post::recompute_signatures(conn),
+        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(conn),
+        AdminTask::RegenerateThumbnails => post::regenerate_thumbnails(conn),
         AdminTask::RegenerateThumbnail => {
             post::regenerate_thumbnail(conn);
             Ok(())
@@ -186,9 +189,9 @@ fn run_task(conn: &mut PgConnection, task: AdminTask) -> Result<(), String> {
             user::reset_password(conn);
             Ok(())
         }
-        AdminTask::ResetFilenames => database::reset_filenames().map_err(|err| err.to_string()),
-        AdminTask::ResetStatistics => database::reset_statistics().map_err(|err| err.to_string()),
-        AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(conn).map_err(|err| err.to_string()),
+        AdminTask::ResetFilenames => database::reset_filenames().map_err(DatabaseError::from),
+        AdminTask::ResetStatistics => database::reset_statistics(),
+        AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(conn),
     }
 }
 

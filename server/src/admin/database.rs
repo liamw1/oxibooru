@@ -1,5 +1,4 @@
-use crate::admin::{PRINT_INTERVAL, ProgressReporter};
-use crate::api::ApiResult;
+use crate::admin::{DatabaseResult, PRINT_INTERVAL, ProgressReporter};
 use crate::content::hash::PostHash;
 use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
@@ -83,7 +82,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
+pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
     if filesystem::path(Directory::Avatars).try_exists()? {
         let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(filesystem::path(Directory::Avatars))? {
@@ -138,7 +137,7 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> ApiResult<()> {
     Ok(())
 }
 
-pub fn reset_relation_stats() -> ApiResult<()> {
+pub fn reset_relation_stats() -> DatabaseResult<()> {
     let mut conn = db::get_connection()?;
     let comment_count: i64 = comment::table.count().first(&mut conn)?;
     let pool_count: i64 = pool::table.count().first(&mut conn)?;
@@ -324,7 +323,7 @@ pub fn reset_relation_stats() -> ApiResult<()> {
 /// Recalculates cached file sizes, row counts, and table statistics.
 /// Useful for when the statistics become inconsistent with database
 /// or when migrating from an older version without statistics.
-pub fn reset_statistics() -> ApiResult<()> {
+pub fn reset_statistics() -> DatabaseResult<()> {
     let _timer = Timer::new("reset_statistics");
 
     // Disk usage will automatically be incremented via triggers as we calculate

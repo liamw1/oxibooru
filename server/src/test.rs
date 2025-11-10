@@ -1,3 +1,4 @@
+use crate::admin::DatabaseResult;
 use crate::api::ApiResult;
 use crate::auth::header;
 use crate::content::hash::{Checksum, Md5Checksum};
@@ -641,7 +642,7 @@ mod test {
 
     #[test]
     #[parallel]
-    fn database_statistics() -> ApiResult<()> {
+    fn database_statistics() -> DatabaseResult<()> {
         let expected_disk_usage: i64 = POSTS.iter().map(|post| post.file_size).sum();
         let expected_pool_count: i64 = POOL_GROUPS.iter().map(|group| group.len() as i64).sum();
         let expected_tag_count: i64 = TAG_GROUPS.iter().map(|group| group.len() as i64).sum();
@@ -670,7 +671,7 @@ mod test {
 
     #[test]
     #[parallel]
-    fn comment_statistics() -> ApiResult<()> {
+    fn comment_statistics() -> DatabaseResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(i64, i64)> = comment_statistics::table.load(&mut conn)?;
         for (comment_id, total_score) in stats {
@@ -686,7 +687,7 @@ mod test {
 
     #[test]
     #[parallel]
-    fn pool_category_statistics() -> ApiResult<()> {
+    fn pool_category_statistics() -> DatabaseResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(i64, i64)> = pool_category_statistics::table.load(&mut conn)?;
         for (category_id, usage_count) in stats {
@@ -698,7 +699,7 @@ mod test {
 
     #[test]
     #[parallel]
-    fn pool_statistics() -> ApiResult<()> {
+    fn pool_statistics() -> DatabaseResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(SmallString, i64)> = pool_statistics::table
             .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool_statistics::pool_id)))
@@ -714,7 +715,7 @@ mod test {
 
     #[test]
     #[parallel]
-    fn post_statistics() -> ApiResult<()> {
+    fn post_statistics() -> DatabaseResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(
             i64,
@@ -774,7 +775,7 @@ mod test {
 
     #[test]
     #[parallel]
-    fn tag_category_statistics() -> ApiResult<()> {
+    fn tag_category_statistics() -> DatabaseResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(i64, i64)> = tag_category_statistics::table.load(&mut conn)?;
         for (category_id, usage_count) in stats {
@@ -786,7 +787,7 @@ mod test {
 
     #[test]
     #[parallel]
-    fn tag_statistics() -> ApiResult<()> {
+    fn tag_statistics() -> DatabaseResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(SmallString, i64)> = tag_statistics::table
             .inner_join(tag_name::table.on(tag_name::tag_id.eq(tag_statistics::tag_id)))
@@ -805,7 +806,7 @@ mod test {
 
     #[test]
     #[parallel]
-    fn user_statistics() -> ApiResult<()> {
+    fn user_statistics() -> DatabaseResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(i64, i64, i64, i64)> = user_statistics::table.load(&mut conn)?;
         for (user_id, comment_count, favorite_count, upload_count) in stats {
@@ -822,7 +823,7 @@ mod test {
 
     #[test]
     #[serial]
-    fn reset_statistics() -> ApiResult<()> {
+    fn reset_statistics() -> DatabaseResult<()> {
         database::reset_relation_stats()?;
         database_statistics()?;
         comment_statistics()?;
