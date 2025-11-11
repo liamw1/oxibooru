@@ -55,6 +55,11 @@ jobs:
   unit-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      PGUSERNAME: oxi
+      PGPASSWORD: changeme
+      PGDATABASE: oxi
+      PGHOST: localhost
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -85,9 +90,12 @@ jobs:
           echo "Starting PostgreSQL..."
           echo "unix_socket_directories = ''" >> "$PGDATA/postgresql.conf"
           pg_ctl start
+
+          echo "Creating user..."
+          psql --host "$PGHOST" --username="postgres" --dbname="postgres" --command="CREATE USER $PGUSERNAME PASSWORD '$PGPASSWORD'" --command="\du"
           
           echo "Creating database..."
-          createdb --host="localhost" --owner="postgres" --username="postgres" oxi
+          createdb --host="$PGHOST" --owner="$PGUSERNAME" --username="postgres" $PGDATABASE
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
