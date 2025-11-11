@@ -85,9 +85,9 @@ jobs:
           echo "Starting PostgreSQL..."
           echo "unix_socket_directories = ''" >> "$PGDATA/postgresql.conf"
           pg_ctl start
-
+          
           echo "Creating database..."
-          psql --host "localhost" --username="postgres" --dbname="postgres" --command="CREATE SCHEMA oxi"
+          createdb --owner="postgres" --username="postgres" oxi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
