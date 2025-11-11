@@ -87,7 +87,7 @@ jobs:
           pg_ctl start
           
           echo "Creating database..."
-          createdb --owner="postgres" --username="postgres" oxi
+          createdb --host="localhost" --owner="postgres" --username="postgres" oxi
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
