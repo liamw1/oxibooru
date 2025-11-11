@@ -18,24 +18,81 @@ jobs:
   clippy:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - name: install-dependencies
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install-dependencies
       run: sudo apt update && sudo apt install clang pkg-config libssl-dev libpq-dev libdav1d-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
-    - uses: dtolnay/rust-toolchain@nightly
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
       with:
         components: clippy
-    - name: Cache Clippy
-      uses: Swatinem/rust-cache@v2
-      with:
-        cache-on-failure: true
-        shared-key: cargo-check
-    - run: cargo clippy --all-features --all-targets -- -D warnings
+    
+    - name: Run Clippy
+      run: cargo clippy --all-features --all-targets -- -D warnings
 
   rustfmt:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: dtolnay/rust-toolchain@stable
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
       with:
         components: rustfmt
-    - run: cargo fmt -- --check
+
+    - name: Run rustfmt
+      run: cargo fmt -- --check
+
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      PGUSERNAME: oxi
+      PGPASSWORD: changeme
+      PGDATABASE: oxi
+      PGHOST: localhost
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create env file
+        run: cp ../doc/example.env ../.env
+
+      - name: Install-dependencies
+        run: sudo apt update && sudo apt install clang pkg-config libssl-dev libpq-dev libdav1d-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
+
+      - name: Add PostgreSQL binaries to PATH
+        shell: bash
+        run: echo "$(pg_config --bindir)" >> $GITHUB_PATH
+
+      - name: Start preinstalled PostgreSQL
+        shell: bash
+        run: |
+          echo "Initializing database cluster..."
+
+          export PGDATA="$HOME/pgdata"
+          mkdir -p "$PGDATA"
+
+          # initdb requires file for password in non-interactive mode
+          export PWFILE="$RUNNER_TEMP/pwfile"
+          echo "postgres" > "$PWFILE"
+          initdb --pgdata="$PGDATA" --username="postgres" --pwfile="$PWFILE"
+
+          echo "Starting PostgreSQL..."
+          echo "unix_socket_directories = ''" >> "$PGDATA/postgresql.conf"
+          pg_ctl start
+
+          echo "Creating user..."
+          psql --host "$PGHOST" --username="postgres" --dbname="postgres" --command="CREATE USER $PGUSERNAME PASSWORD '$PGPASSWORD' CREATEDB"
+          
+          echo "Creating database..."
+          createdb --host="$PGHOST" --owner="$PGUSERNAME" --username="postgres" $PGDATABASE
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test -- --nocapture
