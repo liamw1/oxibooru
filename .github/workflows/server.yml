@@ -92,7 +92,7 @@ jobs:
           pg_ctl start
 
           echo "Creating user..."
-          psql --host "$PGHOST" --username="postgres" --dbname="postgres" --command="CREATE USER $PGUSERNAME PASSWORD '$PGPASSWORD'" --command="\du"
+          psql --host "$PGHOST" --username="postgres" --dbname="postgres" --command="CREATE USER $PGUSERNAME PASSWORD '$PGPASSWORD' CREATEDB"
           
           echo "Creating database..."
           createdb --host="$PGHOST" --owner="$PGUSERNAME" --username="postgres" $PGDATABASE
