@@ -59,7 +59,7 @@ jobs:
       PGUSERNAME: postgres
       PGPASSWORD: postgres
       PGDATABASE: oxi
-      PGHOST: /var/run/postgresql
+      PGHOST: localhost
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -79,7 +79,7 @@ jobs:
         run: |
           echo "Initializing database cluster..."
 
-          export PGDATA="$PGHOST/pgdata"
+          export PGDATA="$HOME/pgdata"
           mkdir -p "$PGDATA"
 
           # initdb requires file for password in non-interactive mode
