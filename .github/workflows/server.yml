@@ -59,6 +59,7 @@ jobs:
       PGUSERNAME: postgres
       PGPASSWORD: postgres
       PGDATABASE: oxi
+      PGHOST: localhost
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
