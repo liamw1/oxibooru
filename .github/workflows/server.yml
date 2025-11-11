@@ -3,8 +3,12 @@ name: Server CI
 on:
   push:
     branches: [ master ]
+    paths:
+      - 'server/**'
   pull_request:
     branches: [ master ]
+    paths:
+      - 'server/**'
 
 defaults:
   run:

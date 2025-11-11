@@ -8,7 +8,7 @@ To aid in the editing and navigating of Rust code, install `rust-analyzer` in yo
 
 Next, you'll want to install the build and runtime dependencies. On Debian-based systems, this looks something like
 ```console
-sudo apt-get update && sudo apt-get install -y clang pkg-config libssl-dev libpq-dev libdav1d-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
+sudo apt update && sudo apt install -y clang pkg-config libssl-dev libpq-dev libdav1d-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
 ```
 
 ## Rust Basics
@@ -49,7 +49,7 @@ If there are any test failures, make sure to start your investigation at the fir
 ### Linting
 After a series of changes to the code, it's good practice to run Rust's static analysis tool, `clippy`, to help catch subtle bugs and style issues. You can do this by running
 ```console
-cargo clippy
+cargo clippy --all-targets
 ```
 
 ## Adding a Migration
