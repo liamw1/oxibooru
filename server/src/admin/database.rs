@@ -19,6 +19,7 @@ use tracing::{error, warn};
 /// Useful when the content hash changes.
 pub fn reset_filenames() -> std::io::Result<()> {
 
+    
     let _timer = Timer::new("reset_filenames");
     if filesystem::path(Directory::GeneratedThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Generated thumbnails renamed", PRINT_INTERVAL);
@@ -80,7 +81,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
             }
         }
     }
-    return Ok(())
+    return Ok(());
 }
 
 pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
