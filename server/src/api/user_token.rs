@@ -33,9 +33,10 @@ async fn list(
             .filter(user::name.eq(&username))
             .first(conn)?;
 
-        let required_rank = match client.id == Some(user_id) {
-            true => config::privileges().user_token_list_self,
-            false => config::privileges().user_token_list_any,
+        let required_rank = if client.id == Some(user_id) {
+            config::privileges().user_token_list_self
+        } else {
+            config::privileges().user_token_list_any
         };
         api::verify_privilege(client, required_rank)?;
 
@@ -78,9 +79,10 @@ async fn create(
             .filter(user::name.eq(&username))
             .first(conn)?;
 
-        let required_rank = match client.id == Some(user_id) {
-            true => config::privileges().user_token_create_self,
-            false => config::privileges().user_token_create_any,
+        let required_rank = if client.id == Some(user_id) {
+            config::privileges().user_token_create_self
+        } else {
+            config::privileges().user_token_create_any
         };
         api::verify_privilege(client, required_rank)?;
 
@@ -135,9 +137,10 @@ async fn update(
             .filter(user::name.eq(&username))
             .first(conn)?;
 
-        let required_rank = match client.id == Some(user_id) {
-            true => config::privileges().user_token_edit_self,
-            false => config::privileges().user_token_edit_any,
+        let required_rank = if client.id == Some(user_id) {
+            config::privileges().user_token_edit_self
+        } else {
+            config::privileges().user_token_edit_any
         };
         api::verify_privilege(client, required_rank)?;
 
@@ -173,9 +176,10 @@ async fn delete(
             .filter(user_token::id.eq(token))
             .first(conn)?;
 
-        let required_rank = match client.id == Some(user_token_owner) {
-            true => config::privileges().user_token_delete_self,
-            false => config::privileges().user_token_delete_any,
+        let required_rank = if client.id == Some(user_token_owner) {
+            config::privileges().user_token_delete_self
+        } else {
+            config::privileges().user_token_delete_any
         };
         api::verify_privilege(client, required_rank)?;
 

@@ -139,9 +139,10 @@ fn flash_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
         let (thumbnail_width, thumbnail_height) = config::get().thumbnails.post_dimensions();
 
         // Condition is equivalent to image_aspect_ratio > config_thumbnail_aspect_ratio
-        let effective_width = match image.width() * thumbnail_height > thumbnail_width * image.height() {
-            true => image.height() * thumbnail_width / thumbnail_height,
-            false => image.width(),
+        let effective_width = if image.width() * thumbnail_height > thumbnail_width * image.height() {
+            image.height() * thumbnail_width / thumbnail_height
+        } else {
+            image.width()
         };
         u32::MAX - effective_width
     });

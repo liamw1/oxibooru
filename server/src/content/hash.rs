@@ -38,9 +38,10 @@ impl PostHash {
     }
 
     pub fn thumbnail_url(&self) -> String {
-        let thumbnail_folder = match self.custom_thumbnail_path().exists() {
-            true => "custom-thumbnails",
-            false => "generated-thumbnails",
+        let thumbnail_folder = if self.custom_thumbnail_path().exists() {
+            "custom-thumbnails"
+        } else {
+            "generated-thumbnails"
         };
         format!("{}/{thumbnail_folder}/{}_{}.jpg", config::get().data_url, self.post_id, self.hash)
     }

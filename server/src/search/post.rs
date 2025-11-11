@@ -263,9 +263,10 @@ fn aspect_ratio() -> SqlLiteral<Float, Bind> {
 fn apply_checksum_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> ApiResult<BoxedQuery<'a>> {
     // Checksums can only be searched by exact value(s)
     let checksums: Vec<Checksum> = parse::values(filter.condition)?;
-    Ok(match filter.negated {
-        true => query.filter(post::checksum.ne_all(checksums)),
-        false => query.filter(post::checksum.eq_any(checksums)),
+    Ok(if filter.negated {
+        query.filter(post::checksum.ne_all(checksums))
+    } else {
+        query.filter(post::checksum.eq_any(checksums))
     })
 }
 
@@ -276,9 +277,10 @@ fn apply_flag_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token
         .bind(post::flags)
         .sql(" & ")
         .bind::<SmallInt, _>(value);
-    Ok(match filter.negated {
-        true => query.filter(bitwise_and.eq(0)),
-        false => query.filter(bitwise_and.ne(0)),
+    Ok(if filter.negated {
+        query.filter(bitwise_and.eq(0))
+    } else {
+        query.filter(bitwise_and.ne(0))
     })
 }
 

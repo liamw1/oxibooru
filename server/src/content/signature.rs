@@ -190,21 +190,21 @@ fn compute_column_deltas(image: &GrayImage) -> Vec<u64> {
 fn compute_grid_points(image: &GrayImage) -> (GridPoints, u32) {
     let row_deltas = compute_row_deltas(image);
     let column_deltas = compute_column_deltas(image);
-    let mut cropped_x_bounds = crop(&column_deltas);
-    let mut cropped_y_bounds = crop(&row_deltas);
+    let mut x_bounds = crop(&column_deltas);
+    let mut y_bounds = crop(&row_deltas);
 
     // Compute grid square radius
-    let grid_square_size = 0.5 + f64::from(std::cmp::min(cropped_x_bounds.length(), cropped_y_bounds.length())) / 20.0;
+    let grid_square_size = 0.5 + f64::from(std::cmp::min(x_bounds.length(), y_bounds.length())) / 20.0;
     let grid_square_radius = (grid_square_size / 2.0)
         .to_u32()
         .expect("0 < grid_square_size / 2 < u32::MAX");
 
     // Adjust cropped bounds so that grid squares won't protrude into image borders
-    cropped_x_bounds.shrink(grid_square_radius);
-    cropped_y_bounds.shrink(grid_square_radius);
+    x_bounds.shrink(grid_square_radius);
+    y_bounds.shrink(grid_square_radius);
 
-    let x_coords: [u32; GRID_SIZE] = cropped_x_bounds.linspace();
-    let y_coords: [u32; GRID_SIZE] = cropped_y_bounds.linspace();
+    let x_coords: [u32; GRID_SIZE] = x_bounds.linspace();
+    let y_coords: [u32; GRID_SIZE] = y_bounds.linspace();
     (CartesianProduct::new(x_coords, y_coords), grid_square_radius)
 }
 

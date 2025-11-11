@@ -465,7 +465,8 @@ mod test {
         assert_ne!(new_usage_count, usage_count);
         assert_ne!(new_implication_count, implication_count);
         assert_ne!(new_suggestion_count, suggestion_count);
-        Ok(reset_database())
+        reset_database();
+        Ok(())
     }
 
     #[tokio::test]

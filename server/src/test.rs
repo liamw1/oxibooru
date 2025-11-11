@@ -43,14 +43,13 @@ pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8")
 
 pub fn get_connection() -> ConnectionResult {
     let mut guard = get_guard();
-    match guard.as_mut() {
-        Some(pool) => pool.get(),
-        None => {
-            let pool = recreate_database().expect("Test database must be constructible");
-            let conn = pool.get();
-            *guard = Some(pool);
-            conn
-        }
+    if let Some(pool) = guard.as_mut() {
+        pool.get()
+    } else {
+        let pool = recreate_database().expect("Test database must be constructible");
+        let conn = pool.get();
+        *guard = Some(pool);
+        conn
     }
 }
 
@@ -88,9 +87,10 @@ pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str
 
     // Optionally specify a body
     let body_path = asset_path("body", relative_path);
-    let reply = match body_path.try_exists()? {
-        true => request.json_from_file(body_path).await,
-        false => request.await,
+    let reply = if body_path.try_exists()? {
+        request.json_from_file(body_path).await
+    } else {
+        request.await
     };
     assert_eq!(reply.status_code(), 200);
 
@@ -235,7 +235,7 @@ const GB: i64 = 1024_i64.pow(3);
 const POSTS: &[NewPost] = &[
     NewPost {
         user_id: Some(1),
-        file_size: 1 * MB,
+        file_size: MB,
         width: 1000,
         height: 2000,
         safety: PostSafety::Safe,
@@ -632,7 +632,7 @@ fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
     [&manifest_dir, "test", folder_path, relative_path].iter().collect()
 }
 
-mod test {
+mod statistics_tests {
     use super::*;
     use crate::admin::database;
     use crate::model::pool::PoolName;
@@ -659,7 +659,7 @@ mod test {
             i32,
         ) = database_statistics::table.first(&mut conn)?;
 
-        assert_eq!(id, true);
+        assert!(id);
         assert_eq!(disk_usage, expected_disk_usage);
         assert_eq!(comment_count, COMMENTS.len() as i64);
         assert_eq!(pool_count, expected_pool_count);
@@ -691,7 +691,7 @@ mod test {
         let mut conn = get_connection()?;
         let stats: Vec<(i64, i64)> = pool_category_statistics::table.load(&mut conn)?;
         for (category_id, usage_count) in stats {
-            let exepected_usage_count = POOL_GROUPS[category_id as usize].len() as i64;
+            let exepected_usage_count = POOL_GROUPS[usize::try_from(category_id).unwrap()].len() as i64;
             assert_eq!(usage_count, exepected_usage_count);
         }
         Ok(())
@@ -716,22 +716,11 @@ mod test {
     #[test]
     #[parallel]
     fn post_statistics() -> DatabaseResult<()> {
-        let mut conn = get_connection()?;
-        let stats: Vec<(
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            i64,
-            Option<DateTime>,
-            Option<DateTime>,
-            Option<DateTime>,
-        )> = post_statistics::table.load(&mut conn)?;
+        type PostData =
+            (i64, i64, i64, i64, i64, i64, i64, i64, i64, Option<DateTime>, Option<DateTime>, Option<DateTime>);
 
+        let mut conn = get_connection()?;
+        let stats: Vec<PostData> = post_statistics::table.load(&mut conn)?;
         for (
             post_id,
             tag_count,
@@ -745,9 +734,9 @@ mod test {
             ..,
         ) in stats
         {
-            let expected_tag_count = POST_TAGS[post_id as usize - 1].len() as i64;
+            let expected_tag_count = POST_TAGS[usize::try_from(post_id - 1).unwrap()].len() as i64;
             let expected_pool_count = POOL_POSTS.iter().filter(|&&(_, id)| id == post_id).count() as i64;
-            let expected_note_count = if post_id == 3 { 1 } else { 0 };
+            let expected_note_count = i64::from(post_id == 3);
             let expected_comment_count = COMMENTS.iter().filter(|&&(_, id, _)| id == post_id).count() as i64;
             let expected_relation_count = POST_RELATIONS
                 .iter()
@@ -779,7 +768,7 @@ mod test {
         let mut conn = get_connection()?;
         let stats: Vec<(i64, i64)> = tag_category_statistics::table.load(&mut conn)?;
         for (category_id, usage_count) in stats {
-            let expected_usage_count = TAG_GROUPS[category_id as usize].len() as i64;
+            let expected_usage_count = TAG_GROUPS[usize::try_from(category_id).unwrap()].len() as i64;
             assert_eq!(usage_count, expected_usage_count);
         }
         Ok(())

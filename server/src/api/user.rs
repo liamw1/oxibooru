@@ -81,9 +81,10 @@ async fn get(
             api::verify_privilege(client, config::privileges().user_view)?;
         }
 
-        let visibility = match viewing_self {
-            true => Visibility::Full,
-            false => Visibility::PublicOnly,
+        let visibility = if viewing_self {
+            Visibility::Full
+        } else {
+            Visibility::PublicOnly
         };
         UserInfo::new_from_id(conn, user_id, &fields, visibility)
             .map(Json)
@@ -113,9 +114,10 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
     }
 
     let creating_self = client.id.is_none();
-    let required_rank = match creating_self {
-        true => config::privileges().user_create_self,
-        false => config::privileges().user_create_any,
+    let required_rank = if creating_self {
+        config::privileges().user_create_self
+    } else {
+        config::privileges().user_create_any
     };
     api::verify_privilege(client, required_rank)?;
     if creation_rank > config::default_rank() {
@@ -148,9 +150,10 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         let user: User = new_user.insert_into(user::table).get_result(conn)?;
 
         if let Some(avatar) = custom_avatar {
-            let required_rank = match creating_self {
-                true => config::privileges().user_edit_self_avatar,
-                false => config::privileges().user_edit_any_avatar,
+            let required_rank = if creating_self {
+                config::privileges().user_edit_self_avatar
+            } else {
+                config::privileges().user_edit_any_avatar
             };
             api::verify_privilege(client, required_rank)?;
 
@@ -224,15 +227,17 @@ async fn update(
         api::verify_version(user_version, body.version)?;
 
         let editing_self = client.id == Some(user_id);
-        let visibility = match editing_self {
-            true => Visibility::Full,
-            false => Visibility::PublicOnly,
+        let visibility = if editing_self {
+            Visibility::Full
+        } else {
+            Visibility::PublicOnly
         };
 
         if let Some(password) = body.password {
-            let required_rank = match editing_self {
-                true => config::privileges().user_edit_self_pass,
-                false => config::privileges().user_edit_any_pass,
+            let required_rank = if editing_self {
+                config::privileges().user_edit_self_pass
+            } else {
+                config::privileges().user_edit_any_pass
             };
             api::verify_privilege(client, required_rank)?;
             api::verify_matches_regex(&password, RegexType::Password)?;
@@ -244,9 +249,10 @@ async fn update(
                 .execute(conn)?;
         }
         if let Some(email) = body.email {
-            let required_rank = match editing_self {
-                true => config::privileges().user_edit_self_email,
-                false => config::privileges().user_edit_any_email,
+            let required_rank = if editing_self {
+                config::privileges().user_edit_self_email
+            } else {
+                config::privileges().user_edit_any_email
             };
             api::verify_privilege(client, required_rank)?;
             api::verify_valid_email(email.as_deref())?;
@@ -256,9 +262,10 @@ async fn update(
                 .execute(conn)?;
         }
         if let Some(rank) = body.rank {
-            let required_rank = match editing_self {
-                true => config::privileges().user_edit_self_rank,
-                false => config::privileges().user_edit_any_rank,
+            let required_rank = if editing_self {
+                config::privileges().user_edit_self_rank
+            } else {
+                config::privileges().user_edit_any_rank
             };
             api::verify_privilege(client, required_rank)?;
             if rank > config::default_rank() {
@@ -270,9 +277,10 @@ async fn update(
                 .execute(conn)?;
         }
         if let Some(avatar_style) = body.avatar_style {
-            let required_rank = match editing_self {
-                true => config::privileges().user_edit_self_avatar,
-                false => config::privileges().user_edit_any_avatar,
+            let required_rank = if editing_self {
+                config::privileges().user_edit_self_avatar
+            } else {
+                config::privileges().user_edit_any_avatar
             };
             api::verify_privilege(client, required_rank)?;
 
@@ -281,18 +289,20 @@ async fn update(
                 .execute(conn)?;
         }
         if let Some(avatar) = custom_avatar {
-            let required_rank = match editing_self {
-                true => config::privileges().user_edit_self_avatar,
-                false => config::privileges().user_edit_any_avatar,
+            let required_rank = if editing_self {
+                config::privileges().user_edit_self_avatar
+            } else {
+                config::privileges().user_edit_any_avatar
             };
             api::verify_privilege(client, required_rank)?;
 
             update::user::avatar(conn, user_id, &username, &avatar)?;
         }
         if let Some(new_name) = body.name.as_deref() {
-            let required_rank = match editing_self {
-                true => config::privileges().user_edit_self_name,
-                false => config::privileges().user_edit_any_name,
+            let required_rank = if editing_self {
+                config::privileges().user_edit_self_name
+            } else {
+                config::privileges().user_edit_any_name
             };
             api::verify_privilege(client, required_rank)?;
             api::verify_matches_regex(new_name, RegexType::Username)?;
@@ -350,9 +360,10 @@ async fn delete(
         api::verify_version(user_version, *client_version)?;
 
         let deleting_self = client.id == Some(user_id);
-        let required_rank = match deleting_self {
-            true => config::privileges().user_delete_self,
-            false => config::privileges().user_delete_any,
+        let required_rank = if deleting_self {
+            config::privileges().user_delete_self
+        } else {
+            config::privileges().user_delete_any
         };
         api::verify_privilege(client, required_rank)?;
 

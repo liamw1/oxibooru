@@ -120,9 +120,10 @@ async fn update(
             .first(conn)?;
         api::verify_version(comment_version, body.version)?;
 
-        let required_rank = match client.id == comment_owner && comment_owner.is_some() {
-            true => config::privileges().comment_edit_own,
-            false => config::privileges().comment_edit_any,
+        let required_rank = if client.id == comment_owner && comment_owner.is_some() {
+            config::privileges().comment_edit_own
+        } else {
+            config::privileges().comment_edit_any
         };
         api::verify_privilege(client, required_rank)?;
 
@@ -179,9 +180,10 @@ async fn delete(
             .first(conn)?;
         api::verify_version(comment_version, *client_version)?;
 
-        let required_rank = match client.id == comment_owner && comment_owner.is_some() {
-            true => config::privileges().comment_delete_own,
-            false => config::privileges().comment_delete_any,
+        let required_rank = if client.id == comment_owner && comment_owner.is_some() {
+            config::privileges().comment_delete_own
+        } else {
+            config::privileges().comment_delete_any
         };
         api::verify_privilege(client, required_rank)?;
 

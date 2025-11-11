@@ -4,7 +4,6 @@ use crate::string::SmallString;
 use lettre::message::Mailbox;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use strum::Display;
@@ -232,14 +231,15 @@ pub fn default_rank() -> UserRank {
 }
 
 pub fn data_dir() -> &'static str {
-    static DATA_DIR: LazyLock<Cow<str>> = LazyLock::new(|| match std::env::var("DOCKER_DEPLOYMENT") {
-        Ok(_) => Cow::Borrowed(&CONFIG.data_dir),
-        Err(_) => {
+    if DOCKER_DEPLOYMENT {
+        &CONFIG.data_dir
+    } else {
+        static DATA_DIR: LazyLock<String> = LazyLock::new(|| {
             dotenvy::from_filename("../.env").expect(".env must be in project root directory");
-            Cow::Owned(std::env::var("MOUNT_DATA").expect("MOUNT_DATA must be defined in .env"))
-        }
-    });
-    &DATA_DIR
+            std::env::var("MOUNT_DATA").expect("MOUNT_DATA must be defined in .env")
+        });
+        &DATA_DIR
+    }
 }
 
 pub fn database_url() -> &'static str {
@@ -254,6 +254,8 @@ pub fn port() -> u16 {
         .and_then(|var| var.parse().ok())
         .unwrap_or(DEFAULT_PORT)
 }
+
+const DOCKER_DEPLOYMENT: bool = option_env!("DOCKER_DEPLOYMENT").is_some();
 
 static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     let config_string = std::fs::read_to_string(get_config_path()).expect("config.toml must exist and be readable");

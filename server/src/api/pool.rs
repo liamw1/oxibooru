@@ -350,7 +350,8 @@ mod test {
         assert_eq!(new_pool.creation_time, pool.creation_time);
         assert!(new_pool.last_edit_time > pool.last_edit_time);
         assert_ne!(new_post_count, post_count);
-        Ok(reset_database())
+        reset_database();
+        Ok(())
     }
 
     #[tokio::test]

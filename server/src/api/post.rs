@@ -400,9 +400,10 @@ struct CreateBody {
 }
 
 async fn create(client: Client, params: ResourceParams, body: CreateBody) -> ApiResult<Json<PostInfo>> {
-    let required_rank = match body.anonymous.unwrap_or(false) {
-        true => config::privileges().post_create_anonymous,
-        false => config::privileges().post_create_identified,
+    let required_rank = if body.anonymous.unwrap_or(false) {
+        config::privileges().post_create_anonymous
+    } else {
+        config::privileges().post_create_identified
     };
     api::verify_privilege(client, required_rank)?;
 
@@ -851,7 +852,7 @@ mod test {
             match token {
                 Token::Id | Token::ContentChecksum | Token::NoteText | Token::Special => continue,
                 _ => (),
-            };
+            }
             let token_str: &'static str = token.into();
             let query = format!("{QUERY}=sort:{token_str} {SORT}&fields=id");
             let path = format!("post/list_{token_str}_sorted.json");
@@ -974,7 +975,8 @@ mod test {
         assert_eq!(new_post.description, post.description);
         assert_eq!(new_post.creation_time, post.creation_time);
         assert!(new_post.last_edit_time > post.last_edit_time);
-        Ok(reset_database())
+        reset_database();
+        Ok(())
     }
 
     #[tokio::test]

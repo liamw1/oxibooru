@@ -113,9 +113,10 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
         PostType::Video => decode::video_has_audio(&temp_path)?,
         PostType::Flash => decode::swf_has_audio(&temp_path)?,
     };
-    let flags = match has_sound {
-        true => PostFlags::new_with(PostFlag::Sound),
-        false => PostFlags::new(),
+    let flags = if has_sound {
+        PostFlags::new_with(PostFlag::Sound)
+    } else {
+        PostFlags::new()
     };
 
     let file_contents = FileContents { data, mime_type };

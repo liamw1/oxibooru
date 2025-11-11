@@ -7,13 +7,10 @@
 #![allow(clippy::option_option)]
 // Buggy
 #![allow(clippy::iter_not_returning_iterator)]
+// Unhelpful
+#![allow(clippy::float_cmp)]
 // Too subjective
-#![allow(
-    clippy::match_bool,
-    clippy::similar_names,
-    clippy::single_match_else,
-    clippy::too_many_lines
-)]
+#![allow(clippy::unreadable_literal, clippy::too_many_lines)]
 
 mod admin;
 mod api;

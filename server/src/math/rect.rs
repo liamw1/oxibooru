@@ -167,7 +167,7 @@ mod test {
                 .iter()
                 .map(|point| 10 * (point.i - min_corner.i) + (point.j - min_corner.j))
                 .collect::<Vec<_>>();
-            assert_eq!(values, vec![00, 01, 02, 10, 11, 12, 20, 21, 22]);
+            assert_eq!(values, vec![0, 1, 2, 10, 11, 12, 20, 21, 22]);
         };
         let check_non_square_rect = |min_corner: IPoint2<i32>| {
             let i_bounds = Interval::new(min_corner.i, min_corner.i + 2);
@@ -177,7 +177,7 @@ mod test {
                 .iter()
                 .map(|point| 10 * (point.i - min_corner.i) + (point.j - min_corner.j))
                 .collect::<Vec<_>>();
-            assert_eq!(values, vec![00, 01, 02, 03, 10, 11, 12, 13, 20, 21, 22, 23])
+            assert_eq!(values, vec![0, 1, 2, 3, 10, 11, 12, 13, 20, 21, 22, 23]);
         };
 
         for i in -3..3 {

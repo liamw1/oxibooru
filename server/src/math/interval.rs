@@ -29,9 +29,10 @@ impl<T: PrimInt> Interval<T> {
     }
 
     pub fn length(self) -> T {
-        match self.is_empty_set() {
-            true => T::zero(),
-            false => self.end - self.start,
+        if self.is_empty_set() {
+            T::zero()
+        } else {
+            self.end - self.start
         }
     }
 
