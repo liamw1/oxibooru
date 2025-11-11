@@ -88,7 +88,7 @@ jobs:
           initdb --pgdata="$PGDATA" --username="postgres" --pwfile="$PWFILE"
 
           echo "Starting PostgreSQL..."
-          echo "unix_socket_directories = '$PGHOST'" >> "$PGDATA/postgresql.conf"
+          echo "unix_socket_directories = ''" >> "$PGDATA/postgresql.conf"
           pg_ctl start
 
           echo "Creating user..."
