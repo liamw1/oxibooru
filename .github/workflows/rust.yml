@@ -2,10 +2,10 @@ name: Rust CI
 
 on:
   workflow_dispatch:
-  #push:
-  #  branches: [ master ]
-  #pull_request:
-  #  branches: [ master ]
+  push:
+    branches: [ workflows ]
+  pull_request:
+    branches: [ workflows ]
 
 jobs:
   clippy:
