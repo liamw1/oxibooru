@@ -8,7 +8,7 @@ on:
     branches: [ workflows ]
 
 defaults:
-  working-directory: ./server
+  working-directory: server
 
 jobs:
   clippy:
