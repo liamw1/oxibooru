@@ -3,8 +3,12 @@ name: Rust CI
 on:
   push:
     branches: [ workflows ]
+    paths:
+      - 'server/**'
   pull_request:
     branches: [ workflows ]
+    paths:
+      - 'server/**'
 
 defaults:
   run:
