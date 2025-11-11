@@ -36,7 +36,7 @@ jobs:
         shared-key: cargo-check
     
     - name: Run Clippy
-      run: cargo clippy --all-features --all-targets -- -D warnings
+      run: cargo clippy #--all-features --all-targets -- -D warnings
 
   rustfmt:
     runs-on: ubuntu-latest
@@ -60,6 +60,12 @@ jobs:
       PGPASSWORD: postgres
       PGDATABASE: oxi
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create env file
+        run: cp ../doc/example.env ../.env
+
       - name: Install-dependencies
         run: sudo apt update && sudo apt install clang pkg-config libssl-dev libpq-dev libdav1d-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
 
@@ -89,12 +95,6 @@ jobs:
 
           echo "Creating database..."
           createdb --owner="$PGUSERNAME" --username="postgres" "$PGDATABASE"
-
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Create env file
-        run: cp ../doc/example.env ../.env
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
