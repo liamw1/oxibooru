@@ -10,7 +10,9 @@ on:
 jobs:
   clippy:
     runs-on: ubuntu-latest
-    working-directory: server
+    defaults:
+      run:
+        working-directory: server
     steps:
     - name: install-dependencies
       run: sudo apt update && sudo apt install clang pkg-config libssl-dev libpq-dev libdav1d-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
@@ -27,7 +29,9 @@ jobs:
 
   rustfmt:
     runs-on: ubuntu-latest
-    working-directory: server
+    defaults:
+      run:
+        working-directory: server
     steps:
     - uses: actions/checkout@v4
     - uses: dtolnay/rust-toolchain@stable
