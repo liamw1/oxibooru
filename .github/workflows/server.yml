@@ -99,4 +99,4 @@ jobs:
           shared-key: cargo-check
 
       - name: Run tests
-        run: cargo test
+        run: cargo test -- --nocapture
