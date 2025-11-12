@@ -342,7 +342,6 @@ impl Serialize for PostFlags {
     Debug,
     Clone,
     Copy,
-    Default,
     PartialEq,
     Eq,
     PartialOrd,
@@ -361,7 +360,6 @@ impl Serialize for PostFlags {
 pub enum UserRank {
     Anonymous,
     Restricted,
-    #[default]
     Regular,
     Power,
     Moderator,

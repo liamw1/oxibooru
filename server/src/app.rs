@@ -22,9 +22,13 @@ pub fn num_rayon_threads() -> usize {
 }
 
 pub fn enable_tracing() {
-    const DEFAULT_DIRECTIVE: &str = "server=info,tower_http=debug,axum=trace";
-    let directive = config::get().log_filter.as_deref().unwrap_or(DEFAULT_DIRECTIVE);
-    let filter = EnvFilter::try_new(directive).unwrap_or(EnvFilter::new(DEFAULT_DIRECTIVE));
+    let filter = match EnvFilter::try_new(&config::get().log_filter) {
+        Ok(filter) => filter,
+        Err(err) => {
+            warn!("Log filter is invalid. Some or all directives may be ignored. Details:\n{err}");
+            EnvFilter::new(&config::get().log_filter)
+        }
+    };
     tracing_subscriber::registry()
         .with(filter)
         .with(tracing_subscriber::fmt::layer().without_time())

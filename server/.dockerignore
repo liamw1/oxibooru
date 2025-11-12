@@ -2,9 +2,6 @@
 Dockerfile
 .dockerignore
 
-# Config template
-config.toml.dist
-
 # Build artifacts
 target
 

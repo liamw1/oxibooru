@@ -1,5 +1,6 @@
 use crate::api::{ApiResult, ResourceParams};
 use crate::auth::Client;
+use crate::config::PublicConfig;
 use crate::model::post::PostFeature;
 use crate::resource::post::PostInfo;
 use crate::schema::{database_statistics, post_feature, user};
@@ -26,7 +27,7 @@ struct Response {
     featuring_time: Option<DateTime>,
     featuring_user: Option<SmallString>,
     server_time: DateTime,
-    config: &'static config::PublicInfo,
+    config: &'static PublicConfig,
 }
 
 async fn get(Extension(client): Extension<Client>, Query(params): Query<ResourceParams>) -> ApiResult<Json<Response>> {
