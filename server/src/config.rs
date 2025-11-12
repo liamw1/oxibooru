@@ -1,4 +1,3 @@
-use crate::db;
 use crate::model::enums::UserRank;
 use crate::string::SmallString;
 use lettre::message::Mailbox;
@@ -242,17 +241,33 @@ pub fn data_dir() -> &'static str {
     }
 }
 
-pub fn database_url() -> &'static str {
-    static DATABASE_URL: LazyLock<String> = LazyLock::new(|| db::create_url(None));
-    &DATABASE_URL
-}
-
 pub fn port() -> u16 {
     const DEFAULT_PORT: u16 = 6666;
     std::env::var("SERVER_PORT")
         .ok()
         .and_then(|var| var.parse().ok())
         .unwrap_or(DEFAULT_PORT)
+}
+
+pub fn database_url() -> &'static str {
+    static DATABASE_URL: LazyLock<String> = LazyLock::new(|| create_url(None));
+    &DATABASE_URL
+}
+
+/// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DATABASE`
+/// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DATABASE`.
+pub fn create_url(database_override: Option<&str>) -> String {
+    if !DOCKER_DEPLOYMENT {
+        dotenvy::from_filename("../.env").expect(".env must be in project root directory");
+    }
+
+    let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER must be defined in .env");
+    let password = std::env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD must be defined in .env");
+    let hostname = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| String::from("localhost"));
+    let database = std::env::var("POSTGRES_DB").expect("POSTGRES_DB must be defined in .env");
+    let database = database_override.unwrap_or(&database);
+
+    format!("postgres://{user}:{password}@{hostname}/{database}")
 }
 
 const DOCKER_DEPLOYMENT: bool = option_env!("DOCKER_DEPLOYMENT").is_some();

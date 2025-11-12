@@ -19,7 +19,7 @@ use crate::schema::{
 };
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, db};
+use crate::{api, config, db};
 use axum::ServiceExt;
 use axum::extract::Request;
 use axum::http::Method;
@@ -610,7 +610,7 @@ fn recreate_database() -> Result<ConnectionPool, Box<dyn Error + Send + Sync>> {
     diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}")).execute(&mut conn)?;
     diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
 
-    let database_url = db::create_url(Some(DATABASE_NAME));
+    let database_url = config::create_url(Some(DATABASE_NAME));
     let mut conn =
         PgConnection::establish(&database_url).expect("Connection must be able to be established with test server");
     db::run_migrations(&mut conn)?;

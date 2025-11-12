@@ -14,6 +14,8 @@ RUN cargo chef prepare --recipe-path recipe.json
 ################################ Build Phase ###############################
 FROM chef AS builder
 
+ENV DOCKER_DEPLOYMENT=1
+
 # Install system dependencies
 RUN apk update && apk add --no-cache pkgconfig clang-dev postgresql-dev dav1d-dev ffmpeg-dev
 
@@ -33,7 +35,6 @@ FROM alpine:${ALPINE_VERSION} AS runtime
 WORKDIR /opt/app
 
 ENV RUST_BACKTRACE=full
-ENV DOCKER_DEPLOYMENT=1
 
 ARG PUID=1000
 ARG PGID=1000
