@@ -25,7 +25,7 @@ argon2 = { version = "0.5.3", features = ["std"] }
 rayon = "1.10.0"
 tower = "0.5.2"
 tracing = "0.1.41"
-toml = "0.8.20"
+config = { version = "0.15.18", default-features = false, features = ["toml"] }
 video-rs = "0.10.3"
 swf = "0.2.2"
 flate2 = "1.0.35"

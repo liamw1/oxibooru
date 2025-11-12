@@ -1,9 +1,10 @@
 use crate::model::enums::UserRank;
 use crate::string::SmallString;
+use config::builder::DefaultState;
+use config::{ConfigBuilder, File, FileFormat};
 use lettre::message::Mailbox;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use strum::Display;
 use url::Url;
@@ -22,14 +23,14 @@ pub enum RegexType {
 }
 
 #[derive(Deserialize)]
-pub struct Thumbnails {
+pub struct ThumbnailConfig {
     pub avatar_width: u32,
     pub avatar_height: u32,
     pub post_width: u32,
     pub post_height: u32,
 }
 
-impl Thumbnails {
+impl ThumbnailConfig {
     pub fn avatar_dimensions(&self) -> (u32, u32) {
         (self.avatar_width, self.avatar_height)
     }
@@ -40,7 +41,7 @@ impl Thumbnails {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-pub struct SmtpInfo {
+pub struct SmtpConfig {
     pub host: SmallString,
     pub port: Option<u16>,
     pub username: Option<SmallString>,
@@ -49,7 +50,7 @@ pub struct SmtpInfo {
 }
 
 #[derive(Serialize, Deserialize)]
-pub struct Privileges {
+pub struct PrivilegeConfig {
     pub user_create_self: UserRank,
     pub user_create_any: UserRank,
     pub user_list: UserRank,
@@ -83,7 +84,6 @@ pub struct Privileges {
     pub post_view: UserRank,
     pub post_view_featured: UserRank,
     pub post_edit_content: UserRank,
-    #[serde(default)]
     pub post_edit_description: UserRank,
     pub post_edit_flag: UserRank,
     pub post_edit_note: UserRank,
@@ -157,7 +157,7 @@ pub struct Privileges {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all(serialize = "camelCase"))]
-pub struct PublicInfo {
+pub struct PublicConfig {
     pub name: SmallString,
     pub default_user_rank: UserRank,
     pub enable_safety: bool,
@@ -173,7 +173,7 @@ pub struct PublicInfo {
     pub tag_name_regex: Regex,
     #[serde(with = "serde_regex")]
     pub tag_category_name_regex: Regex,
-    pub privileges: Privileges,
+    pub privileges: PrivilegeConfig,
 }
 
 #[derive(Deserialize)]
@@ -181,7 +181,6 @@ pub struct PublicInfo {
 pub struct Config {
     data_dir: SmallString,
     pub data_url: SmallString,
-    #[serde(default)]
     pub webhooks: Vec<Url>,
     pub password_secret: SmallString,
     pub content_secret: SmallString,
@@ -192,23 +191,25 @@ pub struct Config {
     pub pool_name_regex: Regex,
     #[serde(with = "serde_regex")]
     pub pool_category_regex: Regex,
-    pub log_filter: Option<String>,
-    #[serde(default)]
+    pub log_filter: String,
     pub auto_explain: bool,
-    pub thumbnails: Thumbnails,
-    pub smtp: Option<SmtpInfo>,
-    pub public_info: PublicInfo,
+    pub thumbnails: ThumbnailConfig,
+    pub smtp: Option<SmtpConfig>,
+    pub public_info: PublicConfig,
 }
 
+/// Returns a reference to the global [`Config`] object, which is deserialized
+/// from the `config.toml`. Fields that are not present in `config.toml` will
+/// be replaced by its default, which is specified in `config.toml.dist`.
 pub fn get() -> &'static Config {
     &CONFIG
 }
 
-pub fn smtp() -> Option<&'static SmtpInfo> {
+pub fn smtp() -> Option<&'static SmtpConfig> {
     CONFIG.smtp.as_ref()
 }
 
-pub fn privileges() -> &'static Privileges {
+pub fn privileges() -> &'static PrivilegeConfig {
     &CONFIG.public_info.privileges
 }
 
@@ -271,35 +272,30 @@ pub fn create_url(database_override: Option<&str>) -> String {
 }
 
 const DOCKER_DEPLOYMENT: bool = option_env!("DOCKER_DEPLOYMENT").is_some();
+const DEFAULT_CONFIG: &str = include_str!("../config.toml.dist");
 
 static CONFIG: LazyLock<Config> = LazyLock::new(|| {
-    let config_string = std::fs::read_to_string(get_config_path()).expect("config.toml must exist and be readable");
-    let mut config: Config = match toml::from_str(&config_string) {
+    // TODO: Remove in favor of config injection
+    if cfg!(test) {
+        return ConfigBuilder::<DefaultState>::default()
+            .add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml))
+            .build()
+            .and_then(config::Config::try_deserialize)
+            .unwrap();
+    }
+
+    let mut config: Config = match ConfigBuilder::<DefaultState>::default()
+        .add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml))
+        .add_source(File::with_name("config"))
+        .build()
+        .and_then(config::Config::try_deserialize)
+    {
         Ok(parsed) => parsed,
         Err(err) => {
-            eprintln!(
-                "Could not parse config.toml.
-       
-       Please ensure that your config is formatted correctly, that each field name
-       matches the fields in config.toml.dist exactly, and that each field value
-       has the proper type. Details:\n\n{err}"
-            );
-            std::process::exit(1)
+            eprintln!("Could not parse config.toml. Details:\n{err}");
+            std::process::exit(1);
         }
     };
     config.public_info.can_send_mails = config.smtp.is_some();
     config
 });
-
-fn get_config_path() -> PathBuf {
-    // Use config.toml.dist if in test environment, config.toml if in production
-    if cfg!(test) {
-        let manifest_dir =
-            std::env::var("CARGO_MANIFEST_DIR").expect("Test environment must have CARGO_MANIFEST_DIR defined");
-        [&manifest_dir, "config.toml.dist"].iter().collect()
-    } else {
-        let exe_path = std::env::current_exe().expect("Current exe path exists and is readable");
-        let parent_path = exe_path.parent().unwrap_or(Path::new("/"));
-        [parent_path, Path::new("config.toml")].iter().collect()
-    }
-}
