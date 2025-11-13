@@ -70,11 +70,11 @@ impl TagInfo {
         let mut usages = resource::retrieve(fields[Field::Usages], || get_usages(conn, &tags))?;
 
         let batch_size = tags.len();
-        resource::check_batch_results(categories.len(), batch_size);
-        resource::check_batch_results(names.len(), batch_size);
-        resource::check_batch_results(implications.len(), batch_size);
-        resource::check_batch_results(suggestions.len(), batch_size);
-        resource::check_batch_results(usages.len(), batch_size);
+        resource::check_batch_results(batch_size, categories.len());
+        resource::check_batch_results(batch_size, names.len());
+        resource::check_batch_results(batch_size, implications.len());
+        resource::check_batch_results(batch_size, suggestions.len());
+        resource::check_batch_results(batch_size, usages.len());
 
         let results = tags
             .into_iter()

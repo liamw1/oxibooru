@@ -31,6 +31,7 @@ mod user_token;
 
 pub type ApiResult<T> = Result<T, Error>;
 
+/// Giant error enum of doom
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub enum Error {

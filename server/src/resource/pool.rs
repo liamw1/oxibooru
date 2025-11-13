@@ -72,10 +72,10 @@ impl PoolInfo {
         let mut post_counts = resource::retrieve(fields[Field::PostCount], || get_post_counts(conn, &pools))?;
 
         let batch_size = pools.len();
-        resource::check_batch_results(names.len(), batch_size);
-        resource::check_batch_results(categories.len(), batch_size);
-        resource::check_batch_results(posts.len(), batch_size);
-        resource::check_batch_results(post_counts.len(), batch_size);
+        resource::check_batch_results(batch_size, names.len());
+        resource::check_batch_results(batch_size, categories.len());
+        resource::check_batch_results(batch_size, posts.len());
+        resource::check_batch_results(batch_size, post_counts.len());
 
         let results = pools
             .into_iter()

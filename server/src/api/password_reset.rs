@@ -33,6 +33,7 @@ fn get_user_info(
         .map_err(api::Error::from)
 }
 
+/// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#request-password-reset)
 async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
     let smtp_info = config::smtp().ok_or(api::Error::MissingSmtpInfo)?;
 
@@ -57,7 +58,7 @@ async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
     let site_name = &config::get().public_info.name;
     let username = percent_encoding::utf8_percent_encode(&username, NON_ALPHANUMERIC);
     let separator = percent_encoding::percent_encode_byte(b':');
-    let reset_token = hash::compute_url_safe_hash(&password_salt);
+    let reset_token = hash::compute_url_safe_hash(password_salt.as_bytes());
     let url = format!("{domain}/password-reset/{username}{separator}{reset_token}");
 
     let email = Message::builder()
@@ -112,6 +113,7 @@ fn generate_temporary_password(length: u8) -> String {
         .collect()
 }
 
+/// See [confirm-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#confirm-password-reset)
 async fn reset_password(
     Path(username): Path<String>,
     Json(confirmation): Json<ResetToken>,
@@ -120,7 +122,7 @@ async fn reset_password(
 
     db::get_connection()?.transaction(|conn| {
         let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
-        if confirmation.token != hash::compute_url_safe_hash(&password_salt) {
+        if confirmation.token != hash::compute_url_safe_hash(password_salt.as_bytes()) {
             return Err(api::Error::UnauthorizedPasswordReset);
         }
 

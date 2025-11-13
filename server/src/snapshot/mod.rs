@@ -12,7 +12,19 @@ pub mod post;
 pub mod tag;
 pub mod tag_category;
 
+/// Computes a diff between an `old` snapshot [`Value`] and a `new` snapshot [`Value`].
 pub fn value_diff(old: Value, new: Value) -> Option<Value> {
+    let value_index = |value: &Value| -> usize {
+        match value {
+            Value::Null => 0,
+            Value::Bool(_) => 1,
+            Value::Number(_) => 2,
+            Value::String(_) => 3,
+            Value::Array(_) => 4,
+            Value::Object(_) => 5,
+        }
+    };
+
     match (old, new) {
         (Value::Array(old_array), Value::Array(new_array)) => array_diff(old_array, new_array),
         (Value::Object(old_object), Value::Object(new_object)) => object_diff(old_object, new_object),
@@ -32,17 +44,7 @@ pub fn value_diff(old: Value, new: Value) -> Option<Value> {
     }
 }
 
-fn value_index(value: &Value) -> usize {
-    match value {
-        Value::Null => 0,
-        Value::Bool(_) => 1,
-        Value::Number(_) => 2,
-        Value::String(_) => 3,
-        Value::Array(_) => 4,
-        Value::Object(_) => 5,
-    }
-}
-
+/// Computes element-wise diff between `old` and `new` values.
 fn array_diff(old: Vec<Value>, new: Vec<Value>) -> Option<Value> {
     let new_set: HashSet<&Value> = new.iter().collect();
     let removed: Vec<_> = old.iter().filter(|item| !new_set.contains(item)).cloned().collect();
@@ -59,6 +61,7 @@ fn array_diff(old: Vec<Value>, new: Vec<Value>) -> Option<Value> {
     })
 }
 
+/// Computes diff between `old` and `new` JSON key/value maps.
 fn object_diff(old: Map<String, Value>, mut new: Map<String, Value>) -> Option<Value> {
     let mut diff = Map::new();
 
@@ -103,6 +106,7 @@ fn object_diff(old: Map<String, Value>, mut new: Map<String, Value>) -> Option<V
     })
 }
 
+/// Creates a snapshot for a "set default" operation.
 fn set_default_snapshot(
     conn: &mut PgConnection,
     client: Client,

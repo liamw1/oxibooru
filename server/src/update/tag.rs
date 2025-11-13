@@ -255,22 +255,28 @@ enum TraversalState {
     Explored,
 }
 
+/// A graph of tag parent/child relationships used for cycle detection.
+/// Technically may not be a single graph but instead a collection of disjoint graphs.
 struct DependencyGraph {
     // Maps children to parents
     nodes: HashMap<i64, HashSet<i64>>,
 }
 
 impl DependencyGraph {
+    /// Initializes graph using `starting_nodes` and no connections.
     fn new(starting_nodes: &[i64]) -> Self {
         Self {
             nodes: starting_nodes.iter().map(|&tag_id| (tag_id, HashSet::new())).collect(),
         }
     }
 
+    /// Returns the number of nodes in the graph.
     fn len(&self) -> usize {
         self.nodes.len()
     }
 
+    /// Inserts a new connection into the graph. May create a new node
+    /// if `implication` contains a tag ID not in graph.
     fn insert(&mut self, implication: TagImplication) -> bool {
         let parents = self.nodes.entry(implication.child_id).or_default();
         let new_node = parents.is_empty();
@@ -278,6 +284,7 @@ impl DependencyGraph {
         new_node
     }
 
+    /// Returns the nodes of the graph as a [`HashSet`].
     fn into_nodes(self) -> IntoKeys<i64, HashSet<i64>> {
         self.nodes.into_keys()
     }

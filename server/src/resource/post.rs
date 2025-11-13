@@ -215,25 +215,25 @@ impl PostInfo {
             resource::retrieve(fields[Field::FavoritedBy], || get_users_who_favorited(conn, &posts))?;
 
         let batch_size = posts.len();
-        resource::check_batch_results(owners.len(), batch_size);
-        resource::check_batch_results(content_urls.len(), batch_size);
-        resource::check_batch_results(thumbnail_urls.len(), batch_size);
-        resource::check_batch_results(tags.len(), batch_size);
-        resource::check_batch_results(comments.len(), batch_size);
-        resource::check_batch_results(relations.len(), batch_size);
-        resource::check_batch_results(pools.len(), batch_size);
-        resource::check_batch_results(notes.len(), batch_size);
-        resource::check_batch_results(scores.len(), batch_size);
-        resource::check_batch_results(client_scores.len(), batch_size);
-        resource::check_batch_results(client_favorites.len(), batch_size);
-        resource::check_batch_results(tag_counts.len(), batch_size);
-        resource::check_batch_results(comment_counts.len(), batch_size);
-        resource::check_batch_results(relation_counts.len(), batch_size);
-        resource::check_batch_results(note_counts.len(), batch_size);
-        resource::check_batch_results(favorite_counts.len(), batch_size);
-        resource::check_batch_results(feature_counts.len(), batch_size);
-        resource::check_batch_results(last_feature_times.len(), batch_size);
-        resource::check_batch_results(users_who_favorited.len(), batch_size);
+        resource::check_batch_results(batch_size, owners.len());
+        resource::check_batch_results(batch_size, content_urls.len());
+        resource::check_batch_results(batch_size, thumbnail_urls.len());
+        resource::check_batch_results(batch_size, tags.len());
+        resource::check_batch_results(batch_size, comments.len());
+        resource::check_batch_results(batch_size, relations.len());
+        resource::check_batch_results(batch_size, pools.len());
+        resource::check_batch_results(batch_size, notes.len());
+        resource::check_batch_results(batch_size, scores.len());
+        resource::check_batch_results(batch_size, client_scores.len());
+        resource::check_batch_results(batch_size, client_favorites.len());
+        resource::check_batch_results(batch_size, tag_counts.len());
+        resource::check_batch_results(batch_size, comment_counts.len());
+        resource::check_batch_results(batch_size, relation_counts.len());
+        resource::check_batch_results(batch_size, note_counts.len());
+        resource::check_batch_results(batch_size, favorite_counts.len());
+        resource::check_batch_results(batch_size, feature_counts.len());
+        resource::check_batch_results(batch_size, last_feature_times.len());
+        resource::check_batch_results(batch_size, users_who_favorited.len());
 
         let results = posts
             .into_iter()

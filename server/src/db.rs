@@ -31,6 +31,7 @@ pub fn get_connection() -> ConnectionResult {
     }
 }
 
+/// TODO: Remove in favor of `AppState`.
 #[cfg(test)]
 pub fn get_prod_connection() -> ConnectionResult {
     CONNECTION_POOL.get()

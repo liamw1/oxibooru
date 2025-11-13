@@ -20,6 +20,7 @@ pub fn routes() -> Router {
         .route("/tag-category/{name}/default", routing::put(set_default))
 }
 
+/// See [listing-tag-categories](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-tag-categories)
 async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -34,6 +35,7 @@ async fn list(
         .map_err(api::Error::from)
 }
 
+/// See [getting-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag-category)
 async fn get(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
@@ -62,6 +64,7 @@ struct CreateBody {
     color: SmallString,
 }
 
+/// See [creating-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-tag-category)
 async fn create(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -96,6 +99,7 @@ struct UpdateBody {
     color: Option<SmallString>,
 }
 
+/// See [updating-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-tag-category)
 async fn update(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
@@ -134,6 +138,7 @@ async fn update(
         .map_err(api::Error::from)
 }
 
+/// See [setting-default-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#setting-default-tag-category)
 async fn set_default(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
@@ -186,6 +191,7 @@ async fn set_default(
         .map_err(api::Error::from)
 }
 
+/// See [deleting-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-tag-category)
 async fn delete(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,

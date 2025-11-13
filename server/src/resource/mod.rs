@@ -42,15 +42,18 @@ where
     }
 }
 
-fn check_batch_results(batch_size: usize, post_count: usize) {
-    assert!(batch_size == 0 || batch_size == post_count);
+/// Validates that a batch retrieval is the expected size.
+fn check_batch_results(batch_size: usize, retrieved_size: usize) {
+    assert!(retrieved_size == 0 || retrieved_size == batch_size);
 }
 
+/// Validates that a retrieval designed to fetch one element actually does contain only one element.
 fn single<T>(mut batch: Vec<T>) -> T {
     assert_eq!(batch.len(), 1);
     batch.pop().expect("Batch contains exactly one element")
 }
 
+/// Convience function that shortens line counts.
 fn retrieve<T, E, F>(enabled: bool, mut function: F) -> Result<Vec<T>, E>
 where
     F: FnMut() -> Result<Vec<T>, E>,
@@ -71,6 +74,7 @@ where
     order_transformed_as(values, order, |value| *value.id())
 }
 
+/// Similar to [`order_as`], but extracts primary key of `values` using `get_id` function.
 fn order_transformed_as<V, F>(mut values: Vec<V>, order: &[i64], get_id: F) -> Vec<V>
 where
     F: Fn(&V) -> i64,

@@ -2,7 +2,7 @@ use num_traits::int::PrimInt;
 use std::convert::TryFrom;
 use std::num::TryFromIntError;
 
-/// Represents a point in 2D space.
+/// Represents a point on a two-dimensional integer lattice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IPoint2<T: PrimInt> {
     pub i: T,
@@ -10,13 +10,9 @@ pub struct IPoint2<T: PrimInt> {
 }
 
 impl<T: PrimInt> IPoint2<T> {
+    /// Constructs a point at coordinates (`i`, `j`).
     pub fn new(i: T, j: T) -> Self {
         Self { i, j }
-    }
-
-    #[cfg(test)]
-    pub fn zero() -> Self {
-        Self::new(T::zero(), T::zero())
     }
 }
 

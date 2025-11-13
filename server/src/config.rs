@@ -292,6 +292,7 @@ static CONFIG: LazyLock<Config> = LazyLock::new(|| {
     {
         Ok(parsed) => parsed,
         Err(err) => {
+            // We use `eprintln!` instead of `error!` here because tracing hasn't been initialized yet
             eprintln!("Could not parse config.toml. Details:\n{err}");
             std::process::exit(1);
         }

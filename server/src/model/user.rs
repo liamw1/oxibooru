@@ -41,6 +41,7 @@ pub struct User {
 }
 
 impl User {
+    /// Returns a URL to either a custom or gravatar avatar depending on the user's avatar style.
     pub fn avatar_url(&self) -> String {
         match self.avatar_style {
             AvatarStyle::Gravatar => hash::gravatar_url(&self.name),

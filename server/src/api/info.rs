@@ -30,6 +30,7 @@ struct Response {
     config: &'static PublicConfig,
 }
 
+/// See [getting-global-info](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-global-info)
 async fn get(Extension(client): Extension<Client>, Query(params): Query<ResourceParams>) -> ApiResult<Json<Response>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     db::get_connection()?.transaction(|conn| {

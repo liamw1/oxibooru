@@ -17,21 +17,30 @@ pub mod snapshot;
 pub mod tag;
 pub mod user;
 
+/// An interface for a search query builder.
 pub trait Builder<'a> {
     type Token;
     type BoxedQuery;
 
+    /// Returns a stored [`SearchCriteria`] as a mutable reference.
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token>;
+
+    /// Executes a query that returns primary keys of all rows matching search criteria.
     fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>>;
+
+    /// Executes a count query for the number of rows matching search criteria.
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64>;
 
+    /// Sets OFFSET and LIMIT for search query.
     fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
         self.criteria().set_offset_and_limit(offset, limit);
     }
 
+    /// Executes both load and count queries for all rows matching search criteria.
+    /// If the search has a random sort, then this will also mutate the user's search seed.
     fn list(&mut self, conn: &mut PgConnection) -> ApiResult<(i64, Vec<i64>)> {
         if self.criteria().random_sort {
-            change_seed(conn, self.criteria().client)?;
+            change_user_seed(conn, self.criteria().client)?;
         }
 
         let total = self.count(conn)?;
@@ -80,12 +89,15 @@ where
     T: Copy + FromStr,
     <T as FromStr>::Err: std::error::Error,
 {
+    /// Constructs a new [`SearchCriteria`] by parsing `search_criteria` [`str`] into a set terms
+    /// (filters or sorts) separated by unescaped whitespace. If a term does not contain an unescaped `:`,
+    /// then it will be interpreted as an `anonymous_token`.
     fn new(client: Client, search_criteria: &'a str, anonymous_token: T) -> Result<Self, <T as FromStr>::Err> {
         let mut filters: Vec<UnparsedFilter<T>> = Vec::new();
         let mut sorts: Vec<ParsedSort<T>> = Vec::new();
         let mut random_sort = false;
 
-        // Filters are separated by whitespace
+        // Terms are separated by whitespace
         for term in parse::split_unescaped_whitespace(search_criteria) {
             let (term, negated) = match term.strip_prefix('-') {
                 Some(unnegated_term) => (unnegated_term, true),
@@ -182,6 +194,7 @@ struct UnparsedFilter<'a, T> {
 }
 
 impl<T> UnparsedFilter<'_, T> {
+    /// Returns a version of the filter where `negated` is `false`.
     fn unnegated(self) -> Self {
         Self {
             kind: self.kind,
@@ -260,6 +273,7 @@ impl QueryCache {
     }
 }
 
+/// Sets the global postgresql random seed to the search seed of the `client`.
 fn set_seed(conn: &mut PgConnection, client: Client) -> QueryResult<()> {
     use crate::schema::user;
 
@@ -273,7 +287,8 @@ fn set_seed(conn: &mut PgConnection, client: Client) -> QueryResult<()> {
         .map(|_| ())
 }
 
-fn change_seed(conn: &mut PgConnection, client: Client) -> QueryResult<()> {
+/// Cycles search seed for `client` to a new random seed.
+fn change_user_seed(conn: &mut PgConnection, client: Client) -> QueryResult<()> {
     use crate::schema::user;
 
     if let Some(user_id) = client.id {

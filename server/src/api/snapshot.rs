@@ -14,6 +14,7 @@ pub fn routes() -> Router {
 
 const MAX_SNAPSHOTS_PER_PAGE: i64 = 1000;
 
+/// See [listing-snapshots](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-snapshots)
 async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,

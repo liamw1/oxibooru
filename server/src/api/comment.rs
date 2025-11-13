@@ -23,6 +23,7 @@ pub fn routes() -> Router {
 
 const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 
+/// See [listing-comments](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-comments)
 async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
@@ -47,6 +48,7 @@ async fn list(
     })
 }
 
+/// See [getting-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-comment)
 async fn get(
     Extension(client): Extension<Client>,
     Path(comment_id): Path<i64>,
@@ -74,6 +76,7 @@ struct CreateBody {
     text: String,
 }
 
+/// See [creating-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-comment)
 async fn create(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -104,6 +107,7 @@ struct UpdateBody {
     text: String,
 }
 
+/// See [updating-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-comment)
 async fn update(
     Extension(client): Extension<Client>,
     Path(comment_id): Path<i64>,
@@ -137,6 +141,7 @@ async fn update(
         .map_err(api::Error::from)
 }
 
+/// See [rating-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#rating-comment)
 async fn rate(
     Extension(client): Extension<Client>,
     Path(comment_id): Path<i64>,
@@ -168,6 +173,7 @@ async fn rate(
         .map_err(api::Error::from)
 }
 
+/// See [deleting-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-comment)
 async fn delete(
     Extension(client): Extension<Client>,
     Path(comment_id): Path<i64>,

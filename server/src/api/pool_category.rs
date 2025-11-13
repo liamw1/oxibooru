@@ -20,6 +20,7 @@ pub fn routes() -> Router {
         .route("/pool-category/{name}/default", routing::put(set_default))
 }
 
+/// See [listing-pool-categories](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-pool-categories)
 async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -34,6 +35,7 @@ async fn list(
         .map_err(api::Error::from)
 }
 
+/// See [getting-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-pool-category)
 async fn get(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
@@ -61,6 +63,7 @@ struct CreateBody {
     color: SmallString,
 }
 
+/// See [creating-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-pool-category)
 async fn create(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -93,6 +96,7 @@ struct UpdateBody {
     color: Option<SmallString>,
 }
 
+/// See [updating-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-pool-category)
 async fn update(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
@@ -127,6 +131,7 @@ async fn update(
         .map_err(api::Error::from)
 }
 
+/// See [setting-default-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#setting-default-pool-category)
 async fn set_default(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
@@ -180,6 +185,7 @@ async fn set_default(
         .map_err(api::Error::from)
 }
 
+/// See [deleting-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-pool-category)
 async fn delete(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,

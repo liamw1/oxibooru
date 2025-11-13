@@ -83,6 +83,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
     Ok(())
 }
 
+/// Updates database values for thumbnail size.
 pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
     if Directory::Avatars.path().try_exists()? {
         let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
@@ -138,6 +139,12 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
     Ok(())
 }
 
+/// Recomputes database table statistics. Useful for when new statistics are added
+/// or a bug is found in statistics updaters.
+///
+/// Because it computes statistics one row at a time, this function is fairly slow.
+/// A much faster version of this is done in `scripts/convert_szuru_database.sql`,
+/// but it would be very tricky to implement in Diesel.
 pub fn reset_relation_stats() -> DatabaseResult<()> {
     let mut conn = db::get_connection()?;
     let comment_count: i64 = comment::table.count().first(&mut conn)?;

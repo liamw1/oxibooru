@@ -8,6 +8,7 @@ pub struct Interval<T: PrimInt> {
 }
 
 impl<T: PrimInt> Interval<T> {
+    /// Creates a new interval with inclusive `min` and `max` bounds.
     pub fn new(min: T, max: T) -> Self {
         Self {
             start: min,
@@ -15,19 +16,22 @@ impl<T: PrimInt> Interval<T> {
         }
     }
 
+    /// Returns the lowest point contained within the interval.
     pub fn min(self) -> T {
         self.start
     }
 
+    /// Returns the highest point contained within the interval.
     pub fn max(self) -> T {
         self.end - T::one()
     }
 
-    /// Calculates the midpoint of the interval, avoiding overflow
+    /// Calculates the midpoint of the interval, avoiding overflow.
     pub fn midpoint(self) -> T {
         self.start + (self.end - self.start) / (T::one() + T::one())
     }
 
+    /// Calculates the length of the interval. Returns `0` if the interval is empty or invalid.
     pub fn length(self) -> T {
         if self.is_empty_set() {
             T::zero()
@@ -36,20 +40,24 @@ impl<T: PrimInt> Interval<T> {
         }
     }
 
+    /// Determines if `value` is contained within the interval.
     pub fn contains<U: PrimInt>(self, value: U) -> bool {
         T::from(value).is_some_and(|n| self.start <= n && n < self.end)
     }
 
+    /// Checks if the interval contains any points.
     pub fn is_empty_set(self) -> bool {
         self.start >= self.end
     }
 
+    /// Computes the intersection of two intervals `a` and `b`.
     pub fn intersection(a: Self, b: Self) -> Self {
         let start = std::cmp::max(a.start, b.start);
         let end = std::cmp::min(a.end, b.end);
         Self { start, end }
     }
 
+    /// Computes an evenly spaced array of `N` points within the interval.
     pub fn linspace<const N: usize>(self) -> [T; N] {
         match N {
             0 => [T::zero(); N],
@@ -72,6 +80,7 @@ impl<T: PrimInt> Interval<T> {
         }
     }
 
+    /// Shrinks interval by `n` units on both ends.
     pub fn shrink(&mut self, n: T) {
         self.start = self.start.saturating_add(n);
         self.end = self.end.saturating_sub(n);
