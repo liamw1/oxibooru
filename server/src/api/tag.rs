@@ -27,6 +27,7 @@ pub fn routes() -> Router {
 const MAX_TAGS_PER_PAGE: i64 = 1000;
 const MAX_TAG_SIBLINGS: i64 = 1000;
 
+/// See [listing-tags](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-tags)
 async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
@@ -52,6 +53,7 @@ async fn list(
     })
 }
 
+/// See [getting-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag)
 async fn get(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
@@ -84,6 +86,7 @@ struct TagSiblings {
     results: Vec<TagSibling>,
 }
 
+/// See [getting-tag-siblings](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag-siblings)
 async fn get_siblings(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
@@ -132,6 +135,7 @@ struct CreateBody {
     suggestions: Option<Vec<SmallString>>,
 }
 
+/// See [creating-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-tag)
 async fn create(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -181,6 +185,7 @@ async fn create(
         .map_err(api::Error::from)
 }
 
+/// See [merging-tags](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-tags)
 async fn merge(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -227,6 +232,7 @@ struct UpdateBody {
     suggestions: Option<Vec<SmallString>>,
 }
 
+/// See [updating-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-tag)
 async fn update(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
@@ -298,6 +304,7 @@ async fn update(
         .map_err(api::Error::from)
 }
 
+/// See [deleting-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-tag)
 async fn delete(
     Extension(client): Extension<Client>,
     Path(name): Path<String>,

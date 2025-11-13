@@ -6,7 +6,7 @@ use std::ops::Range;
 use std::str::FromStr;
 use time::{Date, Duration, Month, OffsetDateTime, Time};
 
-/// This can be replaced by official Pattern trait when stabilized.
+/// NOTE: This can be replaced by official Pattern trait when stabilized.
 pub trait Pattern: Copy {
     fn matches(self, c: char) -> bool;
 
@@ -30,6 +30,7 @@ impl Pattern for IsWhitespace {
     }
 }
 
+/// Like [`str::split_whitespace`], but ignores whitespace escaped with `\`.
 pub fn split_unescaped_whitespace(text: &str) -> impl Iterator<Item = &str> {
     SplitUnescaped::new(text, IsWhitespace).filter(|term| !term.is_empty())
 }
@@ -97,6 +98,7 @@ where
         .map_err(api::Error::from)
 }
 
+/// A general iterator over patterns that are not escaped with `\`.
 struct SplitUnescaped<'a, P> {
     text: &'a str,
     start: usize,
@@ -132,6 +134,7 @@ impl<'a, P: Pattern> Iterator for SplitUnescaped<'a, P> {
     }
 }
 
+/// Determines if character at `index` in `text` is escaped with `\`.
 fn is_unescaped(text: &str, index: usize) -> bool {
     let backslash_count = text
         .chars()
@@ -231,6 +234,7 @@ fn parse_time(time: &str) -> Result<Range<DateTime>, TimeParsingError> {
     Ok(start_date..end_date.into())
 }
 
+/// Tries to parse `text` into a [`Month`]. Returns [`TimeParsingError`] on failure.
 fn parse_month(text: &str) -> Result<Month, TimeParsingError> {
     let number: u8 = text.parse()?;
     number.try_into().map_err(TimeParsingError::from)

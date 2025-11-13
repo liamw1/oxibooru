@@ -17,6 +17,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use tracing::warn;
 use url::Url;
 
+/// Attempts to authorizes user by either username/password or user token.
 pub async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
     let auth_header = request.headers().get(AUTHORIZATION);
     let client = if let Some(auth_value) = auth_header {
@@ -38,6 +39,7 @@ pub async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
     Ok(next.run(request).await)
 }
 
+/// Sends snapshot data to webhook URLs after modifying requests.
 pub async fn post_to_webhooks(request: Request, next: Next) -> ApiResult<Response> {
     let can_modify_database = matches!(request.method(), &Method::POST | &Method::PUT | &Method::DELETE);
     let response = next.run(request).await;
@@ -59,6 +61,7 @@ pub async fn post_to_webhooks(request: Request, next: Next) -> ApiResult<Respons
     Ok(response)
 }
 
+/// Initializes last posted snapshot counter using highest ID snapshot
 pub fn initialize_snapshot_counter(conn: &mut PgConnection) -> QueryResult<()> {
     let latest_snapshot_id = snapshot::table
         .select(snapshot::id)
@@ -72,6 +75,7 @@ pub fn initialize_snapshot_counter(conn: &mut PgConnection) -> QueryResult<()> {
 
 static LAST_POSTED_SNAPSHOT: AtomicI64 = AtomicI64::new(i64::MAX);
 
+/// Sends `snapshot` data to webhooks if it hasn't already been posted by another thread.
 fn post_snapshot(snapshot: Snapshot) {
     loop {
         let last_posted_snapshot = LAST_POSTED_SNAPSHOT.load(Ordering::SeqCst);
@@ -93,6 +97,7 @@ fn post_snapshot(snapshot: Snapshot) {
     }
 }
 
+/// Sends `snapshot` data to given `url`.
 async fn post_to_webhook(url: Url, snapshot: Arc<Snapshot>) {
     const APPLICATION_JSON: HeaderValue = HeaderValue::from_static("application/json");
     let post = async || {

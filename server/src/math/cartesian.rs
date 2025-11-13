@@ -10,12 +10,14 @@ pub struct CartesianProduct<L, R, const N: usize, const M: usize> {
 }
 
 impl<L, R, const N: usize, const M: usize> CartesianProduct<L, R, N, M> {
+    /// Constructs a new [`CartesianProduct`] from two sets `left` and `right`.
     pub fn new(left: [L; N], right: [R; M]) -> CartesianProduct<L, R, N, M> {
         CartesianProduct { left, right }
     }
 
-    pub fn at(&self, i: usize, j: usize) -> (&L, &R) {
-        (&self.left[i], &self.right[j])
+    /// Returns the value of the cartesian product at the given two-dimensional index.
+    pub fn at(&self, index: IPoint2<usize>) -> (&L, &R) {
+        (&self.left[index.i], &self.right[index.j])
     }
 
     #[cfg(test)]
@@ -28,10 +30,12 @@ impl<L, R, const N: usize, const M: usize> CartesianProduct<L, R, N, M> {
         &self.right
     }
 
-    pub fn bounds(&self) -> IRect<usize> {
+    /// Returns the dimensions of the cartesian product as an [`IRect`].
+    pub fn dimensions(&self) -> IRect<usize> {
         IRect::new_zero_based(self.left.len() - 1, self.right.len() - 1)
     }
 
+    /// Returns an iterator over the elements of the cartesian product.
     pub fn iter(&'_ self) -> CartesianProductIter<'_, L, R, N, M> {
         CartesianProductIter {
             cartesian_product: self,
@@ -39,9 +43,10 @@ impl<L, R, const N: usize, const M: usize> CartesianProduct<L, R, N, M> {
         }
     }
 
+    /// Returns an iterator over the stored elements and their corresponding indices within the product.
     pub fn indexed_iter(&self) -> impl Iterator<Item = (IPoint2<usize>, (&L, &R))> {
         // This is a bit wasteful, since CartesianProductIter already contains an index
-        self.bounds().iter().zip(self.iter())
+        self.dimensions().iter().zip(self.iter())
     }
 }
 
@@ -53,7 +58,7 @@ pub struct CartesianProductIter<'a, L, R, const N: usize, const M: usize> {
 impl<'a, L, R, const N: usize, const M: usize> Iterator for CartesianProductIter<'a, L, R, N, M> {
     type Item = (&'a L, &'a R);
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current > self.cartesian_product.bounds().max_corner() {
+        if self.current > self.cartesian_product.dimensions().max_corner() {
             return None;
         }
 
@@ -66,7 +71,7 @@ impl<'a, L, R, const N: usize, const M: usize> Iterator for CartesianProductIter
             self.current.i += 1;
         }
 
-        Some(self.cartesian_product.at(current.i, current.j))
+        Some(self.cartesian_product.at(current))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

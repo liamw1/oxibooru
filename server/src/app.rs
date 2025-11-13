@@ -21,6 +21,7 @@ pub fn num_rayon_threads() -> usize {
         .unwrap_or(1)
 }
 
+/// Initializes logging using [`tracing_subscriber`].
 pub fn enable_tracing() {
     let filter = match EnvFilter::try_new(&config::get().log_filter) {
         Ok(filter) => filter,

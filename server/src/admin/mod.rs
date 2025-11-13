@@ -39,10 +39,12 @@ pub enum AdminTask {
     ResetThumbnailSizes,
 }
 
+/// Checks if server was started in admin mode.
 pub fn enabled() -> bool {
     std::env::args().any(|arg| arg == "--admin")
 }
 
+/// Starts server CLI.
 pub fn command_line_mode(conn: &mut PgConnection) {
     print_info();
 
@@ -87,6 +89,7 @@ impl TryFrom<&str> for LoopState {
     }
 }
 
+/// An atomic counter that prints message with the current count at regular intervals.
 struct ProgressReporter {
     message: &'static str,
     print_interval: Option<u64>,
@@ -94,6 +97,8 @@ struct ProgressReporter {
 }
 
 impl ProgressReporter {
+    /// Creates a new [`ProgressReporter`] that will print "`message`: {count}"
+    /// to the info logs every `print_interval` increments.
     fn new(message: &'static str, print_interval: Option<u64>) -> Self {
         Self {
             message,
@@ -102,6 +107,7 @@ impl ProgressReporter {
         }
     }
 
+    /// Atomically increments the count.
     fn increment(&self) {
         let count = self.count.fetch_add(1, Ordering::SeqCst) + 1;
         if let Some(print_interval) = self.print_interval
@@ -111,11 +117,13 @@ impl ProgressReporter {
         }
     }
 
+    /// Immediately prints "{message}: {count}" to the info logs.
     fn report(&self) {
         info!("{}: {}", self.message, self.count.load(Ordering::SeqCst));
     }
 }
 
+/// Prints some helpful information about the CLI to the console.
 fn print_info() {
     let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
     println!(
@@ -126,6 +134,7 @@ fn print_info() {
     println!("Available commands: {possible_arguments:?}\n");
 }
 
+/// Prompts the user for input with message `prompt`.
 fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
     let stdin = std::io::stdin();
     let mut stdout = std::io::stdout();
@@ -152,6 +161,9 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
     }
 }
 
+/// Repeatedly performs some `function` that prompts for user input until it returns
+/// either [`LoopState::Stop`] or [`LoopState::Exit`], the latter of which terminates
+/// the program immediately.
 fn user_input_loop<F>(conn: &mut PgConnection, mut function: F)
 where
     F: FnMut(&mut PgConnection, &mut String) -> Result<LoopState, String>,
@@ -195,6 +207,7 @@ fn run_task(conn: &mut PgConnection, task: AdminTask) -> DatabaseResult<()> {
     }
 }
 
+/// Extrats the post ID from a `path` to post content.
 fn get_post_id(path: &Path) -> Option<i64> {
     let path_str = path.file_name()?.to_string_lossy();
     let (post_id, _tail) = path_str.split_once('_')?;

@@ -141,6 +141,8 @@ pub enum MimeType {
 }
 
 impl MimeType {
+    /// Attempts to construct a [`MimeType`] from `extension`.
+    /// Returns [`ParseExtensionError`] if `extension` is not supported.
     pub fn from_extension(extension: &str) -> Result<Self, ParseExtensionError> {
         match extension {
             "avif" | "AVIF" => Ok(Self::Avif),
@@ -159,11 +161,14 @@ impl MimeType {
         }
     }
 
+    /// Attempts to extract [`MimeType`] from `path` extension.
+    /// Returns [`None`] if `path` has no extension or has one that's not supported.
     pub fn from_path(path: &Path) -> Option<Self> {
         let extension = path.extension()?.to_string_lossy();
         Self::from_extension(&extension).ok()
     }
 
+    /// Returns corresponding extension for [`MimeType`].
     pub fn extension(self) -> &'static str {
         match self {
             Self::Avif => "avif",
@@ -179,6 +184,8 @@ impl MimeType {
         }
     }
 
+    /// Returns corresponding [`ImageFormat`] if [`MimeType`] is an image format.
+    /// Returns [`None`] otherwise.
     pub fn to_image_format(self) -> Option<ImageFormat> {
         match self {
             MimeType::Avif => Some(ImageFormat::Avif),
@@ -268,16 +275,19 @@ pub struct PostFlags {
 }
 
 impl PostFlags {
+    /// Constructs a new [`PostFlags`] with no flags set.
     pub const fn new() -> Self {
         Self { flags: 0 }
     }
 
+    /// Constructs a new [`PostFlags`] with a single `flag` set.
     pub const fn new_with(flag: PostFlag) -> Self {
         Self {
             flags: 1 << flag as u16,
         }
     }
 
+    /// Constructs a new [`PostFlags`] with a set of `flags` set.
     pub fn from_slice(flags: &[PostFlag]) -> Self {
         flags.iter().fold(Self::new(), |flags, &flag| flags | flag)
     }

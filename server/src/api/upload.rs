@@ -26,11 +26,13 @@ struct UploadResponse {
     token: String,
 }
 
+/// See [uploading-temporary-file](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#uploading-temporary-file)
 async fn upload_from_url(body: UploadBody) -> ApiResult<Json<UploadResponse>> {
     let token = download::from_url(body.content_url).await?;
     Ok(Json(UploadResponse { token }))
 }
 
+/// See [uploading-temporary-file](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#uploading-temporary-file)
 async fn upload_handler(
     Extension(client): Extension<Client>,
     body: JsonOrMultipart<UploadBody>,

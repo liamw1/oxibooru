@@ -79,8 +79,8 @@
         - [Updating user token](#updating-user-token)
         - [Deleting user token](#deleting-user-token)
     - Password reset
-        - [Password reset - step 1: mail request](#password-reset---step-1-mail-request)
-        - [Password reset - step 2: confirmation](#password-reset---step-2-confirmation)
+        - [Request password reset](#request-password-reset)
+        - [Confirm password reset](#confirm-password-reset)
     - Snapshots
         - [Listing snapshots](#listing-snapshots)
     - Global info
@@ -2005,7 +2005,7 @@ data.
 
     Deletes existing user token.
 
-## Password reset - step 1: mail request
+## Request password reset
 - **Request**
 
     `GET /password-reset/<email-or-name>`
@@ -2029,7 +2029,7 @@ data.
     mailbox, which is a strong indication they are the rightful owner of the
     account.
 
-## Password reset - step 2: confirmation
+## Confirm password reset
 - **Request**
 
     `POST /password-reset/<email-or-name>`

@@ -73,6 +73,7 @@ pub struct PostRelation {
 diesel::joinable!(post_relation -> post (parent_id));
 
 impl PostRelation {
+    /// Creates a bidirectional pair of [`PostRelation`]s for two posts with ids `id_1` and `id_2`.
     pub fn new_pair(id_1: i64, id_2: i64) -> [Self; 2] {
         [PostRelation::new(id_1, id_2), PostRelation::new(id_2, id_1)]
     }
@@ -226,6 +227,11 @@ pub struct PostSignature {
 }
 
 impl PostSignature {
+    /// Retrieves a list of potential candidates for similar posts from the database.
+    ///
+    /// This is designed avoid false negatives with as few false positives as possible,
+    /// but it's still very coarse and the vast majority of candidates will still be false positives.
+    /// This should only be used in conjuction with a more fine-grained but slower similarity test.
     pub fn find_similar_candidates(conn: &mut PgConnection, words: &[i32; NUM_WORDS]) -> QueryResult<Vec<Self>> {
         conn.transaction(|conn| {
             // Postgres really wants to perform a seq scan here, which is much slower than

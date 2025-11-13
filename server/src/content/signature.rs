@@ -10,9 +10,20 @@ pub const NUM_WORDS: usize = 100; // Number indexes to create from signature
 pub const COMPRESSED_SIGNATURE_LEN: usize = SIGNATURE_LEN.div_ceil(SIGNATURE_DIGITS);
 pub const SIGNATURE_VERSION: i32 = 1; // Bump this whenever post signatures change
 
-pub struct Cache {
+/// Stores uncompressed `signature` and `norm`.
+pub struct SignatureCache {
     signature: [u8; SIGNATURE_LEN],
     norm: f64,
+}
+
+impl SignatureCache {
+    pub fn new(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> Self {
+        let signature = uncompress(compressed_signature);
+        Self {
+            signature,
+            norm: norm(&signature),
+        }
+    }
 }
 
 /// Calculates a compact "signature" for an image that can be used for similarity search.
@@ -27,24 +38,17 @@ pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_LEN] {
     compress(&signature)
 }
 
-pub fn cache(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> Cache {
-    let signature = uncompress(compressed_signature);
-    Cache {
-        signature,
-        norm: norm(&signature),
-    }
-}
-
 /// Computes a "distance" between two images based on their signatures.
 /// Result is a number in the interval \[0, 1\].
 ///
 /// The lower the number, the more similar the two images are.
-pub fn distance(signature_a_cache: &Cache, signature_b_compressed: &[i64; COMPRESSED_SIGNATURE_LEN]) -> f64 {
+pub fn distance(signature: &SignatureCache, compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> f64 {
     const _MAX_DISTANCE: i32 = (NUM_SYMBOLS as i32).pow(2) * SIGNATURE_LEN as i32;
     const _: () = assert!(_MAX_DISTANCE as i64 <= i32::MAX as i64); // Ensures no i32 overflow when computing distance
 
-    let signature_b = uncompress(signature_b_compressed);
-    let l2_squared_distance: i32 = signature_a_cache
+    let signature_a = signature;
+    let signature_b = uncompress(compressed_signature);
+    let l2_squared_distance: i32 = signature_a
         .signature
         .map(i32::from)
         .into_iter()
@@ -53,7 +57,7 @@ pub fn distance(signature_a_cache: &Cache, signature_b_compressed: &[i64; COMPRE
         .sum();
     let l2_distance = f64::from(l2_squared_distance).sqrt();
 
-    let denominator = signature_a_cache.norm + norm(&signature_b);
+    let denominator = signature_a.norm + norm(&signature_b);
     if denominator == 0.0 {
         0.0
     } else {
@@ -129,9 +133,10 @@ where
     array
 }
 
-fn crop_position(iter: impl Iterator<Item = u64>, total_delta: u64) -> usize {
+/// Determines crop position on a single side of an image using row/column deltas.
+fn crop_position(delta_iter: impl Iterator<Item = u64>, total_delta: u64) -> usize {
     let delta_limit = CROP_PERCENTILE * total_delta / 100;
-    let iter = std::iter::once(0).chain(iter);
+    let iter = std::iter::once(0).chain(delta_iter);
     iter.scan(0, |cumulative_delta, delta| {
         *cumulative_delta += delta;
         Some(*cumulative_delta)
@@ -140,6 +145,7 @@ fn crop_position(iter: impl Iterator<Item = u64>, total_delta: u64) -> usize {
     .unwrap_or(0)
 }
 
+/// Determines crop bounds in one dimension using computed row/column `deltas`.
 fn crop(deltas: &[u64]) -> Interval<u32> {
     let total_delta = deltas.iter().sum();
     let lower = crop_position(deltas.iter().copied(), total_delta);
@@ -300,6 +306,7 @@ fn normalize(differences: &[i16; SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
     array_from_iter(signature_iter)
 }
 
+/// Compresses an `uncompressed_signature` for efficient database serialization.
 fn compress(uncompressed_signature: &[u8; SIGNATURE_LEN]) -> [i64; COMPRESSED_SIGNATURE_LEN] {
     let compression_iter = uncompressed_signature.chunks(SIGNATURE_DIGITS).map(|chunk| {
         chunk
@@ -312,6 +319,7 @@ fn compress(uncompressed_signature: &[u8; SIGNATURE_LEN]) -> [i64; COMPRESSED_SI
     array_from_iter(compression_iter)
 }
 
+/// Uncompresses a `compressed_signature`.
 fn uncompress(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
     // Create divisor as NonZeroU64 to guarantee compiler doesn't generate divide-by-zero check
     const DIVISOR: NonZeroU64 = NonZeroU64::new(NUM_SYMBOLS as u64).expect("NUM_SYMBOLS is non-zero");
@@ -329,6 +337,7 @@ fn uncompress(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> [u8; SI
     array_from_iter(decompression_iter)
 }
 
+/// Computes L2 norm of the given `signature`.
 fn norm(signature: &[u8; SIGNATURE_LEN]) -> f64 {
     const _MAX_NORM: i32 = ((NUM_SYMBOLS as i32) / 2).pow(2) * SIGNATURE_LEN as i32;
     const _: () = assert!(_MAX_NORM as i64 <= i32::MAX as i64); // Ensures no i32 overflow when computing norm
@@ -353,7 +362,7 @@ mod test {
         let (monochrome, _) = image_properties("monochrome.png")?;
         let (gradient, _) = image_properties("gradient.png")?;
 
-        let one_pixel_signature_cache = cache(&one_pixel);
+        let one_pixel_signature_cache = SignatureCache::new(&one_pixel);
         assert_eq!(distance(&one_pixel_signature_cache, &monochrome), 0.0);
         assert_ne!(distance(&one_pixel_signature_cache, &gradient), 0.0);
         Ok(())
@@ -375,11 +384,11 @@ mod test {
         let (image_similar, _) = image_properties("starry_night_similar.png")?;
 
         // Identical images of different formats
-        assert_eq!(distance(&cache(&png), &tiff), 0.0);
+        assert_eq!(distance(&SignatureCache::new(&png), &tiff), 0.0);
         // Similar images of same format
-        assert!((distance(&cache(&image), &image_similar) - 0.21172875793283555).abs() < 1e-8);
+        assert!((distance(&SignatureCache::new(&image), &image_similar) - 0.21172875793283555).abs() < 1e-8);
         // Different images
-        assert!((distance(&cache(&png), &image) - 0.7148876237445337).abs() < 1e-8);
+        assert!((distance(&SignatureCache::new(&png), &image) - 0.7148876237445337).abs() < 1e-8);
         Ok(())
     }
 
@@ -392,7 +401,7 @@ mod test {
         let (lisa_cat_signature, lisa_cat_indexes) = image_properties("lisa-cat.jpg")?;
         let (starry_night_signature, _starry_night_indexes) = image_properties("starry_night.png")?;
 
-        let lisa_signature_cache = cache(&lisa_signature);
+        let lisa_signature_cache = SignatureCache::new(&lisa_signature);
         assert!(distance(&lisa_signature_cache, &lisa_border_signature) < 0.2);
         assert!(distance(&lisa_signature_cache, &lisa_large_border_signature) < 0.2);
         assert!(distance(&lisa_signature_cache, &lisa_wide_signature) < 0.25);

@@ -15,7 +15,7 @@ use hmac::{Mac, SimpleHmac};
 use std::path::PathBuf;
 use std::str::FromStr;
 
-/// Stores a `post_id` and post `hash`.
+/// Stores a `post_id` and cached post `hash`.
 pub struct PostHash {
     post_id: i64,
     hash: String,
@@ -24,7 +24,7 @@ pub struct PostHash {
 impl PostHash {
     pub fn new(post_id: i64) -> Self {
         Self {
-            hash: URL_SAFE_NO_PAD.encode(hmac_hash(&post_id.to_le_bytes()).into_bytes()),
+            hash: compute_url_safe_hash(&post_id.to_le_bytes()),
             post_id,
         }
     }
@@ -33,10 +33,13 @@ impl PostHash {
         self.post_id
     }
 
+    /// Returns URL to post content.
     pub fn content_url(&self, content_type: MimeType) -> String {
         format!("{}/posts/{}_{}.{}", config::get().data_url, self.post_id, self.hash, content_type.extension())
     }
 
+    /// Returns URL to post thumbnail. Will be a generated thumbnail by default or
+    /// a custom thumbnail if it exists.
     pub fn thumbnail_url(&self) -> String {
         let thumbnail_folder = if self.custom_thumbnail_path().exists() {
             "custom-thumbnails"
@@ -46,6 +49,7 @@ impl PostHash {
         format!("{}/{thumbnail_folder}/{}_{}.jpg", config::get().data_url, self.post_id, self.hash)
     }
 
+    /// Returns path to post content on disk.
     pub fn content_path(&self, content_type: MimeType) -> PathBuf {
         format!(
             "{}/{}_{}.{}",
@@ -57,10 +61,12 @@ impl PostHash {
         .into()
     }
 
+    /// Returns path to generated post thumbnail on disk.
     pub fn generated_thumbnail_path(&self) -> PathBuf {
         format!("{}/{}_{}.jpg", filesystem::as_str(Directory::GeneratedThumbnails), self.post_id, self.hash).into()
     }
 
+    /// Returns path to custom post thumbnail on disk.
     pub fn custom_thumbnail_path(&self) -> PathBuf {
         format!("{}/{}_{}.jpg", filesystem::as_str(Directory::CustomThumbnails), self.post_id, self.hash).into()
     }
@@ -69,6 +75,8 @@ impl PostHash {
 pub type Checksum = GenericChecksum<32>;
 pub type Md5Checksum = GenericChecksum<16>;
 
+/// Represents a fixed-size checksum of length `N`.
+/// Can be deserialized from the database without allocation.
 #[derive(Debug, Clone, PartialEq, Eq, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Bytea)]
 pub struct GenericChecksum<const N: usize>([u8; N]);
@@ -127,10 +135,12 @@ pub fn gravatar_url(username: &str) -> String {
     format!("https://gravatar.com/avatar/{hex_encoded_hash}?d=retro&s={}", config::get().thumbnails.avatar_width)
 }
 
+/// Returns URL to custom user avatar.
 pub fn custom_avatar_url(username: &str) -> String {
     format!("{}/avatars/{}.png", config::get().data_url, username.to_lowercase())
 }
 
+/// Returns path to custom user avatar on disk.
 pub fn custom_avatar_path(username: &str) -> PathBuf {
     format!("{}/{}.png", filesystem::as_str(Directory::Avatars), username.to_lowercase()).into()
 }
@@ -143,13 +153,16 @@ pub fn compute_checksum(content: &[u8]) -> Checksum {
     GenericChecksum(hash.into_bytes().into())
 }
 
+/// Computes MD5 checksum. Not used for duplicate detection due to its vulnerability
+/// to collisions.
 pub fn compute_md5_checksum(content: &[u8]) -> Md5Checksum {
     let digest = md5::compute(content);
     GenericChecksum(digest.0)
 }
 
-pub fn compute_url_safe_hash(content: &str) -> String {
-    let hash = hmac_hash(content.as_bytes());
+/// Similar to [`compute_checksum`], except checksum is base64 encoded.
+pub fn compute_url_safe_hash(content: &[u8]) -> String {
+    let hash = hmac_hash(content);
     URL_SAFE_NO_PAD.encode(hash.into_bytes())
 }
 

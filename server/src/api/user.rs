@@ -37,6 +37,7 @@ pub fn routes() -> Router {
 
 const MAX_USERS_PER_PAGE: i64 = 1000;
 
+/// See [listing-users](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-users)
 async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
@@ -62,6 +63,7 @@ async fn list(
     })
 }
 
+/// See [getting-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
 async fn get(
     Extension(client): Extension<Client>,
     Path(username): Path<String>,
@@ -107,6 +109,7 @@ struct CreateBody {
     avatar_url: Option<Url>,
 }
 
+/// See [creating-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
 async fn create(client: Client, params: ResourceParams, body: CreateBody) -> ApiResult<Json<UserInfo>> {
     let creation_rank = body.rank.unwrap_or(config::default_rank());
     if creation_rank == UserRank::Anonymous {
@@ -167,6 +170,7 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         .map_err(api::Error::from)
 }
 
+/// Creates a user from either a JSON body or a multipart form.
 async fn create_handler(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -205,6 +209,7 @@ struct UpdateBody {
     avatar_url: Option<Url>,
 }
 
+/// See [updating-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
 async fn update(
     client: Client,
     username: String,
@@ -325,6 +330,7 @@ async fn update(
         .map_err(api::Error::from)
 }
 
+/// Updates a user from either a JSON body or a multipart form.
 async fn update_handler(
     Extension(client): Extension<Client>,
     Path(username): Path<String>,
@@ -347,6 +353,7 @@ async fn update_handler(
     }
 }
 
+/// See [deleting-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-user)
 async fn delete(
     Extension(client): Extension<Client>,
     Path(username): Path<String>,

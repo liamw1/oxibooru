@@ -149,6 +149,7 @@ fn flash_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
     Ok(images.into_iter().next())
 }
 
+/// Returns maximum decoded image size.
 fn image_reader_limits() -> Limits {
     const GB: u64 = 1024_u64.pow(3);
 
@@ -157,10 +158,11 @@ fn image_reader_limits() -> Limits {
     limits
 }
 
-fn rgb24_frame(data: &[u8], width: u32, height: u32, stride: usize) -> DynamicImage {
+/// Converts raw `video_frame` into a [`DynamicImage`].
+fn rgb24_frame(video_frame: &[u8], width: u32, height: u32, stride: usize) -> DynamicImage {
     let rgb_image = RgbImage::from_fn(width, height, |x, y| {
         let offset = y as usize * stride + x as usize * 3;
-        Rgb([data[offset], data[offset + 1], data[offset + 2]])
+        Rgb([video_frame[offset], video_frame[offset + 1], video_frame[offset + 2]])
     });
     DynamicImage::ImageRgb8(rgb_image)
 }

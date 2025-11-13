@@ -38,7 +38,7 @@ impl FileContents {
         Ok(Self { data, mime_type })
     }
 
-    /// Saves file data to temporary upload directory.
+    /// Saves file data to temporary upload directory and returns the name of the file written.
     pub fn save(&self) -> std::io::Result<String> {
         filesystem::save_uploaded_file(&self.data, self.mime_type)
     }
@@ -47,6 +47,11 @@ impl FileContents {
 /// Contains either the name of a file uploaded to the temporary uploads
 /// directory, a url pointing to a file on the web, or the contents of the
 /// file sent via a multipart request.
+///
+/// Methods on this object consume it and will save the content to the
+/// temporary uploads directory (if not already present) before operating on it.
+/// This is because some operations such as video decoding require a path to the
+/// content on disk.
 pub enum Content {
     DirectUpload(FileContents),
     Token(String),
@@ -54,6 +59,11 @@ pub enum Content {
 }
 
 impl Content {
+    /// Constructs a new [`Content`] from either an in-memory `direct_upload`, a `token` which represents
+    /// a file in the temporary uploads directory, or a URL to download the content from.
+    ///
+    /// If multiple ways of retrieving content are given, the method of retrieving the content will
+    /// be the first argument that is not [`None`].
     pub fn new(direct_upload: Option<FileContents>, token: Option<String>, url: Option<Url>) -> Option<Self> {
         match (direct_upload, token, url) {
             (Some(file), _, _) => Some(Self::DirectUpload(file)),
@@ -63,6 +73,7 @@ impl Content {
         }
     }
 
+    /// Saves content to temporary uploads directory and returns the name of the file written.
     pub async fn save(self) -> ApiResult<String> {
         match self {
             Self::DirectUpload(file_contents) => file_contents.save().map_err(api::Error::from),
@@ -71,6 +82,7 @@ impl Content {
         }
     }
 
+    /// Computes thumbnail for uploaded content.
     pub async fn thumbnail(self, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
         let token = self.save().await?;
         let file_contents = FileContents::from_token(&token)?;
@@ -78,17 +90,20 @@ impl Content {
         decode::representative_image(&file_contents, &file_path).map(|image| thumbnail::create(&image, thumbnail_type))
     }
 
+    /// Computes properties for uploaded content.
     pub async fn compute_properties(self) -> ApiResult<CachedProperties> {
         let token = self.save().await?;
         cache::compute_properties(token)
     }
 
+    /// Retrieves content properties from cache or computes them if not present in cache.
     pub async fn get_or_compute_properties(self) -> ApiResult<CachedProperties> {
         let token = self.save().await?;
         cache::get_or_compute_properties(token)
     }
 }
 
+/// Used for bodies which can either be expressed as JSON or Multipart form, like post updates.
 pub enum JsonOrMultipart<T> {
     Json(T),
     Multipart(Multipart),

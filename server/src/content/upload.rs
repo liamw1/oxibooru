@@ -24,6 +24,7 @@ pub struct Body<const N: usize> {
     pub metadata: Option<Vec<u8>>,
 }
 
+/// Attempts to extract given `fields` and optional JSON "metadata" field from given `form_data`.
 pub async fn extract<const N: usize>(mut form_data: Multipart, fields: [PartName; N]) -> ApiResult<Body<N>> {
     let mut files = std::array::from_fn(|_| None);
     let mut metadata = None;

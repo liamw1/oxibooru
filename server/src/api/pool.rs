@@ -26,6 +26,7 @@ pub fn routes() -> Router {
 
 const MAX_POOLS_PER_PAGE: i64 = 1000;
 
+/// See [lsting-pools](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-pools)
 async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
@@ -51,6 +52,7 @@ async fn list(
     })
 }
 
+/// See [getting-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-pool)
 async fn get(
     Extension(client): Extension<Client>,
     Path(pool_id): Path<i64>,
@@ -79,6 +81,7 @@ struct CreateBody {
     posts: Option<Vec<i64>>,
 }
 
+/// See [creating-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-pool)
 async fn create(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -124,6 +127,7 @@ async fn create(
         .map_err(api::Error::from)
 }
 
+/// See [merging-pools](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-pools)
 async fn merge(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -163,6 +167,7 @@ struct UpdateBody {
     posts: Option<Vec<i64>>,
 }
 
+/// See [updating-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-pool)
 async fn update(
     Extension(client): Extension<Client>,
     Path(pool_id): Path<i64>,
@@ -221,6 +226,7 @@ async fn update(
         .map_err(api::Error::from)
 }
 
+/// See [deleting-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-pool)
 async fn delete(
     Extension(client): Extension<Client>,
     Path(pool_id): Path<i64>,

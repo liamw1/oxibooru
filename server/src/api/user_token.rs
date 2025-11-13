@@ -21,6 +21,7 @@ pub fn routes() -> Router {
         .route("/user-token/{username}/{token}", routing::put(update).delete(delete))
 }
 
+/// See [listing-user-tokens](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-user-tokens)
 async fn list(
     Extension(client): Extension<Client>,
     Path(username): Path<String>,
@@ -64,6 +65,7 @@ struct CreateBody {
     expiration_time: Option<DateTime>,
 }
 
+/// See [creating-user-token](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-user-token)
 async fn create(
     Extension(client): Extension<Client>,
     Path(username): Path<String>,
@@ -122,6 +124,7 @@ struct UpdateBody {
     expiration_time: Option<Option<DateTime>>,
 }
 
+/// See [updating-user-token](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-user-token)
 async fn update(
     Extension(client): Extension<Client>,
     Path((username, token)): Path<(String, Uuid)>,
@@ -164,6 +167,7 @@ async fn update(
     Ok(Json(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), updated_user_token, &fields)))
 }
 
+/// See [deleting-user-token](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-user-token)
 async fn delete(
     Extension(client): Extension<Client>,
     Path((username, token)): Path<(String, Uuid)>,

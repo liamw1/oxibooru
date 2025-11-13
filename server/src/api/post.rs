@@ -1,6 +1,7 @@
 use crate::api::{ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
 use crate::auth::Client;
 use crate::content::hash::PostHash;
+use crate::content::signature::SignatureCache;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
 use crate::content::{Content, FileContents, JsonOrMultipart, signature, upload};
@@ -72,6 +73,7 @@ where
     db::get_connection()?.transaction(update)
 }
 
+/// See [listing-posts](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-posts)
 async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
@@ -97,6 +99,7 @@ async fn list(
     })
 }
 
+/// See [getting-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-post)
 async fn get(
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
@@ -122,6 +125,7 @@ struct PostNeighbors {
     next: Option<PostInfo>,
 }
 
+/// See [getting-around-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-around-post)
 async fn get_neighbors(
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
@@ -201,6 +205,7 @@ async fn get_neighbors(
     })
 }
 
+/// See [getting-featured-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-featured-post)
 async fn get_featured(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -229,6 +234,7 @@ struct FeatureBody {
     id: i64,
 }
 
+/// See [featuring-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#featuring-post)
 async fn feature(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -282,6 +288,7 @@ struct ReverseSearchResponse {
     similar_posts: Vec<SimilarPost>,
 }
 
+/// See [reverse-image-search](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#reverse-image-search)
 async fn reverse_search(
     client: Client,
     params: ResourceParams,
@@ -319,7 +326,7 @@ async fn reverse_search(
             info!("Found {} similar signatures", similar_signature_candidates.len());
 
             // Filter candidates based on similarity score
-            let content_signature_cache = signature::cache(&content_properties.signature);
+            let content_signature_cache = SignatureCache::new(&content_properties.signature);
             let mut similar_signatures: Vec<_> = similar_signature_candidates
                 .into_iter()
                 .filter_map(|post_signature| {
@@ -350,6 +357,7 @@ async fn reverse_search(
         .map(Json)
 }
 
+/// Performs reverse image search using either a JSON body or a multipart form.
 async fn reverse_search_handler(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -399,6 +407,7 @@ struct CreateBody {
     flags: Option<Vec<PostFlag>>,
 }
 
+/// See [creating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-post)
 async fn create(client: Client, params: ResourceParams, body: CreateBody) -> ApiResult<Json<PostInfo>> {
     let required_rank = if body.anonymous.unwrap_or(false) {
         config::privileges().post_create_anonymous
@@ -488,6 +497,7 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         .map_err(api::Error::from)
 }
 
+/// Creates a post from either a JSON body or a multipart form.
 async fn create_handler(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -517,6 +527,7 @@ struct PostMergeBody {
     replace_content: bool,
 }
 
+/// See [merging-posts](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-posts)
 async fn merge(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -548,6 +559,7 @@ async fn merge(
         .map_err(api::Error::from)
 }
 
+/// See [adding-post-to-favorites](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#adding-post-to-favorites)
 async fn favorite(
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
@@ -576,6 +588,7 @@ async fn favorite(
         .map_err(api::Error::from)
 }
 
+/// See [rating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-post)
 async fn rate(
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
@@ -630,6 +643,7 @@ struct UpdateBody {
     thumbnail_url: Option<Url>,
 }
 
+/// See [updating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-post)
 async fn update(client: Client, post_id: i64, params: ResourceParams, body: UpdateBody) -> ApiResult<Json<PostInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let post_hash = PostHash::new(post_id);
@@ -745,6 +759,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
         .map_err(api::Error::from)
 }
 
+/// Updates post from either a JSON body or a multipart form.
 async fn update_handler(
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
@@ -766,6 +781,7 @@ async fn update_handler(
     }
 }
 
+/// See [deleting-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-post)
 async fn delete(
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
@@ -805,6 +821,7 @@ async fn delete(
     Ok(Json(()))
 }
 
+/// See [removing-post-from-favorites](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#removing-post-from-favorites)
 async fn unfavorite(
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
