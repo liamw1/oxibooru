@@ -19,9 +19,9 @@ use tracing::{error, warn};
 /// Useful when the content hash changes.
 pub fn reset_filenames() -> std::io::Result<()> {
     let _timer = Timer::new("reset_filenames");
-    if filesystem::path(Directory::GeneratedThumbnails).try_exists()? {
+    if Directory::GeneratedThumbnails.path().try_exists()? {
         let progress = ProgressReporter::new("Generated thumbnails renamed", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))? {
+        for entry in std::fs::read_dir(Directory::GeneratedThumbnails.path())? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
@@ -35,9 +35,9 @@ pub fn reset_filenames() -> std::io::Result<()> {
             }
         }
     }
-    if filesystem::path(Directory::CustomThumbnails).try_exists()? {
+    if Directory::CustomThumbnails.path().try_exists()? {
         let progress = ProgressReporter::new("Custom thumbnails renamed", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))? {
+        for entry in std::fs::read_dir(Directory::CustomThumbnails.path())? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
@@ -51,9 +51,9 @@ pub fn reset_filenames() -> std::io::Result<()> {
             }
         }
     }
-    if filesystem::path(Directory::Posts).try_exists()? {
+    if Directory::Posts.path().try_exists()? {
         let progress = ProgressReporter::new("Posts renamed", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(filesystem::path(Directory::Posts))? {
+        for entry in std::fs::read_dir(Directory::Posts.path())? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
@@ -84,9 +84,9 @@ pub fn reset_filenames() -> std::io::Result<()> {
 }
 
 pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
-    if filesystem::path(Directory::Avatars).try_exists()? {
+    if Directory::Avatars.path().try_exists()? {
         let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(filesystem::path(Directory::Avatars))? {
+        for entry in std::fs::read_dir(Directory::Avatars.path())? {
             let path = entry?.path();
             let Some(username) = path.file_name().map(OsStr::to_string_lossy) else {
                 error!("Unable to convert file name of {path:?} to string");
@@ -101,9 +101,9 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
             progress.increment();
         }
     }
-    if filesystem::path(Directory::GeneratedThumbnails).try_exists()? {
+    if Directory::GeneratedThumbnails.path().try_exists()? {
         let progress = ProgressReporter::new("Generated thumbnail sizes cached", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(filesystem::path(Directory::GeneratedThumbnails))? {
+        for entry in std::fs::read_dir(Directory::GeneratedThumbnails.path())? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
@@ -118,9 +118,9 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
             progress.increment();
         }
     }
-    if filesystem::path(Directory::CustomThumbnails).try_exists()? {
+    if Directory::CustomThumbnails.path().try_exists()? {
         let progress = ProgressReporter::new("Custom thumbnails sizes cached", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(filesystem::path(Directory::CustomThumbnails))? {
+        for entry in std::fs::read_dir(Directory::CustomThumbnails.path())? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
@@ -334,9 +334,9 @@ pub fn reset_statistics() -> DatabaseResult<()> {
         .set(database_statistics::disk_usage.eq(0))
         .execute(&mut conn)?;
 
-    if filesystem::path(Directory::Posts).try_exists()? {
+    if Directory::Posts.path().try_exists()? {
         let progress = ProgressReporter::new("Posts content sizes cached", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(filesystem::path(Directory::Posts))? {
+        for entry in std::fs::read_dir(Directory::Posts.path())? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");

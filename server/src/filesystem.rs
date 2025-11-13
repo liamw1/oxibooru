@@ -22,19 +22,21 @@ pub enum Directory {
     TemporaryUploads,
 }
 
-/// Returns absolute path to the specified `directory`.
-pub fn path(directory: Directory) -> &'static Path {
-    Path::new(as_str(directory))
-}
+impl Directory {
+    /// Returns absolute path to `self`.
+    pub fn path(self) -> &'static Path {
+        Path::new(self.as_str())
+    }
 
-/// Returns absolute path to the specified `directory` as a str.
-pub fn as_str(directory: Directory) -> &'static str {
-    match directory {
-        Directory::Avatars => &AVATARS_DIRECTORY,
-        Directory::Posts => &POSTS_DIRECTORY,
-        Directory::GeneratedThumbnails => &GENERATED_THUMBNAILS_DIRECTORY,
-        Directory::CustomThumbnails => &CUSTOM_THUMBNAILS_DIRECTORY,
-        Directory::TemporaryUploads => &TEMPORARY_UPLOADS_DIRECTORY,
+    /// Returns absolute path to `self` as a [`str`].
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Directory::Avatars => &AVATARS_DIRECTORY,
+            Directory::Posts => &POSTS_DIRECTORY,
+            Directory::GeneratedThumbnails => &GENERATED_THUMBNAILS_DIRECTORY,
+            Directory::CustomThumbnails => &CUSTOM_THUMBNAILS_DIRECTORY,
+            Directory::TemporaryUploads => &TEMPORARY_UPLOADS_DIRECTORY,
+        }
     }
 }
 
@@ -155,8 +157,7 @@ pub fn swap_posts(
 /// Creates `directory` or does nothing if it already exists.
 /// Returns whether `directory` was created, or an error if one occured.
 pub fn create_dir(directory: Directory) -> std::io::Result<bool> {
-    let path = path(directory);
-    match std::fs::create_dir(path) {
+    match std::fs::create_dir(directory.path()) {
         Ok(()) => Ok(true),
         Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
         Err(err) => Err(err),
@@ -183,7 +184,7 @@ pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
 /// Deletes everything in the temporary uploads directory.
 pub fn purge_temporary_uploads() -> std::io::Result<()> {
     create_dir(Directory::TemporaryUploads)?;
-    for entry in std::fs::read_dir(path(Directory::TemporaryUploads))? {
+    for entry in std::fs::read_dir(Directory::TemporaryUploads.path())? {
         let path = entry?.path();
         std::fs::remove_file(path)?;
     }

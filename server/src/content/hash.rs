@@ -1,6 +1,6 @@
+use crate::config;
 use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
-use crate::{config, filesystem};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use diesel::deserialize::FromSql;
@@ -12,6 +12,7 @@ use diesel::{FromSqlRow, deserialize, serialize};
 use hex::{FromHex, FromHexError};
 use hmac::digest::CtOutput;
 use hmac::{Mac, SimpleHmac};
+use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
 
@@ -34,35 +35,35 @@ impl PostHash {
     }
 
     pub fn content_url(&self, content_type: MimeType) -> String {
-        format!("{}/posts/{}_{}.{}", config::get().data_url, self.post_id, self.hash, content_type.extension())
+        format!("{}/posts/{self}.{}", config::get().data_url, content_type.extension())
     }
 
     pub fn thumbnail_url(&self) -> String {
+        // Note: this requires interacting with the filesystem and might be slow
         let thumbnail_folder = if self.custom_thumbnail_path().exists() {
             "custom-thumbnails"
         } else {
             "generated-thumbnails"
         };
-        format!("{}/{thumbnail_folder}/{}_{}.jpg", config::get().data_url, self.post_id, self.hash)
+        format!("{}/{thumbnail_folder}/{self}.jpg", config::get().data_url)
     }
 
     pub fn content_path(&self, content_type: MimeType) -> PathBuf {
-        format!(
-            "{}/{}_{}.{}",
-            filesystem::as_str(Directory::Posts),
-            self.post_id,
-            self.hash,
-            content_type.extension()
-        )
-        .into()
+        format!("{}/{self}.{}", Directory::Posts.as_str(), content_type.extension()).into()
     }
 
     pub fn generated_thumbnail_path(&self) -> PathBuf {
-        format!("{}/{}_{}.jpg", filesystem::as_str(Directory::GeneratedThumbnails), self.post_id, self.hash).into()
+        format!("{}/{self}.jpg", Directory::GeneratedThumbnails.as_str()).into()
     }
 
     pub fn custom_thumbnail_path(&self) -> PathBuf {
-        format!("{}/{}_{}.jpg", filesystem::as_str(Directory::CustomThumbnails), self.post_id, self.hash).into()
+        format!("{}/{self}.jpg", Directory::CustomThumbnails.as_str()).into()
+    }
+}
+
+impl Display for PostHash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}_{}", self.post_id, self.hash)
     }
 }
 
@@ -132,7 +133,7 @@ pub fn custom_avatar_url(username: &str) -> String {
 }
 
 pub fn custom_avatar_path(username: &str) -> PathBuf {
-    format!("{}/{}.png", filesystem::as_str(Directory::Avatars), username.to_lowercase()).into()
+    format!("{}/{}.png", Directory::Avatars.as_str(), username.to_lowercase()).into()
 }
 
 /// Computes a checksum for duplicate detection. Uses raw file data instead of decoded
