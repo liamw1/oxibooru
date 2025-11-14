@@ -8,6 +8,8 @@ content_secret = "change"
 
 data_url = "data"
 data_dir = "/data"
+# required to display embeds
+client_dir = "/var/www"
 
 # Webhooks to call when events occur (such as post/tag/user/etc. changes)
 # the listed urls will be called with a HTTP POST request with a payload

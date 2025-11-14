@@ -1,5 +1,6 @@
-use crate::auth::Client;
+use std::fs;
 use crate::auth::header::AuthenticationError;
+use crate::auth::Client;
 use crate::config::{self, RegexType};
 use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
@@ -9,6 +10,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::fs::File;
 use std::num::NonZero;
 use std::ops::Deref;
 use std::time::Duration;
@@ -28,6 +30,7 @@ mod tag_category;
 mod upload;
 mod user;
 mod user_token;
+mod embeds_api;
 
 pub type ApiResult<T> = Result<T, Error>;
 
@@ -258,7 +261,32 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
     }
 }
 
+
+#[derive(Clone, Debug)]
+struct AppState {
+    index_htm: Option<String>
+}
+
+fn get_app_state() -> AppState {
+    let message = fs::read_to_string(config::get().client_dir.to_string() + "/index.htm");
+    match message {
+        Ok(v) => {
+            AppState {
+                index_htm: Some(v),
+            }
+        },
+        Err(_e) => {
+            // todo logging
+            return AppState {
+                index_htm: None
+            }
+        }
+    }
+}
+
 pub fn routes() -> Router {
+    let shared_state = get_app_state();
+
     Router::new()
         .merge(comment::routes())
         .merge(info::routes())
@@ -272,14 +300,18 @@ pub fn routes() -> Router {
         .merge(upload::routes())
         .merge(user_token::routes())
         .merge(user::routes())
+        .merge(embeds_api::routes())
         .layer((
             TraceLayer::new_for_http(),
             // Graceful shutdown will wait for outstanding requests to complete.
             // Add a timeout so requests don't hang forever.
             TimeoutLayer::new(Duration::from_secs(60)),
         ))
+        .with_state(shared_state)
         .route_layer(axum::middleware::from_fn(middleware::auth))
         .route_layer(axum::middleware::from_fn(middleware::post_to_webhooks))
+
+        
 }
 
 /// Represents body of a request to apply/change a score.

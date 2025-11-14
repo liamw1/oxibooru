@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, PageParams, PagedResponse};
+use crate::api::{ApiResult, AppState, PageParams, PagedResponse};
 use crate::auth::Client;
 use crate::resource::snapshot::SnapshotInfo;
 use crate::search::Builder;
@@ -8,7 +8,7 @@ use axum::extract::Query;
 use axum::{Extension, Json, Router, routing};
 use diesel::prelude::*;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new().route("/snapshots", routing::get(list))
 }
 

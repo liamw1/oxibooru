@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{ApiResult, AppState, DeleteBody, PageParams, PagedResponse, ResourceParams};
 use crate::auth::Client;
 use crate::auth::password;
 use crate::config::RegexType;
@@ -22,7 +22,7 @@ use diesel::prelude::*;
 use serde::Deserialize;
 use url::Url;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/users", routing::get(list).post(create_handler))
         .route(

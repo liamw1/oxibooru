@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::api::{ApiResult, AppState, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams};
 use crate::auth::Client;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
@@ -14,7 +14,7 @@ use diesel::dsl::exists;
 use diesel::prelude::*;
 use serde::Deserialize;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/comments", routing::get(list).post(create))
         .route("/comment/{id}", routing::get(get).put(update).delete(delete))
