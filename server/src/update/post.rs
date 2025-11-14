@@ -47,18 +47,32 @@ pub fn thumbnail(
 }
 
 /// Replaces the current set of relations with `relations` for post associated with `post_id`.
-pub fn set_relations(conn: &mut PgConnection, post_id: i64, relations: &[i64]) -> QueryResult<()> {
-    let new_relations: Vec<_> = relations
+pub fn set_relations(conn: &mut PgConnection, post_id: i64, new_related_posts: &[i64]) -> QueryResult<()> {
+    let new_relations: Vec<_> = new_related_posts
         .iter()
         .filter(|&&id| id != post_id)
         .flat_map(|&other_id| PostRelation::new_pair(post_id, other_id))
         .collect();
 
-    diesel::delete(post_relation::table)
+    // Delete old relations and return old related posts ids.
+    // Post relations are bi-directional, so it doesn't matter whether we return parent_id or child_id.
+    let old_related_posts: Vec<i64> = diesel::delete(post_relation::table)
         .filter(post_relation::parent_id.eq(post_id))
         .or_filter(post_relation::child_id.eq(post_id))
-        .execute(conn)?;
+        .returning(post_relation::child_id)
+        .get_results(conn)?;
     new_relations.insert_into(post_relation::table).execute(conn)?;
+
+    // Update last edit time for any posts involved in removed or added relations.
+    let updated_posts: Vec<_> = old_related_posts
+        .iter()
+        .chain(new_related_posts)
+        .filter(|&&id| id != post_id)
+        .collect();
+    diesel::update(post::table)
+        .set(post::last_edit_time.eq(DateTime::now()))
+        .filter(post::id.eq_any(updated_posts))
+        .execute(conn)?;
     Ok(())
 }
 
