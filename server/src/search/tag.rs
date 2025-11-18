@@ -11,7 +11,7 @@ use crate::{
 };
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use strum::EnumString;
 
 #[derive(Clone, Copy, EnumString)]

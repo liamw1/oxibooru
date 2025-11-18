@@ -9,7 +9,9 @@ use axum::http::Method;
 use axum::http::header::AUTHORIZATION;
 use axum::middleware::Next;
 use axum::response::Response;
-use diesel::prelude::*;
+use diesel::{
+    ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper,
+};
 use reqwest::Client;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, REFERER};
 use std::sync::Arc;

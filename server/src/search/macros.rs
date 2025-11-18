@@ -41,7 +41,8 @@ macro_rules! apply_time_filter {
 /// Used for applying filters on string-based expressions.
 #[macro_export]
 macro_rules! apply_str_filter {
-    ($query:expr, $expression:expr, $filter:expr) => {
+    ($query:expr, $expression:expr, $filter:expr) => {{
+        use diesel::TextExpressionMethods;
         match $crate::search::parse::str_condition($filter.condition) {
             $crate::search::StrCondition::Regular(condition) => {
                 $crate::apply_condition!($query, $expression, $filter, condition)
@@ -54,7 +55,7 @@ macro_rules! apply_str_filter {
                 false => $query.filter($crate::search::lower($expression).like(pattern)),
             },
         }
-    };
+    }};
 }
 
 /// Applies DISTINCT to the given `query` if the given `filter` is multivalued
@@ -73,12 +74,13 @@ macro_rules! apply_distinct_if_multivalued {
 /// Order is either ASC or DESC.
 #[macro_export]
 macro_rules! apply_sort {
-    ($query:expr, $expression:expr, $sort:expr) => {
+    ($query:expr, $expression:expr, $sort:expr) => {{
+        use diesel::PgSortExpressionMethods;
         match $sort.order {
             $crate::search::Order::Asc => $query.then_order_by($expression.asc()),
             $crate::search::Order::Desc => $query.then_order_by($expression.desc().nulls_last()),
         }
-    };
+    }};
 }
 
 /// Applies seeded random ordering to the given `query`.

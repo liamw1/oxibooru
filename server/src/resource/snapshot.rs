@@ -6,7 +6,7 @@ use crate::resource::user::MicroUser;
 use crate::schema::{snapshot, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::skip_serializing_none;

@@ -5,7 +5,9 @@ use crate::resource::{self, BoolFill};
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use diesel::prelude::*;
+use diesel::{
+    BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
+};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use std::rc::Rc;

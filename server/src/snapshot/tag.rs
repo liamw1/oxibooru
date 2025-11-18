@@ -7,7 +7,7 @@ use crate::model::tag_category::TagCategory;
 use crate::schema::{tag_category, tag_implication, tag_name, tag_suggestion};
 use crate::string::{LargeString, SmallString};
 use crate::{api, snapshot};
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, Insertable, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_json::json;
 

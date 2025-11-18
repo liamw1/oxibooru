@@ -6,7 +6,7 @@ use crate::search::{Builder, Order, ParsedSort, SearchCriteria};
 use crate::{api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
 use diesel::dsl::{IntoBoxed, LeftJoin, Select};
 use diesel::pg::Pg;
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use strum::EnumString;
 
 #[derive(Clone, Copy, EnumString)]

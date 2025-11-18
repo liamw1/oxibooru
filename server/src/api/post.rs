@@ -19,7 +19,10 @@ use crate::{api, config, db, filesystem, resource, snapshot, update};
 use axum::extract::{DefaultBodyLimit, Extension, Path, Query};
 use axum::{Json, Router, routing};
 use diesel::dsl::exists;
-use diesel::prelude::*;
+use diesel::{
+    Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl,
+    SelectableHelper,
+};
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 use tokio::sync::Mutex as AsyncMutex;
@@ -848,7 +851,7 @@ mod test {
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
-    use diesel::prelude::*;
+    use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
     use serial_test::{parallel, serial};
     use strum::IntoEnumIterator;
 

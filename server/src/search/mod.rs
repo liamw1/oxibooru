@@ -1,8 +1,8 @@
 use crate::api::ApiResult;
 use crate::auth::Client;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
-use diesel::prelude::*;
 use diesel::sql_types::{Float, SingleValue};
+use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, declare_sql_function};
 use std::borrow::Cow;
 use std::collections::HashSet;
 use std::ops::{Not, Range};
@@ -141,9 +141,6 @@ where
     }
 }
 
-define_sql_function!(fn random() -> BigInt);
-define_sql_function!(fn lower<T: SingleValue>(text: T) -> Text);
-
 #[derive(Clone, Copy)]
 struct QueryArgs {
     offset: i64,
@@ -271,6 +268,16 @@ impl QueryCache {
             });
         }
     }
+}
+
+#[declare_sql_function]
+extern "SQL" {
+    fn random() -> BigInt;
+}
+
+#[declare_sql_function]
+extern "SQL" {
+    fn lower<T: SingleValue>(text: T) -> Text;
 }
 
 /// Sets the global postgresql random seed to the search seed of the `client`.

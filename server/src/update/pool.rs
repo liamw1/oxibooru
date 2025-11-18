@@ -6,7 +6,7 @@ use crate::schema::{pool, pool_name, pool_post};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::dsl::max;
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, RunQueryDsl};
 
 /// Updates `last_edit_time` of pool associated with `pool_id`.
 pub fn last_edit_time(conn: &mut PgConnection, pool_id: i64) -> ApiResult<()> {

@@ -10,7 +10,7 @@ use crate::time::DateTime;
 use crate::{api, config, db, resource, snapshot};
 use axum::extract::{Extension, Path, Query};
 use axum::{Json, Router, routing};
-use diesel::prelude::*;
+use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 
 pub fn routes() -> Router {
@@ -219,7 +219,7 @@ mod test {
     use crate::schema::{tag_category, tag_category_statistics};
     use crate::test::*;
     use crate::time::DateTime;
-    use diesel::prelude::*;
+    use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
     use serial_test::{parallel, serial};
 
     // Exclude fields that involve creation_time or last_edit_time

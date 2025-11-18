@@ -10,7 +10,7 @@ use crate::time::DateTime;
 use crate::{api, config, db, resource};
 use axum::extract::{Extension, Path, Query};
 use axum::{Json, Router, routing};
-use diesel::prelude::*;
+use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, Insertable, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -199,7 +199,7 @@ mod test {
     use crate::schema::{user, user_token};
     use crate::test::*;
     use diesel::dsl::exists;
-    use diesel::prelude::*;
+    use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
     use serial_test::{parallel, serial};
     use uuid::Uuid;
 

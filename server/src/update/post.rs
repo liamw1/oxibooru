@@ -14,7 +14,7 @@ use crate::schema::{
     post_tag,
 };
 use crate::time::DateTime;
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use image::DynamicImage;
 use std::collections::HashSet;
 

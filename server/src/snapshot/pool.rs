@@ -6,7 +6,7 @@ use crate::model::snapshot::NewSnapshot;
 use crate::schema::{pool_category, pool_name, pool_post};
 use crate::string::{LargeString, SmallString};
 use crate::{api, snapshot};
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_json::json;
 

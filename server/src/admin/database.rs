@@ -11,7 +11,7 @@ use crate::schema::{
 use crate::time::{DateTime, Timer};
 use crate::{admin, db, filesystem};
 use diesel::dsl::{count, max, sum};
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, NullableExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use std::ffi::OsStr;
 use tracing::{error, warn};
 

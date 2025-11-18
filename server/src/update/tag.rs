@@ -10,7 +10,7 @@ use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, snapshot};
 use diesel::dsl::max;
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, RunQueryDsl};
 use std::collections::hash_map::{Entry, IntoKeys};
 use std::collections::{HashMap, HashSet};
 

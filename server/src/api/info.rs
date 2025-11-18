@@ -10,7 +10,7 @@ use crate::{config, db, resource};
 use axum::extract::{Extension, Query};
 use axum::response::Json;
 use axum::routing::{self, Router};
-use diesel::prelude::*;
+use diesel::{Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Serialize;
 
 pub fn routes() -> Router {

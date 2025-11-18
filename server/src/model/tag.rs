@@ -5,8 +5,8 @@ use crate::time::DateTime;
 use diesel::dsl::sql;
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
-use diesel::prelude::*;
 use diesel::sql_types::Bool;
+use diesel::{AsChangeset, Associations, Identifiable, Insertable, Queryable, Selectable};
 
 #[derive(Clone, Copy, Default, Insertable)]
 #[diesel(table_name = tag)]

@@ -8,7 +8,7 @@ use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::extract::Path;
 use axum::{Json, Router, routing};
-use diesel::prelude::*;
+use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use lettre::Address;
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;

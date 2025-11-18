@@ -9,9 +9,9 @@ use crate::schema::{database_statistics, post, post_signature};
 use crate::time::{DateTime, Timer};
 use crate::{admin, db, update};
 use diesel::dsl::exists;
-use diesel::prelude::*;
 use diesel::r2d2::PoolError;
-use rayon::prelude::*;
+use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tracing::{error, warn};
 
 /// Checks the integrity of all posts on the filesystem by comparing the stored

@@ -3,7 +3,7 @@ use crate::resource::BoolFill;
 use crate::schema::{tag_category, tag_category_statistics};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use diesel::prelude::*;
+use diesel::{PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use strum::{EnumString, EnumTable};

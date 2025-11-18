@@ -3,7 +3,10 @@ use crate::resource::{self, BoolFill};
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use diesel::prelude::*;
+use diesel::{
+    BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, JoinOnDsl, PgConnection, QueryDsl, QueryResult,
+    RunQueryDsl, SelectableHelper,
+};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};

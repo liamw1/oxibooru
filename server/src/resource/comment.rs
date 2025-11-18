@@ -6,7 +6,7 @@ use crate::resource::{self, BoolFill};
 use crate::schema::{comment, comment_score, comment_statistics, user};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use diesel::prelude::*;
+use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use strum::{EnumString, EnumTable};

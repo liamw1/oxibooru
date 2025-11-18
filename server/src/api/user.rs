@@ -18,7 +18,7 @@ use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use axum::extract::{DefaultBodyLimit, Extension, Path, Query};
 use axum::{Json, Router, routing};
-use diesel::prelude::*;
+use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
 use url::Url;
 
@@ -387,7 +387,7 @@ mod test {
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
-    use diesel::prelude::*;
+    use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
     use serial_test::{parallel, serial};
 
     // Exclude fields that involve creation_time or last_edit_time

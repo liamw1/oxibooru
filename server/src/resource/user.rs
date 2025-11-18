@@ -8,7 +8,7 @@ use crate::schema::{post_score, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::dsl::count_star;
-use diesel::prelude::*;
+use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use strum::{EnumString, EnumTable};

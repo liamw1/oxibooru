@@ -5,7 +5,7 @@ use crate::schema::{comment, comment_score};
 use crate::string::LargeString;
 use crate::time::DateTime;
 use diesel::pg::Pg;
-use diesel::prelude::*;
+use diesel::{Associations, Identifiable, Insertable, Queryable, Selectable};
 
 #[derive(Insertable)]
 #[diesel(table_name = comment)]

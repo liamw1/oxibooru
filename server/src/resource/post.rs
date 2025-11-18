@@ -17,7 +17,10 @@ use crate::schema::{
 };
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use diesel::prelude::*;
+use diesel::{
+    BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, NullableExpressionMethods, PgConnection, QueryDsl,
+    QueryResult, RunQueryDsl, SelectableHelper,
+};
 use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};

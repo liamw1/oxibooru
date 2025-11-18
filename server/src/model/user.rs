@@ -4,7 +4,7 @@ use crate::schema::{user, user_token};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::pg::Pg;
-use diesel::prelude::*;
+use diesel::{AsChangeset, Associations, Identifiable, Insertable, Queryable, Selectable};
 use std::option::Option;
 use uuid::Uuid;
 

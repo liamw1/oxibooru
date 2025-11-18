@@ -2,7 +2,7 @@ use crate::api::ApiResult;
 use crate::schema::user;
 use crate::time::DateTime;
 use crate::{db, filesystem};
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use image::DynamicImage;
 
 /// Updates the last known login time for the user with the given `user_id`.

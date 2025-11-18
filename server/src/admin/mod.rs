@@ -1,5 +1,5 @@
 use crate::app;
-use diesel::prelude::*;
+use diesel::PgConnection;
 use diesel::r2d2::PoolError;
 use rayon::ThreadPoolBuilder;
 use std::io::Write;

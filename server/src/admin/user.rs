@@ -6,7 +6,7 @@ use crate::{admin, api};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use diesel::dsl::exists;
-use diesel::prelude::*;
+use diesel::{ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 
 /// This function prompts the user for input again to reset passwords for specific users.
 pub fn reset_password(conn: &mut PgConnection) {

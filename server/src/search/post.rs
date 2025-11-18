@@ -14,8 +14,8 @@ use crate::{
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
-use diesel::prelude::*;
 use diesel::sql_types::{Float, SmallInt};
+use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use std::str::FromStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 

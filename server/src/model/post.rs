@@ -11,9 +11,12 @@ use crate::time::DateTime;
 use byteorder::{NetworkEndian, ReadBytesExt};
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::{Pg, PgValue};
-use diesel::prelude::*;
 use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::{Array, BigInt, Integer, Nullable};
+use diesel::{
+    AsChangeset, Associations, Connection, Identifiable, Insertable, PgArrayExpressionMethods, PgConnection, QueryDsl,
+    QueryResult, Queryable, RunQueryDsl, Selectable, SelectableHelper,
+};
 use diesel::{AsExpression, FromSqlRow};
 use std::ops::Deref;
 

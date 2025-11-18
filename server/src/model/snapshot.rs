@@ -4,7 +4,7 @@ use crate::schema::snapshot;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::pg::Pg;
-use diesel::prelude::*;
+use diesel::{Associations, Identifiable, Insertable, PgConnection, QueryResult, Queryable, RunQueryDsl, Selectable};
 use serde::Serialize;
 use serde_json::Value;
 

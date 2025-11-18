@@ -8,7 +8,9 @@ use crate::resource::post::Note;
 use crate::schema::{post_feature, post_note, post_relation, post_tag, tag_name};
 use crate::string::{LargeString, SmallString};
 use crate::{api, snapshot};
-use diesel::prelude::*;
+use diesel::{
+    ExpressionMethods, JoinOnDsl, OptionalExtension, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper,
+};
 use serde::Serialize;
 use serde_json::json;
 

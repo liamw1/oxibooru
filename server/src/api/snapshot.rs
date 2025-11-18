@@ -6,7 +6,7 @@ use crate::search::snapshot::QueryBuilder;
 use crate::{api, config, db, resource};
 use axum::extract::Query;
 use axum::{Extension, Json, Router, routing};
-use diesel::prelude::*;
+use diesel::Connection;
 
 pub fn routes() -> Router {
     Router::new().route("/snapshots", routing::get(list))
