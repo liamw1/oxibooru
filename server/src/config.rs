@@ -264,7 +264,7 @@ pub fn create_url(database_override: Option<&str>) -> String {
 
     let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER must be defined in .env");
     let password = std::env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD must be defined in .env");
-    let hostname = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| String::from("localhost"));
+    let hostname = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
     let database = std::env::var("POSTGRES_DB").expect("POSTGRES_DB must be defined in .env");
     let database = database_override.unwrap_or(&database);
 

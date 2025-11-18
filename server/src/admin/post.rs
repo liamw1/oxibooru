@@ -106,7 +106,7 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) {
 
         let post_id = user_input
             .parse::<i64>()
-            .map_err(|_| String::from("Post ID must be an integer"))?;
+            .map_err(|_| "Post ID must be an integer".to_owned())?;
         let mime_type = post::table
             .find(post_id)
             .select(post::mime_type)

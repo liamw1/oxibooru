@@ -156,7 +156,7 @@ impl MimeType {
             "webm" | "WEBM" => Ok(Self::Webm),
             "swf" | "SWF" => Ok(Self::Swf),
             _ => Err(ParseExtensionError {
-                extenstion: String::from(extension),
+                extenstion: extension.into(),
             }),
         }
     }

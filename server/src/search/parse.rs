@@ -294,9 +294,9 @@ mod test {
         assert_eq!(str_condition("a.."), StrCondition::Regular(Condition::GreaterEq("a".into())));
         assert_eq!(str_condition("..z"), StrCondition::Regular(Condition::LessEq("z".into())));
         assert_eq!(str_condition("a..z"), StrCondition::Regular(Condition::Range("a".into().."z".into())));
-        assert_eq!(str_condition("*str*"), StrCondition::WildCard(String::from("%str%")));
-        assert_eq!(str_condition("a*,*b,*c*"), StrCondition::WildCard(String::from("a%,%b,%c%")));
-        assert_eq!(str_condition("*a..b"), StrCondition::WildCard(String::from("%a..b")));
+        assert_eq!(str_condition("*str*"), StrCondition::WildCard("%str%".into()));
+        assert_eq!(str_condition("a*,*b,*c*"), StrCondition::WildCard("a%,%b,%c%".into()));
+        assert_eq!(str_condition("*a..b"), StrCondition::WildCard("%a..b".into()));
 
         assert_eq!(condition("safe")?, Condition::Values(vec![PostSafety::Safe]));
         assert_eq!(condition("safe..unsafe")?, Condition::Range(PostSafety::Safe..PostSafety::Unsafe));
@@ -365,11 +365,11 @@ mod test {
         assert_eq!(split_once("a\\::b", ':'), Some(("a\\:", "b")));
         assert_eq!(split_once("a\\\\:b", ':'), Some(("a\\\\", "b")));
 
-        assert_eq!(unescape("\\."), String::from("."));
-        assert_eq!(unescape("\\\\."), String::from("\\."));
-        assert_eq!(unescape("\\\\\\."), String::from("\\."));
-        assert_eq!(unescape("\\\\\\\\."), String::from("\\\\."));
-        assert_eq!(unescape(",\\.,x.\\\\:.j..\\,"), String::from(",.,x.\\:.j..,"));
+        assert_eq!(unescape("\\."), ".".to_owned());
+        assert_eq!(unescape("\\\\."), "\\.".to_owned());
+        assert_eq!(unescape("\\\\\\."), "\\.".to_owned());
+        assert_eq!(unescape("\\\\\\\\."), "\\\\.".to_owned());
+        assert_eq!(unescape(",\\.,x.\\\\:.j..\\,"), ",.,x.\\:.j..,".to_owned());
 
         // Check that escaped tokens are escaped properly
         assert_eq!(

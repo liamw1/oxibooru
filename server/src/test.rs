@@ -105,14 +105,13 @@ pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str
             .select(snapshot::data)
             .order_by(snapshot::id.desc())
             .first(&mut conn)?;
-        assert_eq!(actual_snapshot_data, expected_snapshot_data);
+        verify_json("snapshot data", &expected_snapshot_data, &actual_snapshot_data);
     }
 
     let file_contents = std::fs::read_to_string(asset_path("reply", relative_path))?;
     let expected_body: Value = serde_json::from_str(&file_contents)?;
     let actual_body: Value = reply.json();
-
-    assert_eq!(actual_body, expected_body);
+    verify_json("response body", &expected_body, &actual_body);
     Ok(())
 }
 
@@ -630,6 +629,17 @@ fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
     let manifest_dir =
         std::env::var("CARGO_MANIFEST_DIR").expect("Test environment must have CARGO_MANIFEST_DIR defined");
     [&manifest_dir, "test", folder_path, relative_path].iter().collect()
+}
+
+fn verify_json(name: &str, expected: &Value, actual: &Value) {
+    let diff_message = crate::snapshot::value_diff(expected.clone(), actual.clone())
+        .map_or("JSON contents are nearly equal, but at least one array element is out-of-order!".into(), |diff| {
+            format!("Diff:\n{diff}")
+        });
+    assert!(
+        expected == actual,
+        "Incorrect {name}. Expected:\n{expected}\n\nReceived:\n{actual}\n\n{diff_message}\n",
+    );
 }
 
 mod statistics_tests {

@@ -22,7 +22,7 @@ pub fn reset_password(conn: &mut PgConnection) {
         // Check if user exists
         match diesel::select(exists(user::table.filter(user::name.eq(&user)))).get_result(conn) {
             Ok(true) => (),
-            Ok(false) => return Err(String::from("No user with this username exists")),
+            Ok(false) => return Err("No user with this username exists".into()),
             Err(err) => return Err(format!("Could not determine if user exists for reason: {err}")),
         }
 
