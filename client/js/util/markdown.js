@@ -166,7 +166,9 @@ function formatMarkdown(text) {
         new StrikeThroughWrapper(),
         new FaviconWrapper(),
     ];
+
     const turndownService = new TurndownService();
+    text = DOMPurify.sanitize(text);
     text = turndownService.turndown(text);
     text = escapeHtml(text);
     for (let wrapper of wrappers) {
@@ -177,7 +179,7 @@ function formatMarkdown(text) {
     for (let wrapper of wrappers) {
         text = wrapper.postprocess(text);
     }
-    return DOMPurify.sanitize(text);
+    return text;
 }
 
 function formatInlineMarkdown(text) {

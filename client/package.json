@@ -7,7 +7,7 @@
     "build-container": "docker build -t szurubooru/client:dev ."
   },
   "dependencies": {
-    "dompurify": "^2.5.4",
+    "dompurify": "^3.3.0",
     "font-awesome": "^4.7.0",
     "ios-inner-height": "^1.0.3",
     "js-cookie": "^2.2.0",
