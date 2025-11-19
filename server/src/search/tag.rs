@@ -118,7 +118,7 @@ impl<'a> QueryBuilder<'a> {
         let sorts = self.search.sorts.iter().copied().chain(default_sort);
         let unsorted_query = unsorted_query.inner_join(tag_name::table).filter(TagName::primary());
         let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
-            Token::CreationTime => apply_sort!(query, tag::creation_time, sort),
+            Token::CreationTime => apply_sort!(query, tag::id, sort),
             Token::LastEditTime => apply_sort!(query, tag::last_edit_time, sort),
             Token::Name => apply_sort!(query, tag_name::name, sort),
             Token::Category => apply_sort!(query, tag_category::name, sort),

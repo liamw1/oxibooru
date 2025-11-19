@@ -84,7 +84,7 @@ impl<'a> QueryBuilder<'a> {
         let sorts = self.search.sorts.iter().copied().chain(default_sort);
         let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
             Token::Name => apply_sort!(query, user::name, sort),
-            Token::CreationTime => apply_sort!(query, user::creation_time, sort),
+            Token::CreationTime => apply_sort!(query, user::id, sort),
             Token::LastLoginTime => apply_sort!(query, user::last_login_time, sort),
         });
         match self.search.extra_args {
