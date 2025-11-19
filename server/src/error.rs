@@ -5,8 +5,8 @@ pub trait ErrorKind {
 impl ErrorKind for std::env::VarError {
     fn kind(&self) -> &'static str {
         match self {
-            Self::NotPresent => "NotPresent",
-            Self::NotUnicode(_) => "NotUnicode",
+            Self::NotPresent => "EnvironmentVariableNotPresent",
+            Self::NotUnicode(_) => "EnvironmentVariableNotUnicode",
         }
     }
 }
@@ -14,7 +14,7 @@ impl ErrorKind for std::env::VarError {
 impl ErrorKind for std::io::ErrorKind {
     fn kind(&self) -> &'static str {
         match self {
-            Self::NotFound => "NotFound",
+            Self::NotFound => "FileNotFound",
             Self::PermissionDenied => "PermissionDenied",
             Self::ConnectionRefused => "ConnectionRefused",
             Self::ConnectionReset => "ConnectionReset",
@@ -22,11 +22,11 @@ impl ErrorKind for std::io::ErrorKind {
             Self::NetworkUnreachable => "NetworkUnreachable",
             Self::ConnectionAborted => "ConnectionAborted",
             Self::NotConnected => "NotConnected",
-            Self::AddrInUse => "AddrInUse",
-            Self::AddrNotAvailable => "AddrNotAvailable",
+            Self::AddrInUse => "AddressInUse",
+            Self::AddrNotAvailable => "AddressNotAvailable",
             Self::NetworkDown => "NetworkDown",
             Self::BrokenPipe => "BrokenPipe",
-            Self::AlreadyExists => "AlreadyExists",
+            Self::AlreadyExists => "FileAlreadyExists",
             Self::WouldBlock => "WouldBlock",
             Self::NotADirectory => "NotADirectory",
             Self::IsADirectory => "IsADirectory",
@@ -46,13 +46,14 @@ impl ErrorKind for std::io::ErrorKind {
             Self::Deadlock => "Deadlock",
             Self::CrossesDevices => "CrossesDevices",
             Self::TooManyLinks => "TooManyLinks",
+            Self::InvalidFilename => "InvalidFilename",
             Self::ArgumentListTooLong => "ArgumentListTooLong",
             Self::Interrupted => "Interrupted",
             Self::Unsupported => "Unsupported",
             Self::UnexpectedEof => "UnexpectedEof",
             Self::OutOfMemory => "OutOfMemory",
-            Self::Other => "OtherIOError",
-            _ => "UnknownIOError",
+            Self::Other => "OtherIoError",
+            _ => "UnknownIoError",
         }
     }
 }
@@ -69,7 +70,7 @@ impl ErrorKind for argon2::password_hash::errors::B64Error {
 impl ErrorKind for argon2::password_hash::errors::InvalidValue {
     fn kind(&self) -> &'static str {
         match self {
-            Self::InvalidChar(_) => "InvalidChar",
+            Self::InvalidChar(_) => "InvalidCharacter",
             Self::InvalidFormat => "InvalidFormat",
             Self::Malformed => "MalformedValue",
             Self::TooLong => "ValueTooLong",
@@ -132,7 +133,7 @@ impl ErrorKind for diesel::result::Error {
             Self::DatabaseError(err, _) => err.kind(),
             Self::DeserializationError(_) => "DeserializationError",
             Self::InvalidCString(_) => "InvalidCString",
-            Self::NotFound => "NotFound",
+            Self::NotFound => "RowNotFound",
             Self::NotInTransaction => "NotInTransaction",
             Self::QueryBuilderError(_) => "QueryBuilderError",
             Self::RollbackErrorOnCommit { rollback_error, .. } => rollback_error.kind(),
@@ -186,7 +187,7 @@ impl ErrorKind for image::error::LimitErrorKind {
     fn kind(&self) -> &'static str {
         match self {
             Self::DimensionError => "DimensionLimitsExceeded",
-            Self::InsufficientMemory => "OutOfMemory",
+            Self::InsufficientMemory => "InsufficientMemory",
             Self::Unsupported { .. } => "UnsupportedImageDimensions",
             _ => "UnknownImageLimitError",
         }
@@ -236,7 +237,7 @@ impl ErrorKind for std::num::IntErrorKind {
             Self::InvalidDigit => "InvalidDigit",
             Self::PosOverflow => "PositiveOverflow",
             Self::NegOverflow => "NegativeOverflow",
-            Self::Zero => "Zero",
+            Self::Zero => "ZeroNotAllowed",
             _ => "UnknownIntParseError",
         }
     }
@@ -338,10 +339,10 @@ impl ErrorKind for lettre::error::Error {
 impl ErrorKind for serde_json::error::Category {
     fn kind(&self) -> &'static str {
         match self {
-            Self::Io => "SerdeJsonIO",
-            Self::Syntax => "SerdeJsonSyntax",
-            Self::Data => "SerdeJsonData",
-            Self::Eof => "SerdeJsonEOF",
+            Self::Io => "JsonIoError",
+            Self::Syntax => "JsonInvalidSyntax",
+            Self::Data => "JsonInvalidData",
+            Self::Eof => "JsonUnexpectedEOF",
         }
     }
 }
@@ -358,7 +359,21 @@ impl ErrorKind for swf::error::Error {
     }
 }
 
-impl ErrorKind for crate::api::Error {
+impl ErrorKind for crate::model::enums::ResourceType {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::Comment => "CommentNotFound",
+            Self::Pool => "PoolNotFound",
+            Self::PoolCategory => "PoolCategoryNotFound",
+            Self::Post => "PostNotFound",
+            Self::Tag | Self::TagImplication | Self::TagSuggestion => "TagNotFound",
+            Self::TagCategory => "TagCategoryNotFound",
+            Self::User => "UserNotFound",
+        }
+    }
+}
+
+impl ErrorKind for crate::api::ApiError {
     fn kind(&self) -> &'static str {
         match self {
             Self::BadExtension(_) => "BadExtension",
@@ -391,17 +406,16 @@ impl ErrorKind for crate::api::Error {
             Self::MissingFormData => "MissingFormData",
             Self::MissingMetadata => "MissingMetadata",
             Self::MissingSmtpInfo => "MissingSmtpInfo",
-            Self::Multipart(_) => "Multipart/Form-Data",
+            Self::Multipart(_) => "MultipartError",
             Self::NoNamesGiven(_) => "NoNamesGiven",
             Self::NotAnInteger(err) => err.kind().kind(),
-            Self::NotFound(_) => "NotFound",
+            Self::NotFound(err) => err.kind(),
             Self::NotLoggedIn => "NotLoggedIn",
             Self::Request(_) => "RequestError",
             Self::ResourceModified => "ResourceModified",
             Self::SelfMerge(_) => "SelfMerge",
             Self::StdIo(err) => err.kind().kind(),
             Self::SwfDecoding(err) => err.kind(),
-            Self::TooLarge(_) => "TooLarge",
             Self::TooMany(_) => "TooMany",
             Self::UnauthorizedPasswordReset => "UnauthorizedPasswordReset",
             Self::VideoDecoding(err) => err.kind(),

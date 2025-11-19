@@ -3,9 +3,10 @@ use crate::content::hash::{Checksum, Md5Checksum};
 use crate::content::signature::COMPRESSED_SIGNATURE_LEN;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::{FileContents, decode, hash, signature, thumbnail};
+use crate::filesystem;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
-use crate::{api, filesystem};
 use image::DynamicImage;
+use image::error::LimitErrorKind;
 use std::collections::VecDeque;
 use std::sync::{LazyLock, Mutex, MutexGuard};
 use tracing::error;
@@ -128,8 +129,8 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
         md5_checksum,
         signature: signature::compute(&image),
         thumbnail: thumbnail::create(&image, ThumbnailType::Post),
-        width: i32::try_from(image.width()).map_err(|_| api::Error::TooLarge("Image width"))?,
-        height: i32::try_from(image.height()).map_err(|_| api::Error::TooLarge("Image height"))?,
+        width: i32::try_from(image.width()).map_err(|_| LimitErrorKind::DimensionError)?,
+        height: i32::try_from(image.height()).map_err(|_| LimitErrorKind::DimensionError)?,
         mime_type,
         file_size,
         flags,

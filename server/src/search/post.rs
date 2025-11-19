@@ -1,4 +1,4 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::content::hash::Checksum;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
@@ -8,8 +8,7 @@ use crate::schema::{
 };
 use crate::search::{Builder, Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter, parse};
 use crate::{
-    api, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
-    apply_time_filter,
+    apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter,
 };
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
@@ -98,7 +97,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
         let query = self.build_filtered(conn)?;
         let query = self.apply_cache_filters(query);
-        self.get_ordered_ids(conn, query).map_err(api::Error::from)
+        self.get_ordered_ids(conn, query).map_err(ApiError::from)
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
@@ -111,7 +110,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
                 .select(database_statistics::post_count)
                 .first(conn)
         }
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
     }
 }
 
@@ -120,7 +119,7 @@ impl<'a> QueryBuilder<'a> {
         let search = SearchCriteria::new(client, search_criteria, Token::Tag).map_err(Box::from)?;
         for sort in &search.sorts {
             match sort.kind {
-                Token::ContentChecksum | Token::NoteText | Token::Special => return Err(api::Error::InvalidSort),
+                Token::ContentChecksum | Token::NoteText | Token::Special => return Err(ApiError::InvalidSort),
                 _ => (),
             }
         }
@@ -433,21 +432,21 @@ fn apply_special_filter<'a>(
     if let Some(cache) = cache {
         let special_token = SpecialToken::from_str(filter.condition).map_err(Box::from)?;
         let post_ids: Vec<i64> = match special_token {
-            SpecialToken::Liked => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
+            SpecialToken::Liked => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
                 post_score::table
                     .select(post_score::post_id)
                     .filter(post_score::user_id.eq(client_id))
                     .filter(post_score::score.eq(1))
                     .load(conn)
             }),
-            SpecialToken::Disliked => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
+            SpecialToken::Disliked => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
                 post_score::table
                     .select(post_score::post_id)
                     .filter(post_score::user_id.eq(client_id))
                     .filter(post_score::score.eq(-1))
                     .load(conn)
             }),
-            SpecialToken::Fav => client.id.ok_or(api::Error::NotLoggedIn).map(|client_id| {
+            SpecialToken::Fav => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
                 post_favorite::table
                     .select(post_favorite::post_id)
                     .filter(post_favorite::user_id.eq(client_id))

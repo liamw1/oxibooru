@@ -1,5 +1,4 @@
-use crate::api;
-use crate::api::ApiResult;
+use crate::api::{self, ApiError, ApiResult};
 use crate::config::RegexType;
 use crate::model::pool::{NewPoolName, PoolPost};
 use crate::schema::{pool, pool_name, pool_post};
@@ -75,7 +74,7 @@ fn add_names(conn: &mut PgConnection, pool_id: i64, current_name_count: i32, nam
     let total_name_count = i32::try_from(names.len())
         .ok()
         .and_then(|new_name_count| current_name_count.checked_add(new_name_count))
-        .ok_or(api::Error::TooMany("names on pool"))?;
+        .ok_or(ApiError::TooMany("names on pool"))?;
     let updated_names: Vec<_> = names
         .iter()
         .zip(current_name_count..total_name_count)
@@ -90,7 +89,7 @@ fn add_posts(conn: &mut PgConnection, pool_id: i64, current_post_count: i64, pos
     let total_post_count = i64::try_from(posts.len())
         .ok()
         .and_then(|new_post_count| current_post_count.checked_add(new_post_count))
-        .ok_or(api::Error::TooMany("posts in pool"))?;
+        .ok_or(ApiError::TooMany("posts in pool"))?;
     let new_pool_posts: Vec<_> = posts
         .iter()
         .zip(current_post_count..total_post_count)

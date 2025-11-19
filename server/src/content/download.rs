@@ -1,6 +1,6 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
+use crate::filesystem;
 use crate::model::enums::MimeType;
-use crate::{api, filesystem};
 use reqwest::Client;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, REFERER};
 use std::str::FromStr;
@@ -32,5 +32,5 @@ pub async fn from_url(url: Url) -> ApiResult<String> {
     let mime_type = MimeType::from_str(content_type.unwrap_or("")).map_err(Box::from)?;
 
     let bytes = response.bytes().await?;
-    filesystem::save_uploaded_file(&bytes, mime_type).map_err(api::Error::from)
+    filesystem::save_uploaded_file(&bytes, mime_type).map_err(ApiError::from)
 }

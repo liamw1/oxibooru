@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
+use crate::api::{ApiError, ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
 use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
@@ -32,7 +32,7 @@ async fn list(
         .transaction(|conn| PoolCategoryInfo::all(conn, &fields))
         .map(|results| UnpagedResponse { results })
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [getting-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-pool-category)
@@ -49,10 +49,10 @@ async fn get(
             .filter(pool_category::name.eq(name))
             .first(conn)
             .optional()?
-            .ok_or(api::Error::NotFound(ResourceType::PoolCategory))?;
+            .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
         PoolCategoryInfo::new(conn, category, &fields)
             .map(Json)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })
 }
 
@@ -85,7 +85,7 @@ async fn create(
     })?;
     conn.transaction(|conn| PoolCategoryInfo::new(conn, category, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 #[derive(Deserialize)]
@@ -124,11 +124,11 @@ async fn update(
         new_category.last_edit_time = DateTime::now();
         let _: PoolCategory = new_category.save_changes(conn)?;
         snapshot::pool_category::modification_snapshot(conn, client, &old_category, &new_category)?;
-        Ok::<_, api::Error>(new_category)
+        Ok::<_, ApiError>(new_category)
     })?;
     conn.transaction(|conn| PoolCategoryInfo::new(conn, updated_category, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [setting-default-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#setting-default-pool-category)
@@ -178,11 +178,11 @@ async fn set_default(
         let _: PoolCategory = new_default_category.save_changes(conn)?;
 
         snapshot::pool_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
-        Ok::<_, api::Error>(new_default_category)
+        Ok::<_, ApiError>(new_default_category)
     })?;
     conn.transaction(|conn| PoolCategoryInfo::new(conn, new_default_category, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [deleting-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-pool-category)
@@ -197,7 +197,7 @@ async fn delete(
         let category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
         api::verify_version(category.last_edit_time, *client_version)?;
         if category.id == 0 {
-            return Err(api::Error::DeleteDefault(ResourceType::PoolCategory));
+            return Err(ApiError::DeleteDefault(ResourceType::PoolCategory));
         }
 
         diesel::delete(pool_category::table.find(category.id)).execute(conn)?;

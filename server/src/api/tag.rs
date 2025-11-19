@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{ApiError, ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::auth::Client;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, Tag};
@@ -71,10 +71,10 @@ async fn get(
             .filter(tag_name::name.eq(name))
             .first(conn)
             .optional()?
-            .ok_or(api::Error::NotFound(ResourceType::Tag))?;
+            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
         TagInfo::new_from_id(conn, tag_id, &fields)
             .map(Json)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })
 }
 
@@ -147,7 +147,7 @@ async fn create(
     api::verify_privilege(client, config::privileges().tag_create)?;
 
     if body.names.is_empty() {
-        return Err(api::Error::NoNamesGiven(ResourceType::Tag));
+        return Err(ApiError::NoNamesGiven(ResourceType::Tag));
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -181,11 +181,11 @@ async fn create(
             suggestions,
         };
         snapshot::tag::creation_snapshot(conn, client, tag_data)?;
-        Ok::<_, api::Error>(tag)
+        Ok::<_, ApiError>(tag)
     })?;
     conn.transaction(|conn| TagInfo::new(conn, tag, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [merging-tags](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-tags)
@@ -210,18 +210,18 @@ async fn merge(
         let (absorbed_id, absorbed_version) = get_tag_info(conn, &body.remove)?;
         let (merge_to_id, merge_to_version) = get_tag_info(conn, &body.merge_to)?;
         if absorbed_id == merge_to_id {
-            return Err(api::Error::SelfMerge(ResourceType::Tag));
+            return Err(ApiError::SelfMerge(ResourceType::Tag));
         }
         api::verify_version(absorbed_version, body.remove_version)?;
         api::verify_version(merge_to_version, body.merge_to_version)?;
 
         update::tag::merge(conn, absorbed_id, merge_to_id)?;
         snapshot::tag::merge_snapshot(conn, client, body.remove, &body.merge_to)?;
-        Ok::<_, api::Error>(merge_to_id)
+        Ok::<_, ApiError>(merge_to_id)
     })?;
     conn.transaction(|conn| TagInfo::new_from_id(conn, merged_tag_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 #[derive(Deserialize)]
@@ -276,7 +276,7 @@ async fn update(
         if let Some(names) = body.names {
             api::verify_privilege(client, config::privileges().tag_edit_name)?;
             if names.is_empty() {
-                return Err(api::Error::NoNamesGiven(ResourceType::Tag));
+                return Err(ApiError::NoNamesGiven(ResourceType::Tag));
             }
 
             update::tag::set_names(conn, tag_id, &names)?;
@@ -300,11 +300,11 @@ async fn update(
         new_tag.last_edit_time = DateTime::now();
         let _: Tag = new_tag.save_changes(conn)?;
         snapshot::tag::modification_snapshot(conn, client, old_snapshot_data, new_snapshot_data)?;
-        Ok::<_, api::Error>(tag_id)
+        Ok::<_, ApiError>(tag_id)
     })?;
     conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [deleting-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-tag)

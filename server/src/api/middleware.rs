@@ -1,9 +1,9 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::auth::{Client as AuthClient, header};
 use crate::model::enums::UserRank;
 use crate::model::snapshot::Snapshot;
 use crate::schema::snapshot;
-use crate::{api, config, db, update};
+use crate::{config, db, update};
 use axum::extract::Request;
 use axum::http::Method;
 use axum::http::header::AUTHORIZATION;
@@ -109,7 +109,7 @@ async fn post_to_webhook(url: Url, snapshot: Arc<Snapshot>) {
 
         let client = Client::builder().default_headers(headers).build()?;
         let response = client.post(url.clone()).json(&snapshot).send().await?;
-        response.error_for_status().map(|_| ()).map_err(api::Error::from)
+        response.error_for_status().map(|_| ()).map_err(ApiError::from)
     };
 
     if let Err(err) = post().await {

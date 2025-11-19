@@ -1,7 +1,7 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
+use crate::config;
 use crate::content::{FileContents, flash};
 use crate::model::enums::PostType;
-use crate::{api, config};
 use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, Rgb, RgbImage};
 use std::fs::File;
 use std::io::{BufReader, Cursor};
@@ -23,12 +23,12 @@ pub fn representative_image(file_contents: &FileContents, file_path: &Path) -> A
                 .mime_type
                 .to_image_format()
                 .expect("Mime type should be convertable to image format");
-            image(&file_contents.data, image_format).map_err(api::Error::from)
+            image(&file_contents.data, image_format).map_err(ApiError::from)
         }
         PostType::Video => video_frame(file_path)
-            .map_err(api::Error::from)
-            .and_then(|frame| frame.ok_or(api::Error::EmptyVideo)),
-        PostType::Flash => flash_image(file_path).and_then(|frame| frame.ok_or(api::Error::EmptySwf)),
+            .map_err(ApiError::from)
+            .and_then(|frame| frame.ok_or(ApiError::EmptyVideo)),
+        PostType::Flash => flash_image(file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
     }
 }
 

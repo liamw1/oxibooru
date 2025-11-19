@@ -1,9 +1,9 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::auth::password;
 use crate::content::hash;
 use crate::schema::user;
 use crate::string::SmallString;
-use crate::{api, config, db};
+use crate::{config, db};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::extract::Path;
@@ -30,16 +30,16 @@ fn get_user_info(
         .select((user::id, user::name, user::email, user::password_salt))
         .filter(user::name.eq(identifier).or(user::email.eq(identifier)))
         .first(conn)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#request-password-reset)
 async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
-    let smtp_info = config::smtp().ok_or(api::Error::MissingSmtpInfo)?;
+    let smtp_info = config::smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
     let mut conn = db::get_connection()?;
     let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;
-    let user_email = user_email.ok_or(api::Error::NoEmail)?;
+    let user_email = user_email.ok_or(ApiError::NoEmail)?;
     let user_mailbox = Mailbox::new(None, Address::from_str(&user_email)?);
 
     let domain = if let Some(domain) = config::get().domain.as_deref() {
@@ -88,7 +88,7 @@ async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
     }
     let mailer = smtp_builder.build();
 
-    mailer.send(&email).map(|_| Json(())).map_err(api::Error::from)
+    mailer.send(&email).map(|_| Json(())).map_err(ApiError::from)
 }
 
 #[derive(Deserialize)]
@@ -123,7 +123,7 @@ async fn reset_password(
     db::get_connection()?.transaction(|conn| {
         let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
         if confirmation.token != hash::compute_url_safe_hash(password_salt.as_bytes()) {
-            return Err(api::Error::UnauthorizedPasswordReset);
+            return Err(ApiError::UnauthorizedPasswordReset);
         }
 
         let temporary_password = generate_temporary_password(TEMPORARY_PASSWORD_LENGTH);

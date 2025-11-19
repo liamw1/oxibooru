@@ -1,11 +1,10 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::model::pool::PoolName;
 use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_statistics};
 use crate::search::{Builder, Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter};
 use crate::{
-    api, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
-    apply_time_filter,
+    apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter,
 };
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
@@ -45,7 +44,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
         let query = self.build_filtered(conn)?;
         let query = self.apply_cache_filters(query);
-        self.get_ordered_ids(conn, query).map_err(api::Error::from)
+        self.get_ordered_ids(conn, query).map_err(ApiError::from)
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
@@ -58,7 +57,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
                 .select(database_statistics::pool_count)
                 .first(conn)
         }
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
     }
 }
 

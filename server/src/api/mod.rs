@@ -8,6 +8,7 @@ use crate::time::DateTime;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
+use image::error::{ImageError, LimitError, LimitErrorKind};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::num::NonZero;
 use std::ops::Deref;
@@ -29,12 +30,12 @@ mod upload;
 mod user;
 mod user_token;
 
-pub type ApiResult<T> = Result<T, Error>;
+pub type ApiResult<T> = Result<T, ApiError>;
 
 /// Giant error enum of doom
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
-pub enum Error {
+pub enum ApiError {
     BadExtension(#[from] crate::model::enums::ParseExtensionError),
     BadHash(#[from] crate::auth::HashError),
     BadHeader(#[from] axum::http::header::ToStrError),
@@ -96,8 +97,6 @@ pub enum Error {
     SelfMerge(ResourceType),
     StdIo(#[from] std::io::Error),
     SwfDecoding(#[from] swf::error::Error),
-    #[error("{0} is too large")]
-    TooLarge(&'static str),
     #[error("Too many {0}")]
     TooMany(&'static str),
     #[error("Password reset token is invalid")]
@@ -105,7 +104,7 @@ pub enum Error {
     VideoDecoding(#[from] video_rs::Error),
 }
 
-impl Error {
+impl ApiError {
     fn status_code(&self) -> StatusCode {
         use serde_json::error::Category;
         type QueryError = diesel::result::Error;
@@ -140,7 +139,6 @@ impl Error {
             | Self::NotAnInteger(_)
             | Self::Request(_)
             | Self::SelfMerge(_)
-            | Self::TooLarge(_)
             | Self::TooMany(_)
             | Self::VideoDecoding(_) => StatusCode::BAD_REQUEST,
             Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
@@ -211,7 +209,6 @@ impl Error {
             Self::SelfMerge(_) => "Self Merge",
             Self::StdIo(_) => "IO Error",
             Self::SwfDecoding(_) => "SWF Decoding Error",
-            Self::TooLarge(_) => "Too Large",
             Self::TooMany(_) => "Too Many",
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
             Self::VideoDecoding(_) => "Video Decoding Error",
@@ -227,7 +224,13 @@ impl Error {
     }
 }
 
-impl IntoResponse for Error {
+impl From<LimitErrorKind> for ApiError {
+    fn from(value: LimitErrorKind) -> Self {
+        Self::Image(ImageError::Limits(LimitError::from(value)))
+    }
+}
+
+impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         (self.status_code(), Json(self.response())).into_response()
     }
@@ -238,7 +241,7 @@ impl IntoResponse for Error {
 pub fn verify_privilege(client: Client, required_rank: UserRank) -> ApiResult<()> {
     (client.rank >= required_rank)
         .then_some(())
-        .ok_or(Error::InsufficientPrivileges)
+        .ok_or(ApiError::InsufficientPrivileges)
 }
 
 /// Checks if `haystack` matches regex `regex_type`.
@@ -247,7 +250,7 @@ pub fn verify_matches_regex(haystack: &str, regex_type: RegexType) -> ApiResult<
     config::regex(regex_type)
         .is_match(haystack)
         .then_some(())
-        .ok_or_else(|| Error::ExpressionFailsRegex(SmallString::new(haystack), regex_type))
+        .ok_or_else(|| ApiError::ExpressionFailsRegex(SmallString::new(haystack), regex_type))
 }
 
 /// Checks if `email` is a valid email.
@@ -392,7 +395,7 @@ struct ErrorResponse {
 fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiResult<()> {
     (cfg!(test) || current_version == client_version)
         .then_some(())
-        .ok_or(Error::ResourceModified)
+        .ok_or(ApiError::ResourceModified)
 }
 
 // Any value that is present is considered Some value, including null.

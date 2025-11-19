@@ -1,8 +1,8 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::content::cache::CachedProperties;
 use crate::content::thumbnail::ThumbnailType;
+use crate::filesystem;
 use crate::model::enums::MimeType;
-use crate::{api, filesystem};
 use axum::RequestExt;
 use axum::extract::{FromRequest, Json, Multipart};
 use axum::http::StatusCode;
@@ -76,7 +76,7 @@ impl Content {
     /// Saves content to temporary uploads directory and returns the name of the file written.
     pub async fn save(self) -> ApiResult<String> {
         match self {
-            Self::DirectUpload(file_contents) => file_contents.save().map_err(api::Error::from),
+            Self::DirectUpload(file_contents) => file_contents.save().map_err(ApiError::from),
             Self::Token(token) => Ok(token),
             Self::Url(url) => download::from_url(url).await,
         }

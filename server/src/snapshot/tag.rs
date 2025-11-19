@@ -1,12 +1,12 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::model::snapshot::NewSnapshot;
 use crate::model::tag::{Tag, TagName};
 use crate::model::tag_category::TagCategory;
 use crate::schema::{tag_category, tag_implication, tag_name, tag_suggestion};
+use crate::snapshot;
 use crate::string::{LargeString, SmallString};
-use crate::{api, snapshot};
 use diesel::{ExpressionMethods, Insertable, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_json::json;
@@ -90,7 +90,7 @@ pub fn new_name_snapshots(conn: &mut PgConnection, client: Client, new_names: Ve
     new_snapshots
         .insert_into(crate::schema::snapshot::table)
         .execute(conn)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 pub fn merge_snapshot(
@@ -147,19 +147,17 @@ fn unary_snapshot(
 ) -> ApiResult<()> {
     tag_data.sort_fields();
     let resource_id = tag_data.names.first().expect(TAG_NAME_PANIC_MESSAGE).clone();
-    serde_json::to_value(tag_data)
-        .map_err(api::Error::from)
-        .and_then(|data| {
-            NewSnapshot {
-                user_id: client.id,
-                operation,
-                resource_type: ResourceType::Tag,
-                resource_id,
-                data,
-            }
-            .insert(conn)
-            .map_err(api::Error::from)
-        })
+    serde_json::to_value(tag_data).map_err(ApiError::from).and_then(|data| {
+        NewSnapshot {
+            user_id: client.id,
+            operation,
+            resource_type: ResourceType::Tag,
+            resource_id,
+            data,
+        }
+        .insert(conn)
+        .map_err(ApiError::from)
+    })
 }
 
 const TAG_NAME_PANIC_MESSAGE: &str = "A tag must have at least one name";

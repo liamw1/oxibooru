@@ -1,4 +1,4 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::content::upload::{self, MAX_UPLOAD_SIZE, PartName};
 use crate::content::{JsonOrMultipart, download};
@@ -50,7 +50,7 @@ async fn upload_handler(
                 let url_upload: UploadBody = serde_json::from_slice(&metadata)?;
                 upload_from_url(url_upload).await
             } else {
-                Err(api::Error::MissingFormData)
+                Err(ApiError::MissingFormData)
             }
         }
     }

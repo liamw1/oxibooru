@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{ApiError, ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::auth::Client;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
@@ -64,11 +64,11 @@ async fn get(
     db::get_connection()?.transaction(|conn| {
         let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(conn)?;
         if !pool_exists {
-            return Err(api::Error::NotFound(ResourceType::Pool));
+            return Err(ApiError::NotFound(ResourceType::Pool));
         }
         PoolInfo::new_from_id(conn, pool_id, &fields)
             .map(Json)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })
 }
 
@@ -90,7 +90,7 @@ async fn create(
     api::verify_privilege(client, config::privileges().pool_create)?;
 
     if body.names.is_empty() {
-        return Err(api::Error::NoNamesGiven(ResourceType::Pool));
+        return Err(ApiError::NoNamesGiven(ResourceType::Pool));
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -120,11 +120,11 @@ async fn create(
             posts,
         };
         snapshot::pool::creation_snapshot(conn, client, pool.id, pool_data)?;
-        Ok::<_, api::Error>(pool)
+        Ok::<_, ApiError>(pool)
     })?;
     conn.transaction(|conn| PoolInfo::new(conn, pool, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [merging-pools](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-pools)
@@ -138,7 +138,7 @@ async fn merge(
     let absorbed_id = body.remove;
     let merge_to_id = body.merge_to;
     if absorbed_id == merge_to_id {
-        return Err(api::Error::SelfMerge(ResourceType::Pool));
+        return Err(ApiError::SelfMerge(ResourceType::Pool));
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -150,11 +150,11 @@ async fn merge(
         api::verify_version(merge_to_version, body.merge_to_version)?;
 
         update::pool::merge(conn, absorbed_id, merge_to_id)?;
-        snapshot::pool::merge_snapshot(conn, client, absorbed_id, merge_to_id).map_err(api::Error::from)
+        snapshot::pool::merge_snapshot(conn, client, absorbed_id, merge_to_id).map_err(ApiError::from)
     })?;
     conn.transaction(|conn| PoolInfo::new_from_id(conn, merge_to_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 #[derive(Deserialize)]
@@ -203,7 +203,7 @@ async fn update(
         if let Some(names) = body.names {
             api::verify_privilege(client, config::privileges().pool_edit_name)?;
             if names.is_empty() {
-                return Err(api::Error::NoNamesGiven(ResourceType::Pool));
+                return Err(ApiError::NoNamesGiven(ResourceType::Pool));
             }
 
             update::pool::set_names(conn, pool_id, &names)?;
@@ -223,7 +223,7 @@ async fn update(
     })?;
     conn.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [deleting-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-pool)

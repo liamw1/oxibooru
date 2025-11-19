@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::api::{ApiError, ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
 use crate::auth::Client;
 use crate::content::hash::PostHash;
 use crate::content::signature::SignatureCache;
@@ -114,11 +114,11 @@ async fn get(
     db::get_connection()?.transaction(|conn| {
         let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;
         if !post_exists {
-            return Err(api::Error::NotFound(ResourceType::Post));
+            return Err(ApiError::NotFound(ResourceType::Post));
         }
         PostInfo::new_from_id(conn, client, post_id, &fields)
             .map(Json)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })
 }
 
@@ -227,7 +227,7 @@ async fn get_featured(
             .map(|post_id| PostInfo::new_from_id(conn, client, post_id, &fields))
             .transpose()
             .map(Json)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })
 }
 
@@ -246,7 +246,7 @@ async fn feature(
     api::verify_privilege(client, config::privileges().post_feature)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
+    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
     let new_post_feature = NewPostFeature {
         post_id: body.id,
         user_id,
@@ -265,7 +265,7 @@ async fn feature(
     })?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, client, body.id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 #[derive(Deserialize)]
@@ -301,7 +301,7 @@ async fn reverse_search(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let content = Content::new(body.content, body.content_token, body.content_url)
-        .ok_or(api::Error::MissingContent(ResourceType::Post))?;
+        .ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.compute_properties().await?;
     db::get_connection()?
         .transaction(|conn| {
@@ -381,7 +381,7 @@ async fn reverse_search_handler(
             } else if let Some(metadata) = decoded_body.metadata {
                 serde_json::from_slice(&metadata)?
             } else {
-                return Err(api::Error::MissingFormData);
+                return Err(ApiError::MissingFormData);
             };
             reverse_search(client, params, reverse_search_body).await
         }
@@ -421,7 +421,7 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let content = Content::new(body.content, body.content_token, body.content_url)
-        .ok_or(api::Error::MissingContent(ResourceType::Post))?;
+        .ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.get_or_compute_properties().await?;
 
     let custom_thumbnail = match Content::new(body.thumbnail, body.thumbnail_token, body.thumbnail_url) {
@@ -491,13 +491,13 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
             featured: false,
         };
         snapshot::post::creation_snapshot(conn, client, post.id, post_data)?;
-        Ok::<_, api::Error>(post.id)
+        Ok::<_, ApiError>(post.id)
     })
     .await?;
     db::get_connection()?
         .transaction(|conn| PostInfo::new_from_id(conn, client, post_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// Creates a post from either a JSON body or a multipart form.
@@ -510,7 +510,7 @@ async fn create_handler(
         JsonOrMultipart::Json(payload) => create(client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
-            let metadata = decoded_body.metadata.ok_or(api::Error::MissingMetadata)?;
+            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut new_post: CreateBody = serde_json::from_slice(&metadata)?;
             let [content, thumbnail] = decoded_body.files;
 
@@ -541,7 +541,7 @@ async fn merge(
     let absorbed_id = body.post_info.remove;
     let merge_to_id = body.post_info.merge_to;
     if absorbed_id == merge_to_id {
-        return Err(api::Error::SelfMerge(ResourceType::Post));
+        return Err(ApiError::SelfMerge(ResourceType::Post));
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -559,7 +559,7 @@ async fn merge(
     db::get_connection()?
         .transaction(|conn| PostInfo::new_from_id(conn, client, body.post_info.merge_to, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [adding-post-to-favorites](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#adding-post-to-favorites)
@@ -571,7 +571,7 @@ async fn favorite(
     api::verify_privilege(client, config::privileges().post_favorite)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
+    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
     let new_post_favorite = PostFavorite {
         post_id,
         user_id,
@@ -584,11 +584,11 @@ async fn favorite(
         new_post_favorite
             .insert_into(post_favorite::table)
             .execute(conn)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, client, post_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [rating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-post)
@@ -601,7 +601,7 @@ async fn rate(
     api::verify_privilege(client, config::privileges().post_score)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
+    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
 
     let mut conn = db::get_connection()?;
     conn.transaction(|conn| {
@@ -617,11 +617,11 @@ async fn rate(
             .insert_into(post_score::table)
             .execute(conn)?;
         }
-        Ok::<_, api::Error>(())
+        Ok::<_, ApiError>(())
     })?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, client, post_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 #[derive(Deserialize)]
@@ -759,7 +759,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
     db::get_connection()?
         .transaction(|conn| PostInfo::new_from_id(conn, client, post_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// Updates post from either a JSON body or a multipart form.
@@ -773,7 +773,7 @@ async fn update_handler(
         JsonOrMultipart::Json(payload) => update(client, post_id, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
-            let metadata = decoded_body.metadata.ok_or(api::Error::MissingMetadata)?;
+            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut post_update: UpdateBody = serde_json::from_slice(&metadata)?;
             let [content, thumbnail] = decoded_body.files;
 
@@ -816,7 +816,7 @@ async fn delete(
         snapshot::post::deletion_snapshot(conn, client, post_id, post_data)?;
 
         diesel::delete(post::table.find(post_id)).execute(conn)?;
-        Ok::<_, api::Error>(mime_type)
+        Ok::<_, ApiError>(mime_type)
     })?;
     if config::get().delete_source_files {
         filesystem::delete_post(&PostHash::new(post_id), mime_type)?;
@@ -833,13 +833,13 @@ async fn unfavorite(
     api::verify_privilege(client, config::privileges().post_favorite)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
+    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
 
     let mut conn = db::get_connection()?;
     diesel::delete(post_favorite::table.find((post_id, user_id))).execute(&mut conn)?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, client, post_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 #[cfg(test)]

@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
+use crate::api::{ApiError, ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
 use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
@@ -32,7 +32,7 @@ async fn list(
         .transaction(|conn| TagCategoryInfo::all(conn, &fields))
         .map(|results| UnpagedResponse { results })
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [getting-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag-category)
@@ -49,10 +49,10 @@ async fn get(
             .filter(tag_category::name.eq(name))
             .first(conn)
             .optional()?
-            .ok_or(api::Error::NotFound(ResourceType::TagCategory))?;
+            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
         TagCategoryInfo::new(conn, category, &fields)
             .map(Json)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })
 }
 
@@ -87,7 +87,7 @@ async fn create(
     })?;
     conn.transaction(|conn| TagCategoryInfo::new(conn, category, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 #[derive(Deserialize)]
@@ -131,11 +131,11 @@ async fn update(
         new_category.last_edit_time = DateTime::now();
         let _: TagCategory = new_category.save_changes(conn)?;
         snapshot::tag_category::modification_snapshot(conn, client, &old_category, &new_category)?;
-        Ok::<_, api::Error>(new_category)
+        Ok::<_, ApiError>(new_category)
     })?;
     conn.transaction(|conn| TagCategoryInfo::new(conn, updated_category, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [setting-default-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#setting-default-tag-category)
@@ -184,11 +184,11 @@ async fn set_default(
         let _: TagCategory = new_default_category.save_changes(conn)?;
 
         snapshot::tag_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
-        Ok::<_, api::Error>(new_default_category)
+        Ok::<_, ApiError>(new_default_category)
     })?;
     conn.transaction(|conn| TagCategoryInfo::new(conn, new_default_category, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [deleting-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-tag-category)
@@ -203,7 +203,7 @@ async fn delete(
         let category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
         api::verify_version(category.last_edit_time, *client_version)?;
         if category.id == 0 {
-            return Err(api::Error::DeleteDefault(ResourceType::TagCategory));
+            return Err(ApiError::DeleteDefault(ResourceType::TagCategory));
         }
 
         diesel::delete(tag_category::table.find(category.id)).execute(conn)?;

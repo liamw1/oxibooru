@@ -1,9 +1,9 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::schema::{snapshot, user};
 use crate::search::{Builder, Order, ParsedSort, SearchCriteria};
-use crate::{api, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
+use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
 use diesel::dsl::{IntoBoxed, LeftJoin, Select};
 use diesel::pg::Pg;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
@@ -35,12 +35,12 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 
     fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
         let query = self.build_filtered()?;
-        self.get_ordered_ids(conn, query).map_err(api::Error::from)
+        self.get_ordered_ids(conn, query).map_err(ApiError::from)
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
         let unsorted_query = self.build_filtered()?;
-        unsorted_query.count().first(conn).map_err(api::Error::from)
+        unsorted_query.count().first(conn).map_err(ApiError::from)
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::api::{ApiError, ApiResult, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams};
 use crate::auth::Client;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
@@ -60,11 +60,11 @@ async fn get(
     db::get_connection()?.transaction(|conn| {
         let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(conn)?;
         if !comment_exists {
-            return Err(api::Error::NotFound(ResourceType::Comment));
+            return Err(ApiError::NotFound(ResourceType::Comment));
         }
         CommentInfo::new_from_id(conn, client, comment_id, &fields)
             .map(Json)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })
 }
 
@@ -84,7 +84,7 @@ async fn create(
 ) -> ApiResult<Json<CommentInfo>> {
     api::verify_privilege(client, config::privileges().comment_create)?;
 
-    let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
+    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let new_comment = NewComment {
         user_id: Some(user_id),
@@ -97,7 +97,7 @@ async fn create(
     let comment = new_comment.insert_into(comment::table).get_result(&mut conn)?;
     conn.transaction(|conn| CommentInfo::new(conn, client, comment, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 #[derive(Deserialize)]
@@ -134,11 +134,11 @@ async fn update(
         diesel::update(comment::table.find(comment_id))
             .set((comment::text.eq(body.text), comment::last_edit_time.eq(DateTime::now())))
             .execute(conn)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })?;
     conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [rating-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#rating-comment)
@@ -150,7 +150,7 @@ async fn rate(
 ) -> ApiResult<Json<CommentInfo>> {
     api::verify_privilege(client, config::privileges().comment_score)?;
 
-    let user_id = client.id.ok_or(api::Error::NotLoggedIn)?;
+    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let mut conn = db::get_connection()?;
@@ -166,11 +166,11 @@ async fn rate(
             .insert_into(comment_score::table)
             .execute(conn)?;
         }
-        Ok::<_, api::Error>(())
+        Ok::<_, ApiError>(())
     })?;
     conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// See [deleting-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-comment)

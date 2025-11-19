@@ -1,5 +1,4 @@
-use crate::api;
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::content::FileContents;
 use crate::model::enums::MimeType;
 use crate::string::SmallString;
@@ -44,10 +43,10 @@ pub async fn extract<const N: usize>(mut form_data: Multipart, fields: [PartName
 
         // Ensure metadata is JSON
         if file_info.is_none() && field.content_type() != Some("application/json") {
-            return Err(api::Error::InvalidMetadataType);
+            return Err(ApiError::InvalidMetadataType);
         }
 
-        let data = field.bytes().await.map_err(api::Error::from)?.to_vec();
+        let data = field.bytes().await.map_err(ApiError::from)?.to_vec();
         match file_info {
             Some((index, mime_type)) => files[index] = Some(FileContents { data, mime_type }),
             None => metadata = Some(data),
@@ -68,17 +67,17 @@ fn get_mime_type(field: &Field) -> ApiResult<MimeType> {
     let content_type = field.content_type().map(str::trim);
 
     match (extension, content_type) {
-        (Some(ext), None | Some("application/octet-stream")) => MimeType::from_extension(ext).map_err(api::Error::from),
+        (Some(ext), None | Some("application/octet-stream")) => MimeType::from_extension(ext).map_err(ApiError::from),
         (Some(ext), Some(content_type)) => {
             let mime_type = MimeType::from_extension(ext)?;
             if MimeType::from_str(content_type) != Ok(mime_type) {
-                return Err(api::Error::ContentTypeMismatch(mime_type, SmallString::new(content_type)));
+                return Err(ApiError::ContentTypeMismatch(mime_type, SmallString::new(content_type)));
             }
             Ok(mime_type)
         }
         (None, Some(content_type)) => MimeType::from_str(content_type)
             .map_err(Box::from)
-            .map_err(api::Error::from),
-        (None, None) => Err(api::Error::MissingContentType),
+            .map_err(ApiError::from),
+        (None, None) => Err(ApiError::MissingContentType),
     }
 }

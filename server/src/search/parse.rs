@@ -1,4 +1,4 @@
-use crate::api::{self, ApiResult};
+use crate::api::{ApiError, ApiResult};
 use crate::search::{Condition, StrCondition, TimeParsingError};
 use crate::time::DateTime;
 use std::borrow::Cow;
@@ -55,8 +55,8 @@ pub fn str_condition(condition: &'_ str) -> StrCondition<'_> {
 pub fn time_condition(condition: &str) -> ApiResult<Condition<Range<DateTime>>> {
     if let Some(split_str) = condition.split_once("..") {
         return match split_str {
-            (left, "") => parse_time(left).map(Condition::GreaterEq).map_err(api::Error::from),
-            ("", right) => parse_time(right).map(Condition::LessEq).map_err(api::Error::from),
+            (left, "") => parse_time(left).map(Condition::GreaterEq).map_err(ApiError::from),
+            ("", right) => parse_time(right).map(Condition::LessEq).map_err(ApiError::from),
             (left, right) => Ok(Condition::Range(parse_time(left)?..parse_time(right)?)),
         };
     }
@@ -65,7 +65,7 @@ pub fn time_condition(condition: &str) -> ApiResult<Condition<Range<DateTime>>> 
         .map(parse_time)
         .collect::<Result<_, _>>()
         .map(Condition::Values)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// Parses a non-string non-time `condition`.
@@ -95,7 +95,7 @@ where
         .map(str::parse)
         .collect::<Result<_, _>>()
         .map_err(Box::from)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// A general iterator over patterns that are not escaped with `\`.

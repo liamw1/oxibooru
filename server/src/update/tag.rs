@@ -1,4 +1,4 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
@@ -44,7 +44,7 @@ pub fn set_implications(conn: &mut PgConnection, tag_id: i64, implied_ids: &[i64
                     parent_id: tag_id,
                     child_id,
                 })
-                .ok_or(api::Error::CyclicDependency(ResourceType::TagImplication))
+                .ok_or(ApiError::CyclicDependency(ResourceType::TagImplication))
         })
         .collect::<Result<_, _>>()?;
 
@@ -65,7 +65,7 @@ pub fn set_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i6
                     parent_id: tag_id,
                     child_id,
                 })
-                .ok_or(api::Error::CyclicDependency(ResourceType::TagSuggestion))
+                .ok_or(ApiError::CyclicDependency(ResourceType::TagSuggestion))
         })
         .collect::<Result<_, _>>()?;
 
@@ -114,7 +114,7 @@ pub fn get_or_create_tag_ids(
         }
     }
     if detect_cycles && dependency_graph.has_cycle() {
-        return Err(api::Error::CyclicDependency(ResourceType::TagImplication));
+        return Err(ApiError::CyclicDependency(ResourceType::TagImplication));
     }
 
     let mut tag_ids: Vec<_> = dependency_graph.into_nodes().collect();
@@ -325,7 +325,7 @@ fn add_names(conn: &mut PgConnection, tag_id: i64, current_name_count: i32, name
     let total_name_count = i32::try_from(names.len())
         .ok()
         .and_then(|new_name_count| current_name_count.checked_add(new_name_count))
-        .ok_or(api::Error::TooMany("names on tag"))?;
+        .ok_or(ApiError::TooMany("names on tag"))?;
     let new_names: Vec<_> = names
         .iter()
         .zip(current_name_count..total_name_count)

@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, ResourceParams, UnpagedResponse};
+use crate::api::{ApiError, ApiResult, ResourceParams, UnpagedResponse};
 use crate::auth::Client;
 use crate::model::enums::AvatarStyle;
 use crate::model::user::{NewUserToken, UserToken};
@@ -45,7 +45,7 @@ async fn list(
             .filter(user_token::user_id.eq(user_id))
             .load(conn)
             .map(|tokens| (avatar_style, tokens))
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })?;
 
     let username = SmallString::new(username);
@@ -108,7 +108,7 @@ async fn create(
         }
         .insert_into(user_token::table)
         .get_result(conn)?;
-        Ok::<_, api::Error>((user_token, avatar_style))
+        Ok::<_, ApiError>((user_token, avatar_style))
     })?;
     Ok(Json(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), user_token, &fields)))
 }
@@ -162,7 +162,7 @@ async fn update(
         user_token.last_edit_time = DateTime::now();
 
         let updated_user_token: UserToken = user_token.save_changes(conn)?;
-        Ok::<_, api::Error>((updated_user_token, avatar_style))
+        Ok::<_, ApiError>((updated_user_token, avatar_style))
     })?;
     Ok(Json(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), updated_user_token, &fields)))
 }

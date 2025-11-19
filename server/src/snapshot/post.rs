@@ -1,4 +1,4 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::model::enums::{PostFlags, PostSafety, ResourceOperation, ResourceType};
 use crate::model::post::{Post, PostNote};
@@ -6,8 +6,8 @@ use crate::model::snapshot::NewSnapshot;
 use crate::model::tag::TagName;
 use crate::resource::post::Note;
 use crate::schema::{post_feature, post_note, post_relation, post_tag, tag_name};
+use crate::snapshot;
 use crate::string::{LargeString, SmallString};
-use crate::{api, snapshot};
 use diesel::{
     ExpressionMethods, JoinOnDsl, OptionalExtension, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper,
 };
@@ -175,7 +175,7 @@ pub fn unary_snapshot(
 ) -> ApiResult<()> {
     post_data.sort_fields();
     serde_json::to_value(post_data)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
         .and_then(|data| {
             NewSnapshot {
                 user_id: client.id,
@@ -185,6 +185,6 @@ pub fn unary_snapshot(
                 data,
             }
             .insert(conn)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
         })
 }

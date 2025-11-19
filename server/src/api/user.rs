@@ -1,4 +1,4 @@
-use crate::api::{ApiResult, DeleteBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{ApiError, ApiResult, DeleteBody, PageParams, PagedResponse, ResourceParams};
 use crate::auth::Client;
 use crate::auth::password;
 use crate::config::RegexType;
@@ -76,7 +76,7 @@ async fn get(
             .filter(user::name.eq(username))
             .first(conn)
             .optional()?
-            .ok_or(api::Error::NotFound(ResourceType::User))?;
+            .ok_or(ApiError::NotFound(ResourceType::User))?;
 
         let viewing_self = client.id == Some(user_id);
         if !viewing_self {
@@ -90,7 +90,7 @@ async fn get(
         };
         UserInfo::new_from_id(conn, user_id, &fields, visibility)
             .map(Json)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
     })
 }
 
@@ -113,7 +113,7 @@ struct CreateBody {
 async fn create(client: Client, params: ResourceParams, body: CreateBody) -> ApiResult<Json<UserInfo>> {
     let creation_rank = body.rank.unwrap_or(config::default_rank());
     if creation_rank == UserRank::Anonymous {
-        return Err(api::Error::InvalidUserRank);
+        return Err(ApiError::InvalidUserRank);
     }
 
     let creating_self = client.id.is_none();
@@ -163,11 +163,11 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
             update::user::avatar(conn, user.id, &body.name, &avatar)?;
         }
 
-        Ok::<_, api::Error>(user)
+        Ok::<_, ApiError>(user)
     })?;
     conn.transaction(|conn| UserInfo::new(conn, user, &fields, Visibility::Full))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// Creates a user from either a JSON body or a multipart form.
@@ -180,13 +180,13 @@ async fn create_handler(
         JsonOrMultipart::Json(payload) => create(client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
-            let metadata = decoded_body.metadata.ok_or(api::Error::MissingMetadata)?;
+            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut new_user: CreateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar)] = decoded_body.files {
                 new_user.avatar = Some(avatar);
                 create(client, params, new_user).await
             } else {
-                Err(api::Error::MissingFormData)
+                Err(ApiError::MissingFormData)
             }
         }
     }
@@ -327,7 +327,7 @@ async fn update(
     })?;
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility))
         .map(Json)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
 }
 
 /// Updates a user from either a JSON body or a multipart form.
@@ -341,13 +341,13 @@ async fn update_handler(
         JsonOrMultipart::Json(payload) => update(client, username, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
-            let metadata = decoded_body.metadata.ok_or(api::Error::MissingMetadata)?;
+            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut user_update: UpdateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar)] = decoded_body.files {
                 user_update.avatar = Some(avatar);
                 update(client, username, params, user_update).await
             } else {
-                Err(api::Error::MissingFormData)
+                Err(ApiError::MissingFormData)
             }
         }
     }

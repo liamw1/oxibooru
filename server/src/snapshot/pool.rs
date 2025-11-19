@@ -1,11 +1,11 @@
-use crate::api::ApiResult;
+use crate::api::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::model::pool::Pool;
 use crate::model::snapshot::NewSnapshot;
 use crate::schema::{pool_category, pool_name, pool_post};
+use crate::snapshot;
 use crate::string::{LargeString, SmallString};
-use crate::{api, snapshot};
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_json::json;
@@ -114,7 +114,7 @@ fn unary_snapshot(
 ) -> ApiResult<()> {
     pool_data.sort_fields();
     serde_json::to_value(pool_data)
-        .map_err(api::Error::from)
+        .map_err(ApiError::from)
         .and_then(|data| {
             NewSnapshot {
                 user_id: client.id,
@@ -124,6 +124,6 @@ fn unary_snapshot(
                 data,
             }
             .insert(conn)
-            .map_err(api::Error::from)
+            .map_err(ApiError::from)
         })
 }

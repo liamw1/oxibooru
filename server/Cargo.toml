@@ -4,45 +4,45 @@ version = "0.7.0"
 edition = "2024"
 
 [dependencies]
-diesel = { version = "2.3.2", features = ["postgres", "r2d2", "time", "uuid", "serde_json",
+argon2 = { version = "0.5.3", features = ["std"] }
+axum = { version = "0.8.4", features = ["multipart"] }
+base64 = "0.22.1"
+blake3 = { version = "1.5.5", features = ["std", "traits-preview"] }
+byteorder = "1.5.0"
+compact_str = { version = "0.9.0", features = ["serde"] }
+config = { version = "0.15.18", default-features = false, features = ["toml"] }
+diesel = { version = "2.3.2", features = ["postgres", "r2d2", "time", "uuid", "serde_json", 
                                           "i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
 diesel_migrations = { version = "2.3.0", features = ["postgres"] }
-tokio = { version = "1.43.0", features = ["full"] }
-axum = { version = "0.8.4", features = ["multipart"] }
-reqwest = { version ="0.12.12", features = ["json"] }
-tower-http = { version = "0.6.6", features = ["trace", "timeout", "normalize-path"] }
-tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
-image = { version = "0.25.5", features = ["avif-native"] }
-serde = { version = "1.0.217", features = ["derive", "rc"] }
-strum = { version = "0.27.0", features = ["derive", "phf"] }
-time = { version = "0.3.37", features = ["serde-human-readable"] }
-uuid = { version = "1.13.1", features = ["v4", "serde"] }
-url = { version = "2.5.4", features = ["serde"] }
-compact_str = { version = "0.9.0", features = ["serde"] }
-lettre = { version = "0.11.12", features = ["serde"] }
-blake3 = { version = "1.5.5", features = ["std", "traits-preview"] }
-argon2 = { version = "0.5.3", features = ["std"] }
-rayon = "1.10.0"
-tower = "0.5.2"
-tracing = "0.1.41"
-config = { version = "0.15.18", default-features = false, features = ["toml"] }
-video-rs = "0.10.3"
-swf = "0.2.2"
+dotenvy = "0.15.7"
 flate2 = "1.0.35"
-hmac = "0.12.1"
-md5 = "0.7.0"
-base64 = "0.22.1"
-percent-encoding = "2.3.1"
 hex = "0.4.3"
-byteorder = "1.5.0"
+hmac = "0.12.1"
+image = { version = "0.25.5", features = ["avif-native"] }
+lettre = { version = "0.11.12", features = ["serde"] }
+md5 = "0.7.0"
+num-traits = "0.2.19"
+percent-encoding = "2.3.1"
+rayon = "1.10.0"
 regex = "1.11.1"
+reqwest = { version ="0.12.12", features = ["json"] }
+serde = { version = "1.0.217", features = ["derive", "rc"] }
 serde_json = "1.0.138"
 serde_regex = "1.1.0"
 serde_repr = "0.1.19"
 serde_with = "3.12.0"
+strum = { version = "0.27.0", features = ["derive", "phf"] }
+swf = "0.2.2"
 thiserror = "2.0.11"
-num-traits = "0.2.19"
-dotenvy = "0.15.7"
+time = { version = "0.3.37", features = ["serde-human-readable"] }
+tokio = { version = "1.43.0", features = ["full"] }
+tower = "0.5.2"
+tower-http = { version = "0.6.6", features = ["trace", "timeout", "normalize-path"] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
+url = { version = "2.5.4", features = ["serde"] }
+uuid = { version = "1.13.1", features = ["v4", "serde"] }
+video-rs = "0.10.3"
 
 [dev-dependencies]
 axum-test = "17.3.0"
