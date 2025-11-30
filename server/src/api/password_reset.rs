@@ -1,12 +1,13 @@
 use crate::api::{ApiError, ApiResult};
+use crate::app::AppState;
 use crate::auth::password;
+use crate::config;
 use crate::content::hash;
 use crate::schema::user;
 use crate::string::SmallString;
-use crate::{config, db};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
-use axum::extract::Path;
+use axum::extract::{Path, State};
 use axum::{Json, Router, routing};
 use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use lettre::Address;
@@ -18,7 +19,7 @@ use percent_encoding::NON_ALPHANUMERIC;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new().route("/password-reset/{identifier}", routing::get(request_reset).post(reset_password))
 }
 
@@ -34,10 +35,10 @@ fn get_user_info(
 }
 
 /// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#request-password-reset)
-async fn request_reset(Path(identifier): Path<String>) -> ApiResult<Json<()>> {
+async fn request_reset(State(state): State<AppState>, Path(identifier): Path<String>) -> ApiResult<Json<()>> {
     let smtp_info = config::smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;
     let user_email = user_email.ok_or(ApiError::NoEmail)?;
     let user_mailbox = Mailbox::new(None, Address::from_str(&user_email)?);
@@ -115,12 +116,13 @@ fn generate_temporary_password(length: u8) -> String {
 
 /// See [confirm-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#confirm-password-reset)
 async fn reset_password(
+    State(state): State<AppState>,
     Path(username): Path<String>,
     Json(confirmation): Json<ResetToken>,
 ) -> ApiResult<Json<NewPassword>> {
     const TEMPORARY_PASSWORD_LENGTH: u8 = 16;
 
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
         if confirmation.token != hash::compute_url_safe_hash(password_salt.as_bytes()) {
             return Err(ApiError::UnauthorizedPasswordReset);

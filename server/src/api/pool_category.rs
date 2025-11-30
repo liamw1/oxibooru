@@ -1,4 +1,5 @@
 use crate::api::{ApiError, ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
+use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::RegexType;
 use crate::model::enums::ResourceType;
@@ -7,13 +8,13 @@ use crate::resource::pool_category::PoolCategoryInfo;
 use crate::schema::{pool, pool_category};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, resource, snapshot};
-use axum::extract::{Extension, Path, Query};
+use crate::{api, config, resource, snapshot};
+use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/pool-categories", routing::get(list).post(create))
         .route("/pool-category/{name}", routing::get(get).put(update).delete(delete))
@@ -22,13 +23,15 @@ pub fn routes() -> Router {
 
 /// See [listing-pool-categories](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-pool-categories)
 async fn list(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UnpagedResponse<PoolCategoryInfo>>> {
     api::verify_privilege(client, config::privileges().pool_category_list)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?
+    state
+        .get_connection()?
         .transaction(|conn| PoolCategoryInfo::all(conn, &fields))
         .map(|results| UnpagedResponse { results })
         .map(Json)
@@ -37,6 +40,7 @@ async fn list(
 
 /// See [getting-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-pool-category)
 async fn get(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
@@ -44,7 +48,7 @@ async fn get(
     api::verify_privilege(client, config::privileges().pool_category_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let category = pool_category::table
             .filter(pool_category::name.eq(name))
             .first(conn)
@@ -65,6 +69,7 @@ struct CreateBody {
 
 /// See [creating-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-pool-category)
 async fn create(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
@@ -78,7 +83,7 @@ async fn create(
         color: &body.color,
     };
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let category = conn.transaction(|conn| {
         let category = new_category.insert_into(pool_category::table).get_result(conn)?;
         snapshot::pool_category::creation_snapshot(conn, client, &category).map(|()| category)
@@ -98,6 +103,7 @@ struct UpdateBody {
 
 /// See [updating-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-pool-category)
 async fn update(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
@@ -105,7 +111,7 @@ async fn update(
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let updated_category = conn.transaction(|conn| {
         let old_category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
         api::verify_version(old_category.last_edit_time, body.version)?;
@@ -133,6 +139,7 @@ async fn update(
 
 /// See [setting-default-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#setting-default-pool-category)
 async fn set_default(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
@@ -140,7 +147,7 @@ async fn set_default(
     api::verify_privilege(client, config::privileges().pool_category_set_default)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let new_default_category: PoolCategory = conn.transaction(|conn| {
         let mut category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
         let mut old_default_category: PoolCategory =
@@ -187,13 +194,14 @@ async fn set_default(
 
 /// See [deleting-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-pool-category)
 async fn delete(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, config::privileges().pool_category_delete)?;
 
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let category: PoolCategory = pool_category::table.filter(pool_category::name.eq(name)).first(conn)?;
         api::verify_version(category.last_edit_time, *client_version)?;
         if category.id == 0 {

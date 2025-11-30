@@ -1,4 +1,5 @@
 use crate::api::{ApiError, ApiResult, ResourceParams, UnpagedResponse};
+use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::enums::AvatarStyle;
 use crate::model::user::{NewUserToken, UserToken};
@@ -7,14 +8,14 @@ use crate::resource::user_token::UserTokenInfo;
 use crate::schema::{user, user_token};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::{api, config, db, resource};
-use axum::extract::{Extension, Path, Query};
+use crate::{api, config, resource};
+use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, Insertable, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 use uuid::Uuid;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/user-tokens/{username}", routing::get(list))
         .route("/user-token/{username}", routing::post(create))
@@ -23,12 +24,13 @@ pub fn routes() -> Router {
 
 /// See [listing-user-tokens](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-user-tokens)
 async fn list(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(username): Path<String>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UnpagedResponse<UserTokenInfo>>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let (avatar_style, user_tokens) = db::get_connection()?.transaction(|conn| {
+    let (avatar_style, user_tokens) = state.get_connection()?.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -67,6 +69,7 @@ struct CreateBody {
 
 /// See [creating-user-token](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-user-token)
 async fn create(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(username): Path<String>,
     Query(params): Query<ResourceParams>,
@@ -74,7 +77,7 @@ async fn create(
 ) -> ApiResult<Json<UserTokenInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let (user_token, avatar_style) = conn.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
@@ -126,6 +129,7 @@ struct UpdateBody {
 
 /// See [updating-user-token](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-user-token)
 async fn update(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path((username, token)): Path<(String, Uuid)>,
     Query(params): Query<ResourceParams>,
@@ -133,7 +137,7 @@ async fn update(
 ) -> ApiResult<Json<UserTokenInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let (updated_user_token, avatar_style) = conn.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
@@ -169,10 +173,11 @@ async fn update(
 
 /// See [deleting-user-token](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-user-token)
 async fn delete(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path((username, token)): Path<(String, Uuid)>,
 ) -> ApiResult<Json<()>> {
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let user_token_owner: i64 = user::table
             .inner_join(user_token::table)
             .select(user_token::user_id)

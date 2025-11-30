@@ -1,4 +1,5 @@
 use crate::api::{ApiResult, ResourceParams};
+use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::PublicConfig;
 use crate::model::post::PostFeature;
@@ -6,14 +7,14 @@ use crate::resource::post::PostInfo;
 use crate::schema::{database_statistics, post_feature, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{config, db, resource};
-use axum::extract::{Extension, Query};
+use crate::{config, resource};
+use axum::extract::{Extension, Query, State};
 use axum::response::Json;
 use axum::routing::{self, Router};
 use diesel::{Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Serialize;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new().route("/info", routing::get(get))
 }
 
@@ -31,9 +32,13 @@ struct Response {
 }
 
 /// See [getting-global-info](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-global-info)
-async fn get(Extension(client): Extension<Client>, Query(params): Query<ResourceParams>) -> ApiResult<Json<Response>> {
+async fn get(
+    State(state): State<AppState>,
+    Extension(client): Extension<Client>,
+    Query(params): Query<ResourceParams>,
+) -> ApiResult<Json<Response>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let (post_count, disk_usage) = database_statistics::table
             .select((database_statistics::post_count, database_statistics::disk_usage))
             .first(conn)?;

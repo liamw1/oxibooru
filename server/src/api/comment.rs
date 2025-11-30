@@ -1,4 +1,5 @@
 use crate::api::{ApiError, ApiResult, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
@@ -7,14 +8,14 @@ use crate::schema::{comment, comment_score};
 use crate::search::Builder;
 use crate::search::comment::QueryBuilder;
 use crate::time::DateTime;
-use crate::{api, config, db, resource};
-use axum::extract::{Extension, Path, Query};
+use crate::{api, config, resource};
+use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::dsl::exists;
 use diesel::{Connection, ExpressionMethods, Insertable, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/comments", routing::get(list).post(create))
         .route("/comment/{id}", routing::get(get).put(update).delete(delete))
@@ -25,6 +26,7 @@ const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 
 /// See [listing-comments](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-comments)
 async fn list(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<CommentInfo>>> {
@@ -33,7 +35,7 @@ async fn list(
     let offset = params.offset.unwrap_or(0);
     let limit = std::cmp::min(params.limit.get(), MAX_COMMENTS_PER_PAGE);
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
@@ -50,6 +52,7 @@ async fn list(
 
 /// See [getting-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-comment)
 async fn get(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(comment_id): Path<i64>,
     Query(params): Query<ResourceParams>,
@@ -57,7 +60,7 @@ async fn get(
     api::verify_privilege(client, config::privileges().comment_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(conn)?;
         if !comment_exists {
             return Err(ApiError::NotFound(ResourceType::Comment));
@@ -78,6 +81,7 @@ struct CreateBody {
 
 /// See [creating-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-comment)
 async fn create(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
@@ -93,7 +97,7 @@ async fn create(
         creation_time: DateTime::now(),
     };
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let comment = new_comment.insert_into(comment::table).get_result(&mut conn)?;
     conn.transaction(|conn| CommentInfo::new(conn, client, comment, &fields))
         .map(Json)
@@ -109,6 +113,7 @@ struct UpdateBody {
 
 /// See [updating-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-comment)
 async fn update(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(comment_id): Path<i64>,
     Query(params): Query<ResourceParams>,
@@ -116,7 +121,7 @@ async fn update(
 ) -> ApiResult<Json<CommentInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
         let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
@@ -143,6 +148,7 @@ async fn update(
 
 /// See [rating-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#rating-comment)
 async fn rate(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(comment_id): Path<i64>,
     Query(params): Query<ResourceParams>,
@@ -153,7 +159,7 @@ async fn rate(
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
         diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
 
@@ -175,11 +181,12 @@ async fn rate(
 
 /// See [deleting-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-comment)
 async fn delete(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(comment_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))

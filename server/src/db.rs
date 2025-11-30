@@ -1,8 +1,6 @@
 use crate::admin::{AdminTask, database};
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::schema::database_statistics;
-#[cfg(test)]
-use crate::test;
 use crate::{app, config};
 use diesel::migration::Migration;
 use diesel::pg::Pg;
@@ -11,7 +9,7 @@ use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use std::error::Error;
 use std::num::ParseIntError;
-use std::sync::LazyLock;
+use std::ops::RangeInclusive;
 use std::time::Duration;
 use tracing::{error, info};
 
@@ -19,30 +17,33 @@ pub type Connection = PooledConnection<ConnectionManager<PgConnection>>;
 pub type ConnectionPool = Pool<ConnectionManager<PgConnection>>;
 pub type ConnectionResult = Result<Connection, PoolError>;
 
-/// Returns a connection to the database from a connection pool.
-pub fn get_connection() -> ConnectionResult {
-    #[cfg(not(test))]
-    {
-        CONNECTION_POOL.get()
-    }
-    #[cfg(test)]
-    {
-        test::get_connection()
-    }
-}
+/// Creates a connection pool to the database.
+pub fn create_connection_pool() -> ConnectionPool {
+    assert!(!cfg!(test), "Connection to production database disallowed in test build!");
 
-/// TODO: Remove in favor of `AppState`.
-#[cfg(test)]
-pub fn get_prod_connection() -> ConnectionResult {
-    CONNECTION_POOL.get()
+    let num_tokio_threads = tokio::runtime::Handle::try_current()
+        .map(|handle| handle.metrics().num_workers())
+        .unwrap_or(1);
+    let num_threads = std::cmp::max(num_tokio_threads, app::num_rayon_threads()) as u32;
+
+    Pool::builder()
+        .max_size(num_threads + 1)
+        .max_lifetime(None)
+        .idle_timeout(None)
+        .test_on_check_out(true)
+        .connection_customizer(Box::new(ConnectionInitialzier {}))
+        .build(ConnectionManager::new(config::database_url()))
+        .expect("Connection pool must be constructible")
 }
 
 /// Runs embedded migrations on the database. Used to update database for end-users who don't build server themselves.
-/// Doesn't perform any error handling, as this is meant to be run once on application start.
-pub fn run_migrations(conn: &mut PgConnection) -> Result<(), Box<dyn Error + Send + Sync>> {
+pub fn run_database_migrations(
+    connection_pool: &ConnectionPool,
+) -> Result<RangeInclusive<i32>, Box<dyn Error + Send + Sync>> {
+    let mut conn = connection_pool.get()?;
     let pending_migrations = conn.pending_migrations(MIGRATIONS)?;
     if pending_migrations.is_empty() {
-        return Ok(());
+        return Ok(RangeInclusive::new(1, 0));
     }
 
     let migration_number = |migration: &dyn Migration<Pg>| -> Result<i32, ParseIntError> {
@@ -54,27 +55,31 @@ pub fn run_migrations(conn: &mut PgConnection) -> Result<(), Box<dyn Error + Sen
     let last_migration = migration_number(pending_migrations.last().expect(panic_message))?;
     let migration_range = first_migration..=last_migration;
 
+    info!("Running pending migrations...");
+    conn.run_pending_migrations(MIGRATIONS)?;
+    Ok(migration_range)
+}
+
+pub fn run_server_migrations(
+    connection_pool: &ConnectionPool,
+    migration_range: RangeInclusive<i32>,
+) -> Result<(), Box<dyn Error + Send + Sync>> {
     // Update filenames if migrating primary keys to BIGINT
     if migration_range.contains(&12) && !migration_range.contains(&1) {
         database::reset_filenames()?;
     }
 
-    info!("Running pending migrations...");
-    conn.run_pending_migrations(MIGRATIONS)?;
-    if cfg!(test) {
-        return Ok(());
-    }
-
     // If creating the database for the first time, set post signature version
+    let mut conn = connection_pool.get()?;
     if migration_range.contains(&1) {
         diesel::update(database_statistics::table)
             .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
-            .execute(conn)?;
+            .execute(&mut conn)?;
     }
 
     // Cache thumbnail sizes if migrating to statistics system
     if migration_range.contains(&13) {
-        database::reset_thumbnail_sizes(conn)?;
+        database::reset_thumbnail_sizes(connection_pool)?;
     }
     Ok(())
 }
@@ -114,23 +119,6 @@ pub fn check_signature_version(conn: &mut PgConnection) -> QueryResult<()> {
 }
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
-
-static CONNECTION_POOL: LazyLock<ConnectionPool> = LazyLock::new(|| {
-    let num_tokio_threads = tokio::runtime::Handle::try_current()
-        .map(|handle| handle.metrics().num_workers())
-        .unwrap_or(1);
-    let num_threads = std::cmp::max(num_tokio_threads, app::num_rayon_threads()) as u32;
-
-    let manager = ConnectionManager::new(config::database_url());
-    Pool::builder()
-        .max_size(num_threads + 1)
-        .max_lifetime(None)
-        .idle_timeout(None)
-        .test_on_check_out(true)
-        .connection_customizer(Box::new(ConnectionInitialzier {}))
-        .build(manager)
-        .expect("Connection pool must be constructible")
-});
 
 #[derive(Debug)]
 struct ConnectionInitialzier {}

@@ -3,29 +3,31 @@ use crate::content::hash::{Checksum, PostHash};
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{FileContents, decode, hash, signature, thumbnail};
+use crate::db::ConnectionPool;
 use crate::model::enums::MimeType;
 use crate::model::post::{CompressedSignature, NewPostSignature};
 use crate::schema::{database_statistics, post, post_signature};
 use crate::time::{DateTime, Timer};
-use crate::{admin, db, update};
+use crate::{admin, update};
 use diesel::dsl::exists;
 use diesel::r2d2::PoolError;
-use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use tracing::{error, warn};
 
 /// Checks the integrity of all posts on the filesystem by comparing the stored
 /// checksum with the checksum of the post content in its current state.
 /// Meant to detect file corruption or silent modification.
-pub fn check_integrity(conn: &mut PgConnection) -> DatabaseResult<()> {
+pub fn check_integrity(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
     let _timer = Timer::new("check_integrity");
     let progress = ProgressReporter::new("Posts checked", PRINT_INTERVAL);
     let failures = ProgressReporter::new("Integrity checks failed", None);
 
-    let post_data: Vec<_> = post::table.select(post::id).load(conn)?;
+    let mut conn = connection_pool.get()?;
+    let post_data: Vec<_> = post::table.select(post::id).load(&mut conn)?;
     post_data
         .into_par_iter()
-        .try_for_each(|post_id| check_integrity_in_parallel(post_id, &progress, &failures))
+        .try_for_each(|post_id| check_integrity_in_parallel(connection_pool, post_id, &progress, &failures))
         .map_err(DatabaseError::from)?;
     failures.report();
     Ok(())
@@ -33,15 +35,16 @@ pub fn check_integrity(conn: &mut PgConnection) -> DatabaseResult<()> {
 
 /// Recomputes posts checksums.
 /// Useful when the way we compute checksums changes.
-pub fn recompute_checksums(conn: &mut PgConnection) -> DatabaseResult<()> {
+pub fn recompute_checksums(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
     let _timer = Timer::new("recompute_checksums");
     let progress = ProgressReporter::new("Checksums computed", PRINT_INTERVAL);
     let duplicate_count = ProgressReporter::new("Duplicates found", PRINT_INTERVAL);
 
-    let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
+    let mut conn = connection_pool.get()?;
+    let post_ids: Vec<_> = post::table.select(post::id).load(&mut conn)?;
     post_ids
         .into_par_iter()
-        .try_for_each(|post_id| recompute_checksum_in_parallel(post_id, &progress, &duplicate_count))
+        .try_for_each(|post_id| recompute_checksum_in_parallel(connection_pool, post_id, &progress, &duplicate_count))
         .map_err(DatabaseError::from)?;
     duplicate_count.report();
     Ok(())
@@ -49,22 +52,23 @@ pub fn recompute_checksums(conn: &mut PgConnection) -> DatabaseResult<()> {
 
 /// Recomputes both post signatures and signature indexes.
 /// Useful when the post signature parameters change.
-pub fn recompute_signatures(conn: &mut PgConnection) -> DatabaseResult<()> {
+pub fn recompute_signatures(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
     let _timer = Timer::new("recompute_signatures");
     let progress = ProgressReporter::new("Signatures computed", PRINT_INTERVAL);
 
-    let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
+    let mut conn = connection_pool.get()?;
+    let post_ids: Vec<_> = post::table.select(post::id).load(&mut conn)?;
 
     // Update signature version only after a successful data retrieval.
     // We do this before actually recomputing signatures so that server
     // can continue running during computation.
     diesel::update(database_statistics::table)
         .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
-        .execute(conn)?;
+        .execute(&mut conn)?;
 
     post_ids
         .into_par_iter()
-        .try_for_each(|post_id| recompute_signature_in_parallel(post_id, &progress))
+        .try_for_each(|post_id| recompute_signature_in_parallel(connection_pool, post_id, &progress))
         .map_err(DatabaseError::from)
 }
 
@@ -73,31 +77,33 @@ pub fn recompute_signatures(conn: &mut PgConnection) -> DatabaseResult<()> {
 ///
 /// This is much faster than recomputing the signatures, as this function doesn't require
 /// reading post content from disk.
-pub fn recompute_indexes(conn: &mut PgConnection) -> DatabaseResult<()> {
+pub fn recompute_indexes(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
     let _timer = Timer::new("recompute_indexes");
     let progress = ProgressReporter::new("Indexes computed", PRINT_INTERVAL);
 
-    let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
+    let mut conn = connection_pool.get()?;
+    let post_ids: Vec<_> = post::table.select(post::id).load(&mut conn)?;
     post_ids
         .into_par_iter()
-        .try_for_each(|post_id| recompute_index_in_parallel(post_id, &progress))
+        .try_for_each(|post_id| recompute_index_in_parallel(connection_pool, post_id, &progress))
         .map_err(DatabaseError::from)
 }
 
-pub fn regenerate_thumbnails(conn: &mut PgConnection) -> DatabaseResult<()> {
+pub fn regenerate_thumbnails(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
     let _timer = Timer::new("regenerate_thumbnails");
     let progress = ProgressReporter::new("Thumbnails regenerated", PRINT_INTERVAL);
 
-    let post_ids: Vec<_> = post::table.select(post::id).load(conn)?;
+    let mut conn = connection_pool.get()?;
+    let post_ids: Vec<_> = post::table.select(post::id).load(&mut conn)?;
     post_ids
         .into_par_iter()
-        .try_for_each(|post_id| regenerate_thumbnail_in_parallel(post_id, &progress))
+        .try_for_each(|post_id| regenerate_thumbnail_in_parallel(connection_pool, post_id, &progress))
         .map_err(DatabaseError::from)
 }
 
 /// Prompts the user for input again to regenerate specific thumbnails.
-pub fn regenerate_thumbnail(conn: &mut PgConnection) {
-    admin::user_input_loop(conn, |conn: &mut PgConnection, buffer: &mut String| {
+pub fn regenerate_thumbnail(connection_pool: &ConnectionPool) {
+    admin::user_input_loop(connection_pool, |connection_pool: &ConnectionPool, buffer: &mut String| {
         println!("Please enter the post ID you would like to generate a thumbnail for. Enter \"done\" when finished.");
         let user_input = admin::prompt_user_input("Post ID", buffer);
         if let Ok(state) = LoopState::try_from(user_input) {
@@ -107,10 +113,14 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) {
         let post_id = user_input
             .parse::<i64>()
             .map_err(|_| "Post ID must be an integer".to_owned())?;
+
+        let mut conn = connection_pool
+            .get()
+            .map_err(|_| "Could not establish a connection to the database for reason: {err}")?;
         let mime_type = post::table
             .find(post_id)
             .select(post::mime_type)
-            .first(conn)
+            .first(&mut conn)
             .map_err(|err| format!("Cannot retrieve MIME type for post {post_id} for reason: {err}"))?;
 
         let post_hash = PostHash::new(post_id);
@@ -122,7 +132,7 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) {
         let thumbnail = decode::representative_image(&file_contents, &content_path)
             .map(|image| thumbnail::create(&image, ThumbnailType::Post))
             .map_err(|err| format!("Cannot decode content for post {post_id} for reason: {err}"))?;
-        update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Generated)
+        update::post::thumbnail(&mut conn, &post_hash, &thumbnail, ThumbnailCategory::Generated)
             .map_err(|err| format!("Cannot save thumbnail for post {post_id} for reason: {err}"))?;
 
         println!("Thumbnail regeneration successful.\n");
@@ -132,11 +142,12 @@ pub fn regenerate_thumbnail(conn: &mut PgConnection) {
 
 /// Checks content integrity for post with id `post_id`. Designed to operate in a parallel iterator.
 fn check_integrity_in_parallel(
+    connection_pool: &ConnectionPool,
     post_id: i64,
     progress: &ProgressReporter,
     failures: &ProgressReporter,
 ) -> Result<(), PoolError> {
-    let mut conn = db::get_connection()?;
+    let mut conn = connection_pool.get()?;
     let (mime_type, checksum): (MimeType, Checksum) = match post::table
         .find(post_id)
         .select((post::mime_type, post::checksum))
@@ -170,8 +181,12 @@ fn check_integrity_in_parallel(
 }
 
 /// Recomputes index for post with id `post_id`. Designed to operate in a parallel iterator.
-fn recompute_index_in_parallel(post_id: i64, progress: &ProgressReporter) -> Result<(), PoolError> {
-    let mut conn = db::get_connection()?;
+fn recompute_index_in_parallel(
+    connection_pool: &ConnectionPool,
+    post_id: i64,
+    progress: &ProgressReporter,
+) -> Result<(), PoolError> {
+    let mut conn = connection_pool.get()?;
     let signature: CompressedSignature = post_signature::table
         .find(post_id)
         .select(post_signature::signature)
@@ -192,11 +207,12 @@ fn recompute_index_in_parallel(post_id: i64, progress: &ProgressReporter) -> Res
 
 /// Recomputes checksum for post with id `post_id`. Designed to operate in a parallel iterator.
 fn recompute_checksum_in_parallel(
+    connection_pool: &ConnectionPool,
     post_id: i64,
     progress: &ProgressReporter,
     duplicate_count: &ProgressReporter,
 ) -> Result<(), PoolError> {
-    let mut conn = db::get_connection()?;
+    let mut conn = connection_pool.get()?;
     let mime_type = match post::table
         .find(post_id)
         .select(post::mime_type)
@@ -256,8 +272,12 @@ fn recompute_checksum_in_parallel(
 }
 
 /// Recomputes signature for post with id `post_id`. Designed to operate in a parallel iterator.
-fn recompute_signature_in_parallel(post_id: i64, progress: &ProgressReporter) -> Result<(), PoolError> {
-    let mut conn = db::get_connection()?;
+fn recompute_signature_in_parallel(
+    connection_pool: &ConnectionPool,
+    post_id: i64,
+    progress: &ProgressReporter,
+) -> Result<(), PoolError> {
+    let mut conn = connection_pool.get()?;
     let mime_type = match post::table
         .find(post_id)
         .select(post::mime_type)
@@ -326,8 +346,12 @@ fn recompute_signature_in_parallel(post_id: i64, progress: &ProgressReporter) ->
 }
 
 /// Regenerates thumbnail for post with id `post_id`. Designed to operate in a parallel iterator.
-fn regenerate_thumbnail_in_parallel(post_id: i64, progress: &ProgressReporter) -> Result<(), PoolError> {
-    let mut conn = db::get_connection()?;
+fn regenerate_thumbnail_in_parallel(
+    connection_pool: &ConnectionPool,
+    post_id: i64,
+    progress: &ProgressReporter,
+) -> Result<(), PoolError> {
+    let mut conn = connection_pool.get()?;
     let mime_type = match post::table
         .find(post_id)
         .select(post::mime_type)

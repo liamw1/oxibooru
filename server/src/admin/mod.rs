@@ -1,5 +1,5 @@
 use crate::app;
-use diesel::PgConnection;
+use crate::db::ConnectionPool;
 use diesel::r2d2::PoolError;
 use rayon::ThreadPoolBuilder;
 use std::io::Write;
@@ -45,7 +45,7 @@ pub fn enabled() -> bool {
 }
 
 /// Starts server CLI.
-pub fn command_line_mode(conn: &mut PgConnection) {
+pub fn command_line_mode(connection_pool: &ConnectionPool) {
     print_info();
 
     ThreadPoolBuilder::new()
@@ -53,7 +53,7 @@ pub fn command_line_mode(conn: &mut PgConnection) {
         .build_global()
         .expect("Must be able to configure to global rayon thread pool");
 
-    user_input_loop(conn, |conn: &mut PgConnection, buffer: &mut String| {
+    user_input_loop(connection_pool, |connection_pool: &ConnectionPool, buffer: &mut String| {
         let user_input = prompt_user_input("Please select a task", buffer);
         if let Ok(state) = LoopState::try_from(user_input) {
             return Ok(state);
@@ -63,7 +63,7 @@ pub fn command_line_mode(conn: &mut PgConnection) {
             let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
             format!("Command line arguments must be one of {possible_arguments:?}")
         })?;
-        run_task(conn, task).map_err(|err| err.to_string())?;
+        run_task(connection_pool, task).map_err(|err| err.to_string())?;
 
         println!("Task finished.\n");
         Ok(LoopState::Continue)
@@ -164,13 +164,13 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
 /// Repeatedly performs some `function` that prompts for user input until it returns
 /// either [`LoopState::Stop`] or [`LoopState::Exit`], the latter of which terminates
 /// the program immediately.
-fn user_input_loop<F>(conn: &mut PgConnection, mut function: F)
+fn user_input_loop<F>(connection_pool: &ConnectionPool, mut function: F)
 where
-    F: FnMut(&mut PgConnection, &mut String) -> Result<LoopState, String>,
+    F: FnMut(&ConnectionPool, &mut String) -> Result<LoopState, String>,
 {
     let mut buffer = String::new();
     loop {
-        match function(conn, &mut buffer) {
+        match function(connection_pool, &mut buffer) {
             Ok(LoopState::Continue) => (),
             Ok(LoopState::Stop) => break,
             Ok(LoopState::Exit) => std::process::exit(0),
@@ -184,26 +184,26 @@ where
 /// Runs a single task. This function is designed to only establish a connection to the database
 /// if necessary. That way users can run tasks that don't require database connection without
 /// spinning up the database.
-fn run_task(conn: &mut PgConnection, task: AdminTask) -> DatabaseResult<()> {
+fn run_task(connection_pool: &ConnectionPool, task: AdminTask) -> DatabaseResult<()> {
     info!("Starting task...");
 
     match task {
-        AdminTask::CheckPostIntegrity => post::check_integrity(conn),
-        AdminTask::RecomputePostChecksums => post::recompute_checksums(conn),
-        AdminTask::RecomputePostSignatures => post::recompute_signatures(conn),
-        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(conn),
-        AdminTask::RegenerateThumbnails => post::regenerate_thumbnails(conn),
+        AdminTask::CheckPostIntegrity => post::check_integrity(connection_pool),
+        AdminTask::RecomputePostChecksums => post::recompute_checksums(connection_pool),
+        AdminTask::RecomputePostSignatures => post::recompute_signatures(connection_pool),
+        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(connection_pool),
+        AdminTask::RegenerateThumbnails => post::regenerate_thumbnails(connection_pool),
         AdminTask::RegenerateThumbnail => {
-            post::regenerate_thumbnail(conn);
+            post::regenerate_thumbnail(connection_pool);
             Ok(())
         }
         AdminTask::ResetPassword => {
-            user::reset_password(conn);
+            user::reset_password(connection_pool);
             Ok(())
         }
         AdminTask::ResetFilenames => database::reset_filenames().map_err(DatabaseError::from),
-        AdminTask::ResetStatistics => database::reset_statistics(),
-        AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(conn),
+        AdminTask::ResetStatistics => database::reset_statistics(connection_pool),
+        AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(connection_pool),
     }
 }
 

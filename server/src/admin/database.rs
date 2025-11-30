@@ -1,5 +1,6 @@
 use crate::admin::{DatabaseResult, PRINT_INTERVAL, ProgressReporter};
 use crate::content::hash::PostHash;
+use crate::db::ConnectionPool;
 use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
 use crate::schema::{
@@ -9,9 +10,9 @@ use crate::schema::{
     tag_suggestion, user, user_statistics,
 };
 use crate::time::{DateTime, Timer};
-use crate::{admin, db, filesystem};
+use crate::{admin, filesystem};
 use diesel::dsl::{count, max, sum};
-use diesel::{ExpressionMethods, NullableExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, NullableExpressionMethods, QueryDsl, RunQueryDsl};
 use std::ffi::OsStr;
 use tracing::{error, warn};
 
@@ -84,7 +85,9 @@ pub fn reset_filenames() -> std::io::Result<()> {
 }
 
 /// Updates database values for thumbnail size.
-pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
+pub fn reset_thumbnail_sizes(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
+    let mut conn = connection_pool.get()?;
+
     if Directory::Avatars.path().try_exists()? {
         let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
         for entry in std::fs::read_dir(Directory::Avatars.path())? {
@@ -98,7 +101,7 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
             diesel::update(user::table)
                 .set(user::custom_avatar_size.eq(file_size))
                 .filter(user::name.eq(username))
-                .execute(conn)?;
+                .execute(&mut conn)?;
             progress.increment();
         }
     }
@@ -115,7 +118,7 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
             diesel::update(post::table)
                 .set(post::generated_thumbnail_size.eq(file_size))
                 .filter(post::id.eq(post_id))
-                .execute(conn)?;
+                .execute(&mut conn)?;
             progress.increment();
         }
     }
@@ -132,7 +135,7 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
             diesel::update(post::table)
                 .set(post::custom_thumbnail_size.eq(file_size))
                 .filter(post::id.eq(post_id))
-                .execute(conn)?;
+                .execute(&mut conn)?;
             progress.increment();
         }
     }
@@ -145,8 +148,9 @@ pub fn reset_thumbnail_sizes(conn: &mut PgConnection) -> DatabaseResult<()> {
 /// Because it computes statistics one row at a time, this function is fairly slow.
 /// A much faster version of this is done in `scripts/convert_szuru_database.sql`,
 /// but it would be very tricky to implement in Diesel.
-pub fn reset_relation_stats() -> DatabaseResult<()> {
-    let mut conn = db::get_connection()?;
+pub fn reset_relation_stats(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
+    let mut conn = connection_pool.get()?;
+
     let comment_count: i64 = comment::table.count().first(&mut conn)?;
     let pool_count: i64 = pool::table.count().first(&mut conn)?;
     let post_count: i64 = post::table.count().first(&mut conn)?;
@@ -331,12 +335,12 @@ pub fn reset_relation_stats() -> DatabaseResult<()> {
 /// Recalculates cached file sizes, row counts, and table statistics.
 /// Useful for when the statistics become inconsistent with database
 /// or when migrating from an older version without statistics.
-pub fn reset_statistics() -> DatabaseResult<()> {
+pub fn reset_statistics(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
     let _timer = Timer::new("reset_statistics");
 
     // Disk usage will automatically be incremented via triggers as we calculate
     // content, thumbnail, and avatar sizes
-    let mut conn = db::get_connection()?;
+    let mut conn = connection_pool.get()?;
     diesel::update(database_statistics::table)
         .set(database_statistics::disk_usage.eq(0))
         .execute(&mut conn)?;
@@ -358,6 +362,6 @@ pub fn reset_statistics() -> DatabaseResult<()> {
             progress.increment();
         }
     }
-    reset_thumbnail_sizes(&mut conn)?;
-    reset_relation_stats()
+    reset_thumbnail_sizes(connection_pool)?;
+    reset_relation_stats(connection_pool)
 }

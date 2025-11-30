@@ -1,8 +1,8 @@
-use crate::auth::Client;
+use crate::auth::{self, Client};
+use crate::db::ConnectionPool;
 use crate::model::enums::UserRank;
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
-use crate::{auth, db};
 use base64::prelude::BASE64_STANDARD;
 use base64::{DecodeError, Engine};
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
@@ -30,11 +30,11 @@ pub enum AuthenticationError {
 
 /// Authentication can either be done by token-based authentication (recommended)
 /// or by sending password as plaintext.
-pub fn authenticate_user(auth: &str) -> Result<Client, AuthenticationError> {
+pub fn authenticate_user(connection_pool: &ConnectionPool, auth: &str) -> Result<Client, AuthenticationError> {
     let (auth_type, credentials) = auth.split_once(' ').ok_or(AuthenticationError::MalformedCredentials)?;
     match auth_type {
-        "Basic" => basic_access_authentication(credentials),
-        "Token" => token_authentication(credentials),
+        "Basic" => basic_access_authentication(connection_pool, credentials),
+        "Token" => token_authentication(connection_pool, credentials),
         _ => Err(AuthenticationError::InvalidAuthType),
     }
 }
@@ -57,9 +57,12 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
 
 /// Checks that the given `credentials` are of the form "username:password"
 /// and that the username/password combination is valid.
-fn basic_access_authentication(credentials: &str) -> Result<Client, AuthenticationError> {
+fn basic_access_authentication(
+    connection_pool: &ConnectionPool,
+    credentials: &str,
+) -> Result<Client, AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
-    let mut conn = db::get_connection()?;
+    let mut conn = connection_pool.get()?;
 
     // For security reasons, don't give any indication to the user if it was the password
     // or the username that was incorrect.
@@ -76,11 +79,10 @@ fn basic_access_authentication(credentials: &str) -> Result<Client, Authenticati
 
 /// Checks that the given `credentials` are of the form "username:token"
 /// and that the username/token combination is valid and non-expired.
-fn token_authentication(credentials: &str) -> Result<Client, AuthenticationError> {
+fn token_authentication(connection_pool: &ConnectionPool, credentials: &str) -> Result<Client, AuthenticationError> {
     let (username, unparsed_token) = decode_credentials(credentials)?;
     let token = Uuid::parse_str(&unparsed_token)?;
-
-    let mut conn = db::get_connection()?;
+    let mut conn = connection_pool.get()?;
 
     let (user_id, rank, enabled, expiration_time): (i64, UserRank, bool, Option<DateTime>) = user_token::table
         .inner_join(user::table)

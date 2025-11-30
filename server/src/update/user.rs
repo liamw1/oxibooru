@@ -1,21 +1,20 @@
 use crate::api::ApiResult;
+use crate::filesystem;
 use crate::schema::user;
 use crate::time::DateTime;
-use crate::{db, filesystem};
-use diesel::{ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use image::DynamicImage;
 
 /// Updates the last known login time for the user with the given `user_id`.
-pub fn last_login_time(user_id: i64) -> ApiResult<()> {
-    let mut conn = db::get_connection()?;
+pub fn last_login_time(conn: &mut PgConnection, user_id: i64) -> QueryResult<()> {
     diesel::update(user::table.find(user_id))
         .set(user::last_login_time.eq(DateTime::now()))
-        .execute(&mut conn)?;
+        .execute(conn)?;
     Ok(())
 }
 
 /// Updates `last_edit_time` of user with given `user_id`.
-pub fn last_edit_time(conn: &mut PgConnection, user_id: i64) -> ApiResult<()> {
+pub fn last_edit_time(conn: &mut PgConnection, user_id: i64) -> QueryResult<()> {
     diesel::update(user::table.find(user_id))
         .set(user::last_edit_time.eq(DateTime::now()))
         .execute(conn)?;

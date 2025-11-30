@@ -1,7 +1,9 @@
 use crate::api::middleware;
+use crate::db::{ConnectionPool, ConnectionResult};
 use crate::{admin, api, config, db, filesystem};
 use axum::ServiceExt;
 use axum::extract::Request;
+use std::error::Error;
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
 use tokio::signal::unix::SignalKind;
@@ -11,6 +13,21 @@ use tracing::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+
+#[derive(Clone, Debug)]
+pub struct AppState {
+    pub connection_pool: ConnectionPool,
+}
+
+impl AppState {
+    pub fn new(connection_pool: ConnectionPool) -> Self {
+        AppState { connection_pool }
+    }
+
+    pub fn get_connection(&self) -> ConnectionResult {
+        self.connection_pool.get()
+    }
+}
 
 /// Returns the number of threads that the global rayon thread pool will
 /// be constructed with. The rayon thread pool is currently only used when
@@ -36,19 +53,19 @@ pub fn enable_tracing() {
         .init();
 }
 
-pub fn initialize() -> Result<(), String> {
-    let mut conn = db::get_connection().map_err(|err| err.to_string())?;
-    db::run_migrations(&mut conn).map_err(|err| err.to_string())?;
+pub fn initialize() -> Result<(), Box<dyn Error + Send + Sync>> {
+    let connection_pool = db::create_connection_pool();
+    let migration_range = db::run_database_migrations(&connection_pool)?;
+    db::run_server_migrations(&connection_pool, migration_range)?;
 
     if admin::enabled() {
-        admin::command_line_mode(&mut conn);
+        admin::command_line_mode(&connection_pool);
         std::process::exit(0);
     }
 
-    // We do this after admin mode check so that users can update signatures
-    db::check_signature_version(&mut conn).map_err(|err| err.to_string())?;
-
-    middleware::initialize_snapshot_counter(&mut conn).map_err(|err| err.to_string())?;
+    let mut conn = connection_pool.get()?;
+    db::check_signature_version(&mut conn)?; // We do this after admin mode check so that users can update signatures
+    middleware::initialize_snapshot_counter(&mut conn)?;
 
     if let Err(err) = filesystem::purge_temporary_uploads() {
         warn!("Failed to purge temporary files. Details:\n{err}");
@@ -57,7 +74,8 @@ pub fn initialize() -> Result<(), String> {
 }
 
 pub async fn run() -> std::io::Result<()> {
-    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes());
+    let state = AppState::new(db::create_connection_pool());
+    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(state));
 
     let address = format!("0.0.0.0:{}", config::port());
     let listener = TcpListener::bind(address).await?;

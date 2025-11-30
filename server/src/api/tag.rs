@@ -1,4 +1,5 @@
 use crate::api::{ApiError, ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, Tag};
@@ -9,8 +10,8 @@ use crate::search::tag::QueryBuilder;
 use crate::snapshot::tag::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::{api, config, db, resource, snapshot, update};
-use axum::extract::{Extension, Path, Query};
+use crate::{api, config, resource, snapshot, update};
+use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::dsl::count_star;
 use diesel::{
@@ -19,7 +20,7 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/tags", routing::get(list).post(create))
         .route("/tag/{name}", routing::get(get).put(update).delete(delete))
@@ -32,6 +33,7 @@ const MAX_TAG_SIBLINGS: i64 = 1000;
 
 /// See [listing-tags](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-tags)
 async fn list(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<TagInfo>>> {
@@ -41,7 +43,7 @@ async fn list(
     let limit = std::cmp::min(params.limit.get(), MAX_TAGS_PER_PAGE);
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
@@ -58,6 +60,7 @@ async fn list(
 
 /// See [getting-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag)
 async fn get(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
@@ -65,7 +68,7 @@ async fn get(
     api::verify_privilege(client, config::privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let tag_id = tag_name::table
             .select(tag_name::tag_id)
             .filter(tag_name::name.eq(name))
@@ -91,6 +94,7 @@ struct TagSiblings {
 
 /// See [getting-tag-siblings](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag-siblings)
 async fn get_siblings(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
@@ -98,7 +102,7 @@ async fn get_siblings(
     api::verify_privilege(client, config::privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let tag_id: i64 = tag::table
             .select(tag::id)
             .inner_join(tag_name::table)
@@ -140,6 +144,7 @@ struct CreateBody {
 
 /// See [creating-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-tag)
 async fn create(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
@@ -151,7 +156,7 @@ async fn create(
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let tag = conn.transaction(|conn| {
         let (category_id, category): (i64, SmallString) = tag_category::table
             .select((tag_category::id, tag_category::name))
@@ -190,6 +195,7 @@ async fn create(
 
 /// See [merging-tags](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-tags)
 async fn merge(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<MergeBody<SmallString>>,
@@ -205,7 +211,7 @@ async fn merge(
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let merged_tag_id = conn.transaction(|conn| {
         let (absorbed_id, absorbed_version) = get_tag_info(conn, &body.remove)?;
         let (merge_to_id, merge_to_version) = get_tag_info(conn, &body.merge_to)?;
@@ -237,6 +243,7 @@ struct UpdateBody {
 
 /// See [updating-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-tag)
 async fn update(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
@@ -244,7 +251,7 @@ async fn update(
 ) -> ApiResult<Json<TagInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let tag_id = conn.transaction(|conn| {
         let old_tag: Tag = tag::table
             .inner_join(tag_name::table)
@@ -309,13 +316,14 @@ async fn update(
 
 /// See [deleting-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-tag)
 async fn delete(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(name): Path<String>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, config::privileges().tag_delete)?;
 
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let tag: Tag = tag::table
             .select(Tag::as_select())
             .inner_join(tag_name::table)

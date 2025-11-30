@@ -1,10 +1,11 @@
 use crate::api::{ApiError, ApiResult};
+use crate::app::AppState;
 use crate::auth::{Client as AuthClient, header};
 use crate::model::enums::UserRank;
 use crate::model::snapshot::Snapshot;
 use crate::schema::snapshot;
-use crate::{config, db, update};
-use axum::extract::Request;
+use crate::{config, update};
+use axum::extract::{Request, State};
 use axum::http::Method;
 use axum::http::header::AUTHORIZATION;
 use axum::middleware::Next;
@@ -20,11 +21,11 @@ use tracing::warn;
 use url::Url;
 
 /// Attempts to authorizes user by either username/password or user token.
-pub async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
+pub async fn auth(State(state): State<AppState>, mut request: Request, next: Next) -> ApiResult<Response> {
     let auth_header = request.headers().get(AUTHORIZATION);
     let client = if let Some(auth_value) = auth_header {
         let auth_str = auth_value.to_str()?;
-        header::authenticate_user(auth_str)
+        header::authenticate_user(&state.connection_pool, auth_str)
     } else {
         Ok(AuthClient::new(None, UserRank::Anonymous))
     }?;
@@ -34,7 +35,8 @@ pub async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
         && let Some(query) = request.uri().query()
         && query.contains("bump-login")
     {
-        update::user::last_login_time(user_id)?;
+        let mut conn = state.get_connection()?;
+        update::user::last_login_time(&mut conn, user_id)?;
     }
 
     request.extensions_mut().insert(client);
@@ -42,12 +44,12 @@ pub async fn auth(mut request: Request, next: Next) -> ApiResult<Response> {
 }
 
 /// Sends snapshot data to webhook URLs after modifying requests.
-pub async fn post_to_webhooks(request: Request, next: Next) -> ApiResult<Response> {
+pub async fn post_to_webhooks(State(state): State<AppState>, request: Request, next: Next) -> ApiResult<Response> {
     let can_modify_database = matches!(request.method(), &Method::POST | &Method::PUT | &Method::DELETE);
     let response = next.run(request).await;
 
     if can_modify_database {
-        let mut conn = db::get_connection()?;
+        let mut conn = state.get_connection()?;
         let last_posted_snapshot = LAST_POSTED_SNAPSHOT.load(Ordering::SeqCst);
         let new_snapshots = snapshot::table
             .select(Snapshot::as_select())

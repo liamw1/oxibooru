@@ -1,10 +1,12 @@
 use crate::api::{ApiError, ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::app::AppState;
 use crate::auth::Client;
 use crate::content::hash::PostHash;
 use crate::content::signature::SignatureCache;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
 use crate::content::{Content, FileContents, JsonOrMultipart, signature, upload};
+use crate::db::ConnectionPool;
 use crate::filesystem::Directory;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
@@ -16,7 +18,7 @@ use crate::snapshot::post::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, config, db, filesystem, resource, snapshot, update};
-use axum::extract::{DefaultBodyLimit, Extension, Path, Query};
+use axum::extract::{DefaultBodyLimit, Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::dsl::exists;
 use diesel::{
@@ -29,7 +31,7 @@ use tokio::sync::Mutex as AsyncMutex;
 use tracing::info;
 use url::Url;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/posts", routing::get(list).post(create_handler))
         .route(
@@ -63,7 +65,7 @@ static POST_TAG_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::n
 /// more pessimistic than necessary, as parallel updates are safe if the sets of tags are
 /// disjoint. However, allowing disjoint tagging introduces additional complexity so it
 /// isn't being done as of now.
-async fn tagging_update<T, F>(tags_updated: bool, update: F) -> ApiResult<T>
+async fn tagging_update<T, F>(connection_pool: &ConnectionPool, tags_updated: bool, update: F) -> ApiResult<T>
 where
     F: FnOnce(&mut db::Connection) -> ApiResult<T>,
 {
@@ -73,11 +75,12 @@ where
     }
 
     // Get a fresh connection here so that connection isn't being held while waiting on lock
-    db::get_connection()?.transaction(update)
+    connection_pool.get()?.transaction(update)
 }
 
 /// See [listing-posts](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-posts)
 async fn list(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PostInfo>>> {
@@ -87,7 +90,7 @@ async fn list(
     let limit = std::cmp::min(params.limit.get(), MAX_POSTS_PER_PAGE);
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
@@ -104,6 +107,7 @@ async fn list(
 
 /// See [getting-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-post)
 async fn get(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
@@ -111,7 +115,7 @@ async fn get(
     api::verify_privilege(client, config::privileges().post_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;
         if !post_exists {
             return Err(ApiError::NotFound(ResourceType::Post));
@@ -130,6 +134,7 @@ struct PostNeighbors {
 
 /// See [getting-around-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-around-post)
 async fn get_neighbors(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
@@ -149,7 +154,7 @@ async fn get_neighbors(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut query_builder = QueryBuilder::new(client, params.criteria())?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         const INITIAL_LIMIT: i64 = 100;
         const LIMIT_GROWTH: i64 = 8;
 
@@ -210,13 +215,14 @@ async fn get_neighbors(
 
 /// See [getting-featured-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-featured-post)
 async fn get_featured(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<Option<PostInfo>>> {
     api::verify_privilege(client, config::privileges().post_view_featured)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let featured_post_id: Option<i64> = post_feature::table
             .select(post_feature::post_id)
             .order_by(post_feature::time.desc())
@@ -239,6 +245,7 @@ struct FeatureBody {
 
 /// See [featuring-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#featuring-post)
 async fn feature(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<FeatureBody>,
@@ -253,7 +260,7 @@ async fn feature(
         time: DateTime::now(),
     };
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
         let previous_feature_id = post_feature::table
             .select(post_feature::post_id)
@@ -293,6 +300,7 @@ struct ReverseSearchResponse {
 
 /// See [reverse-image-search](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#reverse-image-search)
 async fn reverse_search(
+    state: AppState,
     client: Client,
     params: ResourceParams,
     body: ReverseSearchBody,
@@ -303,7 +311,8 @@ async fn reverse_search(
     let content = Content::new(body.content, body.content_token, body.content_url)
         .ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.compute_properties().await?;
-    db::get_connection()?
+    state
+        .get_connection()?
         .transaction(|conn| {
             let _timer = crate::time::Timer::new("reverse search");
 
@@ -362,6 +371,7 @@ async fn reverse_search(
 
 /// Performs reverse image search using either a JSON body or a multipart form.
 async fn reverse_search_handler(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     body: JsonOrMultipart<ReverseSearchBody>,
@@ -369,7 +379,7 @@ async fn reverse_search_handler(
     api::verify_privilege(client, config::privileges().post_reverse_search)?;
 
     match body {
-        JsonOrMultipart::Json(payload) => reverse_search(client, params, payload).await,
+        JsonOrMultipart::Json(payload) => reverse_search(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content]).await?;
             let reverse_search_body = if let [Some(content)] = decoded_body.files {
@@ -383,7 +393,7 @@ async fn reverse_search_handler(
             } else {
                 return Err(ApiError::MissingFormData);
             };
-            reverse_search(client, params, reverse_search_body).await
+            reverse_search(state, client, params, reverse_search_body).await
         }
     }
 }
@@ -411,7 +421,12 @@ struct CreateBody {
 }
 
 /// See [creating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-post)
-async fn create(client: Client, params: ResourceParams, body: CreateBody) -> ApiResult<Json<PostInfo>> {
+async fn create(
+    state: AppState,
+    client: Client,
+    params: ResourceParams,
+    body: CreateBody,
+) -> ApiResult<Json<PostInfo>> {
     let required_rank = if body.anonymous.unwrap_or(false) {
         config::privileges().post_create_anonymous
     } else {
@@ -445,7 +460,7 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         description: body.description.as_deref().unwrap_or(""),
     };
 
-    let post_id = tagging_update(body.tags.is_some(), |conn| {
+    let post_id = tagging_update(&state.connection_pool, body.tags.is_some(), |conn| {
         // We do this before post insertion so that the post sequence isn't incremented if it fails
         let (tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, client, body.tags.unwrap_or_default(), false)?;
         let relations = body.relations.unwrap_or_default();
@@ -494,7 +509,8 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         Ok::<_, ApiError>(post.id)
     })
     .await?;
-    db::get_connection()?
+    state
+        .get_connection()?
         .transaction(|conn| PostInfo::new_from_id(conn, client, post_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
@@ -502,12 +518,13 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
 
 /// Creates a post from either a JSON body or a multipart form.
 async fn create_handler(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     body: JsonOrMultipart<CreateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => create(client, params, payload).await,
+        JsonOrMultipart::Json(payload) => create(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
@@ -516,7 +533,7 @@ async fn create_handler(
 
             new_post.content = content;
             new_post.thumbnail = thumbnail;
-            create(client, params, new_post).await
+            create(state, client, params, new_post).await
         }
     }
 }
@@ -532,6 +549,7 @@ struct PostMergeBody {
 
 /// See [merging-posts](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-posts)
 async fn merge(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<PostMergeBody>,
@@ -545,7 +563,7 @@ async fn merge(
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    tagging_update(true, |conn| {
+    tagging_update(&state.connection_pool, true, |conn| {
         let absorbed_post: Post = post::table.find(absorbed_id).first(conn)?;
         let merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
         api::verify_version(absorbed_post.last_edit_time, body.post_info.remove_version)?;
@@ -556,7 +574,8 @@ async fn merge(
         Ok(())
     })
     .await?;
-    db::get_connection()?
+    state
+        .get_connection()?
         .transaction(|conn| PostInfo::new_from_id(conn, client, body.post_info.merge_to, &fields))
         .map(Json)
         .map_err(ApiError::from)
@@ -564,6 +583,7 @@ async fn merge(
 
 /// See [adding-post-to-favorites](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#adding-post-to-favorites)
 async fn favorite(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
@@ -578,7 +598,7 @@ async fn favorite(
         time: DateTime::now(),
     };
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
         new_post_favorite
@@ -593,6 +613,7 @@ async fn favorite(
 
 /// See [rating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-post)
 async fn rate(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
@@ -603,7 +624,7 @@ async fn rate(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
@@ -647,7 +668,13 @@ struct UpdateBody {
 }
 
 /// See [updating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-post)
-async fn update(client: Client, post_id: i64, params: ResourceParams, body: UpdateBody) -> ApiResult<Json<PostInfo>> {
+async fn update(
+    state: AppState,
+    client: Client,
+    post_id: i64,
+    params: ResourceParams,
+    body: UpdateBody,
+) -> ApiResult<Json<PostInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let post_hash = PostHash::new(post_id);
 
@@ -660,7 +687,7 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
         None => None,
     };
 
-    tagging_update(body.tags.is_some(), |conn| {
+    tagging_update(&state.connection_pool, body.tags.is_some(), |conn| {
         let old_post: Post = post::table.find(post_id).first(conn)?;
         let old_mime_type = old_post.mime_type;
         api::verify_version(old_post.last_edit_time, body.version)?;
@@ -756,7 +783,8 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
         Ok(())
     })
     .await?;
-    db::get_connection()?
+    state
+        .get_connection()?
         .transaction(|conn| PostInfo::new_from_id(conn, client, post_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
@@ -764,13 +792,14 @@ async fn update(client: Client, post_id: i64, params: ResourceParams, body: Upda
 
 /// Updates post from either a JSON body or a multipart form.
 async fn update_handler(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
     body: JsonOrMultipart<UpdateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => update(client, post_id, params, payload).await,
+        JsonOrMultipart::Json(payload) => update(state, client, post_id, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
@@ -779,13 +808,14 @@ async fn update_handler(
 
             post_update.content = content;
             post_update.thumbnail = thumbnail;
-            update(client, post_id, params, post_update).await
+            update(state, client, post_id, params, post_update).await
         }
     }
 }
 
 /// See [deleting-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-post)
 async fn delete(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
@@ -799,14 +829,14 @@ async fn delete(
     let relation_count: i64 = post_statistics::table
         .find(post_id)
         .select(post_statistics::relation_count)
-        .first(&mut db::get_connection()?)?;
+        .first(&mut state.get_connection()?)?;
 
     let _lock;
     if relation_count > 0 {
         _lock = ANTI_DEADLOCK_MUTEX.lock().await;
     }
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let mime_type = conn.transaction(|conn| {
         let post: Post = post::table.find(post_id).first(conn)?;
         api::verify_version(post.last_edit_time, *client_version)?;
@@ -826,6 +856,7 @@ async fn delete(
 
 /// See [removing-post-from-favorites](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#removing-post-from-favorites)
 async fn unfavorite(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
@@ -835,7 +866,7 @@ async fn unfavorite(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     diesel::delete(post_favorite::table.find((post_id, user_id))).execute(&mut conn)?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, client, post_id, &fields))
         .map(Json)

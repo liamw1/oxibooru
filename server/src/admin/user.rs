@@ -1,16 +1,17 @@
 use crate::admin::LoopState;
 use crate::auth::password;
 use crate::config::RegexType;
+use crate::db::ConnectionPool;
 use crate::schema::user;
 use crate::{admin, api};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use diesel::dsl::exists;
-use diesel::{ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 
 /// This function prompts the user for input again to reset passwords for specific users.
-pub fn reset_password(conn: &mut PgConnection) {
-    admin::user_input_loop(conn, |conn: &mut PgConnection, buffer: &mut String| {
+pub fn reset_password(connection_pool: &ConnectionPool) {
+    admin::user_input_loop(connection_pool, |connection_pool: &ConnectionPool, buffer: &mut String| {
         println!(
             "Please enter the username of the user you would like to reset a password for. Enter \"done\" when finished."
         );
@@ -20,7 +21,10 @@ pub fn reset_password(conn: &mut PgConnection) {
         }
 
         // Check if user exists
-        match diesel::select(exists(user::table.filter(user::name.eq(&user)))).get_result(conn) {
+        let mut conn = connection_pool
+            .get()
+            .map_err(|_| "Could not establish a connection to the database for reason: {err}")?;
+        match diesel::select(exists(user::table.filter(user::name.eq(&user)))).get_result(&mut conn) {
             Ok(true) => (),
             Ok(false) => return Err("No user with this username exists".into()),
             Err(err) => return Err(format!("Could not determine if user exists for reason: {err}")),
@@ -38,7 +42,7 @@ pub fn reset_password(conn: &mut PgConnection) {
         diesel::update(user::table)
             .filter(user::name.eq(user))
             .set((user::password_hash.eq(&hash), user::password_salt.eq(salt.as_str())))
-            .execute(conn)
+            .execute(&mut conn)
             .map_err(|err| format!("Could not update password for reason: {err}"))?;
 
         println!("Password reset successful.\n");

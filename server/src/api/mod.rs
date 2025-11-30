@@ -1,3 +1,4 @@
+use crate::app::AppState;
 use crate::auth::Client;
 use crate::auth::header::AuthenticationError;
 use crate::config::{self, RegexType};
@@ -262,7 +263,7 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
     }
 }
 
-pub fn routes() -> Router {
+pub fn routes(state: AppState) -> Router {
     Router::new()
         .merge(comment::routes())
         .merge(info::routes())
@@ -282,8 +283,9 @@ pub fn routes() -> Router {
             // Add a timeout so requests don't hang forever.
             TimeoutLayer::new(Duration::from_secs(60)),
         ))
-        .route_layer(axum::middleware::from_fn(middleware::auth))
-        .route_layer(axum::middleware::from_fn(middleware::post_to_webhooks))
+        .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
+        .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::post_to_webhooks))
+        .with_state(state)
 }
 
 /// Represents body of a request to apply/change a score.

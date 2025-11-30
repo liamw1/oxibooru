@@ -1,4 +1,5 @@
 use crate::api::{ApiError, ApiResult};
+use crate::app::AppState;
 use crate::auth::Client;
 use crate::content::upload::{self, MAX_UPLOAD_SIZE, PartName};
 use crate::content::{JsonOrMultipart, download};
@@ -8,7 +9,7 @@ use axum::{Json, Router, routing};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/uploads", routing::post(upload_handler))
         .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))

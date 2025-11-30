@@ -1,5 +1,6 @@
 use crate::admin::DatabaseResult;
 use crate::api::ApiResult;
+use crate::app::AppState;
 use crate::auth::header;
 use crate::content::hash::{Checksum, Md5Checksum};
 use crate::db::{ConnectionPool, ConnectionResult};
@@ -26,12 +27,10 @@ use axum::http::Method;
 use axum::http::header::AUTHORIZATION;
 use axum_test::TestServer;
 use diesel::r2d2::{ConnectionManager, Pool};
-use diesel::{Connection, ExpressionMethods, Insertable, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
+use diesel::{ExpressionMethods, Insertable, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde_json::Value;
-use std::error::Error;
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
-use std::time::Duration;
 use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
 use uuid::Uuid;
@@ -42,15 +41,7 @@ pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZ
 pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
 
 pub fn get_connection() -> ConnectionResult {
-    let mut guard = get_guard();
-    if let Some(pool) = guard.as_mut() {
-        pool.get()
-    } else {
-        let pool = recreate_database().expect("Test database must be constructible");
-        let conn = pool.get();
-        *guard = Some(pool);
-        conn
-    }
+    get_connection_pool().get()
 }
 
 /// Resets the test database. Useful after operations that are hard to reverse perfectly, like merging.
@@ -70,7 +61,8 @@ pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
 }
 
 pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) -> ApiResult<()> {
-    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes());
+    let state = AppState::new(get_connection_pool());
+    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(state));
     let (method, path) = query
         .split_once(' ')
         .expect("Query string must have method and path separated by a space");
@@ -604,25 +596,44 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
     Ok(())
 }
 
-fn recreate_database() -> Result<ConnectionPool, Box<dyn Error + Send + Sync>> {
-    let mut conn = db::get_prod_connection()?;
-    diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}")).execute(&mut conn)?;
-    diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
+pub fn get_connection_pool() -> ConnectionPool {
+    let mut guard = get_guard();
+    if let Some(pool) = guard.as_mut() {
+        pool.clone()
+    } else {
+        let pool = recreate_database().expect("Test database must be constructible");
+        *guard = Some(pool.clone());
+        pool
+    }
+}
 
-    let database_url = config::create_url(Some(DATABASE_NAME));
-    let mut conn =
-        PgConnection::establish(&database_url).expect("Connection must be able to be established with test server");
-    db::run_migrations(&mut conn)?;
-    populate_database(&mut conn)?;
+fn recreate_database() -> DatabaseResult<ConnectionPool> {
+    // Drop and create test database via postgres database
+    {
+        let postgres_url = config::create_url(Some("postgres"));
+        let postgres_connection_pool = Pool::builder()
+            .max_size(1)
+            .test_on_check_out(true)
+            .build(ConnectionManager::<PgConnection>::new(postgres_url))
+            .expect("Postgres connection pool must be constructible");
 
-    let manager = ConnectionManager::new(database_url);
-    let pool = Pool::builder()
-        .max_lifetime(Some(Duration::from_secs(60)))
+        let mut conn = postgres_connection_pool.get()?;
+        diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}")).execute(&mut conn)?;
+        diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
+    }
+
+    let test_url = config::create_url(Some(DATABASE_NAME));
+    let test_connection_pool = Pool::builder()
+        .max_lifetime(None)
         .idle_timeout(None)
         .test_on_check_out(true)
-        .build(manager)
+        .build(ConnectionManager::new(test_url))
         .expect("Test connection pool must be constructible");
-    Ok(pool)
+    db::run_database_migrations(&test_connection_pool).unwrap();
+
+    let mut conn = test_connection_pool.get()?;
+    populate_database(&mut conn)?;
+    Ok(test_connection_pool)
 }
 
 fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
@@ -823,7 +834,7 @@ mod statistics_tests {
     #[test]
     #[serial]
     fn reset_statistics() -> DatabaseResult<()> {
-        database::reset_relation_stats()?;
+        database::reset_relation_stats(&get_connection_pool())?;
         database_statistics()?;
         comment_statistics()?;
         pool_category_statistics()?;

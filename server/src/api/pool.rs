@@ -1,4 +1,5 @@
 use crate::api::{ApiError, ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
@@ -9,14 +10,14 @@ use crate::search::pool::QueryBuilder;
 use crate::snapshot::pool::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::{api, config, db, resource, snapshot, update};
-use axum::extract::{Extension, Path, Query};
+use crate::{api, config, resource, snapshot, update};
+use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::dsl::exists;
 use diesel::{Connection, ExpressionMethods, Insertable, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/pools", routing::get(list))
         .route("/pool", routing::post(create))
@@ -28,6 +29,7 @@ const MAX_POOLS_PER_PAGE: i64 = 1000;
 
 /// See [lsting-pools](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-pools)
 async fn list(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PoolInfo>>> {
@@ -37,7 +39,7 @@ async fn list(
     let limit = std::cmp::min(params.limit.get(), MAX_POOLS_PER_PAGE);
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
@@ -54,6 +56,7 @@ async fn list(
 
 /// See [getting-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-pool)
 async fn get(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(pool_id): Path<i64>,
     Query(params): Query<ResourceParams>,
@@ -61,7 +64,7 @@ async fn get(
     api::verify_privilege(client, config::privileges().pool_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(conn)?;
         if !pool_exists {
             return Err(ApiError::NotFound(ResourceType::Pool));
@@ -83,6 +86,7 @@ struct CreateBody {
 
 /// See [creating-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-pool)
 async fn create(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
@@ -94,7 +98,7 @@ async fn create(
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let pool = conn.transaction(|conn| {
         let (category_id, category): (i64, SmallString) = pool_category::table
             .select((pool_category::id, pool_category::name))
@@ -129,6 +133,7 @@ async fn create(
 
 /// See [merging-pools](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-pools)
 async fn merge(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<MergeBody<i64>>,
@@ -142,7 +147,7 @@ async fn merge(
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
         let remove_version = pool::table.find(absorbed_id).select(pool::last_edit_time).first(conn)?;
         let merge_to_version = pool::table.find(merge_to_id).select(pool::last_edit_time).first(conn)?;
@@ -169,6 +174,7 @@ struct UpdateBody {
 
 /// See [updating-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-pool)
 async fn update(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(pool_id): Path<i64>,
     Query(params): Query<ResourceParams>,
@@ -176,7 +182,7 @@ async fn update(
 ) -> ApiResult<Json<PoolInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
         let old_pool: Pool = pool::table.find(pool_id).first(conn)?;
         api::verify_version(old_pool.last_edit_time, body.version)?;
@@ -228,13 +234,14 @@ async fn update(
 
 /// See [deleting-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-pool)
 async fn delete(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(pool_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, config::privileges().pool_delete)?;
 
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let pool: Pool = pool::table.find(pool_id).first(conn)?;
         api::verify_version(pool.last_edit_time, *client_version)?;
 

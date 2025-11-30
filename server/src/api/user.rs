@@ -1,4 +1,5 @@
 use crate::api::{ApiError, ApiResult, DeleteBody, PageParams, PagedResponse, ResourceParams};
+use crate::app::AppState;
 use crate::auth::Client;
 use crate::auth::password;
 use crate::config::RegexType;
@@ -13,16 +14,16 @@ use crate::search::Builder;
 use crate::search::user::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db, filesystem, resource, update};
+use crate::{api, config, filesystem, resource, update};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
-use axum::extract::{DefaultBodyLimit, Extension, Path, Query};
+use axum::extract::{DefaultBodyLimit, Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
 use url::Url;
 
-pub fn routes() -> Router {
+pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/users", routing::get(list).post(create_handler))
         .route(
@@ -39,6 +40,7 @@ const MAX_USERS_PER_PAGE: i64 = 1000;
 
 /// See [listing-users](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-users)
 async fn list(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<UserInfo>>> {
@@ -48,7 +50,7 @@ async fn list(
     let limit = std::cmp::min(params.limit.get(), MAX_USERS_PER_PAGE);
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
@@ -65,12 +67,13 @@ async fn list(
 
 /// See [getting-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
 async fn get(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(username): Path<String>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UserInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let user_id = user::table
             .select(user::id)
             .filter(user::name.eq(username))
@@ -110,7 +113,12 @@ struct CreateBody {
 }
 
 /// See [creating-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
-async fn create(client: Client, params: ResourceParams, body: CreateBody) -> ApiResult<Json<UserInfo>> {
+async fn create(
+    state: AppState,
+    client: Client,
+    params: ResourceParams,
+    body: CreateBody,
+) -> ApiResult<Json<UserInfo>> {
     let creation_rank = body.rank.unwrap_or(config::default_rank());
     if creation_rank == UserRank::Anonymous {
         return Err(ApiError::InvalidUserRank);
@@ -148,7 +156,7 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
         None => None,
     };
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let user = conn.transaction(|conn| {
         let user: User = new_user.insert_into(user::table).get_result(conn)?;
 
@@ -172,19 +180,20 @@ async fn create(client: Client, params: ResourceParams, body: CreateBody) -> Api
 
 /// Creates a user from either a JSON body or a multipart form.
 async fn create_handler(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     body: JsonOrMultipart<CreateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => create(client, params, payload).await,
+        JsonOrMultipart::Json(payload) => create(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut new_user: CreateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar)] = decoded_body.files {
                 new_user.avatar = Some(avatar);
-                create(client, params, new_user).await
+                create(state, client, params, new_user).await
             } else {
                 Err(ApiError::MissingFormData)
             }
@@ -211,6 +220,7 @@ struct UpdateBody {
 
 /// See [updating-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
 async fn update(
+    state: AppState,
     client: Client,
     username: String,
     params: ResourceParams,
@@ -223,7 +233,7 @@ async fn update(
         None => None,
     };
 
-    let mut conn = db::get_connection()?;
+    let mut conn = state.get_connection()?;
     let (user_id, visibility) = conn.transaction(|conn| {
         let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))
@@ -323,7 +333,9 @@ async fn update(
                 filesystem::move_file(&old_custom_avatar_path, &new_custom_avatar_path)?;
             }
         }
-        update::user::last_edit_time(conn, user_id).map(|()| (user_id, visibility))
+        update::user::last_edit_time(conn, user_id)
+            .map(|()| (user_id, visibility))
+            .map_err(ApiError::from)
     })?;
     conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility))
         .map(Json)
@@ -332,20 +344,21 @@ async fn update(
 
 /// Updates a user from either a JSON body or a multipart form.
 async fn update_handler(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(username): Path<String>,
     Query(params): Query<ResourceParams>,
     body: JsonOrMultipart<UpdateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => update(client, username, params, payload).await,
+        JsonOrMultipart::Json(payload) => update(state, client, username, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut user_update: UpdateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar)] = decoded_body.files {
                 user_update.avatar = Some(avatar);
-                update(client, username, params, user_update).await
+                update(state, client, username, params, user_update).await
             } else {
                 Err(ApiError::MissingFormData)
             }
@@ -355,11 +368,12 @@ async fn update_handler(
 
 /// See [deleting-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-user)
 async fn delete(
+    State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(username): Path<String>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    db::get_connection()?.transaction(|conn| {
+    state.get_connection()?.transaction(|conn| {
         let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(username))
