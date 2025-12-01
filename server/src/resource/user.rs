@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::content::hash;
 use crate::get_user_stats;
 use crate::model::enums::{AvatarStyle, Score, UserRank};
@@ -21,10 +22,10 @@ pub struct MicroUser {
 }
 
 impl MicroUser {
-    pub fn new(name: SmallString, avatar_style: AvatarStyle) -> Self {
+    pub fn new(config: &Config, name: SmallString, avatar_style: AvatarStyle) -> Self {
         let avatar_url = match avatar_style {
-            AvatarStyle::Gravatar => hash::gravatar_url(&name),
-            AvatarStyle::Manual => hash::custom_avatar_url(&name),
+            AvatarStyle::Gravatar => hash::gravatar_url(config, &name),
+            AvatarStyle::Manual => config.custom_avatar_url(&name),
         };
         Self { name, avatar_url }
     }
@@ -82,24 +83,27 @@ pub struct UserInfo {
 impl UserInfo {
     pub fn new(
         conn: &mut PgConnection,
+        config: &Config,
         user: User,
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Self> {
-        Self::new_batch(conn, vec![user], fields, visibility).map(resource::single)
+        Self::new_batch(conn, config, vec![user], fields, visibility).map(resource::single)
     }
 
     pub fn new_from_id(
         conn: &mut PgConnection,
+        config: &Config,
         user_id: i64,
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Self> {
-        Self::new_batch_from_ids(conn, &[user_id], fields, visibility).map(resource::single)
+        Self::new_batch_from_ids(conn, config, &[user_id], fields, visibility).map(resource::single)
     }
 
     pub fn new_batch(
         conn: &mut PgConnection,
+        config: &Config,
         users: Vec<User>,
         fields: &FieldTable<bool>,
         visibility: Visibility,
@@ -131,7 +135,7 @@ impl UserInfo {
             .into_iter()
             .rev()
             .map(|user| Self {
-                avatar_url: fields[Field::AvatarUrl].then(|| user.avatar_url()),
+                avatar_url: fields[Field::AvatarUrl].then(|| user.avatar_url(config)),
                 version: fields[Field::Version].then_some(user.last_edit_time),
                 name: fields[Field::Name].then_some(user.name),
                 email: fields[Field::Email].then_some(match visibility {
@@ -154,13 +158,14 @@ impl UserInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
+        config: &Config,
         user_ids: &[i64],
         fields: &FieldTable<bool>,
         visibility: Visibility,
     ) -> QueryResult<Vec<Self>> {
         let unordered_users = user::table.filter(user::id.eq_any(user_ids)).load(conn)?;
         let users = resource::order_as(unordered_users, user_ids);
-        Self::new_batch(conn, users, fields, visibility)
+        Self::new_batch(conn, config, users, fields, visibility)
     }
 }
 

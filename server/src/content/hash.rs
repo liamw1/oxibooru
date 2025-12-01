@@ -1,4 +1,4 @@
-use crate::config;
+use crate::config::Config;
 use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
 use base64::Engine;
@@ -23,9 +23,9 @@ pub struct PostHash {
 }
 
 impl PostHash {
-    pub fn new(post_id: i64) -> Self {
+    pub fn new(config: &Config, post_id: i64) -> Self {
         Self {
-            hash: compute_url_safe_hash(&post_id.to_le_bytes()),
+            hash: compute_url_safe_hash(config, &post_id.to_le_bytes()),
             post_id,
         }
     }
@@ -35,35 +35,38 @@ impl PostHash {
     }
 
     /// Returns URL to post content.
-    pub fn content_url(&self, content_type: MimeType) -> String {
-        format!("{}/posts/{self}.{}", config::get().data_url, content_type.extension())
+    pub fn content_url(&self, config: &Config, content_type: MimeType) -> String {
+        format!("{}/posts/{self}.{}", config.data_url, content_type.extension())
     }
 
     /// Returns URL to post thumbnail. Will be a generated thumbnail by default or
     /// a custom thumbnail if it exists.
-    pub fn thumbnail_url(&self) -> String {
+    pub fn thumbnail_url(&self, config: &Config) -> String {
         // Note: this requires interacting with the filesystem and might be slow
-        let thumbnail_folder = if self.custom_thumbnail_path().exists() {
+        let thumbnail_folder = if self.custom_thumbnail_path(config).exists() {
             "custom-thumbnails"
         } else {
             "generated-thumbnails"
         };
-        format!("{}/{thumbnail_folder}/{self}.jpg", config::get().data_url)
+        format!("{}/{thumbnail_folder}/{self}.jpg", config.data_url)
     }
 
     /// Returns path to post content on disk.
-    pub fn content_path(&self, content_type: MimeType) -> PathBuf {
-        format!("{}/{self}.{}", Directory::Posts.as_str(), content_type.extension()).into()
+    pub fn content_path(&self, config: &Config, content_type: MimeType) -> PathBuf {
+        let filename = format!("{self}.{}", content_type.extension());
+        config.path(Directory::Posts).join(filename)
     }
 
     /// Returns path to generated post thumbnail on disk.
-    pub fn generated_thumbnail_path(&self) -> PathBuf {
-        format!("{}/{self}.jpg", Directory::GeneratedThumbnails.as_str()).into()
+    pub fn generated_thumbnail_path(&self, config: &Config) -> PathBuf {
+        let filename = format!("{self}.jpg");
+        config.path(Directory::GeneratedThumbnails).join(filename)
     }
 
     /// Returns path to custom post thumbnail on disk.
-    pub fn custom_thumbnail_path(&self) -> PathBuf {
-        format!("{}/{self}.jpg", Directory::CustomThumbnails.as_str()).into()
+    pub fn custom_thumbnail_path(&self, config: &Config) -> PathBuf {
+        let filename = format!("{self}.jpg");
+        config.path(Directory::CustomThumbnails).join(filename)
     }
 }
 
@@ -130,27 +133,17 @@ impl<const N: usize> FromSql<Bytea, Pg> for GenericChecksum<N> {
     }
 }
 
-pub fn gravatar_url(username: &str) -> String {
-    let username_hash = hmac_hash(username.to_lowercase().as_bytes());
+pub fn gravatar_url(config: &Config, username: &str) -> String {
+    let username_hash = hmac_hash(config, username.to_lowercase().as_bytes());
     let hex_encoded_hash = hex::encode(username_hash.into_bytes());
-    format!("https://gravatar.com/avatar/{hex_encoded_hash}?d=retro&s={}", config::get().thumbnails.avatar_width)
-}
-
-/// Returns URL to custom user avatar.
-pub fn custom_avatar_url(username: &str) -> String {
-    format!("{}/avatars/{}.png", config::get().data_url, username.to_lowercase())
-}
-
-/// Returns path to custom user avatar on disk.
-pub fn custom_avatar_path(username: &str) -> PathBuf {
-    format!("{}/{}.png", Directory::Avatars.as_str(), username.to_lowercase()).into()
+    format!("https://gravatar.com/avatar/{hex_encoded_hash}?d=retro&s={}", config.thumbnails.avatar_width)
 }
 
 /// Computes a checksum for duplicate detection. Uses raw file data instead of decoded
 /// pixel data because different compression schemes can compress identical pixel data
 /// in different ways.
-pub fn compute_checksum(content: &[u8]) -> Checksum {
-    let hash = hmac_hash(content);
+pub fn compute_checksum(config: &Config, content: &[u8]) -> Checksum {
+    let hash = hmac_hash(config, content);
     GenericChecksum(hash.into_bytes().into())
 }
 
@@ -162,16 +155,15 @@ pub fn compute_md5_checksum(content: &[u8]) -> Md5Checksum {
 }
 
 /// Similar to [`compute_checksum`], except checksum is base64 encoded.
-pub fn compute_url_safe_hash(content: &[u8]) -> String {
-    let hash = hmac_hash(content);
+pub fn compute_url_safe_hash(config: &Config, content: &[u8]) -> String {
+    let hash = hmac_hash(config, content);
     URL_SAFE_NO_PAD.encode(hash.into_bytes())
 }
 
 type Hmac = SimpleHmac<blake3::Hasher>;
 
-fn hmac_hash(bytes: &[u8]) -> CtOutput<Hmac> {
-    let mut mac =
-        Hmac::new_from_slice(config::get().content_secret.as_bytes()).expect("HMAC should take key of any size");
+fn hmac_hash(config: &Config, bytes: &[u8]) -> CtOutput<Hmac> {
+    let mut mac = Hmac::new_from_slice(config.content_secret.as_bytes()).expect("HMAC should take key of any size");
     mac.update(bytes);
     mac.finalize()
 }

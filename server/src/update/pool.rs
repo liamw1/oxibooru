@@ -1,5 +1,5 @@
 use crate::api::{self, ApiError, ApiResult};
-use crate::config::RegexType;
+use crate::config::{Config, RegexType};
 use crate::model::pool::{NewPoolName, PoolPost};
 use crate::schema::{pool, pool_name, pool_post};
 use crate::string::SmallString;
@@ -16,10 +16,10 @@ pub fn last_edit_time(conn: &mut PgConnection, pool_id: i64) -> ApiResult<()> {
 }
 
 /// Replaces the current ordered list of names with `names` for pool associated with `pool_id`.
-pub fn set_names(conn: &mut PgConnection, pool_id: i64, names: &[SmallString]) -> ApiResult<()> {
+pub fn set_names(conn: &mut PgConnection, config: &Config, pool_id: i64, names: &[SmallString]) -> ApiResult<()> {
     names
         .iter()
-        .try_for_each(|name| api::verify_matches_regex(name, RegexType::Pool))?;
+        .try_for_each(|name| api::verify_matches_regex(config, name, RegexType::Pool))?;
 
     diesel::delete(pool_name::table)
         .filter(pool_name::pool_id.eq(pool_id))

@@ -8,7 +8,7 @@ use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, resource, snapshot};
+use crate::{api, resource, snapshot};
 use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
@@ -27,7 +27,7 @@ async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UnpagedResponse<TagCategoryInfo>>> {
-    api::verify_privilege(client, config::privileges().tag_category_list)?;
+    api::verify_privilege(client, state.config.privileges().tag_category_list)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state
@@ -45,7 +45,7 @@ async fn get(
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
-    api::verify_privilege(client, config::privileges().tag_category_view)?;
+    api::verify_privilege(client, state.config.privileges().tag_category_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
@@ -75,8 +75,8 @@ async fn create(
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
-    api::verify_privilege(client, config::privileges().tag_category_create)?;
-    api::verify_matches_regex(&body.name, RegexType::TagCategory)?;
+    api::verify_privilege(client, state.config.privileges().tag_category_create)?;
+    api::verify_matches_regex(&state.config, &body.name, RegexType::TagCategory)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let new_category = NewTagCategory {
@@ -121,16 +121,16 @@ async fn update(
 
         let mut new_category = old_category.clone();
         if let Some(order) = body.order {
-            api::verify_privilege(client, config::privileges().tag_category_edit_order)?;
+            api::verify_privilege(client, state.config.privileges().tag_category_edit_order)?;
             new_category.order = order;
         }
         if let Some(name) = body.name {
-            api::verify_privilege(client, config::privileges().tag_category_edit_name)?;
-            api::verify_matches_regex(&name, RegexType::TagCategory)?;
+            api::verify_privilege(client, state.config.privileges().tag_category_edit_name)?;
+            api::verify_matches_regex(&state.config, &name, RegexType::TagCategory)?;
             new_category.name = name;
         }
         if let Some(color) = body.color {
-            api::verify_privilege(client, config::privileges().tag_category_edit_color)?;
+            api::verify_privilege(client, state.config.privileges().tag_category_edit_color)?;
             new_category.color = color;
         }
 
@@ -151,7 +151,7 @@ async fn set_default(
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
-    api::verify_privilege(client, config::privileges().tag_category_set_default)?;
+    api::verify_privilege(client, state.config.privileges().tag_category_set_default)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = state.get_connection()?;
@@ -205,7 +205,7 @@ async fn delete(
     Path(name): Path<String>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    api::verify_privilege(client, config::privileges().tag_category_delete)?;
+    api::verify_privilege(client, state.config.privileges().tag_category_delete)?;
 
     state.get_connection()?.transaction(|conn| {
         let category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;

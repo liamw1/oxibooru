@@ -1,7 +1,8 @@
 use crate::api::{ApiError, ApiResult};
+use crate::config::Config;
 use crate::content::cache::CachedProperties;
 use crate::content::thumbnail::ThumbnailType;
-use crate::filesystem;
+use crate::filesystem::{self, Directory};
 use crate::model::enums::MimeType;
 use axum::RequestExt;
 use axum::extract::{FromRequest, Json, Multipart};
@@ -28,19 +29,19 @@ pub struct FileContents {
 
 impl FileContents {
     /// Constructs an instance from a temporary upload.
-    pub fn from_token(token: &str) -> ApiResult<Self> {
+    pub fn from_token(config: &Config, token: &str) -> ApiResult<Self> {
         let (_uuid, extension) = token.split_once('.').unwrap_or((token, ""));
         let mime_type = MimeType::from_extension(extension)?;
 
-        let temp_path = filesystem::temporary_upload_filepath(token);
+        let temp_path = config.path(Directory::TemporaryUploads).join(token);
         let data = std::fs::read(&temp_path)?;
 
         Ok(Self { data, mime_type })
     }
 
     /// Saves file data to temporary upload directory and returns the name of the file written.
-    pub fn save(&self) -> std::io::Result<String> {
-        filesystem::save_uploaded_file(&self.data, self.mime_type)
+    pub fn save(&self, config: &Config) -> std::io::Result<String> {
+        filesystem::save_uploaded_file(config, &self.data, self.mime_type)
     }
 }
 
@@ -74,32 +75,33 @@ impl Content {
     }
 
     /// Saves content to temporary uploads directory and returns the name of the file written.
-    pub async fn save(self) -> ApiResult<String> {
+    pub async fn save(self, config: &Config) -> ApiResult<String> {
         match self {
-            Self::DirectUpload(file_contents) => file_contents.save().map_err(ApiError::from),
+            Self::DirectUpload(file_contents) => file_contents.save(config).map_err(ApiError::from),
             Self::Token(token) => Ok(token),
-            Self::Url(url) => download::from_url(url).await,
+            Self::Url(url) => download::from_url(config, url).await,
         }
     }
 
     /// Computes thumbnail for uploaded content.
-    pub async fn thumbnail(self, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
-        let token = self.save().await?;
-        let file_contents = FileContents::from_token(&token)?;
-        let file_path = filesystem::temporary_upload_filepath(&token);
-        decode::representative_image(&file_contents, &file_path).map(|image| thumbnail::create(&image, thumbnail_type))
+    pub async fn thumbnail(self, config: &Config, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
+        let token = self.save(config).await?;
+        let file_contents = FileContents::from_token(config, &token)?;
+        let temp_path = config.path(Directory::TemporaryUploads).join(&token);
+        decode::representative_image(config, &file_contents, &temp_path)
+            .map(|image| thumbnail::create(config, &image, thumbnail_type))
     }
 
     /// Computes properties for uploaded content.
-    pub async fn compute_properties(self) -> ApiResult<CachedProperties> {
-        let token = self.save().await?;
-        cache::compute_properties(token)
+    pub async fn compute_properties(self, config: &Config) -> ApiResult<CachedProperties> {
+        let token = self.save(config).await?;
+        cache::compute_properties(config, token)
     }
 
     /// Retrieves content properties from cache or computes them if not present in cache.
-    pub async fn get_or_compute_properties(self) -> ApiResult<CachedProperties> {
-        let token = self.save().await?;
-        cache::get_or_compute_properties(token)
+    pub async fn get_or_compute_properties(self, config: &Config) -> ApiResult<CachedProperties> {
+        let token = self.save(config).await?;
+        cache::get_or_compute_properties(config, token)
     }
 }
 

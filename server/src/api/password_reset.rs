@@ -1,7 +1,6 @@
 use crate::api::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::auth::password;
-use crate::config;
 use crate::content::hash;
 use crate::schema::user;
 use crate::string::SmallString;
@@ -36,14 +35,14 @@ fn get_user_info(
 
 /// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#request-password-reset)
 async fn request_reset(State(state): State<AppState>, Path(identifier): Path<String>) -> ApiResult<Json<()>> {
-    let smtp_info = config::smtp().ok_or(ApiError::MissingSmtpInfo)?;
+    let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
     let mut conn = state.get_connection()?;
     let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;
     let user_email = user_email.ok_or(ApiError::NoEmail)?;
     let user_mailbox = Mailbox::new(None, Address::from_str(&user_email)?);
 
-    let domain = if let Some(domain) = config::get().domain.as_deref() {
+    let domain = if let Some(domain) = state.config.domain.as_deref() {
         domain.to_string()
     } else if let Ok(domain) = std::env::var("HTTP_ORIGIN") {
         domain
@@ -56,10 +55,10 @@ async fn request_reset(State(state): State<AppState>, Path(identifier): Path<Str
     };
     let domain = domain.trim_end_matches('/');
 
-    let site_name = &config::get().public_info.name;
+    let site_name = &state.config.public_info.name;
     let username = percent_encoding::utf8_percent_encode(&username, NON_ALPHANUMERIC);
     let separator = percent_encoding::percent_encode_byte(b':');
-    let reset_token = hash::compute_url_safe_hash(password_salt.as_bytes());
+    let reset_token = hash::compute_url_safe_hash(&state.config, password_salt.as_bytes());
     let url = format!("{domain}/password-reset/{username}{separator}{reset_token}");
 
     let email = Message::builder()
@@ -124,14 +123,14 @@ async fn reset_password(
 
     state.get_connection()?.transaction(|conn| {
         let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
-        if confirmation.token != hash::compute_url_safe_hash(password_salt.as_bytes()) {
+        if confirmation.token != hash::compute_url_safe_hash(&state.config, password_salt.as_bytes()) {
             return Err(ApiError::UnauthorizedPasswordReset);
         }
 
         let temporary_password = generate_temporary_password(TEMPORARY_PASSWORD_LENGTH);
 
         let salt = SaltString::generate(&mut OsRng);
-        let hash = password::hash_password(&temporary_password, &salt)?;
+        let hash = password::hash_password(&state.config, &temporary_password, &salt)?;
         diesel::update(user::table.find(user_id))
             .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
             .execute(conn)?;

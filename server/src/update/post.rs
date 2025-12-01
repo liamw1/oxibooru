@@ -1,5 +1,5 @@
 use crate::api::ApiResult;
-use crate::config;
+use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::ThumbnailCategory;
 use crate::filesystem;
@@ -29,12 +29,13 @@ pub fn last_edit_time(conn: &mut PgConnection, post_id: i64) -> ApiResult<()> {
 /// Updates thumbnail for post.
 pub fn thumbnail(
     conn: &mut PgConnection,
+    config: &Config,
     post_hash: &PostHash,
     thumbnail: &DynamicImage,
     thumbnail_type: ThumbnailCategory,
 ) -> ApiResult<()> {
-    filesystem::delete_post_thumbnail(post_hash, thumbnail_type)?;
-    let thumbnail_size = filesystem::save_post_thumbnail(post_hash, thumbnail, thumbnail_type)?;
+    filesystem::delete_post_thumbnail(config, post_hash, thumbnail_type)?;
+    let thumbnail_size = filesystem::save_post_thumbnail(config, post_hash, thumbnail, thumbnail_type)?;
     match thumbnail_type {
         ThumbnailCategory::Generated => diesel::update(post::table.find(post_hash.id()))
             .set(post::generated_thumbnail_size.eq(thumbnail_size))
@@ -101,14 +102,15 @@ pub fn set_notes(conn: &mut PgConnection, post_id: i64, notes: &[Note]) -> Query
 /// Merges `absorbed_post` to `merge_to_post`.
 pub fn merge(
     conn: &mut PgConnection,
+    config: &Config,
     absorbed_post: &Post,
     merge_to_post: &Post,
     replace_content: bool,
 ) -> ApiResult<()> {
     let absorbed_id = absorbed_post.id;
     let merge_to_id = merge_to_post.id;
-    let absorbed_hash = PostHash::new(absorbed_id);
-    let merge_to_hash = PostHash::new(merge_to_id);
+    let absorbed_hash = PostHash::new(config, absorbed_id);
+    let merge_to_hash = PostHash::new(config, merge_to_id);
 
     // Merge relations
     let involved_relations: Vec<PostRelation> = post_relation::table
@@ -262,7 +264,13 @@ pub fn merge(
 
     if replace_content {
         if !cfg!(test) {
-            filesystem::swap_posts(&absorbed_hash, absorbed_post.mime_type, &merge_to_hash, merge_to_post.mime_type)?;
+            filesystem::swap_posts(
+                config,
+                &absorbed_hash,
+                absorbed_post.mime_type,
+                &merge_to_hash,
+                merge_to_post.mime_type,
+            )?;
         }
 
         // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
@@ -283,13 +291,13 @@ pub fn merge(
             .execute(conn)?;
     }
 
-    if config::get().delete_source_files && !cfg!(test) {
+    if config.delete_source_files && !cfg!(test) {
         let deleted_content_type = if replace_content {
             merge_to_post.mime_type
         } else {
             absorbed_post.mime_type
         };
-        filesystem::delete_post(&absorbed_hash, deleted_content_type)?;
+        filesystem::delete_post(config, &absorbed_hash, deleted_content_type)?;
     }
     last_edit_time(conn, merge_to_id)?;
     Ok(())

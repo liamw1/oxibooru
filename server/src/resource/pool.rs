@@ -1,3 +1,4 @@
+use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource::post::MicroPost;
@@ -59,18 +60,28 @@ pub struct PoolInfo {
 }
 
 impl PoolInfo {
-    pub fn new(conn: &mut PgConnection, pool: Pool, fields: &FieldTable<bool>) -> QueryResult<Self> {
-        Self::new_batch(conn, vec![pool], fields).map(resource::single)
+    pub fn new(conn: &mut PgConnection, config: &Config, pool: Pool, fields: &FieldTable<bool>) -> QueryResult<Self> {
+        Self::new_batch(conn, config, vec![pool], fields).map(resource::single)
     }
 
-    pub fn new_from_id(conn: &mut PgConnection, pool_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
-        Self::new_batch_from_ids(conn, &[pool_id], fields).map(resource::single)
+    pub fn new_from_id(
+        conn: &mut PgConnection,
+        config: &Config,
+        pool_id: i64,
+        fields: &FieldTable<bool>,
+    ) -> QueryResult<Self> {
+        Self::new_batch_from_ids(conn, config, &[pool_id], fields).map(resource::single)
     }
 
-    pub fn new_batch(conn: &mut PgConnection, pools: Vec<Pool>, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
+    pub fn new_batch(
+        conn: &mut PgConnection,
+        config: &Config,
+        pools: Vec<Pool>,
+        fields: &FieldTable<bool>,
+    ) -> QueryResult<Vec<Self>> {
         let mut categories = resource::retrieve(fields[Field::Category], || get_categories(conn, &pools))?;
         let mut names = resource::retrieve(fields[Field::Names], || get_names(conn, &pools))?;
-        let mut posts = resource::retrieve(fields[Field::Posts], || get_posts(conn, &pools))?;
+        let mut posts = resource::retrieve(fields[Field::Posts], || get_posts(conn, config, &pools))?;
         let mut post_counts = resource::retrieve(fields[Field::PostCount], || get_post_counts(conn, &pools))?;
 
         let batch_size = pools.len();
@@ -99,12 +110,13 @@ impl PoolInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
+        config: &Config,
         pool_ids: &[i64],
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_pools = pool::table.filter(pool::id.eq_any(pool_ids)).load(conn)?;
         let pools = resource::order_as(unordered_pools, pool_ids);
-        Self::new_batch(conn, pools, fields)
+        Self::new_batch(conn, config, pools, fields)
     }
 }
 
@@ -133,7 +145,7 @@ fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<Sma
         .collect())
 }
 
-fn get_posts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<MicroPost>>> {
+fn get_posts(conn: &mut PgConnection, config: &Config, pools: &[Pool]) -> QueryResult<Vec<Vec<MicroPost>>> {
     Ok(PoolPost::belonging_to(pools)
         .order_by(pool_post::order)
         .load::<PoolPost>(conn)?
@@ -144,7 +156,7 @@ fn get_posts(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<Mic
                 .into_iter()
                 .map(|pool_post| MicroPost {
                     id: pool_post.post_id,
-                    thumbnail_url: PostHash::new(pool_post.post_id).thumbnail_url(),
+                    thumbnail_url: PostHash::new(config, pool_post.post_id).thumbnail_url(config),
                 })
                 .collect()
         })

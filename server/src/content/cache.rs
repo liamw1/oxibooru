@@ -1,9 +1,10 @@
 use crate::api::ApiResult;
+use crate::config::Config;
 use crate::content::hash::{Checksum, Md5Checksum};
 use crate::content::signature::COMPRESSED_SIGNATURE_LEN;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::{FileContents, decode, hash, signature, thumbnail};
-use crate::filesystem;
+use crate::filesystem::{self, Directory};
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
 use image::DynamicImage;
 use image::error::LimitErrorKind;
@@ -27,8 +28,8 @@ pub struct CachedProperties {
 }
 
 /// Computes content properties and caches them in memory.
-pub fn compute_properties(content_token: String) -> ApiResult<CachedProperties> {
-    let properties = compute_properties_no_cache(content_token.clone())?;
+pub fn compute_properties(config: &Config, content_token: String) -> ApiResult<CachedProperties> {
+    let properties = compute_properties_no_cache(config, content_token.clone())?;
 
     // Clone this here to make sure we aren't holding onto lock for longer than necessary
     let properties_copy = properties.clone();
@@ -38,11 +39,11 @@ pub fn compute_properties(content_token: String) -> ApiResult<CachedProperties> 
 }
 
 /// Returns cached properties of content or computes them if not in cache.
-pub fn get_or_compute_properties(content_token: String) -> ApiResult<CachedProperties> {
+pub fn get_or_compute_properties(config: &Config, content_token: String) -> ApiResult<CachedProperties> {
     let maybe_properties = get_cache_guard().remove(&content_token);
     match maybe_properties {
         Some(properties) => Ok(properties),
-        None => compute_properties_no_cache(content_token),
+        None => compute_properties_no_cache(config, content_token),
     }
 }
 
@@ -98,11 +99,11 @@ fn get_cache_guard() -> MutexGuard<'static, RingCache> {
 }
 
 /// Computes content properties without storing them in cache.
-fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
-    let temp_path = filesystem::temporary_upload_filepath(&token);
+fn compute_properties_no_cache(config: &Config, token: String) -> ApiResult<CachedProperties> {
+    let temp_path = config.path(Directory::TemporaryUploads).join(&token);
     let file_size = filesystem::file_size(&temp_path)?;
     let data = std::fs::read(&temp_path)?;
-    let checksum = hash::compute_checksum(&data);
+    let checksum = hash::compute_checksum(config, &data);
     let md5_checksum = hash::compute_md5_checksum(&data);
 
     let (_uuid, extension) = token.split_once('.').unwrap_or((&token, ""));
@@ -121,14 +122,14 @@ fn compute_properties_no_cache(token: String) -> ApiResult<CachedProperties> {
     };
 
     let file_contents = FileContents { data, mime_type };
-    let image = decode::representative_image(&file_contents, &temp_path)?;
+    let image = decode::representative_image(config, &file_contents, &temp_path)?;
 
     Ok(CachedProperties {
         token,
         checksum,
         md5_checksum,
         signature: signature::compute(&image),
-        thumbnail: thumbnail::create(&image, ThumbnailType::Post),
+        thumbnail: thumbnail::create(config, &image, ThumbnailType::Post),
         width: i32::try_from(image.width()).map_err(|_| LimitErrorKind::DimensionError)?,
         height: i32::try_from(image.height()).map_err(|_| LimitErrorKind::DimensionError)?,
         mime_type,

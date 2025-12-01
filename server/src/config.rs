@@ -1,3 +1,4 @@
+use crate::filesystem::Directory;
 use crate::model::enums::UserRank;
 use crate::string::SmallString;
 use config::builder::DefaultState;
@@ -5,6 +6,7 @@ use config::{ConfigBuilder, File, FileFormat};
 use lettre::message::Mailbox;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use std::sync::LazyLock;
 use strum::Display;
 use url::Url;
@@ -49,7 +51,7 @@ pub struct SmtpConfig {
     pub from: Mailbox,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PrivilegeConfig {
     pub user_create_self: UserRank,
     pub user_create_any: UserRank,
@@ -154,7 +156,7 @@ pub struct PrivilegeConfig {
     pub upload_use_downloader: UserRank,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all(serialize = "camelCase"))]
 pub struct PublicConfig {
@@ -179,8 +181,8 @@ pub struct PublicConfig {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    data_dir: SmallString,
-    pub data_url: SmallString,
+    pub data_dir: PathBuf,
+    pub data_url: String,
     pub webhooks: Vec<Url>,
     pub password_secret: SmallString,
     pub content_secret: SmallString,
@@ -198,48 +200,80 @@ pub struct Config {
     pub public_info: PublicConfig,
 }
 
-/// Returns a reference to the global [`Config`] object, which is deserialized
-/// from the `config.toml`. Fields that are not present in `config.toml` will
-/// be replaced by its default, which is specified in `config.toml.dist`.
-pub fn get() -> &'static Config {
-    &CONFIG
-}
+impl Config {
+    pub fn smtp(&self) -> Option<&SmtpConfig> {
+        self.smtp.as_ref()
+    }
 
-pub fn smtp() -> Option<&'static SmtpConfig> {
-    CONFIG.smtp.as_ref()
-}
+    pub fn default_rank(&self) -> UserRank {
+        self.public_info.default_user_rank
+    }
 
-pub fn privileges() -> &'static PrivilegeConfig {
-    &CONFIG.public_info.privileges
-}
+    pub fn privileges(&self) -> &PrivilegeConfig {
+        &self.public_info.privileges
+    }
 
-/// Gets Regexes that are used to filter valid names for pools, tags, usernames, etc.
-pub fn regex(regex_type: RegexType) -> &'static Regex {
-    match regex_type {
-        RegexType::Pool => &CONFIG.pool_name_regex,
-        RegexType::PoolCategory => &CONFIG.pool_category_regex,
-        RegexType::Tag => &CONFIG.public_info.tag_name_regex,
-        RegexType::TagCategory => &CONFIG.public_info.tag_category_name_regex,
-        RegexType::Username => &CONFIG.public_info.username_regex,
-        RegexType::Password => &CONFIG.public_info.password_regex,
+    pub fn regex(&self, regex_type: RegexType) -> &Regex {
+        match regex_type {
+            RegexType::Pool => &self.pool_name_regex,
+            RegexType::PoolCategory => &self.pool_category_regex,
+            RegexType::Tag => &self.public_info.tag_name_regex,
+            RegexType::TagCategory => &self.public_info.tag_category_name_regex,
+            RegexType::Username => &self.public_info.username_regex,
+            RegexType::Password => &self.public_info.password_regex,
+        }
+    }
+
+    pub fn path(&self, directory: Directory) -> PathBuf {
+        let folder = match directory {
+            Directory::Avatars => "avatars",
+            Directory::Posts => "posts",
+            Directory::GeneratedThumbnails => "generated-thumbnails",
+            Directory::CustomThumbnails => "custom-thumbnails",
+            Directory::TemporaryUploads => "temporary-uploads",
+        };
+        self.data_dir.join(folder)
+    }
+
+    /// Returns URL to custom user avatar.
+    pub fn custom_avatar_url(&self, username: &str) -> String {
+        format!("{}/avatars/{}.png", self.data_url, username.to_lowercase())
+    }
+
+    /// Returns path to custom user avatar on disk.
+    pub fn custom_avatar_path(&self, username: &str) -> PathBuf {
+        let filename = format!("{}.png", username.to_lowercase());
+        self.path(Directory::Avatars).join(filename)
     }
 }
 
-/// The rank of an anonymous user.
-pub fn default_rank() -> UserRank {
-    CONFIG.public_info.default_user_rank
+pub fn create() -> Config {
+    assert!(!cfg!(test), "Production config disallowed in test build!");
+
+    let mut config: Config = match ConfigBuilder::<DefaultState>::default()
+        .add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml))
+        .add_source(File::with_name("config"))
+        .build()
+        .and_then(config::Config::try_deserialize)
+    {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            // We use `eprintln!` instead of `error!` here because tracing hasn't been initialized yet
+            eprintln!("Could not parse config.toml. Details:\n{err}");
+            std::process::exit(1);
+        }
+    };
+    config.public_info.can_send_mails = config.smtp.is_some();
+    config
 }
 
-pub fn data_dir() -> &'static str {
-    if DOCKER_DEPLOYMENT {
-        &CONFIG.data_dir
-    } else {
-        static DATA_DIR: LazyLock<String> = LazyLock::new(|| {
-            dotenvy::from_filename("../.env").expect(".env must be in project root directory");
-            std::env::var("MOUNT_DATA").expect("MOUNT_DATA must be defined in .env")
-        });
-        &DATA_DIR
-    }
+#[cfg(test)]
+pub fn default() -> Config {
+    ConfigBuilder::<DefaultState>::default()
+        .add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml))
+        .build()
+        .and_then(config::Config::try_deserialize)
+        .unwrap()
 }
 
 pub fn port() -> u16 {
@@ -273,30 +307,3 @@ pub fn create_url(database_override: Option<&str>) -> String {
 
 const DOCKER_DEPLOYMENT: bool = option_env!("DOCKER_DEPLOYMENT").is_some();
 const DEFAULT_CONFIG: &str = include_str!("../config.toml.dist");
-
-static CONFIG: LazyLock<Config> = LazyLock::new(|| {
-    // TODO: Remove in favor of config injection
-    if cfg!(test) {
-        return ConfigBuilder::<DefaultState>::default()
-            .add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml))
-            .build()
-            .and_then(config::Config::try_deserialize)
-            .unwrap();
-    }
-
-    let mut config: Config = match ConfigBuilder::<DefaultState>::default()
-        .add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml))
-        .add_source(File::with_name("config"))
-        .build()
-        .and_then(config::Config::try_deserialize)
-    {
-        Ok(parsed) => parsed,
-        Err(err) => {
-            // We use `eprintln!` instead of `error!` here because tracing hasn't been initialized yet
-            eprintln!("Could not parse config.toml. Details:\n{err}");
-            std::process::exit(1);
-        }
-    };
-    config.public_info.can_send_mails = config.smtp.is_some();
-    config
-});

@@ -61,7 +61,7 @@ pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
 }
 
 pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) -> ApiResult<()> {
-    let state = AppState::new(get_connection_pool());
+    let state = AppState::new(get_connection_pool(), config::default());
     let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(state));
     let (method, path) = query
         .split_once(' ')

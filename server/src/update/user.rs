@@ -1,7 +1,7 @@
-use crate::api::ApiResult;
 use crate::filesystem;
 use crate::schema::user;
 use crate::time::DateTime;
+use crate::{api::ApiResult, config::Config};
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use image::DynamicImage;
 
@@ -22,10 +22,16 @@ pub fn last_edit_time(conn: &mut PgConnection, user_id: i64) -> QueryResult<()> 
 }
 
 /// Updates custom avatar for user.
-pub fn avatar(conn: &mut PgConnection, user_id: i64, name: &str, avatar: &DynamicImage) -> ApiResult<()> {
-    filesystem::delete_custom_avatar(name)?;
+pub fn avatar(
+    conn: &mut PgConnection,
+    config: &Config,
+    user_id: i64,
+    name: &str,
+    avatar: &DynamicImage,
+) -> ApiResult<()> {
+    filesystem::delete_custom_avatar(config, name)?;
 
-    let avatar_size = filesystem::save_custom_avatar(name, avatar)?;
+    let avatar_size = filesystem::save_custom_avatar(config, name, avatar)?;
     diesel::update(user::table.find(user_id))
         .set(user::custom_avatar_size.eq(avatar_size))
         .execute(conn)?;

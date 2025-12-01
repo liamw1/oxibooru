@@ -3,11 +3,11 @@ use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::PublicConfig;
 use crate::model::post::PostFeature;
+use crate::resource;
 use crate::resource::post::PostInfo;
 use crate::schema::{database_statistics, post_feature, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{config, resource};
 use axum::extract::{Extension, Query, State};
 use axum::response::Json;
 use axum::routing::{self, Router};
@@ -28,7 +28,7 @@ struct Response {
     featuring_time: Option<DateTime>,
     featuring_user: Option<SmallString>,
     server_time: DateTime,
-    config: &'static PublicConfig,
+    config: PublicConfig,
 }
 
 /// See [getting-global-info](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-global-info)
@@ -48,7 +48,7 @@ async fn get(
             .optional()?;
         let featured_post: Option<PostInfo> = latest_feature
             .as_ref()
-            .map(|feature| PostInfo::new_from_id(conn, client, feature.post_id, &fields))
+            .map(|feature| PostInfo::new_from_id(conn, &state.config, client, feature.post_id, &fields))
             .transpose()?;
         let featuring_user: Option<SmallString> = latest_feature
             .as_ref()
@@ -69,7 +69,7 @@ async fn get(
             featuring_time: latest_feature.as_ref().map(|feature| feature.time),
             featuring_user,
             server_time: DateTime::now(),
-            config: &config::get().public_info,
+            config: state.config.public_info.clone(),
         }))
     })
 }

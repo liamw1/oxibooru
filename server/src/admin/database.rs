@@ -1,4 +1,5 @@
 use crate::admin::{DatabaseResult, PRINT_INTERVAL, ProgressReporter};
+use crate::app::AppState;
 use crate::content::hash::PostHash;
 use crate::db::ConnectionPool;
 use crate::filesystem::Directory;
@@ -18,43 +19,43 @@ use tracing::{error, warn};
 
 /// Renames post files and thumbnails.
 /// Useful when the content hash changes.
-pub fn reset_filenames() -> std::io::Result<()> {
+pub fn reset_filenames(state: &AppState) -> std::io::Result<()> {
     let _timer = Timer::new("reset_filenames");
-    if Directory::GeneratedThumbnails.path().try_exists()? {
+    if state.config.path(Directory::GeneratedThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Generated thumbnails renamed", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(Directory::GeneratedThumbnails.path())? {
+        for entry in std::fs::read_dir(state.config.path(Directory::GeneratedThumbnails))? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
                 continue;
             };
 
-            let new_path = PostHash::new(post_id).generated_thumbnail_path();
+            let new_path = PostHash::new(&state.config, post_id).generated_thumbnail_path(&state.config);
             if path != new_path {
                 filesystem::move_file(&path, &new_path)?;
                 progress.increment();
             }
         }
     }
-    if Directory::CustomThumbnails.path().try_exists()? {
+    if state.config.path(Directory::CustomThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Custom thumbnails renamed", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(Directory::CustomThumbnails.path())? {
+        for entry in std::fs::read_dir(state.config.path(Directory::CustomThumbnails))? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
                 continue;
             };
 
-            let new_path = PostHash::new(post_id).custom_thumbnail_path();
+            let new_path = PostHash::new(&state.config, post_id).custom_thumbnail_path(&state.config);
             if path != new_path {
                 filesystem::move_file(&path, &new_path)?;
                 progress.increment();
             }
         }
     }
-    if Directory::Posts.path().try_exists()? {
+    if state.config.path(Directory::Posts).try_exists()? {
         let progress = ProgressReporter::new("Posts renamed", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(Directory::Posts.path())? {
+        for entry in std::fs::read_dir(state.config.path(Directory::Posts))? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
@@ -62,7 +63,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
             };
 
             let new_path = if let Some(mime_type) = MimeType::from_path(&path) {
-                PostHash::new(post_id).content_path(mime_type)
+                PostHash::new(&state.config, post_id).content_path(&state.config, mime_type)
             } else {
                 if let Some(extension) = path.extension().map(OsStr::to_string_lossy) {
                     warn!("Post {post_id} has unsupported file extension {extension}");
@@ -70,7 +71,7 @@ pub fn reset_filenames() -> std::io::Result<()> {
                     warn!("Post {post_id} has no file extension");
                 }
 
-                let mut new_path = PostHash::new(post_id).content_path(MimeType::Png);
+                let mut new_path = PostHash::new(&state.config, post_id).content_path(&state.config, MimeType::Png);
                 new_path.set_extension(path.extension().unwrap_or(OsStr::new("")));
                 new_path
             };
@@ -85,12 +86,12 @@ pub fn reset_filenames() -> std::io::Result<()> {
 }
 
 /// Updates database values for thumbnail size.
-pub fn reset_thumbnail_sizes(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
-    let mut conn = connection_pool.get()?;
+pub fn reset_thumbnail_sizes(state: &AppState) -> DatabaseResult<()> {
+    let mut conn = state.get_connection()?;
 
-    if Directory::Avatars.path().try_exists()? {
+    if state.config.path(Directory::Avatars).try_exists()? {
         let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(Directory::Avatars.path())? {
+        for entry in std::fs::read_dir(state.config.path(Directory::Avatars))? {
             let path = entry?.path();
             let Some(username) = path.file_name().map(OsStr::to_string_lossy) else {
                 error!("Unable to convert file name of {path:?} to string");
@@ -105,9 +106,9 @@ pub fn reset_thumbnail_sizes(connection_pool: &ConnectionPool) -> DatabaseResult
             progress.increment();
         }
     }
-    if Directory::GeneratedThumbnails.path().try_exists()? {
+    if state.config.path(Directory::GeneratedThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Generated thumbnail sizes cached", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(Directory::GeneratedThumbnails.path())? {
+        for entry in std::fs::read_dir(state.config.path(Directory::GeneratedThumbnails))? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
@@ -122,9 +123,9 @@ pub fn reset_thumbnail_sizes(connection_pool: &ConnectionPool) -> DatabaseResult
             progress.increment();
         }
     }
-    if Directory::CustomThumbnails.path().try_exists()? {
+    if state.config.path(Directory::CustomThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Custom thumbnails sizes cached", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(Directory::CustomThumbnails.path())? {
+        for entry in std::fs::read_dir(state.config.path(Directory::CustomThumbnails))? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
@@ -335,19 +336,19 @@ pub fn reset_relation_stats(connection_pool: &ConnectionPool) -> DatabaseResult<
 /// Recalculates cached file sizes, row counts, and table statistics.
 /// Useful for when the statistics become inconsistent with database
 /// or when migrating from an older version without statistics.
-pub fn reset_statistics(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
+pub fn reset_statistics(state: &AppState) -> DatabaseResult<()> {
     let _timer = Timer::new("reset_statistics");
 
     // Disk usage will automatically be incremented via triggers as we calculate
     // content, thumbnail, and avatar sizes
-    let mut conn = connection_pool.get()?;
+    let mut conn = state.get_connection()?;
     diesel::update(database_statistics::table)
         .set(database_statistics::disk_usage.eq(0))
         .execute(&mut conn)?;
 
-    if Directory::Posts.path().try_exists()? {
+    if state.config.path(Directory::Posts).try_exists()? {
         let progress = ProgressReporter::new("Posts content sizes cached", PRINT_INTERVAL);
-        for entry in std::fs::read_dir(Directory::Posts.path())? {
+        for entry in std::fs::read_dir(state.config.path(Directory::Posts))? {
             let path = entry?.path();
             let Some(post_id) = admin::get_post_id(&path) else {
                 error!("Could not find post_id of {path:?}");
@@ -362,6 +363,6 @@ pub fn reset_statistics(connection_pool: &ConnectionPool) -> DatabaseResult<()> 
             progress.increment();
         }
     }
-    reset_thumbnail_sizes(connection_pool)?;
-    reset_relation_stats(connection_pool)
+    reset_thumbnail_sizes(state)?;
+    reset_relation_stats(&state.connection_pool)
 }

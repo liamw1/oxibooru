@@ -8,7 +8,7 @@ use crate::resource::user_token::UserTokenInfo;
 use crate::schema::{user, user_token};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::{api, config, resource};
+use crate::{api, resource};
 use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, Insertable, QueryDsl, RunQueryDsl, SaveChangesDsl};
@@ -37,9 +37,9 @@ async fn list(
             .first(conn)?;
 
         let required_rank = if client.id == Some(user_id) {
-            config::privileges().user_token_list_self
+            state.config.privileges().user_token_list_self
         } else {
-            config::privileges().user_token_list_any
+            state.config.privileges().user_token_list_any
         };
         api::verify_privilege(client, required_rank)?;
 
@@ -53,7 +53,9 @@ async fn list(
     let username = SmallString::new(username);
     let results = user_tokens
         .into_iter()
-        .map(|user_token| UserTokenInfo::new(MicroUser::new(username.clone(), avatar_style), user_token, &fields))
+        .map(|user_token| {
+            UserTokenInfo::new(MicroUser::new(&state.config, username.clone(), avatar_style), user_token, &fields)
+        })
         .collect();
     Ok(Json(UnpagedResponse { results }))
 }
@@ -85,9 +87,9 @@ async fn create(
             .first(conn)?;
 
         let required_rank = if client.id == Some(user_id) {
-            config::privileges().user_token_create_self
+            state.config.privileges().user_token_create_self
         } else {
-            config::privileges().user_token_create_any
+            state.config.privileges().user_token_create_any
         };
         api::verify_privilege(client, required_rank)?;
 
@@ -113,7 +115,11 @@ async fn create(
         .get_result(conn)?;
         Ok::<_, ApiError>((user_token, avatar_style))
     })?;
-    Ok(Json(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), user_token, &fields)))
+    Ok(Json(UserTokenInfo::new(
+        MicroUser::new(&state.config, username.into(), avatar_style),
+        user_token,
+        &fields,
+    )))
 }
 
 #[derive(Deserialize)]
@@ -145,9 +151,9 @@ async fn update(
             .first(conn)?;
 
         let required_rank = if client.id == Some(user_id) {
-            config::privileges().user_token_edit_self
+            state.config.privileges().user_token_edit_self
         } else {
-            config::privileges().user_token_edit_any
+            state.config.privileges().user_token_edit_any
         };
         api::verify_privilege(client, required_rank)?;
 
@@ -168,7 +174,11 @@ async fn update(
         let updated_user_token: UserToken = user_token.save_changes(conn)?;
         Ok::<_, ApiError>((updated_user_token, avatar_style))
     })?;
-    Ok(Json(UserTokenInfo::new(MicroUser::new(username.into(), avatar_style), updated_user_token, &fields)))
+    Ok(Json(UserTokenInfo::new(
+        MicroUser::new(&state.config, username.into(), avatar_style),
+        updated_user_token,
+        &fields,
+    )))
 }
 
 /// See [deleting-user-token](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-user-token)
@@ -186,9 +196,9 @@ async fn delete(
             .first(conn)?;
 
         let required_rank = if client.id == Some(user_token_owner) {
-            config::privileges().user_token_delete_self
+            state.config.privileges().user_token_delete_self
         } else {
-            config::privileges().user_token_delete_any
+            state.config.privileges().user_token_delete_any
         };
         api::verify_privilege(client, required_rank)?;
 

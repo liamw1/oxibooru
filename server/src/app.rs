@@ -1,9 +1,11 @@
 use crate::api::middleware;
+use crate::config::Config;
 use crate::db::{ConnectionPool, ConnectionResult};
 use crate::{admin, api, config, db, filesystem};
 use axum::ServiceExt;
 use axum::extract::Request;
 use std::error::Error;
+use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
 use tokio::signal::unix::SignalKind;
@@ -14,14 +16,18 @@ use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct AppState {
     pub connection_pool: ConnectionPool,
+    pub config: Arc<Config>,
 }
 
 impl AppState {
-    pub fn new(connection_pool: ConnectionPool) -> Self {
-        AppState { connection_pool }
+    pub fn new(connection_pool: ConnectionPool, config: Config) -> Self {
+        AppState {
+            connection_pool,
+            config: Arc::new(config),
+        }
     }
 
     pub fn get_connection(&self) -> ConnectionResult {
@@ -39,12 +45,12 @@ pub fn num_rayon_threads() -> usize {
 }
 
 /// Initializes logging using [`tracing_subscriber`].
-pub fn enable_tracing() {
-    let filter = match EnvFilter::try_new(&config::get().log_filter) {
+pub fn enable_tracing(state: &AppState) {
+    let filter = match EnvFilter::try_new(&state.config.log_filter) {
         Ok(filter) => filter,
         Err(err) => {
             warn!("Log filter is invalid. Some or all directives may be ignored. Details:\n{err}");
-            EnvFilter::new(&config::get().log_filter)
+            EnvFilter::new(&state.config.log_filter)
         }
     };
     tracing_subscriber::registry()
@@ -53,28 +59,26 @@ pub fn enable_tracing() {
         .init();
 }
 
-pub fn initialize() -> Result<(), Box<dyn Error + Send + Sync>> {
-    let connection_pool = db::create_connection_pool();
-    let migration_range = db::run_database_migrations(&connection_pool)?;
-    db::run_server_migrations(&connection_pool, migration_range)?;
+pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> {
+    let migration_range = db::run_database_migrations(&state.connection_pool)?;
+    db::run_server_migrations(state, migration_range)?;
 
     if admin::enabled() {
-        admin::command_line_mode(&connection_pool);
+        admin::command_line_mode(state);
         std::process::exit(0);
     }
 
-    let mut conn = connection_pool.get()?;
+    let mut conn = state.get_connection()?;
     db::check_signature_version(&mut conn)?; // We do this after admin mode check so that users can update signatures
     middleware::initialize_snapshot_counter(&mut conn)?;
 
-    if let Err(err) = filesystem::purge_temporary_uploads() {
+    if let Err(err) = filesystem::purge_temporary_uploads(&state.config) {
         warn!("Failed to purge temporary files. Details:\n{err}");
     }
     Ok(())
 }
 
-pub async fn run() -> std::io::Result<()> {
-    let state = AppState::new(db::create_connection_pool());
+pub async fn run(state: AppState) -> std::io::Result<()> {
     let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(state));
 
     let address = format!("0.0.0.0:{}", config::port());

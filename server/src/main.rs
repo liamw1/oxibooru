@@ -35,12 +35,14 @@ mod update;
 
 #[tokio::main]
 async fn main() {
-    app::enable_tracing();
-    if let Err(err) = app::initialize() {
+    let state = app::AppState::new(db::create_connection_pool(), config::create());
+
+    app::enable_tracing(&state);
+    if let Err(err) = app::initialize(&state) {
         tracing::error!("An error occurred during initialization. Details:\n{err}");
         std::process::exit(1);
     }
-    if let Err(err) = app::run().await {
+    if let Err(err) = app::run(state).await {
         tracing::error!("Unable to start server. Details:\n{err}");
         std::process::exit(1);
     }

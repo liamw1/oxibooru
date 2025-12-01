@@ -10,7 +10,7 @@ use crate::search::pool::QueryBuilder;
 use crate::snapshot::pool::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::{api, config, resource, snapshot, update};
+use crate::{api, resource, snapshot, update};
 use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::dsl::exists;
@@ -33,7 +33,7 @@ async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PoolInfo>>> {
-    api::verify_privilege(client, config::privileges().pool_list)?;
+    api::verify_privilege(client, state.config.privileges().pool_list)?;
 
     let offset = params.offset.unwrap_or(0);
     let limit = std::cmp::min(params.limit.get(), MAX_POOLS_PER_PAGE);
@@ -49,7 +49,7 @@ async fn list(
             offset,
             limit,
             total,
-            results: PoolInfo::new_batch_from_ids(conn, &selected_pools, &fields)?,
+            results: PoolInfo::new_batch_from_ids(conn, &state.config, &selected_pools, &fields)?,
         }))
     })
 }
@@ -61,7 +61,7 @@ async fn get(
     Path(pool_id): Path<i64>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<PoolInfo>> {
-    api::verify_privilege(client, config::privileges().pool_view)?;
+    api::verify_privilege(client, state.config.privileges().pool_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
@@ -69,7 +69,7 @@ async fn get(
         if !pool_exists {
             return Err(ApiError::NotFound(ResourceType::Pool));
         }
-        PoolInfo::new_from_id(conn, pool_id, &fields)
+        PoolInfo::new_from_id(conn, &state.config, pool_id, &fields)
             .map(Json)
             .map_err(ApiError::from)
     })
@@ -91,7 +91,7 @@ async fn create(
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
-    api::verify_privilege(client, config::privileges().pool_create)?;
+    api::verify_privilege(client, state.config.privileges().pool_create)?;
 
     if body.names.is_empty() {
         return Err(ApiError::NoNamesGiven(ResourceType::Pool));
@@ -114,7 +114,7 @@ async fn create(
         let posts = body.posts.unwrap_or_default();
 
         // Set names and posts
-        update::pool::set_names(conn, pool.id, &body.names)?;
+        update::pool::set_names(conn, &state.config, pool.id, &body.names)?;
         update::pool::set_posts(conn, pool.id, &posts)?;
 
         let pool_data = SnapshotData {
@@ -126,7 +126,7 @@ async fn create(
         snapshot::pool::creation_snapshot(conn, client, pool.id, pool_data)?;
         Ok::<_, ApiError>(pool)
     })?;
-    conn.transaction(|conn| PoolInfo::new(conn, pool, &fields))
+    conn.transaction(|conn| PoolInfo::new(conn, &state.config, pool, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -138,7 +138,7 @@ async fn merge(
     Query(params): Query<ResourceParams>,
     Json(body): Json<MergeBody<i64>>,
 ) -> ApiResult<Json<PoolInfo>> {
-    api::verify_privilege(client, config::privileges().pool_merge)?;
+    api::verify_privilege(client, state.config.privileges().pool_merge)?;
 
     let absorbed_id = body.remove;
     let merge_to_id = body.merge_to;
@@ -157,7 +157,7 @@ async fn merge(
         update::pool::merge(conn, absorbed_id, merge_to_id)?;
         snapshot::pool::merge_snapshot(conn, client, absorbed_id, merge_to_id).map_err(ApiError::from)
     })?;
-    conn.transaction(|conn| PoolInfo::new_from_id(conn, merge_to_id, &fields))
+    conn.transaction(|conn| PoolInfo::new_from_id(conn, &state.config, merge_to_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -192,7 +192,7 @@ async fn update(
         let mut new_snapshot_data = old_snapshot_data.clone();
 
         if let Some(category) = body.category {
-            api::verify_privilege(client, config::privileges().pool_edit_category)?;
+            api::verify_privilege(client, state.config.privileges().pool_edit_category)?;
 
             let category_id: i64 = pool_category::table
                 .select(pool_category::id)
@@ -202,21 +202,21 @@ async fn update(
             new_snapshot_data.category = category;
         }
         if let Some(description) = body.description {
-            api::verify_privilege(client, config::privileges().pool_edit_description)?;
+            api::verify_privilege(client, state.config.privileges().pool_edit_description)?;
             new_pool.description = description.clone();
             new_snapshot_data.description = description;
         }
         if let Some(names) = body.names {
-            api::verify_privilege(client, config::privileges().pool_edit_name)?;
+            api::verify_privilege(client, state.config.privileges().pool_edit_name)?;
             if names.is_empty() {
                 return Err(ApiError::NoNamesGiven(ResourceType::Pool));
             }
 
-            update::pool::set_names(conn, pool_id, &names)?;
+            update::pool::set_names(conn, &state.config, pool_id, &names)?;
             new_snapshot_data.names = names;
         }
         if let Some(posts) = body.posts {
-            api::verify_privilege(client, config::privileges().pool_edit_post)?;
+            api::verify_privilege(client, state.config.privileges().pool_edit_post)?;
 
             update::pool::set_posts(conn, pool_id, &posts)?;
             new_snapshot_data.posts = posts;
@@ -227,7 +227,7 @@ async fn update(
         snapshot::pool::modification_snapshot(conn, client, pool_id, old_snapshot_data, new_snapshot_data)?;
         Ok(())
     })?;
-    conn.transaction(|conn| PoolInfo::new_from_id(conn, pool_id, &fields))
+    conn.transaction(|conn| PoolInfo::new_from_id(conn, &state.config, pool_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -239,7 +239,7 @@ async fn delete(
     Path(pool_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    api::verify_privilege(client, config::privileges().pool_delete)?;
+    api::verify_privilege(client, state.config.privileges().pool_delete)?;
 
     state.get_connection()?.transaction(|conn| {
         let pool: Pool = pool::table.find(pool_id).first(conn)?;

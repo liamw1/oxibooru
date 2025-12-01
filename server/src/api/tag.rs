@@ -10,7 +10,7 @@ use crate::search::tag::QueryBuilder;
 use crate::snapshot::tag::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::{api, config, resource, snapshot, update};
+use crate::{api, resource, snapshot, update};
 use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::dsl::count_star;
@@ -37,7 +37,7 @@ async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<TagInfo>>> {
-    api::verify_privilege(client, config::privileges().tag_list)?;
+    api::verify_privilege(client, state.config.privileges().tag_list)?;
 
     let offset = params.offset.unwrap_or(0);
     let limit = std::cmp::min(params.limit.get(), MAX_TAGS_PER_PAGE);
@@ -65,7 +65,7 @@ async fn get(
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagInfo>> {
-    api::verify_privilege(client, config::privileges().tag_view)?;
+    api::verify_privilege(client, state.config.privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
@@ -99,7 +99,7 @@ async fn get_siblings(
     Path(name): Path<String>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagSiblings>> {
-    api::verify_privilege(client, config::privileges().tag_view)?;
+    api::verify_privilege(client, state.config.privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
@@ -149,7 +149,7 @@ async fn create(
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
 ) -> ApiResult<Json<TagInfo>> {
-    api::verify_privilege(client, config::privileges().tag_create)?;
+    api::verify_privilege(client, state.config.privileges().tag_create)?;
 
     if body.names.is_empty() {
         return Err(ApiError::NoNamesGiven(ResourceType::Tag));
@@ -170,11 +170,21 @@ async fn create(
         .get_result(conn)?;
 
         // Add names, implications, and suggestions
-        update::tag::set_names(conn, tag.id, &body.names)?;
-        let (implied_ids, implications) =
-            update::tag::get_or_create_tag_ids(conn, client, body.implications.unwrap_or_default(), true)?;
-        let (suggested_ids, suggestions) =
-            update::tag::get_or_create_tag_ids(conn, client, body.suggestions.unwrap_or_default(), true)?;
+        update::tag::set_names(conn, &state.config, tag.id, &body.names)?;
+        let (implied_ids, implications) = update::tag::get_or_create_tag_ids(
+            conn,
+            &state.config,
+            client,
+            body.implications.unwrap_or_default(),
+            true,
+        )?;
+        let (suggested_ids, suggestions) = update::tag::get_or_create_tag_ids(
+            conn,
+            &state.config,
+            client,
+            body.suggestions.unwrap_or_default(),
+            true,
+        )?;
         update::tag::set_implications(conn, tag.id, &implied_ids)?;
         update::tag::set_suggestions(conn, tag.id, &suggested_ids)?;
 
@@ -200,7 +210,7 @@ async fn merge(
     Query(params): Query<ResourceParams>,
     Json(body): Json<MergeBody<SmallString>>,
 ) -> ApiResult<Json<TagInfo>> {
-    api::verify_privilege(client, config::privileges().tag_merge)?;
+    api::verify_privilege(client, state.config.privileges().tag_merge)?;
 
     let get_tag_info = |conn: &mut PgConnection, name: &str| {
         tag::table
@@ -266,7 +276,7 @@ async fn update(
         let mut new_snapshot_data = old_snapshot_data.clone();
 
         if let Some(category) = body.category {
-            api::verify_privilege(client, config::privileges().tag_edit_category)?;
+            api::verify_privilege(client, state.config.privileges().tag_edit_category)?;
 
             let category_id: i64 = tag_category::table
                 .select(tag_category::id)
@@ -276,30 +286,32 @@ async fn update(
             new_snapshot_data.category = category;
         }
         if let Some(description) = body.description {
-            api::verify_privilege(client, config::privileges().tag_edit_description)?;
+            api::verify_privilege(client, state.config.privileges().tag_edit_description)?;
             new_tag.description = description.clone();
             new_snapshot_data.description = description;
         }
         if let Some(names) = body.names {
-            api::verify_privilege(client, config::privileges().tag_edit_name)?;
+            api::verify_privilege(client, state.config.privileges().tag_edit_name)?;
             if names.is_empty() {
                 return Err(ApiError::NoNamesGiven(ResourceType::Tag));
             }
 
-            update::tag::set_names(conn, tag_id, &names)?;
+            update::tag::set_names(conn, &state.config, tag_id, &names)?;
             new_snapshot_data.names = names;
         }
         if let Some(implications) = body.implications {
-            api::verify_privilege(client, config::privileges().tag_edit_implication)?;
+            api::verify_privilege(client, state.config.privileges().tag_edit_implication)?;
 
-            let (implied_ids, implications) = update::tag::get_or_create_tag_ids(conn, client, implications, true)?;
+            let (implied_ids, implications) =
+                update::tag::get_or_create_tag_ids(conn, &state.config, client, implications, true)?;
             update::tag::set_implications(conn, tag_id, &implied_ids)?;
             new_snapshot_data.implications = implications;
         }
         if let Some(suggestions) = body.suggestions {
-            api::verify_privilege(client, config::privileges().tag_edit_suggestion)?;
+            api::verify_privilege(client, state.config.privileges().tag_edit_suggestion)?;
 
-            let (suggested_ids, suggestions) = update::tag::get_or_create_tag_ids(conn, client, suggestions, true)?;
+            let (suggested_ids, suggestions) =
+                update::tag::get_or_create_tag_ids(conn, &state.config, client, suggestions, true)?;
             update::tag::set_suggestions(conn, tag_id, &suggested_ids)?;
             new_snapshot_data.suggestions = suggestions;
         }
@@ -321,7 +333,7 @@ async fn delete(
     Path(name): Path<String>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    api::verify_privilege(client, config::privileges().tag_delete)?;
+    api::verify_privilege(client, state.config.privileges().tag_delete)?;
 
     state.get_connection()?.transaction(|conn| {
         let tag: Tag = tag::table

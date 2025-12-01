@@ -1,6 +1,6 @@
 use crate::api::{ApiError, ApiResult};
 use crate::auth::Client;
-use crate::config::RegexType;
+use crate::config::{Config, RegexType};
 use crate::model::enums::ResourceType;
 use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagName, TagSuggestion};
@@ -8,7 +8,7 @@ use crate::schema::post_tag;
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, snapshot};
+use crate::{api, snapshot};
 use diesel::dsl::max;
 use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, RunQueryDsl};
 use std::collections::hash_map::{Entry, IntoKeys};
@@ -23,10 +23,10 @@ pub fn last_edit_time(conn: &mut PgConnection, tag_id: i64) -> ApiResult<()> {
 }
 
 /// Replaces the current ordered list of names with `names` for tag associated with `tag_id`.
-pub fn set_names(conn: &mut PgConnection, tag_id: i64, names: &[SmallString]) -> ApiResult<()> {
+pub fn set_names(conn: &mut PgConnection, config: &Config, tag_id: i64, names: &[SmallString]) -> ApiResult<()> {
     names
         .iter()
-        .try_for_each(|name| api::verify_matches_regex(name, RegexType::Tag))?;
+        .try_for_each(|name| api::verify_matches_regex(config, name, RegexType::Tag))?;
 
     diesel::delete(tag_name::table)
         .filter(tag_name::tag_id.eq(tag_id))
@@ -83,6 +83,7 @@ pub fn set_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i6
 /// Checks that each new name matches on the Tag regex.
 pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
+    config: &Config,
     client: Client,
     names: Vec<SmallString>,
     detect_cycles: bool,
@@ -132,11 +133,11 @@ pub fn get_or_create_tag_ids(
         .collect();
     new_names
         .iter()
-        .try_for_each(|name| api::verify_matches_regex(name, RegexType::Tag))?;
+        .try_for_each(|name| api::verify_matches_regex(config, name, RegexType::Tag))?;
 
     // Create new tags if given unique names
     if !new_names.is_empty() {
-        api::verify_privilege(client, config::privileges().tag_create)?;
+        api::verify_privilege(client, config.privileges().tag_create)?;
 
         let new_tag_ids: Vec<i64> = vec![NewTag::default(); new_names.len()]
             .insert_into(tag::table)

@@ -4,7 +4,7 @@ use crate::auth::Client;
 use crate::resource::snapshot::SnapshotInfo;
 use crate::search::Builder;
 use crate::search::snapshot::QueryBuilder;
-use crate::{api, config, resource};
+use crate::{api, resource};
 use axum::extract::{Query, State};
 use axum::{Extension, Json, Router, routing};
 use diesel::Connection;
@@ -21,7 +21,7 @@ async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<SnapshotInfo>>> {
-    api::verify_privilege(client, config::privileges().snapshot_list)?;
+    api::verify_privilege(client, state.config.privileges().snapshot_list)?;
 
     let offset = params.offset.unwrap_or(0);
     let limit = std::cmp::min(params.limit.get(), MAX_SNAPSHOTS_PER_PAGE);
@@ -36,7 +36,7 @@ async fn list(
             offset,
             limit,
             total,
-            results: SnapshotInfo::new_batch_from_ids(conn, &selected_snapshots, &fields)?,
+            results: SnapshotInfo::new_batch_from_ids(conn, &state.config, &selected_snapshots, &fields)?,
         }))
     })
 }

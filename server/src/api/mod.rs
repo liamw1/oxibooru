@@ -1,7 +1,7 @@
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::auth::header::AuthenticationError;
-use crate::config::{self, RegexType};
+use crate::config::{Config, RegexType};
 use crate::error::ErrorKind;
 use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
 use crate::string::SmallString;
@@ -247,8 +247,9 @@ pub fn verify_privilege(client: Client, required_rank: UserRank) -> ApiResult<()
 
 /// Checks if `haystack` matches regex `regex_type`.
 /// Returns error if it does not match on the regex.
-pub fn verify_matches_regex(haystack: &str, regex_type: RegexType) -> ApiResult<()> {
-    config::regex(regex_type)
+pub fn verify_matches_regex(config: &Config, haystack: &str, regex_type: RegexType) -> ApiResult<()> {
+    config
+        .regex(regex_type)
         .is_match(haystack)
         .then_some(())
         .ok_or_else(|| ApiError::ExpressionFailsRegex(SmallString::new(haystack), regex_type))

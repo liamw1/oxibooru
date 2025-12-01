@@ -8,7 +8,7 @@ use crate::schema::{comment, comment_score};
 use crate::search::Builder;
 use crate::search::comment::QueryBuilder;
 use crate::time::DateTime;
-use crate::{api, config, resource};
+use crate::{api, resource};
 use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::dsl::exists;
@@ -30,7 +30,7 @@ async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<CommentInfo>>> {
-    api::verify_privilege(client, config::privileges().comment_list)?;
+    api::verify_privilege(client, state.config.privileges().comment_list)?;
 
     let offset = params.offset.unwrap_or(0);
     let limit = std::cmp::min(params.limit.get(), MAX_COMMENTS_PER_PAGE);
@@ -45,7 +45,7 @@ async fn list(
             offset,
             limit,
             total,
-            results: CommentInfo::new_batch_from_ids(conn, client, &selected_comments, &fields)?,
+            results: CommentInfo::new_batch_from_ids(conn, &state.config, client, &selected_comments, &fields)?,
         }))
     })
 }
@@ -57,7 +57,7 @@ async fn get(
     Path(comment_id): Path<i64>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<CommentInfo>> {
-    api::verify_privilege(client, config::privileges().comment_view)?;
+    api::verify_privilege(client, state.config.privileges().comment_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
@@ -65,7 +65,7 @@ async fn get(
         if !comment_exists {
             return Err(ApiError::NotFound(ResourceType::Comment));
         }
-        CommentInfo::new_from_id(conn, client, comment_id, &fields)
+        CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields)
             .map(Json)
             .map_err(ApiError::from)
     })
@@ -86,7 +86,7 @@ async fn create(
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
 ) -> ApiResult<Json<CommentInfo>> {
-    api::verify_privilege(client, config::privileges().comment_create)?;
+    api::verify_privilege(client, state.config.privileges().comment_create)?;
 
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -99,7 +99,7 @@ async fn create(
 
     let mut conn = state.get_connection()?;
     let comment = new_comment.insert_into(comment::table).get_result(&mut conn)?;
-    conn.transaction(|conn| CommentInfo::new(conn, client, comment, &fields))
+    conn.transaction(|conn| CommentInfo::new(conn, &state.config, client, comment, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -130,9 +130,9 @@ async fn update(
         api::verify_version(comment_version, body.version)?;
 
         let required_rank = if client.id == comment_owner && comment_owner.is_some() {
-            config::privileges().comment_edit_own
+            state.config.privileges().comment_edit_own
         } else {
-            config::privileges().comment_edit_any
+            state.config.privileges().comment_edit_any
         };
         api::verify_privilege(client, required_rank)?;
 
@@ -141,7 +141,7 @@ async fn update(
             .execute(conn)
             .map_err(ApiError::from)
     })?;
-    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields))
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -154,7 +154,7 @@ async fn rate(
     Query(params): Query<ResourceParams>,
     Json(body): Json<RatingBody>,
 ) -> ApiResult<Json<CommentInfo>> {
-    api::verify_privilege(client, config::privileges().comment_score)?;
+    api::verify_privilege(client, state.config.privileges().comment_score)?;
 
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -174,7 +174,7 @@ async fn rate(
         }
         Ok::<_, ApiError>(())
     })?;
-    conn.transaction(|conn| CommentInfo::new_from_id(conn, client, comment_id, &fields))
+    conn.transaction(|conn| CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -194,9 +194,9 @@ async fn delete(
         api::verify_version(comment_version, *client_version)?;
 
         let required_rank = if client.id == comment_owner && comment_owner.is_some() {
-            config::privileges().comment_delete_own
+            state.config.privileges().comment_delete_own
         } else {
-            config::privileges().comment_delete_any
+            state.config.privileges().comment_delete_any
         };
         api::verify_privilege(client, required_rank)?;
 

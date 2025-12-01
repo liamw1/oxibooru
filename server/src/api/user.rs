@@ -5,7 +5,7 @@ use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
-use crate::content::{Content, FileContents, JsonOrMultipart, hash, upload};
+use crate::content::{Content, FileContents, JsonOrMultipart, upload};
 use crate::model::enums::{AvatarStyle, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{UserInfo, Visibility};
@@ -14,7 +14,7 @@ use crate::search::Builder;
 use crate::search::user::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, filesystem, resource, update};
+use crate::{api, filesystem, resource, update};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use axum::extract::{DefaultBodyLimit, Extension, Path, Query, State};
@@ -44,7 +44,7 @@ async fn list(
     Extension(client): Extension<Client>,
     Query(params): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<UserInfo>>> {
-    api::verify_privilege(client, config::privileges().user_list)?;
+    api::verify_privilege(client, state.config.privileges().user_list)?;
 
     let offset = params.offset.unwrap_or(0);
     let limit = std::cmp::min(params.limit.get(), MAX_USERS_PER_PAGE);
@@ -60,7 +60,13 @@ async fn list(
             offset,
             limit,
             total,
-            results: UserInfo::new_batch_from_ids(conn, &selected_users, &fields, Visibility::PublicOnly)?,
+            results: UserInfo::new_batch_from_ids(
+                conn,
+                &state.config,
+                &selected_users,
+                &fields,
+                Visibility::PublicOnly,
+            )?,
         }))
     })
 }
@@ -83,7 +89,7 @@ async fn get(
 
         let viewing_self = client.id == Some(user_id);
         if !viewing_self {
-            api::verify_privilege(client, config::privileges().user_view)?;
+            api::verify_privilege(client, state.config.privileges().user_view)?;
         }
 
         let visibility = if viewing_self {
@@ -91,7 +97,7 @@ async fn get(
         } else {
             Visibility::PublicOnly
         };
-        UserInfo::new_from_id(conn, user_id, &fields, visibility)
+        UserInfo::new_from_id(conn, &state.config, user_id, &fields, visibility)
             .map(Json)
             .map_err(ApiError::from)
     })
@@ -119,29 +125,29 @@ async fn create(
     params: ResourceParams,
     body: CreateBody,
 ) -> ApiResult<Json<UserInfo>> {
-    let creation_rank = body.rank.unwrap_or(config::default_rank());
+    let creation_rank = body.rank.unwrap_or(state.config.default_rank());
     if creation_rank == UserRank::Anonymous {
         return Err(ApiError::InvalidUserRank);
     }
 
     let creating_self = client.id.is_none();
     let required_rank = if creating_self {
-        config::privileges().user_create_self
+        state.config.privileges().user_create_self
     } else {
-        config::privileges().user_create_any
+        state.config.privileges().user_create_any
     };
     api::verify_privilege(client, required_rank)?;
-    if creation_rank > config::default_rank() {
+    if creation_rank > state.config.default_rank() {
         api::verify_privilege(client, creation_rank)?;
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    api::verify_matches_regex(&body.name, RegexType::Username)?;
-    api::verify_matches_regex(&body.password, RegexType::Password)?;
+    api::verify_matches_regex(&state.config, &body.name, RegexType::Username)?;
+    api::verify_matches_regex(&state.config, &body.password, RegexType::Password)?;
     api::verify_valid_email(body.email.as_deref())?;
 
     let salt = SaltString::generate(&mut OsRng);
-    let hash = password::hash_password(&body.password, &salt)?;
+    let hash = password::hash_password(&state.config, &body.password, &salt)?;
     let new_user = NewUser {
         name: &body.name,
         password_hash: &hash,
@@ -152,7 +158,7 @@ async fn create(
     };
 
     let custom_avatar = match Content::new(body.avatar, body.avatar_token, body.avatar_url) {
-        Some(content) => Some(content.thumbnail(ThumbnailType::Avatar).await?),
+        Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Avatar).await?),
         None => None,
     };
 
@@ -162,18 +168,18 @@ async fn create(
 
         if let Some(avatar) = custom_avatar {
             let required_rank = if creating_self {
-                config::privileges().user_edit_self_avatar
+                state.config.privileges().user_edit_self_avatar
             } else {
-                config::privileges().user_edit_any_avatar
+                state.config.privileges().user_edit_any_avatar
             };
             api::verify_privilege(client, required_rank)?;
 
-            update::user::avatar(conn, user.id, &body.name, &avatar)?;
+            update::user::avatar(conn, &state.config, user.id, &body.name, &avatar)?;
         }
 
         Ok::<_, ApiError>(user)
     })?;
-    conn.transaction(|conn| UserInfo::new(conn, user, &fields, Visibility::Full))
+    conn.transaction(|conn| UserInfo::new(conn, &state.config, user, &fields, Visibility::Full))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -229,7 +235,7 @@ async fn update(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let custom_avatar = match Content::new(body.avatar, body.avatar_token, body.avatar_url) {
-        Some(content) => Some(content.thumbnail(ThumbnailType::Avatar).await?),
+        Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Avatar).await?),
         None => None,
     };
 
@@ -250,24 +256,24 @@ async fn update(
 
         if let Some(password) = body.password {
             let required_rank = if editing_self {
-                config::privileges().user_edit_self_pass
+                state.config.privileges().user_edit_self_pass
             } else {
-                config::privileges().user_edit_any_pass
+                state.config.privileges().user_edit_any_pass
             };
             api::verify_privilege(client, required_rank)?;
-            api::verify_matches_regex(&password, RegexType::Password)?;
+            api::verify_matches_regex(&state.config, &password, RegexType::Password)?;
 
             let salt = SaltString::generate(&mut OsRng);
-            let hash = password::hash_password(&password, &salt)?;
+            let hash = password::hash_password(&state.config, &password, &salt)?;
             diesel::update(user::table.find(user_id))
                 .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
                 .execute(conn)?;
         }
         if let Some(email) = body.email {
             let required_rank = if editing_self {
-                config::privileges().user_edit_self_email
+                state.config.privileges().user_edit_self_email
             } else {
-                config::privileges().user_edit_any_email
+                state.config.privileges().user_edit_any_email
             };
             api::verify_privilege(client, required_rank)?;
             api::verify_valid_email(email.as_deref())?;
@@ -278,12 +284,12 @@ async fn update(
         }
         if let Some(rank) = body.rank {
             let required_rank = if editing_self {
-                config::privileges().user_edit_self_rank
+                state.config.privileges().user_edit_self_rank
             } else {
-                config::privileges().user_edit_any_rank
+                state.config.privileges().user_edit_any_rank
             };
             api::verify_privilege(client, required_rank)?;
-            if rank > config::default_rank() {
+            if rank > state.config.default_rank() {
                 api::verify_privilege(client, rank)?;
             }
 
@@ -293,9 +299,9 @@ async fn update(
         }
         if let Some(avatar_style) = body.avatar_style {
             let required_rank = if editing_self {
-                config::privileges().user_edit_self_avatar
+                state.config.privileges().user_edit_self_avatar
             } else {
-                config::privileges().user_edit_any_avatar
+                state.config.privileges().user_edit_any_avatar
             };
             api::verify_privilege(client, required_rank)?;
 
@@ -305,31 +311,31 @@ async fn update(
         }
         if let Some(avatar) = custom_avatar {
             let required_rank = if editing_self {
-                config::privileges().user_edit_self_avatar
+                state.config.privileges().user_edit_self_avatar
             } else {
-                config::privileges().user_edit_any_avatar
+                state.config.privileges().user_edit_any_avatar
             };
             api::verify_privilege(client, required_rank)?;
 
-            update::user::avatar(conn, user_id, &username, &avatar)?;
+            update::user::avatar(conn, &state.config, user_id, &username, &avatar)?;
         }
         if let Some(new_name) = body.name.as_deref() {
             let required_rank = if editing_self {
-                config::privileges().user_edit_self_name
+                state.config.privileges().user_edit_self_name
             } else {
-                config::privileges().user_edit_any_name
+                state.config.privileges().user_edit_any_name
             };
             api::verify_privilege(client, required_rank)?;
-            api::verify_matches_regex(new_name, RegexType::Username)?;
+            api::verify_matches_regex(&state.config, new_name, RegexType::Username)?;
 
             // Update first to see if new name clashes with any existing names
             diesel::update(user::table.find(user_id))
                 .set(user::name.eq(new_name))
                 .execute(conn)?;
 
-            let old_custom_avatar_path = hash::custom_avatar_path(&username);
+            let old_custom_avatar_path = state.config.custom_avatar_path(&username);
             if old_custom_avatar_path.try_exists()? {
-                let new_custom_avatar_path = hash::custom_avatar_path(new_name);
+                let new_custom_avatar_path = state.config.custom_avatar_path(new_name);
                 filesystem::move_file(&old_custom_avatar_path, &new_custom_avatar_path)?;
             }
         }
@@ -337,7 +343,7 @@ async fn update(
             .map(|()| (user_id, visibility))
             .map_err(ApiError::from)
     })?;
-    conn.transaction(|conn| UserInfo::new_from_id(conn, user_id, &fields, visibility))
+    conn.transaction(|conn| UserInfo::new_from_id(conn, &state.config, user_id, &fields, visibility))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -382,9 +388,9 @@ async fn delete(
 
         let deleting_self = client.id == Some(user_id);
         let required_rank = if deleting_self {
-            config::privileges().user_delete_self
+            state.config.privileges().user_delete_self
         } else {
-            config::privileges().user_delete_any
+            state.config.privileges().user_delete_any
         };
         api::verify_privilege(client, required_rank)?;
 

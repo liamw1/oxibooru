@@ -1,4 +1,5 @@
 use crate::auth::Client;
+use crate::config::Config;
 use crate::model::comment::{Comment, CommentScore};
 use crate::model::enums::{AvatarStyle, Rating};
 use crate::resource::user::MicroUser;
@@ -49,29 +50,32 @@ pub struct CommentInfo {
 impl CommentInfo {
     pub fn new(
         conn: &mut PgConnection,
+        config: &Config,
         client: Client,
         comment: Comment,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
-        Self::new_batch(conn, client, vec![comment], fields).map(resource::single)
+        Self::new_batch(conn, config, client, vec![comment], fields).map(resource::single)
     }
 
     pub fn new_from_id(
         conn: &mut PgConnection,
+        config: &Config,
         client: Client,
         comment_id: i64,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
-        Self::new_batch_from_ids(conn, client, &[comment_id], fields).map(resource::single)
+        Self::new_batch_from_ids(conn, config, client, &[comment_id], fields).map(resource::single)
     }
 
     pub fn new_batch(
         conn: &mut PgConnection,
+        config: &Config,
         client: Client,
         comments: Vec<Comment>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, &comments))?;
+        let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, config, &comments))?;
         let mut scores = resource::retrieve(fields[Field::Score], || get_scores(conn, &comments))?;
         let mut client_scores =
             resource::retrieve(fields[Field::OwnScore], || get_client_scores(conn, client, &comments))?;
@@ -101,17 +105,18 @@ impl CommentInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
+        config: &Config,
         client: Client,
         comment_ids: &[i64],
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_comments = comment::table.filter(comment::id.eq_any(comment_ids)).load(conn)?;
         let comments = resource::order_as(unordered_comments, comment_ids);
-        Self::new_batch(conn, client, comments, fields)
+        Self::new_batch(conn, config, client, comments, fields)
     }
 }
 
-fn get_owners(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<Option<MicroUser>>> {
+fn get_owners(conn: &mut PgConnection, config: &Config, comments: &[Comment]) -> QueryResult<Vec<Option<MicroUser>>> {
     let comment_ids: Vec<_> = comments.iter().map(Identifiable::id).copied().collect();
     comment::table
         .filter(comment::id.eq_any(&comment_ids))
@@ -122,7 +127,7 @@ fn get_owners(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
             resource::order_like(comment_info, comments, |&(id, ..)| id)
                 .into_iter()
                 .map(|comment_owner| {
-                    comment_owner.map(|(_, username, avatar_style)| MicroUser::new(username, avatar_style))
+                    comment_owner.map(|(_, username, avatar_style)| MicroUser::new(config, username, avatar_style))
                 })
                 .collect()
         })

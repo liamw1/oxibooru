@@ -1,5 +1,5 @@
 use crate::api::{ApiError, ApiResult};
-use crate::config;
+use crate::config::Config;
 use crate::content::{FileContents, flash};
 use crate::model::enums::PostType;
 use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, Rgb, RgbImage};
@@ -16,7 +16,11 @@ use video_rs::ffmpeg::media::Type;
 /// For images, this is simply the decoded image.
 /// For videos, it is the first frame of the video.
 /// For Flash media, it is the largest image that can be decoded from the Flash tags.
-pub fn representative_image(file_contents: &FileContents, file_path: &Path) -> ApiResult<DynamicImage> {
+pub fn representative_image(
+    config: &Config,
+    file_contents: &FileContents,
+    file_path: &Path,
+) -> ApiResult<DynamicImage> {
     match PostType::from(file_contents.mime_type) {
         PostType::Image | PostType::Animation => {
             let image_format = file_contents
@@ -28,7 +32,7 @@ pub fn representative_image(file_contents: &FileContents, file_path: &Path) -> A
         PostType::Video => video_frame(file_path)
             .map_err(ApiError::from)
             .and_then(|frame| frame.ok_or(ApiError::EmptyVideo)),
-        PostType::Flash => flash_image(file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
+        PostType::Flash => flash_image(config, file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
     }
 }
 
@@ -89,7 +93,7 @@ fn video_frame(path: &Path) -> Result<Option<DynamicImage>, video_rs::Error> {
 }
 
 /// Search swf tags for the largest decodable image
-fn flash_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
+fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> {
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let swf_buf = swf::decompress_swf(reader)?;
@@ -136,7 +140,7 @@ fn flash_image(path: &Path) -> ApiResult<Option<DynamicImage>> {
 
     // Sort images in order of decreasing effective width after cropping for thumbnails
     images.sort_by_key(|image| {
-        let (thumbnail_width, thumbnail_height) = config::get().thumbnails.post_dimensions();
+        let (thumbnail_width, thumbnail_height) = config.thumbnails.post_dimensions();
 
         // Condition is equivalent to image_aspect_ratio > config_thumbnail_aspect_ratio
         let effective_width = if image.width() * thumbnail_height > thumbnail_width * image.height() {

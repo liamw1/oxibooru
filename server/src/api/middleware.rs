@@ -4,7 +4,7 @@ use crate::auth::{Client as AuthClient, header};
 use crate::model::enums::UserRank;
 use crate::model::snapshot::Snapshot;
 use crate::schema::snapshot;
-use crate::{config, update};
+use crate::update;
 use axum::extract::{Request, State};
 use axum::http::Method;
 use axum::http::header::AUTHORIZATION;
@@ -25,7 +25,7 @@ pub async fn auth(State(state): State<AppState>, mut request: Request, next: Nex
     let auth_header = request.headers().get(AUTHORIZATION);
     let client = if let Some(auth_value) = auth_header {
         let auth_str = auth_value.to_str()?;
-        header::authenticate_user(&state.connection_pool, auth_str)
+        header::authenticate_user(&state, auth_str)
     } else {
         Ok(AuthClient::new(None, UserRank::Anonymous))
     }?;
@@ -58,7 +58,7 @@ pub async fn post_to_webhooks(State(state): State<AppState>, request: Request, n
             .load(&mut conn)?;
 
         for snapshot in new_snapshots {
-            post_snapshot(snapshot);
+            post_snapshot(&state, snapshot);
         }
     }
 
@@ -80,7 +80,7 @@ pub fn initialize_snapshot_counter(conn: &mut PgConnection) -> QueryResult<()> {
 static LAST_POSTED_SNAPSHOT: AtomicI64 = AtomicI64::new(i64::MAX);
 
 /// Sends `snapshot` data to webhooks if it hasn't already been posted by another thread.
-fn post_snapshot(snapshot: Snapshot) {
+fn post_snapshot(state: &AppState, snapshot: Snapshot) {
     loop {
         let last_posted_snapshot = LAST_POSTED_SNAPSHOT.load(Ordering::SeqCst);
         if snapshot.id <= last_posted_snapshot {
@@ -96,7 +96,7 @@ fn post_snapshot(snapshot: Snapshot) {
     }
 
     let snapshot = Arc::new(snapshot);
-    for url in &config::get().webhooks {
+    for url in &state.config.webhooks {
         tokio::spawn(post_to_webhook(url.clone(), snapshot.clone()));
     }
 }

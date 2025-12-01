@@ -1,4 +1,4 @@
-use crate::config;
+use crate::config::Config;
 use image::imageops::FilterType;
 use image::{DynamicImage, GenericImageView};
 
@@ -17,10 +17,10 @@ pub enum ThumbnailCategory {
 /// Returns a thumbnail of the given `image`. Resizes thumbnail so that it is a small as possible
 /// while containing an area with dimensions `X_width` by `X_height`, where "X" refers to the thumbnail type.
 /// The values of `X_width` and `X_height` are read from the config.toml.
-pub fn create(image: &DynamicImage, thumbnail_type: ThumbnailType) -> DynamicImage {
+pub fn create(config: &Config, image: &DynamicImage, thumbnail_type: ThumbnailType) -> DynamicImage {
     let (config_width, config_height) = match thumbnail_type {
-        ThumbnailType::Post => config::get().thumbnails.post_dimensions(),
-        ThumbnailType::Avatar => config::get().thumbnails.avatar_dimensions(),
+        ThumbnailType::Post => config.thumbnails.post_dimensions(),
+        ThumbnailType::Avatar => config.thumbnails.avatar_dimensions(),
     };
 
     let (image_width, image_height) = image.dimensions();

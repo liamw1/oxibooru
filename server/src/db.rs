@@ -1,4 +1,5 @@
 use crate::admin::{AdminTask, database};
+use crate::app::AppState;
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::schema::database_statistics;
 use crate::{app, config};
@@ -61,16 +62,16 @@ pub fn run_database_migrations(
 }
 
 pub fn run_server_migrations(
-    connection_pool: &ConnectionPool,
+    state: &AppState,
     migration_range: RangeInclusive<i32>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // Update filenames if migrating primary keys to BIGINT
     if migration_range.contains(&12) && !migration_range.contains(&1) {
-        database::reset_filenames()?;
+        database::reset_filenames(state)?;
     }
 
     // If creating the database for the first time, set post signature version
-    let mut conn = connection_pool.get()?;
+    let mut conn = state.get_connection()?;
     if migration_range.contains(&1) {
         diesel::update(database_statistics::table)
             .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
@@ -79,7 +80,7 @@ pub fn run_server_migrations(
 
     // Cache thumbnail sizes if migrating to statistics system
     if migration_range.contains(&13) {
-        database::reset_thumbnail_sizes(connection_pool)?;
+        database::reset_thumbnail_sizes(state)?;
     }
     Ok(())
 }
@@ -125,7 +126,8 @@ struct ConnectionInitialzier {}
 
 impl CustomizeConnection<PgConnection, diesel::r2d2::Error> for ConnectionInitialzier {
     fn on_acquire(&self, conn: &mut PgConnection) -> Result<(), diesel::r2d2::Error> {
-        if config::get().auto_explain {
+        let config = config::create();
+        if config.auto_explain {
             diesel::sql_query("LOAD 'auto_explain';").execute(conn)?;
             diesel::sql_query("SET SESSION auto_explain.log_min_duration = 500;").execute(conn)?;
             diesel::sql_query("SET SESSION auto_explain.log_parameter_max_length = 0;").execute(conn)?;
