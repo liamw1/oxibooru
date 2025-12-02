@@ -63,9 +63,10 @@ macro_rules! apply_str_filter {
 #[macro_export]
 macro_rules! apply_distinct_if_multivalued {
     ($query:expr, $filter:expr) => {
-        match $filter.is_multivalued() {
-            true => $query.distinct(),
-            false => $query,
+        if $crate::search::parse::is_multivalued($filter.condition) {
+            $query.distinct()
+        } else {
+            $query
         }
     };
 }

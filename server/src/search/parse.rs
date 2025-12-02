@@ -98,6 +98,13 @@ where
         .map_err(ApiError::from)
 }
 
+// Checks if condition represents multiple values (i.e. a list, range, or wildcard pattern).
+pub fn is_multivalued(condition: &str) -> bool {
+    next_unescaped_split(condition, ',').is_some()
+        || next_unescaped_split(condition, '*').is_some()
+        || range_split(condition).is_some()
+}
+
 /// A general iterator over patterns that are not escaped with `\`.
 struct SplitUnescaped<'a, P> {
     text: &'a str,
