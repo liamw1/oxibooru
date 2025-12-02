@@ -44,6 +44,9 @@ uuid = { version = "1.13.1", features = ["v4", "serde"] }
 video-rs = "0.10.3"
 walkdir = "2.5.0"
 
+[target.'cfg(target_env = "musl")'.dependencies]
+mimalloc = "0.1.48"
+
 [dev-dependencies]
 axum-test = "17.3.0"
 serial_test = "3.2.0"
