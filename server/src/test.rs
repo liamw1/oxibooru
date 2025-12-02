@@ -536,7 +536,7 @@ fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> 
             .execute(conn)?;
 
         let post_hash = PostHash::new(config, post_id);
-        let content_path = post_hash.content_path(config, mime_type);
+        let content_path = post_hash.content_path(mime_type);
         std::fs::copy(image_path(&source), content_path)?;
     }
     Ok(())

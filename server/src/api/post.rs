@@ -489,7 +489,7 @@ async fn create(
             .path(Directory::TemporaryUploads)
             .join(&content_properties.token);
         filesystem::create_dir(&state.config, Directory::Posts)?;
-        filesystem::move_file(&temp_path, &post_hash.content_path(&state.config, content_properties.mime_type))?;
+        filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
@@ -779,8 +779,8 @@ async fn update(
                 .config
                 .path(Directory::TemporaryUploads)
                 .join(&content_properties.token);
-            filesystem::delete_content(&state.config, &post_hash, old_mime_type)?;
-            filesystem::move_file(&temp_path, &post_hash.content_path(&state.config, content_properties.mime_type))?;
+            filesystem::delete_content(&post_hash, old_mime_type)?;
+            filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
             // Replace generated thumbnail
             update::post::thumbnail(
@@ -868,7 +868,7 @@ async fn delete(
         Ok::<_, ApiError>(mime_type)
     })?;
     if state.config.delete_source_files {
-        filesystem::delete_post(&state.config, &PostHash::new(&state.config, post_id), mime_type)?;
+        filesystem::delete_post(&PostHash::new(&state.config, post_id), mime_type)?;
     }
     Ok(Json(()))
 }

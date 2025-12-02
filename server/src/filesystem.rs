@@ -66,11 +66,11 @@ pub fn save_post_thumbnail(
     let thumbnail_path = match thumbnail_type {
         ThumbnailCategory::Generated => {
             create_dir(config, Directory::GeneratedThumbnails)?;
-            post.generated_thumbnail_path(config)
+            post.generated_thumbnail_path()
         }
         ThumbnailCategory::Custom => {
             create_dir(config, Directory::CustomThumbnails)?;
-            post.custom_thumbnail_path(config)
+            post.custom_thumbnail_path()
         }
     };
 
@@ -79,29 +79,25 @@ pub fn save_post_thumbnail(
 }
 
 /// Deletes thumbnail of `post` from disk, if it exists.
-pub fn delete_post_thumbnail(
-    config: &Config,
-    post: &PostHash,
-    thumbnail_type: ThumbnailCategory,
-) -> std::io::Result<()> {
+pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailCategory) -> std::io::Result<()> {
     let thumbnail_path = match thumbnail_type {
-        ThumbnailCategory::Generated => post.generated_thumbnail_path(config),
-        ThumbnailCategory::Custom => post.custom_thumbnail_path(config),
+        ThumbnailCategory::Generated => post.generated_thumbnail_path(),
+        ThumbnailCategory::Custom => post.custom_thumbnail_path(),
     };
     remove_if_exists(&thumbnail_path)
 }
 
 /// Deletes `post` content from disk.
-pub fn delete_content(config: &Config, post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
-    let content_path = post.content_path(config, mime_type);
+pub fn delete_content(post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
+    let content_path = post.content_path(mime_type);
     std::fs::remove_file(content_path)
 }
 
 /// Deletes `post` thumbnails and content from disk.
-pub fn delete_post(config: &Config, post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
-    delete_post_thumbnail(config, post, ThumbnailCategory::Generated)?;
-    delete_post_thumbnail(config, post, ThumbnailCategory::Custom)?;
-    delete_content(config, post, mime_type)
+pub fn delete_post(post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
+    delete_post_thumbnail(post, ThumbnailCategory::Generated)?;
+    delete_post_thumbnail(post, ThumbnailCategory::Custom)?;
+    delete_content(post, mime_type)
 }
 
 /// Renames the contents and thumbnails of two posts as if they had swapped ids.
@@ -113,11 +109,11 @@ pub fn swap_posts(
     mime_type_b: MimeType,
 ) -> std::io::Result<()> {
     // No special cases needed here because generated thumbnails always exists and their type is always .jpg
-    swap_files(config, &post_a.generated_thumbnail_path(config), &post_b.generated_thumbnail_path(config))?;
+    swap_files(config, &post_a.generated_thumbnail_path(), &post_b.generated_thumbnail_path())?;
 
     // Handle the four distinct cases of custom thumbnails existing/not existing
-    let custom_thumbnail_path_a = post_a.custom_thumbnail_path(config);
-    let custom_thumbnail_path_b = post_b.custom_thumbnail_path(config);
+    let custom_thumbnail_path_a = post_a.custom_thumbnail_path();
+    let custom_thumbnail_path_b = post_b.custom_thumbnail_path();
     match (custom_thumbnail_path_a.try_exists()?, custom_thumbnail_path_b.try_exists()?) {
         (true, true) => swap_files(config, &custom_thumbnail_path_a, &custom_thumbnail_path_b)?,
         (true, false) => move_file(&custom_thumbnail_path_a, &custom_thumbnail_path_b)?,
@@ -126,13 +122,13 @@ pub fn swap_posts(
     }
 
     // Contents can have same MIME type or different MIME types
-    let old_image_path_a = post_a.content_path(config, mime_type_a);
-    let old_image_path_b = post_b.content_path(config, mime_type_b);
+    let old_image_path_a = post_a.content_path(mime_type_a);
+    let old_image_path_b = post_b.content_path(mime_type_b);
     if mime_type_a == mime_type_b {
         swap_files(config, &old_image_path_a, &old_image_path_b)
     } else {
-        move_file(&old_image_path_a, &post_b.content_path(config, mime_type_a))?;
-        move_file(&old_image_path_b, &post_a.content_path(config, mime_type_b))
+        move_file(&old_image_path_a, &post_b.content_path(mime_type_a))?;
+        move_file(&old_image_path_b, &post_a.content_path(mime_type_b))
     }
 }
 

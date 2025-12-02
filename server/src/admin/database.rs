@@ -29,7 +29,7 @@ pub fn reset_filenames(state: &AppState) -> std::io::Result<()> {
                 continue;
             };
 
-            let new_path = PostHash::new(&state.config, post_id).generated_thumbnail_path(&state.config);
+            let new_path = PostHash::new(&state.config, post_id).generated_thumbnail_path();
             if path != new_path {
                 filesystem::move_file(&path, &new_path)?;
                 progress.increment();
@@ -45,7 +45,7 @@ pub fn reset_filenames(state: &AppState) -> std::io::Result<()> {
                 continue;
             };
 
-            let new_path = PostHash::new(&state.config, post_id).custom_thumbnail_path(&state.config);
+            let new_path = PostHash::new(&state.config, post_id).custom_thumbnail_path();
             if path != new_path {
                 filesystem::move_file(&path, &new_path)?;
                 progress.increment();
@@ -62,7 +62,7 @@ pub fn reset_filenames(state: &AppState) -> std::io::Result<()> {
             };
 
             let new_path = if let Some(mime_type) = MimeType::from_path(&path) {
-                PostHash::new(&state.config, post_id).content_path(&state.config, mime_type)
+                PostHash::new(&state.config, post_id).content_path(mime_type)
             } else {
                 if let Some(extension) = path.extension().map(OsStr::to_string_lossy) {
                     warn!("Post {post_id} has unsupported file extension {extension}");
@@ -70,7 +70,7 @@ pub fn reset_filenames(state: &AppState) -> std::io::Result<()> {
                     warn!("Post {post_id} has no file extension");
                 }
 
-                let mut new_path = PostHash::new(&state.config, post_id).content_path(&state.config, MimeType::Png);
+                let mut new_path = PostHash::new(&state.config, post_id).content_path(MimeType::Png);
                 new_path.set_extension(path.extension().unwrap_or(OsStr::new("")));
                 new_path
             };

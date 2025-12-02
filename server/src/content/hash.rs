@@ -17,16 +17,18 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 /// Stores a `post_id` and cached post `hash`.
-pub struct PostHash {
+pub struct PostHash<'a> {
     post_id: i64,
     hash: String,
+    config: &'a Config,
 }
 
-impl PostHash {
-    pub fn new(config: &Config, post_id: i64) -> Self {
+impl<'a> PostHash<'a> {
+    pub fn new(config: &'a Config, post_id: i64) -> Self {
         Self {
             hash: compute_url_safe_hash(config, &post_id.to_le_bytes()),
             post_id,
+            config,
         }
     }
 
@@ -35,42 +37,42 @@ impl PostHash {
     }
 
     /// Returns URL to post content.
-    pub fn content_url(&self, config: &Config, content_type: MimeType) -> String {
-        format!("{}/posts/{self}.{}", config.data_url, content_type.extension())
+    pub fn content_url(&self, content_type: MimeType) -> String {
+        format!("{}/posts/{self}.{}", self.config.data_url, content_type.extension())
     }
 
     /// Returns URL to post thumbnail. Will be a generated thumbnail by default or
     /// a custom thumbnail if it exists.
-    pub fn thumbnail_url(&self, config: &Config) -> String {
+    pub fn thumbnail_url(&self) -> String {
         // Note: this requires interacting with the filesystem and might be slow
-        let thumbnail_folder = if self.custom_thumbnail_path(config).exists() {
+        let thumbnail_folder = if self.custom_thumbnail_path().exists() {
             "custom-thumbnails"
         } else {
             "generated-thumbnails"
         };
-        format!("{}/{thumbnail_folder}/{self}.jpg", config.data_url)
+        format!("{}/{thumbnail_folder}/{self}.jpg", self.config.data_url)
     }
 
     /// Returns path to post content on disk.
-    pub fn content_path(&self, config: &Config, content_type: MimeType) -> PathBuf {
+    pub fn content_path(&self, content_type: MimeType) -> PathBuf {
         let filename = format!("{self}.{}", content_type.extension());
-        config.path(Directory::Posts).join(filename)
+        self.config.path(Directory::Posts).join(filename)
     }
 
     /// Returns path to generated post thumbnail on disk.
-    pub fn generated_thumbnail_path(&self, config: &Config) -> PathBuf {
+    pub fn generated_thumbnail_path(&self) -> PathBuf {
         let filename = format!("{self}.jpg");
-        config.path(Directory::GeneratedThumbnails).join(filename)
+        self.config.path(Directory::GeneratedThumbnails).join(filename)
     }
 
     /// Returns path to custom post thumbnail on disk.
-    pub fn custom_thumbnail_path(&self, config: &Config) -> PathBuf {
+    pub fn custom_thumbnail_path(&self) -> PathBuf {
         let filename = format!("{self}.jpg");
-        config.path(Directory::CustomThumbnails).join(filename)
+        self.config.path(Directory::CustomThumbnails).join(filename)
     }
 }
 
-impl Display for PostHash {
+impl Display for PostHash<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}_{}", self.post_id, self.hash)
     }

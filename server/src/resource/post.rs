@@ -286,7 +286,7 @@ impl PostInfo {
                 comments: comments.pop(),
                 pools: pools.pop(),
                 has_custom_thumbnail: fields[Field::HasCustomThumbnail]
-                    .then(|| PostHash::new(config, post.id).custom_thumbnail_path(config).exists()),
+                    .then(|| PostHash::new(config, post.id).custom_thumbnail_path().exists()),
             })
             .collect::<Vec<_>>();
         Ok(results.into_iter().rev().collect())
@@ -325,14 +325,14 @@ fn get_owners(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> Query
 fn get_content_urls(config: &Config, posts: &[Post]) -> Vec<String> {
     posts
         .iter()
-        .map(|post| PostHash::new(config, post.id).content_url(config, post.mime_type))
+        .map(|post| PostHash::new(config, post.id).content_url(post.mime_type))
         .collect()
 }
 
 fn get_thumbnail_urls(config: &Config, posts: &[Post]) -> Vec<String> {
     posts
         .iter()
-        .map(|post| PostHash::new(config, post.id).thumbnail_url(config))
+        .map(|post| PostHash::new(config, post.id).thumbnail_url())
         .collect()
 }
 
@@ -446,7 +446,7 @@ fn get_relations(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> Qu
                 .into_iter()
                 .map(|relation| MicroPost {
                     id: relation.child_id,
-                    thumbnail_url: PostHash::new(config, relation.child_id).thumbnail_url(config),
+                    thumbnail_url: PostHash::new(config, relation.child_id).thumbnail_url(),
                 })
                 .collect()
         })

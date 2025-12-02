@@ -124,7 +124,7 @@ pub fn regenerate_thumbnail(state: &AppState) {
             .map_err(|err| format!("Cannot retrieve MIME type for post {post_id} for reason: {err}"))?;
 
         let post_hash = PostHash::new(&state.config, post_id);
-        let content_path = post_hash.content_path(&state.config, mime_type);
+        let content_path = post_hash.content_path(mime_type);
         let data = std::fs::read(&content_path)
             .map_err(|err| format!("Cannot read content for post {post_id} for reason: {err}"))?;
 
@@ -162,7 +162,7 @@ fn check_integrity_in_parallel(
         }
     };
 
-    let content_path = PostHash::new(&state.config, post_id).content_path(&state.config, mime_type);
+    let content_path = PostHash::new(&state.config, post_id).content_path(mime_type);
     let file_contents = match std::fs::read(&content_path) {
         Ok(contents) => contents,
         Err(err) => {
@@ -223,7 +223,7 @@ fn recompute_checksum_in_parallel(
         }
     };
 
-    let image_path = PostHash::new(&state.config, post_id).content_path(&state.config, mime_type);
+    let image_path = PostHash::new(&state.config, post_id).content_path(mime_type);
     let file_contents = match std::fs::read(&image_path) {
         Ok(contents) => contents,
         Err(err) => {
@@ -288,7 +288,7 @@ fn recompute_signature_in_parallel(
         }
     };
 
-    let content_path = PostHash::new(&state.config, post_id).content_path(&state.config, mime_type);
+    let content_path = PostHash::new(&state.config, post_id).content_path(mime_type);
     let data = match std::fs::read(&content_path) {
         Ok(contents) => contents,
         Err(err) => {
@@ -363,7 +363,7 @@ fn regenerate_thumbnail_in_parallel(
     };
 
     let post_hash = PostHash::new(&state.config, post_id);
-    let content_path = post_hash.content_path(&state.config, mime_type);
+    let content_path = post_hash.content_path(mime_type);
     let data = match std::fs::read(&content_path) {
         Ok(data) => data,
         Err(err) => {

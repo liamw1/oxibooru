@@ -156,7 +156,7 @@ fn get_posts(conn: &mut PgConnection, config: &Config, pools: &[Pool]) -> QueryR
                 .into_iter()
                 .map(|pool_post| MicroPost {
                     id: pool_post.post_id,
-                    thumbnail_url: PostHash::new(config, pool_post.post_id).thumbnail_url(config),
+                    thumbnail_url: PostHash::new(config, pool_post.post_id).thumbnail_url(),
                 })
                 .collect()
         })

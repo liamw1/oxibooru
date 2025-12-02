@@ -34,7 +34,7 @@ pub fn thumbnail(
     thumbnail: &DynamicImage,
     thumbnail_type: ThumbnailCategory,
 ) -> ApiResult<()> {
-    filesystem::delete_post_thumbnail(config, post_hash, thumbnail_type)?;
+    filesystem::delete_post_thumbnail(post_hash, thumbnail_type)?;
     let thumbnail_size = filesystem::save_post_thumbnail(config, post_hash, thumbnail, thumbnail_type)?;
     match thumbnail_type {
         ThumbnailCategory::Generated => diesel::update(post::table.find(post_hash.id()))
@@ -295,7 +295,7 @@ pub fn merge(
         } else {
             absorbed_post.mime_type
         };
-        filesystem::delete_post(config, &absorbed_hash, deleted_content_type)?;
+        filesystem::delete_post(&absorbed_hash, deleted_content_type)?;
     }
     last_edit_time(conn, merge_to_id)?;
     Ok(())
