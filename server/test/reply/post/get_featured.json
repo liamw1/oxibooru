@@ -15,8 +15,8 @@
     "flags": [],
     "source": "starry_night.png",
     "description": "0101100010",
-    "contentUrl": "data/posts/1_V6zvZPXwEjHz6HXRlqdExw1vocUl4qCD_Rmey1e1x5s.jpg",
-    "thumbnailUrl": "data/generated-thumbnails/1_V6zvZPXwEjHz6HXRlqdExw1vocUl4qCD_Rmey1e1x5s.jpg",
+    "contentUrl": "data/posts/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg",
+    "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg",
     "tags": [
         {
             "names": [
@@ -66,11 +66,11 @@
     "relations": [
         {
             "id": 2,
-            "thumbnailUrl": "data/generated-thumbnails/2_kCRQGRRpd3-9vUMza745KoNTxo5HF4irmNYIE8yli44.jpg"
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
         },
         {
             "id": 3,
-            "thumbnailUrl": "data/generated-thumbnails/3_lepGa4OLoBfljP0ADMujN15ptzP-O0o4yV8_FXHuuUg.jpg"
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.jpg"
         }
     ],
     "pools": [

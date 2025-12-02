@@ -3,6 +3,7 @@ use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use blake3::KEY_LEN;
 use diesel::deserialize::FromSql;
 use diesel::expression::AsExpression;
 use diesel::pg::{Pg, PgValue};
@@ -10,8 +11,6 @@ use diesel::serialize::{Output, ToSql};
 use diesel::sql_types::Bytea;
 use diesel::{FromSqlRow, deserialize, serialize};
 use hex::{FromHex, FromHexError};
-use hmac::digest::CtOutput;
-use hmac::{Mac, SimpleHmac};
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -25,8 +24,14 @@ pub struct PostHash<'a> {
 
 impl<'a> PostHash<'a> {
     pub fn new(config: &'a Config, post_id: i64) -> Self {
+        let mut key = [0; KEY_LEN];
+        for (key_byte, &value) in key.iter_mut().zip(config.content_secret.as_bytes()) {
+            *key_byte = value;
+        }
+        let hash = blake3::keyed_hash(&key, &post_id.to_le_bytes());
+
         Self {
-            hash: compute_url_safe_hash(config, &post_id.to_le_bytes()),
+            hash: URL_SAFE_NO_PAD.encode(hash.as_bytes()),
             post_id,
             config,
         }
@@ -74,7 +79,9 @@ impl<'a> PostHash<'a> {
 
 impl Display for PostHash<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}_{}", self.post_id, self.hash)
+        let outer_bucket = self.post_id / 1_000_000;
+        let inner_bucket = (self.post_id / 10_000) % 100;
+        write!(f, "{outer_bucket:06}/{inner_bucket:02}/{}_{}", self.post_id, self.hash)
     }
 }
 
@@ -136,17 +143,17 @@ impl<const N: usize> FromSql<Bytea, Pg> for GenericChecksum<N> {
 }
 
 pub fn gravatar_url(config: &Config, username: &str) -> String {
-    let username_hash = hmac_hash(config, username.to_lowercase().as_bytes());
-    let hex_encoded_hash = hex::encode(username_hash.into_bytes());
+    let username_hash = blake3::hash(username.to_lowercase().as_bytes());
+    let hex_encoded_hash = hex::encode(username_hash.as_bytes());
     format!("https://gravatar.com/avatar/{hex_encoded_hash}?d=retro&s={}", config.thumbnails.avatar_width)
 }
 
 /// Computes a checksum for duplicate detection. Uses raw file data instead of decoded
 /// pixel data because different compression schemes can compress identical pixel data
 /// in different ways.
-pub fn compute_checksum(config: &Config, content: &[u8]) -> Checksum {
-    let hash = hmac_hash(config, content);
-    GenericChecksum(hash.into_bytes().into())
+pub fn compute_checksum(content: &[u8]) -> Checksum {
+    let hash = blake3::hash(content);
+    GenericChecksum(hash.into())
 }
 
 /// Computes MD5 checksum. Not used for duplicate detection due to its vulnerability
@@ -157,15 +164,7 @@ pub fn compute_md5_checksum(content: &[u8]) -> Md5Checksum {
 }
 
 /// Similar to [`compute_checksum`], except checksum is base64 encoded.
-pub fn compute_url_safe_hash(config: &Config, content: &[u8]) -> String {
-    let hash = hmac_hash(config, content);
-    URL_SAFE_NO_PAD.encode(hash.into_bytes())
-}
-
-type Hmac = SimpleHmac<blake3::Hasher>;
-
-fn hmac_hash(config: &Config, bytes: &[u8]) -> CtOutput<Hmac> {
-    let mut mac = Hmac::new_from_slice(config.content_secret.as_bytes()).expect("HMAC should take key of any size");
-    mac.update(bytes);
-    mac.finalize()
+pub fn compute_url_safe_hash(content: &[u8]) -> String {
+    let hash = blake3::hash(content);
+    URL_SAFE_NO_PAD.encode(hash.as_bytes())
 }

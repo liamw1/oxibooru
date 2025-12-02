@@ -1,8 +1,8 @@
-use crate::admin::{AdminTask, database};
+use crate::admin::AdminTask;
 use crate::app::AppState;
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::schema::database_statistics;
-use crate::{app, config};
+use crate::{admin, app, config};
 use diesel::migration::Migration;
 use diesel::pg::Pg;
 use diesel::r2d2::{ConnectionManager, CustomizeConnection, Pool, PoolError, PooledConnection};
@@ -61,27 +61,37 @@ pub fn run_database_migrations(
     Ok(migration_range)
 }
 
+/// Runs other server-related migrations, like restructuring data folder or recomputing signatures
 pub fn run_server_migrations(
     state: &AppState,
     migration_range: RangeInclusive<i32>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
-    // Update filenames if migrating primary keys to BIGINT
-    if migration_range.contains(&12) && !migration_range.contains(&1) {
-        database::reset_filenames(state)?;
-    }
-
     // If creating the database for the first time, set post signature version
     let mut conn = state.get_connection()?;
     if migration_range.contains(&1) {
         diesel::update(database_statistics::table)
             .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
             .execute(&mut conn)?;
+
+        return Ok(());
+    }
+
+    // Update filenames if migrating primary keys to BIGINT
+    if migration_range.contains(&12) {
+        admin::database::reset_filenames(state)?;
     }
 
     // Cache thumbnail sizes if migrating to statistics system
     if migration_range.contains(&13) {
-        database::reset_thumbnail_sizes(state)?;
+        admin::database::reset_thumbnail_sizes(state)?;
     }
+
+    // Migrate to new post storage structure and fix checksum bug
+    if migration_range.contains(&21) {
+        admin::database::reset_filenames(state)?;
+        admin::post::recompute_checksums(state)?;
+    }
+
     Ok(())
 }
 

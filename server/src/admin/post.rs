@@ -132,7 +132,7 @@ pub fn regenerate_thumbnail(state: &AppState) {
         let thumbnail = decode::representative_image(&state.config, &file_contents, &content_path)
             .map(|image| thumbnail::create(&state.config, &image, ThumbnailType::Post))
             .map_err(|err| format!("Cannot decode content for post {post_id} for reason: {err}"))?;
-        update::post::thumbnail(&mut conn, &state.config, &post_hash, &thumbnail, ThumbnailCategory::Generated)
+        update::post::thumbnail(&mut conn, &post_hash, &thumbnail, ThumbnailCategory::Generated)
             .map_err(|err| format!("Cannot save thumbnail for post {post_id} for reason: {err}"))?;
 
         println!("Thumbnail regeneration successful.\n");
@@ -171,7 +171,7 @@ fn check_integrity_in_parallel(
         }
     };
 
-    let file_checksum = hash::compute_checksum(&state.config, &file_contents);
+    let file_checksum = hash::compute_checksum(&file_contents);
     if checksum != file_checksum {
         warn!("Post {post_id} failed integrity check. The file may have been corrupted or silently modified.");
         failures.increment();
@@ -232,7 +232,8 @@ fn recompute_checksum_in_parallel(
         }
     };
 
-    let checksum = hash::compute_checksum(&state.config, &file_contents);
+    let checksum = hash::compute_checksum(&file_contents);
+    println!("Post {post_id} checksum: {}", hex::encode(&checksum));
     let md5_checksum = hash::compute_md5_checksum(&file_contents);
     let duplicate: Option<i64> = match post::table
         .select(post::id)
@@ -380,9 +381,7 @@ fn regenerate_thumbnail_in_parallel(
             return Ok(());
         }
     };
-    if let Err(err) =
-        update::post::thumbnail(&mut conn, &state.config, &post_hash, &thumbnail, ThumbnailCategory::Generated)
-    {
+    if let Err(err) = update::post::thumbnail(&mut conn, &post_hash, &thumbnail, ThumbnailCategory::Generated) {
         error!("Cannot save thumbnail for post {post_id} for reason: {err}");
     } else {
         progress.increment();

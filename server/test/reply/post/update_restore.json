@@ -14,8 +14,8 @@
     ],
     "source": "mp4.mp4",
     "description": "descriptor",
-    "contentUrl": "data/posts/5_Tdd7ElikauHsmoXgiYwg_k7GVh3l1oDIrKJDj53Lj7Y.mp4",
-    "thumbnailUrl": "data/generated-thumbnails/5_Tdd7ElikauHsmoXgiYwg_k7GVh3l1oDIrKJDj53Lj7Y.jpg",
+    "contentUrl": "data/posts/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.mp4",
+    "thumbnailUrl": "data/generated-thumbnails/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.jpg",
     "tags": [
         {
             "names": [
@@ -84,7 +84,7 @@
     "relations": [
         {
             "id": 4,
-            "thumbnailUrl": "data/generated-thumbnails/4_3Moy64sFfoQNkxtOCI5Xqoqa_OVeDO0_aRVUHLqFYnE.jpg"
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/4_78-cbid-2Ci2jMEqspr2LjF8OTP0kQUVVlCb53twMRw.jpg"
         }
     ],
     "pools": [

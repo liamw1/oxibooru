@@ -58,7 +58,7 @@ async fn request_reset(State(state): State<AppState>, Path(identifier): Path<Str
     let site_name = &state.config.public_info.name;
     let username = percent_encoding::utf8_percent_encode(&username, NON_ALPHANUMERIC);
     let separator = percent_encoding::percent_encode_byte(b':');
-    let reset_token = hash::compute_url_safe_hash(&state.config, password_salt.as_bytes());
+    let reset_token = hash::compute_url_safe_hash(password_salt.as_bytes());
     let url = format!("{domain}/password-reset/{username}{separator}{reset_token}");
 
     let email = Message::builder()
@@ -123,7 +123,7 @@ async fn reset_password(
 
     state.get_connection()?.transaction(|conn| {
         let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
-        if confirmation.token != hash::compute_url_safe_hash(&state.config, password_salt.as_bytes()) {
+        if confirmation.token != hash::compute_url_safe_hash(password_salt.as_bytes()) {
             return Err(ApiError::UnauthorizedPasswordReset);
         }
 

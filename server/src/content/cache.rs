@@ -84,7 +84,7 @@ fn compute_properties_no_cache(state: &AppState, token: String) -> ApiResult<Cac
     let temp_path = state.config.path(Directory::TemporaryUploads).join(&token);
     let file_size = filesystem::file_size(&temp_path)?;
     let data = std::fs::read(&temp_path)?;
-    let checksum = hash::compute_checksum(&state.config, &data);
+    let checksum = hash::compute_checksum(&data);
     let md5_checksum = hash::compute_md5_checksum(&data);
 
     let (_uuid, extension) = token.split_once('.').unwrap_or((&token, ""));

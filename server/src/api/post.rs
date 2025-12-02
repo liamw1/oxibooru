@@ -488,21 +488,14 @@ async fn create(
             .config
             .path(Directory::TemporaryUploads)
             .join(&content_properties.token);
-        filesystem::create_dir(&state.config, Directory::Posts)?;
         filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
         // Create thumbnails
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client, state.config.privileges().post_edit_thumbnail)?;
-            update::post::thumbnail(conn, &state.config, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
+            update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
         }
-        update::post::thumbnail(
-            conn,
-            &state.config,
-            &post_hash,
-            &content_properties.thumbnail,
-            ThumbnailCategory::Generated,
-        )?;
+        update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
 
         let post_data = SnapshotData {
             safety: post.safety,
@@ -783,17 +776,11 @@ async fn update(
             filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
             // Replace generated thumbnail
-            update::post::thumbnail(
-                conn,
-                &state.config,
-                &post_hash,
-                &content_properties.thumbnail,
-                ThumbnailCategory::Generated,
-            )?;
+            update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
         }
         if let Some(thumbnail) = custom_thumbnail {
             api::verify_privilege(client, state.config.privileges().post_edit_thumbnail)?;
-            update::post::thumbnail(conn, &state.config, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
+            update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
         }
 
         new_post.last_edit_time = DateTime::now();

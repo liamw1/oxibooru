@@ -6,7 +6,6 @@ use crate::config::Config;
 use crate::content::hash::{Checksum, Md5Checksum, PostHash};
 use crate::content::signature::{COMPRESSED_SIGNATURE_LEN, NUM_WORDS};
 use crate::db::ConnectionResult;
-use crate::filesystem::{self, Directory};
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{AvatarStyle, MimeType, PostFlag, PostFlags, Score, UserRank};
 use crate::model::enums::{PostSafety, PostType};
@@ -37,7 +36,7 @@ use axum_test::TestServer;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{ExpressionMethods, Insertable, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
@@ -364,7 +363,6 @@ fn get_state_guard() -> MutexGuard<'static, Option<AppState>> {
 fn recreate_database() -> DatabaseResult<AppState> {
     let rng = &mut OsRng;
     let test_data_directory = std::env::temp_dir().join(rng.next_u64().to_string());
-    std::fs::create_dir(&test_data_directory)?;
 
     let mut test_config = config::default();
     test_config.data_dir = test_data_directory;
@@ -524,7 +522,6 @@ fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> 
         .get_results(conn)?;
 
     // Simulate uploads
-    filesystem::create_dir(config, Directory::Posts)?;
     for (post_id, mime_type, source) in post_data {
         let post_signature = NewPostSignature {
             post_id,
@@ -537,6 +534,8 @@ fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> 
 
         let post_hash = PostHash::new(config, post_id);
         let content_path = post_hash.content_path(mime_type);
+        std::fs::create_dir_all(content_path.parent().unwrap_or(Path::new("")))?;
+
         std::fs::copy(image_path(&source), content_path)?;
     }
     Ok(())

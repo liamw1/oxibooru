@@ -21,8 +21,8 @@
             "flags": [],
             "source": "starry_night.png",
             "description": "0101100010",
-            "contentUrl": "data/posts/1_V6zvZPXwEjHz6HXRlqdExw1vocUl4qCD_Rmey1e1x5s.jpg",
-            "thumbnailUrl": "data/generated-thumbnails/1_V6zvZPXwEjHz6HXRlqdExw1vocUl4qCD_Rmey1e1x5s.jpg",
+            "contentUrl": "data/posts/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg",
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg",
             "tags": [
                 {
                     "names": [
@@ -72,11 +72,11 @@
             "relations": [
                 {
                     "id": 2,
-                    "thumbnailUrl": "data/generated-thumbnails/2_kCRQGRRpd3-9vUMza745KoNTxo5HF4irmNYIE8yli44.jpg"
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
                 },
                 {
                     "id": 3,
-                    "thumbnailUrl": "data/generated-thumbnails/3_lepGa4OLoBfljP0ADMujN15ptzP-O0o4yV8_FXHuuUg.jpg"
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.jpg"
                 }
             ],
             "pools": [
@@ -125,8 +125,8 @@
             "flags": [],
             "source": "gif.gif",
             "description": "",
-            "contentUrl": "data/posts/2_kCRQGRRpd3-9vUMza745KoNTxo5HF4irmNYIE8yli44.gif",
-            "thumbnailUrl": "data/generated-thumbnails/2_kCRQGRRpd3-9vUMza745KoNTxo5HF4irmNYIE8yli44.jpg",
+            "contentUrl": "data/posts/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.gif",
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg",
             "tags": [
                 {
                     "names": [
@@ -230,7 +230,7 @@
             "relations": [
                 {
                     "id": 1,
-                    "thumbnailUrl": "data/generated-thumbnails/1_V6zvZPXwEjHz6HXRlqdExw1vocUl4qCD_Rmey1e1x5s.jpg"
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
                 }
             ],
             "pools": [
@@ -288,8 +288,8 @@
             "flags": [],
             "source": "bmp.bmp",
             "description": "",
-            "contentUrl": "data/posts/3_lepGa4OLoBfljP0ADMujN15ptzP-O0o4yV8_FXHuuUg.bmp",
-            "thumbnailUrl": "data/generated-thumbnails/3_lepGa4OLoBfljP0ADMujN15ptzP-O0o4yV8_FXHuuUg.jpg",
+            "contentUrl": "data/posts/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.bmp",
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.jpg",
             "tags": [
                 {
                     "names": [
@@ -311,7 +311,7 @@
             "relations": [
                 {
                     "id": 1,
-                    "thumbnailUrl": "data/generated-thumbnails/1_V6zvZPXwEjHz6HXRlqdExw1vocUl4qCD_Rmey1e1x5s.jpg"
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
                 }
             ],
             "pools": [],
@@ -368,13 +368,13 @@
             "flags": [],
             "source": "1_pixel.png",
             "description": "description9000",
-            "contentUrl": "data/posts/4_3Moy64sFfoQNkxtOCI5Xqoqa_OVeDO0_aRVUHLqFYnE.png",
-            "thumbnailUrl": "data/generated-thumbnails/4_3Moy64sFfoQNkxtOCI5Xqoqa_OVeDO0_aRVUHLqFYnE.jpg",
+            "contentUrl": "data/posts/000000/00/4_78-cbid-2Ci2jMEqspr2LjF8OTP0kQUVVlCb53twMRw.png",
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/4_78-cbid-2Ci2jMEqspr2LjF8OTP0kQUVVlCb53twMRw.jpg",
             "tags": [],
             "relations": [
                 {
                     "id": 5,
-                    "thumbnailUrl": "data/generated-thumbnails/5_Tdd7ElikauHsmoXgiYwg_k7GVh3l1oDIrKJDj53Lj7Y.jpg"
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.jpg"
                 }
             ],
             "pools": [
@@ -422,8 +422,8 @@
             ],
             "source": "mp4.mp4",
             "description": "descriptor",
-            "contentUrl": "data/posts/5_Tdd7ElikauHsmoXgiYwg_k7GVh3l1oDIrKJDj53Lj7Y.mp4",
-            "thumbnailUrl": "data/generated-thumbnails/5_Tdd7ElikauHsmoXgiYwg_k7GVh3l1oDIrKJDj53Lj7Y.jpg",
+            "contentUrl": "data/posts/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.mp4",
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.jpg",
             "tags": [
                 {
                     "names": [
@@ -492,7 +492,7 @@
             "relations": [
                 {
                     "id": 4,
-                    "thumbnailUrl": "data/generated-thumbnails/4_3Moy64sFfoQNkxtOCI5Xqoqa_OVeDO0_aRVUHLqFYnE.jpg"
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/4_78-cbid-2Ci2jMEqspr2LjF8OTP0kQUVVlCb53twMRw.jpg"
                 }
             ],
             "pools": [

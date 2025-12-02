@@ -15,8 +15,8 @@
     "flags": [],
     "source": "bmp.bmp",
     "description": "",
-    "contentUrl": "data/posts/3_lepGa4OLoBfljP0ADMujN15ptzP-O0o4yV8_FXHuuUg.bmp",
-    "thumbnailUrl": "data/generated-thumbnails/3_lepGa4OLoBfljP0ADMujN15ptzP-O0o4yV8_FXHuuUg.jpg",
+    "contentUrl": "data/posts/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.bmp",
+    "thumbnailUrl": "data/generated-thumbnails/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.jpg",
     "tags": [
         {
             "names": [
@@ -38,7 +38,7 @@
     "relations": [
         {
             "id": 1,
-            "thumbnailUrl": "data/generated-thumbnails/1_V6zvZPXwEjHz6HXRlqdExw1vocUl4qCD_Rmey1e1x5s.jpg"
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
         }
     ],
     "pools": [],

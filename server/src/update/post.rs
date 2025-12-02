@@ -29,13 +29,12 @@ pub fn last_edit_time(conn: &mut PgConnection, post_id: i64) -> ApiResult<()> {
 /// Updates thumbnail for post.
 pub fn thumbnail(
     conn: &mut PgConnection,
-    config: &Config,
     post_hash: &PostHash,
     thumbnail: &DynamicImage,
     thumbnail_type: ThumbnailCategory,
 ) -> ApiResult<()> {
     filesystem::delete_post_thumbnail(post_hash, thumbnail_type)?;
-    let thumbnail_size = filesystem::save_post_thumbnail(config, post_hash, thumbnail, thumbnail_type)?;
+    let thumbnail_size = filesystem::save_post_thumbnail(post_hash, thumbnail, thumbnail_type)?;
     match thumbnail_type {
         ThumbnailCategory::Generated => diesel::update(post::table.find(post_hash.id()))
             .set(post::generated_thumbnail_size.eq(thumbnail_size))

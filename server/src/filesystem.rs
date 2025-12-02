@@ -30,11 +30,10 @@ pub fn file_size(path: &Path) -> std::io::Result<i64> {
 /// Saves raw bytes to temporary upload folder as a `mime_type`-file to disk.
 /// Returns name of the file written.
 pub fn save_uploaded_file(config: &Config, data: &[u8], mime_type: MimeType) -> std::io::Result<String> {
-    // Create temp directory if necessary
-    create_dir(config, Directory::TemporaryUploads)?;
-
     let upload_token = format!("{}.{}", Uuid::new_v4(), mime_type.extension());
     let upload_path = config.path(Directory::TemporaryUploads).join(&upload_token);
+    create_parent_directories(&upload_path)?;
+
     std::fs::write(upload_path, data)?;
     Ok(upload_token)
 }
@@ -42,8 +41,8 @@ pub fn save_uploaded_file(config: &Config, data: &[u8], mime_type: MimeType) -> 
 /// Saves custom avatar `thumbnail` for user with name `username` to disk.
 /// Returns size of the thumbnail in bytes.
 pub fn save_custom_avatar(config: &Config, username: &str, thumbnail: &DynamicImage) -> ImageResult<i64> {
-    create_dir(config, Directory::Avatars)?;
     let avatar_path = config.custom_avatar_path(username);
+    create_parent_directories(&avatar_path)?;
 
     thumbnail.to_rgb8().save(&avatar_path)?;
     file_size(&avatar_path).map_err(ImageError::from)
@@ -58,21 +57,15 @@ pub fn delete_custom_avatar(config: &Config, username: &str) -> std::io::Result<
 /// Saves `post` `thumbnail` to disk. Can be custom or automatically generated.
 /// Returns size of the thumbnail in bytes.
 pub fn save_post_thumbnail(
-    config: &Config,
     post: &PostHash,
     thumbnail: &DynamicImage,
     thumbnail_type: ThumbnailCategory,
 ) -> ImageResult<i64> {
     let thumbnail_path = match thumbnail_type {
-        ThumbnailCategory::Generated => {
-            create_dir(config, Directory::GeneratedThumbnails)?;
-            post.generated_thumbnail_path()
-        }
-        ThumbnailCategory::Custom => {
-            create_dir(config, Directory::CustomThumbnails)?;
-            post.custom_thumbnail_path()
-        }
+        ThumbnailCategory::Generated => post.generated_thumbnail_path(),
+        ThumbnailCategory::Custom => post.custom_thumbnail_path(),
     };
+    create_parent_directories(&thumbnail_path)?;
 
     thumbnail.to_rgb8().save(&thumbnail_path)?;
     file_size(&thumbnail_path).map_err(ImageError::from)
@@ -132,20 +125,11 @@ pub fn swap_posts(
     }
 }
 
-/// Creates `directory` or does nothing if it already exists.
-/// Returns whether `directory` was created, or an error if one occured.
-pub fn create_dir(config: &Config, directory: Directory) -> std::io::Result<bool> {
-    match std::fs::create_dir(config.path(directory)) {
-        Ok(()) => Ok(true),
-        Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => Ok(false),
-        Err(err) => Err(err),
-    }
-}
-
 /// Moves file from `from` to `to`.
 /// Tries simply renaming first and falls back to copy/remove if `from` and `to`
 /// are on different file systems.
 pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
+    create_parent_directories(to)?;
     if let Err(ErrorKind::CrossesDevices) = std::fs::rename(from, to).as_ref().map_err(std::io::Error::kind) {
         std::fs::copy(from, to)?;
         std::fs::remove_file(from)?;
@@ -161,10 +145,12 @@ pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
 
 /// Deletes everything in the temporary uploads directory.
 pub fn purge_temporary_uploads(config: &Config) -> std::io::Result<()> {
-    create_dir(config, Directory::TemporaryUploads)?;
-    for entry in std::fs::read_dir(config.path(Directory::TemporaryUploads))? {
-        let path = entry?.path();
-        std::fs::remove_file(path)?;
+    let temporary_uploads_path = config.path(Directory::TemporaryUploads);
+    if temporary_uploads_path.try_exists()? {
+        for entry in std::fs::read_dir(config.path(Directory::TemporaryUploads))? {
+            let path = entry?.path();
+            std::fs::remove_file(path)?;
+        }
     }
     Ok(())
 }
@@ -194,4 +180,14 @@ fn set_permissions(path: &Path) -> std::io::Result<()> {
     let mut permissions = std::fs::metadata(path)?.permissions();
     permissions.set_mode(0o644);
     std::fs::set_permissions(path, permissions)
+}
+
+fn create_parent_directories(path: &Path) -> std::io::Result<()> {
+    if let Err(err) = std::fs::create_dir_all(path.parent().unwrap_or(Path::new("")))
+        && err.kind() != std::io::ErrorKind::AlreadyExists
+    {
+        Err(err)
+    } else {
+        Ok(())
+    }
 }

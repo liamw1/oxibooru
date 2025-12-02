@@ -17,7 +17,6 @@ diesel_migrations = { version = "2.3.0", features = ["postgres"] }
 dotenvy = "0.15.7"
 flate2 = "1.0.35"
 hex = "0.4.3"
-hmac = "0.12.1"
 image = { version = "0.25.5", features = ["avif-native"] }
 lettre = { version = "0.11.12", features = ["serde"] }
 md5 = "0.7.0"
@@ -43,6 +42,7 @@ tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = { version = "2.5.4", features = ["serde"] }
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
 video-rs = "0.10.3"
+walkdir = "2.5.0"
 
 [dev-dependencies]
 axum-test = "17.3.0"

@@ -10,7 +10,7 @@ use thiserror::Error;
 use tracing::{error, info};
 
 pub mod database;
-mod post;
+pub mod post;
 mod user;
 
 pub type DatabaseResult<T> = Result<T, DatabaseError>;
@@ -21,6 +21,7 @@ pub enum DatabaseError {
     Connection(#[from] PoolError),
     Query(#[from] diesel::result::Error),
     Io(#[from] std::io::Error),
+    WalkDir(#[from] walkdir::Error),
 }
 
 #[derive(Clone, Copy, EnumString, EnumIter, IntoStaticStr)]
@@ -200,7 +201,7 @@ fn run_task(state: &AppState, task: AdminTask) -> DatabaseResult<()> {
             user::reset_password(state);
             Ok(())
         }
-        AdminTask::ResetFilenames => database::reset_filenames(state).map_err(DatabaseError::from),
+        AdminTask::ResetFilenames => database::reset_filenames(state),
         AdminTask::ResetStatistics => database::reset_statistics(state),
         AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(state),
     }
