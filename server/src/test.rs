@@ -371,7 +371,7 @@ fn recreate_database() -> DatabaseResult<AppState> {
 
     // Drop and create test database via postgres database
     {
-        let postgres_url = config::create_url(Some("postgres"));
+        let postgres_url = config::database_url(Some("postgres"));
         let postgres_connection_pool = Pool::builder()
             .max_size(1)
             .test_on_check_out(true)
@@ -383,7 +383,7 @@ fn recreate_database() -> DatabaseResult<AppState> {
         diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
     }
 
-    let test_url = config::create_url(Some(DATABASE_NAME));
+    let test_url = config::database_url(Some(DATABASE_NAME));
     let test_connection_pool = Pool::builder()
         .max_lifetime(None)
         .idle_timeout(None)

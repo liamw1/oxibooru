@@ -7,7 +7,6 @@ use lettre::message::Mailbox;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use std::sync::LazyLock;
 use strum::Display;
 use url::Url;
 
@@ -284,14 +283,9 @@ pub fn port() -> u16 {
         .unwrap_or(DEFAULT_PORT)
 }
 
-pub fn database_url() -> &'static str {
-    static DATABASE_URL: LazyLock<String> = LazyLock::new(|| create_url(None));
-    &DATABASE_URL
-}
-
 /// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DATABASE`
 /// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DATABASE`.
-pub fn create_url(database_override: Option<&str>) -> String {
+pub fn database_url(database_override: Option<&str>) -> String {
     if !DOCKER_DEPLOYMENT {
         dotenvy::from_filename("../.env").expect(".env must be in project root directory");
     }

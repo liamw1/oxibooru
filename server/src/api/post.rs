@@ -310,7 +310,7 @@ async fn reverse_search(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let content = Content::new(body.content, body.content_token, body.content_url)
         .ok_or(ApiError::MissingContent(ResourceType::Post))?;
-    let content_properties = content.compute_properties(&state.config).await?;
+    let content_properties = content.compute_properties(&state).await?;
     state
         .get_connection()?
         .transaction(|conn| {
@@ -437,7 +437,7 @@ async fn create(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let content = Content::new(body.content, body.content_token, body.content_url)
         .ok_or(ApiError::MissingContent(ResourceType::Post))?;
-    let content_properties = content.get_or_compute_properties(&state.config).await?;
+    let content_properties = content.get_or_compute_properties(&state).await?;
 
     let custom_thumbnail = match Content::new(body.thumbnail, body.thumbnail_token, body.thumbnail_url) {
         Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Post).await?),
@@ -689,7 +689,7 @@ async fn update(
     let post_hash = PostHash::new(&state.config, post_id);
 
     let new_content = match Content::new(body.content, body.content_token, body.content_url) {
-        Some(content) => Some(content.get_or_compute_properties(&state.config).await?),
+        Some(content) => Some(content.get_or_compute_properties(&state).await?),
         None => None,
     };
     let custom_thumbnail = match Content::new(body.thumbnail, body.thumbnail_token, body.thumbnail_url) {

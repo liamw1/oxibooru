@@ -1,17 +1,18 @@
 use crate::api::middleware;
 use crate::config::Config;
+use crate::content::cache::RingCache;
 use crate::db::{ConnectionPool, ConnectionResult};
 use crate::{admin, api, config, db, filesystem};
 use axum::ServiceExt;
 use axum::extract::Request;
 use std::error::Error;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
 use tokio::signal::unix::SignalKind;
 use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -20,18 +21,34 @@ use tracing_subscriber::util::SubscriberInitExt;
 pub struct AppState {
     pub connection_pool: ConnectionPool,
     pub config: Arc<Config>,
+    pub content_cache: Arc<Mutex<RingCache>>,
 }
 
 impl AppState {
     pub fn new(connection_pool: ConnectionPool, config: Config) -> Self {
+        /// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
+        const CONTENT_CACHE_SIZE: usize = 10;
         AppState {
             connection_pool,
             config: Arc::new(config),
+            content_cache: Arc::new(Mutex::new(RingCache::new(CONTENT_CACHE_SIZE))),
         }
     }
 
     pub fn get_connection(&self) -> ConnectionResult {
         self.connection_pool.get()
+    }
+
+    pub fn get_content_cache(&self) -> MutexGuard<'_, RingCache> {
+        match self.content_cache.lock() {
+            Ok(guard) => guard,
+            Err(err) => {
+                error!("Content cache has been poisoned! Resetting...");
+                let mut guard = err.into_inner();
+                guard.clear();
+                guard
+            }
+        }
     }
 }
 

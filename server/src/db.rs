@@ -33,7 +33,7 @@ pub fn create_connection_pool() -> ConnectionPool {
         .idle_timeout(None)
         .test_on_check_out(true)
         .connection_customizer(Box::new(ConnectionInitialzier {}))
-        .build(ConnectionManager::new(config::database_url()))
+        .build(ConnectionManager::new(config::database_url(None)))
         .expect("Connection pool must be constructible")
 }
 
