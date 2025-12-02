@@ -70,6 +70,87 @@ macro_rules! apply_distinct_if_multivalued {
     };
 }
 
+/// Stores the results of a complex filter to one of the TEMP tables.
+/// Positive filter results will be intersected with the `matching` table while
+/// negative filter results will be unioned with the `nonmatching` table.
+///
+/// `filtered_ids` should be a query that returns the IDs of the resources matching the unnegated filter.
+/// `column` should be a column that represents the ID of the resource.
+#[macro_export]
+macro_rules! update_filter_cache {
+    ($conn:expr, $filtered_ids:expr, $column:expr, $filter:expr, $state:expr) => {{
+        if !$state.completed {
+            if $filter.negated {
+                // Nonmatches are unioned
+                let insert_statement = diesel::insert_into($crate::search::temp::nonmatching::table)
+                    .values($filtered_ids)
+                    .into_columns($crate::search::temp::nonmatching::id);
+
+                if $state.has_nonmatching {
+                    // Avoid primary key conflicts if nonmatching table already has rows
+                    insert_statement.on_conflict_do_nothing().execute($conn)
+                } else {
+                    $state.has_nonmatching = true;
+                    diesel::sql_query("CREATE TEMP TABLE nonmatching (id BIGINT PRIMARY KEY) ON COMMIT DROP")
+                        .execute($conn)?;
+
+                    insert_statement.execute($conn)
+                }
+            } else if $state.has_matching {
+                // Matches are intersected
+                let intersecting_subselect = $filtered_ids
+                    .select(diesel::dsl::sql::<diesel::sql_types::Integer>("0"))
+                    .filter(
+                        diesel::dsl::sql::<diesel::sql_types::Bool>("")
+                            .bind($column.eq($crate::search::temp::matching::id)),
+                    );
+                diesel::delete($crate::search::temp::matching::table)
+                    .filter(diesel::dsl::not(diesel::dsl::exists(intersecting_subselect)))
+                    .execute($conn)
+            } else {
+                $state.has_matching = true;
+                diesel::sql_query("CREATE TEMP TABLE matching (id BIGINT PRIMARY KEY) ON COMMIT DROP")
+                    .execute($conn)?;
+
+                // Insert instead of intersecting for first positive filter
+                diesel::insert_into($crate::search::temp::matching::table)
+                    .values($filtered_ids)
+                    .into_columns($crate::search::temp::matching::id)
+                    .execute($conn)
+            }
+        } else {
+            Ok(0)
+        }
+    }};
+}
+
+/// Applies the cached results in the `matching` and `nonmatching` TEMP tables
+/// as a filter on the specified `column`. When this function is called, the
+/// cache is considered fully built and any subsequent calls to [`update_filter_cache`]
+/// in the same transaction won't modify the cache.
+#[macro_export]
+macro_rules! apply_cache_filters {
+    ($query:expr, $column:expr, $state:expr) => {{
+        $state.completed = true;
+        let query = if $state.has_matching {
+            let matching_subselect = $crate::search::temp::matching::table
+                .select(diesel::dsl::sql::<diesel::sql_types::Integer>("0"))
+                .filter($crate::search::temp::matching::id.eq($column));
+            $query.filter(diesel::dsl::exists(matching_subselect))
+        } else {
+            $query
+        };
+        if $state.has_nonmatching {
+            let nonmatching_subselect = $crate::search::temp::nonmatching::table
+                .select(diesel::dsl::sql::<diesel::sql_types::Integer>("0"))
+                .filter($crate::search::temp::nonmatching::id.eq($column));
+            query.filter(diesel::dsl::not(diesel::dsl::exists(nonmatching_subselect)))
+        } else {
+            query
+        }
+    }};
+}
+
 /// Applies an ordering to the given `query`.
 /// Order is either ASC or DESC.
 #[macro_export]

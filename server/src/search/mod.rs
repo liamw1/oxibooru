@@ -4,7 +4,6 @@ use argon2::password_hash::rand_core::{OsRng, RngCore};
 use diesel::sql_types::{Float, SingleValue};
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, declare_sql_function};
 use std::borrow::Cow;
-use std::collections::HashSet;
 use std::ops::{Not, Range};
 use std::str::FromStr;
 
@@ -15,6 +14,7 @@ pub mod pool;
 pub mod post;
 pub mod snapshot;
 pub mod tag;
+mod temp;
 pub mod user;
 
 /// An interface for a search query builder.
@@ -213,59 +213,22 @@ struct ParsedSort<T> {
     order: Order,
 }
 
-/// A cache that stores results from what would otherwise be subqueries in preparation for a
-/// search query. This is used in place of subqueries because `PostgreSQL` does a poor job of
-/// optimizing queries that contain multiple subquery filters.
-struct QueryCache {
-    matches: Option<HashSet<i64>>,
-    nonmatches: Option<HashSet<i64>>,
+/// Stores the current state of the filter cache TEMP tables.
+/// `has_matching` indicates if the [`temp::matching`] table has values.
+/// `has_nonmatching` indicates if the [`temp::nonmatching`] table has values.
+/// `completed` indicates if the cache for this query has been fully built.
+struct CacheState {
+    has_matching: bool,
+    has_nonmatching: bool,
+    completed: bool,
 }
 
-impl QueryCache {
-    /// Creates an empty cache
+impl CacheState {
     fn new() -> Self {
         Self {
-            matches: None,
-            nonmatches: None,
-        }
-    }
-
-    /// Returns a new [`QueryCache`] if `self` is empty and [None] otherwise.
-    /// This function exists because of aliasing issues in mutable `QueryBuilder` functions.
-    fn clone_if_empty(&self) -> Option<Self> {
-        let is_empty = self.matches.is_none() && self.nonmatches.is_none();
-        is_empty.then(Self::new)
-    }
-
-    /// If `value` is [Some], replaces content of `self` with a semantically equivalent [`QueryCache`].
-    /// Does nothing if `value` is [None].
-    fn replace(&mut self, value: Option<Self>) {
-        if let Some(cache) = value {
-            // If matching and nonmatching sets both exist, we can subtract the nonmatching
-            // set from the matching set and discard the nonmatching set. This makes queries
-            // that have both positive and negative conditions much faster.
-            let (matches, nonmatches) = match (cache.matches, cache.nonmatches) {
-                (Some(match_set), Some(nonmatch_set)) => {
-                    let set_difference = match_set.difference(&nonmatch_set).copied().collect();
-                    (Some(set_difference), None)
-                }
-                (matches, nonmatches) => (matches, nonmatches),
-            };
-            *self = Self { matches, nonmatches };
-        }
-    }
-
-    /// Updates `self` with a new batch of `post_ids`, which may represents
-    /// a matching (`negated = false`) or nonmatching (`negated = true`) set of posts.
-    fn update(&mut self, post_ids: Vec<i64>, negated: bool) {
-        // Nonmatching sets are unioned while matching sets are intersected
-        if negated {
-            self.nonmatches.get_or_insert_default().extend(post_ids);
-        } else {
-            self.matches = Some(match self.matches.as_ref() {
-                Some(matches) => post_ids.into_iter().filter(|id| matches.contains(id)).collect(),
-                None => post_ids.into_iter().collect(),
-            });
+            has_matching: false,
+            has_nonmatching: false,
+            completed: false,
         }
     }
 }

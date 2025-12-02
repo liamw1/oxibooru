@@ -6,9 +6,10 @@ use crate::schema::{
     comment, database_statistics, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics,
     post_tag, tag_name, user,
 };
-use crate::search::{Builder, Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter, parse};
+use crate::search::{Builder, CacheState, Order, ParsedSort, SearchCriteria, UnparsedFilter, parse};
 use crate::{
-    apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter,
+    apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
+    apply_time_filter, update_filter_cache,
 };
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
@@ -83,7 +84,7 @@ pub enum Token {
 
 pub struct QueryBuilder<'a> {
     search: SearchCriteria<'a, Token>,
-    cache: QueryCache,
+    cache_state: CacheState,
 }
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
@@ -96,14 +97,12 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 
     fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
         let query = self.build_filtered(conn)?;
-        let query = self.apply_cache_filters(query);
         self.get_ordered_ids(conn, query).map_err(ApiError::from)
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
         if self.search.has_filter() {
             let unsorted_query = self.build_filtered(conn)?;
-            let unsorted_query = self.apply_cache_filters(unsorted_query);
             unsorted_query.count().first(conn)
         } else {
             database_statistics::table
@@ -126,12 +125,11 @@ impl<'a> QueryBuilder<'a> {
 
         Ok(Self {
             search,
-            cache: QueryCache::new(),
+            cache_state: CacheState::new(),
         })
     }
 
     fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
-        let mut cache = self.cache.clone_if_empty();
         let base_query = post::table
             .select(post::id)
             .inner_join(post_statistics::table)
@@ -156,12 +154,12 @@ impl<'a> QueryBuilder<'a> {
                 Token::Description => Ok(apply_str_filter!(query, post::description, filter)),
                 Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
                 Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
-                Token::Tag => apply_tag_filter(conn, query, filter, cache.as_mut()),
-                Token::Pool => apply_pool_filter(conn, query, filter, cache.as_mut()),
+                Token::Tag => apply_tag_filter(conn, query, filter, &mut self.cache_state),
+                Token::Pool => apply_pool_filter(conn, query, filter, &mut self.cache_state),
                 Token::Uploader => Ok(apply_str_filter!(query, user::name, filter)),
-                Token::Fav => apply_favorite_filter(conn, query, filter, cache.as_mut()),
-                Token::Comment => apply_comment_filter(conn, query, filter, cache.as_mut()),
-                Token::NoteText => apply_note_text_filter(conn, query, filter, cache.as_mut()),
+                Token::Fav => apply_favorite_filter(conn, query, filter, &mut self.cache_state),
+                Token::Comment => apply_comment_filter(conn, query, filter, &mut self.cache_state),
+                Token::NoteText => apply_note_text_filter(conn, query, filter, &mut self.cache_state),
                 Token::TagCount => apply_filter!(query, post_statistics::tag_count, filter, i64),
                 Token::CommentCount => apply_filter!(query, post_statistics::comment_count, filter, i64),
                 Token::RelationCount => apply_filter!(query, post_statistics::relation_count, filter, i64),
@@ -169,13 +167,12 @@ impl<'a> QueryBuilder<'a> {
                 Token::FavCount => apply_filter!(query, post_statistics::favorite_count, filter, i64),
                 Token::FeatureCount => apply_filter!(query, post_statistics::feature_count, filter, i64),
                 Token::Score => apply_filter!(query, post_statistics::score, filter, i64),
-                Token::CommentTime => apply_comment_time_filter(conn, query, filter, cache.as_mut()),
-                Token::FavTime => apply_favorite_time_filter(conn, query, filter, cache.as_mut()),
-                Token::FeatureTime => apply_feature_time_filter(conn, query, filter, cache.as_mut()),
-                Token::Special => apply_special_filter(conn, query, self.search.client, filter, cache.as_mut()),
+                Token::CommentTime => apply_comment_time_filter(conn, query, filter, &mut self.cache_state),
+                Token::FavTime => apply_favorite_time_filter(conn, query, filter, &mut self.cache_state),
+                Token::FeatureTime => apply_feature_time_filter(conn, query, filter, &mut self.cache_state),
+                Token::Special => apply_special_filter(conn, query, self.search.client, filter, &mut self.cache_state),
             })?;
-        self.cache.replace(cache);
-        Ok(query)
+        Ok(apply_cache_filters!(query, post::id, self.cache_state))
     }
 
     fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
@@ -222,16 +219,6 @@ impl<'a> QueryBuilder<'a> {
             None => query,
         }
         .load(conn)
-    }
-
-    fn apply_cache_filters(&'a self, mut query: BoxedQuery<'a>) -> BoxedQuery<'a> {
-        if let Some(matching_ids) = self.cache.matches.as_ref() {
-            query = query.filter(post::id.eq_any(matching_ids));
-        }
-        if let Some(nonmatching_ids) = self.cache.nonmatches.as_ref() {
-            query = query.filter(post::id.ne_all(nonmatching_ids));
-        }
-        query
     }
 }
 
@@ -287,18 +274,15 @@ fn apply_tag_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let post_tags = post_tag::table
-            .select(post_tag::post_id)
-            .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
-            .into_boxed();
-        let post_tags = apply_distinct_if_multivalued!(post_tags, filter);
-        let filtered_posts = apply_str_filter!(post_tags, tag_name::name, filter.unnegated());
-        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
-        cache.update(post_ids, filter.negated);
-    }
+    let post_tags = post_tag::table
+        .select(post_tag::post_id)
+        .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
+        .into_boxed();
+    let post_tags = apply_distinct_if_multivalued!(post_tags, filter);
+    let filtered_posts = apply_str_filter!(post_tags, tag_name::name, filter.unnegated());
+    update_filter_cache!(conn, filtered_posts, post_tag::post_id, filter, state)?;
     Ok(query)
 }
 
@@ -306,15 +290,12 @@ fn apply_pool_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
-        let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
-        let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
-        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
-        cache.update(post_ids, filter.negated);
-    }
+    let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
+    let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
+    let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
+    update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
     Ok(query)
 }
 
@@ -322,18 +303,15 @@ fn apply_favorite_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let favorites = post_favorite::table
-            .select(post_favorite::post_id)
-            .inner_join(user::table)
-            .into_boxed();
-        let favorites = apply_distinct_if_multivalued!(favorites, filter);
-        let filtered_posts = apply_str_filter!(favorites, user::name, filter.unnegated());
-        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
-        cache.update(post_ids, filter.negated);
-    }
+    let favorites = post_favorite::table
+        .select(post_favorite::post_id)
+        .inner_join(user::table)
+        .into_boxed();
+    let favorites = apply_distinct_if_multivalued!(favorites, filter);
+    let filtered_posts = apply_str_filter!(favorites, user::name, filter.unnegated());
+    update_filter_cache!(conn, filtered_posts, post_favorite::post_id, filter, state)?;
     Ok(query)
 }
 
@@ -341,18 +319,15 @@ fn apply_comment_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let comments = comment::table
-            .select(comment::post_id)
-            .distinct()
-            .inner_join(user::table)
-            .into_boxed();
-        let filtered_posts = apply_str_filter!(comments, user::name, filter.unnegated());
-        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
-        cache.update(post_ids, filter.negated);
-    }
+    let comments = comment::table
+        .select(comment::post_id)
+        .distinct()
+        .inner_join(user::table)
+        .into_boxed();
+    let filtered_posts = apply_str_filter!(comments, user::name, filter.unnegated());
+    update_filter_cache!(conn, filtered_posts, comment::post_id, filter, state)?;
     Ok(query)
 }
 
@@ -360,14 +335,11 @@ fn apply_note_text_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let post_notes = post_note::table.select(post_note::post_id).distinct().into_boxed();
-        let filtered_posts = apply_str_filter!(post_notes, post_note::text, filter.unnegated());
-        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
-        cache.update(post_ids, filter.negated);
-    }
+    let post_notes = post_note::table.select(post_note::post_id).distinct().into_boxed();
+    let filtered_posts = apply_str_filter!(post_notes, post_note::text, filter.unnegated());
+    update_filter_cache!(conn, filtered_posts, post_note::post_id, filter, state)?;
     Ok(query)
 }
 
@@ -375,14 +347,11 @@ fn apply_comment_time_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let comments = comment::table.select(comment::post_id).distinct().into_boxed();
-        let filtered_posts = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
-        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
-        cache.update(post_ids, filter.negated);
-    }
+    let comments = comment::table.select(comment::post_id).distinct().into_boxed();
+    let filtered_posts = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
+    update_filter_cache!(conn, filtered_posts, comment::post_id, filter, state)?;
     Ok(query)
 }
 
@@ -390,17 +359,14 @@ fn apply_favorite_time_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let post_favorites = post_favorite::table
-            .select(post_favorite::post_id)
-            .distinct()
-            .into_boxed();
-        let filtered_posts = apply_time_filter!(post_favorites, post_favorite::time, filter.unnegated())?;
-        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
-        cache.update(post_ids, filter.negated);
-    }
+    let post_favorites = post_favorite::table
+        .select(post_favorite::post_id)
+        .distinct()
+        .into_boxed();
+    let filtered_posts = apply_time_filter!(post_favorites, post_favorite::time, filter.unnegated())?;
+    update_filter_cache!(conn, filtered_posts, post_favorite::post_id, filter, state)?;
     Ok(query)
 }
 
@@ -408,17 +374,14 @@ fn apply_feature_time_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let post_features = post_feature::table
-            .select(post_feature::post_id)
-            .distinct()
-            .into_boxed();
-        let filtered_posts = apply_time_filter!(post_features, post_feature::time, filter.unnegated())?;
-        let post_ids: Vec<i64> = filtered_posts.load(conn)?;
-        cache.update(post_ids, filter.negated);
-    }
+    let post_features = post_feature::table
+        .select(post_feature::post_id)
+        .distinct()
+        .into_boxed();
+    let filtered_posts = apply_time_filter!(post_features, post_feature::time, filter.unnegated())?;
+    update_filter_cache!(conn, filtered_posts, post_feature::post_id, filter, state)?;
     Ok(query)
 }
 
@@ -427,44 +390,41 @@ fn apply_special_filter<'a>(
     query: BoxedQuery<'a>,
     client: Client,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let special_token = SpecialToken::from_str(filter.condition).map_err(Box::from)?;
-        let post_ids: Vec<i64> = match special_token {
-            SpecialToken::Liked => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
-                post_score::table
-                    .select(post_score::post_id)
-                    .filter(post_score::user_id.eq(client_id))
-                    .filter(post_score::score.eq(1))
-                    .load(conn)
-            }),
-            SpecialToken::Disliked => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
-                post_score::table
-                    .select(post_score::post_id)
-                    .filter(post_score::user_id.eq(client_id))
-                    .filter(post_score::score.eq(-1))
-                    .load(conn)
-            }),
-            SpecialToken::Fav => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
-                post_favorite::table
-                    .select(post_favorite::post_id)
-                    .filter(post_favorite::user_id.eq(client_id))
-                    .load(conn)
-            }),
-            SpecialToken::Tumbleweed => {
-                // A score of 0 doesn't necessarily mean no ratings, so we count them with a HAVING clause
-                Ok(post_statistics::table
-                    .select(post_statistics::post_id)
-                    .left_join(post_score::table.on(post_score::post_id.eq(post_statistics::post_id)))
-                    .filter(post_statistics::favorite_count.eq(0))
-                    .filter(post_statistics::comment_count.eq(0))
-                    .group_by(post_statistics::post_id)
-                    .having(count(post_score::post_id).eq(0))
-                    .load(conn))
-            }
-        }??;
-        cache.update(post_ids, filter.negated);
-    }
+    let special_token = SpecialToken::from_str(filter.condition).map_err(Box::from)?;
+    match special_token {
+        SpecialToken::Liked => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
+            let filtered_posts = post_score::table
+                .select(post_score::post_id)
+                .filter(post_score::user_id.eq(client_id))
+                .filter(post_score::score.eq(1));
+            update_filter_cache!(conn, filtered_posts, post_score::post_id, filter, state)
+        }),
+        SpecialToken::Disliked => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
+            let filtered_posts = post_score::table
+                .select(post_score::post_id)
+                .filter(post_score::user_id.eq(client_id))
+                .filter(post_score::score.eq(-1));
+            update_filter_cache!(conn, filtered_posts, post_score::post_id, filter, state)
+        }),
+        SpecialToken::Fav => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
+            let filtered_posts = post_favorite::table
+                .select(post_favorite::post_id)
+                .filter(post_favorite::user_id.eq(client_id));
+            update_filter_cache!(conn, filtered_posts, post_favorite::post_id, filter, state)
+        }),
+        SpecialToken::Tumbleweed => {
+            // A score of 0 doesn't necessarily mean no ratings, so we count them with a HAVING clause
+            let filtered_posts = post_statistics::table
+                .select(post_statistics::post_id)
+                .left_join(post_score::table.on(post_score::post_id.eq(post_statistics::post_id)))
+                .filter(post_statistics::favorite_count.eq(0))
+                .filter(post_statistics::comment_count.eq(0))
+                .group_by(post_statistics::post_id)
+                .having(count(post_score::post_id).eq(0));
+            Ok(update_filter_cache!(conn, filtered_posts, post_statistics::post_id, filter, state))
+        }
+    }??;
     Ok(query)
 }

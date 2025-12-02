@@ -4,9 +4,10 @@ use crate::model::tag::TagName;
 use crate::schema::{
     database_statistics, tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion,
 };
-use crate::search::{Builder, Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter};
+use crate::search::{Builder, CacheState, Order, ParsedSort, SearchCriteria, UnparsedFilter};
 use crate::{
-    apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter,
+    apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
+    apply_time_filter, update_filter_cache,
 };
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
@@ -38,7 +39,7 @@ pub enum Token {
 
 pub struct QueryBuilder<'a> {
     search: SearchCriteria<'a, Token>,
-    cache: QueryCache,
+    cache_state: CacheState,
 }
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
@@ -51,14 +52,12 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 
     fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
         let query = self.build_filtered(conn)?;
-        let query = self.apply_cache_filters(query);
         self.get_ordered_ids(conn, query).map_err(ApiError::from)
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
         if self.search.has_filter() {
             let unsorted_query = self.build_filtered(conn)?;
-            let unsorted_query = self.apply_cache_filters(unsorted_query);
             unsorted_query.count().first(conn)
         } else {
             database_statistics::table
@@ -74,12 +73,11 @@ impl<'a> QueryBuilder<'a> {
         let search = SearchCriteria::new(client, search_criteria, Token::Name).map_err(Box::from)?;
         Ok(Self {
             search,
-            cache: QueryCache::new(),
+            cache_state: CacheState::new(),
         })
     }
 
     fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
-        let mut cache = self.cache.clone_if_empty();
         let base_query = tag::table
             .select(tag::id)
             .inner_join(tag_statistics::table)
@@ -92,17 +90,16 @@ impl<'a> QueryBuilder<'a> {
             .try_fold(base_query, |query, &filter| match filter.kind {
                 Token::CreationTime => apply_time_filter!(query, tag::creation_time, filter),
                 Token::LastEditTime => apply_time_filter!(query, tag::last_edit_time, filter),
-                Token::Name => apply_name_filter(conn, query, filter, cache.as_mut()),
+                Token::Name => apply_name_filter(conn, query, filter, &mut self.cache_state),
                 Token::Category => Ok(apply_str_filter!(query, tag_category::name, filter)),
                 Token::Description => Ok(apply_str_filter!(query, tag::description, filter)),
                 Token::UsageCount => apply_filter!(query, tag_statistics::usage_count, filter, i64),
                 Token::ImplicationCount => apply_filter!(query, tag_statistics::implication_count, filter, i64),
                 Token::SuggestionCount => apply_filter!(query, tag_statistics::suggestion_count, filter, i64),
-                Token::Implies => apply_implies_filter(conn, query, filter, cache.as_mut()),
-                Token::Suggests => apply_suggests_filter(conn, query, filter, cache.as_mut()),
+                Token::Implies => apply_implies_filter(conn, query, filter, &mut self.cache_state),
+                Token::Suggests => apply_suggests_filter(conn, query, filter, &mut self.cache_state),
             })?;
-        self.cache.replace(cache);
-        Ok(query)
+        Ok(apply_cache_filters!(query, tag::id, self.cache_state))
     }
 
     fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
@@ -135,16 +132,6 @@ impl<'a> QueryBuilder<'a> {
         }
         .load(conn)
     }
-
-    fn apply_cache_filters(&'a self, mut query: BoxedQuery<'a>) -> BoxedQuery<'a> {
-        if let Some(matching_ids) = self.cache.matches.as_ref() {
-            query = query.filter(tag::id.eq_any(matching_ids));
-        }
-        if let Some(nonmatching_ids) = self.cache.nonmatches.as_ref() {
-            query = query.filter(tag::id.ne_all(nonmatching_ids));
-        }
-        query
-    }
 }
 
 type BoxedQuery<'a> =
@@ -154,15 +141,12 @@ fn apply_name_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let names = tag_name::table.select(tag_name::tag_id).into_boxed();
-        let names = apply_distinct_if_multivalued!(names, filter);
-        let filtered_tags = apply_str_filter!(names, tag_name::name, filter.unnegated());
-        let tag_ids: Vec<i64> = filtered_tags.load(conn)?;
-        cache.update(tag_ids, filter.negated);
-    }
+    let names = tag_name::table.select(tag_name::tag_id).into_boxed();
+    let names = apply_distinct_if_multivalued!(names, filter);
+    let filtered_tags = apply_str_filter!(names, tag_name::name, filter.unnegated());
+    update_filter_cache!(conn, filtered_tags, tag_name::tag_id, filter, state)?;
     Ok(query)
 }
 
@@ -170,18 +154,15 @@ fn apply_implies_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let implications = tag_implication::table
-            .select(tag_implication::parent_id)
-            .inner_join(tag_name::table.on(tag_implication::child_id.eq(tag_name::tag_id)))
-            .into_boxed();
-        let implications = apply_distinct_if_multivalued!(implications, filter);
-        let filtered_tags = apply_str_filter!(implications, tag_name::name, filter.unnegated());
-        let tag_ids: Vec<i64> = filtered_tags.load(conn)?;
-        cache.update(tag_ids, filter.negated);
-    }
+    let implications = tag_implication::table
+        .select(tag_implication::parent_id)
+        .inner_join(tag_name::table.on(tag_implication::child_id.eq(tag_name::tag_id)))
+        .into_boxed();
+    let implications = apply_distinct_if_multivalued!(implications, filter);
+    let filtered_tags = apply_str_filter!(implications, tag_name::name, filter.unnegated());
+    update_filter_cache!(conn, filtered_tags, tag_name::tag_id, filter, state)?;
     Ok(query)
 }
 
@@ -189,17 +170,14 @@ fn apply_suggests_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let suggestions = tag_suggestion::table
-            .select(tag_suggestion::parent_id)
-            .inner_join(tag_name::table.on(tag_suggestion::child_id.eq(tag_name::tag_id)))
-            .into_boxed();
-        let suggestions = apply_distinct_if_multivalued!(suggestions, filter);
-        let filtered_tags = apply_str_filter!(suggestions, tag_name::name, filter.unnegated());
-        let tag_ids: Vec<i64> = filtered_tags.load(conn)?;
-        cache.update(tag_ids, filter.negated);
-    }
+    let suggestions = tag_suggestion::table
+        .select(tag_suggestion::parent_id)
+        .inner_join(tag_name::table.on(tag_suggestion::child_id.eq(tag_name::tag_id)))
+        .into_boxed();
+    let suggestions = apply_distinct_if_multivalued!(suggestions, filter);
+    let filtered_tags = apply_str_filter!(suggestions, tag_name::name, filter.unnegated());
+    update_filter_cache!(conn, filtered_tags, tag_name::tag_id, filter, state)?;
     Ok(query)
 }

@@ -233,7 +233,6 @@ fn recompute_checksum_in_parallel(
     };
 
     let checksum = hash::compute_checksum(&file_contents);
-    println!("Post {post_id} checksum: {}", hex::encode(&checksum));
     let md5_checksum = hash::compute_md5_checksum(&file_contents);
     let duplicate: Option<i64> = match post::table
         .select(post::id)

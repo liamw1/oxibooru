@@ -2,9 +2,10 @@ use crate::api::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::model::pool::PoolName;
 use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_statistics};
-use crate::search::{Builder, Order, ParsedSort, QueryCache, SearchCriteria, UnparsedFilter};
+use crate::search::{Builder, CacheState, Order, ParsedSort, SearchCriteria, UnparsedFilter};
 use crate::{
-    apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter,
+    apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
+    apply_time_filter, update_filter_cache,
 };
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
@@ -30,7 +31,7 @@ pub enum Token {
 
 pub struct QueryBuilder<'a> {
     search: SearchCriteria<'a, Token>,
-    cache: QueryCache,
+    cache_state: CacheState,
 }
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
@@ -43,14 +44,12 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 
     fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
         let query = self.build_filtered(conn)?;
-        let query = self.apply_cache_filters(query);
         self.get_ordered_ids(conn, query).map_err(ApiError::from)
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
         if self.search.has_filter() {
             let unsorted_query = self.build_filtered(conn)?;
-            let unsorted_query = self.apply_cache_filters(unsorted_query);
             unsorted_query.count().first(conn)
         } else {
             database_statistics::table
@@ -66,12 +65,11 @@ impl<'a> QueryBuilder<'a> {
         let search = SearchCriteria::new(client, search_criteria, Token::Name).map_err(Box::from)?;
         Ok(Self {
             search,
-            cache: QueryCache::new(),
+            cache_state: CacheState::new(),
         })
     }
 
     fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
-        let mut cache = self.cache.clone_if_empty();
         let base_query = pool::table
             .select(pool::id)
             .inner_join(pool_statistics::table)
@@ -84,12 +82,11 @@ impl<'a> QueryBuilder<'a> {
             .try_fold(base_query, |query, &filter| match filter.kind {
                 Token::CreationTime => apply_time_filter!(query, pool::creation_time, filter),
                 Token::LastEditTime => apply_time_filter!(query, pool::last_edit_time, filter),
-                Token::Name => apply_name_filter(conn, query, filter, cache.as_mut()),
+                Token::Name => apply_name_filter(conn, query, filter, &mut self.cache_state),
                 Token::Category => Ok(apply_str_filter!(query, pool_category::name, filter)),
                 Token::PostCount => apply_filter!(query, pool_statistics::post_count, filter, i64),
             })?;
-        self.cache.replace(cache);
-        Ok(query)
+        Ok(apply_cache_filters!(query, pool::id, self.cache_state))
     }
 
     fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
@@ -117,16 +114,6 @@ impl<'a> QueryBuilder<'a> {
         }
         .load(conn)
     }
-
-    fn apply_cache_filters(&'a self, mut query: BoxedQuery<'a>) -> BoxedQuery<'a> {
-        if let Some(matching_ids) = self.cache.matches.as_ref() {
-            query = query.filter(pool::id.eq_any(matching_ids));
-        }
-        if let Some(nonmatching_ids) = self.cache.nonmatches.as_ref() {
-            query = query.filter(pool::id.ne_all(nonmatching_ids));
-        }
-        query
-    }
 }
 
 type BoxedQuery<'a> = IntoBoxed<
@@ -139,14 +126,11 @@ fn apply_name_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
     filter: UnparsedFilter<Token>,
-    cache: Option<&mut QueryCache>,
+    state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
-    if let Some(cache) = cache {
-        let names = pool_name::table.select(pool_name::pool_id).into_boxed();
-        let names = apply_distinct_if_multivalued!(names, filter);
-        let filtered_pools = apply_str_filter!(names, pool_name::name, filter.unnegated());
-        let pool_ids: Vec<i64> = filtered_pools.load(conn)?;
-        cache.update(pool_ids, filter.negated);
-    }
+    let names = pool_name::table.select(pool_name::pool_id).into_boxed();
+    let names = apply_distinct_if_multivalued!(names, filter);
+    let filtered_pools = apply_str_filter!(names, pool_name::name, filter.unnegated());
+    update_filter_cache!(conn, filtered_pools, pool_name::pool_id, filter, state)?;
     Ok(query)
 }

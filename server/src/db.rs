@@ -141,6 +141,7 @@ impl CustomizeConnection<PgConnection, diesel::r2d2::Error> for ConnectionInitia
             diesel::sql_query("LOAD 'auto_explain';").execute(conn)?;
             diesel::sql_query("SET SESSION auto_explain.log_min_duration = 500;").execute(conn)?;
             diesel::sql_query("SET SESSION auto_explain.log_parameter_max_length = 0;").execute(conn)?;
+            diesel::sql_query("SET SESSION auto_explain.log_analyze = TRUE;").execute(conn)?;
         }
         Ok(())
     }
