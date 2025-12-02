@@ -1,7 +1,6 @@
 use crate::admin::{DatabaseResult, PRINT_INTERVAL, ProgressReporter};
 use crate::app::AppState;
 use crate::content::hash::PostHash;
-use crate::db::ConnectionPool;
 use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
 use crate::schema::{
@@ -149,8 +148,8 @@ pub fn reset_thumbnail_sizes(state: &AppState) -> DatabaseResult<()> {
 /// Because it computes statistics one row at a time, this function is fairly slow.
 /// A much faster version of this is done in `scripts/convert_szuru_database.sql`,
 /// but it would be very tricky to implement in Diesel.
-pub fn reset_relation_stats(connection_pool: &ConnectionPool) -> DatabaseResult<()> {
-    let mut conn = connection_pool.get()?;
+pub fn reset_relation_stats(state: &AppState) -> DatabaseResult<()> {
+    let mut conn = state.get_connection()?;
 
     let comment_count: i64 = comment::table.count().first(&mut conn)?;
     let pool_count: i64 = pool::table.count().first(&mut conn)?;
@@ -364,5 +363,5 @@ pub fn reset_statistics(state: &AppState) -> DatabaseResult<()> {
         }
     }
     reset_thumbnail_sizes(state)?;
-    reset_relation_stats(&state.connection_pool)
+    reset_relation_stats(state)
 }

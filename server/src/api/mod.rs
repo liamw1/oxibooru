@@ -396,7 +396,12 @@ struct ErrorResponse {
 /// Checks if `current_version` matches `client_version`.
 /// Returns error if they do not match.
 fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiResult<()> {
-    (cfg!(test) || current_version == client_version)
+    // Check disabled in test builds
+    if cfg!(test) {
+        return Ok(());
+    }
+
+    (current_version == client_version)
         .then_some(())
         .ok_or(ApiError::ResourceModified)
 }

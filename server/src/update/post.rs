@@ -250,7 +250,7 @@ pub fn merge(
         .execute(conn)?;
 
     // If replacing content, update post signature. This needs to be done before deletion because post signatures cascade
-    if replace_content && !cfg!(test) {
+    if replace_content {
         let (signature, indexes): (CompressedSignature, SignatureIndexes) = post_signature::table
             .find(absorbed_id)
             .select((post_signature::signature, post_signature::words))
@@ -263,15 +263,13 @@ pub fn merge(
     diesel::delete(post::table.find(absorbed_id)).execute(conn)?;
 
     if replace_content {
-        if !cfg!(test) {
-            filesystem::swap_posts(
-                config,
-                &absorbed_hash,
-                absorbed_post.mime_type,
-                &merge_to_hash,
-                merge_to_post.mime_type,
-            )?;
-        }
+        filesystem::swap_posts(
+            config,
+            &absorbed_hash,
+            absorbed_post.mime_type,
+            &merge_to_hash,
+            merge_to_post.mime_type,
+        )?;
 
         // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
         diesel::update(post::table.find(merge_to_post.id))
@@ -291,7 +289,7 @@ pub fn merge(
             .execute(conn)?;
     }
 
-    if config.delete_source_files && !cfg!(test) {
+    if config.delete_source_files {
         let deleted_content_type = if replace_content {
             merge_to_post.mime_type
         } else {

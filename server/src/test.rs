@@ -2,25 +2,33 @@ use crate::admin::DatabaseResult;
 use crate::api::ApiResult;
 use crate::app::AppState;
 use crate::auth::header;
-use crate::content::hash::{Checksum, Md5Checksum};
-use crate::db::{ConnectionPool, ConnectionResult};
+use crate::config::Config;
+use crate::content::hash::{Checksum, Md5Checksum, PostHash};
+use crate::content::signature::{COMPRESSED_SIGNATURE_LEN, NUM_WORDS};
+use crate::db::ConnectionResult;
+use crate::filesystem::{self, Directory};
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{AvatarStyle, MimeType, PostFlag, PostFlags, Score, UserRank};
 use crate::model::enums::{PostSafety, PostType};
 use crate::model::pool::{NewPool, NewPoolName, PoolPost};
 use crate::model::pool_category::NewPoolCategory;
-use crate::model::post::{NewPost, NewPostFeature, NewPostNote, PostFavorite, PostRelation, PostScore, PostTag};
+use crate::model::post::{
+    CompressedSignature, NewPost, NewPostFeature, NewPostNote, NewPostSignature, PostFavorite, PostRelation, PostScore,
+    PostTag, SignatureIndexes,
+};
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
 use crate::model::tag_category::NewTagCategory;
 use crate::model::user::{NewUser, NewUserToken};
 use crate::schema::{
     comment, comment_score, pool, pool_category, pool_category_statistics, pool_name, pool_post, pool_statistics, post,
-    post_favorite, post_feature, post_note, post_relation, post_score, post_statistics, post_tag, snapshot, tag,
-    tag_category, tag_category_statistics, tag_implication, tag_name, tag_statistics, tag_suggestion, user, user_token,
+    post_favorite, post_feature, post_note, post_relation, post_score, post_signature, post_statistics, post_tag,
+    snapshot, tag, tag_category, tag_category_statistics, tag_implication, tag_name, tag_statistics, tag_suggestion,
+    user, user_token,
 };
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, config, db};
+use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::ServiceExt;
 use axum::extract::Request;
 use axum::http::Method;
@@ -41,12 +49,23 @@ pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZ
 pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
 
 pub fn get_connection() -> ConnectionResult {
-    get_connection_pool().get()
+    get_state().connection_pool.get()
+}
+
+pub fn get_state() -> AppState {
+    let mut guard = get_state_guard();
+    if let Some(state) = guard.as_mut() {
+        state.clone()
+    } else {
+        let state = recreate_database().expect("Test database must be constructible");
+        *guard = Some(state.clone());
+        state
+    }
 }
 
 /// Resets the test database. Useful after operations that are hard to reverse perfectly, like merging.
 pub fn reset_database() {
-    *get_guard() = None;
+    *get_state_guard() = None;
 }
 
 /// Returns path to a test image.
@@ -61,8 +80,7 @@ pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
 }
 
 pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) -> ApiResult<()> {
-    let state = AppState::new(get_connection_pool(), config::default());
-    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(state));
+    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(get_state()));
     let (method, path) = query
         .split_once(' ')
         .expect("Query string must have method and path separated by a space");
@@ -84,7 +102,7 @@ pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str
     } else {
         request.await
     };
-    assert_eq!(reply.status_code(), 200);
+    reply.assert_status_ok();
 
     // Optionally read an expected snapshot
     let snapshot_path = asset_path("snapshot", relative_path);
@@ -221,6 +239,7 @@ const POOL_POSTS: &[(&str, i64)] = &[
     ("realistic", 5),
 ];
 
+// NOTE: Source field must be the name of the coresponding image in test/images directory
 const MB: i64 = 1024_i64.pow(2);
 const GB: i64 = 1024_i64.pow(3);
 const POSTS: &[NewPost] = &[
@@ -235,7 +254,7 @@ const POSTS: &[NewPost] = &[
         checksum: Checksum::from_bytes(b"01"),
         checksum_md5: Md5Checksum::from_bytes(b"01"),
         flags: PostFlags::new(),
-        source: "My hard drive",
+        source: "starry_night.png",
         description: "0101100010",
     },
     NewPost {
@@ -249,7 +268,7 @@ const POSTS: &[NewPost] = &[
         checksum: Checksum::from_bytes(b"02"),
         checksum_md5: Md5Checksum::from_bytes(b"02"),
         flags: PostFlags::new(),
-        source: "",
+        source: "gif.gif",
         description: "",
     },
     NewPost {
@@ -259,11 +278,11 @@ const POSTS: &[NewPost] = &[
         height: 7479,
         safety: PostSafety::Safe,
         type_: PostType::Image,
-        mime_type: MimeType::Png,
+        mime_type: MimeType::Bmp,
         checksum: Checksum::from_bytes(b"03"),
         checksum_md5: Md5Checksum::from_bytes(b"03"),
         flags: PostFlags::new(),
-        source: "Wikipedia",
+        source: "bmp.bmp",
         description: "",
     },
     NewPost {
@@ -273,11 +292,11 @@ const POSTS: &[NewPost] = &[
         height: 1,
         safety: PostSafety::Safe,
         type_: PostType::Image,
-        mime_type: MimeType::Bmp,
+        mime_type: MimeType::Png,
         checksum: Checksum::from_bytes(b"04"),
         checksum_md5: Md5Checksum::from_bytes(b"04"),
         flags: PostFlags::new(),
-        source: "",
+        source: "1_pixel.png",
         description: "description9000",
     },
     NewPost {
@@ -291,7 +310,7 @@ const POSTS: &[NewPost] = &[
         checksum: Checksum::from_bytes(b"05"),
         checksum_md5: Md5Checksum::from_bytes(b"05"),
         flags: PostFlags::new_with(PostFlag::Sound),
-        source: "???",
+        source: "mp4.mp4",
         description: "descriptor",
     },
 ];
@@ -327,10 +346,10 @@ const COMMENT_SCORES: &[(i64, i64, Score)] = &[
     (3, 5, Score::Dislike),
 ];
 
-static CONNECTION_POOL: Mutex<Option<ConnectionPool>> = Mutex::new(None);
+static TEST_STATE: Mutex<Option<AppState>> = Mutex::new(None);
 
-fn get_guard() -> MutexGuard<'static, Option<ConnectionPool>> {
-    match CONNECTION_POOL.lock() {
+fn get_state_guard() -> MutexGuard<'static, Option<AppState>> {
+    match TEST_STATE.lock() {
         Ok(guard) => guard,
         Err(err) => {
             // If panic occurs while holding lock, database may be in an invalid state
@@ -340,6 +359,42 @@ fn get_guard() -> MutexGuard<'static, Option<ConnectionPool>> {
             guard
         }
     }
+}
+
+fn recreate_database() -> DatabaseResult<AppState> {
+    let rng = &mut OsRng;
+    let test_data_directory = std::env::temp_dir().join(rng.next_u64().to_string());
+    std::fs::create_dir(&test_data_directory)?;
+
+    let mut test_config = config::default();
+    test_config.data_dir = test_data_directory;
+
+    // Drop and create test database via postgres database
+    {
+        let postgres_url = config::create_url(Some("postgres"));
+        let postgres_connection_pool = Pool::builder()
+            .max_size(1)
+            .test_on_check_out(true)
+            .build(ConnectionManager::<PgConnection>::new(postgres_url))
+            .expect("Postgres connection pool must be constructible");
+
+        let mut conn = postgres_connection_pool.get()?;
+        diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}")).execute(&mut conn)?;
+        diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
+    }
+
+    let test_url = config::create_url(Some(DATABASE_NAME));
+    let test_connection_pool = Pool::builder()
+        .max_lifetime(None)
+        .idle_timeout(None)
+        .test_on_check_out(true)
+        .build(ConnectionManager::new(test_url))
+        .expect("Test connection pool must be constructible");
+    db::run_database_migrations(&test_connection_pool).unwrap();
+
+    let mut conn = test_connection_pool.get()?;
+    populate_database(&mut conn, &test_config)?;
+    Ok(AppState::new(test_connection_pool, test_config))
 }
 
 const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRank) -> NewUser<'static> {
@@ -462,7 +517,32 @@ fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
     Ok(())
 }
 
-fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
+fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> {
+    let post_data: Vec<(i64, MimeType, String)> = POSTS
+        .insert_into(post::table)
+        .returning((post::id, post::mime_type, post::source))
+        .get_results(conn)?;
+
+    // Simulate uploads
+    filesystem::create_dir(config, Directory::Posts)?;
+    for (post_id, mime_type, source) in post_data {
+        let post_signature = NewPostSignature {
+            post_id,
+            signature: CompressedSignature::from([0; COMPRESSED_SIGNATURE_LEN]),
+            words: SignatureIndexes::from([0; NUM_WORDS]),
+        };
+        diesel::insert_into(post_signature::table)
+            .values(post_signature)
+            .execute(conn)?;
+
+        let post_hash = PostHash::new(config, post_id);
+        let content_path = post_hash.content_path(config, mime_type);
+        std::fs::copy(image_path(&source), content_path)?;
+    }
+    Ok(())
+}
+
+fn populate_database(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> {
     // Create users
     USERS.insert_into(user::table).execute(conn)?;
 
@@ -482,9 +562,7 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
     create_tags(conn)?;
     create_pool_categories(conn)?;
     create_pools(conn)?;
-
-    // Create posts
-    POSTS.insert_into(post::table).execute(conn)?;
+    create_posts(conn, config)?;
 
     // Add relations
     let new_post_relations: Vec<_> = POST_RELATIONS
@@ -594,46 +672,6 @@ fn populate_database(conn: &mut PgConnection) -> QueryResult<()> {
     new_comment_scores.insert_into(comment_score::table).execute(conn)?;
 
     Ok(())
-}
-
-pub fn get_connection_pool() -> ConnectionPool {
-    let mut guard = get_guard();
-    if let Some(pool) = guard.as_mut() {
-        pool.clone()
-    } else {
-        let pool = recreate_database().expect("Test database must be constructible");
-        *guard = Some(pool.clone());
-        pool
-    }
-}
-
-fn recreate_database() -> DatabaseResult<ConnectionPool> {
-    // Drop and create test database via postgres database
-    {
-        let postgres_url = config::create_url(Some("postgres"));
-        let postgres_connection_pool = Pool::builder()
-            .max_size(1)
-            .test_on_check_out(true)
-            .build(ConnectionManager::<PgConnection>::new(postgres_url))
-            .expect("Postgres connection pool must be constructible");
-
-        let mut conn = postgres_connection_pool.get()?;
-        diesel::sql_query(format!("DROP DATABASE IF EXISTS {DATABASE_NAME}")).execute(&mut conn)?;
-        diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
-    }
-
-    let test_url = config::create_url(Some(DATABASE_NAME));
-    let test_connection_pool = Pool::builder()
-        .max_lifetime(None)
-        .idle_timeout(None)
-        .test_on_check_out(true)
-        .build(ConnectionManager::new(test_url))
-        .expect("Test connection pool must be constructible");
-    db::run_database_migrations(&test_connection_pool).unwrap();
-
-    let mut conn = test_connection_pool.get()?;
-    populate_database(&mut conn)?;
-    Ok(test_connection_pool)
 }
 
 fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
@@ -834,7 +872,7 @@ mod statistics_tests {
     #[test]
     #[serial]
     fn reset_statistics() -> DatabaseResult<()> {
-        database::reset_relation_stats(&get_connection_pool())?;
+        database::reset_relation_stats(&get_state())?;
         database_statistics()?;
         comment_statistics()?;
         pool_category_statistics()?;
