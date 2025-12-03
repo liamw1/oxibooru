@@ -37,7 +37,9 @@ pub fn reset_filenames(state: &AppState) -> DatabaseResult<()> {
 
             let new_path = PostHash::new(&state.config, post_id).generated_thumbnail_path();
             if path != new_path {
-                filesystem::move_file(path, &new_path)?;
+                if let Err(err) = filesystem::move_file(path, &new_path) {
+                    error!("Could not move {path:?} to {new_path:?} for reason: {err}");
+                }
                 progress.increment();
             }
         }
@@ -58,7 +60,9 @@ pub fn reset_filenames(state: &AppState) -> DatabaseResult<()> {
 
             let new_path = PostHash::new(&state.config, post_id).custom_thumbnail_path();
             if path != new_path {
-                filesystem::move_file(path, &new_path)?;
+                if let Err(err) = filesystem::move_file(path, &new_path) {
+                    error!("Could not move {path:?} to {new_path:?} for reason: {err}");
+                }
                 progress.increment();
             }
         }
@@ -92,7 +96,9 @@ pub fn reset_filenames(state: &AppState) -> DatabaseResult<()> {
             };
 
             if path != new_path {
-                filesystem::move_file(path, &new_path)?;
+                if let Err(err) = filesystem::move_file(path, &new_path) {
+                    error!("Could not move {path:?} to {new_path:?} for reason: {err}");
+                }
                 progress.increment();
             }
         }
