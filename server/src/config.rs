@@ -246,33 +246,18 @@ impl Config {
     }
 }
 
+/// Deserializes the `config.toml`.
+/// Any values not present will default to the corresponding value in `config.toml.dist`.
 pub fn create() -> Config {
     assert!(!cfg!(test), "Production config disallowed in test build!");
-
-    let mut config: Config = match ConfigBuilder::<DefaultState>::default()
-        .add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml))
-        .add_source(File::with_name("config"))
-        .build()
-        .and_then(config::Config::try_deserialize)
-    {
-        Ok(parsed) => parsed,
-        Err(err) => {
-            // We use `eprintln!` instead of `error!` here because tracing hasn't been initialized yet
-            eprintln!("Could not parse config.toml. Details:\n{err}");
-            std::process::exit(1);
-        }
-    };
-    config.public_info.can_send_mails = config.smtp.is_some();
-    config
+    create_config(Some("config"))
 }
 
+/// Creates a test config with an optional `override_relative_path` to override the default config.
 #[cfg(test)]
-pub fn default() -> Config {
-    ConfigBuilder::<DefaultState>::default()
-        .add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml))
-        .build()
-        .and_then(config::Config::try_deserialize)
-        .unwrap()
+pub fn test_config(override_relative_path: Option<&str>) -> Config {
+    let override_path = override_relative_path.map(|relative_path| format!("test/queries/{relative_path}/config"));
+    create_config(override_path.as_deref())
 }
 
 pub fn port() -> u16 {
@@ -301,3 +286,22 @@ pub fn database_url(database_override: Option<&str>) -> String {
 
 const DOCKER_DEPLOYMENT: bool = option_env!("DOCKER_DEPLOYMENT").is_some();
 const DEFAULT_CONFIG: &str = include_str!("../config.toml.dist");
+
+fn create_config(config_path: Option<&str>) -> Config {
+    let mut config_builder =
+        ConfigBuilder::<DefaultState>::default().add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml));
+    if let Some(path) = config_path {
+        config_builder = config_builder.add_source(File::with_name(path));
+    }
+
+    let mut config: Config = match config_builder.build().and_then(config::Config::try_deserialize) {
+        Ok(parsed) => parsed,
+        Err(err) => {
+            // We use `eprintln!` instead of `error!` here because tracing hasn't been initialized yet
+            eprintln!("Could not parse config.toml. Details:\n{err}");
+            std::process::exit(1);
+        }
+    };
+    config.public_info.can_send_mails = config.smtp.is_some();
+    config
+}

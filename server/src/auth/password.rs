@@ -39,7 +39,7 @@ mod test {
 
     #[test]
     fn hash_password() {
-        let test_config = config::default();
+        let test_config = config::test_config(None);
         assert!(is_valid_password(&test_config, TEST_HASH, TEST_PASSWORD));
         assert!(!is_valid_password(&test_config, TEST_HASH, "wrong_password"));
     }

@@ -418,8 +418,8 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /users/?query";
         const SORT: &str = "-sort:name&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "user/list.json").await?;
-        verify_query(&format!("{QUERY}=name:*user* {SORT}{FIELDS}"), "user/list_has_user_in_name.json").await
+        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "user/list").await?;
+        verify_query(&format!("{QUERY}=name:*user* {SORT}{FIELDS}"), "user/list_has_user_in_name").await
     }
 
     #[tokio::test]
@@ -436,7 +436,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /user/{NAME}/?{FIELDS}"), "user/get.json").await?;
+        verify_query(&format!("GET /user/{NAME}/?{FIELDS}"), "user/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -455,7 +455,7 @@ mod test {
         let mut conn = get_connection()?;
         let user_count = get_user_count(&mut conn)?;
 
-        verify_query(&format!("POST /users/?{FIELDS}"), "user/create.json").await?;
+        verify_query(&format!("POST /users/?{FIELDS}"), "user/create").await?;
 
         let (user_id, name): (i64, String) = user::table
             .select((user::id, user::name))
@@ -465,7 +465,7 @@ mod test {
         let new_user_count = get_user_count(&mut conn)?;
         assert_eq!(new_user_count, user_count + 1);
 
-        verify_query(&format!("DELETE /user/{name}"), "user/delete.json").await?;
+        verify_query(&format!("DELETE /user/{name}"), "user/delete").await?;
 
         let new_user_count = get_user_count(&mut conn)?;
         let has_user: bool = diesel::select(exists(user::table.find(user_id))).get_result(&mut conn)?;
@@ -500,7 +500,7 @@ mod test {
 
         let (user, comment_count, favorite_count, upload_count) = get_user_info(&mut conn)?;
 
-        verify_query(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/update.json").await?;
+        verify_query(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/update").await?;
 
         let (new_user, new_comment_count, new_favorite_count, new_upload_count) = get_user_info(&mut conn)?;
         assert_eq!(new_user.id, user.id);
@@ -518,7 +518,7 @@ mod test {
         assert_eq!(new_upload_count, upload_count);
 
         let new_name = &new_user.name;
-        verify_query(&format!("PUT /user/{new_name}/?{FIELDS}"), "user/update_restore.json").await?;
+        verify_query(&format!("PUT /user/{new_name}/?{FIELDS}"), "user/update_restore").await?;
 
         let (new_user, new_comment_count, new_favorite_count, new_upload_count) = get_user_info(&mut conn)?;
         assert_eq!(new_user.id, user.id);

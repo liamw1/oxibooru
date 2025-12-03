@@ -273,10 +273,10 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /pools/?query";
         const SORT: &str = "-sort:creation-time&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "pool/list.json").await?;
-        verify_query(&format!("{QUERY}=sort:post-count&limit=1{FIELDS}"), "pool/list_most_posts.json").await?;
-        verify_query(&format!("{QUERY}=category:Setting {SORT}{FIELDS}"), "pool/list_category_setting.json").await?;
-        verify_query(&format!("{QUERY}=name:*punk* {SORT}{FIELDS}"), "pool/list_name_punk.json").await
+        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "pool/list").await?;
+        verify_query(&format!("{QUERY}=sort:post-count&limit=1{FIELDS}"), "pool/list_most_posts").await?;
+        verify_query(&format!("{QUERY}=category:Setting {SORT}{FIELDS}"), "pool/list_category_setting").await?;
+        verify_query(&format!("{QUERY}=name:*punk* {SORT}{FIELDS}"), "pool/list_name_punk").await
     }
 
     #[tokio::test]
@@ -293,7 +293,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /pool/{POOL_ID}/?{FIELDS}"), "pool/get.json").await?;
+        verify_query(&format!("GET /pool/{POOL_ID}/?{FIELDS}"), "pool/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -312,7 +312,7 @@ mod test {
         let mut conn = get_connection()?;
         let pool_count = get_pool_count(&mut conn)?;
 
-        verify_query(&format!("POST /pool/?{FIELDS}"), "pool/create.json").await?;
+        verify_query(&format!("POST /pool/?{FIELDS}"), "pool/create").await?;
 
         let pool_id: i64 = pool::table
             .select(pool::id)
@@ -327,7 +327,7 @@ mod test {
         assert_eq!(new_pool_count, pool_count + 1);
         assert_eq!(post_count, 2);
 
-        verify_query(&format!("DELETE /pool/{pool_id}/?{FIELDS}"), "pool/delete.json").await?;
+        verify_query(&format!("DELETE /pool/{pool_id}/?{FIELDS}"), "pool/delete").await?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
         let has_pool: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(&mut conn)?;
@@ -352,7 +352,7 @@ mod test {
         let mut conn = get_connection()?;
         let (pool, post_count) = get_pool_info(&mut conn)?;
 
-        verify_query(&format!("POST /pool-merge/?{FIELDS}"), "pool/merge.json").await?;
+        verify_query(&format!("POST /pool-merge/?{FIELDS}"), "pool/merge").await?;
 
         let has_pool: bool = diesel::select(exists(pool::table.find(REMOVE_ID))).get_result(&mut conn)?;
         assert!(!has_pool);
@@ -382,7 +382,7 @@ mod test {
         let mut conn = get_connection()?;
         let (pool, post_count) = get_pool_info(&mut conn)?;
 
-        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/update.json").await?;
+        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/update").await?;
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
         assert_ne!(new_pool.category_id, pool.category_id);
@@ -391,7 +391,7 @@ mod test {
         assert!(new_pool.last_edit_time > pool.last_edit_time);
         assert_ne!(new_post_count, post_count);
 
-        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/update_restore.json").await?;
+        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/update_restore").await?;
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
         assert_eq!(new_pool.category_id, pool.category_id);

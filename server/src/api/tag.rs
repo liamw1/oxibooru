@@ -372,11 +372,10 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /tags/?query";
         const SORT: &str = "-sort:name&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "tag/list.json").await?;
-        verify_query(&format!("{QUERY}=sort:usage-count -sort:name&limit=1{FIELDS}"), "tag/list_most_used.json")
-            .await?;
-        verify_query(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character.json").await?;
-        verify_query(&format!("{QUERY}=*sky* {SORT}{FIELDS}"), "tag/list_has_sky_in_name.json").await?;
+        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "tag/list").await?;
+        verify_query(&format!("{QUERY}=sort:usage-count -sort:name&limit=1{FIELDS}"), "tag/list_most_used").await?;
+        verify_query(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character").await?;
+        verify_query(&format!("{QUERY}=*sky* {SORT}{FIELDS}"), "tag/list_has_sky_in_name").await?;
         Ok(())
     }
 
@@ -395,7 +394,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /tag/{NAME}/?{FIELDS}"), "tag/get.json").await?;
+        verify_query(&format!("GET /tag/{NAME}/?{FIELDS}"), "tag/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -417,7 +416,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /tag-siblings/{NAME}/?{FIELDS}"), "tag/get_siblings.json").await?;
+        verify_query(&format!("GET /tag-siblings/{NAME}/?{FIELDS}"), "tag/get_siblings").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -436,7 +435,7 @@ mod test {
         let mut conn = get_connection()?;
         let tag_count = get_tag_count(&mut conn)?;
 
-        verify_query(&format!("POST /tags/?{FIELDS}"), "tag/create.json").await?;
+        verify_query(&format!("POST /tags/?{FIELDS}"), "tag/create").await?;
 
         let (tag_id, name): (i64, SmallString) = tag_name::table
             .select((tag_name::tag_id, tag_name::name))
@@ -446,7 +445,7 @@ mod test {
         let new_tag_count = get_tag_count(&mut conn)?;
         assert_eq!(new_tag_count, tag_count + 1);
 
-        verify_query(&format!("DELETE /tag/{name}/?{FIELDS}"), "tag/delete.json").await?;
+        verify_query(&format!("DELETE /tag/{name}/?{FIELDS}"), "tag/delete").await?;
 
         let new_tag_count = get_tag_count(&mut conn)?;
         let has_tag: bool = diesel::select(exists(tag::table.find(tag_id))).get_result(&mut conn)?;
@@ -481,7 +480,7 @@ mod test {
             .filter(tag_name::name.eq(REMOVE))
             .first(&mut conn)?;
 
-        verify_query(&format!("POST /tag-merge/?{FIELDS}"), "tag/merge.json").await?;
+        verify_query(&format!("POST /tag-merge/?{FIELDS}"), "tag/merge").await?;
 
         let has_tag: bool = diesel::select(exists(tag::table.find(remove_id))).get_result(&mut conn)?;
         assert!(!has_tag);
@@ -520,7 +519,7 @@ mod test {
         let mut conn = get_connection()?;
         let (tag, usage_count, implication_count, suggestion_count) = get_tag_info(&mut conn, NAME)?;
 
-        verify_query(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/update.json").await?;
+        verify_query(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/update").await?;
 
         let new_name: SmallString = tag_name::table
             .select(tag_name::name)
@@ -538,7 +537,7 @@ mod test {
         assert_ne!(new_implication_count, implication_count);
         assert_ne!(new_suggestion_count, suggestion_count);
 
-        verify_query(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/update_restore.json").await?;
+        verify_query(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/update_restore").await?;
 
         let new_tag_id: i64 = tag::table.select(tag::id).order_by(tag::id.desc()).first(&mut conn)?;
         diesel::delete(tag::table.find(new_tag_id)).execute(&mut conn)?;

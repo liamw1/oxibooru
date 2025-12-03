@@ -231,7 +231,7 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn list() -> ApiResult<()> {
-        verify_query(&format!("GET /pool-categories/?{FIELDS}"), "pool_category/list.json").await
+        verify_query(&format!("GET /pool-categories/?{FIELDS}"), "pool_category/list").await
     }
 
     #[tokio::test]
@@ -248,7 +248,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /pool-category/{NAME}/?{FIELDS}"), "pool_category/get.json").await?;
+        verify_query(&format!("GET /pool-category/{NAME}/?{FIELDS}"), "pool_category/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -261,7 +261,7 @@ mod test {
         let mut conn = get_connection()?;
         let category_count: i64 = pool_category::table.count().first(&mut conn)?;
 
-        verify_query(&format!("POST /pool-categories/?{FIELDS}"), "pool_category/create.json").await?;
+        verify_query(&format!("POST /pool-categories/?{FIELDS}"), "pool_category/create").await?;
 
         let category_name: SmallString = pool_category::table
             .select(pool_category::name)
@@ -277,7 +277,7 @@ mod test {
         assert_eq!(new_category_count, category_count + 1);
         assert_eq!(usage_count, 0);
 
-        verify_query(&format!("DELETE /pool-category/{category_name}"), "pool_category/delete.json").await?;
+        verify_query(&format!("DELETE /pool-category/{category_name}"), "pool_category/delete").await?;
 
         let new_category_count: i64 = pool_category::table.count().first(&mut conn)?;
         assert_eq!(new_category_count, category_count);
@@ -294,7 +294,7 @@ mod test {
             .filter(pool_category::name.eq(NAME))
             .first(&mut conn)?;
 
-        verify_query(&format!("PUT /pool-category/{NAME}/?{FIELDS}"), "pool_category/update.json").await?;
+        verify_query(&format!("PUT /pool-category/{NAME}/?{FIELDS}"), "pool_category/update").await?;
 
         let updated_category: PoolCategory = pool_category::table
             .filter(pool_category::id.eq(category.id))
@@ -304,7 +304,7 @@ mod test {
         assert!(updated_category.last_edit_time > category.last_edit_time);
 
         let new_name = updated_category.name;
-        verify_query(&format!("PUT /pool-category/{new_name}/?{FIELDS}"), "pool_category/update_restore.json").await
+        verify_query(&format!("PUT /pool-category/{new_name}/?{FIELDS}"), "pool_category/update_restore").await
     }
 
     #[tokio::test]
@@ -319,14 +319,13 @@ mod test {
             Ok(category_id == 0)
         };
 
-        verify_query(&format!("PUT /pool-category/{NAME}/default/?{FIELDS}"), "pool_category/set_default.json").await?;
+        verify_query(&format!("PUT /pool-category/{NAME}/default/?{FIELDS}"), "pool_category/set_default").await?;
 
         let mut conn = get_connection()?;
         let default = is_default(&mut conn)?;
         assert!(default);
 
-        verify_query(&format!("PUT /pool-category/default/default/?{FIELDS}"), "pool_category/restore_default.json")
-            .await?;
+        verify_query(&format!("PUT /pool-category/default/default/?{FIELDS}"), "pool_category/restore_default").await?;
 
         let default = is_default(&mut conn)?;
         assert!(!default);

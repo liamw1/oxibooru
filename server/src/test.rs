@@ -36,8 +36,9 @@ use axum_test::TestServer;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{ExpressionMethods, Insertable, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde_json::Value;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
 use uuid::Uuid;
@@ -72,14 +73,43 @@ pub fn image_path(relative_path: &str) -> PathBuf {
     asset_path("images", relative_path)
 }
 
-/// Verifies that a given `query` matches the contents of a `reply_filepath`.
+/// Verifies that a given `query` matches the contents of a `repsonse.json`
+/// that lies in the `test/queries/relative_path` directory. A `snapshot.json`
+/// will also be checked if it exists. A `body.json` and `config.toml` can be
+/// specified if they exist.
+///
 /// `query` must be of the form `METHOD path` (e.g. `GET /post/1`).
 pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
     verify_query_with_user("administrator", query, relative_path).await
 }
 
 pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) -> ApiResult<()> {
-    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(get_state()));
+    let mut expected_response: Option<Value> = None;
+    let mut expected_snapshot: Option<Value> = None;
+    let mut body: Option<Value> = None;
+    let mut config: Option<Config> = None;
+    for entry in std::fs::read_dir(asset_path("queries", relative_path))? {
+        let path = entry?.path();
+        let file_contents = std::fs::read_to_string(&path)?;
+        match path.file_name().and_then(OsStr::to_str) {
+            Some("response.json") => expected_response = Some(serde_json::from_str(&file_contents)?),
+            Some("snapshot.json") => expected_snapshot = Some(serde_json::from_str(&file_contents)?),
+            Some("body.json") => body = Some(serde_json::from_str(&file_contents)?),
+            Some("config.toml") => config = Some(config::test_config(Some(relative_path))),
+            Some(file_name) => panic!("Unexpected file name {file_name} in {relative_path}"),
+            _ => panic!("Could not parse file name {:?} in {relative_path}", path.file_name()),
+        }
+    }
+
+    // Optionally override default config
+    let mut app_state = get_state();
+    if let Some(mut config) = config {
+        // Data directory should not be overriden
+        config.data_dir = app_state.config.data_dir.clone();
+        app_state.config = Arc::new(config);
+    }
+
+    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(app_state));
     let (method, path) = query
         .split_once(' ')
         .expect("Query string must have method and path separated by a space");
@@ -95,32 +125,29 @@ pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str
         .add_header(AUTHORIZATION, basic_access_authentication);
 
     // Optionally specify a body
-    let body_path = asset_path("body", relative_path);
-    let reply = if body_path.try_exists()? {
-        request.json_from_file(body_path).await
+    let response = if let Some(body) = body {
+        request.json(&body).await
     } else {
         request.await
     };
-    reply.assert_status_ok();
+    response.assert_status_ok();
 
-    // Optionally read an expected snapshot
-    let snapshot_path = asset_path("snapshot", relative_path);
-    if snapshot_path.try_exists()? {
-        let file_contents = std::fs::read_to_string(asset_path("snapshot", relative_path))?;
-        let expected_snapshot_data: Value = serde_json::from_str(&file_contents)?;
-
+    // Optionally check an expected snapshot
+    if let Some(expected_snapshot) = expected_snapshot {
         let mut conn = get_connection()?;
-        let actual_snapshot_data: Value = snapshot::table
+        let actual_snapshot: Value = snapshot::table
             .select(snapshot::data)
             .order_by(snapshot::id.desc())
             .first(&mut conn)?;
-        verify_json("snapshot data", &expected_snapshot_data, &actual_snapshot_data);
+        verify_json(relative_path, "snapshot data", &expected_snapshot, &actual_snapshot);
     }
 
-    let file_contents = std::fs::read_to_string(asset_path("reply", relative_path))?;
-    let expected_body: Value = serde_json::from_str(&file_contents)?;
-    let actual_body: Value = reply.json();
-    verify_json("response body", &expected_body, &actual_body);
+    if let Some(expected_response) = expected_response {
+        let actual_response: Value = response.json();
+        verify_json(relative_path, "response body", &expected_response, &actual_response);
+    } else {
+        panic!("Missing response.json in {relative_path}");
+    }
     Ok(())
 }
 
@@ -364,7 +391,7 @@ fn recreate_database() -> DatabaseResult<AppState> {
     let rng = &mut OsRng;
     let test_data_directory = std::env::temp_dir().join(rng.next_u64().to_string());
 
-    let mut test_config = config::default();
+    let mut test_config = config::test_config(None);
     test_config.data_dir = test_data_directory;
 
     // Drop and create test database via postgres database
@@ -388,7 +415,7 @@ fn recreate_database() -> DatabaseResult<AppState> {
         .test_on_check_out(true)
         .build(ConnectionManager::new(test_url))
         .expect("Test connection pool must be constructible");
-    db::run_database_migrations(&test_connection_pool).unwrap();
+    db::run_database_migrations(&test_connection_pool).expect("Must be able to run test migrations");
 
     let mut conn = test_connection_pool.get()?;
     populate_database(&mut conn, &test_config)?;
@@ -679,14 +706,14 @@ fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
     [&manifest_dir, "test", folder_path, relative_path].iter().collect()
 }
 
-fn verify_json(name: &str, expected: &Value, actual: &Value) {
+fn verify_json(test_name: &str, json_type: &str, expected: &Value, actual: &Value) {
     let diff_message = crate::snapshot::value_diff(expected.clone(), actual.clone())
         .map_or("JSON contents are nearly equal, but at least one array element is out-of-order!".into(), |diff| {
             format!("Diff:\n{diff}")
         });
     assert!(
         expected == actual,
-        "Incorrect {name}. Expected:\n{expected}\n\nReceived:\n{actual}\n\n{diff_message}\n",
+        "Incorrect {json_type} for {test_name}. Expected:\n{expected}\n\nReceived:\n{actual}\n\n{diff_message}\n",
     );
 }
 
