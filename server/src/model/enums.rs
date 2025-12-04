@@ -358,6 +358,7 @@ impl Serialize for PostFlags {
     Ord,
     EnumString,
     FromRepr,
+    IntoStaticStr,
     AsExpression,
     FromSqlRow,
     Serialize,

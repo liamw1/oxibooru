@@ -80,10 +80,10 @@ pub fn image_path(relative_path: &str) -> PathBuf {
 ///
 /// `query` must be of the form `METHOD path` (e.g. `GET /post/1`).
 pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
-    verify_query_with_user("administrator", query, relative_path).await
+    verify_query_with_user(UserRank::Administrator, query, relative_path).await
 }
 
-pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) -> ApiResult<()> {
+pub async fn verify_query_with_user(user: UserRank, query: &str, relative_path: &str) -> ApiResult<()> {
     let mut expected_response: Option<Value> = None;
     let mut expected_snapshot: Option<Value> = None;
     let mut body: Option<Value> = None;
@@ -115,14 +115,15 @@ pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str
         .expect("Query string must have method and path separated by a space");
     let method = Method::try_from(method).expect("Query string must start with a valid method");
     let path = path.replace(' ', "%20"); // Percent-encode all spaces
-    let credentials = header::credentials_for(user, TEST_PASSWORD);
-    let basic_access_authentication = format!("Basic {credentials}");
 
     let server =
         TestServer::new(ServiceExt::<Request>::into_make_service(app)).expect("Test server must be constructible");
-    let request = server
-        .method(method, &path)
-        .add_header(AUTHORIZATION, basic_access_authentication);
+    let mut request = server.method(method, &path);
+    if user != UserRank::Anonymous {
+        let credentials = header::credentials_for(user.into(), TEST_PASSWORD);
+        let basic_access_authentication = format!("Basic {credentials}");
+        request = request.add_header(AUTHORIZATION, basic_access_authentication);
+    }
 
     // Optionally specify a body
     let response = if let Some(body) = body {
@@ -130,7 +131,6 @@ pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str
     } else {
         request.await
     };
-    response.assert_status_ok();
 
     // Optionally check an expected snapshot
     if let Some(expected_snapshot) = expected_snapshot {
@@ -143,7 +143,8 @@ pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str
     }
 
     if let Some(expected_response) = expected_response {
-        let actual_response: Value = response.json();
+        let actual_response: Value = serde_json::from_slice(response.as_bytes())
+            .unwrap_or_else(|e| panic!("Bad JSON: {e}\nBody:\n{}", String::from_utf8_lossy(response.as_bytes())));
         verify_json(relative_path, "response body", &expected_response, &actual_response);
     } else {
         panic!("Missing response.json in {relative_path}");

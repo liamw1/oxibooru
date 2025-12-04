@@ -4,7 +4,7 @@ use crate::auth::Client;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::CommentInfo;
-use crate::schema::{comment, comment_score};
+use crate::schema::{comment, comment_score, post};
 use crate::search::Builder;
 use crate::search::comment::QueryBuilder;
 use crate::time::DateTime;
@@ -12,7 +12,7 @@ use crate::{api, resource};
 use axum::extract::{Extension, Path, Query, State};
 use axum::{Json, Router, routing};
 use diesel::dsl::exists;
-use diesel::{Connection, ExpressionMethods, Insertable, QueryDsl, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
@@ -98,7 +98,16 @@ async fn create(
     };
 
     let mut conn = state.get_connection()?;
-    let comment = new_comment.insert_into(comment::table).get_result(&mut conn)?;
+    let comment = state.get_connection()?.transaction(|conn| {
+        let post_exists: bool = diesel::select(exists(post::table.find(new_comment.post_id))).get_result(conn)?;
+        if !post_exists {
+            return Err(ApiError::NotFound(ResourceType::Post));
+        }
+        new_comment
+            .insert_into(comment::table)
+            .get_result(conn)
+            .map_err(ApiError::from)
+    })?;
     conn.transaction(|conn| CommentInfo::new(conn, &state.config, client, comment, &fields))
         .map(Json)
         .map_err(ApiError::from)
@@ -126,7 +135,9 @@ async fn update(
         let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Comment))?;
         api::verify_version(comment_version, body.version)?;
 
         let required_rank = if client.id == comment_owner && comment_owner.is_some() {
@@ -161,6 +172,11 @@ async fn rate(
 
     let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
+        let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(conn)?;
+        if !comment_exists {
+            return Err(ApiError::NotFound(ResourceType::Comment));
+        }
+
         diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*body) {
@@ -190,7 +206,9 @@ async fn delete(
         let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Comment))?;
         api::verify_version(comment_version, *client_version)?;
 
         let required_rank = if client.id == comment_owner && comment_owner.is_some() {
@@ -209,6 +227,7 @@ async fn delete(
 mod test {
     use crate::api::ApiResult;
     use crate::model::comment::Comment;
+    use crate::model::enums::UserRank;
     use crate::schema::{comment, comment_statistics, database_statistics, user, user_statistics};
     use crate::test::*;
     use crate::time::DateTime;
@@ -360,6 +379,22 @@ mod test {
         let (new_score, new_last_edit_time) = get_comment_info(&mut conn)?;
         assert_eq!(new_score, score);
         assert_eq!(new_last_edit_time, last_edit_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn error() -> ApiResult<()> {
+        verify_query(&format!("GET /comment/99/?{FIELDS}"), "comment/get_nonexistent").await?;
+        verify_query(&format!("POST /comments/?{FIELDS}"), "comment/create_on_nonexistent_post").await?;
+        verify_query(&format!("PUT /comment/99/?{FIELDS}"), "comment/update_nonexistent").await?;
+        verify_query(&format!("PUT /comment/99/score/?{FIELDS}"), "comment/like_nonexistent").await?;
+        verify_query(&format!("DELETE /comment/99"), "comment/delete_nonexistent").await?;
+
+        //verify_query(&format!("PUT /comment/1/score/?{FIELDS}"), "comment/invalid_rating").await?;
+        verify_query_with_user(UserRank::Anonymous, &format!("POST /comments/?{FIELDS}"), "comment/create_anonymously")
+            .await?;
+
         Ok(())
     }
 }

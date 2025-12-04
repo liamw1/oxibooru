@@ -1792,7 +1792,6 @@ data.
 - **Errors**
 
     - the post does not exist
-    - comment text is empty
     - privileges are too low
 
 - **Description**
@@ -1821,7 +1820,6 @@ data.
 
     - the version is outdated
     - the comment does not exist
-    - new comment text is empty
     - privileges are too low
 
 - **Description**
