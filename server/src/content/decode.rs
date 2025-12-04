@@ -73,7 +73,7 @@ pub fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
 }
 
 /// Decodes first frame of video contents.
-fn video_frame(path: &Path) -> Result<Option<DynamicImage>, video_rs::Error> {
+fn video_frame(path: &Path) -> ApiResult<Option<DynamicImage>> {
     let mut decoder = Decoder::new(path)?;
     let frame = decoder.decode_raw()?;
 
@@ -85,11 +85,12 @@ fn video_frame(path: &Path) -> Result<Option<DynamicImage>, video_rs::Error> {
     let width = frame.width();
     let height = frame.height();
     let stride = frame.stride(0);
-    Ok(Some(match frame.format() {
-        Pixel::RGB24 => rgb24_frame(frame_data, width, height, stride),
+    match frame.format() {
+        Pixel::RGB24 => Ok(rgb24_frame(frame_data, width, height, stride)),
         // There's a looooooot of pixel formats, so I'll just implementment them as they come up
-        format => panic!("Video frame format {format:?} is unimplemented!"),
-    }))
+        format => Err(ApiError::UnimplementedFrameFormat(format)),
+    }
+    .map(Some)
 }
 
 /// Search swf tags for the largest decodable image

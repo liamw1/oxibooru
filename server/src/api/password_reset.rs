@@ -1,3 +1,4 @@
+use crate::api::extract::{Json, Path};
 use crate::api::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::auth::password;
@@ -6,8 +7,8 @@ use crate::schema::user;
 use crate::string::SmallString;
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
-use axum::extract::{Path, State};
-use axum::{Json, Router, routing};
+use axum::extract::State;
+use axum::{Router, routing};
 use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
 use lettre::Address;
 use lettre::message::Mailbox;

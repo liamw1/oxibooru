@@ -1,0 +1,3 @@
+[public_info.privileges]
+comment_delete_any = "moderator"
+comment_delete_own = "regular"

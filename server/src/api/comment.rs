@@ -1,3 +1,4 @@
+use crate::api::extract::{Json, Path, Query};
 use crate::api::{ApiError, ApiResult, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
@@ -9,8 +10,8 @@ use crate::search::Builder;
 use crate::search::comment::QueryBuilder;
 use crate::time::DateTime;
 use crate::{api, resource};
-use axum::extract::{Extension, Path, Query, State};
-use axum::{Json, Router, routing};
+use axum::extract::{Extension, State};
+use axum::{Router, routing};
 use diesel::dsl::exists;
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
@@ -88,10 +89,9 @@ async fn create(
 ) -> ApiResult<Json<CommentInfo>> {
     api::verify_privilege(client, state.config.privileges().comment_create)?;
 
-    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let new_comment = NewComment {
-        user_id: Some(user_id),
+        user_id: client.id,
         post_id: body.post_id,
         text: &body.text,
         creation_time: DateTime::now(),
@@ -385,15 +385,16 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query(&format!("GET /comment/99/?{FIELDS}"), "comment/get_nonexistent").await?;
-        verify_query(&format!("POST /comments/?{FIELDS}"), "comment/create_on_nonexistent_post").await?;
-        verify_query(&format!("PUT /comment/99/?{FIELDS}"), "comment/update_nonexistent").await?;
-        verify_query(&format!("PUT /comment/99/score/?{FIELDS}"), "comment/like_nonexistent").await?;
+        verify_query(&format!("GET /comment/99"), "comment/get_nonexistent").await?;
+        verify_query(&format!("POST /comments"), "comment/create_on_nonexistent_post").await?;
+        verify_query(&format!("PUT /comment/99"), "comment/update_nonexistent").await?;
+        verify_query(&format!("PUT /comment/99/score"), "comment/like_nonexistent").await?;
         verify_query(&format!("DELETE /comment/99"), "comment/delete_nonexistent").await?;
 
-        //verify_query(&format!("PUT /comment/1/score/?{FIELDS}"), "comment/invalid_rating").await?;
-        verify_query_with_user(UserRank::Anonymous, &format!("POST /comments/?{FIELDS}"), "comment/create_anonymously")
-            .await?;
+        verify_query(&format!("PUT /comment/1/score"), "comment/invalid_rating").await?;
+
+        // User has permission to delete own comment, but not another's
+        verify_query_with_user(UserRank::Regular, &format!("DELETE /comment/2"), "comment/delete_another").await?;
 
         Ok(())
     }

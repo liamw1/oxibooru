@@ -70,6 +70,7 @@ fn basic_access_authentication(state: &AppState, credentials: &str) -> Result<Cl
         .optional()?
         .ok_or(AuthenticationError::UsernamePasswordMismatch)?;
     auth::password::is_valid_password(&state.config, &password_hash, &password)
+        .is_ok()
         .then_some(Client::new(Some(user_id), rank))
         .ok_or(AuthenticationError::UsernamePasswordMismatch)
 }

@@ -3,6 +3,7 @@ use crate::content::FileContents;
 use crate::model::enums::MimeType;
 use crate::string::SmallString;
 use axum::extract::multipart::{Field, Multipart};
+use axum::extract::rejection::{JsonRejection, MissingJsonContentType};
 use std::ffi::OsStr;
 use std::path::Path;
 use std::str::FromStr;
@@ -43,7 +44,9 @@ pub async fn extract<const N: usize>(mut form_data: Multipart, fields: [PartName
 
         // Ensure metadata is JSON
         if file_info.is_none() && field.content_type() != Some("application/json") {
-            return Err(ApiError::InvalidMetadataType);
+            return Err(ApiError::JsonRejection(JsonRejection::MissingJsonContentType(
+                MissingJsonContentType::default(),
+            )));
         }
 
         let data = field.bytes().await.map_err(ApiError::from)?.to_vec();

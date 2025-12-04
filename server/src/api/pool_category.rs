@@ -1,3 +1,4 @@
+use crate::api::extract::{Json, Path, Query};
 use crate::api::{ApiError, ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
 use crate::app::AppState;
 use crate::auth::Client;
@@ -9,8 +10,8 @@ use crate::schema::{pool, pool_category};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, resource, snapshot};
-use axum::extract::{Extension, Path, Query, State};
-use axum::{Json, Router, routing};
+use axum::extract::{Extension, State};
+use axum::{Router, routing};
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 
