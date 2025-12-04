@@ -323,10 +323,13 @@ List of possible error names:
 - `PathParseErrorAtKey`
 - `PermissionDenied`
 - `PhcStringTrailingData`
+- `PoolCategoryNameAlreadyExists`
 - `PoolCategoryNotFound`
+- `PoolNameAlreadyExists`
 - `PoolNotFound`
 - `PositiveOverflow`
 - `PostNotFound`
+- `PostRelationAlreadyExists`
 - `QueryBuilderError`
 - `QuotaExceeded`
 - `ReadExhausted`
@@ -347,7 +350,9 @@ List of possible error names:
 - `SwfIoError`
 - `SwfParseError`
 - `SwfUnsupported`
+- `TagCategoryNameAlreadyExists`
 - `TagCategoryNotFound`
+- `TagNameAlreadyExists`
 - `TagNotFound`
 - `TimedOut`
 - `TooFewArgs`
@@ -371,6 +376,7 @@ List of possible error names:
 - `UnsupportedFormat`
 - `UnsupportedImageDimensions`
 - `UnsupportedPathType`
+- `UserNameAlreadyExists`
 - `UsernamePasswordMismatch`
 - `UserNotFound`
 - `Utf8ConversionError`

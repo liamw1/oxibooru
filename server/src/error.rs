@@ -127,6 +127,19 @@ impl ErrorKind for crate::auth::header::AuthenticationError {
     }
 }
 
+impl ErrorKind for crate::model::enums::ResourceProperty {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::PoolName => "PoolNameAlreadyExists",
+            Self::PoolCategoryName => "PoolCategoryNameAlreadyExists",
+            Self::PostRelation => "PostRelationAlreadyExists",
+            Self::TagName => "TagNameAlreadyExists",
+            Self::TagCategoryName => "TagCategoryNameAlreadyExists",
+            Self::UserName => "UserNameAlreadyExists",
+        }
+    }
+}
+
 impl ErrorKind for crate::model::enums::ResourceType {
     fn kind(&self) -> &'static str {
         match self {
@@ -423,6 +436,7 @@ impl ErrorKind for video_rs::Error {
 impl ErrorKind for crate::api::ApiError {
     fn kind(&self) -> &'static str {
         match self {
+            Self::AlreadyExists(err) => err.kind(),
             Self::ContentTypeMismatch(..) => "ContentTypeMismatch",
             Self::CyclicDependency(_) => "CyclicDependency",
             Self::DeleteDefault(_) => "DeleteDefault",

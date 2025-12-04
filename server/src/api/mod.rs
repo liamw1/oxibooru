@@ -3,12 +3,13 @@ use crate::auth::Client;
 use crate::auth::header::AuthenticationError;
 use crate::config::{Config, RegexType};
 use crate::error::ErrorKind;
-use crate::model::enums::{MimeType, Rating, ResourceType, UserRank};
+use crate::model::enums::{MimeType, Rating, ResourceProperty, ResourceType, UserRank};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Json, Router};
+use diesel::QueryResult;
 use image::error::{ImageError, LimitError, LimitErrorKind};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::num::NonZero;
@@ -38,6 +39,8 @@ pub type ApiResult<T> = Result<T, ApiError>;
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub enum ApiError {
+    #[error("{0} already exists")]
+    AlreadyExists(ResourceProperty),
     #[error("File of type {0} did not match request with content-type '{1}'")]
     ContentTypeMismatch(MimeType, SmallString),
     #[error("Cyclic dependency detected in {0}s")]
@@ -126,7 +129,8 @@ impl ApiError {
             Self::MultipartRejection(err) => err.status(),
             Self::PathRejection(err) => err.status(),
             Self::QueryRejection(err) => err.status(),
-            Self::ContentTypeMismatch(..)
+            Self::AlreadyExists(_)
+            | Self::ContentTypeMismatch(..)
             | Self::CyclicDependency(_)
             | Self::DeleteDefault(_)
             | Self::EmptySwf
@@ -178,6 +182,7 @@ impl ApiError {
 
     fn category(&self) -> &'static str {
         match self {
+            Self::AlreadyExists(_) => "Already Exists",
             Self::ContentTypeMismatch(..) => "Content Type Mismatch",
             Self::CyclicDependency(_) => "Cyclic Dependency",
             Self::DeleteDefault(_) => "Delete Default",
@@ -426,4 +431,28 @@ where
     D: Deserializer<'de>,
 {
     Deserialize::deserialize(deserializer).map(Some)
+}
+
+fn map_unique_violation<T>(result: QueryResult<T>, property: ResourceProperty) -> ApiResult<T> {
+    use diesel::result::DatabaseErrorKind;
+    use diesel::result::Error as DeiselError;
+
+    match result {
+        Ok(value) => Ok(value),
+        Err(DeiselError::DatabaseError(DatabaseErrorKind::UniqueViolation, _)) => {
+            Err(ApiError::AlreadyExists(property))
+        }
+        Err(err) => Err(err.into()),
+    }
+}
+
+fn map_foreign_key_violation<T>(result: QueryResult<T>, resource: ResourceType) -> ApiResult<T> {
+    use diesel::result::DatabaseErrorKind;
+    use diesel::result::Error as DeiselError;
+
+    match result {
+        Ok(value) => Ok(value),
+        Err(DeiselError::DatabaseError(DatabaseErrorKind::ForeignKeyViolation, _)) => Err(ApiError::NotFound(resource)),
+        Err(err) => Err(err.into()),
+    }
 }

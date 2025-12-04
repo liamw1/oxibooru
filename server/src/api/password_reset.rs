@@ -161,10 +161,8 @@ mod test {
         verify_query("GET /password-reset/restricted_user", "password_reset/no_email").await?;
         verify_query("GET /password-reset/power_user", "password_reset/invalid_email").await?;
         verify_query("GET /password-reset/regular_user", "password_reset/reset_disabled").await?;
-
-        const QUERY: &str = "POST /password-reset/regular_user";
-        verify_query(QUERY, "password_reset/invalid_token").await?;
-        verify_query(QUERY, "password_reset/missing_token").await?;
+        verify_query("POST /password-reset/regular_user", "password_reset/invalid_token").await?;
+        verify_query("POST /password-reset/regular_user", "password_reset/missing_token").await?;
         Ok(())
     }
 }

@@ -469,7 +469,7 @@ impl FromSql<SmallInt, Pg> for ResourceOperation {
     }
 }
 
-#[derive(Debug, Display, Clone, Copy, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize)]
+#[derive(Debug, Display, Clone, Copy, EnumString, FromRepr, IntoStaticStr, AsExpression, FromSqlRow, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[diesel(sql_type = SmallInt)]
@@ -499,6 +499,17 @@ impl FromSql<SmallInt, Pg> for ResourceType {
         let database_value = i16::from_sql(value)?;
         ResourceType::from_repr(database_value).ok_or("Failed to deserialize resource type".into())
     }
+}
+
+#[derive(Debug, Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum ResourceProperty {
+    PoolName,
+    PoolCategoryName,
+    PostRelation,
+    TagName,
+    TagCategoryName,
+    UserName,
 }
 
 #[cfg(test)]

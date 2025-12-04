@@ -7,8 +7,9 @@ use crate::content::hash::{Checksum, Md5Checksum, PostHash};
 use crate::content::signature::{COMPRESSED_SIGNATURE_LEN, NUM_WORDS};
 use crate::db::ConnectionResult;
 use crate::model::comment::{NewComment, NewCommentScore};
-use crate::model::enums::{AvatarStyle, MimeType, PostFlag, PostFlags, Score, UserRank};
-use crate::model::enums::{PostSafety, PostType};
+use crate::model::enums::{
+    AvatarStyle, MimeType, PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score, UserRank,
+};
 use crate::model::pool::{NewPool, NewPoolName, PoolPost};
 use crate::model::pool_category::NewPoolCategory;
 use crate::model::post::{
@@ -66,6 +67,19 @@ pub fn get_state() -> AppState {
 /// Resets the test database. Useful after operations that are hard to reverse perfectly, like merging.
 pub fn reset_database() {
     *get_state_guard() = None;
+}
+
+/// Useful after a table's sequence gets updated as an unintended side-effect.
+/// This can happen when attempting to insert a row but it fails due to a constraint violation.
+pub fn reset_sequence(table: ResourceType) -> ApiResult<()> {
+    let table: &str = table.into();
+    let query = format!(
+        "SELECT setval(pg_get_serial_sequence('{table}', 'id'), GREATEST((SELECT MAX(id) FROM \"{table}\"), 1));"
+    );
+
+    let mut conn = get_connection()?;
+    diesel::sql_query(query).execute(&mut conn)?;
+    Ok(())
 }
 
 /// Returns path to a test image.

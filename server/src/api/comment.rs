@@ -5,7 +5,7 @@ use crate::auth::Client;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::CommentInfo;
-use crate::schema::{comment, comment_score, post};
+use crate::schema::{comment, comment_score};
 use crate::search::Builder;
 use crate::search::comment::QueryBuilder;
 use crate::time::DateTime;
@@ -99,14 +99,8 @@ async fn create(
 
     let mut conn = state.get_connection()?;
     let comment = state.get_connection()?.transaction(|conn| {
-        let post_exists: bool = diesel::select(exists(post::table.find(new_comment.post_id))).get_result(conn)?;
-        if !post_exists {
-            return Err(ApiError::NotFound(ResourceType::Post));
-        }
-        new_comment
-            .insert_into(comment::table)
-            .get_result(conn)
-            .map_err(ApiError::from)
+        let insert_result = new_comment.insert_into(comment::table).get_result(conn);
+        api::map_foreign_key_violation(insert_result, ResourceType::Post)
     })?;
     conn.transaction(|conn| CommentInfo::new(conn, &state.config, client, comment, &fields))
         .map(Json)
@@ -172,21 +166,17 @@ async fn rate(
 
     let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
-        let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(conn)?;
-        if !comment_exists {
-            return Err(ApiError::NotFound(ResourceType::Comment));
-        }
-
         diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*body) {
-            NewCommentScore {
+            let insert_result = NewCommentScore {
                 comment_id,
                 user_id,
                 score,
             }
             .insert_into(comment_score::table)
-            .execute(conn)?;
+            .execute(conn);
+            api::map_foreign_key_violation(insert_result, ResourceType::Comment)?;
         }
         Ok::<_, ApiError>(())
     })?;
@@ -227,7 +217,7 @@ async fn delete(
 mod test {
     use crate::api::ApiResult;
     use crate::model::comment::Comment;
-    use crate::model::enums::UserRank;
+    use crate::model::enums::{ResourceType, UserRank};
     use crate::schema::{comment, comment_statistics, database_statistics, user, user_statistics};
     use crate::test::*;
     use crate::time::DateTime;
@@ -396,6 +386,7 @@ mod test {
         // User has permission to delete own comment, but not another's
         verify_query_with_user(UserRank::Regular, "DELETE /comment/2", "comment/delete_another").await?;
 
+        reset_sequence(ResourceType::Comment)?;
         Ok(())
     }
 }
