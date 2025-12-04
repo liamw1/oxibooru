@@ -10,7 +10,9 @@ window.$docsify = {
     homepage: 'https://raw.githubusercontent.com/liamw1/oxibooru/master/README.md',
     alias: {
         '/.*/_sidebar.md': '/_sidebar.md',
-        '.*?/LICENSE': 'https://raw.githubusercontent.com/liamw1/oxibooru/master/LICENSE.md'
+        '.*?/LICENSE': 'https://raw.githubusercontent.com/liamw1/oxibooru/master/LICENSE.md',
+        // fix routing of main README.md, as they point into the "doc" directory
+        '/doc/(.*)': '/$1'
     },
     nameLink: '/',
     toc: {
