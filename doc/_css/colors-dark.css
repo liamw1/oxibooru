@@ -1,0 +1,15 @@
+:root {
+  --primary: #24aadd;
+  --secondary: oklch(74.8% 0.26 342.55);
+  --accent: oklch(74.51% 0.167 183.61);
+  --neutral: #2a323c;
+  --neutral-content: #e6e6e6;
+  --base-100: #1a1a1a;
+  --base-200: #3b3b3b;
+  --base-300: #333;
+  --base-content: var(--neutral-content);
+  --info: #17a2b8;
+  --success: #28a745;
+  --warning: #f0ad4e;
+  --error: #dc3545;
+}

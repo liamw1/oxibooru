@@ -1,0 +1,7 @@
+- [API](API.md)
+- [BENCHMARKS](BENCHMARKS.md)
+- [DEV](DEV.md)
+- [CONVERSION](CONVERSION.md)
+- [INSTALL](INSTALL.md)
+- [License](/LICENSE.md)
+- [🌐 GitHub Repository](https://github.com/liamw1/oxibooru/)

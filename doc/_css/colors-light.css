@@ -1,0 +1,16 @@
+:root {
+  --primary: #66cc8a;
+  --secondary: #377cfb;
+  --accent: #f68067;
+  --neutral: #333c4d;
+  --neutral-content: #f9fafb;
+  --base-100: oklch(100% 0 0);
+  --base-200: #f9fafb;
+  --base-300: #e3ecf8;
+  --base-content: #333c4d;
+  --info: #17a2b8;
+  --success: #28a745;
+  --warning: #f0ad4e;
+  --error: #dc3545;
+}
+
