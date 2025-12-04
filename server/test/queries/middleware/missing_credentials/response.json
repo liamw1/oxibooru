@@ -1,0 +1,5 @@
+{
+    "description": "Authentication credentials are malformed",
+    "name": "MalformedCredentials",
+    "title": "Failed Authentication"
+}

@@ -29,9 +29,7 @@ pub fn representative_image(
                 .expect("Mime type should be convertable to image format");
             image(&file_contents.data, image_format).map_err(ApiError::from)
         }
-        PostType::Video => video_frame(file_path)
-            .map_err(ApiError::from)
-            .and_then(|frame| frame.ok_or(ApiError::EmptyVideo)),
+        PostType::Video => video_frame(file_path).and_then(|frame| frame.ok_or(ApiError::EmptyVideo)),
         PostType::Flash => flash_image(config, file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
     }
 }

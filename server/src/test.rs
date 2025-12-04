@@ -84,6 +84,16 @@ pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
 }
 
 pub async fn verify_query_with_user(user: UserRank, query: &str, relative_path: &str) -> ApiResult<()> {
+    let credentials =
+        (user != UserRank::Anonymous).then(|| header::credentials_for(USERS[user as usize - 1].name, TEST_PASSWORD));
+    verify_query_with_credentials(credentials, query, relative_path).await
+}
+
+pub async fn verify_query_with_credentials(
+    credentials: Option<String>,
+    query: &str,
+    relative_path: &str,
+) -> ApiResult<()> {
     let mut expected_response: Option<Value> = None;
     let mut expected_snapshot: Option<Value> = None;
     let mut body: Option<Value> = None;
@@ -119,8 +129,7 @@ pub async fn verify_query_with_user(user: UserRank, query: &str, relative_path: 
     let server =
         TestServer::new(ServiceExt::<Request>::into_make_service(app)).expect("Test server must be constructible");
     let mut request = server.method(method, &path);
-    if user != UserRank::Anonymous {
-        let credentials = header::credentials_for(USERS[user as usize - 1].name, TEST_PASSWORD);
+    if let Some(credentials) = credentials {
         let basic_access_authentication = format!("Basic {credentials}");
         request = request.add_header(AUTHORIZATION, basic_access_authentication);
     }
@@ -345,13 +354,13 @@ const POSTS: &[NewPost] = &[
 
 const POST_RELATIONS: &[(i64, i64)] = &[(1, 2), (1, 3), (4, 5)];
 
-/// (user_id, post_id)
+/// (`user_id`, `post_id`)
 const POST_FAVORITES: &[(i64, i64)] = &[(1, 1), (2, 2), (2, 3), (2, 4), (5, 5)];
 
-/// (user_id, post_id)
+/// (`user_id`, `post_id`)
 const POST_FEATURES: &[(i64, i64)] = &[(5, 5), (4, 4), (3, 1), (3, 3), (3, 1)];
 
-/// (user_id, post_id, score)
+/// (`user_id`, `post_id`, `score`)
 const POST_SCORES: &[(i64, i64, Score)] = &[
     (1, 5, Score::Dislike),
     (2, 1, Score::Like),
@@ -362,7 +371,7 @@ const POST_SCORES: &[(i64, i64, Score)] = &[
     (5, 5, Score::Like),
 ];
 
-/// (user_id, post_id, text)
+/// (`user_id`, `post_id`, `text`)
 const COMMENTS: &[(Option<i64>, i64, &str)] = &[
     (Some(2), 1, "Cool post!"),
     (Some(5), 1, "how did you post this"),
@@ -370,7 +379,7 @@ const COMMENTS: &[(Option<i64>, i64, &str)] = &[
     (None, 5, "Lorem ipsum dolor sit amet, consectetur adipiscing elit"),
 ];
 
-/// (comment_id, user_id, score)
+/// (`comment_id`, `user_id`, `score`)
 const COMMENT_SCORES: &[(i64, i64, Score)] = &[
     (1, 1, Score::Like),
     (1, 3, Score::Like),

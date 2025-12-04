@@ -118,3 +118,30 @@ async fn post_to_webhook(url: Url, snapshot: Arc<Snapshot>) {
         warn!("Could not post snapshot to {url}. Details:\n{err}");
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::api::ApiResult;
+    use crate::auth::header;
+    use crate::test::*;
+    use serial_test::parallel;
+
+    const QUERY: &str = "GET /comment/1";
+
+    #[tokio::test]
+    #[parallel]
+    async fn unauthorized() -> ApiResult<()> {
+        let wrong_username = Some(header::credentials_for("mystery_man29", TEST_PASSWORD));
+        verify_query_with_credentials(wrong_username, QUERY, "middleware/wrong_username").await?;
+
+        let wrong_password = Some(header::credentials_for("regular_user", "password123"));
+        verify_query_with_credentials(wrong_password, QUERY, "middleware/wrong_password").await?;
+
+        let missing_credentials = Some(String::new());
+        verify_query_with_credentials(missing_credentials, QUERY, "middleware/missing_credentials").await?;
+
+        let unencoded_credentials = Some(format!("regular_user:{TEST_PASSWORD}"));
+        verify_query_with_credentials(unencoded_credentials, QUERY, "middleware/unencoded_credentials").await?;
+        Ok(())
+    }
+}

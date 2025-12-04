@@ -385,16 +385,16 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query(&format!("GET /comment/99"), "comment/get_nonexistent").await?;
-        verify_query(&format!("POST /comments"), "comment/create_on_nonexistent_post").await?;
-        verify_query(&format!("PUT /comment/99"), "comment/update_nonexistent").await?;
-        verify_query(&format!("PUT /comment/99/score"), "comment/like_nonexistent").await?;
-        verify_query(&format!("DELETE /comment/99"), "comment/delete_nonexistent").await?;
+        verify_query("GET /comment/99", "comment/get_nonexistent").await?;
+        verify_query("POST /comments", "comment/create_on_nonexistent_post").await?;
+        verify_query("PUT /comment/99", "comment/update_nonexistent").await?;
+        verify_query("PUT /comment/99/score", "comment/like_nonexistent").await?;
+        verify_query("DELETE /comment/99", "comment/delete_nonexistent").await?;
 
-        verify_query(&format!("PUT /comment/1/score"), "comment/invalid_rating").await?;
+        verify_query("PUT /comment/1/score", "comment/invalid_rating").await?;
 
         // User has permission to delete own comment, but not another's
-        verify_query_with_user(UserRank::Regular, &format!("DELETE /comment/2"), "comment/delete_another").await?;
+        verify_query_with_user(UserRank::Regular, "DELETE /comment/2", "comment/delete_another").await?;
 
         Ok(())
     }
