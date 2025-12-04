@@ -1,6 +1,6 @@
 # Benchmarks
 
-These benchmarks are meant to give a rough idea of the relative speed differences between szurubooru and oxibooru for various operations. My mythodology here is very crude (often just taking a few measurements) and there's a lot of external factors that could affect the results, so take them with a grain of salt.
+These benchmarks are meant to give a rough idea of the relative speed differences between szurubooru and oxibooru for various operations. My methodology here is very crude (often just taking a few measurements) and there's a lot of external factors that could affect the results, so take them with a grain of salt.
 
 These benchmarks were performed on the same database consisting of about 125k images and 25k tags. Everything is containerized with Docker and all requests are made anonymously, so time to authenticate isn't included.
 
@@ -132,7 +132,7 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 ## Reverse Image Search
 
-- First, let's try to batch upload 50 small images each around 40-300kb. This way, we're mostly timing signature search and comparison rather than signature creation, which can be very expensive for large images. Additionaly, these images don't match on any images in the database. Otherwise the time spent retrieving field data about similar posts could pollute the results.
+- First, let's try to batch upload 50 small images each around 40-300kb. This way, we're mostly timing signature search and comparison rather than signature creation, which can be very expensive for large images. Additionally, these images don't match on any images in the database. Otherwise the time spent retrieving field data about similar posts could pollute the results.
 
     **`POST http://localhost:8080/api/posts/reverse-search`**
 
@@ -143,7 +143,7 @@ These benchmarks were performed on the same database consisting of about 125k im
 
     After a bunch of optimizations, Oxibooru is now 5x faster here! However, even this doesn't show the full story.
 
-    Despite performing better, Oxibooru is actually doing a lot more work than Szurubooru. The reverse image search method uses a two-tier approach. We have a fine-grained filter that computes the "distance" between two post signatures and a coarse-grained filter that looks up likely candidate signatures with a series of signature "words". Two signatures are considered likely to be similar if they have any words in common. This is faster than computing the signature distance and can easily be done within Postgres, so we run the coarse-grained filter first so that we don't have to run every signature through the fine-grained filter. However, the coarse-grained filter is _very_ coarse. It generally passes for 5-20% of all images in the database, meaning there will be 8k-25k candidate signatures for a single reverse search. Szurubooru chooses to limit this to the 100 candidates with the most words in common. The problem with this is that as databases get larger, the likelihood of an actual match falling outside of the top 100 candidate signatures increases. In Oxibooru, I made the choice to evaulate _all of the candidate signatures_ against the fine-grained filter.
+    Despite performing better, Oxibooru is actually doing a lot more work than Szurubooru. The reverse image search method uses a two-tier approach. We have a fine-grained filter that computes the "distance" between two post signatures and a coarse-grained filter that looks up likely candidate signatures with a series of signature "words". Two signatures are considered likely to be similar if they have any words in common. This is faster than computing the signature distance and can easily be done within Postgres, so we run the coarse-grained filter first so that we don't have to run every signature through the fine-grained filter. However, the coarse-grained filter is _very_ coarse. It generally passes for 5-20% of all images in the database, meaning there will be 8k-25k candidate signatures for a single reverse search. Szurubooru chooses to limit this to the 100 candidates with the most words in common. The problem with this is that as databases get larger, the likelihood of an actual match falling outside of the top 100 candidate signatures increases. In Oxibooru, I made the choice to evaluate _all of the candidate signatures_ against the fine-grained filter.
 
 - Now let's try a large image so that the signature and checksum creation time dominates. Here's the results for a large 92MB image:
 
