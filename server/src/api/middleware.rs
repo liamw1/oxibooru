@@ -126,11 +126,11 @@ mod test {
     use crate::test::*;
     use serial_test::parallel;
 
-    const QUERY: &str = "GET /comment/1";
-
     #[tokio::test]
     #[parallel]
     async fn unauthorized() -> ApiResult<()> {
+        const QUERY: &str = "GET /comment/1";
+
         let wrong_username = Some(header::credentials_for("mystery_man29", TEST_PASSWORD));
         verify_query_with_credentials(wrong_username, QUERY, "middleware/wrong_username").await?;
 

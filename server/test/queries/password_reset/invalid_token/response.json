@@ -1,0 +1,5 @@
+{
+    "description": "Password reset token is invalid",
+    "name": "UnauthorizedPasswordReset",
+    "title": "Unauthorized Password Reset"
+}

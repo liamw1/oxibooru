@@ -299,6 +299,7 @@ pub fn routes(state: AppState) -> Router {
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::post_to_webhooks))
         .with_state(state)
+        .fallback(|| async { (StatusCode::NOT_FOUND, "Route not found") })
 }
 
 /// Represents body of a request to apply/change a score.
