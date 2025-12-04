@@ -12,9 +12,7 @@ window.$docsify = {
         '/.*/_sidebar.md': '/_sidebar.md',
         '.*?/LICENSE': 'https://raw.githubusercontent.com/liamw1/oxibooru/master/LICENSE.md'
     },
-    nameLink: {
-        '/': '#/',
-    },  
+    nameLink: '/',
     toc: {
         tocMaxLevel: 3,
         target: 'h2, h3, h4, h5, h6',
