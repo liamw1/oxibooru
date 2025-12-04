@@ -1,120 +1,102 @@
-`oxibooru` uses REST API for all operations.
+# API
 
+Oxibooru uses REST API for all operations.
 
+## Table of contents
 
-# Table of contents
+- [API](#api)
+  - [Table of contents](#table-of-contents)
+  - [General rules](#general-rules)
+    - [Authentication](#authentication)
+    - [User token authentication](#user-token-authentication)
+    - [Basic requests](#basic-requests)
+    - [File uploads](#file-uploads)
+    - [Error handling](#error-handling)
+    - [Field selecting](#field-selecting)
+    - [Versioning](#versioning)
+    - [Webhooks](#webhooks)
+  - [API reference](#api-reference)
+    - [Listing tag categories](#listing-tag-categories)
+    - [Getting tag category](#getting-tag-category)
+    - [Creating tag category](#creating-tag-category)
+    - [Updating tag category](#updating-tag-category)
+    - [Setting default tag category](#setting-default-tag-category)
+    - [Deleting tag category](#deleting-tag-category)
+    - [Listing tags](#listing-tags)
+    - [Getting tag](#getting-tag)
+    - [Getting tag siblings](#getting-tag-siblings)
+    - [Creating tag](#creating-tag)
+    - [Merging tags](#merging-tags)
+    - [Updating tag](#updating-tag)
+    - [Deleting tag](#deleting-tag)
+    - [Listing posts](#listing-posts)
+    - [Getting post](#getting-post)
+    - [Getting around post](#getting-around-post)
+    - [Getting featured post](#getting-featured-post)
+    - [Featuring post](#featuring-post)
+    - [Reverse image search](#reverse-image-search)
+    - [Creating post](#creating-post)
+    - [Merging posts](#merging-posts)
+    - [Adding post to favorites](#adding-post-to-favorites)
+    - [Rating post](#rating-post)
+    - [Updating post](#updating-post)
+    - [Deleting post](#deleting-post)
+    - [Removing post from favorites](#removing-post-from-favorites)
+    - [Listing pool categories](#listing-pool-categories)
+    - [Getting pool category](#getting-pool-category)
+    - [Creating pool category](#creating-pool-category)
+    - [Updating pool category](#updating-pool-category)
+    - [Setting default pool category](#setting-default-pool-category)
+    - [Deleting pool category](#deleting-pool-category)
+    - [Listing pools](#listing-pools)
+    - [Getting pool](#getting-pool)
+    - [Creating pool](#creating-pool)
+    - [Merging pools](#merging-pools)
+    - [Updating pool](#updating-pool)
+    - [Deleting pool](#deleting-pool)
+    - [Listing comments](#listing-comments)
+    - [Getting comment](#getting-comment)
+    - [Creating comment](#creating-comment)
+    - [Updating comment](#updating-comment)
+    - [Rating comment](#rating-comment)
+    - [Deleting comment](#deleting-comment)
+    - [Listing users](#listing-users)
+    - [Getting user](#getting-user)
+    - [Creating user](#creating-user)
+    - [Updating user](#updating-user)
+    - [Deleting user](#deleting-user)
+    - [Listing user tokens](#listing-user-tokens)
+    - [Creating user token](#creating-user-token)
+    - [Updating user token](#updating-user-token)
+    - [Deleting user token](#deleting-user-token)
+    - [Request password reset](#request-password-reset)
+    - [Confirm password reset](#confirm-password-reset)
+    - [Listing snapshots](#listing-snapshots)
+    - [Getting global info](#getting-global-info)
+    - [Uploading temporary file](#uploading-temporary-file)
+  - [Resources](#resources)
+    - [User](#user)
+    - [Micro user](#micro-user)
+    - [User token](#user-token)
+    - [Tag category](#tag-category)
+    - [Tag](#tag)
+    - [Micro tag](#micro-tag)
+    - [Post](#post)
+    - [Micro post](#micro-post)
+    - [Note](#note)
+    - [Pool category](#pool-category)
+    - [Pool](#pool)
+    - [Micro pool](#micro-pool)
+    - [Comment](#comment)
+    - [Snapshot](#snapshot)
+    - [Unpaged search result](#unpaged-search-result)
+    - [Paged search result](#paged-search-result)
+    - [Image search result](#image-search-result)
+  - [Search](#search)
 
-1. [General rules](#general-rules)
+## General rules
 
-   - [Authentication](#authentication)
-   - [User token authentication](#user-token-authentication)
-   - [Basic requests](#basic-requests)
-   - [File uploads](#file-uploads)
-   - [Error handling](#error-handling)
-   - [Field selecting](#field-selecting)
-   - [Versioning](#versioning)
-   - [Webhooks](#webhooks)
-
-2. [API reference](#api-reference)
-
-    - Tag categories
-        - [Listing tag categories](#listing-tag-categories)
-        - [Getting tag category](#getting-tag-category)
-        - [Creating tag category](#creating-tag-category)
-        - [Updating tag category](#updating-tag-category)
-        - [Setting default tag category](#setting-default-tag-category)
-        - [Deleting tag category](#deleting-tag-category)
-    - Tags
-        - [Listing tags](#listing-tags)
-        - [Getting tag](#getting-tag)
-        - [Getting tag siblings](#getting-tag-siblings)
-        - [Creating tag](#creating-tag)
-        - [Merging tags](#merging-tags)
-        - [Updating tag](#updating-tag)
-        - [Deleting tag](#deleting-tag)
-    - Posts
-        - [Listing posts](#listing-posts)
-        - [Getting post](#getting-post)
-        - [Getting around post](#getting-around-post)
-        - [Getting featured post](#getting-featured-post)
-        - [Featuring post](#featuring-post)
-        - [Reverse image search](#reverse-image-search)
-        - [Creating post](#creating-post)
-        - [Merging posts](#merging-posts)
-        - [Adding post to favorites](#adding-post-to-favorites)
-        - [Rating post](#rating-post)
-        - [Updating post](#updating-post)
-        - [Deleting post](#deleting-post)
-        - [Removing post from favorites](#removing-post-from-favorites)
-    - Pool categories
-        - [Listing pool categories](#listing-pool-categories)
-        - [Getting pool category](#getting-pool-category)
-        - [Creating pool category](#creating-pool-category)
-        - [Updating pool category](#updating-pool-category)
-        - [Setting default pool category](#setting-default-pool-category)
-        - [Deleting pool category](#deleting-pool-category)
-    - Pools
-        - [Listing pools](#listing-pools)
-        - [Getting pool](#getting-pool)
-        - [Creating pool](#creating-pool)
-        - [Merging pools](#merging-pools)
-        - [Updating pool](#updating-pool)
-        - [Deleting pool](#deleting-pool)
-    - Comments
-        - [Listing comments](#listing-comments)
-        - [Getting comment](#getting-comment)
-        - [Creating comment](#creating-comment)
-        - [Updating comment](#updating-comment)
-        - [Rating comment](#rating-comment)
-        - [Deleting comment](#deleting-comment)
-    - Users
-        - [Listing users](#listing-users)
-        - [Getting user](#getting-user)
-        - [Creating user](#creating-user)
-        - [Updating user](#updating-user)
-        - [Deleting user](#deleting-user)
-    - User Tokens
-        - [Listing user tokens](#listing-user-tokens)
-        - [Creating user token](#creating-user-token)
-        - [Updating user token](#updating-user-token)
-        - [Deleting user token](#deleting-user-token)
-    - Password reset
-        - [Request password reset](#request-password-reset)
-        - [Confirm password reset](#confirm-password-reset)
-    - Snapshots
-        - [Listing snapshots](#listing-snapshots)
-    - Global info
-        - [Getting global info](#getting-global-info)
-    - File uploads
-        - [Uploading temporary file](#uploading-temporary-file)
-
-3. [Resources](#resources)
-
-   - [User](#user)
-   - [Micro user](#micro-user)
-   - [User token](#user-token)
-   - [Tag category](#tag-category)
-   - [Tag](#tag)
-   - [Micro tag](#micro-tag)
-   - [Post](#post)
-   - [Micro post](#micro-post)
-   - [Pool category](#pool-category)
-   - [Pool](#pool)
-   - [Micro pool](#micro-pool)
-   - [Note](#note)
-   - [Comment](#comment)
-   - [Snapshot](#snapshot)
-   - [Unpaged search result](#unpaged-search-result)
-   - [Paged search result](#paged-search-result)
-   - [Image search result](#image-search-result)
-
-4. [Search](#search)
-
-
-
-# General rules
-
-## Authentication
+### Authentication
 
 Authentication is achieved by means of [basic HTTP
 auth](https://en.wikipedia.org/wiki/Basic_access_authentication) or through the
@@ -128,7 +110,7 @@ It is recommended to add `?bump-login` GET parameter to the first request in a
 client "session" (where the definition of a session is up to the client), so
 that the user's last login time is kept up to date.
 
-## User token authentication
+### User token authentication
 
 User token authentication works similarly to [basic HTTP
 auth](https://en.wikipedia.org/wiki/Basic_access_authentication). Because it
@@ -146,12 +128,12 @@ the first token, there is no need to transmit the user password in plaintext
 via basic auth. Additionally tokens can be revoked at anytime allowing a
 cleaner interface for isolating clients from user credentials.
 
-## Basic requests
+### Basic requests
 
 Every request must use `Content-Type: application/json` and `Accept:
 application/json`. An exception to this rule are requests that upload files.
 
-## File uploads
+### File uploads
 
 Requests that upload files must use `multipart/form-data` encoding. Any request
 that bundles user files, must send the request data (which is JSON) as an
@@ -179,7 +161,7 @@ named `content`, the client should pass `{"contentToken":"deadbeef"}` as part
 of the JSON message body. If the file with the particular token doesn't exist
 or it has expired, the server will show an error.
 
-## Error handling
+### Error handling
 
 All errors (except for unhandled fatal server errors) send relevant HTTP status
 code together with JSON of following structure:
@@ -368,7 +350,7 @@ List of possible error names:
 - `WriteZero`
 - `ZeroNotAllowed`
 
-## Field selecting
+### Field selecting
 
 For performance considerations, sometimes the client might want to choose the
 fields the server sends to it in order to improve the query speed. This
@@ -384,7 +366,7 @@ should send a `GET` query like this:
 GET /posts/?fields=id,tags
 ```
 
-## Versioning
+### Versioning
 
 To prevent problems with concurrent resource modification, oxibooru
 implements optimistic locks using resource versions. Each modifiable resource
@@ -408,7 +390,7 @@ will reject the request as well, in which case the client is encouraged to notif
 user about the situation.
 
 
-## Webhooks
+### Webhooks
 
 System administrators can choose to configure webhooks to track events.
 Webhook URIs can be configured in `config.yaml` (See `config.yaml.dist` for
@@ -417,13 +399,13 @@ URIs with a [snapshot resource](#snapshot) generated with anonymous user
 privileges as the message body, in JSON format.
 
 
-# API reference
+## API reference
 
 Depending on the deployment, the URLs might be relative to some base path such
 as `/api/`. Values denoted with diamond braces (`<like this>`) signify variable
 data.
 
-## Listing tag categories
+### Listing tag categories
 - **Request**
 
     `GET /tag-categories`
@@ -441,7 +423,7 @@ data.
 
     Lists all tag categories. Doesn't use paging.
 
-## Getting tag category
+### Getting tag category
 - **Request**
 
     `GET /tag-category/<name>`
@@ -459,7 +441,7 @@ data.
 
     Retrieves information about an existing tag category.
 
-## Creating tag category
+### Creating tag category
 - **Request**
 
     `POST /tag-categories`
@@ -490,7 +472,7 @@ data.
     Creates a new tag category using specified parameters. Name must match
     `tag_category_name_regex` from server's configuration.
 
-## Updating tag category
+### Updating tag category
 - **Request**
 
     `PUT /tag-category/<name>`
@@ -526,7 +508,7 @@ data.
     except the [`version`](#versioning) are optional - update concerns only
     provided fields.
 
-## Setting default tag category
+### Setting default tag category
 - **Request**
 
     `PUT /tag-category/<name>/default`
@@ -551,7 +533,7 @@ data.
     Sets given tag category as default. All new tags created manually or
     automatically will have this category.
 
-## Deleting tag category
+### Deleting tag category
 - **Request**
 
     `DELETE /tag-category/<name>`
@@ -582,7 +564,7 @@ data.
     Deletes an existing non-default tag category. Tags belonging to this 
     category will be moved to the default category.
 
-## Listing tags
+### Listing tags
 - **Request**
 
     `GET /tags/?offset=<initial-pos>&limit=<page-size>&query=<query>`
@@ -651,7 +633,7 @@ data.
 
     None.
 
-## Getting tag
+### Getting tag
 - **Request**
 
     `GET /tag/<name>`
@@ -669,7 +651,7 @@ data.
 
     Retrieves information about an existing tag.
 
-## Getting tag siblings
+### Getting tag siblings
 - **Request**
 
     `GET /tag-siblings/<name>`
@@ -703,7 +685,7 @@ data.
     appears with given tag. Results are sorted by occurrences count and the
     list is truncated to the first 50 elements. Doesn't use paging.
 
-## Creating tag
+### Creating tag
 - **Request**
 
     `POST /tags`
@@ -745,7 +727,7 @@ data.
     first tag category found. If there are no tag categories established yet,
     an error will be thrown.
 
-## Merging tags
+### Merging tags
 - **Request**
 
     `POST /tag-merge/`
@@ -778,7 +760,7 @@ data.
     implications to the target tag. Other tag properties such as category and
     aliases do not get transferred and are discarded.
 
-## Updating tag
+### Updating tag
 - **Request**
 
     `PUT /tag/<name>`
@@ -822,7 +804,7 @@ data.
     the [`version`](#versioning) are optional - update concerns only provided
     fields.
 
-## Deleting tag
+### Deleting tag
 - **Request**
 
     `DELETE /tag/<name>`
@@ -851,7 +833,7 @@ data.
 
     Deletes existing tag. The tag to be deleted must have no usages.
 
-## Listing posts
+### Listing posts
 - **Request**
 
     `GET /posts/?offset=<initial-pos>&limit=<page-size>&query=<query>`
@@ -985,7 +967,7 @@ data.
     | `fav`        | posts added to favorites by currently logged in user          |
     | `tumbleweed` | posts with score of 0, without comments and without favorites |
 
-## Getting post
+### Getting post
 - **Request**
 
     `GET /post/<id>`
@@ -1003,7 +985,7 @@ data.
 
     Retrieves information about an existing post.
 
-## Getting around post
+### Getting around post
 - **Request**
 
     `GET /post/<id>/around`
@@ -1026,7 +1008,7 @@ data.
 
     Retrieves information about posts that are before or after an existing post.
 
-## Getting featured post
+### Getting featured post
 - **Request**
 
     `GET /featured-post`
@@ -1046,7 +1028,7 @@ data.
     exists mostly for compatibility with setting featured post - most of times,
     you'd want to use query global info which contains more information.
 
-## Featuring post
+### Featuring post
 - **Request**
 
     `POST /featured-post`
@@ -1072,7 +1054,7 @@ data.
 
     Features a post on the main page in web client.
 
-## Reverse image search
+### Reverse image search
 - **Request**
 
     `POST /posts/reverse-search`
@@ -1093,7 +1075,7 @@ data.
 
     Retrieves posts that look like the input image.
 
-## Creating post
+### Creating post
 - **Request**
 
     `POST /posts/`
@@ -1142,7 +1124,7 @@ data.
     anonymous uploads completely from config.) For details on how to pass `content`
     and `thumbnail`, see [file uploads](#file-uploads).
 
-## Merging posts
+### Merging posts
 - **Request**
 
     `POST /post-merge/`
@@ -1179,7 +1161,7 @@ data.
     its safety, source, whether to loop the video and other scalar values do
     not get transferred and are discarded.
 
-## Adding post to favorites
+### Adding post to favorites
 - **Request**
 
     `POST /post/<id>/favorite`
@@ -1197,7 +1179,7 @@ data.
 
     Marks the post as favorite for authenticated user.
 
-## Rating post
+### Rating post
 - **Request**
 
     `PUT /post/<id>/score`
@@ -1225,7 +1207,7 @@ data.
     Updates score of authenticated user for given post. Valid scores are -1, 0
     and 1.
 
-## Updating post
+### Updating post
 - **Request**
 
     `PUT /post/<id>`
@@ -1274,7 +1256,7 @@ data.
     [`version`](#versioning) are optional - update concerns only provided
     fields.
 
-## Deleting post
+### Deleting post
 - **Request**
 
     `DELETE /post/<id>`
@@ -1303,7 +1285,7 @@ data.
 
     Deletes existing post. Related posts and tags are kept.
 
-## Removing post from favorites
+### Removing post from favorites
 - **Request**
 
     `DELETE /post/<id>/favorite`
@@ -1321,7 +1303,7 @@ data.
 
     Unmarks the post as favorite for authenticated user.
 
-## Listing pool categories
+### Listing pool categories
 - **Request**
 
     `GET /pool-categories`
@@ -1339,7 +1321,7 @@ data.
 
     Lists all pool categories. Doesn't use paging.
 
-## Getting pool category
+### Getting pool category
 - **Request**
 
     `GET /pool-category/<name>`
@@ -1357,7 +1339,7 @@ data.
 
     Retrieves information about an existing pool category.
 
-## Creating pool category
+### Creating pool category
 - **Request**
 
     `POST /pool-categories`
@@ -1387,7 +1369,7 @@ data.
     Creates a new pool category using specified parameters. Name must match
     `pool_category_name_regex` from server's configuration.
 
-## Updating pool category
+### Updating pool category
 - **Request**
 
     `PUT /pool-category/<name>`
@@ -1422,7 +1404,7 @@ data.
     except the [`version`](#versioning) are optional - update concerns only
     provided fields.
 
-## Setting default pool category
+### Setting default pool category
 - **Request**
 
     `PUT /pool-category/<name>/default`
@@ -1447,7 +1429,7 @@ data.
     Sets given pool category as default. All new pools created manually or
     automatically will have this category.
 
-## Deleting pool category
+### Deleting pool category
 - **Request**
 
     `DELETE /pool-category/<name>`
@@ -1478,7 +1460,7 @@ data.
     Deletes an existing non-default pool category. Pools belonging to this 
     category will be moved to the default category.
 
-## Listing pools
+### Listing pools
 - **Request**
 
     `GET /pools/?offset=<initial-pos>&limit=<page-size>&query=<query>`
@@ -1533,7 +1515,7 @@ data.
 
     None.
 
-## Getting pool
+### Getting pool
 - **Request**
 
     `GET /pool/<id>`
@@ -1551,7 +1533,7 @@ data.
 
     Retrieves information about an existing pool.
 
-## Creating pool
+### Creating pool
 - **Request**
 
     `POST /pool`
@@ -1589,7 +1571,7 @@ data.
     integer post IDs. If the specified posts do not exist, an error will be
     thrown.
 
-## Merging pools
+### Merging pools
 - **Request**
 
     `POST /pool-merge/`
@@ -1622,7 +1604,7 @@ data.
     pool properties such as category and aliases do not get transferred and are
     discarded.
 
-## Updating pool
+### Updating pool
 - **Request**
 
     `PUT /pool/<id>`
@@ -1666,7 +1648,7 @@ data.
     All fields except the [`version`](#versioning) are optional - update
     concerns only provided fields.
 
-## Deleting pool
+### Deleting pool
 - **Request**
 
     `DELETE /pool/<id>`
@@ -1696,7 +1678,7 @@ data.
     Deletes existing pool. All posts in the pool will only have their relation
     to the pool removed.
 
-## Listing comments
+### Listing comments
 - **Request**
 
     `GET /comments/?offset=<initial-pos>&limit=<page-size>&query=<query>`
@@ -1753,7 +1735,7 @@ data.
 
     None.
 
-## Getting comment
+### Getting comment
 - **Request**
 
     `GET /comment/<id>`
@@ -1771,7 +1753,7 @@ data.
 
     Retrieves information about an existing comment.
 
-## Creating comment
+### Creating comment
 - **Request**
 
     `POST /comments/`
@@ -1799,7 +1781,7 @@ data.
 
     Creates a new comment under given post.
 
-## Updating comment
+### Updating comment
 - **Request**
 
     `PUT /comment/<id>`
@@ -1828,7 +1810,7 @@ data.
 
     Updates an existing comment text.
 
-## Rating comment
+### Rating comment
 - **Request**
 
     `PUT /comment/<id>/score`
@@ -1856,7 +1838,7 @@ data.
     Updates score of authenticated user for given comment. Valid scores are -1,
     0 and 1.
 
-## Deleting comment
+### Deleting comment
 - **Request**
 
     `DELETE /comment/<id>`
@@ -1885,7 +1867,7 @@ data.
 
     Deletes existing comment.
 
-## Listing users
+### Listing users
 - **Request**
 
     `GET /users/?offset=<initial-pos>&limit=<page-size>&query=<query>`
@@ -1936,7 +1918,7 @@ data.
 
     None.
 
-## Getting user
+### Getting user
 - **Request**
 
     `GET /user/<name>`
@@ -1954,7 +1936,7 @@ data.
 
     Retrieves information about an existing user.
 
-## Creating user
+### Creating user
 - **Request**
 
     `POST /users`
@@ -1999,7 +1981,7 @@ data.
     ever created, become an administrator, whereas subsequent users will be
     given the rank indicated by `default_rank` in the server's configuration.
 
-## Updating user
+### Updating user
 - **Request**
 
     `PUT /user/<name>`
@@ -2048,7 +2030,7 @@ data.
     [`version`](#versioning) are optional - update concerns only provided
     fields.
 
-## Deleting user
+### Deleting user
 - **Request**
 
     `DELETE /user/<name>`
@@ -2077,7 +2059,7 @@ data.
 
     Deletes existing user.
 
-## Listing user tokens
+### Listing user tokens
 - **Request**
 
     `GET /user-tokens/<user_name>`
@@ -2095,7 +2077,7 @@ data.
 
     Searches for user tokens for the given user.
 
-## Creating user token
+### Creating user token
 - **Request**
 
     `POST /user-token/<user_name>`
@@ -2123,7 +2105,7 @@ data.
     Creates a new user token that can be used for authentication of API
     endpoints instead of a password.
 
-## Updating user token
+### Updating user token
 - **Request**
 
     `PUT /user-token/<user_name>/<token>`
@@ -2155,7 +2137,7 @@ data.
     except the [`version`](#versioning) are optional - update concerns only
     provided fields.
 
-## Deleting user token
+### Deleting user token
 - **Request**
 
     `DELETE /user-token/<user_name>/<token>`
@@ -2181,7 +2163,7 @@ data.
 
     Deletes existing user token.
 
-## Request password reset
+### Request password reset
 - **Request**
 
     `GET /password-reset/<email-or-name>`
@@ -2205,7 +2187,7 @@ data.
     mailbox, which is a strong indication they are the rightful owner of the
     account.
 
-## Confirm password reset
+### Confirm password reset
 - **Request**
 
     `POST /password-reset/<email-or-name>`
@@ -2237,7 +2219,7 @@ data.
     Generates a new password for given user. Password is sent as plain-text, so
     it is recommended to connect through HTTPS.
 
-## Listing snapshots
+### Listing snapshots
 - **Request**
 
     `GET /snapshots/?offset=<initial-pos>&limit=<page-size>&query=<query>`
@@ -2278,7 +2260,7 @@ data.
 
     None.
 
-## Getting global info
+### Getting global info
 - **Request**
 
     `GET /info`
@@ -2317,7 +2299,7 @@ data.
     exception of privilege array keys being converted to lower camel case to
     match the API convention.
 
-## Uploading temporary file
+### Uploading temporary file
 
 - **Request**
 
@@ -2348,9 +2330,9 @@ data.
 
 
 
-# Resources
+## Resources
 
-## User
+### User
 **Description**
 
 A single user.
@@ -2412,12 +2394,12 @@ A single user.
   server returns `false`.
 - `<favorite-post-count>`: number of favorited posts.
 
-## Micro user
+### Micro user
 **Description**
 
 A [user resource](#user) stripped down to `name` and `avatarUrl` fields.
 
-## User token
+### User token
 **Description**
 
 A single user token.
@@ -2449,7 +2431,7 @@ A single user token.
 - `<last-edit-time>`: time the user token was edited, formatted as per RFC 3339.
 - `<last-usage-time>`: the last time this token was used during a login involving `?bump-login`, formatted as per RFC 3339.
 
-## Tag category
+### Tag category
 **Description**
 
 A single tag category. The primary purpose of tag categories is to distinguish
@@ -2478,7 +2460,7 @@ experience.
 - `<order>`: the order in which tags with this category are displayed, ascending.
 - `<is-default>`: whether the tag category is the default one.
 
-## Tag
+### Tag
 **Description**
 
 A single tag. Tags are used to let users search for posts.
@@ -2517,12 +2499,12 @@ A single tag. Tags are used to let users search for posts.
 - `<description>`: the tag description (instructions how to use, history etc.)
   The client should render is as Markdown.
 
-## Micro tag
+### Micro tag
 **Description**
 
 A [tag resource](#tag) stripped down to `names`, `category` and `usages` fields.
 
-## Post
+### Post
 **Description**
 
 One file together with its metadata posted to the site.
@@ -2637,12 +2619,12 @@ One file together with its metadata posted to the site.
 - `<comment>`: a [comment resource](#comment) for given post.
 - `<pool>`: a [micro pool resource](#micro-pool) in which the post is a member of.
 
-## Micro post
+### Micro post
 **Description**
 
 A [post resource](#post) stripped down to `id` and `thumbnailUrl` fields.
 
-## Note
+### Note
 **Description**
 
 A text annotation rendered on top of the post.
@@ -2663,7 +2645,7 @@ A text annotation rendered on top of the post.
   will draw it inside the post's upper left quarter.
 - `<text>`: the annotation text. The client should render is as Markdown.
 
-## Pool category
+### Pool category
 **Description**
 
 A single pool category. The primary purpose of pool categories is to distinguish
@@ -2690,7 +2672,7 @@ experience.
 - `<usages>`: how many pools is the given category used with.
 - `<is-default>`: whether the pool category is the default one.
 
-## Pool
+### Pool
 **Description**
 
 An ordered list of posts, with a description and category.
@@ -2725,13 +2707,13 @@ An ordered list of posts, with a description and category.
 - `<description>`: the pool description (instructions how to use, history etc.)
   The client should render it as Markdown.
 
-## Micro pool
+### Micro pool
 **Description**
 
 A [pool resource](#pool) stripped down to `id`, `names`, `category`,
 `description` and `postCount` fields.
 
-## Comment
+### Comment
 **Description**
 
 A comment under a post.
@@ -2765,7 +2747,7 @@ A comment under a post.
   authenticated user.
 
 
-## Snapshot
+### Snapshot
 **Description**
 
 A snapshot is a version of a database resource.
@@ -2987,7 +2969,7 @@ A tuple containing 2 elements:
 - resource ID equivalent to `<resource-id>` of the target entity.
 
 
-## Unpaged search result
+### Unpaged search result
 **Description**
 
 A result of search operation that doesn't involve paging.
@@ -3008,7 +2990,7 @@ A result of search operation that doesn't involve paging.
 - `<resource>`: any resource - which exactly depends on the API call. For
   details on this field, check the documentation for given API call.
 
-## Paged search result
+### Paged search result
 **Description**
 
 A result of search operation that involves paging.
@@ -3040,7 +3022,7 @@ A result of search operation that involves paging.
   details on this field, check the documentation for given API call.
 
 
-## Image search result
+### Image search result
 **Description**
 
 A result of reverse image search operation.
@@ -3072,7 +3054,7 @@ A result of reverse image search operation.
 - `<distance>`: distance from the original image (0..1). The lower this value
    is, the more similar the post is.
 
-# Search
+## Search
 
 Search queries are built of tokens that are separated by spaces. Each token can
 be of following form:
