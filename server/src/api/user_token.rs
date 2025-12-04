@@ -22,7 +22,7 @@ pub fn routes() -> Router<AppState> {
         .route("/user-token/{username}/{token}", routing::put(update).delete(delete))
 }
 
-/// See [listing-user-tokens](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-user-tokens)
+/// See [listing-user-tokens](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-user-tokens)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -69,7 +69,7 @@ struct CreateBody {
     expiration_time: Option<DateTime>,
 }
 
-/// See [creating-user-token](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-user-token)
+/// See [creating-user-token](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-user-token)
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -133,7 +133,7 @@ struct UpdateBody {
     expiration_time: Option<Option<DateTime>>,
 }
 
-/// See [updating-user-token](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-user-token)
+/// See [updating-user-token](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-user-token)
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -181,7 +181,7 @@ async fn update(
     )))
 }
 
-/// See [deleting-user-token](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-user-token)
+/// See [deleting-user-token](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-user-token)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

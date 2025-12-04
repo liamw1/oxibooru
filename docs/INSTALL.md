@@ -40,7 +40,7 @@ This guide assumes that you have Docker (version 19.03 or greater) and the Docke
 3. **Configure Docker Compose**
 
     ```console
-    cp doc/_media/example.env .env
+    cp docs/_media/example.env .env
     edit .env
     ```
 

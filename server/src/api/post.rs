@@ -78,7 +78,7 @@ where
     connection_pool.get()?.transaction(update)
 }
 
-/// See [listing-posts](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-posts)
+/// See [listing-posts](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-posts)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -105,7 +105,7 @@ async fn list(
     })
 }
 
-/// See [getting-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-post)
+/// See [getting-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-post)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -132,7 +132,7 @@ struct PostNeighbors {
     next: Option<PostInfo>,
 }
 
-/// See [getting-around-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-around-post)
+/// See [getting-around-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-around-post)
 async fn get_neighbors(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -213,7 +213,7 @@ async fn get_neighbors(
     })
 }
 
-/// See [getting-featured-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-featured-post)
+/// See [getting-featured-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-featured-post)
 async fn get_featured(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -243,7 +243,7 @@ struct FeatureBody {
     id: i64,
 }
 
-/// See [featuring-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#featuring-post)
+/// See [featuring-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#featuring-post)
 async fn feature(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -298,7 +298,7 @@ struct ReverseSearchResponse {
     similar_posts: Vec<SimilarPost>,
 }
 
-/// See [reverse-image-search](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#reverse-image-search)
+/// See [reverse-image-search](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#reverse-image-search)
 async fn reverse_search(
     state: AppState,
     client: Client,
@@ -420,7 +420,7 @@ struct CreateBody {
     flags: Option<Vec<PostFlag>>,
 }
 
-/// See [creating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-post)
+/// See [creating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-post)
 async fn create(
     state: AppState,
     client: Client,
@@ -550,7 +550,7 @@ struct PostMergeBody {
     replace_content: bool,
 }
 
-/// See [merging-posts](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-posts)
+/// See [merging-posts](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-posts)
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -584,7 +584,7 @@ async fn merge(
         .map_err(ApiError::from)
 }
 
-/// See [adding-post-to-favorites](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#adding-post-to-favorites)
+/// See [adding-post-to-favorites](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#adding-post-to-favorites)
 async fn favorite(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -614,7 +614,7 @@ async fn favorite(
         .map_err(ApiError::from)
 }
 
-/// See [rating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-post)
+/// See [rating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-post)
 async fn rate(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -670,7 +670,7 @@ struct UpdateBody {
     thumbnail_url: Option<Url>,
 }
 
-/// See [updating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-post)
+/// See [updating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-post)
 async fn update(
     state: AppState,
     client: Client,
@@ -819,7 +819,7 @@ async fn update_handler(
     }
 }
 
-/// See [deleting-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-post)
+/// See [deleting-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-post)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -860,7 +860,7 @@ async fn delete(
     Ok(Json(()))
 }
 
-/// See [removing-post-from-favorites](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#removing-post-from-favorites)
+/// See [removing-post-from-favorites](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#removing-post-from-favorites)
 async fn unfavorite(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

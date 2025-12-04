@@ -12,13 +12,13 @@ window.$docsify = {
         '/.*/_sidebar.md': '/_sidebar.md',
         '.*?/LICENSE': 'https://raw.githubusercontent.com/liamw1/oxibooru/master/LICENSE.md',
         // fix routing of main README.md, as they point into the "doc" directory
-        '/doc/(.*)': '/$1'
+        '/docs/(.*)': '/$1'
     },
     nameLink: '/',
     toc: {
         tocMaxLevel: 3,
         target: 'h2, h3, h4, h5, h6',
-        ignoreHeaders:  ['<!-- {docsify-ignore} -->', '<!-- {docsify-ignore-all} -->']
+        ignoreHeaders: ['<!-- {docsify-ignore} -->', '<!-- {docsify-ignore-all} -->']
     },
     tabs: {
         persist: true,
