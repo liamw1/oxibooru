@@ -1,0 +1,71 @@
+/* better sidebar arrow viability */
+
+.sidebar-nav ul:not(.app-sub-sidebar) > li:not(.file)::before {
+  top: 13px;
+  border-right: 1px solid var(--accent);
+  border-bottom: 1px solid var(--accent);
+  transition: transform 0.2s;
+}
+
+/* Navbar BG color fix */
+
+.app-nav li ul {
+  filter: drop-shadow(0 0 1rem var(--custom_dropshadow));
+  background-color: var(--custom_sidebar);
+  border-color: transparent;
+}
+
+/* Hide sidebar pin to fix mobile sidebar:  */
+
+.sidebar-pin {
+  width: 0 !important;
+  height: 0 !important;
+  padding: 0;
+}
+
+/* Fix mobile theme switch overlap */
+
+@media screen and (max-width: 768px) {
+  #docsify-darklight-theme {
+    position: absolute;
+    left: -10px;
+    top: -5px !important;
+  }
+}
+
+/*
+Accordion fixes
+  Colors
+  Spacing between accordions
+*/
+
+.accordion {
+  background-color: var(--custom_sidebar);
+  color: var(--codeTextColor);
+  filter: drop-shadow(0 0 1rem var(--custom_dropshadow));
+  border-radius: 0.25rem;
+}
+
+.accordion:hover,
+.accordion.opened {
+  background-color: var(--borderColor);
+}
+
+.accordion.opened {
+  border-bottom-left-radius: 0px;
+  border-bottom-right-radius: 0px;
+}
+
+.panel.opened {
+  height: 100%;
+}
+
+.panel {
+  height: 0px;
+  border: 0px;
+  background-color: var(--custom_sidebar);
+  filter: drop-shadow(0 0 1rem var(--custom_dropshadow));
+  border-radius: 0.25rem;
+  border-top-left-radius: 0px;
+  border-top-right-radius: 0px;
+}

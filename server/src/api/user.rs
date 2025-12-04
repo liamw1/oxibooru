@@ -38,7 +38,7 @@ pub fn routes() -> Router<AppState> {
 
 const MAX_USERS_PER_PAGE: i64 = 1000;
 
-/// See [listing-users](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-users)
+/// See [listing-users](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-users)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -71,7 +71,7 @@ async fn list(
     })
 }
 
-/// See [getting-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
+/// See [getting-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-user)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -118,7 +118,7 @@ struct CreateBody {
     avatar_url: Option<Url>,
 }
 
-/// See [creating-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
+/// See [creating-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-user)
 async fn create(
     state: AppState,
     client: Client,
@@ -224,7 +224,7 @@ struct UpdateBody {
     avatar_url: Option<Url>,
 }
 
-/// See [updating-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
+/// See [updating-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-user)
 async fn update(
     state: AppState,
     client: Client,
@@ -372,7 +372,7 @@ async fn update_handler(
     }
 }
 
-/// See [deleting-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-user)
+/// See [deleting-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-user)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
