@@ -31,7 +31,7 @@ and the Docker Compose CLI (version 1.27.0 or greater) already installed.
 
 3. **Configure Docker Compose**
     ```console
-    cp doc/example.env .env
+    cp doc/_media/example.env .env
     edit .env
     ```
     Change the values of the variables in `.env` as needed.
