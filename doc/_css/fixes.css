@@ -133,7 +133,7 @@ Image:
 
 pre,
 .medium-zoom-image {
-  filter: drop-shadow(0 0 1rem var(--zoomimage-shadow-color));
+  /* filter: drop-shadow(0 0 1rem var(--zoomimage-shadow-color)); */
   border-radius: 0.20rem;
 }
 
