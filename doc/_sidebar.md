@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD041 -->
 - [Install Oxibooru](INSTALL.md)
 - [Migrate from Szurubooru](CONVERSION.md)
 - [Benchmarks](BENCHMARKS.md)
