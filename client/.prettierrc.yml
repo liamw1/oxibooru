@@ -1,4 +1,0 @@
-parser: babel
-printWidth: 79
-tabWidth: 4
-quoteProps: consistent

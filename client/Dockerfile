@@ -1,38 +1,32 @@
-FROM --platform=$BUILDPLATFORM node:lts AS builder
-WORKDIR /opt/app
+# BUILDER IMAGE
+FROM oven/bun:1 AS builder
 
-COPY package.json package-lock.json ./
-RUN npm install
+# Create app directory
+WORKDIR /app
 
-COPY . ./
+# Get app dependencies
+COPY package.json bun.lock ./
 
-ARG BUILD_INFO="docker-latest"
-ARG CLIENT_BUILD_ARGS=""
-RUN BASE_URL="__BASEURL__" node build.js --gzip ${CLIENT_BUILD_ARGS}
+# building app
+RUN bun install
 
+# Bundle app source
+COPY . .
 
-FROM --platform=$BUILDPLATFORM scratch AS approot
+# Build app
+RUN bun run build
 
-COPY docker-start.sh /
+# FINAL IMAGE
+FROM oven/bun:1 AS final
 
-WORKDIR /etc/nginx
-COPY nginx.conf.docker ./nginx.conf
+# Create app directory
+WORKDIR /usr/src/app
 
-WORKDIR /var/www
-COPY --from=builder /opt/app/public/ .
+# Get app dependencies. Needed because of module imports
+COPY package.json bun.lock ./
 
+# Copy build result
+COPY --from=builder /app/build .
 
-FROM nginx:alpine AS release
-
-RUN apk --no-cache add dumb-init
-COPY --from=approot / /
-
-CMD ["/docker-start.sh"]
-VOLUME ["/data"]
-
-LABEL \
-    maintainer="" \
-    org.opencontainers.image.title="oxibooru/client" \
-    org.opencontainers.image.url="https://github.com/liamw1/oxibooru" \
-    org.opencontainers.image.source="https://github.com/liamw1/oxibooru" \
-    org.opencontainers.image.licenses="GPL-3.0"
+# set startup command
+CMD ["bun", "run", "index.js"]
