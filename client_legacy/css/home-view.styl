@@ -1,0 +1,70 @@
+#home
+    text-align: center !important
+    max-width: 100%
+
+    header
+        margin-bottom: 1em
+        h1
+            line-height: initial
+            font-size: 2.5em
+            margin: 0
+
+    .messages
+        text-align: center
+        .message
+            margin: 0 auto 2em auto
+
+    form
+        display: inline-block
+        width: auto
+        vertical-align: middle
+        margin: 0 0 2em 0
+        text-align: left
+        white-space: nowrap
+        input
+            width: auto
+        .sep
+            margin: 0 0.75em
+        @media (max-width: 500px)
+            .sep, a
+                display: none
+
+    .post-container
+        margin-bottom: 2em
+        display: flex
+        align-items: center
+        justify-content: center
+        &:empty
+            margin-bottom: 0
+
+    nav
+        a
+            padding: 0.5em
+
+    aside
+        margin-bottom: 0.3em
+        font-size: 90%
+        white-space: nowrap
+
+    footer
+        line-height: 150%
+        font-size: 80%
+        ul
+            padding: 0
+            text-align: center
+            li
+                display: inline
+                white-space: nowrap
+                @media (max-width: 800px)
+                    display: block
+            .sep
+                word-spacing: 1.1em
+                background-repeat: no-repeat
+                background-position: 50% 50%
+                background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12'><circle cx='6' cy='6' r='2' fill='%23111111'/></svg>")
+
+    .thumbnail
+        margin-right: 0.4em
+
+.darktheme #home footer ul .sep
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12'><circle cx='6' cy='6' r='2' fill='%23e6e6e6'/></svg>")

@@ -1,0 +1,12 @@
+env:
+  browser: true
+  commonjs: true
+  es6: true
+extends: 'prettier'
+globals:
+  Atomics: readonly
+  SharedArrayBuffer: readonly
+ignorePatterns:
+  - build.js
+parserOptions:
+  ecmaVersion: 11

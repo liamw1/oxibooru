@@ -1,0 +1,54 @@
+@import colors
+$comment-border-color = $top-navigation-color
+$comment-border-color-darktheme = $top-navigation-color-darktheme
+
+.global-comment-list
+    text-align: left
+
+    &>ul
+        list-style-type: none
+        margin: 1em 0 0
+        padding: 0
+
+        &>li
+            margin-top: 2em
+            padding-top: 2em
+            border-top: 3px solid $comment-border-color
+            &:first-child
+                margin-top: 0
+                padding-top: 0
+                border-top: none
+
+        @media (max-width: 700px)
+            .post-thumbnail
+                margin-bottom: 1em
+                .thumbnail
+                    width: 50vw
+                    height: 33vw
+
+        @media (min-width: 700px)
+            &>li
+                padding-left: 13em
+            .post-thumbnail
+                float: left
+                margin: 0 0 1em -13em
+                .thumbnail
+                    width: 12em
+                    height: 8em
+
+        &>li
+            clear: both
+
+        .post-thumbnail
+            vertical-align: top
+            margin-right: 1em
+            a
+                display: inline-block
+
+        .comments-container
+            width: 100%
+
+.darktheme .global-comment-list
+    &>ul
+        &>li
+            border-top: 3px solid $comment-border-color-darktheme
