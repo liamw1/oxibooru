@@ -3,7 +3,7 @@ use crate::api::extract::{Json, Path, Query};
 use crate::api::{ResourceParams, UnpagedResponse};
 use crate::app::AppState;
 use crate::auth::Client;
-use crate::model::enums::AvatarStyle;
+use crate::model::enums::{AvatarStyle, ResourceType};
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
 use crate::resource::user_token::UserTokenInfo;
@@ -13,7 +13,12 @@ use crate::time::DateTime;
 use crate::{api, resource};
 use axum::extract::{Extension, State};
 use axum::{Router, routing};
-use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, Insertable, QueryDsl, RunQueryDsl, SaveChangesDsl};
+use diesel::dsl::sql;
+use diesel::sql_types::Integer;
+use diesel::{
+    BoolExpressionMethods, Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl,
+    SaveChangesDsl,
+};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -36,7 +41,9 @@ async fn list(
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::User))?;
 
         let required_rank = if client.id == Some(user_id) {
             state.config.privileges().user_token_list_self
@@ -86,7 +93,9 @@ async fn create(
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::User))?;
 
         let required_rank = if client.id == Some(user_id) {
             state.config.privileges().user_token_create_self
@@ -150,7 +159,9 @@ async fn update(
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::User))?;
 
         let required_rank = if client.id == Some(user_id) {
             state.config.privileges().user_token_edit_self
@@ -159,7 +170,12 @@ async fn update(
         };
         api::verify_privilege(client, required_rank)?;
 
-        let mut user_token: UserToken = user_token::table.find(token).first(conn)?;
+        let mut user_token: UserToken = user_token::table
+            .find(token)
+            .filter(user_token::user_id.eq(user_id))
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::UserToken))?;
         api::verify_version(user_token.last_edit_time, body.version)?;
 
         if let Some(enabled) = body.enabled {
@@ -191,11 +207,11 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     state.get_connection()?.transaction(|conn| {
         let user_token_owner: i64 = user::table
-            .inner_join(user_token::table)
-            .select(user_token::user_id)
+            .select(user::id)
             .filter(user::name.eq(username))
-            .filter(user_token::id.eq(token))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::User))?;
 
         let required_rank = if client.id == Some(user_token_owner) {
             state.config.privileges().user_token_delete_self
@@ -204,7 +220,15 @@ async fn delete(
         };
         api::verify_privilege(client, required_rank)?;
 
-        diesel::delete(user_token::table.find(token)).execute(conn)?;
+        let _: i32 = diesel::delete(
+            user_token::table
+                .find(token)
+                .filter(user_token::user_id.eq(user_token_owner)),
+        )
+        .returning(sql::<Integer>("0"))
+        .get_result(conn)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::UserToken))?;
         Ok(Json(()))
     })
 }
@@ -212,6 +236,7 @@ async fn delete(
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
+    use crate::model::enums::UserRank;
     use crate::model::user::UserToken;
     use crate::schema::{user, user_token};
     use crate::test::*;
@@ -264,7 +289,7 @@ mod test {
         let mut conn = get_connection()?;
         let user_token = get_user_token(&mut conn)?;
 
-        verify_query(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/update").await?;
+        verify_query(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/edit").await?;
 
         let new_user_token = get_user_token(&mut conn)?;
         assert_eq!(new_user_token.id, user_token.id);
@@ -275,7 +300,7 @@ mod test {
         assert!(new_user_token.last_edit_time > user_token.last_edit_time);
         assert_eq!(new_user_token.last_usage_time, user_token.last_usage_time);
 
-        verify_query(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/update_restore").await?;
+        verify_query(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/edit_restore").await?;
 
         let new_user_token = get_user_token(&mut conn)?;
         assert_eq!(new_user_token.id, user_token.id);
@@ -285,6 +310,37 @@ mod test {
         assert_eq!(new_user_token.expiration_time, user_token.expiration_time);
         assert!(new_user_token.last_edit_time > user_token.last_edit_time);
         assert_eq!(new_user_token.last_usage_time, user_token.last_usage_time);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn error() -> ApiResult<()> {
+        verify_query("GET /user-tokens/fake_user", "user_token/list_nonexistent_user").await?;
+        verify_query("POST /user-token/fake_user", "user_token/create_nonexistent_user").await?;
+        verify_query(&format!("PUT /user-token/fake_user/{TEST_TOKEN}"), "user_token/edit_nonexistent_user").await?;
+        verify_query(&format!("PUT /user-token/regular_user/{TEST_TOKEN}"), "user_token/edit_nonexistent_token")
+            .await?;
+        verify_query(&format!("DELETE /user-token/fake_user/{TEST_TOKEN}"), "user_token/delete_nonexistent_user")
+            .await?;
+        verify_query(&format!("DELETE /user-token/regular_user/{TEST_TOKEN}"), "user_token/delete_nonexistent_token")
+            .await?;
+
+        // User has `self` permissions but not `any` permissions for user_token operations
+        verify_query_with_user(UserRank::Regular, "GET /user-tokens/power_user", "user_token/list_another").await?;
+        verify_query_with_user(UserRank::Regular, "POST /user-token/power_user", "user_token/create_another").await?;
+        verify_query_with_user(
+            UserRank::Regular,
+            &format!("PUT /user-token/power_user/{TEST_TOKEN}"),
+            "user_token/edit_another",
+        )
+        .await?;
+        verify_query_with_user(
+            UserRank::Regular,
+            &format!("DELETE /user-token/power_user/{TEST_TOKEN}"),
+            "user_token/delete_another",
+        )
+        .await?;
         Ok(())
     }
 }

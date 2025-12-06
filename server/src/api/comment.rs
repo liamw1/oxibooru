@@ -320,7 +320,7 @@ mod test {
         let mut conn = get_connection()?;
         let (comment, score) = get_comment_info(&mut conn)?;
 
-        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/update").await?;
+        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/edit").await?;
 
         let (new_comment, new_score) = get_comment_info(&mut conn)?;
         assert_ne!(new_comment.text, comment.text);
@@ -328,7 +328,7 @@ mod test {
         assert!(new_comment.last_edit_time > comment.last_edit_time);
         assert_eq!(new_score, score);
 
-        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/update_restore").await?;
+        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/edit_restore").await?;
 
         let (new_comment, new_score) = get_comment_info(&mut conn)?;
         assert_eq!(new_comment.text, comment.text);
@@ -378,7 +378,7 @@ mod test {
     async fn error() -> ApiResult<()> {
         verify_query("GET /comment/99", "comment/get_nonexistent").await?;
         verify_query("POST /comments", "comment/create_on_nonexistent_post").await?;
-        verify_query("PUT /comment/99", "comment/update_nonexistent").await?;
+        verify_query("PUT /comment/99", "comment/edit_nonexistent").await?;
         verify_query("PUT /comment/99/score", "comment/like_nonexistent").await?;
         verify_query("DELETE /comment/99", "comment/delete_nonexistent").await?;
 

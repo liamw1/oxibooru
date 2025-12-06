@@ -238,6 +238,7 @@ List of possible error names:
 - `EnvironmentVariableNotPresent`
 - `EnvironmentVariableNotUnicode`
 - `ExecutableFileBusy`
+- `ExpiredToken`
 - `ExpressionFailsRegex`
 - `FailedAlready`
 - `FailedConnection`
@@ -277,7 +278,6 @@ List of possible error names:
 - `InvalidPhcStringField`
 - `InvalidResizeParameters`
 - `InvalidSort`
-- `InvalidToken`
 - `InvalidUserRank`
 - `InvalidUtf8InPathParam`
 - `InvalidVersion`
@@ -378,7 +378,9 @@ List of possible error names:
 - `UnsupportedPathType`
 - `UserNameAlreadyExists`
 - `UsernamePasswordMismatch`
+- `UsernameTokenMismatch`
 - `UserNotFound`
+- `UserTokenNotFound`
 - `Utf8ConversionError`
 - `ValueTooLong`
 - `ValueTooShort`
@@ -2107,6 +2109,7 @@ data.
 
 - **Errors**
 
+    - the user does not exist
     - privileges are too low
 
 - **Description**
@@ -2134,6 +2137,7 @@ data.
 
 - **Errors**
 
+    - the user does not exist
     - privileges are too low
 
 - **Description**
@@ -2164,6 +2168,7 @@ data.
 - **Errors**
 
     - the version is outdated
+    - the user does not exist
     - the user token does not exist
     - privileges are too low
 
@@ -2192,6 +2197,7 @@ data.
 
 - **Errors**
 
+    - the user does not exist
     - the token does not exist
     - privileges are too low
 

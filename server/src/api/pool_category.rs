@@ -317,7 +317,7 @@ mod test {
             .filter(pool_category::name.eq(NAME))
             .first(&mut conn)?;
 
-        verify_query(&format!("PUT /pool-category/{NAME}/?{FIELDS}"), "pool_category/update").await?;
+        verify_query(&format!("PUT /pool-category/{NAME}/?{FIELDS}"), "pool_category/edit").await?;
 
         let updated_category: PoolCategory = pool_category::table
             .filter(pool_category::id.eq(category.id))
@@ -327,7 +327,7 @@ mod test {
         assert!(updated_category.last_edit_time > category.last_edit_time);
 
         let new_name = updated_category.name;
-        verify_query(&format!("PUT /pool-category/{new_name}/?{FIELDS}"), "pool_category/update_restore").await
+        verify_query(&format!("PUT /pool-category/{new_name}/?{FIELDS}"), "pool_category/edit_restore").await
     }
 
     #[tokio::test]
@@ -359,14 +359,14 @@ mod test {
     #[parallel]
     async fn error() -> ApiResult<()> {
         verify_query("GET /pool-category/none", "pool_category/get_nonexistent").await?;
-        verify_query("PUT /pool-category/none", "pool_category/update_nonexistent").await?;
+        verify_query("PUT /pool-category/none", "pool_category/edit_nonexistent").await?;
         verify_query("PUT /pool-category/none/default", "pool_category/default_nonexistent").await?;
         verify_query("DELETE /pool-category/none", "pool_category/delete_nonexistent").await?;
 
         verify_query("POST /pool-categories", "pool_category/create_invalid").await?;
         verify_query("POST /pool-categories", "pool_category/create_name_clash").await?;
-        verify_query("PUT /pool-category/default", "pool_category/update_invalid").await?;
-        verify_query("PUT /pool-category/default", "pool_category/update_name_clash").await?;
+        verify_query("PUT /pool-category/default", "pool_category/edit_invalid").await?;
+        verify_query("PUT /pool-category/default", "pool_category/edit_name_clash").await?;
         verify_query("DELETE /pool-category/default", "pool_category/delete_default").await?;
 
         reset_sequence(ResourceType::PoolCategory)?;

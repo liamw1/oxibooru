@@ -114,14 +114,15 @@ impl ErrorKind for base64::DecodeError {
 impl ErrorKind for crate::auth::header::AuthenticationError {
     fn kind(&self) -> &'static str {
         match self {
+            Self::ExpiredToken => "ExpiredToken",
             Self::FailedConnection(_) => "FailedConnection",
             Self::FailedQuery(err) => err.kind(),
             Self::InvalidAuthType => "InvalidAuthType",
             Self::InvalidEncoding(err) => err.kind(),
-            Self::InvalidToken => "InvalidToken",
             Self::MalformedCredentials => "MalformedCredentials",
             Self::MalformedToken(_) => "MalformedToken",
             Self::UsernamePasswordMismatch => "UsernamePasswordMismatch",
+            Self::UsernameTokenMismatch => "UsernameTokenMismatch",
             Self::Utf8Conversion(_) => "Utf8ConversionError",
         }
     }
@@ -151,6 +152,7 @@ impl ErrorKind for crate::model::enums::ResourceType {
             Self::Tag | Self::TagImplication | Self::TagSuggestion => "TagNotFound",
             Self::TagCategory => "TagCategoryNotFound",
             Self::User => "UserNotFound",
+            Self::UserToken => "UserTokenNotFound",
         }
     }
 }

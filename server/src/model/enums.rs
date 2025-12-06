@@ -484,6 +484,7 @@ pub enum ResourceType {
     TagImplication,
     TagSuggestion,
     User,
+    UserToken,
 }
 
 impl ToSql<SmallInt, Pg> for ResourceType {

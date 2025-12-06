@@ -1124,7 +1124,7 @@ mod test {
         let mut conn = get_connection()?;
         let (post, tag_count, relation_count) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/update").await?;
+        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit").await?;
 
         let (new_post, new_tag_count, new_relation_count) = get_post_info(&mut conn)?;
         assert_eq!(new_post.user_id, post.user_id);
@@ -1144,7 +1144,7 @@ mod test {
         assert_ne!(new_tag_count, tag_count);
         assert_ne!(new_relation_count, relation_count);
 
-        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/update_restore").await?;
+        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit_restore").await?;
 
         let new_tag_id: i64 = tag::table
             .select(tag::id)

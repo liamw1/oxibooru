@@ -322,7 +322,7 @@ mod test {
             .filter(tag_category::name.eq(NAME))
             .first(&mut conn)?;
 
-        verify_query(&format!("PUT /tag-category/{NAME}/?{FIELDS}"), "tag_category/update").await?;
+        verify_query(&format!("PUT /tag-category/{NAME}/?{FIELDS}"), "tag_category/edit").await?;
 
         let updated_category: TagCategory = tag_category::table
             .filter(tag_category::id.eq(category.id))
@@ -332,7 +332,7 @@ mod test {
         assert!(updated_category.last_edit_time > category.last_edit_time);
 
         let new_name = updated_category.name;
-        verify_query(&format!("PUT /tag-category/{new_name}/?{FIELDS}"), "tag_category/update_restore").await
+        verify_query(&format!("PUT /tag-category/{new_name}/?{FIELDS}"), "tag_category/edit_restore").await
     }
 
     #[tokio::test]
@@ -364,14 +364,14 @@ mod test {
     #[parallel]
     async fn error() -> ApiResult<()> {
         verify_query("GET /tag-category/none", "tag_category/get_nonexistent").await?;
-        verify_query("PUT /tag-category/none", "tag_category/update_nonexistent").await?;
+        verify_query("PUT /tag-category/none", "tag_category/edit_nonexistent").await?;
         verify_query("PUT /tag-category/none/default", "tag_category/default_nonexistent").await?;
         verify_query("DELETE /tag-category/none", "tag_category/delete_nonexistent").await?;
 
         verify_query("POST /tag-categories", "tag_category/create_invalid").await?;
         verify_query("POST /tag-categories", "tag_category/create_name_clash").await?;
-        verify_query("PUT /tag-category/default", "tag_category/update_invalid").await?;
-        verify_query("PUT /tag-category/default", "tag_category/update_name_clash").await?;
+        verify_query("PUT /tag-category/default", "tag_category/edit_invalid").await?;
+        verify_query("PUT /tag-category/default", "tag_category/edit_name_clash").await?;
         verify_query("DELETE /tag-category/default", "tag_category/delete_default").await?;
 
         reset_sequence(ResourceType::PoolCategory)?;

@@ -13,18 +13,20 @@ use uuid::Uuid;
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub enum AuthenticationError {
+    #[error("Token has expired")]
+    ExpiredToken,
     FailedConnection(#[from] diesel::r2d2::PoolError),
     FailedQuery(#[from] diesel::result::Error),
     #[error("Invalid authentication type")]
     InvalidAuthType,
     InvalidEncoding(#[from] DecodeError),
-    #[error("Token has expired")]
-    InvalidToken,
     #[error("Authentication credentials are malformed")]
     MalformedCredentials,
     MalformedToken(#[from] uuid::Error),
     #[error("Invalid username and password combination")]
     UsernamePasswordMismatch,
+    #[error("Invalid username and token combination")]
+    UsernameTokenMismatch,
     Utf8Conversion(#[from] Utf8Error),
 }
 
@@ -40,9 +42,15 @@ pub fn authenticate_user(state: &AppState, auth: &str) -> Result<Client, Authent
 }
 
 #[cfg(test)]
-pub fn credentials_for(username: &str, password: &str) -> String {
+pub fn basic_credentials_for(username: &str, password: &str) -> String {
     let credentials = format!("{username}:{password}");
-    BASE64_STANDARD.encode(credentials)
+    format!("Basic {}", BASE64_STANDARD.encode(credentials))
+}
+
+#[cfg(test)]
+pub fn token_credentials_for(username: &str, token: Uuid) -> String {
+    let credentials = format!("{username}:{token}");
+    format!("Token {}", BASE64_STANDARD.encode(credentials))
 }
 
 /// `credentials` are sent base64 encoded, so this function decodes them to utf-8.
@@ -87,11 +95,12 @@ fn token_authentication(state: &AppState, credentials: &str) -> Result<Client, A
         .select((user::id, user::rank, user_token::enabled, user_token::expiration_time))
         .filter(user::name.eq(username))
         .filter(user_token::id.eq(token))
-        .first(&mut conn)?;
+        .first(&mut conn)
+        .optional()?
+        .ok_or(AuthenticationError::UsernameTokenMismatch)?;
 
     let expired = expiration_time.as_ref().is_some_and(|&time| time < DateTime::now());
-    let is_valid_token = enabled && !expired;
-    is_valid_token
+    (enabled && !expired)
         .then_some(Client::new(Some(user_id), rank))
-        .ok_or(AuthenticationError::InvalidToken)
+        .ok_or(AuthenticationError::ExpiredToken)
 }

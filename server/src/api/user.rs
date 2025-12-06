@@ -502,7 +502,7 @@ mod test {
 
         let (user, comment_count, favorite_count, upload_count) = get_user_info(&mut conn)?;
 
-        verify_query(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/update").await?;
+        verify_query(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/edit").await?;
 
         let (new_user, new_comment_count, new_favorite_count, new_upload_count) = get_user_info(&mut conn)?;
         assert_eq!(new_user.id, user.id);
@@ -520,7 +520,7 @@ mod test {
         assert_eq!(new_upload_count, upload_count);
 
         let new_name = &new_user.name;
-        verify_query(&format!("PUT /user/{new_name}/?{FIELDS}"), "user/update_restore").await?;
+        verify_query(&format!("PUT /user/{new_name}/?{FIELDS}"), "user/edit_restore").await?;
 
         let (new_user, new_comment_count, new_favorite_count, new_upload_count) = get_user_info(&mut conn)?;
         assert_eq!(new_user.id, user.id);

@@ -1,0 +1,5 @@
+{
+    "description": "Invalid username and token combination",
+    "name": "UsernameTokenMismatch",
+    "title": "Failed Authentication"
+}

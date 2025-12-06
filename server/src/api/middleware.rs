@@ -125,22 +125,39 @@ mod test {
     use crate::auth::header;
     use crate::test::*;
     use serial_test::parallel;
+    use uuid::{Uuid, uuid};
 
     #[tokio::test]
     #[parallel]
     async fn unauthorized() -> ApiResult<()> {
         const QUERY: &str = "GET /comment/1";
+        const FAKE_TOKEN: Uuid = uuid!("ef94b18f-3244-4394-a529-5ea86b6fde93");
 
-        let wrong_username = Some(header::credentials_for("mystery_man29", TEST_PASSWORD));
-        verify_query_with_credentials(wrong_username, QUERY, "middleware/wrong_username").await?;
-
-        let wrong_password = Some(header::credentials_for("regular_user", "password123"));
+        let wrong_password = Some(header::basic_credentials_for("regular_user", "password123"));
         verify_query_with_credentials(wrong_password, QUERY, "middleware/wrong_password").await?;
+
+        let wrong_username_with_basic = Some(header::basic_credentials_for("mystery_man29", TEST_PASSWORD));
+        verify_query_with_credentials(wrong_username_with_basic, QUERY, "middleware/wrong_username_with_basic").await?;
+
+        let wrong_username_with_token = Some(header::token_credentials_for("fake_user", TEST_TOKEN));
+        verify_query_with_credentials(wrong_username_with_token, QUERY, "middleware/wrong_username_with_token").await?;
+
+        let username_token_mismatch = Some(header::token_credentials_for("regular_user", TEST_TOKEN));
+        verify_query_with_credentials(username_token_mismatch, QUERY, "middleware/username_token_mismatch").await?;
+
+        let wrong_token = Some(header::token_credentials_for("regular_user", FAKE_TOKEN));
+        verify_query_with_credentials(wrong_token, QUERY, "middleware/wrong_token").await?;
+
+        let expired_token = Some(header::token_credentials_for("regular_user", EXPIRED_TOKEN));
+        verify_query_with_credentials(expired_token, QUERY, "middleware/expired_token").await?;
+
+        let disabled_token = Some(header::token_credentials_for("regular_user", DISABLED_TOKEN));
+        verify_query_with_credentials(disabled_token, QUERY, "middleware/disabled_token").await?;
 
         let missing_credentials = Some(String::new());
         verify_query_with_credentials(missing_credentials, QUERY, "middleware/missing_credentials").await?;
 
-        let unencoded_credentials = Some(format!("regular_user:{TEST_PASSWORD}"));
+        let unencoded_credentials = Some(format!("Basic regular_user:{TEST_PASSWORD}"));
         verify_query_with_credentials(unencoded_credentials, QUERY, "middleware/unencoded_credentials").await?;
         Ok(())
     }

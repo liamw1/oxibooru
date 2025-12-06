@@ -534,7 +534,7 @@ mod test {
         let mut conn = get_connection()?;
         let (tag, usage_count, implication_count, suggestion_count) = get_tag_info(&mut conn, NAME)?;
 
-        verify_query(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/update").await?;
+        verify_query(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/edit").await?;
 
         let new_name: SmallString = tag_name::table
             .select(tag_name::name)
@@ -552,7 +552,7 @@ mod test {
         assert_ne!(new_implication_count, implication_count);
         assert_ne!(new_suggestion_count, suggestion_count);
 
-        verify_query(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/update_restore").await?;
+        verify_query(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/edit_restore").await?;
 
         let new_tag_id: i64 = tag::table.select(tag::id).order_by(tag::id.desc()).first(&mut conn)?;
         diesel::delete(tag::table.find(new_tag_id)).execute(&mut conn)?;
@@ -576,7 +576,7 @@ mod test {
         verify_query("GET /tag-siblings/none", "tag/get_siblings_of_nonexistent").await?;
         verify_query("POST /tag-merge", "tag/merge_to_nonexistent").await?;
         verify_query("POST /tag-merge", "tag/merge_with_nonexistent").await?;
-        verify_query("PUT /tag/none", "tag/update_nonexistent").await?;
+        verify_query("PUT /tag/none", "tag/edit_nonexistent").await?;
         verify_query("DELETE /tag/none", "tag/delete_nonexistent").await?;
 
         verify_query("POST /tags", "tag/create_nameless").await?;
@@ -587,13 +587,13 @@ mod test {
         verify_query("POST /tags", "tag/create_invalid_implication").await?;
         verify_query("POST /tag-merge", "tag/self-merge").await?;
 
-        verify_query("PUT /tag/sky", "tag/update_nameless").await?;
-        verify_query("PUT /tag/sky", "tag/update_name_clash").await?;
-        verify_query("PUT /tag/sky", "tag/update_invalid_name").await?;
-        verify_query("PUT /tag/sky", "tag/update_invalid_category").await?;
-        verify_query("PUT /tag/sky", "tag/update_invalid_suggestion").await?;
-        verify_query("PUT /tag/sky", "tag/update_invalid_implication").await?;
-        verify_query("PUT /tag/plant", "tag/update_cyclic_implication").await?;
+        verify_query("PUT /tag/sky", "tag/edit_nameless").await?;
+        verify_query("PUT /tag/sky", "tag/edit_name_clash").await?;
+        verify_query("PUT /tag/sky", "tag/edit_invalid_name").await?;
+        verify_query("PUT /tag/sky", "tag/edit_invalid_category").await?;
+        verify_query("PUT /tag/sky", "tag/edit_invalid_suggestion").await?;
+        verify_query("PUT /tag/sky", "tag/edit_invalid_implication").await?;
+        verify_query("PUT /tag/plant", "tag/edit_cyclic_implication").await?;
 
         reset_sequence(ResourceType::Tag)?;
         Ok(())

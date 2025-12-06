@@ -48,6 +48,8 @@ pub const TEST_PASSWORD: &str = "test_password";
 pub const TEST_SALT: &str = "test_salt";
 pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
 pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
+pub const EXPIRED_TOKEN: Uuid = uuid::uuid!("b7188ca3-1391-4abf-bfc1-7d7dfad7d161");
+pub const DISABLED_TOKEN: Uuid = uuid::uuid!("86c5b652-7c9c-4846-8ae3-5ec236f57c4e");
 
 pub fn get_connection() -> ConnectionResult {
     get_state().connection_pool.get()
@@ -98,8 +100,8 @@ pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
 }
 
 pub async fn verify_query_with_user(user: UserRank, query: &str, relative_path: &str) -> ApiResult<()> {
-    let credentials =
-        (user != UserRank::Anonymous).then(|| header::credentials_for(USERS[user as usize - 1].name, TEST_PASSWORD));
+    let credentials = (user != UserRank::Anonymous)
+        .then(|| header::basic_credentials_for(USERS[user as usize - 1].name, TEST_PASSWORD));
     verify_query_with_credentials(credentials, query, relative_path).await
 }
 
@@ -144,8 +146,7 @@ pub async fn verify_query_with_credentials(
         TestServer::new(ServiceExt::<Request>::into_make_service(app)).expect("Test server must be constructible");
     let mut request = server.method(method, &path);
     if let Some(credentials) = credentials {
-        let basic_access_authentication = format!("Basic {credentials}");
-        request = request.add_header(AUTHORIZATION, basic_access_authentication);
+        request = request.add_header(AUTHORIZATION, credentials);
     }
 
     // Optionally specify a body
@@ -184,6 +185,30 @@ const USERS: &[NewUser] = &[
     new_user("power_user", Some("example&hotmail.com"), UserRank::Power),
     new_user("moderator", None, UserRank::Moderator),
     new_user("administrator", None, UserRank::Administrator),
+];
+
+const USER_TOKENS: &[NewUserToken] = &[
+    NewUserToken {
+        id: TEST_TOKEN,
+        user_id: 5,
+        note: Some("This is a test token"),
+        enabled: true,
+        expiration_time: None,
+    },
+    NewUserToken {
+        id: EXPIRED_TOKEN,
+        user_id: 2,
+        note: Some("This is an expired token"),
+        enabled: true,
+        expiration_time: Some(DateTime::test_date()),
+    },
+    NewUserToken {
+        id: DISABLED_TOKEN,
+        user_id: 2,
+        note: Some("This is a disabled token"),
+        enabled: false,
+        expiration_time: None,
+    },
 ];
 
 const POOL_CATEGORY_NAMES: &[&str] = &["Setting", "Style"];
@@ -605,16 +630,8 @@ fn populate_database(conn: &mut PgConnection, config: &Config) -> DatabaseResult
     // Create users
     USERS.insert_into(user::table).execute(conn)?;
 
-    // Create user token
-    NewUserToken {
-        id: TEST_TOKEN,
-        user_id: 5,
-        note: Some("This is a test token"),
-        enabled: true,
-        expiration_time: None,
-    }
-    .insert_into(user_token::table)
-    .execute(conn)?;
+    // Create user tokens
+    USER_TOKENS.insert_into(user_token::table).execute(conn)?;
 
     // Create tags and pools
     create_tag_categories(conn)?;

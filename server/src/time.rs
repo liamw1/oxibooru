@@ -74,10 +74,15 @@ impl DateTime {
     }
 
     pub fn from_date(year: i32, month: Month, day: u8) -> Result<Self, ComponentRange> {
-        Date::from_calendar_date(year, month, day)
-            .map(Date::midnight)
-            .map(PrimitiveDateTime::assume_utc)
-            .map(Self::from)
+        let date = Date::from_calendar_date(year, month, day)?;
+        let date_time = Date::midnight(date);
+        let utc_time = PrimitiveDateTime::assume_utc(date_time);
+        Ok(Self(utc_time))
+    }
+
+    #[cfg(test)]
+    pub const fn test_date() -> Self {
+        Self(time::macros::datetime!(2008-09-15 0:00 UTC))
     }
 }
 

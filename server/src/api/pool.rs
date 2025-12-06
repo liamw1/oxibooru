@@ -408,7 +408,7 @@ mod test {
         let mut conn = get_connection()?;
         let (pool, post_count) = get_pool_info(&mut conn)?;
 
-        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/update").await?;
+        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit").await?;
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
         assert_ne!(new_pool.category_id, pool.category_id);
@@ -417,7 +417,7 @@ mod test {
         assert!(new_pool.last_edit_time > pool.last_edit_time);
         assert_ne!(new_post_count, post_count);
 
-        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/update_restore").await?;
+        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit_restore").await?;
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
         assert_eq!(new_pool.category_id, pool.category_id);
@@ -434,7 +434,7 @@ mod test {
         verify_query("GET /pool/99", "pool/get_nonexistent").await?;
         verify_query("POST /pool-merge", "pool/merge_to_nonexistent").await?;
         verify_query("POST /pool-merge", "pool/merge_with_nonexistent").await?;
-        verify_query("PUT /pool/99", "pool/update_nonexistent").await?;
+        verify_query("PUT /pool/99", "pool/edit_nonexistent").await?;
         verify_query("DELETE /pool/99", "pool/delete_nonexistent").await?;
 
         verify_query("POST /pool", "pool/create_nameless").await?;
@@ -445,12 +445,12 @@ mod test {
         verify_query("POST /pool", "pool/create_duplicate_post").await?;
         verify_query("POST /pool-merge", "pool/self-merge").await?;
 
-        verify_query("PUT /pool/1", "pool/update_nameless").await?;
-        verify_query("PUT /pool/1", "pool/update_name_clash").await?;
-        verify_query("PUT /pool/1", "pool/update_invalid_name").await?;
-        verify_query("PUT /pool/1", "pool/update_invalid_post").await?;
-        verify_query("PUT /pool/1", "pool/update_invalid_category").await?;
-        verify_query("PUT /pool/1", "pool/update_duplicate_post").await?;
+        verify_query("PUT /pool/1", "pool/edit_nameless").await?;
+        verify_query("PUT /pool/1", "pool/edit_name_clash").await?;
+        verify_query("PUT /pool/1", "pool/edit_invalid_name").await?;
+        verify_query("PUT /pool/1", "pool/edit_invalid_post").await?;
+        verify_query("PUT /pool/1", "pool/edit_invalid_category").await?;
+        verify_query("PUT /pool/1", "pool/edit_duplicate_post").await?;
 
         reset_sequence(ResourceType::Pool)?;
         Ok(())
