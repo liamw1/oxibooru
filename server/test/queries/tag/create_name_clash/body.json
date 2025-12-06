@@ -1,0 +1,16 @@
+{
+    "names": [
+        "agua",
+        "h2o",
+        "water"
+    ],
+    "category": "surroundings",
+    "description": "This is a test tag",
+    "implications": [
+        "rock",
+        "sky"
+    ],
+    "suggestions": [
+        "plant"
+    ]
+}

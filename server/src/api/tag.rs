@@ -109,7 +109,9 @@ async fn get_siblings(
             .select(tag::id)
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
         let posts_tagged_on = post_tag::table
             .select(post_tag::post_id)
             .filter(post_tag::tag_id.eq(tag_id))
@@ -163,7 +165,9 @@ async fn create(
         let (category_id, category): (i64, SmallString) = tag_category::table
             .select((tag_category::id, tag_category::name))
             .filter(tag_category::name.eq(body.category))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
         let tag: Tag = NewTag {
             category_id,
             description: body.description.as_deref().unwrap_or(""),
@@ -220,6 +224,8 @@ async fn merge(
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
             .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -269,7 +275,9 @@ async fn update(
             .inner_join(tag_name::table)
             .select(Tag::as_select())
             .filter(tag_name::name.eq(name))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
         let tag_id = old_tag.id;
         api::verify_version(old_tag.last_edit_time, body.version)?;
 
@@ -283,7 +291,9 @@ async fn update(
             let category_id: i64 = tag_category::table
                 .select(tag_category::id)
                 .filter(tag_category::name.eq(&category))
-                .first(conn)?;
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
             new_tag.category_id = category_id;
             new_snapshot_data.category = category;
         }
@@ -342,7 +352,9 @@ async fn delete(
             .select(Tag::as_select())
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
         api::verify_version(tag.last_edit_time, *client_version)?;
 
         let tag_id = tag.id;
@@ -357,6 +369,7 @@ async fn delete(
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
+    use crate::model::enums::ResourceType;
     use crate::model::tag::Tag;
     use crate::schema::{database_statistics, tag, tag_name, tag_statistics};
     use crate::string::SmallString;
@@ -553,6 +566,36 @@ mod test {
         assert_eq!(new_usage_count, usage_count);
         assert_eq!(new_implication_count, implication_count);
         assert_eq!(new_suggestion_count, suggestion_count);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn error() -> ApiResult<()> {
+        verify_query("GET /tag/none", "tag/get_nonexistent").await?;
+        verify_query("GET /tag-siblings/none", "tag/get_siblings_of_nonexistent").await?;
+        verify_query("POST /tag-merge", "tag/merge_to_nonexistent").await?;
+        verify_query("POST /tag-merge", "tag/merge_with_nonexistent").await?;
+        verify_query("PUT /tag/none", "tag/update_nonexistent").await?;
+        verify_query("DELETE /tag/none", "tag/delete_nonexistent").await?;
+
+        verify_query("POST /tags", "tag/create_nameless").await?;
+        verify_query("POST /tags", "tag/create_name_clash").await?;
+        verify_query("POST /tags", "tag/create_invalid_name").await?;
+        verify_query("POST /tags", "tag/create_invalid_category").await?;
+        verify_query("POST /tags", "tag/create_invalid_suggestion").await?;
+        verify_query("POST /tags", "tag/create_invalid_implication").await?;
+        verify_query("POST /tag-merge", "tag/self-merge").await?;
+
+        verify_query("PUT /tag/sky", "tag/update_nameless").await?;
+        verify_query("PUT /tag/sky", "tag/update_name_clash").await?;
+        verify_query("PUT /tag/sky", "tag/update_invalid_name").await?;
+        verify_query("PUT /tag/sky", "tag/update_invalid_category").await?;
+        verify_query("PUT /tag/sky", "tag/update_invalid_suggestion").await?;
+        verify_query("PUT /tag/sky", "tag/update_invalid_implication").await?;
+        verify_query("PUT /tag/plant", "tag/update_cyclic_implication").await?;
+
+        reset_sequence(ResourceType::Tag)?;
         Ok(())
     }
 }

@@ -1,0 +1,5 @@
+{
+    "description": "'test' does not match on tag regex",
+    "name": "ExpressionFailsRegex",
+    "title": "Expression Fails Regex"
+}

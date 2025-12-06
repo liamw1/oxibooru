@@ -363,11 +363,10 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        const NAME: &str = "none";
-        verify_query(&format!("GET /tag-category/{NAME}"), "tag_category/get_nonexistent").await?;
-        verify_query(&format!("PUT /tag-category/{NAME}"), "tag_category/update_nonexistent").await?;
-        verify_query(&format!("PUT /tag-category/{NAME}/default"), "tag_category/default_nonexistent").await?;
-        verify_query(&format!("DELETE /tag-category/{NAME}"), "tag_category/delete_nonexistent").await?;
+        verify_query("GET /tag-category/none", "tag_category/get_nonexistent").await?;
+        verify_query("PUT /tag-category/none", "tag_category/update_nonexistent").await?;
+        verify_query("PUT /tag-category/none/default", "tag_category/default_nonexistent").await?;
+        verify_query("DELETE /tag-category/none", "tag_category/delete_nonexistent").await?;
 
         verify_query("POST /tag-categories", "tag_category/create_invalid").await?;
         verify_query("POST /tag-categories", "tag_category/create_name_clash").await?;

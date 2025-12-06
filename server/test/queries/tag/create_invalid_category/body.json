@@ -1,0 +1,14 @@
+{
+    "names": [
+        "name"
+    ],
+    "category": "nonexistent",
+    "description": "This is a test tag",
+    "implications": [
+        "rock",
+        "sky"
+    ],
+    "suggestions": [
+        "plant"
+    ]
+}

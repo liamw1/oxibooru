@@ -16,7 +16,9 @@ use crate::{api, resource, snapshot, update};
 use axum::extract::{Extension, State};
 use axum::{Router, routing};
 use diesel::dsl::exists;
-use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
+use diesel::{
+    Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
+};
 use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
@@ -150,21 +152,20 @@ async fn merge(
         return Err(ApiError::SelfMerge(ResourceType::Pool));
     }
 
+    let get_pool_info = |conn: &mut PgConnection, id: i64| {
+        pool::table
+            .find(id)
+            .select(pool::last_edit_time)
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Pool))
+    };
+
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
-        let remove_version = pool::table
-            .find(absorbed_id)
-            .select(pool::last_edit_time)
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Pool))?;
-        let merge_to_version = pool::table
-            .find(merge_to_id)
-            .select(pool::last_edit_time)
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Pool))?;
+        let remove_version = get_pool_info(conn, absorbed_id)?;
+        let merge_to_version = get_pool_info(conn, merge_to_id)?;
         api::verify_version(remove_version, body.remove_version)?;
         api::verify_version(merge_to_version, body.merge_to_version)?;
 

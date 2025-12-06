@@ -1,0 +1,12 @@
+{
+    "names": [],
+    "category": "surroundings",
+    "description": "This is a test tag",
+    "implications": [
+        "rock",
+        "sky"
+    ],
+    "suggestions": [
+        "plant"
+    ]
+}

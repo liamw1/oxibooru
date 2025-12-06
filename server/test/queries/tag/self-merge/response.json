@@ -1,0 +1,5 @@
+{
+    "description": "Cannot merge tag with itself",
+    "name": "SelfMerge",
+    "title": "Self Merge"
+}
