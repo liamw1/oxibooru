@@ -1,5 +1,6 @@
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{ApiError, ApiResult, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::api::{DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::comment::{NewComment, NewCommentScore};
@@ -100,7 +101,7 @@ async fn create(
     let mut conn = state.get_connection()?;
     let comment = state.get_connection()?.transaction(|conn| {
         let insert_result = new_comment.insert_into(comment::table).get_result(conn);
-        api::map_foreign_key_violation(insert_result, ResourceType::Post)
+        error::map_foreign_key_violation(insert_result, ResourceType::Post)
     })?;
     conn.transaction(|conn| CommentInfo::new(conn, &state.config, client, comment, &fields))
         .map(Json)
@@ -176,7 +177,7 @@ async fn rate(
             }
             .insert_into(comment_score::table)
             .execute(conn);
-            api::map_foreign_key_violation(insert_result, ResourceType::Comment)?;
+            error::map_foreign_key_violation(insert_result, ResourceType::Comment)?;
         }
         Ok::<_, ApiError>(())
     })?;
@@ -215,7 +216,7 @@ async fn delete(
 
 #[cfg(test)]
 mod test {
-    use crate::api::ApiResult;
+    use crate::api::error::ApiResult;
     use crate::model::comment::Comment;
     use crate::model::enums::{ResourceType, UserRank};
     use crate::schema::{comment, comment_statistics, database_statistics, user, user_statistics};

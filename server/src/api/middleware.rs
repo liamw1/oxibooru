@@ -1,4 +1,4 @@
-use crate::api::{ApiError, ApiResult};
+use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::auth::{Client as AuthClient, header};
 use crate::model::enums::UserRank;
@@ -121,7 +121,7 @@ async fn post_to_webhook(url: Url, snapshot: Arc<Snapshot>) {
 
 #[cfg(test)]
 mod test {
-    use crate::api::ApiResult;
+    use crate::api::error::ApiResult;
     use crate::auth::header;
     use crate::test::*;
     use serial_test::parallel;

@@ -1,0 +1,5 @@
+{
+    "description": "Cannot merge pool with itself",
+    "name": "SelfMerge",
+    "title": "Self Merge"
+}

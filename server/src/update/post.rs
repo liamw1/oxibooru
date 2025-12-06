@@ -1,4 +1,4 @@
-use crate::api::ApiResult;
+use crate::api::error::ApiResult;
 use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::ThumbnailCategory;

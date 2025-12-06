@@ -1,5 +1,6 @@
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{ApiError, ApiResult, ResourceParams, UnpagedResponse};
+use crate::api::{ResourceParams, UnpagedResponse};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::enums::AvatarStyle;
@@ -210,7 +211,7 @@ async fn delete(
 
 #[cfg(test)]
 mod test {
-    use crate::api::ApiResult;
+    use crate::api::error::ApiResult;
     use crate::model::user::UserToken;
     use crate::schema::{user, user_token};
     use crate::test::*;

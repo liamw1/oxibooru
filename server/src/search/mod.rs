@@ -1,4 +1,4 @@
-use crate::api::ApiResult;
+use crate::api::error::ApiResult;
 use crate::auth::Client;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use diesel::sql_types::{Float, SingleValue};

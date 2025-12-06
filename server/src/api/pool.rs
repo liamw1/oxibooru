@@ -1,5 +1,6 @@
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{ApiError, ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::enums::ResourceType;
@@ -15,7 +16,7 @@ use crate::{api, resource, snapshot, update};
 use axum::extract::{Extension, State};
 use axum::{Router, routing};
 use diesel::dsl::exists;
-use diesel::{Connection, ExpressionMethods, Insertable, QueryDsl, RunQueryDsl, SaveChangesDsl};
+use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
@@ -104,7 +105,9 @@ async fn create(
         let (category_id, category): (i64, SmallString) = pool_category::table
             .select((pool_category::id, pool_category::name))
             .filter(pool_category::name.eq(body.category))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
         let pool: Pool = NewPool {
             category_id,
             description: body.description.as_deref().unwrap_or(""),
@@ -150,8 +153,18 @@ async fn merge(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
-        let remove_version = pool::table.find(absorbed_id).select(pool::last_edit_time).first(conn)?;
-        let merge_to_version = pool::table.find(merge_to_id).select(pool::last_edit_time).first(conn)?;
+        let remove_version = pool::table
+            .find(absorbed_id)
+            .select(pool::last_edit_time)
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Pool))?;
+        let merge_to_version = pool::table
+            .find(merge_to_id)
+            .select(pool::last_edit_time)
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Pool))?;
         api::verify_version(remove_version, body.remove_version)?;
         api::verify_version(merge_to_version, body.merge_to_version)?;
 
@@ -185,7 +198,11 @@ async fn update(
 
     let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
-        let old_pool: Pool = pool::table.find(pool_id).first(conn)?;
+        let old_pool: Pool = pool::table
+            .find(pool_id)
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Pool))?;
         api::verify_version(old_pool.last_edit_time, body.version)?;
 
         let mut new_pool = old_pool.clone();
@@ -198,7 +215,9 @@ async fn update(
             let category_id: i64 = pool_category::table
                 .select(pool_category::id)
                 .filter(pool_category::name.eq(&category))
-                .first(conn)?;
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
             new_pool.category_id = category_id;
             new_snapshot_data.category = category;
         }
@@ -243,7 +262,11 @@ async fn delete(
     api::verify_privilege(client, state.config.privileges().pool_delete)?;
 
     state.get_connection()?.transaction(|conn| {
-        let pool: Pool = pool::table.find(pool_id).first(conn)?;
+        let pool: Pool = pool::table
+            .find(pool_id)
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Pool))?;
         api::verify_version(pool.last_edit_time, *client_version)?;
 
         let pool_id = pool.id;
@@ -257,7 +280,8 @@ async fn delete(
 
 #[cfg(test)]
 mod test {
-    use crate::api::ApiResult;
+    use crate::api::error::ApiResult;
+    use crate::model::enums::ResourceType;
     use crate::model::pool::Pool;
     use crate::schema::{database_statistics, pool, pool_statistics};
     use crate::test::*;
@@ -400,6 +424,34 @@ mod test {
         assert_eq!(new_pool.creation_time, pool.creation_time);
         assert!(new_pool.last_edit_time > pool.last_edit_time);
         assert_eq!(new_post_count, post_count);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn error() -> ApiResult<()> {
+        verify_query("GET /pool/99", "pool/get_nonexistent").await?;
+        verify_query("POST /pool-merge", "pool/merge_to_nonexistent").await?;
+        verify_query("POST /pool-merge", "pool/merge_with_nonexistent").await?;
+        verify_query("PUT /pool/99", "pool/update_nonexistent").await?;
+        verify_query("DELETE /pool/99", "pool/delete_nonexistent").await?;
+
+        verify_query("POST /pool", "pool/create_nameless").await?;
+        verify_query("POST /pool", "pool/create_name_clash").await?;
+        verify_query("POST /pool", "pool/create_invalid_name").await?;
+        verify_query("POST /pool", "pool/create_invalid_post").await?;
+        verify_query("POST /pool", "pool/create_invalid_category").await?;
+        verify_query("POST /pool", "pool/create_duplicate_post").await?;
+        verify_query("POST /pool-merge", "pool/self-merge").await?;
+
+        verify_query("PUT /pool/1", "pool/update_nameless").await?;
+        verify_query("PUT /pool/1", "pool/update_name_clash").await?;
+        verify_query("PUT /pool/1", "pool/update_invalid_name").await?;
+        verify_query("PUT /pool/1", "pool/update_invalid_post").await?;
+        verify_query("PUT /pool/1", "pool/update_invalid_category").await?;
+        verify_query("PUT /pool/1", "pool/update_duplicate_post").await?;
+
+        reset_sequence(ResourceType::Pool)?;
         Ok(())
     }
 }

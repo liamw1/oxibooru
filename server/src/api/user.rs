@@ -1,5 +1,6 @@
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
-use crate::api::{ApiError, ApiResult, DeleteBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{DeleteBody, PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::auth::password;
@@ -402,7 +403,7 @@ async fn delete(
 
 #[cfg(test)]
 mod test {
-    use crate::api::ApiResult;
+    use crate::api::error::ApiResult;
     use crate::model::user::User;
     use crate::schema::{database_statistics, user, user_statistics};
     use crate::test::*;

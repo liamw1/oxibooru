@@ -1,4 +1,4 @@
-use crate::api::ApiError;
+use crate::api::error::ApiError;
 use axum::extract::multipart::{Multipart as AxumMultipart, MultipartRejection};
 use axum::extract::rejection::{JsonRejection, MissingJsonContentType, PathRejection, QueryRejection};
 use axum::extract::{FromRequest, FromRequestParts, Json as AxumJson, Path as AxumPath, Query as AxumQuery, Request};

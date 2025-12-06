@@ -1,5 +1,5 @@
 use crate::admin::DatabaseResult;
-use crate::api::ApiResult;
+use crate::api::error::ApiResult;
 use crate::app::AppState;
 use crate::auth::header;
 use crate::config::Config;

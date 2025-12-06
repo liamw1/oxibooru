@@ -1,4 +1,4 @@
-use crate::api::{ApiError, ApiResult};
+use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::config::Config;
 use crate::content::cache::CachedProperties;

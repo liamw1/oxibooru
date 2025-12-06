@@ -1,6 +1,7 @@
+use crate::api;
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::Json;
 use crate::api::extract::JsonOrMultipart;
-use crate::api::{self, ApiError, ApiResult};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::Config;

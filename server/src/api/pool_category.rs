@@ -1,5 +1,6 @@
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{ApiError, ApiResult, DeleteBody, ResourceParams, UnpagedResponse};
+use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::RegexType;
@@ -141,7 +142,7 @@ async fn update(
 
         new_category.last_edit_time = DateTime::now();
         let _: PoolCategory =
-            api::map_unique_violation(new_category.save_changes(conn), ResourceProperty::PoolCategoryName)?;
+            error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::PoolCategoryName)?;
         snapshot::pool_category::modification_snapshot(conn, client, &old_category, &new_category)?;
         Ok::<_, ApiError>(new_category)
     })?;
@@ -237,7 +238,8 @@ async fn delete(
 
 #[cfg(test)]
 mod test {
-    use crate::api::ApiResult;
+    use crate::api::error::ApiResult;
+    use crate::model::enums::ResourceType;
     use crate::model::pool_category::PoolCategory;
     use crate::schema::{pool_category, pool_category_statistics};
     use crate::string::SmallString;
@@ -362,11 +364,13 @@ mod test {
         verify_query(&format!("PUT /pool-category/{NAME}/default"), "pool_category/default_nonexistent").await?;
         verify_query(&format!("DELETE /pool-category/{NAME}"), "pool_category/delete_nonexistent").await?;
 
-        verify_query("POST /pool-categories", "pool_category/create_name_clash").await?;
         verify_query("POST /pool-categories", "pool_category/create_invalid").await?;
-        verify_query("PUT /pool-category/default", "pool_category/update_name_clash").await?;
+        verify_query("POST /pool-categories", "pool_category/create_name_clash").await?;
         verify_query("PUT /pool-category/default", "pool_category/update_invalid").await?;
+        verify_query("PUT /pool-category/default", "pool_category/update_name_clash").await?;
         verify_query("DELETE /pool-category/default", "pool_category/delete_default").await?;
+
+        reset_sequence(ResourceType::PoolCategory)?;
         Ok(())
     }
 }

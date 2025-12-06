@@ -1,4 +1,4 @@
-use crate::api::{ApiError, ApiResult};
+use crate::api::error::{ApiError, ApiResult};
 use crate::content::FileContents;
 use crate::model::enums::MimeType;
 use crate::string::SmallString;

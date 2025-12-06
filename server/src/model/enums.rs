@@ -505,6 +505,7 @@ impl FromSql<SmallInt, Pg> for ResourceType {
 #[strum(serialize_all = "snake_case")]
 pub enum ResourceProperty {
     PoolName,
+    PoolPost,
     PoolCategoryName,
     PostRelation,
     TagName,

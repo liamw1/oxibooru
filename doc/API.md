@@ -327,6 +327,7 @@ List of possible error names:
 - `PoolCategoryNotFound`
 - `PoolNameAlreadyExists`
 - `PoolNotFound`
+- `PoolPostAlreadyExists`
 - `PositiveOverflow`
 - `PostNotFound`
 - `PostRelationAlreadyExists`
@@ -356,7 +357,6 @@ List of possible error names:
 - `TagNotFound`
 - `TimedOut`
 - `TooFewArgs`
-- `TooMany`
 - `TooManyArgs`
 - `TooManyLinks`
 - `UnableToSendCommand`

@@ -1,4 +1,4 @@
-use crate::api::{ApiError, ApiResult};
+use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::model::pool::PoolName;
 use crate::schema::{database_statistics, pool, pool_category, pool_name, pool_statistics};

@@ -1,5 +1,6 @@
+use crate::api::ResourceParams;
+use crate::api::error::ApiResult;
 use crate::api::extract::{Json, Query};
-use crate::api::{ApiResult, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::PublicConfig;

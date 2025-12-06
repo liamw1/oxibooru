@@ -1,5 +1,6 @@
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
-use crate::api::{ApiError, ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::content::hash::PostHash;
@@ -882,7 +883,7 @@ async fn unfavorite(
 
 #[cfg(test)]
 mod test {
-    use crate::api::ApiResult;
+    use crate::api::error::ApiResult;
     use crate::model::post::Post;
     use crate::schema::{post, post_feature, post_statistics, tag, tag_name, user, user_statistics};
     use crate::search::post::Token;

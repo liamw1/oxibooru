@@ -1,7 +1,8 @@
+use crate::api::error::ApiResult;
+use crate::config::Config;
 use crate::filesystem;
 use crate::schema::user;
 use crate::time::DateTime;
-use crate::{api::ApiResult, config::Config};
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use image::DynamicImage;
 

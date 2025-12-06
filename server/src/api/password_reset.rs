@@ -1,5 +1,5 @@
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path};
-use crate::api::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::auth::password;
 use crate::content::hash;
@@ -148,7 +148,7 @@ async fn reset_password(
 
 #[cfg(test)]
 mod test {
-    use crate::api::ApiResult;
+    use crate::api::error::ApiResult;
     use crate::test::*;
     use serial_test::parallel;
 
