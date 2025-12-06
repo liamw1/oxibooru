@@ -512,6 +512,7 @@ pub enum ResourceProperty {
     TagName,
     TagCategoryName,
     UserName,
+    UserEmail,
 }
 
 #[cfg(test)]

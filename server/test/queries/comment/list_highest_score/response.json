@@ -10,7 +10,7 @@
             "text": "Cool post!",
             "user": {
                 "name": "regular_user",
-                "avatarUrl": "data/avatars/regular_user.png"
+                "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
             },
             "score": 2,
             "ownScore": 0

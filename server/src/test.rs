@@ -180,9 +180,9 @@ pub async fn verify_query_with_credentials(
 const DATABASE_NAME: &str = "__test";
 
 const USERS: &[NewUser] = &[
-    new_user("restricted_user", None, UserRank::Restricted),
+    new_user("restricted_user", Some("google.com"), UserRank::Restricted),
     new_user("regular_user", Some("email@domain.com"), UserRank::Regular),
-    new_user("power_user", Some("example&hotmail.com"), UserRank::Power),
+    new_user("power_user", Some("example@hotmail.com"), UserRank::Power),
     new_user("moderator", None, UserRank::Moderator),
     new_user("administrator", None, UserRank::Administrator),
 ];
@@ -487,7 +487,7 @@ const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRan
         password_salt: TEST_SALT,
         email,
         rank,
-        avatar_style: AvatarStyle::Manual,
+        avatar_style: AvatarStyle::Gravatar,
     }
 }
 

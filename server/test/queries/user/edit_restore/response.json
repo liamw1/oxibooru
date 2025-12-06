@@ -1,12 +1,12 @@
 {
-    "name": "restricted_user",
+    "name": "moderator",
     "email": false,
-    "rank": "restricted",
-    "avatarStyle": "manual",
-    "avatarUrl": "data/avatars/restricted_user.png",
+    "rank": "moderator",
+    "avatarStyle": "gravatar",
+    "avatarUrl": "https://gravatar.com/avatar/2cfd020b749e439ee36c82eb835e2e133facc06eb7e669106f3361e87d605b36?d=retro&s=300",
     "commentCount": 0,
-    "uploadedPostCount": 1,
+    "uploadedPostCount": 0,
     "likedPostCount": false,
     "dislikedPostCount": false,
-    "favoritePostCount": 1
+    "favoritePostCount": 0
 }

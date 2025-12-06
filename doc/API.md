@@ -376,6 +376,7 @@ List of possible error names:
 - `UnsupportedFormat`
 - `UnsupportedImageDimensions`
 - `UnsupportedPathType`
+- `UserEmailAlreadyExists`
 - `UserNameAlreadyExists`
 - `UsernamePasswordMismatch`
 - `UsernameTokenMismatch`

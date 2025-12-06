@@ -1,0 +1,3 @@
+[public_info.privileges]
+user_edit_any_rank  = "anonymous"
+user_edit_self_rank = "anonymous"

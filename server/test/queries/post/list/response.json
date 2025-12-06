@@ -8,7 +8,7 @@
             "id": 1,
             "user": {
                 "name": "restricted_user",
-                "avatarUrl": "data/avatars/restricted_user.png"
+                "avatarUrl": "https://gravatar.com/avatar/6009606e934432ad90cea21381c562a56a8c6e16c107b68af176e214281ee96a?d=retro&s=300"
             },
             "fileSize": 1048576,
             "canvasWidth": 1000,
@@ -103,7 +103,7 @@
             "favoritedBy": [
                 {
                     "name": "restricted_user",
-                    "avatarUrl": "data/avatars/restricted_user.png"
+                    "avatarUrl": "https://gravatar.com/avatar/6009606e934432ad90cea21381c562a56a8c6e16c107b68af176e214281ee96a?d=retro&s=300"
                 }
             ],
             "hasCustomThumbnail": false
@@ -112,7 +112,7 @@
             "id": 2,
             "user": {
                 "name": "regular_user",
-                "avatarUrl": "data/avatars/regular_user.png"
+                "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
             },
             "fileSize": 5242880,
             "canvasWidth": 1980,
@@ -266,7 +266,7 @@
             "favoritedBy": [
                 {
                     "name": "regular_user",
-                    "avatarUrl": "data/avatars/regular_user.png"
+                    "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
                 }
             ],
             "hasCustomThumbnail": false
@@ -275,7 +275,7 @@
             "id": 3,
             "user": {
                 "name": "regular_user",
-                "avatarUrl": "data/avatars/regular_user.png"
+                "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
             },
             "fileSize": 96468992,
             "canvasWidth": 11146,
@@ -346,7 +346,7 @@
             "favoritedBy": [
                 {
                     "name": "regular_user",
-                    "avatarUrl": "data/avatars/regular_user.png"
+                    "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
                 }
             ],
             "hasCustomThumbnail": false
@@ -355,7 +355,7 @@
             "id": 4,
             "user": {
                 "name": "regular_user",
-                "avatarUrl": "data/avatars/regular_user.png"
+                "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
             },
             "fileSize": 1,
             "canvasWidth": 1,
@@ -401,7 +401,7 @@
             "favoritedBy": [
                 {
                     "name": "regular_user",
-                    "avatarUrl": "data/avatars/regular_user.png"
+                    "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
                 }
             ],
             "hasCustomThumbnail": false
@@ -528,7 +528,7 @@
             "favoritedBy": [
                 {
                     "name": "administrator",
-                    "avatarUrl": "data/avatars/administrator.png"
+                    "avatarUrl": "https://gravatar.com/avatar/0911f7898fb33c121bdc89400182a48cf16c704ae826da05a12fa222a54406d0?d=retro&s=300"
                 }
             ],
             "hasCustomThumbnail": false

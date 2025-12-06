@@ -2,7 +2,7 @@
     "id": 1,
     "user": {
         "name": "restricted_user",
-        "avatarUrl": "data/avatars/restricted_user.png"
+        "avatarUrl": "https://gravatar.com/avatar/6009606e934432ad90cea21381c562a56a8c6e16c107b68af176e214281ee96a?d=retro&s=300"
     },
     "fileSize": 5242880,
     "canvasWidth": 1980,
@@ -184,11 +184,11 @@
     "favoritedBy": [
         {
             "name": "regular_user",
-            "avatarUrl": "data/avatars/regular_user.png"
+            "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
         },
         {
             "name": "restricted_user",
-            "avatarUrl": "data/avatars/restricted_user.png"
+            "avatarUrl": "https://gravatar.com/avatar/6009606e934432ad90cea21381c562a56a8c6e16c107b68af176e214281ee96a?d=retro&s=300"
         }
     ],
     "hasCustomThumbnail": false

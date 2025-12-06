@@ -10,7 +10,7 @@
             "text": "Cool post!",
             "user": {
                 "name": "regular_user",
-                "avatarUrl": "data/avatars/regular_user.png"
+                "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
             },
             "score": 2,
             "ownScore": 0
@@ -21,7 +21,7 @@
             "text": "how did you post this",
             "user": {
                 "name": "administrator",
-                "avatarUrl": "data/avatars/administrator.png"
+                "avatarUrl": "https://gravatar.com/avatar/0911f7898fb33c121bdc89400182a48cf16c704ae826da05a12fa222a54406d0?d=retro&s=300"
             },
             "score": 0,
             "ownScore": 0
@@ -32,7 +32,7 @@
             "text": "I don't think this uploaded correctly",
             "user": {
                 "name": "regular_user",
-                "avatarUrl": "data/avatars/regular_user.png"
+                "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
             },
             "score": -4,
             "ownScore": -1

@@ -3,7 +3,7 @@
         "id": 4,
         "user": {
             "name": "regular_user",
-            "avatarUrl": "data/avatars/regular_user.png"
+            "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
         },
         "fileSize": 1,
         "canvasWidth": 1,
@@ -49,7 +49,7 @@
         "favoritedBy": [
             {
                 "name": "regular_user",
-                "avatarUrl": "data/avatars/regular_user.png"
+                "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
             }
         ],
         "hasCustomThumbnail": false

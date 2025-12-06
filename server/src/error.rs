@@ -138,6 +138,7 @@ impl ErrorKind for crate::model::enums::ResourceProperty {
             Self::TagName => "TagNameAlreadyExists",
             Self::TagCategoryName => "TagCategoryNameAlreadyExists",
             Self::UserName => "UserNameAlreadyExists",
+            Self::UserEmail => "UserEmailAlreadyExists",
         }
     }
 }

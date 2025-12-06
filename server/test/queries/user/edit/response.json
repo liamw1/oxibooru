@@ -1,12 +1,12 @@
 {
     "name": "name_change",
     "email": false,
-    "rank": "moderator",
+    "rank": "restricted",
     "avatarStyle": "gravatar",
     "avatarUrl": "https://gravatar.com/avatar/bdbdb4591127c5588be2255d77418e589e48b690f88e2888286eaccf61b81c9d?d=retro&s=300",
     "commentCount": 0,
-    "uploadedPostCount": 1,
+    "uploadedPostCount": 0,
     "likedPostCount": false,
     "dislikedPostCount": false,
-    "favoritePostCount": 1
+    "favoritePostCount": 0
 }

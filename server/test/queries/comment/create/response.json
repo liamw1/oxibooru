@@ -4,7 +4,7 @@
     "text": "This is a test comment",
     "user": {
         "name": "administrator",
-        "avatarUrl": "data/avatars/administrator.png"
+        "avatarUrl": "https://gravatar.com/avatar/0911f7898fb33c121bdc89400182a48cf16c704ae826da05a12fa222a54406d0?d=retro&s=300"
     },
     "score": 0,
     "ownScore": 0
