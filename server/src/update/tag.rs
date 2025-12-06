@@ -1,7 +1,7 @@
-use crate::api::error::{ApiError, ApiResult};
+use crate::api::error::{self, ApiError, ApiResult};
 use crate::auth::Client;
 use crate::config::{Config, RegexType};
-use crate::model::enums::ResourceType;
+use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagName, TagSuggestion};
 use crate::schema::post_tag;
@@ -331,7 +331,8 @@ fn add_names(conn: &mut PgConnection, tag_id: i64, current_name_count: i32, name
         .zip(current_name_count..total_name_count)
         .map(|(name, order)| NewTagName { tag_id, order, name })
         .collect();
-    new_names.insert_into(tag_name::table).execute(conn)?;
+    let insert_result = new_names.insert_into(tag_name::table).execute(conn);
+    error::map_unique_violation(insert_result, ResourceProperty::TagName)?;
     Ok(())
 }
 

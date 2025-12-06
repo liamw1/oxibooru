@@ -1,0 +1,5 @@
+{
+    "description": "'a' does not match on tag category regex",
+    "name": "ExpressionFailsRegex",
+    "title": "Expression Fails Regex"
+}

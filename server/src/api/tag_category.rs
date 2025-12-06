@@ -1,10 +1,10 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{DeleteBody, ResourceParams, UnpagedResponse};
+use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::RegexType;
-use crate::model::enums::ResourceType;
+use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::tag_category::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
@@ -89,8 +89,15 @@ async fn create(
 
     let mut conn = state.get_connection()?;
     let category = conn.transaction(|conn| {
-        let category = new_category.insert_into(tag_category::table).get_result(conn)?;
-        snapshot::tag_category::creation_snapshot(conn, client, &category).map(|()| category)
+        let category = new_category
+            .insert_into(tag_category::table)
+            .on_conflict(tag_category::name)
+            .do_nothing()
+            .get_result(conn)
+            .optional()?
+            .ok_or(ApiError::AlreadyExists(ResourceProperty::TagCategoryName))?;
+        snapshot::tag_category::creation_snapshot(conn, client, &category)?;
+        Ok::<_, ApiError>(category)
     })?;
     conn.transaction(|conn| TagCategoryInfo::new(conn, category, &fields))
         .map(Json)
@@ -118,7 +125,11 @@ async fn update(
 
     let mut conn = state.get_connection()?;
     let updated_category = conn.transaction(|conn| {
-        let old_category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        let old_category: TagCategory = tag_category::table
+            .filter(tag_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
         api::verify_version(old_category.last_edit_time, body.version)?;
 
         let mut new_category = old_category.clone();
@@ -137,7 +148,8 @@ async fn update(
         }
 
         new_category.last_edit_time = DateTime::now();
-        let _: TagCategory = new_category.save_changes(conn)?;
+        let _: TagCategory =
+            error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::TagCategoryName)?;
         snapshot::tag_category::modification_snapshot(conn, client, &old_category, &new_category)?;
         Ok::<_, ApiError>(new_category)
     })?;
@@ -158,7 +170,11 @@ async fn set_default(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut conn = state.get_connection()?;
     let new_default_category: TagCategory = conn.transaction(|conn| {
-        let mut category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        let mut category: TagCategory = tag_category::table
+            .filter(tag_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
         let mut old_default_category: TagCategory = tag_category::table.filter(TagCategory::default()).first(conn)?;
 
         let defaulted_tags: Vec<i64> = diesel::update(tag::table)
@@ -210,7 +226,11 @@ async fn delete(
     api::verify_privilege(client, state.config.privileges().tag_category_delete)?;
 
     state.get_connection()?.transaction(|conn| {
-        let category: TagCategory = tag_category::table.filter(tag_category::name.eq(name)).first(conn)?;
+        let category: TagCategory = tag_category::table
+            .filter(tag_category::name.eq(name))
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
         api::verify_version(category.last_edit_time, *client_version)?;
         if category.id == 0 {
             return Err(ApiError::DeleteDefault(ResourceType::TagCategory));
@@ -225,6 +245,7 @@ async fn delete(
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
+    use crate::model::enums::ResourceType;
     use crate::model::tag_category::TagCategory;
     use crate::schema::{tag_category, tag_category_statistics};
     use crate::test::*;
@@ -336,6 +357,25 @@ mod test {
 
         let default = is_default(&mut conn)?;
         assert!(!default);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn error() -> ApiResult<()> {
+        const NAME: &str = "none";
+        verify_query(&format!("GET /tag-category/{NAME}"), "tag_category/get_nonexistent").await?;
+        verify_query(&format!("PUT /tag-category/{NAME}"), "tag_category/update_nonexistent").await?;
+        verify_query(&format!("PUT /tag-category/{NAME}/default"), "tag_category/default_nonexistent").await?;
+        verify_query(&format!("DELETE /tag-category/{NAME}"), "tag_category/delete_nonexistent").await?;
+
+        verify_query("POST /tag-categories", "tag_category/create_invalid").await?;
+        verify_query("POST /tag-categories", "tag_category/create_name_clash").await?;
+        verify_query("PUT /tag-category/default", "tag_category/update_invalid").await?;
+        verify_query("PUT /tag-category/default", "tag_category/update_name_clash").await?;
+        verify_query("DELETE /tag-category/default", "tag_category/delete_default").await?;
+
+        reset_sequence(ResourceType::PoolCategory)?;
         Ok(())
     }
 }
