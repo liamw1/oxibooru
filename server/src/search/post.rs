@@ -6,16 +6,18 @@ use crate::schema::{
     comment, database_statistics, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics,
     post_tag, tag_name, user,
 };
-use crate::search::{Builder, CacheState, Order, ParsedSort, SearchCriteria, UnparsedFilter, parse};
+use crate::search::{
+    self, Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
+};
 use crate::{
     apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
-    apply_time_filter, update_filter_cache,
+    apply_time_filter, update_filter_cache, update_nonmatching_filter_cache,
 };
-use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
+use diesel::dsl::{Eq, InnerJoin, InnerJoinOn, IntoBoxed, LeftJoin, Select, count, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::sql_types::{Float, SmallInt};
-use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
+use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl, TextExpressionMethods};
 use std::str::FromStr;
 use strum::{EnumIter, EnumString, IntoStaticStr};
 
@@ -130,6 +132,7 @@ impl<'a> QueryBuilder<'a> {
     }
 
     fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
+        let mut nonmatching_posts = None;
         let base_query = post::table
             .select(post::id)
             .inner_join(post_statistics::table)
@@ -154,7 +157,7 @@ impl<'a> QueryBuilder<'a> {
                 Token::Description => Ok(apply_str_filter!(query, post::description, filter)),
                 Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
                 Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
-                Token::Tag => apply_tag_filter(conn, query, filter, &mut self.cache_state),
+                Token::Tag => apply_tag_filter(conn, query, &mut nonmatching_posts, filter, &mut self.cache_state),
                 Token::Pool => apply_pool_filter(conn, query, filter, &mut self.cache_state),
                 Token::Uploader => Ok(apply_str_filter!(query, user::name, filter)),
                 Token::Fav => apply_favorite_filter(conn, query, filter, &mut self.cache_state),
@@ -172,6 +175,9 @@ impl<'a> QueryBuilder<'a> {
                 Token::FeatureTime => apply_feature_time_filter(conn, query, filter, &mut self.cache_state),
                 Token::Special => apply_special_filter(conn, query, self.search.client, filter, &mut self.cache_state),
             })?;
+        if let Some(nonmatching) = nonmatching_posts {
+            update_nonmatching_filter_cache!(conn, nonmatching, self.cache_state)?;
+        }
         Ok(apply_cache_filters!(query, post::id, self.cache_state))
     }
 
@@ -225,6 +231,12 @@ impl<'a> QueryBuilder<'a> {
 type BoxedQuery<'a> =
     IntoBoxed<'a, LeftJoin<InnerJoin<Select<post::table, post::id>, post_statistics::table>, user::table>, Pg>;
 
+type NonmatchingPostTags<'a> = IntoBoxed<
+    'a,
+    InnerJoinOn<Select<post_tag::table, post_tag::post_id>, tag_name::table, Eq<post_tag::tag_id, tag_name::tag_id>>,
+    Pg,
+>;
+
 #[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 enum SpecialToken {
@@ -273,16 +285,35 @@ fn apply_flag_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token
 fn apply_tag_filter<'a>(
     conn: &mut PgConnection,
     query: BoxedQuery<'a>,
-    filter: UnparsedFilter<Token>,
+    nonmatching_posts: &mut Option<NonmatchingPostTags<'a>>,
+    filter: UnparsedFilter<'a, Token>,
     state: &mut CacheState,
 ) -> ApiResult<BoxedQuery<'a>> {
     let post_tags = post_tag::table
         .select(post_tag::post_id)
         .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
         .into_boxed();
-    let post_tags = apply_distinct_if_multivalued!(post_tags, filter);
-    let filtered_posts = apply_str_filter!(post_tags, tag_name::name, filter.unnegated());
-    update_filter_cache!(conn, filtered_posts, post_tag::post_id, filter, state)?;
+
+    if filter.negated {
+        // We can perform an optimization here for negative tag filters. Instead of querying to insert nonmatching
+        // posts into the TEMP table one filter at a time, we can union together the filters to produce a single
+        // query to retrieve all posts that are excluded by the negative filters.
+        let nonmatching = nonmatching_posts.take().unwrap_or(post_tags.distinct());
+        let nonmatching = match parse::str_condition(filter.condition) {
+            StrCondition::Regular(Condition::Values(values)) => nonmatching.or_filter(tag_name::name.eq_any(values)),
+            StrCondition::Regular(Condition::GreaterEq(value)) => nonmatching.or_filter(tag_name::name.ge(value)),
+            StrCondition::Regular(Condition::LessEq(value)) => nonmatching.or_filter(tag_name::name.le(value)),
+            StrCondition::Regular(Condition::Range(range)) => {
+                nonmatching.or_filter(tag_name::name.between(range.start, range.end))
+            }
+            StrCondition::WildCard(pattern) => nonmatching.or_filter(search::lower(tag_name::name).like(pattern)),
+        };
+        nonmatching_posts.replace(nonmatching);
+    } else {
+        let post_tags = apply_distinct_if_multivalued!(post_tags, filter);
+        let filtered_posts = apply_str_filter!(post_tags, tag_name::name, filter.unnegated());
+        update_filter_cache!(conn, filtered_posts, post_tag::post_id, filter, state)?;
+    }
     Ok(query)
 }
 
