@@ -469,7 +469,7 @@ impl FromSql<SmallInt, Pg> for ResourceOperation {
     }
 }
 
-#[derive(Debug, Display, Clone, Copy, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize)]
+#[derive(Debug, Display, Clone, Copy, EnumString, FromRepr, IntoStaticStr, AsExpression, FromSqlRow, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[diesel(sql_type = SmallInt)]
@@ -484,6 +484,7 @@ pub enum ResourceType {
     TagImplication,
     TagSuggestion,
     User,
+    UserToken,
 }
 
 impl ToSql<SmallInt, Pg> for ResourceType {
@@ -499,6 +500,20 @@ impl FromSql<SmallInt, Pg> for ResourceType {
         let database_value = i16::from_sql(value)?;
         ResourceType::from_repr(database_value).ok_or("Failed to deserialize resource type".into())
     }
+}
+
+#[derive(Debug, Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum ResourceProperty {
+    PoolName,
+    PoolPost,
+    PoolCategoryName,
+    PostFeature,
+    PostRelation,
+    TagName,
+    TagCategoryName,
+    UserName,
+    UserEmail,
 }
 
 #[cfg(test)]

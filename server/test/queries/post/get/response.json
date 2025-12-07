@@ -1,0 +1,163 @@
+{
+    "id": 2,
+    "user": {
+        "name": "regular_user",
+        "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
+    },
+    "fileSize": 5242880,
+    "canvasWidth": 1980,
+    "canvasHeight": 1080,
+    "safety": "sketchy",
+    "type": "animation",
+    "mimeType": "image/gif",
+    "checksum": "3032000000000000000000000000000000000000000000000000000000000000",
+    "checksumMD5": "30320000000000000000000000000000",
+    "flags": [],
+    "source": "gif.gif",
+    "description": "",
+    "contentUrl": "data/posts/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.gif",
+    "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg",
+    "tags": [
+        {
+            "names": [
+                "george_lucas"
+            ],
+            "category": "Artist",
+            "usages": 1
+        },
+        {
+            "names": [
+                "star_wars"
+            ],
+            "category": "Source",
+            "usages": 1
+        },
+        {
+            "names": [
+                "admiral_ackbar"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "darth_vader",
+                "annakin_skywalker"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "luke_skywalker"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "princess_leia"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "forest",
+                "woods"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "plant",
+                "foliage"
+            ],
+            "category": "Surroundings",
+            "usages": 2
+        },
+        {
+            "names": [
+                "river",
+                "stream",
+                "creek"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "rock",
+                "stone"
+            ],
+            "category": "Surroundings",
+            "usages": 2
+        },
+        {
+            "names": [
+                "tree"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "water",
+                "agua"
+            ],
+            "category": "Surroundings",
+            "usages": 1
+        },
+        {
+            "names": [
+                "16:9_aspect_ratio"
+            ],
+            "category": "Meta",
+            "usages": 2
+        }
+    ],
+    "relations": [
+        {
+            "id": 1,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
+        }
+    ],
+    "pools": [
+        {
+            "id": 2,
+            "names": [
+                "fantasy"
+            ],
+            "category": "Setting",
+            "description": "",
+            "postCount": 3
+        },
+        {
+            "id": 4,
+            "names": [
+                "cyberpunk"
+            ],
+            "category": "Setting",
+            "description": "",
+            "postCount": 1
+        }
+    ],
+    "notes": [],
+    "score": 1,
+    "ownScore": 0,
+    "ownFavorite": false,
+    "tagCount": 13,
+    "commentCount": 0,
+    "relationCount": 1,
+    "noteCount": 0,
+    "favoriteCount": 1,
+    "featureCount": 0,
+    "favoritedBy": [
+        {
+            "name": "regular_user",
+            "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
+        }
+    ],
+    "hasCustomThumbnail": false
+}

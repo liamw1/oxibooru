@@ -1,14 +1,16 @@
 use crate::admin::DatabaseResult;
-use crate::api::ApiResult;
+use crate::api::error::ApiResult;
 use crate::app::AppState;
 use crate::auth::header;
 use crate::config::Config;
 use crate::content::hash::{Checksum, Md5Checksum, PostHash};
 use crate::content::signature::{COMPRESSED_SIGNATURE_LEN, NUM_WORDS};
 use crate::db::ConnectionResult;
+use crate::filesystem::Directory;
 use crate::model::comment::{NewComment, NewCommentScore};
-use crate::model::enums::{AvatarStyle, MimeType, PostFlag, PostFlags, Score, UserRank};
-use crate::model::enums::{PostSafety, PostType};
+use crate::model::enums::{
+    AvatarStyle, MimeType, PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score, UserRank,
+};
 use crate::model::pool::{NewPool, NewPoolName, PoolPost};
 use crate::model::pool_category::NewPoolCategory;
 use crate::model::post::{
@@ -36,8 +38,9 @@ use axum_test::TestServer;
 use diesel::r2d2::{ConnectionManager, Pool};
 use diesel::{ExpressionMethods, Insertable, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde_json::Value;
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard};
 use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
 use uuid::Uuid;
@@ -46,6 +49,8 @@ pub const TEST_PASSWORD: &str = "test_password";
 pub const TEST_SALT: &str = "test_salt";
 pub const TEST_HASH: &str = "$argon2id$v=19$m=19456,t=2,p=1$dGVzdF9zYWx0$voqGcDZhS6JWiMJy9q12zBgrC6OTBKa9dL8k0O8gD4M";
 pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8");
+pub const EXPIRED_TOKEN: Uuid = uuid::uuid!("b7188ca3-1391-4abf-bfc1-7d7dfad7d161");
+pub const DISABLED_TOKEN: Uuid = uuid::uuid!("86c5b652-7c9c-4846-8ae3-5ec236f57c4e");
 
 pub fn get_connection() -> ConnectionResult {
     get_state().connection_pool.get()
@@ -67,71 +72,153 @@ pub fn reset_database() {
     *get_state_guard() = None;
 }
 
-/// Returns path to a test image.
-pub fn image_path(relative_path: &str) -> PathBuf {
-    asset_path("images", relative_path)
+/// Useful after a table's sequence gets updated as an unintended side-effect.
+/// This can happen when attempting to insert a row but it fails due to a constraint violation.
+pub fn reset_sequence(table: ResourceType) -> ApiResult<()> {
+    let table: &str = table.into();
+    let query = format!(
+        "SELECT setval(pg_get_serial_sequence('{table}', 'id'), GREATEST((SELECT MAX(id) FROM \"{table}\"), 1));"
+    );
+
+    let mut conn = get_connection()?;
+    diesel::sql_query(query).execute(&mut conn)?;
+    Ok(())
 }
 
-/// Verifies that a given `query` matches the contents of a `reply_filepath`.
+/// Returns path to test media.
+pub fn media_path(filename: &str) -> PathBuf {
+    asset_path("media", filename)
+}
+
+pub fn simulate_upload(media_filename: &str, temp_name: &str) -> std::io::Result<u64> {
+    let state = get_state();
+    let temporary_uploads_path = state.config.path(Directory::TemporaryUploads);
+    let media_path = media_path(media_filename);
+
+    std::fs::create_dir_all(&temporary_uploads_path)?;
+    std::fs::copy(media_path, temporary_uploads_path.join(temp_name))
+}
+
+/// Verifies that a given `query` matches the contents of a `repsonse.json`
+/// that lies in the `test/queries/relative_path` directory. A `snapshot.json`
+/// will also be checked if it exists. A `body.json` and `config.toml` can be
+/// specified if they exist.
+///
 /// `query` must be of the form `METHOD path` (e.g. `GET /post/1`).
 pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
-    verify_query_with_user("administrator", query, relative_path).await
+    verify_query_with_user(UserRank::Administrator, query, relative_path).await
 }
 
-pub async fn verify_query_with_user(user: &str, query: &str, relative_path: &str) -> ApiResult<()> {
-    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(get_state()));
+pub async fn verify_query_with_user(user: UserRank, query: &str, relative_path: &str) -> ApiResult<()> {
+    let credentials = (user != UserRank::Anonymous)
+        .then(|| header::basic_credentials_for(USERS[user as usize - 1].name, TEST_PASSWORD));
+    verify_query_with_credentials(credentials, query, relative_path).await
+}
+
+pub async fn verify_query_with_credentials(
+    credentials: Option<String>,
+    query: &str,
+    relative_path: &str,
+) -> ApiResult<()> {
+    let mut expected_response: Option<Value> = None;
+    let mut expected_snapshot: Option<Value> = None;
+    let mut body: Option<Value> = None;
+    let mut config: Option<Config> = None;
+    for entry in std::fs::read_dir(asset_path("queries", relative_path))? {
+        let path = entry?.path();
+        let file_contents = std::fs::read_to_string(&path)?;
+        match path.file_name().and_then(OsStr::to_str) {
+            Some("response.json") => expected_response = Some(serde_json::from_str(&file_contents)?),
+            Some("snapshot.json") => expected_snapshot = Some(serde_json::from_str(&file_contents)?),
+            Some("body.json") => body = Some(serde_json::from_str(&file_contents)?),
+            Some("config.toml") => config = Some(config::test_config(Some(relative_path))),
+            Some(file_name) => panic!("Unexpected file name {file_name} in {relative_path}"),
+            _ => panic!("Could not parse file name {:?} in {relative_path}", path.file_name()),
+        }
+    }
+
+    // Optionally override default config
+    let mut app_state = get_state();
+    if let Some(mut config) = config {
+        // Data directory should not be overriden
+        config.data_dir = app_state.config.data_dir.clone();
+        app_state.config = Arc::new(config);
+    }
+
+    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(app_state));
     let (method, path) = query
         .split_once(' ')
         .expect("Query string must have method and path separated by a space");
     let method = Method::try_from(method).expect("Query string must start with a valid method");
     let path = path.replace(' ', "%20"); // Percent-encode all spaces
-    let credentials = header::credentials_for(user, TEST_PASSWORD);
-    let basic_access_authentication = format!("Basic {credentials}");
 
     let server =
         TestServer::new(ServiceExt::<Request>::into_make_service(app)).expect("Test server must be constructible");
-    let request = server
-        .method(method, &path)
-        .add_header(AUTHORIZATION, basic_access_authentication);
+    let mut request = server.method(method, &path);
+    if let Some(credentials) = credentials {
+        request = request.add_header(AUTHORIZATION, credentials);
+    }
 
     // Optionally specify a body
-    let body_path = asset_path("body", relative_path);
-    let reply = if body_path.try_exists()? {
-        request.json_from_file(body_path).await
+    let response = if let Some(body) = body {
+        request.json(&body).await
     } else {
         request.await
     };
-    reply.assert_status_ok();
 
-    // Optionally read an expected snapshot
-    let snapshot_path = asset_path("snapshot", relative_path);
-    if snapshot_path.try_exists()? {
-        let file_contents = std::fs::read_to_string(asset_path("snapshot", relative_path))?;
-        let expected_snapshot_data: Value = serde_json::from_str(&file_contents)?;
-
+    // Optionally check an expected snapshot
+    if let Some(expected_snapshot) = expected_snapshot {
         let mut conn = get_connection()?;
-        let actual_snapshot_data: Value = snapshot::table
+        let actual_snapshot: Value = snapshot::table
             .select(snapshot::data)
             .order_by(snapshot::id.desc())
             .first(&mut conn)?;
-        verify_json("snapshot data", &expected_snapshot_data, &actual_snapshot_data);
+        verify_json(relative_path, "snapshot data", &expected_snapshot, &actual_snapshot);
     }
 
-    let file_contents = std::fs::read_to_string(asset_path("reply", relative_path))?;
-    let expected_body: Value = serde_json::from_str(&file_contents)?;
-    let actual_body: Value = reply.json();
-    verify_json("response body", &expected_body, &actual_body);
+    if let Some(expected_response) = expected_response {
+        let actual_response: Value = serde_json::from_slice(response.as_bytes()).unwrap_or_else(|_| {
+            panic!("Response for {relative_path} is not JSON.\nBody:\n{}", String::from_utf8_lossy(response.as_bytes()))
+        });
+        verify_json(relative_path, "response body", &expected_response, &actual_response);
+    } else {
+        panic!("Missing response.json in {relative_path}");
+    }
     Ok(())
 }
 
 const DATABASE_NAME: &str = "__test";
 
 const USERS: &[NewUser] = &[
-    new_user("restricted_user", None, UserRank::Restricted),
+    new_user("restricted_user", Some("google.com"), UserRank::Restricted),
     new_user("regular_user", Some("email@domain.com"), UserRank::Regular),
-    new_user("power_user", Some("example&hotmail.com"), UserRank::Power),
+    new_user("power_user", Some("example@hotmail.com"), UserRank::Power),
     new_user("moderator", None, UserRank::Moderator),
     new_user("administrator", None, UserRank::Administrator),
+];
+
+const USER_TOKENS: &[NewUserToken] = &[
+    NewUserToken {
+        id: TEST_TOKEN,
+        user_id: 5,
+        note: Some("This is a test token"),
+        enabled: true,
+        expiration_time: None,
+    },
+    NewUserToken {
+        id: EXPIRED_TOKEN,
+        user_id: 2,
+        note: Some("This is an expired token"),
+        enabled: true,
+        expiration_time: Some(DateTime::test_date()),
+    },
+    NewUserToken {
+        id: DISABLED_TOKEN,
+        user_id: 2,
+        note: Some("This is a disabled token"),
+        enabled: false,
+        expiration_time: None,
+    },
 ];
 
 const POOL_CATEGORY_NAMES: &[&str] = &["Setting", "Style"];
@@ -315,8 +402,14 @@ const POSTS: &[NewPost] = &[
 ];
 
 const POST_RELATIONS: &[(i64, i64)] = &[(1, 2), (1, 3), (4, 5)];
+
+/// (`user_id`, `post_id`)
 const POST_FAVORITES: &[(i64, i64)] = &[(1, 1), (2, 2), (2, 3), (2, 4), (5, 5)];
+
+/// (`user_id`, `post_id`)
 const POST_FEATURES: &[(i64, i64)] = &[(5, 5), (4, 4), (3, 1), (3, 3), (3, 1)];
+
+/// (`user_id`, `post_id`, `score`)
 const POST_SCORES: &[(i64, i64, Score)] = &[
     (1, 5, Score::Dislike),
     (2, 1, Score::Like),
@@ -327,6 +420,7 @@ const POST_SCORES: &[(i64, i64, Score)] = &[
     (5, 5, Score::Like),
 ];
 
+/// (`user_id`, `post_id`, `text`)
 const COMMENTS: &[(Option<i64>, i64, &str)] = &[
     (Some(2), 1, "Cool post!"),
     (Some(5), 1, "how did you post this"),
@@ -334,6 +428,7 @@ const COMMENTS: &[(Option<i64>, i64, &str)] = &[
     (None, 5, "Lorem ipsum dolor sit amet, consectetur adipiscing elit"),
 ];
 
+/// (`comment_id`, `user_id`, `score`)
 const COMMENT_SCORES: &[(i64, i64, Score)] = &[
     (1, 1, Score::Like),
     (1, 3, Score::Like),
@@ -364,7 +459,7 @@ fn recreate_database() -> DatabaseResult<AppState> {
     let rng = &mut OsRng;
     let test_data_directory = std::env::temp_dir().join(rng.next_u64().to_string());
 
-    let mut test_config = config::default();
+    let mut test_config = config::test_config(None);
     test_config.data_dir = test_data_directory;
 
     // Drop and create test database via postgres database
@@ -388,7 +483,7 @@ fn recreate_database() -> DatabaseResult<AppState> {
         .test_on_check_out(true)
         .build(ConnectionManager::new(test_url))
         .expect("Test connection pool must be constructible");
-    db::run_database_migrations(&test_connection_pool).unwrap();
+    db::run_database_migrations(&test_connection_pool).expect("Must be able to run test migrations");
 
     let mut conn = test_connection_pool.get()?;
     populate_database(&mut conn, &test_config)?;
@@ -402,7 +497,7 @@ const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRan
         password_salt: TEST_SALT,
         email,
         rank,
-        avatar_style: AvatarStyle::Manual,
+        avatar_style: AvatarStyle::Gravatar,
     }
 }
 
@@ -536,7 +631,7 @@ fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> 
         let content_path = post_hash.content_path(mime_type);
         std::fs::create_dir_all(content_path.parent().unwrap_or(Path::new("")))?;
 
-        std::fs::copy(image_path(&source), content_path)?;
+        std::fs::copy(media_path(&source), content_path)?;
     }
     Ok(())
 }
@@ -545,16 +640,8 @@ fn populate_database(conn: &mut PgConnection, config: &Config) -> DatabaseResult
     // Create users
     USERS.insert_into(user::table).execute(conn)?;
 
-    // Create user token
-    NewUserToken {
-        id: TEST_TOKEN,
-        user_id: 5,
-        note: Some("This is a test token"),
-        enabled: true,
-        expiration_time: None,
-    }
-    .insert_into(user_token::table)
-    .execute(conn)?;
+    // Create user tokens
+    USER_TOKENS.insert_into(user_token::table).execute(conn)?;
 
     // Create tags and pools
     create_tag_categories(conn)?;
@@ -679,14 +766,14 @@ fn asset_path(folder_path: &str, relative_path: &str) -> PathBuf {
     [&manifest_dir, "test", folder_path, relative_path].iter().collect()
 }
 
-fn verify_json(name: &str, expected: &Value, actual: &Value) {
+fn verify_json(test_name: &str, json_type: &str, expected: &Value, actual: &Value) {
     let diff_message = crate::snapshot::value_diff(expected.clone(), actual.clone())
         .map_or("JSON contents are nearly equal, but at least one array element is out-of-order!".into(), |diff| {
             format!("Diff:\n{diff}")
         });
     assert!(
         expected == actual,
-        "Incorrect {name}. Expected:\n{expected}\n\nReceived:\n{actual}\n\n{diff_message}\n",
+        "Incorrect {json_type} for {test_name}. Expected:\n{expected}\n\nReceived:\n{actual}\n\n{diff_message}\n",
     );
 }
 

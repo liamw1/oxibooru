@@ -1,0 +1,6 @@
+[smtp]
+host = "smtp.gmail.com"
+port = 25
+username = "bot"
+password = "groovy123"
+from     = "App <noreply@example.com>"

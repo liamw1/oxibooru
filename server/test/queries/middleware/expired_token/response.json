@@ -1,0 +1,5 @@
+{
+    "description": "Token has expired",
+    "name": "ExpiredToken",
+    "title": "Failed Authentication"
+}

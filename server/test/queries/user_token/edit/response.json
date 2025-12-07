@@ -1,0 +1,9 @@
+{
+    "user": {
+        "name": "administrator",
+        "avatarUrl": "https://gravatar.com/avatar/0911f7898fb33c121bdc89400182a48cf16c704ae826da05a12fa222a54406d0?d=retro&s=300"
+    },
+    "note": "I'm changing this token",
+    "enabled": false,
+    "expirationTime": "2025-01-17T06:25:08.461692Z"
+}

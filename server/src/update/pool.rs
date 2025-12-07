@@ -1,5 +1,7 @@
-use crate::api::{self, ApiError, ApiResult};
+use crate::api::error::ApiResult;
+use crate::api::{self, error};
 use crate::config::{Config, RegexType};
+use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::pool::{NewPoolName, PoolPost};
 use crate::schema::{pool, pool_name, pool_post};
 use crate::string::SmallString;
@@ -72,24 +74,23 @@ pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> Api
 /// Appends `names` onto the current list of names for the pool associated with `pool_id`.
 fn add_names(conn: &mut PgConnection, pool_id: i64, current_name_count: i32, names: &[SmallString]) -> ApiResult<()> {
     let total_name_count = i32::try_from(names.len())
-        .ok()
-        .and_then(|new_name_count| current_name_count.checked_add(new_name_count))
-        .ok_or(ApiError::TooMany("names on pool"))?;
+        .unwrap_or(i32::MAX)
+        .saturating_add(current_name_count);
     let updated_names: Vec<_> = names
         .iter()
         .zip(current_name_count..total_name_count)
         .map(|(name, order)| NewPoolName { pool_id, order, name })
         .collect();
-    updated_names.insert_into(pool_name::table).execute(conn)?;
+    let insert_result = updated_names.insert_into(pool_name::table).execute(conn);
+    error::map_unique_violation(insert_result, ResourceProperty::PoolName)?;
     Ok(())
 }
 
 /// Appends `posts` onto the current list of posts in the pool associated with `pool_id`.
 fn add_posts(conn: &mut PgConnection, pool_id: i64, current_post_count: i64, posts: &[i64]) -> ApiResult<()> {
     let total_post_count = i64::try_from(posts.len())
-        .ok()
-        .and_then(|new_post_count| current_post_count.checked_add(new_post_count))
-        .ok_or(ApiError::TooMany("posts in pool"))?;
+        .unwrap_or(i64::MAX)
+        .saturating_add(current_post_count);
     let new_pool_posts: Vec<_> = posts
         .iter()
         .zip(current_post_count..total_post_count)
@@ -99,6 +100,7 @@ fn add_posts(conn: &mut PgConnection, pool_id: i64, current_post_count: i64, pos
             order,
         })
         .collect();
-    new_pool_posts.insert_into(pool_post::table).execute(conn)?;
+    let insert_result = new_pool_posts.insert_into(pool_post::table).execute(conn);
+    error::map_unique_or_foreign_key_violation(insert_result, ResourceProperty::PoolPost, ResourceType::Post)?;
     Ok(())
 }

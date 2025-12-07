@@ -310,12 +310,12 @@ fn recompute_signature_in_parallel(
     let signature_indexes = signature::generate_indexes(&image_signature);
     let transaction_result = conn.transaction(|conn| {
         // Post may have been deleted, so make sure it still exists first
-        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;
+        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
         if !post_exists {
             return Ok(0);
         }
 
-        let signature_exists: bool = diesel::select(exists(post_signature::table.find(post_id))).get_result(conn)?;
+        let signature_exists: bool = diesel::select(exists(post_signature::table.find(post_id))).first(conn)?;
         if signature_exists {
             diesel::update(post_signature::table.find(post_id))
                 .set((

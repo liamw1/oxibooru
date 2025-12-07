@@ -1,0 +1,5 @@
+{
+    "description": "Failed to deserialize the JSON body into the target type: flags[0]: unknown variant `loud`, expected `loop` or `sound` at line 1 column 71",
+    "name": "JsonDataError",
+    "title": "JSON Rejection"
+}

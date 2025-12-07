@@ -1,4 +1,4 @@
-use crate::api::{ApiError, ApiResult};
+use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::content::hash::Checksum;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};

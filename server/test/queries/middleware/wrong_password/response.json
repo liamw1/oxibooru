@@ -1,0 +1,5 @@
+{
+    "description": "Invalid username and password combination",
+    "name": "UsernamePasswordMismatch",
+    "title": "Failed Authentication"
+}

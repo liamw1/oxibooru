@@ -1,0 +1,2 @@
+[public_info]
+username_regex = "^[a-zA-Z0-9_-]{1,32}$"

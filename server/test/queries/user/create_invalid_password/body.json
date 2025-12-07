@@ -1,0 +1,7 @@
+{
+    "name": "new_user",
+    "password": "pass",
+    "email": "example@email.com",
+    "rank": "regular",
+    "avatarStyle": "gravatar"
+}

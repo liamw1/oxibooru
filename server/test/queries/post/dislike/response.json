@@ -1,0 +1,80 @@
+{
+    "id": 3,
+    "user": {
+        "name": "regular_user",
+        "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
+    },
+    "fileSize": 96468992,
+    "canvasWidth": 11146,
+    "canvasHeight": 7479,
+    "safety": "safe",
+    "type": "image",
+    "mimeType": "image/bmp",
+    "checksum": "3033000000000000000000000000000000000000000000000000000000000000",
+    "checksumMD5": "30330000000000000000000000000000",
+    "flags": [],
+    "source": "bmp.bmp",
+    "description": "",
+    "contentUrl": "data/posts/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.bmp",
+    "thumbnailUrl": "data/generated-thumbnails/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.jpg",
+    "tags": [
+        {
+            "names": [
+                "tagme",
+                "tag_me"
+            ],
+            "category": "default",
+            "usages": 1
+        },
+        {
+            "names": [
+                "high_resolution",
+                "high_res"
+            ],
+            "category": "Meta",
+            "usages": 1
+        }
+    ],
+    "relations": [
+        {
+            "id": 1,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
+        }
+    ],
+    "pools": [],
+    "notes": [
+        {
+            "polygon": [
+                [
+                    0.0,
+                    0.0
+                ],
+                [
+                    0.0,
+                    1.0
+                ],
+                [
+                    1.0,
+                    0.0
+                ]
+            ],
+            "text": "My favorite part"
+        }
+    ],
+    "score": 0,
+    "ownScore": -1,
+    "ownFavorite": false,
+    "tagCount": 2,
+    "commentCount": 0,
+    "relationCount": 1,
+    "noteCount": 1,
+    "favoriteCount": 1,
+    "featureCount": 1,
+    "favoritedBy": [
+        {
+            "name": "regular_user",
+            "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
+        }
+    ],
+    "hasCustomThumbnail": false
+}

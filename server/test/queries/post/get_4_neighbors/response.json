@@ -1,0 +1,209 @@
+{
+    "prev": {
+        "id": 3,
+        "user": {
+            "name": "regular_user",
+            "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
+        },
+        "fileSize": 96468992,
+        "canvasWidth": 11146,
+        "canvasHeight": 7479,
+        "safety": "safe",
+        "type": "image",
+        "mimeType": "image/bmp",
+        "checksum": "3033000000000000000000000000000000000000000000000000000000000000",
+        "checksumMD5": "30330000000000000000000000000000",
+        "flags": [],
+        "source": "bmp.bmp",
+        "description": "",
+        "contentUrl": "data/posts/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.bmp",
+        "thumbnailUrl": "data/generated-thumbnails/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.jpg",
+        "tags": [
+            {
+                "names": [
+                    "tagme",
+                    "tag_me"
+                ],
+                "category": "default",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "high_resolution",
+                    "high_res"
+                ],
+                "category": "Meta",
+                "usages": 1
+            }
+        ],
+        "relations": [
+            {
+                "id": 1,
+                "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
+            }
+        ],
+        "pools": [],
+        "notes": [
+            {
+                "polygon": [
+                    [
+                        0.0,
+                        0.0
+                    ],
+                    [
+                        0.0,
+                        1.0
+                    ],
+                    [
+                        1.0,
+                        0.0
+                    ]
+                ],
+                "text": "My favorite part"
+            }
+        ],
+        "score": 1,
+        "ownScore": 0,
+        "ownFavorite": false,
+        "tagCount": 2,
+        "commentCount": 0,
+        "relationCount": 1,
+        "noteCount": 1,
+        "favoriteCount": 1,
+        "featureCount": 1,
+        "favoritedBy": [
+            {
+                "name": "regular_user",
+                "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300"
+            }
+        ],
+        "hasCustomThumbnail": false
+    },
+    "next": {
+        "id": 5,
+        "user": null,
+        "fileSize": 107374182400,
+        "canvasWidth": 1980,
+        "canvasHeight": 1080,
+        "safety": "unsafe",
+        "type": "video",
+        "mimeType": "video/mp4",
+        "checksum": "3035000000000000000000000000000000000000000000000000000000000000",
+        "checksumMD5": "30350000000000000000000000000000",
+        "flags": [
+            "sound"
+        ],
+        "source": "mp4.mp4",
+        "description": "descriptor",
+        "contentUrl": "data/posts/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.mp4",
+        "thumbnailUrl": "data/generated-thumbnails/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.jpg",
+        "tags": [
+            {
+                "names": [
+                    "hidetaka_miyazaki"
+                ],
+                "category": "Artist",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "sekiro"
+                ],
+                "category": "Source",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "black_hat_badger"
+                ],
+                "category": "Character",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "isshin_ashina"
+                ],
+                "category": "Character",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "sekiro_(sekiro)"
+                ],
+                "category": "Character",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "night"
+                ],
+                "category": "Surroundings",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "night_sky"
+                ],
+                "category": "Surroundings",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "sky"
+                ],
+                "category": "Surroundings",
+                "usages": 1
+            },
+            {
+                "names": [
+                    "16:9_aspect_ratio"
+                ],
+                "category": "Meta",
+                "usages": 2
+            }
+        ],
+        "relations": [
+            {
+                "id": 4,
+                "thumbnailUrl": "data/generated-thumbnails/000000/00/4_78-cbid-2Ci2jMEqspr2LjF8OTP0kQUVVlCb53twMRw.jpg"
+            }
+        ],
+        "pools": [
+            {
+                "id": 2,
+                "names": [
+                    "fantasy"
+                ],
+                "category": "Setting",
+                "description": "",
+                "postCount": 3
+            },
+            {
+                "id": 6,
+                "names": [
+                    "realistic"
+                ],
+                "category": "Style",
+                "description": "",
+                "postCount": 1
+            }
+        ],
+        "notes": [],
+        "score": 0,
+        "ownScore": 1,
+        "ownFavorite": true,
+        "tagCount": 9,
+        "commentCount": 1,
+        "relationCount": 1,
+        "noteCount": 0,
+        "favoriteCount": 1,
+        "featureCount": 1,
+        "favoritedBy": [
+            {
+                "name": "administrator",
+                "avatarUrl": "https://gravatar.com/avatar/0911f7898fb33c121bdc89400182a48cf16c704ae826da05a12fa222a54406d0?d=retro&s=300"
+            }
+        ],
+        "hasCustomThumbnail": false
+    }
+}

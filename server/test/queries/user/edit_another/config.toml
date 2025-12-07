@@ -1,0 +1,10 @@
+[public_info.privileges]
+user_edit_any_name    = "moderator"
+user_edit_any_pass    = "moderator"
+user_edit_any_email   = "moderator"
+user_edit_any_avatar  = "moderator"
+user_edit_any_rank    = "moderator"
+user_edit_self_name   = "regular"
+user_edit_self_pass   = "regular"
+user_edit_self_email  = "regular"
+user_edit_self_avatar = "regular"

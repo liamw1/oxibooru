@@ -1,4 +1,4 @@
-use crate::api::{ApiError, ApiResult};
+use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
 use crate::filesystem;
 use crate::model::enums::MimeType;

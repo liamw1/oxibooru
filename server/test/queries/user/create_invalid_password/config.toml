@@ -1,0 +1,2 @@
+[public_info]
+password_regex = "^.{5,}$"

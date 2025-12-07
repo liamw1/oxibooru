@@ -1,0 +1,5 @@
+{
+    "description": "Failed to parse the request body as JSON: notes[0].polygon[0]: trailing characters at line 1 column 112",
+    "name": "JsonSyntaxError",
+    "title": "JSON Rejection"
+}

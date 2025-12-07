@@ -418,7 +418,7 @@ mod test {
 
     #[test]
     fn grid_points() -> ImageResult<()> {
-        let lisa_small_border = image::open(image_path("lisa-border.jpg"))?.to_luma8();
+        let lisa_small_border = image::open(media_path("lisa-border.jpg"))?.to_luma8();
 
         let (grid_points, _) = compute_grid_points(&lisa_small_border);
         let lower_left_grid_point = (grid_points.left_set().first().unwrap(), grid_points.right_set().first().unwrap());
@@ -428,7 +428,7 @@ mod test {
         assert!(lower_left_pixel.0[0] < 250);
         assert!(upper_right_pixel.0[0] < 250);
 
-        let lisa_large_border = image::open(image_path("lisa-large_border.jpg"))?.to_luma8();
+        let lisa_large_border = image::open(media_path("lisa-large_border.jpg"))?.to_luma8();
 
         let (grid_points, _) = compute_grid_points(&lisa_large_border);
         let lower_left_grid_point = (grid_points.left_set().first().unwrap(), grid_points.right_set().first().unwrap());
@@ -445,7 +445,7 @@ mod test {
     }
 
     fn image_properties(asset: &str) -> ImageResult<([i64; COMPRESSED_SIGNATURE_LEN], [i32; NUM_WORDS])> {
-        let signature = compute(&image::open(image_path(asset))?);
+        let signature = compute(&image::open(media_path(asset))?);
         let indexes = generate_indexes(&signature);
         Ok((signature, indexes))
     }

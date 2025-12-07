@@ -1,0 +1,2 @@
+[public_info]
+tag_category_name_regex = "^.{5,}$"

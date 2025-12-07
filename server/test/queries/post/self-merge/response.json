@@ -1,0 +1,5 @@
+{
+    "description": "Cannot merge post with itself",
+    "name": "SelfMerge",
+    "title": "Self Merge"
+}

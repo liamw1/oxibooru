@@ -1,0 +1,5 @@
+{
+    "description": "Cyclic dependency detected in tag_implications",
+    "name": "CyclicDependency",
+    "title": "Cyclic Dependency"
+}

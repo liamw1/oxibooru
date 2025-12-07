@@ -1,0 +1,5 @@
+{
+    "description": "Failed to deserialize the JSON body into the target type: notes[0][0]: invalid type: floating point `0.0`, expected a sequence at line 1 column 56",
+    "name": "JsonDataError",
+    "title": "JSON Rejection"
+}

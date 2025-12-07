@@ -1,5 +1,5 @@
 # User-specific configuration
-config.toml
+/server/config.toml
 .env
 
 # Client Development Artifacts

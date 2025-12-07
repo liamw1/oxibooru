@@ -1,0 +1,68 @@
+{
+    "query": "-sort:name",
+    "offset": 0,
+    "limit": 40,
+    "total": 5,
+    "results": [
+        {
+            "name": "administrator",
+            "email": false,
+            "rank": "administrator",
+            "avatarStyle": "gravatar",
+            "avatarUrl": "https://gravatar.com/avatar/0911f7898fb33c121bdc89400182a48cf16c704ae826da05a12fa222a54406d0?d=retro&s=300",
+            "commentCount": 1,
+            "uploadedPostCount": 0,
+            "likedPostCount": false,
+            "dislikedPostCount": false,
+            "favoritePostCount": 1
+        },
+        {
+            "name": "moderator",
+            "email": false,
+            "rank": "moderator",
+            "avatarStyle": "gravatar",
+            "avatarUrl": "https://gravatar.com/avatar/2cfd020b749e439ee36c82eb835e2e133facc06eb7e669106f3361e87d605b36?d=retro&s=300",
+            "commentCount": 0,
+            "uploadedPostCount": 0,
+            "likedPostCount": false,
+            "dislikedPostCount": false,
+            "favoritePostCount": 0
+        },
+        {
+            "name": "power_user",
+            "email": false,
+            "rank": "power",
+            "avatarStyle": "gravatar",
+            "avatarUrl": "https://gravatar.com/avatar/463b3075b7bfd871fc68cf0292fb37d4ef1ec80bbab0d9369f86742d9e2dbbba?d=retro&s=300",
+            "commentCount": 0,
+            "uploadedPostCount": 0,
+            "likedPostCount": false,
+            "dislikedPostCount": false,
+            "favoritePostCount": 0
+        },
+        {
+            "name": "regular_user",
+            "email": false,
+            "rank": "regular",
+            "avatarStyle": "gravatar",
+            "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300",
+            "commentCount": 2,
+            "uploadedPostCount": 3,
+            "likedPostCount": false,
+            "dislikedPostCount": false,
+            "favoritePostCount": 3
+        },
+        {
+            "name": "restricted_user",
+            "email": false,
+            "rank": "restricted",
+            "avatarStyle": "gravatar",
+            "avatarUrl": "https://gravatar.com/avatar/6009606e934432ad90cea21381c562a56a8c6e16c107b68af176e214281ee96a?d=retro&s=300",
+            "commentCount": 0,
+            "uploadedPostCount": 1,
+            "likedPostCount": false,
+            "dislikedPostCount": false,
+            "favoritePostCount": 1
+        }
+    ]
+}

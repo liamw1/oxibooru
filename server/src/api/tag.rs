@@ -1,4 +1,6 @@
-use crate::api::{ApiError, ApiResult, DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::error::{ApiError, ApiResult};
+use crate::api::extract::{Json, Path, Query};
+use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::enums::ResourceType;
@@ -11,8 +13,8 @@ use crate::snapshot::tag::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, resource, snapshot, update};
-use axum::extract::{Extension, Path, Query, State};
-use axum::{Json, Router, routing};
+use axum::extract::{Extension, State};
+use axum::{Router, routing};
 use diesel::dsl::count_star;
 use diesel::{
     Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
@@ -107,7 +109,9 @@ async fn get_siblings(
             .select(tag::id)
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
         let posts_tagged_on = post_tag::table
             .select(post_tag::post_id)
             .filter(post_tag::tag_id.eq(tag_id))
@@ -161,7 +165,9 @@ async fn create(
         let (category_id, category): (i64, SmallString) = tag_category::table
             .select((tag_category::id, tag_category::name))
             .filter(tag_category::name.eq(body.category))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
         let tag: Tag = NewTag {
             category_id,
             description: body.description.as_deref().unwrap_or(""),
@@ -218,6 +224,8 @@ async fn merge(
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
             .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -267,7 +275,9 @@ async fn update(
             .inner_join(tag_name::table)
             .select(Tag::as_select())
             .filter(tag_name::name.eq(name))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
         let tag_id = old_tag.id;
         api::verify_version(old_tag.last_edit_time, body.version)?;
 
@@ -281,7 +291,9 @@ async fn update(
             let category_id: i64 = tag_category::table
                 .select(tag_category::id)
                 .filter(tag_category::name.eq(&category))
-                .first(conn)?;
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
             new_tag.category_id = category_id;
             new_snapshot_data.category = category;
         }
@@ -340,7 +352,9 @@ async fn delete(
             .select(Tag::as_select())
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq(name))
-            .first(conn)?;
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
         api::verify_version(tag.last_edit_time, *client_version)?;
 
         let tag_id = tag.id;
@@ -354,7 +368,8 @@ async fn delete(
 
 #[cfg(test)]
 mod test {
-    use crate::api::ApiResult;
+    use crate::api::error::ApiResult;
+    use crate::model::enums::ResourceType;
     use crate::model::tag::Tag;
     use crate::schema::{database_statistics, tag, tag_name, tag_statistics};
     use crate::string::SmallString;
@@ -372,11 +387,10 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /tags/?query";
         const SORT: &str = "-sort:name&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "tag/list.json").await?;
-        verify_query(&format!("{QUERY}=sort:usage-count -sort:name&limit=1{FIELDS}"), "tag/list_most_used.json")
-            .await?;
-        verify_query(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character.json").await?;
-        verify_query(&format!("{QUERY}=*sky* {SORT}{FIELDS}"), "tag/list_has_sky_in_name.json").await?;
+        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "tag/list").await?;
+        verify_query(&format!("{QUERY}=sort:usage-count -sort:name&limit=1{FIELDS}"), "tag/list_most_used").await?;
+        verify_query(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character").await?;
+        verify_query(&format!("{QUERY}=*sky* {SORT}{FIELDS}"), "tag/list_has_sky_in_name").await?;
         Ok(())
     }
 
@@ -395,7 +409,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /tag/{NAME}/?{FIELDS}"), "tag/get.json").await?;
+        verify_query(&format!("GET /tag/{NAME}/?{FIELDS}"), "tag/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -417,7 +431,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /tag-siblings/{NAME}/?{FIELDS}"), "tag/get_siblings.json").await?;
+        verify_query(&format!("GET /tag-siblings/{NAME}/?{FIELDS}"), "tag/get_siblings").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -436,7 +450,7 @@ mod test {
         let mut conn = get_connection()?;
         let tag_count = get_tag_count(&mut conn)?;
 
-        verify_query(&format!("POST /tags/?{FIELDS}"), "tag/create.json").await?;
+        verify_query(&format!("POST /tags/?{FIELDS}"), "tag/create").await?;
 
         let (tag_id, name): (i64, SmallString) = tag_name::table
             .select((tag_name::tag_id, tag_name::name))
@@ -446,10 +460,10 @@ mod test {
         let new_tag_count = get_tag_count(&mut conn)?;
         assert_eq!(new_tag_count, tag_count + 1);
 
-        verify_query(&format!("DELETE /tag/{name}/?{FIELDS}"), "tag/delete.json").await?;
+        verify_query(&format!("DELETE /tag/{name}/?{FIELDS}"), "tag/delete").await?;
 
         let new_tag_count = get_tag_count(&mut conn)?;
-        let has_tag: bool = diesel::select(exists(tag::table.find(tag_id))).get_result(&mut conn)?;
+        let has_tag: bool = diesel::select(exists(tag::table.find(tag_id))).first(&mut conn)?;
         assert_eq!(new_tag_count, tag_count);
         assert!(!has_tag);
         Ok(())
@@ -481,9 +495,9 @@ mod test {
             .filter(tag_name::name.eq(REMOVE))
             .first(&mut conn)?;
 
-        verify_query(&format!("POST /tag-merge/?{FIELDS}"), "tag/merge.json").await?;
+        verify_query(&format!("POST /tag-merge/?{FIELDS}"), "tag/merge").await?;
 
-        let has_tag: bool = diesel::select(exists(tag::table.find(remove_id))).get_result(&mut conn)?;
+        let has_tag: bool = diesel::select(exists(tag::table.find(remove_id))).first(&mut conn)?;
         assert!(!has_tag);
 
         let (new_tag, new_usage_count, new_implication_count, new_suggestion_count) = get_tag_info(&mut conn)?;
@@ -520,7 +534,7 @@ mod test {
         let mut conn = get_connection()?;
         let (tag, usage_count, implication_count, suggestion_count) = get_tag_info(&mut conn, NAME)?;
 
-        verify_query(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/update.json").await?;
+        verify_query(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/edit").await?;
 
         let new_name: SmallString = tag_name::table
             .select(tag_name::name)
@@ -538,7 +552,7 @@ mod test {
         assert_ne!(new_implication_count, implication_count);
         assert_ne!(new_suggestion_count, suggestion_count);
 
-        verify_query(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/update_restore.json").await?;
+        verify_query(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/edit_restore").await?;
 
         let new_tag_id: i64 = tag::table.select(tag::id).order_by(tag::id.desc()).first(&mut conn)?;
         diesel::delete(tag::table.find(new_tag_id)).execute(&mut conn)?;
@@ -552,6 +566,36 @@ mod test {
         assert_eq!(new_usage_count, usage_count);
         assert_eq!(new_implication_count, implication_count);
         assert_eq!(new_suggestion_count, suggestion_count);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn error() -> ApiResult<()> {
+        verify_query("GET /tag/none", "tag/get_nonexistent").await?;
+        verify_query("GET /tag-siblings/none", "tag/get_siblings_of_nonexistent").await?;
+        verify_query("POST /tag-merge", "tag/merge_to_nonexistent").await?;
+        verify_query("POST /tag-merge", "tag/merge_with_nonexistent").await?;
+        verify_query("PUT /tag/none", "tag/edit_nonexistent").await?;
+        verify_query("DELETE /tag/none", "tag/delete_nonexistent").await?;
+
+        verify_query("POST /tags", "tag/create_nameless").await?;
+        verify_query("POST /tags", "tag/create_name_clash").await?;
+        verify_query("POST /tags", "tag/create_invalid_name").await?;
+        verify_query("POST /tags", "tag/create_invalid_category").await?;
+        verify_query("POST /tags", "tag/create_invalid_suggestion").await?;
+        verify_query("POST /tags", "tag/create_invalid_implication").await?;
+        verify_query("POST /tag-merge", "tag/self-merge").await?;
+
+        verify_query("PUT /tag/sky", "tag/edit_nameless").await?;
+        verify_query("PUT /tag/sky", "tag/edit_name_clash").await?;
+        verify_query("PUT /tag/sky", "tag/edit_invalid_name").await?;
+        verify_query("PUT /tag/sky", "tag/edit_invalid_category").await?;
+        verify_query("PUT /tag/sky", "tag/edit_invalid_suggestion").await?;
+        verify_query("PUT /tag/sky", "tag/edit_invalid_implication").await?;
+        verify_query("PUT /tag/plant", "tag/edit_cyclic_implication").await?;
+
+        reset_sequence(ResourceType::Tag)?;
         Ok(())
     }
 }

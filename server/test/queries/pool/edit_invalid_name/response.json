@@ -1,0 +1,5 @@
+{
+    "description": "'~~~' does not match on pool regex",
+    "name": "ExpressionFailsRegex",
+    "title": "Expression Fails Regex"
+}

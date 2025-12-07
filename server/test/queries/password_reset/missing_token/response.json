@@ -1,0 +1,5 @@
+{
+    "description": "Failed to deserialize the JSON body into the target type: missing field `token` at line 1 column 2",
+    "name": "JsonDataError",
+    "title": "JSON Rejection"
+}

@@ -1,14 +1,18 @@
-use crate::api::{ApiError, ApiResult};
+use crate::api::error::{ApiError, ApiResult};
+use crate::api::extract::{Json, Path};
 use crate::app::AppState;
 use crate::auth::password;
 use crate::content::hash;
+use crate::model::enums::ResourceType;
 use crate::schema::user;
 use crate::string::SmallString;
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
-use axum::extract::{Path, State};
-use axum::{Json, Router, routing};
-use diesel::{BoolExpressionMethods, Connection, ExpressionMethods, PgConnection, QueryDsl, RunQueryDsl};
+use axum::extract::State;
+use axum::{Router, routing};
+use diesel::{
+    BoolExpressionMethods, Connection, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl,
+};
 use lettre::Address;
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
@@ -30,7 +34,8 @@ fn get_user_info(
         .select((user::id, user::name, user::email, user::password_salt))
         .filter(user::name.eq(identifier).or(user::email.eq(identifier)))
         .first(conn)
-        .map_err(ApiError::from)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::User))
 }
 
 /// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#request-password-reset)
@@ -139,4 +144,25 @@ async fn reset_password(
             password: temporary_password,
         }))
     })
+}
+
+#[cfg(test)]
+mod test {
+    use crate::api::error::ApiResult;
+    use crate::test::*;
+    use serial_test::parallel;
+
+    #[tokio::test]
+    #[parallel]
+    async fn error() -> ApiResult<()> {
+        verify_query("GET /password-reset/no_one", "password_reset/request_for_nonexistent_user").await?;
+        verify_query("POST /password-reset/nobody", "password_reset/confirm_for_nonexistent_user").await?;
+
+        verify_query("GET /password-reset/moderator", "password_reset/no_email").await?;
+        verify_query("GET /password-reset/restricted_user", "password_reset/invalid_email").await?;
+        verify_query("GET /password-reset/regular_user", "password_reset/reset_disabled").await?;
+        verify_query("POST /password-reset/regular_user", "password_reset/invalid_token").await?;
+        verify_query("POST /password-reset/regular_user", "password_reset/missing_token").await?;
+        Ok(())
+    }
 }

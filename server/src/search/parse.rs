@@ -1,4 +1,4 @@
-use crate::api::{ApiError, ApiResult};
+use crate::api::error::{ApiError, ApiResult};
 use crate::search::{Condition, StrCondition, TimeParsingError};
 use crate::time::DateTime;
 use std::borrow::Cow;

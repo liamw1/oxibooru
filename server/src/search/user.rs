@@ -1,4 +1,4 @@
-use crate::api::{ApiError, ApiResult};
+use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::schema::{database_statistics, user};
 use crate::search::{Builder, Order, ParsedSort, SearchCriteria};

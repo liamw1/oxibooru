@@ -1,7 +1,7 @@
-use crate::api::{ApiError, ApiResult};
+use crate::api::error::{self, ApiError, ApiResult};
 use crate::auth::Client;
 use crate::config::{Config, RegexType};
-use crate::model::enums::ResourceType;
+use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagName, TagSuggestion};
 use crate::schema::post_tag;
@@ -324,15 +324,15 @@ impl DependencyGraph {
 /// Appends `names` onto the current list of names for the tag associated with `tag_id`.
 fn add_names(conn: &mut PgConnection, tag_id: i64, current_name_count: i32, names: &[SmallString]) -> ApiResult<()> {
     let total_name_count = i32::try_from(names.len())
-        .ok()
-        .and_then(|new_name_count| current_name_count.checked_add(new_name_count))
-        .ok_or(ApiError::TooMany("names on tag"))?;
+        .unwrap_or(i32::MAX)
+        .saturating_add(current_name_count);
     let new_names: Vec<_> = names
         .iter()
         .zip(current_name_count..total_name_count)
         .map(|(name, order)| NewTagName { tag_id, order, name })
         .collect();
-    new_names.insert_into(tag_name::table).execute(conn)?;
+    let insert_result = new_names.insert_into(tag_name::table).execute(conn);
+    error::map_unique_violation(insert_result, ResourceProperty::TagName)?;
     Ok(())
 }
 

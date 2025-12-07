@@ -1,0 +1,11 @@
+{
+    "id": 2,
+    "postId": 1,
+    "text": "how did you post this",
+    "user": {
+        "name": "administrator",
+        "avatarUrl": "https://gravatar.com/avatar/0911f7898fb33c121bdc89400182a48cf16c704ae826da05a12fa222a54406d0?d=retro&s=300"
+    },
+    "score": -1,
+    "ownScore": -1
+}

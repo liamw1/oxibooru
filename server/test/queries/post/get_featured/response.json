@@ -1,0 +1,104 @@
+{
+    "id": 1,
+    "user": {
+        "name": "restricted_user",
+        "avatarUrl": "https://gravatar.com/avatar/6009606e934432ad90cea21381c562a56a8c6e16c107b68af176e214281ee96a?d=retro&s=300"
+    },
+    "fileSize": 1048576,
+    "canvasWidth": 1000,
+    "canvasHeight": 2000,
+    "safety": "safe",
+    "type": "image",
+    "mimeType": "image/jpeg",
+    "checksum": "3031000000000000000000000000000000000000000000000000000000000000",
+    "checksumMD5": "30310000000000000000000000000000",
+    "flags": [],
+    "source": "starry_night.png",
+    "description": "0101100010",
+    "contentUrl": "data/posts/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg",
+    "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg",
+    "tags": [
+        {
+            "names": [
+                "shakespeare"
+            ],
+            "category": "Artist",
+            "usages": 1
+        },
+        {
+            "names": [
+                "classic_literature"
+            ],
+            "category": "Source",
+            "usages": 1
+        },
+        {
+            "names": [
+                "claudius"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "laertes"
+            ],
+            "category": "Character",
+            "usages": 1
+        },
+        {
+            "names": [
+                "plant",
+                "foliage"
+            ],
+            "category": "Surroundings",
+            "usages": 2
+        },
+        {
+            "names": [
+                "rock",
+                "stone"
+            ],
+            "category": "Surroundings",
+            "usages": 2
+        }
+    ],
+    "relations": [
+        {
+            "id": 2,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
+        },
+        {
+            "id": 3,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.jpg"
+        }
+    ],
+    "pools": [
+        {
+            "id": 2,
+            "names": [
+                "fantasy"
+            ],
+            "category": "Setting",
+            "description": "",
+            "postCount": 3
+        }
+    ],
+    "notes": [],
+    "score": 1,
+    "ownScore": 0,
+    "ownFavorite": false,
+    "tagCount": 6,
+    "commentCount": 2,
+    "relationCount": 2,
+    "noteCount": 0,
+    "favoriteCount": 1,
+    "featureCount": 2,
+    "favoritedBy": [
+        {
+            "name": "restricted_user",
+            "avatarUrl": "https://gravatar.com/avatar/6009606e934432ad90cea21381c562a56a8c6e16c107b68af176e214281ee96a?d=retro&s=300"
+        }
+    ],
+    "hasCustomThumbnail": false
+}

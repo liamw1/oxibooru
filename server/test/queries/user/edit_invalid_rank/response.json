@@ -1,0 +1,5 @@
+{
+    "description": "Failed to deserialize the JSON body into the target type: rank: unknown variant `supreme_lord`, expected one of `anonymous`, `restricted`, `regular`, `power`, `moderator`, `administrator` at line 1 column 94",
+    "name": "JsonDataError",
+    "title": "JSON Rejection"
+}

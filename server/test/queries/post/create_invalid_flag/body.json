@@ -1,0 +1,47 @@
+{
+    "tags": [
+        "tree",
+        "plant",
+        "forest",
+        "river",
+        "water",
+        "sky",
+        "admiral_ackbar",
+        "16:9_aspect_ratio"
+    ],
+    "safety": "safe",
+    "source": "I don't know",
+    "description": "cool stuff",
+    "relations": [
+        1,
+        2,
+        4
+    ],
+    "flags": [
+        "loud"
+    ],
+    "notes": [
+        {
+            "polygon": [
+                [
+                    0.0,
+                    0.0
+                ],
+                [
+                    1.0,
+                    0.0
+                ],
+                [
+                    0.0,
+                    1.0
+                ],
+                [
+                    1.0,
+                    1.0
+                ]
+            ],
+            "text": "The good part"
+        }
+    ],
+    "contentToken": "upload.png"
+}
