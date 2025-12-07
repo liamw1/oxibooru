@@ -1,9 +1,10 @@
-use crate::api::error::ApiResult;
+use crate::api::error::{self, ApiResult};
 use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::ThumbnailCategory;
 use crate::filesystem;
 use crate::model::comment::NewComment;
+use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::pool::PoolPost;
 use crate::model::post::{
     CompressedSignature, NewPostFeature, Post, PostFavorite, PostRelation, PostScore, PostTag, SignatureIndexes,
@@ -47,7 +48,7 @@ pub fn thumbnail(
 }
 
 /// Replaces the current set of relations with `relations` for post associated with `post_id`.
-pub fn set_relations(conn: &mut PgConnection, post_id: i64, new_related_posts: &[i64]) -> QueryResult<()> {
+pub fn set_relations(conn: &mut PgConnection, post_id: i64, new_related_posts: &[i64]) -> ApiResult<()> {
     let new_relations: Vec<_> = new_related_posts
         .iter()
         .filter(|&&id| id != post_id)
@@ -61,7 +62,8 @@ pub fn set_relations(conn: &mut PgConnection, post_id: i64, new_related_posts: &
         .or_filter(post_relation::child_id.eq(post_id))
         .returning(post_relation::child_id)
         .get_results(conn)?;
-    new_relations.insert_into(post_relation::table).execute(conn)?;
+    let insert_result = new_relations.insert_into(post_relation::table).execute(conn);
+    error::map_unique_or_foreign_key_violation(insert_result, ResourceProperty::PostRelation, ResourceType::Post)?;
 
     // Update last edit time for any posts involved in removed or added relations.
     let updated_posts: Vec<_> = old_related_posts

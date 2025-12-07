@@ -24,7 +24,7 @@ pub fn reset_password(state: &AppState) {
         let mut conn = state
             .get_connection()
             .map_err(|_| "Could not establish a connection to the database for reason: {err}")?;
-        match diesel::select(exists(user::table.filter(user::name.eq(&user)))).get_result(&mut conn) {
+        match diesel::select(exists(user::table.filter(user::name.eq(&user)))).first(&mut conn) {
             Ok(true) => (),
             Ok(false) => return Err("No user with this username exists".into()),
             Err(err) => return Err(format!("Could not determine if user exists for reason: {err}")),

@@ -1,0 +1,2 @@
+[public_info]
+tag_name_regex = "^\\S+$"

@@ -134,6 +134,7 @@ impl ErrorKind for crate::model::enums::ResourceProperty {
             Self::PoolName => "PoolNameAlreadyExists",
             Self::PoolPost => "PoolPostAlreadyExists",
             Self::PoolCategoryName => "PoolCategoryNameAlreadyExists",
+            Self::PostFeature => "PostAlreadyFeatured",
             Self::PostRelation => "PostRelationAlreadyExists",
             Self::TagName => "TagNameAlreadyExists",
             Self::TagCategoryName => "TagCategoryNameAlreadyExists",

@@ -1,0 +1,135 @@
+{
+    "id": 6,
+    "user": {
+        "avatarUrl": "https://gravatar.com/avatar/0911f7898fb33c121bdc89400182a48cf16c704ae826da05a12fa222a54406d0?d=retro&s=300",
+        "name": "administrator"
+    },
+    "fileSize": 70,
+    "canvasWidth": 1,
+    "canvasHeight": 1,
+    "safety": "safe",
+    "type": "image",
+    "mimeType": "image/png",
+    "checksum": "fb172648054a23d19661f3c4ba6c72853763b675f4171b20fe90b4c51e07968c",
+    "checksumMD5": "beefb99a3dd697cc16c1e145524c16a7",
+    "flags": [
+        "loop",
+        "sound"
+    ],
+    "source": "I don't know",
+    "description": "cool stuff",
+    "contentUrl": "data/posts/000000/00/6_7gkzGhyeEEDx7E5hVIFBBTGuDAOJjVIv9OdhSTNQD7o.png",
+    "thumbnailUrl": "data/generated-thumbnails/000000/00/6_7gkzGhyeEEDx7E5hVIFBBTGuDAOJjVIv9OdhSTNQD7o.jpg",
+    "tags": [
+        {
+            "category": "Character",
+            "names": [
+                "admiral_ackbar"
+            ],
+            "usages": 2
+        },
+        {
+            "category": "Surroundings",
+            "names": [
+                "forest",
+                "woods"
+            ],
+            "usages": 2
+        },
+        {
+            "category": "Surroundings",
+            "names": [
+                "plant",
+                "foliage"
+            ],
+            "usages": 3
+        },
+        {
+            "category": "Surroundings",
+            "names": [
+                "river",
+                "stream",
+                "creek"
+            ],
+            "usages": 2
+        },
+        {
+            "category": "Surroundings",
+            "names": [
+                "sky"
+            ],
+            "usages": 2
+        },
+        {
+            "category": "Surroundings",
+            "names": [
+                "tree"
+            ],
+            "usages": 2
+        },
+        {
+            "category": "Surroundings",
+            "names": [
+                "water",
+                "agua"
+            ],
+            "usages": 2
+        },
+        {
+            "category": "Meta",
+            "names": [
+                "16:9_aspect_ratio"
+            ],
+            "usages": 3
+        }
+    ],
+    "relations": [
+        {
+            "id": 1,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
+        },
+        {
+            "id": 2,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
+        },
+        {
+            "id": 4,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/4_78-cbid-2Ci2jMEqspr2LjF8OTP0kQUVVlCb53twMRw.jpg"
+        }
+    ],
+    "pools": [],
+    "notes": [
+        {
+            "polygon": [
+                [
+                    0.0,
+                    0.0
+                ],
+                [
+                    1.0,
+                    0.0
+                ],
+                [
+                    0.0,
+                    1.0
+                ],
+                [
+                    1.0,
+                    1.0
+                ]
+            ],
+            "text": "The good part"
+        }
+    ],
+    "score": 0,
+    "ownScore": 0,
+    "ownFavorite": false,
+    "tagCount": 8,
+    "commentCount": 0,
+    "relationCount": 3,
+    "noteCount": 1,
+    "favoriteCount": 0,
+    "featureCount": 0,
+    "favoritedBy": [],
+    "hasCustomThumbnail": false
+}

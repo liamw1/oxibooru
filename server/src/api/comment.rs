@@ -63,7 +63,7 @@ async fn get(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(conn)?;
+        let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).first(conn)?;
         if !comment_exists {
             return Err(ApiError::NotFound(ResourceType::Comment));
         }
@@ -298,7 +298,7 @@ mod test {
         verify_query(&format!("DELETE /comment/{comment_id}"), "comment/delete").await?;
 
         let (new_comment_count, new_admin_comment_count) = get_comment_counts(&mut conn)?;
-        let has_comment: bool = diesel::select(exists(comment::table.find(comment_id))).get_result(&mut conn)?;
+        let has_comment: bool = diesel::select(exists(comment::table.find(comment_id))).first(&mut conn)?;
         assert_eq!(new_comment_count, comment_count);
         assert_eq!(new_admin_comment_count, admin_comment_count);
         assert!(!has_comment);
@@ -383,6 +383,7 @@ mod test {
         verify_query("DELETE /comment/99", "comment/delete_nonexistent").await?;
 
         verify_query("PUT /comment/1/score", "comment/invalid_rating").await?;
+        verify_query_with_user(UserRank::Anonymous, "PUT /comment/1/score", "comment/rating_anonymously").await?;
 
         // User has permission to delete own comment, but not another's
         verify_query_with_user(UserRank::Regular, "DELETE /comment/2", "comment/delete_another").await?;

@@ -171,8 +171,7 @@ async fn create(
     let mut conn = state.get_connection()?;
     let user = conn.transaction(|conn| {
         let name_exists: bool =
-            diesel::select(exists(user::table.select(user::id).filter(user::name.eq(&new_user.name))))
-                .get_result(conn)?;
+            diesel::select(exists(user::table.select(user::id).filter(user::name.eq(&new_user.name)))).first(conn)?;
         if name_exists {
             return Err(ApiError::AlreadyExists(ResourceProperty::UserName))?;
         }
@@ -498,7 +497,7 @@ mod test {
         verify_query(&format!("DELETE /user/{name}"), "user/delete").await?;
 
         let new_user_count = get_user_count(&mut conn)?;
-        let has_user: bool = diesel::select(exists(user::table.find(user_id))).get_result(&mut conn)?;
+        let has_user: bool = diesel::select(exists(user::table.find(user_id))).first(&mut conn)?;
         assert_eq!(new_user_count, user_count);
         assert!(!has_user);
         Ok(())

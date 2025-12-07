@@ -463,7 +463,7 @@ mod test {
         verify_query(&format!("DELETE /tag/{name}/?{FIELDS}"), "tag/delete").await?;
 
         let new_tag_count = get_tag_count(&mut conn)?;
-        let has_tag: bool = diesel::select(exists(tag::table.find(tag_id))).get_result(&mut conn)?;
+        let has_tag: bool = diesel::select(exists(tag::table.find(tag_id))).first(&mut conn)?;
         assert_eq!(new_tag_count, tag_count);
         assert!(!has_tag);
         Ok(())
@@ -497,7 +497,7 @@ mod test {
 
         verify_query(&format!("POST /tag-merge/?{FIELDS}"), "tag/merge").await?;
 
-        let has_tag: bool = diesel::select(exists(tag::table.find(remove_id))).get_result(&mut conn)?;
+        let has_tag: bool = diesel::select(exists(tag::table.find(remove_id))).first(&mut conn)?;
         assert!(!has_tag);
 
         let (new_tag, new_usage_count, new_implication_count, new_suggestion_count) = get_tag_info(&mut conn)?;

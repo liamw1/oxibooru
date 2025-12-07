@@ -508,6 +508,7 @@ pub enum ResourceProperty {
     PoolName,
     PoolPost,
     PoolCategoryName,
+    PostFeature,
     PostRelation,
     TagName,
     TagCategoryName,

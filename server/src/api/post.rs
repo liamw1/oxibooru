@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
-use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams};
+use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::content::hash::PostHash;
@@ -10,7 +10,7 @@ use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
 use crate::content::{Content, FileContents, signature, upload};
 use crate::db::ConnectionPool;
 use crate::filesystem::Directory;
-use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score};
+use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceProperty, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
 use crate::resource::post::{Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
@@ -22,7 +22,8 @@ use crate::time::DateTime;
 use crate::{api, db, filesystem, resource, snapshot, update};
 use axum::extract::{DefaultBodyLimit, Extension, State};
 use axum::{Router, routing};
-use diesel::dsl::exists;
+use diesel::dsl::{exists, sql};
+use diesel::sql_types::Integer;
 use diesel::{
     Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl,
     SelectableHelper,
@@ -118,7 +119,7 @@ async fn get(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).get_result(conn)?;
+        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
         if !post_exists {
             return Err(ApiError::NotFound(ResourceType::Post));
         }
@@ -159,6 +160,11 @@ async fn get_neighbors(
     state.get_connection()?.transaction(|conn| {
         const INITIAL_LIMIT: i64 = 100;
         const LIMIT_GROWTH: i64 = 8;
+
+        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
+        if !post_exists {
+            return Err(ApiError::NotFound(ResourceType::Post))?;
+        }
 
         // Handle special cases first
         if !query_builder.criteria().has_filter() && !query_builder.criteria().has_sort() {
@@ -269,8 +275,14 @@ async fn feature(
             .order_by(post_feature::time.desc())
             .first(conn)
             .optional()?;
-        new_post_feature.insert_into(post_feature::table).execute(conn)?;
-        snapshot::post::feature_snapshot(conn, client, previous_feature_id, body.id)
+        if previous_feature_id == Some(new_post_feature.post_id) {
+            return Err(ApiError::AlreadyExists(ResourceProperty::PostFeature));
+        }
+
+        let insert_result = new_post_feature.insert_into(post_feature::table).execute(conn);
+        error::map_foreign_key_violation(insert_result, ResourceType::Post)?;
+        snapshot::post::feature_snapshot(conn, client, previous_feature_id, body.id)?;
+        Ok::<_, ApiError>(())
     })?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, body.id, &fields))
         .map(Json)
@@ -569,8 +581,16 @@ async fn merge(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     tagging_update(&state.connection_pool, true, |conn| {
-        let absorbed_post: Post = post::table.find(absorbed_id).first(conn)?;
-        let merge_to_post: Post = post::table.find(merge_to_id).first(conn)?;
+        let absorbed_post: Post = post::table
+            .find(absorbed_id)
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Post))?;
+        let merge_to_post: Post = post::table
+            .find(merge_to_id)
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Post))?;
         api::verify_version(absorbed_post.last_edit_time, body.post_info.remove_version)?;
         api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
 
@@ -606,10 +626,8 @@ async fn favorite(
     let mut conn = state.get_connection()?;
     conn.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
-        new_post_favorite
-            .insert_into(post_favorite::table)
-            .execute(conn)
-            .map_err(ApiError::from)
+        let insert_result = new_post_favorite.insert_into(post_favorite::table).execute(conn);
+        error::map_foreign_key_violation(insert_result, ResourceType::Post)
     })?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
         .map(Json)
@@ -634,14 +652,15 @@ async fn rate(
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
         if let Ok(score) = Score::try_from(*body) {
-            PostScore {
+            let insert_result = PostScore {
                 post_id,
                 user_id,
                 score,
                 time: DateTime::now(),
             }
             .insert_into(post_score::table)
-            .execute(conn)?;
+            .execute(conn);
+            error::map_foreign_key_violation(insert_result, ResourceType::Post)?;
         }
         Ok::<_, ApiError>(())
     })?;
@@ -693,7 +712,11 @@ async fn update(
     };
 
     tagging_update(&state.connection_pool, body.tags.is_some(), |conn| {
-        let old_post: Post = post::table.find(post_id).first(conn)?;
+        let old_post: Post = post::table
+            .find(post_id)
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Post))?;
         let old_mime_type = old_post.mime_type;
         api::verify_version(old_post.last_edit_time, body.version)?;
 
@@ -837,7 +860,9 @@ async fn delete(
     let relation_count: i64 = post_statistics::table
         .find(post_id)
         .select(post_statistics::relation_count)
-        .first(&mut state.get_connection()?)?;
+        .first(&mut state.get_connection()?)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::Post))?;
 
     let _lock;
     if relation_count > 0 {
@@ -846,7 +871,11 @@ async fn delete(
 
     let mut conn = state.get_connection()?;
     let mime_type = conn.transaction(|conn| {
-        let post: Post = post::table.find(post_id).first(conn)?;
+        let post: Post = post::table
+            .find(post_id)
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Post))?;
         api::verify_version(post.last_edit_time, *client_version)?;
 
         let mime_type = post.mime_type;
@@ -875,7 +904,11 @@ async fn unfavorite(
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
 
     let mut conn = state.get_connection()?;
-    diesel::delete(post_favorite::table.find((post_id, user_id))).execute(&mut conn)?;
+    let _: i32 = diesel::delete(post_favorite::table.find((post_id, user_id)))
+        .returning(sql::<Integer>("0"))
+        .get_result(&mut conn)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::Post))?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
@@ -884,6 +917,8 @@ async fn unfavorite(
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
+    use crate::filesystem::Directory;
+    use crate::model::enums::ResourceType;
     use crate::model::post::Post;
     use crate::schema::{post, post_feature, post_statistics, tag, tag_name, user, user_statistics};
     use crate::search::post::Token;
@@ -1000,6 +1035,21 @@ mod test {
 
     #[tokio::test]
     #[serial]
+    async fn create() -> ApiResult<()> {
+        simulate_upload("1_pixel.png", "cool_post.png")?;
+        verify_query(&format!("POST /posts/?{FIELDS}"), "post/create").await?;
+
+        let state = get_state();
+        let post_path = state.config.path(Directory::Posts);
+        let thumbnail_path = state.config.path(Directory::GeneratedThumbnails);
+
+        assert!(post_path.exists());
+        assert!(thumbnail_path.exists());
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
     async fn merge() -> ApiResult<()> {
         const REMOVE_ID: i64 = 2;
         const MERGE_TO_ID: i64 = 1;
@@ -1015,7 +1065,7 @@ mod test {
 
         verify_query(&format!("POST /post-merge/?{FIELDS}"), "post/merge").await?;
 
-        let has_post: bool = diesel::select(exists(post::table.find(REMOVE_ID))).get_result(&mut conn)?;
+        let has_post: bool = diesel::select(exists(post::table.find(REMOVE_ID))).first(&mut conn)?;
         assert!(!has_post);
 
         let new_post = get_post(&mut conn)?;
@@ -1170,6 +1220,44 @@ mod test {
         assert!(new_post.last_edit_time > post.last_edit_time);
         assert_eq!(new_tag_count, tag_count);
         assert_eq!(new_relation_count, relation_count);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn error() -> ApiResult<()> {
+        verify_query("GET /post/99", "post/get_nonexistent").await?;
+        verify_query("GET /post/99/around", "post/get_around_nonexistent").await?;
+        verify_query("POST /featured-post", "post/feature_nonexistent").await?;
+        verify_query("POST /post-merge", "post/merge_to_nonexistent").await?;
+        verify_query("POST /post-merge", "post/merge_from_nonexistent").await?;
+        verify_query("POST /post/99/favorite", "post/favorite_nonexistent").await?;
+        verify_query("PUT /post/99/score", "post/rate_nonexistent").await?;
+        verify_query("PUT /post/99", "post/edit_nonexistent").await?;
+        verify_query("DELETE /post/99", "post/delete_nonexistent").await?;
+        verify_query("DELETE /post/99/favorite", "post/unfavorite_nonexistent").await?;
+
+        simulate_upload("1_pixel.png", "upload.png")?;
+        verify_query("POST /posts", "post/create_invalid_tag").await?;
+        verify_query("POST /posts", "post/create_invalid_safety").await?;
+        verify_query("POST /posts", "post/create_invalid_note").await?;
+        verify_query("POST /posts", "post/create_invalid_flag").await?;
+        verify_query("POST /posts", "post/create_missing_content").await?;
+        verify_query("POST /posts", "post/create_duplicate_relation").await?;
+        verify_query("POST /posts", "post/create_nonexistent_relation").await?;
+
+        verify_query("PUT /post/1", "post/edit_invalid_tag").await?;
+        verify_query("PUT /post/1", "post/edit_invalid_safety").await?;
+        verify_query("PUT /post/1", "post/edit_invalid_note").await?;
+        verify_query("PUT /post/1", "post/edit_invalid_flag").await?;
+        verify_query("PUT /post/1", "post/edit_duplicate_relation").await?;
+        verify_query("PUT /post/1", "post/edit_nonexistent_relation").await?;
+
+        verify_query("PUT /post/1/score", "post/invalid_rating").await?;
+        verify_query("POST /featured-post", "post/double_feature").await?;
+        verify_query("POST /post-merge", "post/self-merge").await?;
+
+        reset_sequence(ResourceType::Post)?;
         Ok(())
     }
 }

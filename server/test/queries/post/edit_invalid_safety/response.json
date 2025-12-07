@@ -1,0 +1,5 @@
+{
+    "description": "Failed to deserialize the JSON body into the target type: safety: unknown variant `nsfw`, expected one of `safe`, `sketchy`, `unsafe` at line 1 column 76",
+    "name": "JsonDataError",
+    "title": "JSON Rejection"
+}

@@ -269,7 +269,7 @@ mod test {
 
         verify_query(&format!("DELETE /user-token/{USER}/{token}"), "user_token/delete").await?;
 
-        let has_token: bool = diesel::select(exists(user_token::table.find(token))).get_result(&mut conn)?;
+        let has_token: bool = diesel::select(exists(user_token::table.find(token))).first(&mut conn)?;
         assert!(!has_token);
         Ok(())
     }

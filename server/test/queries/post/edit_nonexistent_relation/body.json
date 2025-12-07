@@ -1,0 +1,20 @@
+{
+    "version": "2025-01-17T06:25:08.461692853Z",
+    "tags": [
+        "sky",
+        "plant",
+        "new_tag"
+    ],
+    "safety": "safe",
+    "source": "",
+    "description": "",
+    "relations": [
+        1,
+        99,
+        3
+    ],
+    "flags": [
+        "loop",
+        "sound"
+    ]
+}

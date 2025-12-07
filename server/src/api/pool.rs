@@ -69,7 +69,7 @@ async fn get(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(conn)?;
+        let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).first(conn)?;
         if !pool_exists {
             return Err(ApiError::NotFound(ResourceType::Pool));
         }
@@ -356,7 +356,7 @@ mod test {
         verify_query(&format!("DELETE /pool/{pool_id}/?{FIELDS}"), "pool/delete").await?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
-        let has_pool: bool = diesel::select(exists(pool::table.find(pool_id))).get_result(&mut conn)?;
+        let has_pool: bool = diesel::select(exists(pool::table.find(pool_id))).first(&mut conn)?;
         assert_eq!(new_pool_count, pool_count);
         assert!(!has_pool);
         Ok(())
@@ -380,7 +380,7 @@ mod test {
 
         verify_query(&format!("POST /pool-merge/?{FIELDS}"), "pool/merge").await?;
 
-        let has_pool: bool = diesel::select(exists(pool::table.find(REMOVE_ID))).get_result(&mut conn)?;
+        let has_pool: bool = diesel::select(exists(pool::table.find(REMOVE_ID))).first(&mut conn)?;
         assert!(!has_pool);
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;

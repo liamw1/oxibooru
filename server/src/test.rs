@@ -6,6 +6,7 @@ use crate::config::Config;
 use crate::content::hash::{Checksum, Md5Checksum, PostHash};
 use crate::content::signature::{COMPRESSED_SIGNATURE_LEN, NUM_WORDS};
 use crate::db::ConnectionResult;
+use crate::filesystem::Directory;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{
     AvatarStyle, MimeType, PostFlag, PostFlags, PostSafety, PostType, ResourceType, Score, UserRank,
@@ -84,9 +85,18 @@ pub fn reset_sequence(table: ResourceType) -> ApiResult<()> {
     Ok(())
 }
 
-/// Returns path to a test image.
-pub fn image_path(relative_path: &str) -> PathBuf {
-    asset_path("images", relative_path)
+/// Returns path to test media.
+pub fn media_path(filename: &str) -> PathBuf {
+    asset_path("media", filename)
+}
+
+pub fn simulate_upload(media_filename: &str, temp_name: &str) -> std::io::Result<u64> {
+    let state = get_state();
+    let temporary_uploads_path = state.config.path(Directory::TemporaryUploads);
+    let media_path = media_path(media_filename);
+
+    std::fs::create_dir_all(&temporary_uploads_path)?;
+    std::fs::copy(media_path, temporary_uploads_path.join(temp_name))
 }
 
 /// Verifies that a given `query` matches the contents of a `repsonse.json`
@@ -621,7 +631,7 @@ fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> 
         let content_path = post_hash.content_path(mime_type);
         std::fs::create_dir_all(content_path.parent().unwrap_or(Path::new("")))?;
 
-        std::fs::copy(image_path(&source), content_path)?;
+        std::fs::copy(media_path(&source), content_path)?;
     }
     Ok(())
 }

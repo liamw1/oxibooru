@@ -329,6 +329,7 @@ List of possible error names:
 - `PoolNotFound`
 - `PoolPostAlreadyExists`
 - `PositiveOverflow`
+- `PostAlreadyFeatured`
 - `PostNotFound`
 - `PostRelationAlreadyExists`
 - `QueryBuilderError`
@@ -1125,13 +1126,14 @@ data.
 
     ```json5
     {
-        "tags":      [<tag1>, <tag2>, <tag3>],
-        "safety":    <safety>,
-        "source":    <source>,                    // optional
-        "relations": [<post1>, <post2>, <post3>], // optional
-        "notes":     [<note1>, <note2>, <note3>], // optional
-        "flags":     [<flag1>, <flag2>],          // optional
-        "anonymous": <anonymous>                  // optional
+        "tags":        [<tag1>, <tag2>, <tag3>],
+        "safety":      <safety>,
+        "source":      <source>,                    // optional
+        "description": <description>,               // optional
+        "relations":   [<post1>, <post2>, <post3>], // optional
+        "notes":       [<note1>, <note2>, <note3>], // optional
+        "flags":       [<flag1>, <flag2>],          // optional
+        "anonymous":   <anonymous>                  // optional
     }
     ```
 
