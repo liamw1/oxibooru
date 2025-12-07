@@ -1045,6 +1045,8 @@ mod test {
 
         assert!(post_path.exists());
         assert!(thumbnail_path.exists());
+
+        reset_database();
         Ok(())
     }
 
