@@ -1,6 +1,7 @@
+use byteorder::{NetworkEndian, WriteBytesExt};
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::{Pg, PgValue};
-use diesel::serialize::{self, Output, ToSql};
+use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::SmallInt;
 use diesel::{AsExpression, FromSqlRow};
 use image::ImageFormat;
@@ -38,10 +39,9 @@ pub enum AvatarStyle {
 }
 
 impl ToSql<SmallInt, Pg> for AvatarStyle {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        // SAFETY: AvatarStyle is repr(i16) so a valid AvatarStyle is a valid i16
-        let value: &'a i16 = unsafe { &*std::ptr::from_ref(self).cast() };
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        out.write_i16::<NetworkEndian>(*self as i16)?;
+        Ok(IsNull::No)
     }
 }
 
@@ -76,10 +76,9 @@ impl From<MimeType> for PostType {
 }
 
 impl ToSql<SmallInt, Pg> for PostType {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        // SAFETY: PostType is repr(i16) so a valid PostType is a valid i16
-        let value: &'a i16 = unsafe { &*std::ptr::from_ref(self).cast() };
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        out.write_i16::<NetworkEndian>(*self as i16)?;
+        Ok(IsNull::No)
     }
 }
 
@@ -200,10 +199,9 @@ impl MimeType {
 }
 
 impl ToSql<SmallInt, Pg> for MimeType {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        // SAFETY: MimeType is repr(i16) so a valid MimeType is a valid i16
-        let value: &'a i16 = unsafe { &*std::ptr::from_ref(self).cast() };
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        out.write_i16::<NetworkEndian>(*self as i16)?;
+        Ok(IsNull::No)
     }
 }
 
@@ -240,10 +238,9 @@ pub enum PostSafety {
 }
 
 impl ToSql<SmallInt, Pg> for PostSafety {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        // SAFETY: PostSafety is repr(i16) so a valid PostSafety is a valid i16
-        let value: &'a i16 = unsafe { &*std::ptr::from_ref(self).cast() };
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        out.write_i16::<NetworkEndian>(*self as i16)?;
+        Ok(IsNull::No)
     }
 }
 
@@ -315,10 +312,9 @@ impl<T: Into<u16>> BitOrAssign<T> for PostFlags {
 }
 
 impl ToSql<SmallInt, Pg> for PostFlags {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        // SAFETY: A u16 bitpattern is always a valid i16 bitpattern
-        let value: &'a i16 = unsafe { &*std::ptr::from_ref(&self.flags).cast() };
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        out.write_i16::<NetworkEndian>(self.flags as i16)?;
+        Ok(IsNull::No)
     }
 }
 
@@ -377,10 +373,9 @@ pub enum UserRank {
 }
 
 impl ToSql<SmallInt, Pg> for UserRank {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        // SAFETY: UserRank is repr(i16) so a valid UserRank is a valid i16
-        let value: &'a i16 = unsafe { &*std::ptr::from_ref(self).cast() };
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        out.write_i16::<NetworkEndian>(*self as i16)?;
+        Ok(IsNull::No)
     }
 }
 
@@ -429,10 +424,9 @@ impl TryFrom<Rating> for Score {
 }
 
 impl ToSql<SmallInt, Pg> for Score {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        // SAFETY: Score is repr(i16) so a valid Score is a valid i16
-        let value: &'a i16 = unsafe { &*std::ptr::from_ref(self).cast() };
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        out.write_i16::<NetworkEndian>(*self as i16)?;
+        Ok(IsNull::No)
     }
 }
 
@@ -455,10 +449,9 @@ pub enum ResourceOperation {
 }
 
 impl ToSql<SmallInt, Pg> for ResourceOperation {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        // SAFETY: Score is repr(i16) so a valid ResourceOperation is a valid i16
-        let value: &'a i16 = unsafe { &*std::ptr::from_ref(self).cast() };
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        out.write_i16::<NetworkEndian>(*self as i16)?;
+        Ok(IsNull::No)
     }
 }
 
@@ -488,10 +481,9 @@ pub enum ResourceType {
 }
 
 impl ToSql<SmallInt, Pg> for ResourceType {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        // SAFETY: Score is repr(i16) so a valid ResourceType is a valid i16
-        let value: &'a i16 = unsafe { &*std::ptr::from_ref(self).cast() };
-        <i16 as ToSql<SmallInt, Pg>>::to_sql(value, out)
+    fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
+        out.write_i16::<NetworkEndian>(*self as i16)?;
+        Ok(IsNull::No)
     }
 }
 

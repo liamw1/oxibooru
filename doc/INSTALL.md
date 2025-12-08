@@ -24,7 +24,7 @@ and the Docker Compose CLI (version 1.27.0 or greater) already installed.
     cp server/config.toml.dist server/config.toml
     edit server/config.toml
     ```
-    Pay extra attention to these fields:
+    It's strongly recommended to at least change these fields:
 
     - password_secret
     - content_secret
