@@ -234,10 +234,10 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /comments/?query";
         const SORT: &str = "-sort:id&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "comment/list").await?;
-        verify_query(&format!("{QUERY}=sort:score&limit=1{FIELDS}"), "comment/list_highest_score").await?;
-        verify_query(&format!("{QUERY}=user:regular_user {SORT}{FIELDS}"), "comment/list_regular_user").await?;
-        verify_query(&format!("{QUERY}=text:*this* {SORT}{FIELDS}"), "comment/list_text_filter").await
+        verify_response(&format!("{QUERY}={SORT}{FIELDS}"), "comment/list").await?;
+        verify_response(&format!("{QUERY}=sort:score&limit=1{FIELDS}"), "comment/list_highest_score").await?;
+        verify_response(&format!("{QUERY}=user:regular_user {SORT}{FIELDS}"), "comment/list_regular_user").await?;
+        verify_response(&format!("{QUERY}=text:*this* {SORT}{FIELDS}"), "comment/list_text_filter").await
     }
 
     #[tokio::test]
@@ -254,7 +254,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /comment/{COMMENT_ID}/?{FIELDS}"), "comment/get").await?;
+        verify_response(&format!("GET /comment/{COMMENT_ID}/?{FIELDS}"), "comment/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -279,7 +279,7 @@ mod test {
         let mut conn = get_connection()?;
         let (comment_count, admin_comment_count) = get_comment_counts(&mut conn)?;
 
-        verify_query(&format!("POST /comments/?{FIELDS}"), "comment/create").await?;
+        verify_response(&format!("POST /comments/?{FIELDS}"), "comment/create").await?;
 
         let comment_id: i64 = comment::table
             .select(comment::id)
@@ -295,7 +295,7 @@ mod test {
         assert_eq!(new_admin_comment_count, admin_comment_count + 1);
         assert_eq!(comment_score, 0);
 
-        verify_query(&format!("DELETE /comment/{comment_id}"), "comment/delete").await?;
+        verify_response(&format!("DELETE /comment/{comment_id}"), "comment/delete").await?;
 
         let (new_comment_count, new_admin_comment_count) = get_comment_counts(&mut conn)?;
         let has_comment: bool = diesel::select(exists(comment::table.find(comment_id))).first(&mut conn)?;
@@ -320,7 +320,7 @@ mod test {
         let mut conn = get_connection()?;
         let (comment, score) = get_comment_info(&mut conn)?;
 
-        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/edit").await?;
+        verify_response(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/edit").await?;
 
         let (new_comment, new_score) = get_comment_info(&mut conn)?;
         assert_ne!(new_comment.text, comment.text);
@@ -328,7 +328,7 @@ mod test {
         assert!(new_comment.last_edit_time > comment.last_edit_time);
         assert_eq!(new_score, score);
 
-        verify_query(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/edit_restore").await?;
+        verify_response(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/edit_restore").await?;
 
         let (new_comment, new_score) = get_comment_info(&mut conn)?;
         assert_eq!(new_comment.text, comment.text);
@@ -353,19 +353,19 @@ mod test {
         let mut conn = get_connection()?;
         let (score, last_edit_time) = get_comment_info(&mut conn)?;
 
-        verify_query(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/like").await?;
+        verify_response(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/like").await?;
 
         let (new_score, new_last_edit_time) = get_comment_info(&mut conn)?;
         assert_eq!(new_score, score + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/dislike").await?;
+        verify_response(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/dislike").await?;
 
         let (new_score, new_last_edit_time) = get_comment_info(&mut conn)?;
         assert_eq!(new_score, score - 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/remove_score").await?;
+        verify_response(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/remove_score").await?;
 
         let (new_score, new_last_edit_time) = get_comment_info(&mut conn)?;
         assert_eq!(new_score, score);
@@ -376,17 +376,17 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /comment/99", "comment/get_nonexistent").await?;
-        verify_query("POST /comments", "comment/create_on_nonexistent_post").await?;
-        verify_query("PUT /comment/99", "comment/edit_nonexistent").await?;
-        verify_query("PUT /comment/99/score", "comment/like_nonexistent").await?;
-        verify_query("DELETE /comment/99", "comment/delete_nonexistent").await?;
+        verify_response("GET /comment/99", "comment/get_nonexistent").await?;
+        verify_response("POST /comments", "comment/create_on_nonexistent_post").await?;
+        verify_response("PUT /comment/99", "comment/edit_nonexistent").await?;
+        verify_response("PUT /comment/99/score", "comment/like_nonexistent").await?;
+        verify_response("DELETE /comment/99", "comment/delete_nonexistent").await?;
 
-        verify_query("PUT /comment/1/score", "comment/invalid_rating").await?;
-        verify_query_with_user(UserRank::Anonymous, "PUT /comment/1/score", "comment/rating_anonymously").await?;
+        verify_response("PUT /comment/1/score", "comment/invalid_rating").await?;
+        verify_response_with_user(UserRank::Anonymous, "PUT /comment/1/score", "comment/rating_anonymously").await?;
 
         // User has permission to delete own comment, but not another's
-        verify_query_with_user(UserRank::Regular, "DELETE /comment/2", "comment/delete_another").await?;
+        verify_response_with_user(UserRank::Regular, "DELETE /comment/2", "comment/delete_another").await?;
 
         reset_sequence(ResourceType::Comment)?;
         Ok(())

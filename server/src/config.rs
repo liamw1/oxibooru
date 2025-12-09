@@ -256,7 +256,7 @@ pub fn create() -> Config {
 /// Creates a test config with an optional `override_relative_path` to override the default config.
 #[cfg(test)]
 pub fn test_config(override_relative_path: Option<&str>) -> Config {
-    let override_path = override_relative_path.map(|relative_path| format!("test/queries/{relative_path}/config"));
+    let override_path = override_relative_path.map(|relative_path| format!("test/request/{relative_path}/config"));
     create_config(override_path.as_deref())
 }
 

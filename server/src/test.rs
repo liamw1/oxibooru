@@ -90,6 +90,8 @@ pub fn media_path(filename: &str) -> PathBuf {
     asset_path("media", filename)
 }
 
+/// Simulates content upload by copying `test/media/media_filename` to `temp_uploads/temp_name`.
+/// `temp_name` can then be used as a `contentToken` for requests that require it.
 pub fn simulate_upload(media_filename: &str, temp_name: &str) -> std::io::Result<u64> {
     let state = get_state();
     let temporary_uploads_path = state.config.path(Directory::TemporaryUploads);
@@ -99,32 +101,31 @@ pub fn simulate_upload(media_filename: &str, temp_name: &str) -> std::io::Result
     std::fs::copy(media_path, temporary_uploads_path.join(temp_name))
 }
 
-/// Verifies that a given `query` matches the contents of a `repsonse.json`
-/// that lies in the `test/queries/relative_path` directory. A `snapshot.json`
-/// will also be checked if it exists. A `body.json` and `config.toml` can be
-/// specified if they exist.
+/// Verifies that the response of a given `request` matches the contents of a `repsonse.json`
+/// that lies in the `test/request/relative_path` directory. A `snapshot.json` will also be
+/// checked if it exists. A `body.json` and `config.toml` can be optionally specified.
 ///
-/// `query` must be of the form `METHOD path` (e.g. `GET /post/1`).
-pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
-    verify_query_with_user(UserRank::Administrator, query, relative_path).await
+/// `request` must be of the form `METHOD /path` (e.g. `GET /post/1`).
+pub async fn verify_response(request: &str, relative_path: &str) -> ApiResult<()> {
+    verify_response_with_user(UserRank::Administrator, request, relative_path).await
 }
 
-pub async fn verify_query_with_user(user: UserRank, query: &str, relative_path: &str) -> ApiResult<()> {
+pub async fn verify_response_with_user(user: UserRank, request: &str, relative_path: &str) -> ApiResult<()> {
     let credentials = (user != UserRank::Anonymous)
         .then(|| header::basic_credentials_for(USERS[user as usize - 1].name, TEST_PASSWORD));
-    verify_query_with_credentials(credentials, query, relative_path).await
+    verify_response_with_credentials(credentials, request, relative_path).await
 }
 
-pub async fn verify_query_with_credentials(
+pub async fn verify_response_with_credentials(
     credentials: Option<String>,
-    query: &str,
+    request: &str,
     relative_path: &str,
 ) -> ApiResult<()> {
     let mut expected_response: Option<Value> = None;
     let mut expected_snapshot: Option<Value> = None;
     let mut body: Option<Value> = None;
     let mut config: Option<Config> = None;
-    for entry in std::fs::read_dir(asset_path("queries", relative_path))? {
+    for entry in std::fs::read_dir(asset_path("request", relative_path))? {
         let path = entry?.path();
         let file_contents = std::fs::read_to_string(&path)?;
         match path.file_name().and_then(OsStr::to_str) {
@@ -146,10 +147,10 @@ pub async fn verify_query_with_credentials(
     }
 
     let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(app_state));
-    let (method, path) = query
+    let (method, path) = request
         .split_once(' ')
-        .expect("Query string must have method and path separated by a space");
-    let method = Method::try_from(method).expect("Query string must start with a valid method");
+        .expect("Request string must have method and path separated by a space");
+    let method = Method::try_from(method).expect("Request string must start with a valid method");
     let path = path.replace(' ', "%20"); // Percent-encode all spaces
 
     let server =

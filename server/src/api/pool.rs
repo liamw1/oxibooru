@@ -299,10 +299,10 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /pools/?query";
         const SORT: &str = "-sort:creation-time&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "pool/list").await?;
-        verify_query(&format!("{QUERY}=sort:post-count&limit=1{FIELDS}"), "pool/list_most_posts").await?;
-        verify_query(&format!("{QUERY}=category:Setting {SORT}{FIELDS}"), "pool/list_category_setting").await?;
-        verify_query(&format!("{QUERY}=name:*punk* {SORT}{FIELDS}"), "pool/list_name_punk").await
+        verify_response(&format!("{QUERY}={SORT}{FIELDS}"), "pool/list").await?;
+        verify_response(&format!("{QUERY}=sort:post-count&limit=1{FIELDS}"), "pool/list_most_posts").await?;
+        verify_response(&format!("{QUERY}=category:Setting {SORT}{FIELDS}"), "pool/list_category_setting").await?;
+        verify_response(&format!("{QUERY}=name:*punk* {SORT}{FIELDS}"), "pool/list_name_punk").await
     }
 
     #[tokio::test]
@@ -319,7 +319,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /pool/{POOL_ID}/?{FIELDS}"), "pool/get").await?;
+        verify_response(&format!("GET /pool/{POOL_ID}/?{FIELDS}"), "pool/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -338,7 +338,7 @@ mod test {
         let mut conn = get_connection()?;
         let pool_count = get_pool_count(&mut conn)?;
 
-        verify_query(&format!("POST /pool/?{FIELDS}"), "pool/create").await?;
+        verify_response(&format!("POST /pool/?{FIELDS}"), "pool/create").await?;
 
         let pool_id: i64 = pool::table
             .select(pool::id)
@@ -353,7 +353,7 @@ mod test {
         assert_eq!(new_pool_count, pool_count + 1);
         assert_eq!(post_count, 2);
 
-        verify_query(&format!("DELETE /pool/{pool_id}/?{FIELDS}"), "pool/delete").await?;
+        verify_response(&format!("DELETE /pool/{pool_id}/?{FIELDS}"), "pool/delete").await?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
         let has_pool: bool = diesel::select(exists(pool::table.find(pool_id))).first(&mut conn)?;
@@ -378,7 +378,7 @@ mod test {
         let mut conn = get_connection()?;
         let (pool, post_count) = get_pool_info(&mut conn)?;
 
-        verify_query(&format!("POST /pool-merge/?{FIELDS}"), "pool/merge").await?;
+        verify_response(&format!("POST /pool-merge/?{FIELDS}"), "pool/merge").await?;
 
         let has_pool: bool = diesel::select(exists(pool::table.find(REMOVE_ID))).first(&mut conn)?;
         assert!(!has_pool);
@@ -408,7 +408,7 @@ mod test {
         let mut conn = get_connection()?;
         let (pool, post_count) = get_pool_info(&mut conn)?;
 
-        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit").await?;
+        verify_response(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit").await?;
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
         assert_ne!(new_pool.category_id, pool.category_id);
@@ -417,7 +417,7 @@ mod test {
         assert!(new_pool.last_edit_time > pool.last_edit_time);
         assert_ne!(new_post_count, post_count);
 
-        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit_restore").await?;
+        verify_response(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit_restore").await?;
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
         assert_eq!(new_pool.category_id, pool.category_id);
@@ -431,26 +431,26 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /pool/99", "pool/get_nonexistent").await?;
-        verify_query("POST /pool-merge", "pool/merge_to_nonexistent").await?;
-        verify_query("POST /pool-merge", "pool/merge_with_nonexistent").await?;
-        verify_query("PUT /pool/99", "pool/edit_nonexistent").await?;
-        verify_query("DELETE /pool/99", "pool/delete_nonexistent").await?;
+        verify_response("GET /pool/99", "pool/get_nonexistent").await?;
+        verify_response("POST /pool-merge", "pool/merge_to_nonexistent").await?;
+        verify_response("POST /pool-merge", "pool/merge_with_nonexistent").await?;
+        verify_response("PUT /pool/99", "pool/edit_nonexistent").await?;
+        verify_response("DELETE /pool/99", "pool/delete_nonexistent").await?;
 
-        verify_query("POST /pool", "pool/create_nameless").await?;
-        verify_query("POST /pool", "pool/create_name_clash").await?;
-        verify_query("POST /pool", "pool/create_invalid_name").await?;
-        verify_query("POST /pool", "pool/create_invalid_post").await?;
-        verify_query("POST /pool", "pool/create_invalid_category").await?;
-        verify_query("POST /pool", "pool/create_duplicate_post").await?;
-        verify_query("POST /pool-merge", "pool/self-merge").await?;
+        verify_response("POST /pool", "pool/create_nameless").await?;
+        verify_response("POST /pool", "pool/create_name_clash").await?;
+        verify_response("POST /pool", "pool/create_invalid_name").await?;
+        verify_response("POST /pool", "pool/create_invalid_post").await?;
+        verify_response("POST /pool", "pool/create_invalid_category").await?;
+        verify_response("POST /pool", "pool/create_duplicate_post").await?;
+        verify_response("POST /pool-merge", "pool/self-merge").await?;
 
-        verify_query("PUT /pool/1", "pool/edit_nameless").await?;
-        verify_query("PUT /pool/1", "pool/edit_name_clash").await?;
-        verify_query("PUT /pool/1", "pool/edit_invalid_name").await?;
-        verify_query("PUT /pool/1", "pool/edit_invalid_post").await?;
-        verify_query("PUT /pool/1", "pool/edit_invalid_category").await?;
-        verify_query("PUT /pool/1", "pool/edit_duplicate_post").await?;
+        verify_response("PUT /pool/1", "pool/edit_nameless").await?;
+        verify_response("PUT /pool/1", "pool/edit_name_clash").await?;
+        verify_response("PUT /pool/1", "pool/edit_invalid_name").await?;
+        verify_response("PUT /pool/1", "pool/edit_invalid_post").await?;
+        verify_response("PUT /pool/1", "pool/edit_invalid_category").await?;
+        verify_response("PUT /pool/1", "pool/edit_duplicate_post").await?;
 
         reset_sequence(ResourceType::Pool)?;
         Ok(())

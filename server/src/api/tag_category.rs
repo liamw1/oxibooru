@@ -259,7 +259,7 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn list() -> ApiResult<()> {
-        verify_query(&format!("GET /tag-categories/?{FIELDS}"), "tag_category/list").await
+        verify_response(&format!("GET /tag-categories/?{FIELDS}"), "tag_category/list").await
     }
 
     #[tokio::test]
@@ -276,7 +276,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /tag-category/{NAME}/?{FIELDS}"), "tag_category/get").await?;
+        verify_response(&format!("GET /tag-category/{NAME}/?{FIELDS}"), "tag_category/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -289,7 +289,7 @@ mod test {
         let mut conn = get_connection()?;
         let category_count: i64 = tag_category::table.count().first(&mut conn)?;
 
-        verify_query(&format!("POST /tag-categories/?{FIELDS}"), "tag_category/create").await?;
+        verify_response(&format!("POST /tag-categories/?{FIELDS}"), "tag_category/create").await?;
 
         let category_name: String = tag_category::table
             .select(tag_category::name)
@@ -305,7 +305,7 @@ mod test {
         assert_eq!(new_category_count, category_count + 1);
         assert_eq!(usage_count, 0);
 
-        verify_query(&format!("DELETE /tag-category/{category_name}"), "tag_category/delete").await?;
+        verify_response(&format!("DELETE /tag-category/{category_name}"), "tag_category/delete").await?;
 
         let new_category_count: i64 = tag_category::table.count().first(&mut conn)?;
         assert_eq!(new_category_count, category_count);
@@ -322,7 +322,7 @@ mod test {
             .filter(tag_category::name.eq(NAME))
             .first(&mut conn)?;
 
-        verify_query(&format!("PUT /tag-category/{NAME}/?{FIELDS}"), "tag_category/edit").await?;
+        verify_response(&format!("PUT /tag-category/{NAME}/?{FIELDS}"), "tag_category/edit").await?;
 
         let updated_category: TagCategory = tag_category::table
             .filter(tag_category::id.eq(category.id))
@@ -332,7 +332,7 @@ mod test {
         assert!(updated_category.last_edit_time > category.last_edit_time);
 
         let new_name = updated_category.name;
-        verify_query(&format!("PUT /tag-category/{new_name}/?{FIELDS}"), "tag_category/edit_restore").await
+        verify_response(&format!("PUT /tag-category/{new_name}/?{FIELDS}"), "tag_category/edit_restore").await
     }
 
     #[tokio::test]
@@ -347,13 +347,13 @@ mod test {
             Ok(category_id == 0)
         };
 
-        verify_query(&format!("PUT /tag-category/{NAME}/default/?{FIELDS}"), "tag_category/set_default").await?;
+        verify_response(&format!("PUT /tag-category/{NAME}/default/?{FIELDS}"), "tag_category/set_default").await?;
 
         let mut conn = get_connection()?;
         let default = is_default(&mut conn)?;
         assert!(default);
 
-        verify_query(&format!("PUT /tag-category/default/default/?{FIELDS}"), "tag_category/restore_default").await?;
+        verify_response(&format!("PUT /tag-category/default/default/?{FIELDS}"), "tag_category/restore_default").await?;
 
         let default = is_default(&mut conn)?;
         assert!(!default);
@@ -363,16 +363,16 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /tag-category/none", "tag_category/get_nonexistent").await?;
-        verify_query("PUT /tag-category/none", "tag_category/edit_nonexistent").await?;
-        verify_query("PUT /tag-category/none/default", "tag_category/default_nonexistent").await?;
-        verify_query("DELETE /tag-category/none", "tag_category/delete_nonexistent").await?;
+        verify_response("GET /tag-category/none", "tag_category/get_nonexistent").await?;
+        verify_response("PUT /tag-category/none", "tag_category/edit_nonexistent").await?;
+        verify_response("PUT /tag-category/none/default", "tag_category/default_nonexistent").await?;
+        verify_response("DELETE /tag-category/none", "tag_category/delete_nonexistent").await?;
 
-        verify_query("POST /tag-categories", "tag_category/create_invalid").await?;
-        verify_query("POST /tag-categories", "tag_category/create_name_clash").await?;
-        verify_query("PUT /tag-category/default", "tag_category/edit_invalid").await?;
-        verify_query("PUT /tag-category/default", "tag_category/edit_name_clash").await?;
-        verify_query("DELETE /tag-category/default", "tag_category/delete_default").await?;
+        verify_response("POST /tag-categories", "tag_category/create_invalid").await?;
+        verify_response("POST /tag-categories", "tag_category/create_name_clash").await?;
+        verify_response("PUT /tag-category/default", "tag_category/edit_invalid").await?;
+        verify_response("PUT /tag-category/default", "tag_category/edit_name_clash").await?;
+        verify_response("DELETE /tag-category/default", "tag_category/delete_default").await?;
 
         reset_sequence(ResourceType::PoolCategory)?;
         Ok(())

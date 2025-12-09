@@ -155,14 +155,14 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /password-reset/no_one", "password_reset/request_for_nonexistent_user").await?;
-        verify_query("POST /password-reset/nobody", "password_reset/confirm_for_nonexistent_user").await?;
+        verify_response("GET /password-reset/no_one", "password_reset/request_for_nonexistent_user").await?;
+        verify_response("POST /password-reset/nobody", "password_reset/confirm_for_nonexistent_user").await?;
 
-        verify_query("GET /password-reset/moderator", "password_reset/no_email").await?;
-        verify_query("GET /password-reset/restricted_user", "password_reset/invalid_email").await?;
-        verify_query("GET /password-reset/regular_user", "password_reset/reset_disabled").await?;
-        verify_query("POST /password-reset/regular_user", "password_reset/invalid_token").await?;
-        verify_query("POST /password-reset/regular_user", "password_reset/missing_token").await?;
+        verify_response("GET /password-reset/moderator", "password_reset/no_email").await?;
+        verify_response("GET /password-reset/restricted_user", "password_reset/invalid_email").await?;
+        verify_response("GET /password-reset/regular_user", "password_reset/reset_disabled").await?;
+        verify_response("POST /password-reset/regular_user", "password_reset/invalid_token").await?;
+        verify_response("POST /password-reset/regular_user", "password_reset/missing_token").await?;
         Ok(())
     }
 }

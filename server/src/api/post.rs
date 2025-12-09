@@ -939,7 +939,7 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /posts/?query";
         const SORT: &str = "-sort:id&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "post/list").await?;
+        verify_response(&format!("{QUERY}={SORT}{FIELDS}"), "post/list").await?;
 
         // Test sorts
         for token in Token::iter() {
@@ -950,19 +950,19 @@ mod test {
             let token_str: &'static str = token.into();
             let query = format!("{QUERY}=sort:{token_str} {SORT}&fields=id");
             let path = format!("post/list_{token_str}_sorted");
-            verify_query(&query, &path).await?;
+            verify_response(&query, &path).await?;
         }
 
         // Test filters
-        verify_query(&format!("{QUERY}=-plant,sky,tagme {SORT}&fields=id"), "post/list_tag_filtered").await?;
-        verify_query(&format!("{QUERY}=-pool:2 {SORT}&fields=id"), "post/list_pool_filtered").await?;
-        verify_query(&format!("{QUERY}=fav:*user* {SORT}&fields=id"), "post/list_fav_filtered").await?;
-        verify_query(&format!("{QUERY}=-comment:*user* {SORT}&fields=id"), "post/list_comment_filtered").await?;
-        verify_query(&format!("{QUERY}=note-text:*fav* {SORT}&fields=id"), "post/list_note-text_filtered").await?;
-        verify_query(&format!("{QUERY}=special:liked {SORT}&fields=id"), "post/list_liked_filtered").await?;
-        verify_query(&format!("{QUERY}=special:disliked {SORT}&fields=id"), "post/list_disliked_filtered").await?;
-        verify_query(&format!("{QUERY}=special:fav {SORT}&fields=id"), "post/list_special-fav_filtered").await?;
-        verify_query(&format!("{QUERY}=special:tumbleweed {SORT}&fields=id"), "post/list_tumbleweed_filtered").await
+        verify_response(&format!("{QUERY}=-plant,sky,tagme {SORT}&fields=id"), "post/list_tag_filtered").await?;
+        verify_response(&format!("{QUERY}=-pool:2 {SORT}&fields=id"), "post/list_pool_filtered").await?;
+        verify_response(&format!("{QUERY}=fav:*user* {SORT}&fields=id"), "post/list_fav_filtered").await?;
+        verify_response(&format!("{QUERY}=-comment:*user* {SORT}&fields=id"), "post/list_comment_filtered").await?;
+        verify_response(&format!("{QUERY}=note-text:*fav* {SORT}&fields=id"), "post/list_note-text_filtered").await?;
+        verify_response(&format!("{QUERY}=special:liked {SORT}&fields=id"), "post/list_liked_filtered").await?;
+        verify_response(&format!("{QUERY}=special:disliked {SORT}&fields=id"), "post/list_disliked_filtered").await?;
+        verify_response(&format!("{QUERY}=special:fav {SORT}&fields=id"), "post/list_special-fav_filtered").await?;
+        verify_response(&format!("{QUERY}=special:tumbleweed {SORT}&fields=id"), "post/list_tumbleweed_filtered").await
     }
 
     #[tokio::test]
@@ -979,7 +979,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /post/{POST_ID}/?{FIELDS}"), "post/get").await?;
+        verify_response(&format!("GET /post/{POST_ID}/?{FIELDS}"), "post/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -990,15 +990,15 @@ mod test {
     #[parallel]
     async fn get_neighbors() -> ApiResult<()> {
         const QUERY: &str = "around/?query=-sort:id";
-        verify_query(&format!("GET /post/1/{QUERY}{FIELDS}"), "post/get_1_neighbors").await?;
-        verify_query(&format!("GET /post/4/{QUERY}{FIELDS}"), "post/get_4_neighbors").await?;
-        verify_query(&format!("GET /post/5/{QUERY}{FIELDS}"), "post/get_5_neighbors").await
+        verify_response(&format!("GET /post/1/{QUERY}{FIELDS}"), "post/get_1_neighbors").await?;
+        verify_response(&format!("GET /post/4/{QUERY}{FIELDS}"), "post/get_4_neighbors").await?;
+        verify_response(&format!("GET /post/5/{QUERY}{FIELDS}"), "post/get_5_neighbors").await
     }
 
     #[tokio::test]
     #[parallel]
     async fn get_featured() -> ApiResult<()> {
-        verify_query(&format!("GET /featured-post/?{FIELDS}"), "post/get_featured").await
+        verify_response(&format!("GET /featured-post/?{FIELDS}"), "post/get_featured").await
     }
 
     #[tokio::test]
@@ -1016,7 +1016,7 @@ mod test {
         let mut conn = get_connection()?;
         let (feature_count, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("POST /featured-post/?{FIELDS}"), "post/feature").await?;
+        verify_response(&format!("POST /featured-post/?{FIELDS}"), "post/feature").await?;
 
         let (new_feature_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_feature_count, feature_count + 1);
@@ -1037,7 +1037,7 @@ mod test {
     #[serial]
     async fn create() -> ApiResult<()> {
         simulate_upload("1_pixel.png", "cool_post.png")?;
-        verify_query(&format!("POST /posts/?{FIELDS}"), "post/create").await?;
+        verify_response(&format!("POST /posts/?{FIELDS}"), "post/create").await?;
 
         let state = get_state();
         let post_path = state.config.path(Directory::Posts);
@@ -1065,7 +1065,7 @@ mod test {
         let mut conn = get_connection()?;
         let post = get_post(&mut conn)?;
 
-        verify_query(&format!("POST /post-merge/?{FIELDS}"), "post/merge").await?;
+        verify_response(&format!("POST /post-merge/?{FIELDS}"), "post/merge").await?;
 
         let has_post: bool = diesel::select(exists(post::table.find(REMOVE_ID))).first(&mut conn)?;
         assert!(!has_post);
@@ -1110,14 +1110,14 @@ mod test {
         let mut conn = get_connection()?;
         let (favorite_count, admin_favorite_count, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("POST /post/{POST_ID}/favorite/?{FIELDS}"), "post/favorite").await?;
+        verify_response(&format!("POST /post/{POST_ID}/favorite/?{FIELDS}"), "post/favorite").await?;
 
         let (new_favorite_count, new_admin_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_favorite_count, favorite_count + 1);
         assert_eq!(new_admin_favorite_count, admin_favorite_count + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("DELETE /post/{POST_ID}/favorite/?{FIELDS}"), "post/unfavorite").await?;
+        verify_response(&format!("DELETE /post/{POST_ID}/favorite/?{FIELDS}"), "post/unfavorite").await?;
 
         let (new_favorite_count, new_admin_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_favorite_count, favorite_count);
@@ -1141,19 +1141,19 @@ mod test {
         let mut conn = get_connection()?;
         let (score, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/like").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/like").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/dislike").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/dislike").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score - 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/remove_score").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/remove_score").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score);
@@ -1176,7 +1176,7 @@ mod test {
         let mut conn = get_connection()?;
         let (post, tag_count, relation_count) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit").await?;
 
         let (new_post, new_tag_count, new_relation_count) = get_post_info(&mut conn)?;
         assert_eq!(new_post.user_id, post.user_id);
@@ -1196,7 +1196,7 @@ mod test {
         assert_ne!(new_tag_count, tag_count);
         assert_ne!(new_relation_count, relation_count);
 
-        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit_restore").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit_restore").await?;
 
         let new_tag_id: i64 = tag::table
             .select(tag::id)
@@ -1228,36 +1228,36 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /post/99", "post/get_nonexistent").await?;
-        verify_query("GET /post/99/around", "post/get_around_nonexistent").await?;
-        verify_query("POST /featured-post", "post/feature_nonexistent").await?;
-        verify_query("POST /post-merge", "post/merge_to_nonexistent").await?;
-        verify_query("POST /post-merge", "post/merge_from_nonexistent").await?;
-        verify_query("POST /post/99/favorite", "post/favorite_nonexistent").await?;
-        verify_query("PUT /post/99/score", "post/rate_nonexistent").await?;
-        verify_query("PUT /post/99", "post/edit_nonexistent").await?;
-        verify_query("DELETE /post/99", "post/delete_nonexistent").await?;
-        verify_query("DELETE /post/99/favorite", "post/unfavorite_nonexistent").await?;
+        verify_response("GET /post/99", "post/get_nonexistent").await?;
+        verify_response("GET /post/99/around", "post/get_around_nonexistent").await?;
+        verify_response("POST /featured-post", "post/feature_nonexistent").await?;
+        verify_response("POST /post-merge", "post/merge_to_nonexistent").await?;
+        verify_response("POST /post-merge", "post/merge_from_nonexistent").await?;
+        verify_response("POST /post/99/favorite", "post/favorite_nonexistent").await?;
+        verify_response("PUT /post/99/score", "post/rate_nonexistent").await?;
+        verify_response("PUT /post/99", "post/edit_nonexistent").await?;
+        verify_response("DELETE /post/99", "post/delete_nonexistent").await?;
+        verify_response("DELETE /post/99/favorite", "post/unfavorite_nonexistent").await?;
 
         simulate_upload("1_pixel.png", "upload.png")?;
-        verify_query("POST /posts", "post/create_invalid_tag").await?;
-        verify_query("POST /posts", "post/create_invalid_safety").await?;
-        verify_query("POST /posts", "post/create_invalid_note").await?;
-        verify_query("POST /posts", "post/create_invalid_flag").await?;
-        verify_query("POST /posts", "post/create_missing_content").await?;
-        verify_query("POST /posts", "post/create_duplicate_relation").await?;
-        verify_query("POST /posts", "post/create_nonexistent_relation").await?;
+        verify_response("POST /posts", "post/create_invalid_tag").await?;
+        verify_response("POST /posts", "post/create_invalid_safety").await?;
+        verify_response("POST /posts", "post/create_invalid_note").await?;
+        verify_response("POST /posts", "post/create_invalid_flag").await?;
+        verify_response("POST /posts", "post/create_missing_content").await?;
+        verify_response("POST /posts", "post/create_duplicate_relation").await?;
+        verify_response("POST /posts", "post/create_nonexistent_relation").await?;
 
-        verify_query("PUT /post/1", "post/edit_invalid_tag").await?;
-        verify_query("PUT /post/1", "post/edit_invalid_safety").await?;
-        verify_query("PUT /post/1", "post/edit_invalid_note").await?;
-        verify_query("PUT /post/1", "post/edit_invalid_flag").await?;
-        verify_query("PUT /post/1", "post/edit_duplicate_relation").await?;
-        verify_query("PUT /post/1", "post/edit_nonexistent_relation").await?;
+        verify_response("PUT /post/1", "post/edit_invalid_tag").await?;
+        verify_response("PUT /post/1", "post/edit_invalid_safety").await?;
+        verify_response("PUT /post/1", "post/edit_invalid_note").await?;
+        verify_response("PUT /post/1", "post/edit_invalid_flag").await?;
+        verify_response("PUT /post/1", "post/edit_duplicate_relation").await?;
+        verify_response("PUT /post/1", "post/edit_nonexistent_relation").await?;
 
-        verify_query("PUT /post/1/score", "post/invalid_rating").await?;
-        verify_query("POST /featured-post", "post/double_feature").await?;
-        verify_query("POST /post-merge", "post/self-merge").await?;
+        verify_response("PUT /post/1/score", "post/invalid_rating").await?;
+        verify_response("POST /featured-post", "post/double_feature").await?;
+        verify_response("POST /post-merge", "post/self-merge").await?;
 
         reset_sequence(ResourceType::Post)?;
         Ok(())
