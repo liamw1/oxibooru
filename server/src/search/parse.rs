@@ -1,7 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::search::{Condition, StrCondition, TimeParsingError};
 use crate::time::DateTime;
-use std::borrow::Cow;
 use std::ops::Range;
 use std::str::FromStr;
 use time::{Date, Duration, Month, OffsetDateTime, Time};
@@ -43,7 +42,7 @@ pub fn split_once<P: Pattern>(text: &str, pattern: P) -> Option<(&str, &str)> {
 }
 
 /// Parses string-based `condition`.
-pub fn str_condition(condition: &'_ str) -> StrCondition<'_> {
+pub fn str_condition(condition: &str) -> StrCondition {
     if condition.contains('*') {
         StrCondition::WildCard(unescape(condition).replace('*', "%").replace('_', "\\_").to_lowercase())
     } else {
@@ -175,27 +174,21 @@ fn range_split(text: &str) -> Option<(&str, &str)> {
 }
 
 /// Replaces escaped characters with unescaped ones in `text`.
-fn unescape(text: &'_ str) -> Cow<'_, str> {
-    if text.contains('\\') {
-        let mut escaped = text.starts_with('\\');
-        let start_index = usize::from(escaped);
-        Cow::Owned(
-            text.chars()
-                .skip(start_index)
-                .filter(|&c| {
-                    let skip = !escaped && c == '\\';
-                    escaped = skip;
-                    !skip
-                })
-                .collect(),
-        )
-    } else {
-        Cow::Borrowed(text)
-    }
+fn unescape(text: &str) -> String {
+    let mut escaped = text.starts_with('\\');
+    let start_index = usize::from(escaped);
+    text.chars()
+        .skip(start_index)
+        .filter(|&c| {
+            let skip = !escaped && c == '\\';
+            escaped = skip;
+            !skip
+        })
+        .collect()
 }
 
 /// Parses a non-wildcard string-based `filter`.
-fn parse_regular_str(filter: &'_ str) -> Condition<Cow<'_, str>> {
+fn parse_regular_str(filter: &str) -> Condition<String> {
     match range_split(filter) {
         Some((left, "")) => Condition::GreaterEq(unescape(left)),
         Some(("", right)) => Condition::LessEq(unescape(right)),

@@ -36,15 +36,18 @@ pub struct QueryBuilder<'a> {
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
     type Token = Token;
-    type BoxedQuery = BoxedQuery<'a>;
+    type BoxedQuery = BoxedQuery;
+
+    fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(client, search_criteria, Token::Name).map_err(Box::from)?;
+        Ok(Self {
+            search,
+            cache_state: CacheState::new(),
+        })
+    }
 
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
         &mut self.search
-    }
-
-    fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
-        let query = self.build_filtered(conn)?;
-        self.get_ordered_ids(conn, query).map_err(ApiError::from)
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
@@ -58,18 +61,8 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
         }
         .map_err(ApiError::from)
     }
-}
 
-impl<'a> QueryBuilder<'a> {
-    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::Name).map_err(Box::from)?;
-        Ok(Self {
-            search,
-            cache_state: CacheState::new(),
-        })
-    }
-
-    fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
+    fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery> {
         let base_query = pool::table
             .select(pool::id)
             .inner_join(pool_statistics::table)
@@ -89,7 +82,7 @@ impl<'a> QueryBuilder<'a> {
         Ok(apply_cache_filters!(query, pool::id, self.cache_state))
     }
 
-    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
+    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
             return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
@@ -116,18 +109,18 @@ impl<'a> QueryBuilder<'a> {
     }
 }
 
-type BoxedQuery<'a> = IntoBoxed<
-    'a,
+type BoxedQuery = IntoBoxed<
+    'static,
     InnerJoin<InnerJoin<Select<pool::table, pool::id>, pool_statistics::table>, pool_category::table>,
     Pg,
 >;
 
-fn apply_name_filter<'a>(
+fn apply_name_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let names = pool_name::table.select(pool_name::pool_id).into_boxed();
     let names = apply_distinct_if_multivalued!(names, filter);
     let filtered_pools = apply_str_filter!(names, pool_name::name, filter.unnegated());

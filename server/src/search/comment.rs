@@ -34,20 +34,20 @@ pub struct QueryBuilder<'a> {
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
     type Token = Token;
-    type BoxedQuery = BoxedQuery<'a>;
+    type BoxedQuery = BoxedQuery;
+
+    fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(client, search_criteria, Token::Text).map_err(Box::from)?;
+        Ok(Self { search })
+    }
 
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
         &mut self.search
     }
 
-    fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
-        let query = self.build_filtered()?;
-        self.get_ordered_ids(conn, query).map_err(ApiError::from)
-    }
-
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
         if self.search.has_filter() {
-            let unsorted_query = self.build_filtered()?;
+            let unsorted_query = self.build_filtered(conn)?;
             unsorted_query.count().first(conn)
         } else {
             database_statistics::table
@@ -56,15 +56,8 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
         }
         .map_err(ApiError::from)
     }
-}
 
-impl<'a> QueryBuilder<'a> {
-    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::Text).map_err(Box::from)?;
-        Ok(Self { search })
-    }
-
-    fn build_filtered(&mut self) -> ApiResult<BoxedQuery<'a>> {
+    fn build_filtered(&mut self, _conn: &mut PgConnection) -> ApiResult<BoxedQuery> {
         let base_query = comment::table
             .select(comment::id)
             .inner_join(comment_statistics::table)
@@ -84,7 +77,7 @@ impl<'a> QueryBuilder<'a> {
             })
     }
 
-    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
+    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
             return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
@@ -112,5 +105,8 @@ impl<'a> QueryBuilder<'a> {
     }
 }
 
-type BoxedQuery<'a> =
-    IntoBoxed<'a, LeftJoin<InnerJoin<Select<comment::table, comment::id>, comment_statistics::table>, user::table>, Pg>;
+type BoxedQuery = IntoBoxed<
+    'static,
+    LeftJoin<InnerJoin<Select<comment::table, comment::id>, comment_statistics::table>, user::table>,
+    Pg,
+>;

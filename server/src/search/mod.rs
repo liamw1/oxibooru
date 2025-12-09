@@ -1,9 +1,8 @@
-use crate::api::error::ApiResult;
+use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use diesel::sql_types::{Float, SingleValue};
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, declare_sql_function};
-use std::borrow::Cow;
 use std::ops::{Not, Range};
 use std::str::FromStr;
 
@@ -18,22 +17,19 @@ mod temp;
 pub mod user;
 
 /// An interface for a search query builder.
-pub trait Builder<'a> {
+pub trait Builder<'a>: Sized {
     type Token;
     type BoxedQuery;
+
+    /// Constructs a new query builder that contains filters and sorts parsed from `search_criteria`.
+    fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self>;
 
     /// Returns a stored [`SearchCriteria`] as a mutable reference.
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token>;
 
-    /// Executes a query that returns primary keys of all rows matching search criteria.
-    fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>>;
-
-    /// Executes a count query for the number of rows matching search criteria.
-    fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64>;
-
     /// Sets OFFSET and LIMIT for search query.
     fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
-        self.criteria().set_offset_and_limit(offset, limit);
+        self.criteria().extra_args = Some(QueryArgs { offset, limit });
     }
 
     /// Executes both load and count queries for all rows matching search criteria.
@@ -47,6 +43,21 @@ pub trait Builder<'a> {
         let results = self.load(conn)?;
         Ok((total, results))
     }
+
+    /// Executes a query that returns primary keys of all rows matching search criteria.
+    fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
+        let query = self.build_filtered(conn)?;
+        self.get_ordered_ids(conn, query).map_err(ApiError::from)
+    }
+
+    /// Executes a count query for the number of rows matching search criteria.
+    fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64>;
+
+    /// Builds a query matching the criteria given in the constructor.
+    fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<Self::BoxedQuery>;
+
+    /// Retrieves all ids matching the search criteria. Does not mutate the user's search seed.
+    fn get_ordered_ids(&self, conn: &mut PgConnection, query: Self::BoxedQuery) -> QueryResult<Vec<i64>>;
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -77,10 +88,6 @@ impl<T> SearchCriteria<'_, T> {
 
     pub fn has_filter(&self) -> bool {
         !self.filters.is_empty()
-    }
-
-    fn set_offset_and_limit(&mut self, offset: i64, limit: i64) {
-        self.extra_args = Some(QueryArgs { offset, limit });
     }
 }
 
@@ -177,8 +184,8 @@ enum Condition<V> {
 /// Can either be the usual filter or a wildcard filter.
 /// Only one allowed wildcard pattern per filter for now.
 #[derive(Debug, PartialEq, Eq)]
-enum StrCondition<'a> {
-    Regular(Condition<Cow<'a, str>>),
+enum StrCondition {
+    Regular(Condition<String>),
     WildCard(String),
 }
 

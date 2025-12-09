@@ -91,32 +91,9 @@ pub struct QueryBuilder<'a> {
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
     type Token = Token;
-    type BoxedQuery = BoxedQuery<'a>;
+    type BoxedQuery = BoxedQuery;
 
-    fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
-        &mut self.search
-    }
-
-    fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
-        let query = self.build_filtered(conn)?;
-        self.get_ordered_ids(conn, query).map_err(ApiError::from)
-    }
-
-    fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() {
-            let unsorted_query = self.build_filtered(conn)?;
-            unsorted_query.count().first(conn)
-        } else {
-            database_statistics::table
-                .select(database_statistics::post_count)
-                .first(conn)
-        }
-        .map_err(ApiError::from)
-    }
-}
-
-impl<'a> QueryBuilder<'a> {
-    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
+    fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
         let search = SearchCriteria::new(client, search_criteria, Token::Tag).map_err(Box::from)?;
         for sort in &search.sorts {
             match sort.kind {
@@ -131,7 +108,23 @@ impl<'a> QueryBuilder<'a> {
         })
     }
 
-    fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
+    fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
+        &mut self.search
+    }
+
+    fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
+        if self.search.has_filter() {
+            let unsorted_query = self.build_filtered(conn)?;
+            unsorted_query.count().first(conn)
+        } else {
+            database_statistics::table
+                .select(database_statistics::post_count)
+                .first(conn)
+        }
+        .map_err(ApiError::from)
+    }
+
+    fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery> {
         let mut nonmatching_posts = None;
         let base_query = post::table
             .select(post::id)
@@ -181,7 +174,7 @@ impl<'a> QueryBuilder<'a> {
         Ok(apply_cache_filters!(query, post::id, self.cache_state))
     }
 
-    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
+    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
             return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
@@ -228,11 +221,11 @@ impl<'a> QueryBuilder<'a> {
     }
 }
 
-type BoxedQuery<'a> =
-    IntoBoxed<'a, LeftJoin<InnerJoin<Select<post::table, post::id>, post_statistics::table>, user::table>, Pg>;
+type BoxedQuery =
+    IntoBoxed<'static, LeftJoin<InnerJoin<Select<post::table, post::id>, post_statistics::table>, user::table>, Pg>;
 
-type NonmatchingPostTags<'a> = IntoBoxed<
-    'a,
+type NonmatchingPostTags = IntoBoxed<
+    'static,
     InnerJoinOn<Select<post_tag::table, post_tag::post_id>, tag_name::table, Eq<post_tag::tag_id, tag_name::tag_id>>,
     Pg,
 >;
@@ -258,7 +251,7 @@ fn aspect_ratio() -> SqlLiteral<Float, Bind> {
         .sql(" AS REAL)")
 }
 
-fn apply_checksum_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> ApiResult<BoxedQuery<'a>> {
+fn apply_checksum_filter(query: BoxedQuery, filter: UnparsedFilter<Token>) -> ApiResult<BoxedQuery> {
     // Checksums can only be searched by exact value(s)
     let checksums: Vec<Checksum> = parse::values(filter.condition)?;
     Ok(if filter.negated {
@@ -268,7 +261,7 @@ fn apply_checksum_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, T
     })
 }
 
-fn apply_flag_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> ApiResult<BoxedQuery<'a>> {
+fn apply_flag_filter(query: BoxedQuery, filter: UnparsedFilter<Token>) -> ApiResult<BoxedQuery> {
     let flags: Vec<PostFlag> = parse::values(filter.condition)?;
     let value = flags.into_iter().fold(PostFlags::new(), |value, flag| value | flag);
     let bitwise_and = sql::<SmallInt>("")
@@ -282,13 +275,13 @@ fn apply_flag_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token
     })
 }
 
-fn apply_tag_filter<'a>(
+fn apply_tag_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
-    nonmatching_posts: &mut Option<NonmatchingPostTags<'a>>,
-    filter: UnparsedFilter<'a, Token>,
+    query: BoxedQuery,
+    nonmatching_posts: &mut Option<NonmatchingPostTags>,
+    filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let post_tags = post_tag::table
         .select(post_tag::post_id)
         .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
@@ -317,12 +310,12 @@ fn apply_tag_filter<'a>(
     Ok(query)
 }
 
-fn apply_pool_filter<'a>(
+fn apply_pool_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
     let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
     let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
@@ -330,12 +323,12 @@ fn apply_pool_filter<'a>(
     Ok(query)
 }
 
-fn apply_favorite_filter<'a>(
+fn apply_favorite_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let favorites = post_favorite::table
         .select(post_favorite::post_id)
         .inner_join(user::table)
@@ -346,12 +339,12 @@ fn apply_favorite_filter<'a>(
     Ok(query)
 }
 
-fn apply_comment_filter<'a>(
+fn apply_comment_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let comments = comment::table
         .select(comment::post_id)
         .distinct()
@@ -362,36 +355,36 @@ fn apply_comment_filter<'a>(
     Ok(query)
 }
 
-fn apply_note_text_filter<'a>(
+fn apply_note_text_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let post_notes = post_note::table.select(post_note::post_id).distinct().into_boxed();
     let filtered_posts = apply_str_filter!(post_notes, post_note::text, filter.unnegated());
     update_filter_cache!(conn, filtered_posts, post_note::post_id, filter, state)?;
     Ok(query)
 }
 
-fn apply_comment_time_filter<'a>(
+fn apply_comment_time_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let comments = comment::table.select(comment::post_id).distinct().into_boxed();
     let filtered_posts = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
     update_filter_cache!(conn, filtered_posts, comment::post_id, filter, state)?;
     Ok(query)
 }
 
-fn apply_favorite_time_filter<'a>(
+fn apply_favorite_time_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let post_favorites = post_favorite::table
         .select(post_favorite::post_id)
         .distinct()
@@ -401,12 +394,12 @@ fn apply_favorite_time_filter<'a>(
     Ok(query)
 }
 
-fn apply_feature_time_filter<'a>(
+fn apply_feature_time_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let post_features = post_feature::table
         .select(post_feature::post_id)
         .distinct()
@@ -416,13 +409,13 @@ fn apply_feature_time_filter<'a>(
     Ok(query)
 }
 
-fn apply_special_filter<'a>(
+fn apply_special_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     client: Client,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let special_token = SpecialToken::from_str(filter.condition).map_err(Box::from)?;
     match special_token {
         SpecialToken::Liked => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
