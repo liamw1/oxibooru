@@ -29,6 +29,9 @@ and the Docker Compose CLI (version 1.27.0 or greater) already installed.
     - password_secret
     - content_secret
 
+    Any fields not present will default to their corresponding value
+    in the original config.toml.dist
+
 3. **Configure Docker Compose**
     ```console
     cp doc/example.env .env

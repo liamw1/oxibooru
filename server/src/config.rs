@@ -41,7 +41,7 @@ impl ThumbnailConfig {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct SmtpConfig {
     pub host: SmallString,
     pub port: Option<u16>,
@@ -224,13 +224,7 @@ impl Config {
     }
 
     pub fn path(&self, directory: Directory) -> PathBuf {
-        let folder = match directory {
-            Directory::Avatars => "avatars",
-            Directory::Posts => "posts",
-            Directory::GeneratedThumbnails => "generated-thumbnails",
-            Directory::CustomThumbnails => "custom-thumbnails",
-            Directory::TemporaryUploads => "temporary-uploads",
-        };
+        let folder: &str = directory.into();
         self.data_dir.join(folder)
     }
 

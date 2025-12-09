@@ -8,11 +8,13 @@ use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
+use strum::IntoStaticStr;
 use tracing::warn;
 use uuid::Uuid;
 
 /// Represents important data directories.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, IntoStaticStr)]
+#[strum(serialize_all = "kebab-case")]
 pub enum Directory {
     Avatars,
     Posts,

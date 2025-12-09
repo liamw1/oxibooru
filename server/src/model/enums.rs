@@ -90,19 +90,7 @@ impl FromSql<SmallInt, Pg> for PostType {
 }
 
 #[derive(
-    Debug,
-    Display,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    EnumString,
-    FromRepr,
-    IntoStaticStr,
-    AsExpression,
-    FromSqlRow,
-    Serialize,
-    Deserialize,
+    Debug, Display, Copy, Clone, PartialEq, Eq, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize,
 )]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
@@ -462,7 +450,7 @@ impl FromSql<SmallInt, Pg> for ResourceOperation {
     }
 }
 
-#[derive(Debug, Display, Clone, Copy, EnumString, FromRepr, IntoStaticStr, AsExpression, FromSqlRow, Serialize)]
+#[derive(Debug, Display, Clone, Copy, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[diesel(sql_type = SmallInt)]

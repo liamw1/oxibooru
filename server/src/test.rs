@@ -75,7 +75,6 @@ pub fn reset_database() {
 /// Useful after a table's sequence gets updated as an unintended side-effect.
 /// This can happen when attempting to insert a row but it fails due to a constraint violation.
 pub fn reset_sequence(table: ResourceType) -> ApiResult<()> {
-    let table: &str = table.into();
     let query = format!(
         "SELECT setval(pg_get_serial_sequence('{table}', 'id'), GREATEST((SELECT MAX(id) FROM \"{table}\"), 1));"
     );
