@@ -353,7 +353,8 @@ mod test {
         let default = is_default(&mut conn)?;
         assert!(default);
 
-        verify_response(&format!("PUT /tag-category/default/default/?{FIELDS}"), "tag_category/restore_default").await?;
+        verify_response(&format!("PUT /tag-category/default/default/?{FIELDS}"), "tag_category/restore_default")
+            .await?;
 
         let default = is_default(&mut conn)?;
         assert!(!default);
