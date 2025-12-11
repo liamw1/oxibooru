@@ -938,31 +938,41 @@ mod test {
     #[parallel]
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /posts/?query";
-        const SORT: &str = "-sort:id&limit=40";
-        verify_response(&format!("{QUERY}={SORT}{FIELDS}"), "post/list").await?;
+        const PARAMS: &str = "-sort:id&limit=40&fields=id";
+        verify_response(&format!("{QUERY}=-sort:id&limit=40{FIELDS}"), "post/list").await?;
 
         // Test sorts
         for token in Token::iter() {
-            match token {
-                Token::Id | Token::ContentChecksum | Token::NoteText | Token::Special => continue,
-                _ => (),
+            if matches!(
+                token,
+                Token::Id
+                    | Token::ContentChecksum
+                    | Token::NoteText
+                    | Token::PoolCategory
+                    | Token::Special
+                    | Token::TagCategory
+            ) {
+                continue;
             }
+
             let token_str: &'static str = token.into();
-            let query = format!("{QUERY}=sort:{token_str} {SORT}&fields=id");
+            let query = format!("{QUERY}=sort:{token_str} {PARAMS}");
             let path = format!("post/list_{token_str}_sorted");
             verify_response(&query, &path).await?;
         }
 
         // Test filters
-        verify_response(&format!("{QUERY}=-plant,sky,tagme {SORT}&fields=id"), "post/list_tag_filtered").await?;
-        verify_response(&format!("{QUERY}=-pool:2 {SORT}&fields=id"), "post/list_pool_filtered").await?;
-        verify_response(&format!("{QUERY}=fav:*user* {SORT}&fields=id"), "post/list_fav_filtered").await?;
-        verify_response(&format!("{QUERY}=-comment:*user* {SORT}&fields=id"), "post/list_comment_filtered").await?;
-        verify_response(&format!("{QUERY}=note-text:*fav* {SORT}&fields=id"), "post/list_note-text_filtered").await?;
-        verify_response(&format!("{QUERY}=special:liked {SORT}&fields=id"), "post/list_liked_filtered").await?;
-        verify_response(&format!("{QUERY}=special:disliked {SORT}&fields=id"), "post/list_disliked_filtered").await?;
-        verify_response(&format!("{QUERY}=special:fav {SORT}&fields=id"), "post/list_special-fav_filtered").await?;
-        verify_response(&format!("{QUERY}=special:tumbleweed {SORT}&fields=id"), "post/list_tumbleweed_filtered").await
+        verify_response(&format!("{QUERY}=-plant,sky,tagme {PARAMS}"), "post/list_tag_filtered").await?;
+        verify_response(&format!("{QUERY}=-pool:2 {PARAMS}"), "post/list_pool_filtered").await?;
+        verify_response(&format!("{QUERY}=fav:*user* {PARAMS}"), "post/list_fav_filtered").await?;
+        verify_response(&format!("{QUERY}=-comment:*user* {PARAMS}"), "post/list_comment_filtered").await?;
+        verify_response(&format!("{QUERY}=note-text:*fav* {PARAMS}"), "post/list_note-text_filtered").await?;
+        verify_response(&format!("{QUERY}=pool-category:style {PARAMS}"), "post/list_pool_category_filtered").await?;
+        verify_response(&format!("{QUERY}=tag-category:s* {PARAMS}"), "post/list_tag_category_filtered").await?;
+        verify_response(&format!("{QUERY}=special:liked {PARAMS}"), "post/list_liked_filtered").await?;
+        verify_response(&format!("{QUERY}=special:disliked {PARAMS}"), "post/list_disliked_filtered").await?;
+        verify_response(&format!("{QUERY}=special:fav {PARAMS}"), "post/list_special-fav_filtered").await?;
+        verify_response(&format!("{QUERY}=special:tumbleweed {PARAMS}"), "post/list_tumbleweed_filtered").await
     }
 
     #[tokio::test]

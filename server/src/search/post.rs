@@ -3,8 +3,8 @@ use crate::auth::Client;
 use crate::content::hash::Checksum;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
 use crate::schema::{
-    comment, database_statistics, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics,
-    post_tag, tag_name, user,
+    comment, database_statistics, pool, pool_category, pool_post, post, post_favorite, post_feature, post_note,
+    post_score, post_statistics, post_tag, tag, tag_category, tag_name, user,
 };
 use crate::search::{
     self, Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
@@ -62,7 +62,9 @@ pub enum Token {
     )]
     LastEditTime,
     Tag,
+    TagCategory,
     Pool,
+    PoolCategory,
     #[strum(serialize = "submit", serialize = "upload", serialize = "uploader")]
     Uploader,
     Fav,
@@ -96,9 +98,11 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
         let search = SearchCriteria::new(client, search_criteria, Token::Tag).map_err(Box::from)?;
         for sort in &search.sorts {
-            match sort.kind {
-                Token::ContentChecksum | Token::NoteText | Token::Special => return Err(ApiError::InvalidSort),
-                _ => (),
+            if matches!(
+                sort.kind,
+                Token::ContentChecksum | Token::NoteText | Token::PoolCategory | Token::Special | Token::TagCategory
+            ) {
+                return Err(ApiError::InvalidSort);
             }
         }
 
@@ -126,6 +130,9 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 
     fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery> {
         let mut nonmatching_posts = None;
+        let nonmatching = &mut nonmatching_posts;
+        let state = &mut self.cache_state;
+
         let base_query = post::table
             .select(post::id)
             .inner_join(post_statistics::table)
@@ -150,12 +157,14 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
                 Token::Description => Ok(apply_str_filter!(query, post::description, filter)),
                 Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
                 Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
-                Token::Tag => apply_tag_filter(conn, query, &mut nonmatching_posts, filter, &mut self.cache_state),
-                Token::Pool => apply_pool_filter(conn, query, filter, &mut self.cache_state),
+                Token::Tag => apply_tag_filter(conn, query, nonmatching, filter, state),
+                Token::TagCategory => apply_tag_category_filter(conn, query, filter, state),
+                Token::Pool => apply_pool_filter(conn, query, filter, state),
+                Token::PoolCategory => apply_pool_category_filter(conn, query, filter, state),
                 Token::Uploader => Ok(apply_str_filter!(query, user::name, filter)),
-                Token::Fav => apply_favorite_filter(conn, query, filter, &mut self.cache_state),
-                Token::Comment => apply_comment_filter(conn, query, filter, &mut self.cache_state),
-                Token::NoteText => apply_note_text_filter(conn, query, filter, &mut self.cache_state),
+                Token::Fav => apply_favorite_filter(conn, query, filter, state),
+                Token::Comment => apply_comment_filter(conn, query, filter, state),
+                Token::NoteText => apply_note_text_filter(conn, query, filter, state),
                 Token::TagCount => apply_filter!(query, post_statistics::tag_count, filter, i64),
                 Token::CommentCount => apply_filter!(query, post_statistics::comment_count, filter, i64),
                 Token::RelationCount => apply_filter!(query, post_statistics::relation_count, filter, i64),
@@ -163,10 +172,10 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
                 Token::FavCount => apply_filter!(query, post_statistics::favorite_count, filter, i64),
                 Token::FeatureCount => apply_filter!(query, post_statistics::feature_count, filter, i64),
                 Token::Score => apply_filter!(query, post_statistics::score, filter, i64),
-                Token::CommentTime => apply_comment_time_filter(conn, query, filter, &mut self.cache_state),
-                Token::FavTime => apply_favorite_time_filter(conn, query, filter, &mut self.cache_state),
-                Token::FeatureTime => apply_feature_time_filter(conn, query, filter, &mut self.cache_state),
-                Token::Special => apply_special_filter(conn, query, self.search.client, filter, &mut self.cache_state),
+                Token::CommentTime => apply_comment_time_filter(conn, query, filter, state),
+                Token::FavTime => apply_favorite_time_filter(conn, query, filter, state),
+                Token::FeatureTime => apply_feature_time_filter(conn, query, filter, state),
+                Token::Special => apply_special_filter(conn, query, self.search.client, filter, state),
             })?;
         if let Some(nonmatching) = nonmatching_posts {
             update_nonmatching_filter_cache!(conn, nonmatching, self.cache_state)?;
@@ -211,7 +220,9 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             Token::CommentTime => apply_sort!(query, post_statistics::last_comment_time, sort),
             Token::FavTime => apply_sort!(query, post_statistics::last_favorite_time, sort),
             Token::FeatureTime => apply_sort!(query, post_statistics::last_feature_time, sort),
-            Token::ContentChecksum | Token::NoteText | Token::Special => panic!("Invalid sort-style token!"),
+            Token::ContentChecksum | Token::NoteText | Token::PoolCategory | Token::Special | Token::TagCategory => {
+                panic!("Invalid sort-style token!")
+            }
         });
         match self.search.extra_args {
             Some(args) => query.offset(args.offset).limit(args.limit),
@@ -310,6 +321,23 @@ fn apply_tag_filter(
     Ok(query)
 }
 
+fn apply_tag_category_filter(
+    conn: &mut PgConnection,
+    query: BoxedQuery,
+    filter: UnparsedFilter<Token>,
+    state: &mut CacheState,
+) -> ApiResult<BoxedQuery> {
+    let post_tags = tag::table
+        .inner_join(tag_category::table)
+        .inner_join(post_tag::table)
+        .select(post_tag::post_id)
+        .distinct()
+        .into_boxed();
+    let filtered_posts = apply_str_filter!(post_tags, tag_category::name, filter.unnegated());
+    update_filter_cache!(conn, filtered_posts, post_tag::post_id, filter, state)?;
+    Ok(query)
+}
+
 fn apply_pool_filter(
     conn: &mut PgConnection,
     query: BoxedQuery,
@@ -319,6 +347,23 @@ fn apply_pool_filter(
     let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
     let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
     let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
+    update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
+    Ok(query)
+}
+
+fn apply_pool_category_filter(
+    conn: &mut PgConnection,
+    query: BoxedQuery,
+    filter: UnparsedFilter<Token>,
+    state: &mut CacheState,
+) -> ApiResult<BoxedQuery> {
+    let pool_posts = pool::table
+        .inner_join(pool_category::table)
+        .inner_join(pool_post::table)
+        .select(pool_post::post_id)
+        .distinct()
+        .into_boxed();
+    let filtered_posts = apply_str_filter!(pool_posts, pool_category::name, filter.unnegated());
     update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
     Ok(query)
 }

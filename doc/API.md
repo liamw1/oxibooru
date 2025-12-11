@@ -903,6 +903,7 @@ data.
     | -------------------- | ----------------------------------------------------------                              |
     | `id`                 | having given post number                                                                |
     | `tag`                | having given tag (accepts wildcards)                                                    |
+    | `tag-category`       | having tags from given tag category (accepts wildcards)                                 |
     | `score`              | having given score                                                                      |
     | `uploader`           | uploaded by given user (accepts wildcards)                                              |
     | `upload`             | alias of upload                                                                         |
@@ -910,6 +911,7 @@ data.
     | `comment`            | commented by given user (accepts wildcards)                                             |
     | `fav`                | favorited by given user (accepts wildcards)                                             |
     | `pool`               | belonging to the pool with the given ID                                                 |
+    | `pool-category`      | belonging to pools in the given pool category (accepts wildcards)                       |
     | `tag-count`          | having given number of tags                                                             |
     | `comment-count`      | having given number of comments                                                         |
     | `fav-count`          | favorited by given number of users                                                      |

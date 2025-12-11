@@ -15,6 +15,10 @@
             <td>having given tag (accepts wildcards)</td>
         </tr>
         <tr>
+            <td><code>tag-category</code></td>
+            <td>having tags from given tag category (accepts wildcards)</td>
+        </tr>
+        <tr>
             <td><code>score</code></td>
             <td>having given score</td>
         </tr>
@@ -41,6 +45,10 @@
         <tr>
             <td><code>pool</code></td>
             <td>belonging to the pool with the given ID</td>
+        </tr>
+        <tr>
+            <td><code>pool-category</code></td>
+            <td>belonging to pools in the given pool category (accepts wildcards)</td>
         </tr>
         <tr>
             <td><code>tag-count</code></td>
