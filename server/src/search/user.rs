@@ -6,9 +6,9 @@ use crate::{apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
 use diesel::dsl::{IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
-use strum::EnumString;
+use strum::{Display, EnumIter, EnumString, EnumTable};
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
 pub enum Token {
     #[strum(serialize = "name")]
     Name,
@@ -89,3 +89,12 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 }
 
 type BoxedQuery = IntoBoxed<'static, Select<user::table, user::id>, Pg>;
+
+#[cfg(test)]
+pub fn filter_table() -> TokenTable<&'static str> {
+    TokenTable {
+        _name: "*user*",
+        _creation_time: "-2000",
+        _last_login_time: "2000..2001",
+    }
+}

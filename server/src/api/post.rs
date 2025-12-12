@@ -941,37 +941,24 @@ mod test {
         const PARAMS: &str = "-sort:id&limit=40&fields=id";
         verify_response(&format!("{QUERY}=-sort:id&limit=40{FIELDS}"), "post/list").await?;
 
-        // Test sorts
+        let filter_table = crate::search::post::filter_table();
         for token in Token::iter() {
-            if matches!(
-                token,
-                Token::Id
-                    | Token::ContentChecksum
-                    | Token::NoteText
-                    | Token::PoolCategory
-                    | Token::Special
-                    | Token::TagCategory
-            ) {
-                continue;
-            }
+            let filter = filter_table[token];
+            let (sign, filter) = if filter.starts_with('-') {
+                filter.split_at(1)
+            } else {
+                ("", filter)
+            };
+            let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
+            let path = format!("post/list_{token}_filtered");
+            verify_response(&query, &path).await?;
 
-            let token_str: &'static str = token.into();
-            let query = format!("{QUERY}=sort:{token_str} {PARAMS}");
-            let path = format!("post/list_{token_str}_sorted");
+            let query = format!("{QUERY}=sort:{token} {PARAMS}");
+            let path = format!("post/list_{token}_sorted");
             verify_response(&query, &path).await?;
         }
-
-        // Test filters
-        verify_response(&format!("{QUERY}=-plant,sky,tagme {PARAMS}"), "post/list_tag_filtered").await?;
-        verify_response(&format!("{QUERY}=-pool:2 {PARAMS}"), "post/list_pool_filtered").await?;
-        verify_response(&format!("{QUERY}=fav:*user* {PARAMS}"), "post/list_fav_filtered").await?;
-        verify_response(&format!("{QUERY}=-comment:*user* {PARAMS}"), "post/list_comment_filtered").await?;
-        verify_response(&format!("{QUERY}=note-text:*fav* {PARAMS}"), "post/list_note-text_filtered").await?;
-        verify_response(&format!("{QUERY}=pool-category:style {PARAMS}"), "post/list_pool_category_filtered").await?;
-        verify_response(&format!("{QUERY}=tag-category:s* {PARAMS}"), "post/list_tag_category_filtered").await?;
         verify_response(&format!("{QUERY}=special:liked {PARAMS}"), "post/list_liked_filtered").await?;
         verify_response(&format!("{QUERY}=special:disliked {PARAMS}"), "post/list_disliked_filtered").await?;
-        verify_response(&format!("{QUERY}=special:fav {PARAMS}"), "post/list_special-fav_filtered").await?;
         verify_response(&format!("{QUERY}=special:tumbleweed {PARAMS}"), "post/list_tumbleweed_filtered").await
     }
 

@@ -1,0 +1,64 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "category:character -sort:name",
+    "results": [
+        {
+            "names": [
+                "admiral_ackbar"
+            ]
+        },
+        {
+            "names": [
+                "black_hat_badger"
+            ]
+        },
+        {
+            "names": [
+                "claudius"
+            ]
+        },
+        {
+            "names": [
+                "darth_vader",
+                "annakin_skywalker"
+            ]
+        },
+        {
+            "names": [
+                "isshin_ashina"
+            ]
+        },
+        {
+            "names": [
+                "kuro"
+            ]
+        },
+        {
+            "names": [
+                "laertes"
+            ]
+        },
+        {
+            "names": [
+                "luke_skywalker"
+            ]
+        },
+        {
+            "names": [
+                "ophelia"
+            ]
+        },
+        {
+            "names": [
+                "princess_leia"
+            ]
+        },
+        {
+            "names": [
+                "sekiro_(sekiro)"
+            ]
+        }
+    ],
+    "total": 11
+}

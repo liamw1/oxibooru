@@ -1,0 +1,11 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "-post-count:0..1 -sort:creation-time",
+    "results": [
+        {
+            "id": 2
+        }
+    ],
+    "total": 1
+}

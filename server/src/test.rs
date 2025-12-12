@@ -124,7 +124,9 @@ pub async fn verify_response_with_credentials(
     let mut expected_snapshot: Option<Value> = None;
     let mut body: Option<Value> = None;
     let mut config: Option<Config> = None;
-    for entry in std::fs::read_dir(asset_path("request", relative_path))? {
+    for entry in std::fs::read_dir(asset_path("request", relative_path))
+        .unwrap_or_else(|err| panic!("Could not read {relative_path}. Details: {err}"))
+    {
         let path = entry?.path();
         let file_contents = std::fs::read_to_string(&path)?;
         match path.file_name().and_then(OsStr::to_str) {
@@ -501,42 +503,39 @@ const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRan
     }
 }
 
-fn create_tag_categories(conn: &mut PgConnection) -> QueryResult<usize> {
-    let new_categories: Vec<_> = TAG_CATEGORY_NAMES
-        .iter()
-        .enumerate()
-        .map(|(i, name)| NewTagCategory {
-            order: i as i32 + 1,
-            name,
-            color: "default",
-        })
-        .collect();
-    new_categories.insert_into(tag_category::table).execute(conn)
+// Some inserts here are not batched intentionally to ensure that creation times are distinct
+
+fn create_tag_categories(conn: &mut PgConnection) -> QueryResult<()> {
+    let new_categories = TAG_CATEGORY_NAMES.iter().enumerate().map(|(i, name)| NewTagCategory {
+        order: i as i32 + 1,
+        name,
+        color: "default",
+    });
+    for new_category in new_categories {
+        new_category.insert_into(tag_category::table).execute(conn)?;
+    }
+    Ok(())
 }
 
 fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
     for (i, tags) in TAG_GROUPS.iter().enumerate() {
-        let new_tags: Vec<_> = tags
-            .iter()
-            .map(|_| NewTag {
-                category_id: i as i64,
-                description: "",
-            })
-            .collect();
-        let tag_ids = new_tags.insert_into(tag::table).returning(tag::id).get_results(conn)?;
-
-        let new_tag_names: Vec<_> = tag_ids
-            .iter()
-            .zip(*tags)
-            .flat_map(|(&tag_id, names)| {
-                names.iter().enumerate().map(move |(i, name)| NewTagName {
+        let new_tags = tags.iter().map(|_| NewTag {
+            category_id: i as i64,
+            description: "",
+        });
+        for (new_tag, names) in new_tags.zip(*tags) {
+            let tag_id = new_tag.insert_into(tag::table).returning(tag::id).get_result(conn)?;
+            let new_names: Vec<_> = names
+                .iter()
+                .enumerate()
+                .map(|(i, name)| NewTagName {
                     tag_id,
                     order: i as i32,
                     name,
                 })
-            })
-            .collect();
-        new_tag_names.insert_into(tag_name::table).execute(conn)?;
+                .collect();
+            new_names.insert_into(tag_name::table).execute(conn)?;
+        }
     }
 
     for (parent, child) in TAG_IMPLICATIONS {
@@ -572,52 +571,47 @@ fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
     Ok(())
 }
 
-fn create_pool_categories(conn: &mut PgConnection) -> QueryResult<usize> {
-    let new_categories: Vec<_> = POOL_CATEGORY_NAMES
+fn create_pool_categories(conn: &mut PgConnection) -> QueryResult<()> {
+    let new_categories = POOL_CATEGORY_NAMES
         .iter()
-        .map(|name| NewPoolCategory { name, color: "default" })
-        .collect();
-    new_categories.insert_into(pool_category::table).execute(conn)
+        .map(|name| NewPoolCategory { name, color: "default" });
+    for new_category in new_categories {
+        new_category.insert_into(pool_category::table).execute(conn)?;
+    }
+    Ok(())
 }
 
 fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
     for (i, pools) in POOL_GROUPS.iter().enumerate() {
-        let new_pools: Vec<_> = pools
-            .iter()
-            .map(|_| NewPool {
-                category_id: i as i64,
-                description: "",
-            })
-            .collect();
-        let pool_ids = new_pools
-            .insert_into(pool::table)
-            .returning(pool::id)
-            .get_results(conn)?;
-
-        let new_pool_names: Vec<_> = pool_ids
-            .iter()
-            .zip(*pools)
-            .flat_map(|(&pool_id, names)| {
-                names.iter().enumerate().map(move |(i, name)| NewPoolName {
+        let new_pools = pools.iter().map(|_| NewPool {
+            category_id: i as i64,
+            description: "",
+        });
+        for (new_pool, names) in new_pools.zip(*pools) {
+            let pool_id = new_pool.insert_into(pool::table).returning(pool::id).get_result(conn)?;
+            let new_names: Vec<_> = names
+                .iter()
+                .enumerate()
+                .map(move |(i, name)| NewPoolName {
                     pool_id,
                     order: i as i32,
                     name,
                 })
-            })
-            .collect();
-        new_pool_names.insert_into(pool_name::table).execute(conn)?;
+                .collect();
+            new_names.insert_into(pool_name::table).execute(conn)?;
+        }
     }
     Ok(())
 }
 
 fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> {
-    let post_data: Vec<(i64, MimeType, String)> = POSTS
-        .insert_into(post::table)
-        .returning((post::id, post::mime_type, post::source))
-        .get_results(conn)?;
+    for new_post in POSTS {
+        let (post_id, mime_type, source): (i64, MimeType, String) = new_post
+            .insert_into(post::table)
+            .returning((post::id, post::mime_type, post::source))
+            .get_result(conn)?;
 
-    // Simulate uploads
-    for (post_id, mime_type, source) in post_data {
+        // Simulate uploads
         let post_signature = NewPostSignature {
             post_id,
             signature: CompressedSignature::from([0; COMPRESSED_SIGNATURE_LEN]),

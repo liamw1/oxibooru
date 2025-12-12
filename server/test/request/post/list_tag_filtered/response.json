@@ -1,11 +1,11 @@
 {
-    "query": "-plant,sky,tagme -sort:id",
-    "offset": 0,
     "limit": 40,
-    "total": 1,
+    "offset": 0,
+    "query": "-tag:plant,sky,tagme -sort:id",
     "results": [
         {
             "id": 4
         }
-    ]
+    ],
+    "total": 1
 }

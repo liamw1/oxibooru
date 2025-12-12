@@ -372,12 +372,14 @@ mod test {
     use crate::model::enums::ResourceType;
     use crate::model::tag::Tag;
     use crate::schema::{database_statistics, tag, tag_name, tag_statistics};
+    use crate::search::tag::Token;
     use crate::string::SmallString;
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
     use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
     use serial_test::{parallel, serial};
+    use strum::IntoEnumIterator;
 
     // Exclude fields that involve creation_time or last_edit_time
     const FIELDS: &str = "&fields=description,category,names,implications,suggestions,usages";
@@ -386,11 +388,25 @@ mod test {
     #[parallel]
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /tags/?query";
-        const SORT: &str = "-sort:name&limit=40";
-        verify_response(&format!("{QUERY}={SORT}{FIELDS}"), "tag/list").await?;
-        verify_response(&format!("{QUERY}=sort:usage-count -sort:name&limit=1{FIELDS}"), "tag/list_most_used").await?;
-        verify_response(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character").await?;
-        verify_response(&format!("{QUERY}=*sky* {SORT}{FIELDS}"), "tag/list_has_sky_in_name").await?;
+        const PARAMS: &str = "-sort:name&limit=40&fields=names";
+        verify_response(&format!("{QUERY}=-sort:name&limit=40{FIELDS}"), "tag/list").await?;
+
+        let filter_table = crate::search::tag::filter_table();
+        for token in Token::iter() {
+            let filter = filter_table[token];
+            let (sign, filter) = if filter.starts_with('-') {
+                filter.split_at(1)
+            } else {
+                ("", filter)
+            };
+            let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
+            let path = format!("tag/list_{token}_filtered");
+            verify_response(&query, &path).await?;
+
+            let query = format!("{QUERY}=sort:{token} {PARAMS}");
+            let path = format!("tag/list_{token}_sorted");
+            verify_response(&query, &path).await?;
+        }
         Ok(())
     }
 

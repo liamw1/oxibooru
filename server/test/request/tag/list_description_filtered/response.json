@@ -1,0 +1,7 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "description:*\\ * -sort:name",
+    "results": [],
+    "total": 0
+}

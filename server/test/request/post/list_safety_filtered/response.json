@@ -1,0 +1,17 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "-safety:sketchy,unsafe -sort:id",
+    "results": [
+        {
+            "id": 1
+        },
+        {
+            "id": 3
+        },
+        {
+            "id": 4
+        }
+    ],
+    "total": 3
+}

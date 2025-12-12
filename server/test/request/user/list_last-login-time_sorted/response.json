@@ -1,0 +1,23 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "sort:last-login-time -sort:name",
+    "results": [
+        {
+            "name": "administrator"
+        },
+        {
+            "name": "moderator"
+        },
+        {
+            "name": "power_user"
+        },
+        {
+            "name": "regular_user"
+        },
+        {
+            "name": "restricted_user"
+        }
+    ],
+    "total": 5
+}

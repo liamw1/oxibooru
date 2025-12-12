@@ -6,9 +6,9 @@ use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select};
 use diesel::pg::Pg;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
-use strum::EnumString;
+use strum::{Display, EnumIter, EnumString, EnumTable};
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Token {
     Id,
@@ -110,3 +110,16 @@ type BoxedQuery = IntoBoxed<
     LeftJoin<InnerJoin<Select<comment::table, comment::id>, comment_statistics::table>, user::table>,
     Pg,
 >;
+
+#[cfg(test)]
+pub fn filter_table() -> TokenTable<&'static str> {
+    TokenTable {
+        _id: "-2..4",
+        _post: "1,3,5",
+        _text: "*this*",
+        _creation_time: "2016",
+        _last_edit_time: "-2016",
+        _user: "-*user*",
+        _score: "-0..",
+    }
+}

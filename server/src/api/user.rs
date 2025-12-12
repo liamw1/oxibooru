@@ -436,11 +436,13 @@ mod test {
     use crate::model::enums::{ResourceType, UserRank};
     use crate::model::user::User;
     use crate::schema::{database_statistics, user, user_statistics};
+    use crate::search::user::Token;
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
     use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
     use serial_test::{parallel, serial};
+    use strum::IntoEnumIterator;
 
     // Exclude fields that involve creation_time or last_edit_time
     const FIELDS: &str = "&fields=name,email,rank,avatarStyle,avatarUrl,commentCount,uploadedPostCount,likedPostCount,dislikedPostCount,favoritePostCount";
@@ -449,9 +451,26 @@ mod test {
     #[parallel]
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /users/?query";
-        const SORT: &str = "-sort:name&limit=40";
-        verify_response(&format!("{QUERY}={SORT}{FIELDS}"), "user/list").await?;
-        verify_response(&format!("{QUERY}=name:*user* {SORT}{FIELDS}"), "user/list_has_user_in_name").await
+        const PARAMS: &str = "-sort:name&limit=40&fields=name";
+        verify_response(&format!("{QUERY}=-sort:name&limit=40{FIELDS}"), "user/list").await?;
+
+        let filter_table = crate::search::user::filter_table();
+        for token in Token::iter() {
+            let filter = filter_table[token];
+            let (sign, filter) = if filter.starts_with('-') {
+                filter.split_at(1)
+            } else {
+                ("", filter)
+            };
+            let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
+            let path = format!("user/list_{token}_filtered");
+            verify_response(&query, &path).await?;
+
+            let query = format!("{QUERY}=sort:{token} {PARAMS}");
+            let path = format!("user/list_{token}_sorted");
+            verify_response(&query, &path).await?;
+        }
+        Ok(())
     }
 
     #[tokio::test]

@@ -1,0 +1,23 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "-feature-time:2020..2022 -sort:id",
+    "results": [
+        {
+            "id": 1
+        },
+        {
+            "id": 2
+        },
+        {
+            "id": 3
+        },
+        {
+            "id": 4
+        },
+        {
+            "id": 5
+        }
+    ],
+    "total": 5
+}

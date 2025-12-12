@@ -19,9 +19,9 @@ use diesel::pg::Pg;
 use diesel::sql_types::{Float, SmallInt};
 use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl, TextExpressionMethods};
 use std::str::FromStr;
-use strum::{EnumIter, EnumString, IntoStaticStr};
+use strum::{Display, EnumIter, EnumString, EnumTable};
 
-#[derive(Clone, Copy, EnumIter, EnumString, IntoStaticStr)]
+#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 #[strum(use_phf)]
 pub enum Token {
@@ -221,7 +221,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             Token::FavTime => apply_sort!(query, post_statistics::last_favorite_time, sort),
             Token::FeatureTime => apply_sort!(query, post_statistics::last_feature_time, sort),
             Token::ContentChecksum | Token::NoteText | Token::PoolCategory | Token::Special | Token::TagCategory => {
-                panic!("Invalid sort-style token!")
+                unreachable!()
             }
         });
         match self.search.extra_args {
@@ -496,4 +496,43 @@ fn apply_special_filter(
         }
     }??;
     Ok(query)
+}
+
+#[cfg(test)]
+pub fn filter_table() -> TokenTable<&'static str> {
+    TokenTable {
+        _id: "-3..4",
+        _file_size: "-..1000",
+        _width: "1",
+        _height: "-1,2,3",
+        _area: "1,1000",
+        _aspect_ratio: "1.1..2.5",
+        _safety: "-sketchy,unsafe",
+        _type: "-image",
+        _content_checksum: "3031000000000000000000000000000000000000000000000000000000000000",
+        _flag: "sound",
+        _source: "-*_*",
+        _description: "*00*",
+        _creation_time: "-2012",
+        _last_edit_time: "2012",
+        _tag: "-plant,sky,tagme",
+        _tag_category: "s*",
+        _pool: "-2",
+        _pool_category: "style",
+        _uploader: "-restricted_user",
+        _fav: "*user*",
+        _comment: "-*user*",
+        _note_text: "*fav*",
+        _tag_count: "1..5",
+        _comment_count: "-1..",
+        _relation_count: "1,2,3",
+        _note_count: "-0",
+        _fav_count: "1..",
+        _feature_count: "0",
+        _score: "..1",
+        _comment_time: "-2020",
+        _fav_time: "-2020..2021",
+        _feature_time: "-2020..2022",
+        _special: "fav",
+    }
 }

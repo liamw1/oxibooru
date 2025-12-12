@@ -1,0 +1,14 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "text:*this* -sort:id",
+    "results": [
+        {
+            "id": 2
+        },
+        {
+            "id": 3
+        }
+    ],
+    "total": 2
+}

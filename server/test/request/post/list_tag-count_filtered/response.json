@@ -1,0 +1,11 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "tag-count:1..5 -sort:id",
+    "results": [
+        {
+            "id": 3
+        }
+    ],
+    "total": 1
+}

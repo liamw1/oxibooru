@@ -10,9 +10,9 @@ use crate::{
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
-use strum::EnumString;
+use strum::{Display, EnumIter, EnumString, EnumTable};
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Token {
     #[strum(serialize = "creation-date", serialize = "creation-time")]
@@ -95,7 +95,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
         let sorts = self.search.sorts.iter().copied().chain(default_sort);
         let unsorted_query = unsorted_query.inner_join(pool_name::table).filter(PoolName::primary());
         let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
-            Token::CreationTime => apply_sort!(query, pool::id, sort),
+            Token::CreationTime => apply_sort!(query, pool::creation_time, sort),
             Token::LastEditTime => apply_sort!(query, pool::last_edit_time, sort),
             Token::Name => apply_sort!(query, pool_name::name, sort),
             Token::Category => apply_sort!(query, pool_category::name, sort),
@@ -126,4 +126,15 @@ fn apply_name_filter(
     let filtered_pools = apply_str_filter!(names, pool_name::name, filter.unnegated());
     update_filter_cache!(conn, filtered_pools, pool_name::pool_id, filter, state)?;
     Ok(query)
+}
+
+#[cfg(test)]
+pub fn filter_table() -> TokenTable<&'static str> {
+    TokenTable {
+        _creation_time: "2000..2020",
+        _last_edit_time: "-2000..2020",
+        _name: "*punk*",
+        _category: "Setting",
+        _post_count: "-0..1",
+    }
 }

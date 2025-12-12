@@ -1,0 +1,11 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "feature-count:0 -sort:id",
+    "results": [
+        {
+            "id": 2
+        }
+    ],
+    "total": 1
+}

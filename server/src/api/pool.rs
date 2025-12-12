@@ -285,11 +285,13 @@ mod test {
     use crate::model::enums::ResourceType;
     use crate::model::pool::Pool;
     use crate::schema::{database_statistics, pool, pool_statistics};
+    use crate::search::pool::Token;
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
     use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
     use serial_test::{parallel, serial};
+    use strum::IntoEnumIterator;
 
     // Exclude fields that involve creation_time or last_edit_time
     const FIELDS: &str = "&fields=id,description,category,names,posts,postCount";
@@ -298,11 +300,26 @@ mod test {
     #[parallel]
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /pools/?query";
-        const SORT: &str = "-sort:creation-time&limit=40";
-        verify_response(&format!("{QUERY}={SORT}{FIELDS}"), "pool/list").await?;
-        verify_response(&format!("{QUERY}=sort:post-count&limit=1{FIELDS}"), "pool/list_most_posts").await?;
-        verify_response(&format!("{QUERY}=category:Setting {SORT}{FIELDS}"), "pool/list_category_setting").await?;
-        verify_response(&format!("{QUERY}=name:*punk* {SORT}{FIELDS}"), "pool/list_name_punk").await
+        const PARAMS: &str = "-sort:creation-time&limit=40&fields=id";
+        verify_response(&format!("{QUERY}=-sort:creation-time&limit=40{FIELDS}"), "pool/list").await?;
+
+        let filter_table = crate::search::pool::filter_table();
+        for token in Token::iter() {
+            let filter = filter_table[token];
+            let (sign, filter) = if filter.starts_with('-') {
+                filter.split_at(1)
+            } else {
+                ("", filter)
+            };
+            let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
+            let path = format!("pool/list_{token}_filtered");
+            verify_response(&query, &path).await?;
+
+            let query = format!("{QUERY}=sort:{token} {PARAMS}");
+            let path = format!("pool/list_{token}_sorted");
+            verify_response(&query, &path).await?;
+        }
+        Ok(())
     }
 
     #[tokio::test]

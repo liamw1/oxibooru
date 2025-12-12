@@ -1,0 +1,45 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "usage-count:0,2,5 -sort:name",
+    "results": [
+        {
+            "names": [
+                "16:9_aspect_ratio"
+            ]
+        },
+        {
+            "names": [
+                "desert"
+            ]
+        },
+        {
+            "names": [
+                "kuro"
+            ]
+        },
+        {
+            "names": [
+                "ophelia"
+            ]
+        },
+        {
+            "names": [
+                "plant",
+                "foliage"
+            ]
+        },
+        {
+            "names": [
+                "rock",
+                "stone"
+            ]
+        },
+        {
+            "names": [
+                "sand"
+            ]
+        }
+    ],
+    "total": 7
+}

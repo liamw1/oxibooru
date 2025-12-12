@@ -12,9 +12,9 @@ use crate::{
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
-use strum::EnumString;
+use strum::{Display, EnumIter, EnumString, EnumTable};
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Token {
     #[strum(serialize = "creation-date", serialize = "creation-time")]
@@ -176,4 +176,20 @@ fn apply_suggests_filter(
     let filtered_tags = apply_str_filter!(suggestions, tag_name::name, filter.unnegated());
     update_filter_cache!(conn, filtered_tags, tag_name::tag_id, filter, state)?;
     Ok(query)
+}
+
+#[cfg(test)]
+pub fn filter_table() -> TokenTable<&'static str> {
+    TokenTable {
+        _creation_time: "-1984",
+        _last_edit_time: "1984",
+        _name: "*sky*",
+        _category: "character",
+        _description: "*\\ *",
+        _usage_count: "0,2,5",
+        _implication_count: "-0",
+        _suggestion_count: "-2..",
+        _implies: "-sky",
+        _suggests: "-*k*",
+    }
 }
