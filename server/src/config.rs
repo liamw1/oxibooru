@@ -243,8 +243,11 @@ impl Config {
 /// Deserializes the `config.toml`.
 /// Any values not present will default to the corresponding value in `config.toml.dist`.
 pub fn create() -> Config {
-    assert!(!cfg!(test), "Production config disallowed in test build!");
-    create_config(Some("config"))
+    if cfg!(test) {
+        panic!("Production config disallowed in test build!")
+    } else {
+        create_config(Some("config"))
+    }
 }
 
 /// Creates a test config with an optional `override_relative_path` to override the default config.
