@@ -16,8 +16,10 @@ use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_note, post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
 };
+use crate::search::preference::Preferences;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
+use diesel::dsl::{exists, not};
 use diesel::{
     BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, NullableExpressionMethods, PgConnection, QueryDsl,
     QueryResult, RunQueryDsl, SelectableHelper,
@@ -200,7 +202,8 @@ impl PostInfo {
                 .expect("get_thumbnail_urls is infallible");
         let mut tags = resource::retrieve(fields[Field::Tags], || get_tags(conn, &posts))?;
         let mut comments = resource::retrieve(fields[Field::Comments], || get_comments(conn, config, client, &posts))?;
-        let mut relations = resource::retrieve(fields[Field::Relations], || get_relations(conn, config, &posts))?;
+        let mut relations =
+            resource::retrieve(fields[Field::Relations], || get_relations(conn, config, client, &posts))?;
         let mut pools = resource::retrieve(fields[Field::Pools], || get_pools(conn, &posts))?;
         let mut notes = resource::retrieve(fields[Field::Notes], || get_notes(conn, &posts))?;
         let mut scores = resource::retrieve(fields[Field::Score], || get_post_stats!(conn, &posts, score, i64))?;
@@ -434,11 +437,24 @@ fn get_comments(
         .collect())
 }
 
-fn get_relations(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> QueryResult<Vec<Vec<MicroPost>>> {
-    let related_posts: Vec<PostRelation> = PostRelation::belonging_to(posts)
+fn get_relations(
+    conn: &mut PgConnection,
+    config: &Config,
+    client: Client,
+    posts: &[Post],
+) -> QueryResult<Vec<Vec<MicroPost>>> {
+    let mut related_posts = PostRelation::belonging_to(posts)
         .order(post_relation::child_id)
-        .load(conn)?;
+        .into_boxed();
+
+    // Apply preference filters to post relations
+    let preferences = Preferences::new(config, client);
+    if let Some(hidden_posts) = preferences.hidden_posts(post_relation::child_id) {
+        related_posts = related_posts.filter(not(exists(hidden_posts)));
+    }
+
     Ok(related_posts
+        .load::<PostRelation>(conn)?
         .grouped_by(posts)
         .into_iter()
         .map(|post_relations| {

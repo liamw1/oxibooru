@@ -1,0 +1,7 @@
+[anonymous_preferences]
+tag_blacklist = ["classic_literature", "night"]
+hide_unsafe = true
+hide_sketchy = true
+
+[public_info.privileges]
+post_view_featured = "anonymous"

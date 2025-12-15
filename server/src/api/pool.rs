@@ -53,7 +53,7 @@ async fn list(
             offset,
             limit,
             total,
-            results: PoolInfo::new_batch_from_ids(conn, &state.config, &selected_pools, &fields)?,
+            results: PoolInfo::new_batch_from_ids(conn, &state.config, client, &selected_pools, &fields)?,
         }))
     })
 }
@@ -73,7 +73,7 @@ async fn get(
         if !pool_exists {
             return Err(ApiError::NotFound(ResourceType::Pool));
         }
-        PoolInfo::new_from_id(conn, &state.config, pool_id, &fields)
+        PoolInfo::new_from_id(conn, &state.config, client, pool_id, &fields)
             .map(Json)
             .map_err(ApiError::from)
     })
@@ -121,7 +121,7 @@ async fn create(
 
         // Set names and posts
         update::pool::set_names(conn, &state.config, pool.id, &body.names)?;
-        update::pool::set_posts(conn, pool.id, &posts)?;
+        update::pool::add_posts(conn, pool.id, 0, &posts)?;
 
         let pool_data = SnapshotData {
             description: body.description.unwrap_or_default(),
@@ -132,7 +132,7 @@ async fn create(
         snapshot::pool::creation_snapshot(conn, client, pool.id, pool_data)?;
         Ok::<_, ApiError>(pool)
     })?;
-    conn.transaction(|conn| PoolInfo::new(conn, &state.config, pool, &fields))
+    conn.transaction(|conn| PoolInfo::new(conn, &state.config, client, pool, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -172,7 +172,7 @@ async fn merge(
         update::pool::merge(conn, absorbed_id, merge_to_id)?;
         snapshot::pool::merge_snapshot(conn, client, absorbed_id, merge_to_id).map_err(ApiError::from)
     })?;
-    conn.transaction(|conn| PoolInfo::new_from_id(conn, &state.config, merge_to_id, &fields))
+    conn.transaction(|conn| PoolInfo::new_from_id(conn, &state.config, client, merge_to_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -236,10 +236,10 @@ async fn update(
             update::pool::set_names(conn, &state.config, pool_id, &names)?;
             new_snapshot_data.names = names;
         }
-        if let Some(posts) = body.posts {
+        if let Some(mut posts) = body.posts {
             api::verify_privilege(client, state.config.privileges().pool_edit_post)?;
 
-            update::pool::set_posts(conn, pool_id, &posts)?;
+            update::pool::set_posts(conn, &state.config, client, pool_id, &mut posts)?;
             new_snapshot_data.posts = posts;
         }
 
@@ -248,7 +248,7 @@ async fn update(
         snapshot::pool::modification_snapshot(conn, client, pool_id, old_snapshot_data, new_snapshot_data)?;
         Ok(())
     })?;
-    conn.transaction(|conn| PoolInfo::new_from_id(conn, &state.config, pool_id, &fields))
+    conn.transaction(|conn| PoolInfo::new_from_id(conn, &state.config, client, pool_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -282,7 +282,7 @@ async fn delete(
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
-    use crate::model::enums::ResourceType;
+    use crate::model::enums::{ResourceType, UserRank};
     use crate::model::pool::Pool;
     use crate::schema::{database_statistics, pool, pool_statistics};
     use crate::search::pool::Token;
@@ -442,6 +442,26 @@ mod test {
         assert_eq!(new_pool.creation_time, pool.creation_time);
         assert!(new_pool.last_edit_time > pool.last_edit_time);
         assert_eq!(new_post_count, post_count);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn preferences() -> ApiResult<()> {
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /pools/?query=-sort:creation-time&limit=40&fields=id,posts,postCount",
+            "pool/list_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "PUT /pool/2/?fields=id,posts,postCount",
+            "pool/edit_with_preferences",
+        )
+        .await?;
+
+        reset_database();
         Ok(())
     }
 

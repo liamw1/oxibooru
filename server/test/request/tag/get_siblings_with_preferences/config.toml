@@ -1,0 +1,6 @@
+[anonymous_preferences]
+tag_blacklist = ["sand", "tree"]
+tag_category_blacklist = ["artist", "character", "source", "meta"]
+
+[public_info.privileges]
+tag_view = "anonymous"

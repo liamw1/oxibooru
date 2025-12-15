@@ -77,14 +77,14 @@ macro_rules! update_matching_filter_cache {
         if !$state.completed {
             if $state.has_matching {
                 // Matches are intersected
-                let intersecting_subselect = $filtered_ids
+                let intersecting_subquery = $filtered_ids
                     .select(diesel::dsl::sql::<diesel::sql_types::Integer>("0"))
                     .filter(
                         diesel::dsl::sql::<diesel::sql_types::Bool>("")
                             .bind($column.eq($crate::search::temp::matching::id)),
                     );
                 diesel::delete($crate::search::temp::matching::table)
-                    .filter(diesel::dsl::not(diesel::dsl::exists(intersecting_subselect)))
+                    .filter(diesel::dsl::not(diesel::dsl::exists(intersecting_subquery)))
                     .execute($conn)
             } else {
                 $state.has_matching = true;
@@ -154,18 +154,18 @@ macro_rules! apply_cache_filters {
     ($query:expr, $column:expr, $state:expr) => {{
         $state.completed = true;
         let query = if $state.has_matching {
-            let matching_subselect = $crate::search::temp::matching::table
+            let matching_subquery = $crate::search::temp::matching::table
                 .select(diesel::dsl::sql::<diesel::sql_types::Integer>("0"))
                 .filter($crate::search::temp::matching::id.eq($column));
-            $query.filter(diesel::dsl::exists(matching_subselect))
+            $query.filter(diesel::dsl::exists(matching_subquery))
         } else {
             $query
         };
         if $state.has_nonmatching {
-            let nonmatching_subselect = $crate::search::temp::nonmatching::table
+            let nonmatching_subquery = $crate::search::temp::nonmatching::table
                 .select(diesel::dsl::sql::<diesel::sql_types::Integer>("0"))
                 .filter($crate::search::temp::nonmatching::id.eq($column));
-            query.filter(diesel::dsl::not(diesel::dsl::exists(nonmatching_subselect)))
+            query.filter(diesel::dsl::not(diesel::dsl::exists(nonmatching_subquery)))
         } else {
             query
         }

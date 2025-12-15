@@ -1,0 +1,5 @@
+[anonymous_preferences]
+tag_category_blacklist = ["default"]
+
+[public_info.privileges]
+post_edit_relation = "anonymous"

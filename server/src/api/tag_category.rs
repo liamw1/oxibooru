@@ -44,7 +44,7 @@ async fn list(
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
     api::verify_privilege(client, state.config.privileges().tag_category_view)?;
@@ -117,7 +117,7 @@ struct UpdateBody {
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
@@ -162,7 +162,7 @@ async fn update(
 async fn set_default(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
     api::verify_privilege(client, state.config.privileges().tag_category_set_default)?;
@@ -220,7 +220,7 @@ async fn set_default(
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().tag_category_delete)?;

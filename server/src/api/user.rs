@@ -78,7 +78,7 @@ async fn list(
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UserInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -246,7 +246,7 @@ struct UpdateBody {
 async fn update(
     state: AppState,
     client: Client,
-    username: String,
+    username: &str,
     params: ResourceParams,
     body: UpdateBody,
 ) -> ApiResult<Json<UserInfo>> {
@@ -381,19 +381,19 @@ async fn update(
 async fn update_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams>,
     body: JsonOrMultipart<UpdateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => update(state, client, username, params, payload).await,
+        JsonOrMultipart::Json(payload) => update(state, client, &username, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut user_update: UpdateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar)] = decoded_body.files {
                 user_update.avatar = Some(avatar);
-                update(state, client, username, params, user_update).await
+                update(state, client, &username, params, user_update).await
             } else {
                 Err(ApiError::MissingFormData)
             }
@@ -405,7 +405,7 @@ async fn update_handler(
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     state.get_connection()?.transaction(|conn| {

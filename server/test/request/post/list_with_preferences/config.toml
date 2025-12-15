@@ -1,0 +1,7 @@
+[anonymous_preferences]
+tag_blacklist = ["night"]
+tag_category_blacklist = ["default"]
+hide_untagged = true
+
+[public_info.privileges]
+post_list = "anonymous"

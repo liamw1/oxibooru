@@ -1,0 +1,12 @@
+{
+    "type": "object change",
+    "value": {
+        "relations": {
+            "added": [
+                4
+            ],
+            "removed": [],
+            "type": "list change"
+        }
+    }
+}

@@ -39,7 +39,7 @@ fn get_user_info(
 }
 
 /// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#request-password-reset)
-async fn request_reset(State(state): State<AppState>, Path(identifier): Path<String>) -> ApiResult<Json<()>> {
+async fn request_reset(State(state): State<AppState>, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
     let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
     let mut conn = state.get_connection()?;
@@ -121,7 +121,7 @@ fn generate_temporary_password(length: u8) -> String {
 /// See [confirm-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#confirm-password-reset)
 async fn reset_password(
     State(state): State<AppState>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Json(confirmation): Json<ResetToken>,
 ) -> ApiResult<Json<NewPassword>> {
     const TEMPORARY_PASSWORD_LENGTH: u8 = 16;

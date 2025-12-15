@@ -454,6 +454,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::FailedQuery(err) => err.kind(),
             Self::FromStr(_) => "FromStrError",
             Self::HeaderDeserialization(_) => "HeaderDeserialization",
+            Self::Hidden(_) => "ResourceHidden",
             Self::InsufficientPrivileges => "InsufficientPrivileges",
             Self::InvalidEmailAddress(err) => err.kind(),
             Self::InvalidEmail(err) => err.kind(),

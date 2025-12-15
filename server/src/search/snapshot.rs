@@ -29,11 +29,6 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     type Token = Token;
     type BoxedQuery = BoxedQuery;
 
-    fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::ResourceType).map_err(Box::from)?;
-        Ok(Self { search })
-    }
-
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
         &mut self.search
     }
@@ -80,6 +75,13 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             None => query,
         }
         .load(conn)
+    }
+}
+
+impl<'a> QueryBuilder<'a> {
+    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(client, search_criteria, Token::ResourceType).map_err(Box::from)?;
+        Ok(Self { search })
     }
 }
 

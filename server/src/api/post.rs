@@ -3,6 +3,7 @@ use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
 use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
+use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::content::signature::SignatureCache;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
@@ -16,17 +17,17 @@ use crate::resource::post::{Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
 use crate::search::Builder;
 use crate::search::post::QueryBuilder;
+use crate::search::preference::Preferences;
 use crate::snapshot::post::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, db, filesystem, resource, snapshot, update};
 use axum::extract::{DefaultBodyLimit, Extension, State};
 use axum::{Router, routing};
-use diesel::dsl::{exists, sql};
+use diesel::dsl::{exists, not, sql};
 use diesel::sql_types::Integer;
 use diesel::{
-    Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl,
-    SelectableHelper,
+    Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
@@ -94,7 +95,7 @@ async fn list(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_posts) = query_builder.list(conn)?;
@@ -119,10 +120,7 @@ async fn get(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
-        if !post_exists {
-            return Err(ApiError::NotFound(ResourceType::Post));
-        }
+        verify_visibility(conn, &state.config, client, post_id)?;
         PostInfo::new_from_id(conn, &state.config, client, post_id, &fields)
             .map(Json)
             .map_err(ApiError::from)
@@ -156,36 +154,16 @@ async fn get_neighbors(
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+    let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
     state.get_connection()?.transaction(|conn| {
         const INITIAL_LIMIT: i64 = 100;
         const LIMIT_GROWTH: i64 = 8;
 
-        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
-        if !post_exists {
-            return Err(ApiError::NotFound(ResourceType::Post))?;
-        }
+        verify_visibility(conn, &state.config, client, post_id)?;
 
         // Handle special cases first
-        if !query_builder.criteria().has_filter() && !query_builder.criteria().has_sort() {
-            // Optimized neighbor retrieval for simplest use case
-            let previous_post = post::table
-                .select(Post::as_select())
-                .filter(post::id.gt(post_id))
-                .order_by(post::id.asc())
-                .first(conn)
-                .optional()?;
-            let next_post = post::table
-                .select(Post::as_select())
-                .filter(post::id.lt(post_id))
-                .order_by(post::id.desc())
-                .first(conn)
-                .optional()?;
-
-            let has_previous_post = previous_post.is_some();
-            let posts = previous_post.into_iter().chain(next_post).collect();
-            let post_infos = PostInfo::new_batch(conn, &state.config, client, posts, &fields)?;
-            return Ok(create_post_neighbors(post_infos, has_previous_post));
+        if !query_builder.criteria().has_sort() {
+            // TODO
         }
 
         // Search for neighbors using exponentially increasing limit
@@ -231,12 +209,18 @@ async fn get_featured(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let featured_post_id: Option<i64> = post_feature::table
+        let mut featured = post_feature::table
             .select(post_feature::post_id)
             .order_by(post_feature::time.desc())
-            .first(conn)
-            .optional()?;
+            .into_boxed();
 
+        // Apply preferences to post features
+        let preferences = Preferences::new(&state.config, client);
+        if let Some(hidden_posts) = preferences.hidden_posts(post_feature::post_id) {
+            featured = featured.filter(not(exists(hidden_posts)));
+        }
+
+        let featured_post_id: Option<i64> = featured.first(conn).optional()?;
         featured_post_id
             .map(|post_id| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
             .transpose()
@@ -486,7 +470,7 @@ async fn create(
 
         // Add tags, relations, and notes
         update::post::set_tags(conn, post.id, &tag_ids)?;
-        update::post::set_relations(conn, post.id, &relations)?;
+        update::post::add_relations(conn, post.id, &relations)?;
         update::post::set_notes(conn, post.id, &notes)?;
 
         NewPostSignature {
@@ -749,10 +733,10 @@ async fn update(
             new_post.description = description.clone();
             new_snapshot_data.description = description;
         }
-        if let Some(relations) = body.relations {
+        if let Some(mut relations) = body.relations {
             api::verify_privilege(client, state.config.privileges().post_edit_relation)?;
 
-            update::post::set_relations(conn, post_id, &relations)?;
+            update::post::set_relations(conn, &state.config, client, post_id, &mut relations)?;
             new_snapshot_data.relations = relations;
         }
         if let Some(tags) = body.tags {
@@ -914,11 +898,28 @@ async fn unfavorite(
         .map_err(ApiError::from)
 }
 
+fn verify_visibility(conn: &mut PgConnection, config: &Config, client: Client, post_id: i64) -> ApiResult<()> {
+    let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
+    if !post_exists {
+        return Err(ApiError::NotFound(ResourceType::Post));
+    }
+
+    let preferences = Preferences::new(config, client);
+    if let Some(hidden_posts) = preferences.hidden_posts(post_statistics::post_id) {
+        let post_lookup = hidden_posts.filter(post_statistics::post_id.eq(post_id));
+        let post_hidden: bool = diesel::select(exists(post_lookup)).first(conn)?;
+        if post_hidden {
+            return Err(ApiError::Hidden(ResourceType::Post));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
     use crate::filesystem::Directory;
-    use crate::model::enums::ResourceType;
+    use crate::model::enums::{ResourceType, UserRank};
     use crate::model::post::Post;
     use crate::schema::{post, post_feature, post_statistics, tag, tag_name, user, user_statistics};
     use crate::search::post::Token;
@@ -1219,6 +1220,40 @@ mod test {
         assert!(new_post.last_edit_time > post.last_edit_time);
         assert_eq!(new_tag_count, tag_count);
         assert_eq!(new_relation_count, relation_count);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn preferences() -> ApiResult<()> {
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /posts/?query=-sort:id&limit=9&fields=id,relations,relationCount",
+            "post/list_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /post/5", "post/get_with_preferences").await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /post/4/around", "post/get_around_blacklisted").await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /post/4/around/?fields=id,relations,relationCount",
+            "post/get_around_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /featured-post/?fields=id,relations,relationCount",
+            "post/get_featured_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "PUT /post/1/?fields=id,relations,relationCount",
+            "post/edit_with_preferences",
+        )
+        .await?;
+
+        reset_database();
         Ok(())
     }
 

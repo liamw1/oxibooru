@@ -32,6 +32,7 @@ impl SnapshotData {
             .select(pool_post::post_id)
             .filter(pool_post::pool_id.eq(pool.id))
             .load(conn)?;
+
         Ok(Self {
             description: pool.description,
             category,

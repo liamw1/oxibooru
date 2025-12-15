@@ -168,6 +168,15 @@ pub async fn verify_response_with_credentials(
         request.await
     };
 
+    if let Some(expected_response) = expected_response {
+        let actual_response: Value = serde_json::from_slice(response.as_bytes()).unwrap_or_else(|_| {
+            panic!("Response for {relative_path} is not JSON.\nBody:\n{}", String::from_utf8_lossy(response.as_bytes()))
+        });
+        verify_json(relative_path, "response body", &expected_response, &actual_response);
+    } else {
+        panic!("Missing response.json in {relative_path}");
+    }
+
     // Optionally check an expected snapshot
     if let Some(expected_snapshot) = expected_snapshot {
         let mut conn = get_connection()?;
@@ -176,15 +185,6 @@ pub async fn verify_response_with_credentials(
             .order_by(snapshot::id.desc())
             .first(&mut conn)?;
         verify_json(relative_path, "snapshot data", &expected_snapshot, &actual_snapshot);
-    }
-
-    if let Some(expected_response) = expected_response {
-        let actual_response: Value = serde_json::from_slice(response.as_bytes()).unwrap_or_else(|_| {
-            panic!("Response for {relative_path} is not JSON.\nBody:\n{}", String::from_utf8_lossy(response.as_bytes()))
-        });
-        verify_json(relative_path, "response body", &expected_response, &actual_response);
-    } else {
-        panic!("Missing response.json in {relative_path}");
     }
     Ok(())
 }
@@ -318,6 +318,7 @@ const POST_5_TAGS: &[&str] = &[
 ];
 const POST_TAGS: &[&[&str]] = &[POST_1_TAGS, POST_2_TAGS, POST_3_TAGS, POST_4_TAGS, POST_5_TAGS];
 
+/// (`pool_name`, `post_id`)
 const POOL_POSTS: &[(&str, i64)] = &[
     ("fantasy", 1),
     ("fantasy", 2),
