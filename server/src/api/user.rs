@@ -345,7 +345,7 @@ async fn update(
             };
             api::verify_privilege(client, required_rank)?;
 
-            update::user::avatar(conn, &state.config, user_id, &username, &avatar)?;
+            update::user::avatar(conn, &state.config, user_id, username, &avatar)?;
         }
         if let Some(new_name) = body.name.as_deref() {
             let required_rank = if editing_self {
@@ -362,7 +362,7 @@ async fn update(
                 .execute(conn);
             error::map_unique_violation(update_result, ResourceProperty::UserName)?;
 
-            let old_custom_avatar_path = state.config.custom_avatar_path(&username);
+            let old_custom_avatar_path = state.config.custom_avatar_path(username);
             if old_custom_avatar_path.try_exists()? {
                 let new_custom_avatar_path = state.config.custom_avatar_path(new_name);
                 filesystem::move_file(&old_custom_avatar_path, &new_custom_avatar_path)?;

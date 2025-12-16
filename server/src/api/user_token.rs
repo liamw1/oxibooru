@@ -125,11 +125,7 @@ async fn create(
         .get_result(conn)?;
         Ok::<_, ApiError>((user_token, avatar_style))
     })?;
-    Ok(Json(UserTokenInfo::new(
-        MicroUser::new(&state.config, username.into(), avatar_style),
-        user_token,
-        &fields,
-    )))
+    Ok(Json(UserTokenInfo::new(MicroUser::new(&state.config, username, avatar_style), user_token, &fields)))
 }
 
 #[derive(Deserialize)]

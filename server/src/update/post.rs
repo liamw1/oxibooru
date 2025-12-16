@@ -77,7 +77,7 @@ pub fn set_relations(
         .returning(post_relation::child_id)
         .get_results(conn)?;
 
-    add_relations(conn, post_id, &new_related_posts)?;
+    add_relations(conn, post_id, new_related_posts)?;
 
     // Update last edit time for any posts involved in removed or added relations.
     let updated_posts: Vec<_> = old_related_posts
