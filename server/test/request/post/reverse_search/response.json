@@ -1,0 +1,549 @@
+{
+    "exactPost": null,
+    "similarPosts": [
+        {
+            "distance": 0.0,
+            "post": {
+                "canvasHeight": 2000,
+                "canvasWidth": 1000,
+                "checksum": "3031000000000000000000000000000000000000000000000000000000000000",
+                "checksumMD5": "30310000000000000000000000000000",
+                "commentCount": 2,
+                "contentUrl": "data/posts/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg",
+                "description": "0101100010",
+                "favoriteCount": 1,
+                "favoritedBy": [
+                    {
+                        "avatarUrl": "https://gravatar.com/avatar/6009606e934432ad90cea21381c562a56a8c6e16c107b68af176e214281ee96a?d=retro&s=300",
+                        "name": "restricted_user"
+                    }
+                ],
+                "featureCount": 2,
+                "fileSize": 1048576,
+                "flags": [],
+                "hasCustomThumbnail": false,
+                "id": 1,
+                "mimeType": "image/jpeg",
+                "noteCount": 0,
+                "notes": [],
+                "ownFavorite": false,
+                "ownScore": 0,
+                "pools": [
+                    {
+                        "category": "Setting",
+                        "description": "",
+                        "id": 2,
+                        "names": [
+                            "fantasy"
+                        ],
+                        "postCount": 3
+                    }
+                ],
+                "relationCount": 2,
+                "relations": [
+                    {
+                        "id": 2,
+                        "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
+                    },
+                    {
+                        "id": 3,
+                        "thumbnailUrl": "data/generated-thumbnails/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.jpg"
+                    }
+                ],
+                "safety": "safe",
+                "score": 1,
+                "source": "starry_night.png",
+                "tagCount": 6,
+                "tags": [
+                    {
+                        "category": "Artist",
+                        "names": [
+                            "shakespeare"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Source",
+                        "names": [
+                            "classic_literature"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Character",
+                        "names": [
+                            "claudius"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Character",
+                        "names": [
+                            "laertes"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "plant",
+                            "foliage"
+                        ],
+                        "usages": 2
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "rock",
+                            "stone"
+                        ],
+                        "usages": 2
+                    }
+                ],
+                "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg",
+                "type": "image",
+                "user": {
+                    "avatarUrl": "https://gravatar.com/avatar/6009606e934432ad90cea21381c562a56a8c6e16c107b68af176e214281ee96a?d=retro&s=300",
+                    "name": "restricted_user"
+                }
+            }
+        },
+        {
+            "distance": 0.0,
+            "post": {
+                "canvasHeight": 1080,
+                "canvasWidth": 1980,
+                "checksum": "3032000000000000000000000000000000000000000000000000000000000000",
+                "checksumMD5": "30320000000000000000000000000000",
+                "commentCount": 0,
+                "contentUrl": "data/posts/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.gif",
+                "description": "",
+                "favoriteCount": 1,
+                "favoritedBy": [
+                    {
+                        "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300",
+                        "name": "regular_user"
+                    }
+                ],
+                "featureCount": 0,
+                "fileSize": 5242880,
+                "flags": [],
+                "hasCustomThumbnail": false,
+                "id": 2,
+                "mimeType": "image/gif",
+                "noteCount": 0,
+                "notes": [],
+                "ownFavorite": false,
+                "ownScore": 0,
+                "pools": [
+                    {
+                        "category": "Setting",
+                        "description": "",
+                        "id": 2,
+                        "names": [
+                            "fantasy"
+                        ],
+                        "postCount": 3
+                    },
+                    {
+                        "category": "Setting",
+                        "description": "",
+                        "id": 4,
+                        "names": [
+                            "cyberpunk"
+                        ],
+                        "postCount": 1
+                    }
+                ],
+                "relationCount": 1,
+                "relations": [
+                    {
+                        "id": 1,
+                        "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
+                    }
+                ],
+                "safety": "sketchy",
+                "score": 1,
+                "source": "gif.gif",
+                "tagCount": 13,
+                "tags": [
+                    {
+                        "category": "Artist",
+                        "names": [
+                            "george_lucas"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Source",
+                        "names": [
+                            "star_wars"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Character",
+                        "names": [
+                            "admiral_ackbar"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Character",
+                        "names": [
+                            "darth_vader",
+                            "annakin_skywalker"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Character",
+                        "names": [
+                            "luke_skywalker"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Character",
+                        "names": [
+                            "princess_leia"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "forest",
+                            "woods"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "plant",
+                            "foliage"
+                        ],
+                        "usages": 2
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "river",
+                            "stream",
+                            "creek"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "rock",
+                            "stone"
+                        ],
+                        "usages": 2
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "tree"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "water",
+                            "agua"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Meta",
+                        "names": [
+                            "16:9_aspect_ratio"
+                        ],
+                        "usages": 2
+                    }
+                ],
+                "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg",
+                "type": "animation",
+                "user": {
+                    "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300",
+                    "name": "regular_user"
+                }
+            }
+        },
+        {
+            "distance": 0.0,
+            "post": {
+                "canvasHeight": 7479,
+                "canvasWidth": 11146,
+                "checksum": "3033000000000000000000000000000000000000000000000000000000000000",
+                "checksumMD5": "30330000000000000000000000000000",
+                "commentCount": 0,
+                "contentUrl": "data/posts/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.bmp",
+                "description": "",
+                "favoriteCount": 1,
+                "favoritedBy": [
+                    {
+                        "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300",
+                        "name": "regular_user"
+                    }
+                ],
+                "featureCount": 1,
+                "fileSize": 96468992,
+                "flags": [],
+                "hasCustomThumbnail": false,
+                "id": 3,
+                "mimeType": "image/bmp",
+                "noteCount": 1,
+                "notes": [
+                    {
+                        "polygon": [
+                            [
+                                0.0,
+                                0.0
+                            ],
+                            [
+                                0.0,
+                                1.0
+                            ],
+                            [
+                                1.0,
+                                0.0
+                            ]
+                        ],
+                        "text": "My favorite part"
+                    }
+                ],
+                "ownFavorite": false,
+                "ownScore": 0,
+                "pools": [],
+                "relationCount": 1,
+                "relations": [
+                    {
+                        "id": 1,
+                        "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
+                    }
+                ],
+                "safety": "safe",
+                "score": 1,
+                "source": "bmp.bmp",
+                "tagCount": 2,
+                "tags": [
+                    {
+                        "category": "default",
+                        "names": [
+                            "tagme",
+                            "tag_me"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Meta",
+                        "names": [
+                            "high_resolution",
+                            "high_res"
+                        ],
+                        "usages": 1
+                    }
+                ],
+                "thumbnailUrl": "data/generated-thumbnails/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.jpg",
+                "type": "image",
+                "user": {
+                    "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300",
+                    "name": "regular_user"
+                }
+            }
+        },
+        {
+            "distance": 0.0,
+            "post": {
+                "canvasHeight": 1,
+                "canvasWidth": 1,
+                "checksum": "3034000000000000000000000000000000000000000000000000000000000000",
+                "checksumMD5": "30340000000000000000000000000000",
+                "commentCount": 1,
+                "contentUrl": "data/posts/000000/00/4_78-cbid-2Ci2jMEqspr2LjF8OTP0kQUVVlCb53twMRw.png",
+                "description": "description9000",
+                "favoriteCount": 1,
+                "favoritedBy": [
+                    {
+                        "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300",
+                        "name": "regular_user"
+                    }
+                ],
+                "featureCount": 1,
+                "fileSize": 1,
+                "flags": [],
+                "hasCustomThumbnail": false,
+                "id": 4,
+                "mimeType": "image/png",
+                "noteCount": 0,
+                "notes": [],
+                "ownFavorite": false,
+                "ownScore": -1,
+                "pools": [
+                    {
+                        "category": "Style",
+                        "description": "",
+                        "id": 5,
+                        "names": [
+                            "abstract"
+                        ],
+                        "postCount": 1
+                    }
+                ],
+                "relationCount": 1,
+                "relations": [
+                    {
+                        "id": 5,
+                        "thumbnailUrl": "data/generated-thumbnails/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.jpg"
+                    }
+                ],
+                "safety": "safe",
+                "score": 0,
+                "source": "1_pixel.png",
+                "tagCount": 0,
+                "tags": [],
+                "thumbnailUrl": "data/generated-thumbnails/000000/00/4_78-cbid-2Ci2jMEqspr2LjF8OTP0kQUVVlCb53twMRw.jpg",
+                "type": "image",
+                "user": {
+                    "avatarUrl": "https://gravatar.com/avatar/8bfcaeb7285823c32541860cca686268214e8280602eb3c4ffec3fc52981b1dc?d=retro&s=300",
+                    "name": "regular_user"
+                }
+            }
+        },
+        {
+            "distance": 0.0,
+            "post": {
+                "canvasHeight": 1080,
+                "canvasWidth": 1980,
+                "checksum": "3035000000000000000000000000000000000000000000000000000000000000",
+                "checksumMD5": "30350000000000000000000000000000",
+                "commentCount": 1,
+                "contentUrl": "data/posts/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.mp4",
+                "description": "descriptor",
+                "favoriteCount": 1,
+                "favoritedBy": [
+                    {
+                        "avatarUrl": "https://gravatar.com/avatar/0911f7898fb33c121bdc89400182a48cf16c704ae826da05a12fa222a54406d0?d=retro&s=300",
+                        "name": "administrator"
+                    }
+                ],
+                "featureCount": 1,
+                "fileSize": 107374182400,
+                "flags": [
+                    "sound"
+                ],
+                "hasCustomThumbnail": false,
+                "id": 5,
+                "mimeType": "video/mp4",
+                "noteCount": 0,
+                "notes": [],
+                "ownFavorite": true,
+                "ownScore": 1,
+                "pools": [
+                    {
+                        "category": "Setting",
+                        "description": "",
+                        "id": 2,
+                        "names": [
+                            "fantasy"
+                        ],
+                        "postCount": 3
+                    },
+                    {
+                        "category": "Style",
+                        "description": "",
+                        "id": 6,
+                        "names": [
+                            "realistic"
+                        ],
+                        "postCount": 1
+                    }
+                ],
+                "relationCount": 1,
+                "relations": [
+                    {
+                        "id": 4,
+                        "thumbnailUrl": "data/generated-thumbnails/000000/00/4_78-cbid-2Ci2jMEqspr2LjF8OTP0kQUVVlCb53twMRw.jpg"
+                    }
+                ],
+                "safety": "unsafe",
+                "score": 0,
+                "source": "mp4.mp4",
+                "tagCount": 9,
+                "tags": [
+                    {
+                        "category": "Artist",
+                        "names": [
+                            "hidetaka_miyazaki"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Source",
+                        "names": [
+                            "sekiro"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Character",
+                        "names": [
+                            "black_hat_badger"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Character",
+                        "names": [
+                            "isshin_ashina"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Character",
+                        "names": [
+                            "sekiro_(sekiro)"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "night"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "night_sky"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "sky"
+                        ],
+                        "usages": 1
+                    },
+                    {
+                        "category": "Meta",
+                        "names": [
+                            "16:9_aspect_ratio"
+                        ],
+                        "usages": 2
+                    }
+                ],
+                "thumbnailUrl": "data/generated-thumbnails/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.jpg",
+                "type": "video",
+                "user": null
+            }
+        }
+    ]
+}

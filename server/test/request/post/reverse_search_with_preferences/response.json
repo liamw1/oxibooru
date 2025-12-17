@@ -1,0 +1,60 @@
+{
+    "exactPost": null,
+    "similarPosts": [
+        {
+            "distance": 0.0,
+            "post": {
+                "id": 1,
+                "relationCount": 2,
+                "relations": [
+                    {
+                        "id": 2,
+                        "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
+                    }
+                ]
+            }
+        },
+        {
+            "distance": 0.0,
+            "post": {
+                "id": 2,
+                "relationCount": 1,
+                "relations": [
+                    {
+                        "id": 1,
+                        "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
+                    }
+                ]
+            }
+        },
+        {
+            "distance": 0.0,
+            "post": {
+                "id": 3,
+                "relationCount": 1,
+                "relations": [
+                    {
+                        "id": 1,
+                        "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
+                    }
+                ]
+            }
+        },
+        {
+            "distance": 0.0,
+            "post": {
+                "id": 4,
+                "relationCount": 1,
+                "relations": []
+            }
+        },
+        {
+            "distance": 0.0,
+            "post": {
+                "id": 5,
+                "relationCount": 1,
+                "relations": []
+            }
+        }
+    ]
+}

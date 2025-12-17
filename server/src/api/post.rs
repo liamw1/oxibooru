@@ -1032,6 +1032,13 @@ mod test {
     }
 
     #[tokio::test]
+    #[parallel]
+    async fn reverse_search() -> ApiResult<()> {
+        simulate_upload("1_pixel.png", "upload_for_reverse_search.png")?;
+        verify_response(&format!("POST /posts/reverse-search/?{FIELDS}"), "post/reverse_search").await
+    }
+
+    #[tokio::test]
     #[serial]
     async fn create() -> ApiResult<()> {
         simulate_upload("1_pixel.png", "cool_post.png")?;
@@ -1246,6 +1253,15 @@ mod test {
             "post/get_featured_with_preferences",
         )
         .await?;
+
+        simulate_upload("1_pixel.png", "upload_for_reverse_search.png")?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "POST /posts/reverse-search/?fields=id,relations,relationCount",
+            "post/reverse_search_with_preferences",
+        )
+        .await?;
+
         verify_response_with_user(
             UserRank::Anonymous,
             "PUT /post/1/?fields=id,relations,relationCount",

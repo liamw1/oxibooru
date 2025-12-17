@@ -41,6 +41,12 @@ impl<'a> Preferences<'a> {
             .select(sql::<Integer>("0"))
             .inner_join(post_statistics::table)
             .into_boxed();
+
+        // If no preferences are specified, no posts are hidden
+        if preferences.is_empty() {
+            return Some(query.filter(sql::<Bool>("0 = 1")));
+        }
+
         if preferences.hide_sketchy {
             query = query.or_filter(inner_post.field(post::safety).eq(PostSafety::Sketchy));
         }
