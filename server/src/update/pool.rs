@@ -5,7 +5,7 @@ use crate::config::{Config, RegexType};
 use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::pool::{NewPoolName, PoolPost};
 use crate::schema::{pool, pool_name, pool_post};
-use crate::search::preferences::Preferences;
+use crate::search::preferences;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::dsl::{exists, max};
@@ -40,8 +40,7 @@ pub fn set_posts(
     posts: &mut Vec<i64>,
 ) -> ApiResult<()> {
     // Add posts client doesn't know about
-    let preferences = Preferences::new(config, client);
-    if let Some(hidden_posts) = preferences.hidden_posts(pool_post::post_id) {
+    if let Some(hidden_posts) = preferences::hidden_posts(config, client, pool_post::post_id) {
         let hidden_posts: Vec<i64> = pool_post::table
             .select(pool_post::post_id)
             .filter(pool_post::pool_id.eq(pool_id))

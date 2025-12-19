@@ -15,9 +15,8 @@ use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourcePro
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
 use crate::resource::post::{Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
-use crate::search::Builder;
 use crate::search::post::QueryBuilder;
-use crate::search::preferences::Preferences;
+use crate::search::{Builder, preferences};
 use crate::snapshot::post::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
@@ -215,8 +214,7 @@ async fn get_featured(
             .into_boxed();
 
         // Apply preferences to post features
-        let preferences = Preferences::new(&state.config, client);
-        if let Some(hidden_posts) = preferences.hidden_posts(post_feature::post_id) {
+        if let Some(hidden_posts) = preferences::hidden_posts(&state.config, client, post_feature::post_id) {
             featured = featured.filter(not(exists(hidden_posts)));
         }
 
@@ -904,8 +902,7 @@ fn verify_visibility(conn: &mut PgConnection, config: &Config, client: Client, p
         return Err(ApiError::NotFound(ResourceType::Post));
     }
 
-    let preferences = Preferences::new(config, client);
-    if let Some(hidden_posts) = preferences.hidden_posts(post_statistics::post_id) {
+    if let Some(hidden_posts) = preferences::hidden_posts(config, client, post_statistics::post_id) {
         let post_lookup = hidden_posts.filter(post_statistics::post_id.eq(post_id));
         let post_hidden: bool = diesel::select(exists(post_lookup)).first(conn)?;
         if post_hidden {

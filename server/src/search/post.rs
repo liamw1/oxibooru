@@ -7,9 +7,9 @@ use crate::schema::{
     comment, database_statistics, pool, pool_category, pool_post, post, post_favorite, post_feature, post_note,
     post_score, post_statistics, post_tag, tag, tag_category, tag_name, user,
 };
-use crate::search::preferences::Preferences;
 use crate::search::{
     self, Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
+    preferences,
 };
 use crate::{
     apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
@@ -90,7 +90,7 @@ pub enum Token {
 
 pub struct QueryBuilder<'a> {
     search: SearchCriteria<'a, Token>,
-    preferences: Preferences<'a>,
+    config: &'a Config,
     cache_state: CacheState,
 }
 
@@ -103,7 +103,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() || !self.preferences.is_empty() {
+        if self.search.has_filter() || preferences::has_preferences(self.config, self.search.client) {
             let unsorted_query = self.build_filtered(conn)?;
             unsorted_query.count().first(conn)
         } else {
@@ -166,7 +166,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
         if let Some(nonmatching) = nonmatching_posts {
             update_nonmatching_filter_cache!(conn, nonmatching, self.cache_state)?;
         }
-        if let Some(hidden_posts) = self.preferences.hidden_posts(post::id) {
+        if let Some(hidden_posts) = preferences::hidden_posts(self.config, self.search.client, post::id) {
             query = query.filter(not(exists(hidden_posts)));
         }
         Ok(apply_cache_filters!(query, post::id, self.cache_state))
@@ -224,7 +224,6 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 impl<'a> QueryBuilder<'a> {
     pub fn new(config: &'a Config, client: Client, search_criteria: &'a str) -> ApiResult<Self> {
         let search = SearchCriteria::new(client, search_criteria, Token::Tag).map_err(Box::from)?;
-        let preferences = Preferences::new(config, client);
         for sort in &search.sorts {
             if matches!(
                 sort.kind,
@@ -236,7 +235,7 @@ impl<'a> QueryBuilder<'a> {
 
         Ok(Self {
             search,
-            preferences,
+            config,
             cache_state: CacheState::new(),
         })
     }

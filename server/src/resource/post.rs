@@ -16,7 +16,7 @@ use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_note, post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
 };
-use crate::search::preferences::Preferences;
+use crate::search::preferences;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::dsl::{exists, not};
@@ -448,8 +448,7 @@ fn get_relations(
         .into_boxed();
 
     // Apply preference filters to post relations
-    let preferences = Preferences::new(config, client);
-    if let Some(hidden_posts) = preferences.hidden_posts(post_relation::child_id) {
+    if let Some(hidden_posts) = preferences::hidden_posts(config, client, post_relation::child_id) {
         related_posts = related_posts.filter(not(exists(hidden_posts)));
     }
 

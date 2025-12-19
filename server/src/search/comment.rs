@@ -2,8 +2,7 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::config::Config;
 use crate::schema::{comment, comment_statistics, database_statistics, user};
-use crate::search::preferences::Preferences;
-use crate::search::{Builder, Order, ParsedSort, SearchCriteria};
+use crate::search::{Builder, Order, ParsedSort, SearchCriteria, preferences};
 use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, exists, not};
 use diesel::pg::Pg;
@@ -32,7 +31,7 @@ pub enum Token {
 
 pub struct QueryBuilder<'a> {
     search: SearchCriteria<'a, Token>,
-    preferences: Preferences<'a>,
+    config: &'a Config,
 }
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
@@ -44,7 +43,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() || !self.preferences.is_empty() {
+        if self.search.has_filter() || preferences::has_preferences(self.config, self.search.client) {
             let unsorted_query = self.build_filtered(conn)?;
             unsorted_query.count().first(conn)
         } else {
@@ -76,7 +75,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             })?;
 
         // Apply preference filters to comments
-        if let Some(hidden_posts) = self.preferences.hidden_posts(comment::post_id) {
+        if let Some(hidden_posts) = preferences::hidden_posts(self.config, self.search.client, comment::post_id) {
             query = query.filter(not(exists(hidden_posts)));
         }
         Ok(query)
@@ -113,8 +112,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 impl<'a> QueryBuilder<'a> {
     pub fn new(config: &'a Config, client: Client, search_criteria: &'a str) -> ApiResult<Self> {
         let search = SearchCriteria::new(client, search_criteria, Token::Text).map_err(Box::from)?;
-        let preferences = Preferences::new(config, client);
-        Ok(Self { search, preferences })
+        Ok(Self { search, config })
     }
 }
 

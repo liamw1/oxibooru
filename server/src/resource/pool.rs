@@ -5,7 +5,7 @@ use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource::post::MicroPost;
 use crate::resource::{self, BoolFill};
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
-use crate::search::preferences::Preferences;
+use crate::search::preferences;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::dsl::{exists, not};
@@ -166,8 +166,7 @@ fn get_posts(
     let mut pool_posts = PoolPost::belonging_to(pools).order_by(pool_post::order).into_boxed();
 
     // Apply preference filters to pool posts
-    let preferences = Preferences::new(config, client);
-    if let Some(hidden_posts) = preferences.hidden_posts(pool_post::post_id) {
+    if let Some(hidden_posts) = preferences::hidden_posts(config, client, pool_post::post_id) {
         pool_posts = pool_posts.filter(not(exists(hidden_posts)));
     }
 
