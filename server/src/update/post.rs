@@ -15,7 +15,7 @@ use crate::schema::{
     comment, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature,
     post_tag,
 };
-use crate::search::preference::Preferences;
+use crate::search::preferences::Preferences;
 use crate::time::DateTime;
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};

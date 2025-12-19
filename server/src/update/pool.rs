@@ -5,7 +5,7 @@ use crate::config::{Config, RegexType};
 use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::pool::{NewPoolName, PoolPost};
 use crate::schema::{pool, pool_name, pool_post};
-use crate::search::preference::Preferences;
+use crate::search::preferences::Preferences;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::dsl::{exists, max};

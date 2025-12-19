@@ -16,7 +16,7 @@ use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_note, post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
 };
-use crate::search::preference::Preferences;
+use crate::search::preferences::Preferences;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::dsl::{exists, not};

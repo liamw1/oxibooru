@@ -7,7 +7,7 @@ use crate::schema::{
     comment, database_statistics, pool, pool_category, pool_post, post, post_favorite, post_feature, post_note,
     post_score, post_statistics, post_tag, tag, tag_category, tag_name, user,
 };
-use crate::search::preference::Preferences;
+use crate::search::preferences::Preferences;
 use crate::search::{
     self, Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
 };

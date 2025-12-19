@@ -5,7 +5,7 @@ use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource::post::MicroPost;
 use crate::resource::{self, BoolFill};
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
-use crate::search::preference::Preferences;
+use crate::search::preferences::Preferences;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::dsl::{exists, not};

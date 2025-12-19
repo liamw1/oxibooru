@@ -2,7 +2,7 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::config::Config;
 use crate::schema::{comment, comment_statistics, database_statistics, user};
-use crate::search::preference::Preferences;
+use crate::search::preferences::Preferences;
 use crate::search::{Builder, Order, ParsedSort, SearchCriteria};
 use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, exists, not};

@@ -17,7 +17,7 @@ use crate::resource::post::{Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
 use crate::search::Builder;
 use crate::search::post::QueryBuilder;
-use crate::search::preference::Preferences;
+use crate::search::preferences::Preferences;
 use crate::snapshot::post::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;

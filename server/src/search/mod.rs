@@ -11,7 +11,7 @@ mod macros;
 mod parse;
 pub mod pool;
 pub mod post;
-pub mod preference;
+pub mod preferences;
 pub mod snapshot;
 pub mod tag;
 mod temp;

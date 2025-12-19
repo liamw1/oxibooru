@@ -10,7 +10,7 @@ use crate::resource::comment::CommentInfo;
 use crate::schema::{comment, comment_score};
 use crate::search::Builder;
 use crate::search::comment::QueryBuilder;
-use crate::search::preference::Preferences;
+use crate::search::preferences::Preferences;
 use crate::time::DateTime;
 use crate::{api, resource};
 use axum::extract::{Extension, State};
