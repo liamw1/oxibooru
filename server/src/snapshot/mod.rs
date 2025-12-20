@@ -46,11 +46,16 @@ pub fn value_diff(old: Value, new: Value) -> Option<Value> {
 
 /// Computes element-wise diff between `old` and `new` values.
 fn array_diff(old: Vec<Value>, new: Vec<Value>) -> Option<Value> {
-    let new_set: HashSet<&Value> = new.iter().collect();
-    let removed: Vec<_> = old.iter().filter(|item| !new_set.contains(item)).cloned().collect();
+    let old_set: HashSet<_> = old.iter().collect();
+    let new_set: HashSet<_> = new.iter().collect();
+    let new_in_old: Vec<_> = new.iter().map(|item| old_set.contains(item)).collect();
 
-    let old_set: HashSet<Value> = old.into_iter().collect();
-    let added: Vec<_> = new.into_iter().filter(|item| !old_set.contains(item)).collect();
+    let removed: Vec<_> = old.into_iter().filter(|item| !new_set.contains(item)).collect();
+    let added: Vec<_> = new
+        .into_iter()
+        .zip(new_in_old)
+        .filter_map(|(item, in_old)| (!in_old).then_some(item))
+        .collect();
 
     (!added.is_empty() || !removed.is_empty()).then(|| {
         let change_type = ("type".into(), "list change".into());
