@@ -3,8 +3,8 @@ use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
 use crate::app::AppState;
 use crate::auth::Client;
-use crate::config::RegexType;
-use crate::model::enums::{ResourceProperty, ResourceType};
+use crate::config::{Config, RegexType};
+use crate::model::enums::{ResourceProperty, ResourceType, UserRank};
 use crate::model::tag_category::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
@@ -13,7 +13,9 @@ use crate::time::DateTime;
 use crate::{api, resource, snapshot};
 use axum::extract::{Extension, State};
 use axum::{Router, routing};
-use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
+use diesel::{
+    Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
+};
 use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
@@ -34,7 +36,7 @@ async fn list(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state
         .get_connection()?
-        .transaction(|conn| TagCategoryInfo::all(conn, &fields))
+        .transaction(|conn| TagCategoryInfo::all(conn, &state.config, client, &fields))
         .map(|results| UnpagedResponse { results })
         .map(Json)
         .map_err(ApiError::from)
@@ -51,11 +53,7 @@ async fn get(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let category = tag_category::table
-            .filter(tag_category::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+        let category = verify_visibility(conn, &state.config, client, &name)?;
         TagCategoryInfo::new(conn, category, &fields)
             .map(Json)
             .map_err(ApiError::from)
@@ -242,10 +240,32 @@ async fn delete(
     })
 }
 
+fn verify_visibility(
+    conn: &mut PgConnection,
+    config: &Config,
+    client: Client,
+    category_name: &SmallString,
+) -> ApiResult<TagCategory> {
+    if client.rank == UserRank::Anonymous
+        && config
+            .anonymous_preferences
+            .tag_category_blacklist
+            .contains(category_name)
+    {
+        return Err(ApiError::Hidden(ResourceType::TagCategory));
+    }
+
+    tag_category::table
+        .filter(tag_category::name.eq(category_name))
+        .first(conn)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::TagCategory))
+}
+
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
-    use crate::model::enums::ResourceType;
+    use crate::model::enums::{ResourceType, UserRank};
     use crate::model::tag_category::TagCategory;
     use crate::schema::{tag_category, tag_category_statistics};
     use crate::test::*;
@@ -359,6 +379,19 @@ mod test {
         let default = is_default(&mut conn)?;
         assert!(!default);
         Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn preferences() -> ApiResult<()> {
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /tag-categories/?fields=name",
+            "tag_category/list_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /tag-category/meta", "tag_category/get_with_preferences")
+            .await
     }
 
     #[tokio::test]
