@@ -27,6 +27,7 @@ use diesel::dsl::{exists, not, sql};
 use diesel::sql_types::Integer;
 use diesel::{
     Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
+    SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
@@ -155,14 +156,32 @@ async fn get_neighbors(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
     state.get_connection()?.transaction(|conn| {
-        const INITIAL_LIMIT: i64 = 100;
-        const LIMIT_GROWTH: i64 = 8;
+        const INITIAL_LIMIT: i64 = 1000;
+        const LIMIT_GROWTH: i64 = 10;
 
         verify_visibility(conn, &state.config, client, post_id)?;
 
-        // Handle special cases first
         if !query_builder.criteria().has_sort() {
-            // TODO
+            // Optimized neighbor retrieval if no sort is specified
+            let previous_post = query_builder
+                .build_filtered(conn)?
+                .select(Post::as_select())
+                .filter(post::id.gt(post_id))
+                .order_by(post::id.asc())
+                .first(conn)
+                .optional()?;
+            let next_post = query_builder
+                .build_filtered(conn)?
+                .select(Post::as_select())
+                .filter(post::id.lt(post_id))
+                .order_by(post::id.desc())
+                .first(conn)
+                .optional()?;
+
+            let has_previous_post = previous_post.is_some();
+            let posts = previous_post.into_iter().chain(next_post).collect();
+            let post_infos = PostInfo::new_batch(conn, &state.config, client, posts, &fields)?;
+            return Ok(create_post_neighbors(post_infos, has_previous_post));
         }
 
         // Search for neighbors using exponentially increasing limit
