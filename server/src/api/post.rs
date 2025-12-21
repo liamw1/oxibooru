@@ -195,16 +195,17 @@ async fn get_neighbors(
             query_builder.set_offset_and_limit(offset, limit);
             let post_id_batch = query_builder.load(conn)?;
 
-            let post_index = post_id_batch.iter().position(|&id| id == post_id);
+            let post_position = post_id_batch.iter().position(|&id| id == post_id);
             if post_id_batch.len() < usize::try_from(limit).unwrap_or(usize::MAX)
+                || limit == i64::MAX
                 || post_id_batch.len() == usize::MAX
-                || (post_index.is_some() && post_index != Some(post_id_batch.len().saturating_sub(1)))
+                || (post_position.is_some() && post_position != Some(post_id_batch.len().saturating_sub(1)))
             {
-                let prev_post_id = post_index
+                let prev_post_id = post_position
                     .and_then(|index| index.checked_sub(1))
                     .and_then(|prev_index| post_id_batch.get(prev_index))
                     .copied();
-                let next_post_id = post_index
+                let next_post_id = post_position
                     .and_then(|index| index.checked_add(1))
                     .and_then(|next_index| post_id_batch.get(next_index))
                     .copied();
