@@ -7,13 +7,10 @@ window.$docsify = {
     loadSidebar: true,
     // logo: './_media/logo.png', // gets converted with css for dark mode
     formatUpdated: '{YYYY}-{MM}-{DD} {HH}:{mm}',
-    homepage: 'https://raw.githubusercontent.com/liamw1/oxibooru/master/README.md',
-    alias: {
+        alias: {
         '/.*/_sidebar.md': '/_sidebar.md',
         '.*?/LICENSE': 'https://raw.githubusercontent.com/liamw1/oxibooru/master/LICENSE.md',
-        // fix routing of main README.md, as they point into the "doc" directory
-        '/docs/(.*)': '/$1'
-    },
+            },
     nameLink: '/',
     toc: {
         tocMaxLevel: 3,
