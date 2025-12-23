@@ -28,7 +28,7 @@ function siteWrapperPlugin(hook, vm) {
     } else {
       // inline code specific to these docs. (readme file os not part of the docs-folder)
       url =
-        `https://github.com/liamw1/oxibooru/blob/main${vm.route.file.includes('README.md') ? vm.route.file : `/docs${vm.route.file}`}`
+        `https://github.com/liamw1/oxibooru/blob/main${vm.route.file.includes('README.md') ? vm.route.file : `/docs/${vm.route.file}`}`
     }
 
     const title = html.querySelector('h1');
