@@ -4,5 +4,5 @@
 - [Benchmarks](BENCHMARKS.md)
 - [Development Guide](DEV.md)
 - [API](API.md)
-- [License](/LICENSE.md)
+- [License](LICENSE.md)
 - [Source Code](https://github.com/liamw1/oxibooru/)
