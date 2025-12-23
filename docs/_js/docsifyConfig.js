@@ -2,7 +2,8 @@ window.$docsify = {
     catchPluginErrors: true,
     name: 'Oxibooru Documentation',
     repo: 'https://github.com/liamw1/oxibooru/',
-    routerMode: 'history',
+    // causes routing issues
+    // routerMode: 'history',
     auto2top: true,
     loadSidebar: true,
     // logo: './_media/logo.png', // gets converted with css for dark mode
