@@ -4,7 +4,7 @@
 
 To get started it's recommended to install the Rust toolchain using [`rustup`](https://www.rust-lang.org/tools/install). If you've already installed `rustup` before, you can update with
 
-```console
+```sh
 rustup update
 ```
 
@@ -12,7 +12,7 @@ To aid in the editing and navigating of Rust code, install `rust-analyzer` in yo
 
 Next, you'll want to install the build and runtime dependencies. On Debian-based systems, this looks something like
 
-```console
+```sh
 sudo apt update && sudo apt install -y clang pkg-config libssl-dev libpq-dev libdav1d-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
 ```
 
@@ -22,19 +22,19 @@ sudo apt update && sudo apt install -y clang pkg-config libssl-dev libpq-dev lib
 
 To compile the server, enter the `server/` directory and run
 
-```console
+```sh
 cargo build
 ```
 
 If you would just like to check if the server compiles, you can run
 
-```console
+```sh
 cargo check
 ```
 
 This is much faster than building, as it skips the expensive code generation step of compilation. Finally, to run, run
 
-```console
+```sh
 cargo run
 ```
 
@@ -46,19 +46,19 @@ The server-side code has a number of unit tests, most of which require a connect
 
 To run all server unit tests, run
 
-```console
+```sh
 cargo test
 ```
 
 Some tests take a few minutes to run in `debug`, so you may wish to add `--release` to speed things up. By default, the test runner hides any console output during tests. You can opt out of this behavior with the following flag:
 
-```console
+```sh
 cargo test -- --nocapture
 ```
 
 You can also run a subset of tests using
 
-```console
+```sh
 cargo test test_filter
 ```
 
@@ -70,7 +70,7 @@ If there are any test failures, make sure to start your investigation at the fir
 
 After a series of changes to the code, it's good practice to run Rust's static analysis tool, `clippy`, to help catch subtle bugs and style issues. You can do this by running
 
-```console
+```sh
 cargo clippy --all-targets
 ```
 
@@ -84,7 +84,7 @@ Diesel uses the `schema.rs` file to keep track of the current state of the datab
 
 If you haven't already, install the [Diesel CLI](https://diesel.rs/guides/getting-started.html#installing-diesel-cli). Once you've down this, navigate to the server directory and run
 
-```console
+```sh
 diesel migration run --database-url='postgres://POSTGRES_USER:POSTGRES_PASSWORD@localhost:POSTGRES_PORT/POSTGRES_DB'
 ```
 
@@ -92,7 +92,7 @@ where `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_PORT`, and `POSTGRES_DB` a
 
 Each migration is run inside a transaction and will be reverted automatically if an error is encountered. After a migration is applied successfully, it's good practice to make sure that it is reversible. To do this, run
 
-```console
+```sh
 diesel migration redo --database-url='postgres://POSTGRES_USER:POSTGRES_PASSWORD@localhost:POSTGRES_PORT/POSTGRES_DB'
 ```
 

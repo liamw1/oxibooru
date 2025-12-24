@@ -11,7 +11,7 @@ This guide assumes that you have Docker (version 19.03 or greater) and the Docke
     The latest release can be downloaded from the [releases page](https://github.com/liamw1/oxibooru/releases).
     Alternatively, you can clone the repository with
 
-    ```console
+    ```sh
     git clone https://github.com/liamw1/oxibooru
     ```
 
@@ -21,13 +21,13 @@ This guide assumes that you have Docker (version 19.03 or greater) and the Docke
 
     Enter the `oxibooru` directory:
 
-    ```console
+    ```sh
     cd oxibooru
     ```
 
 2. **Configure the application**
 
-    ```console
+    ```sh
     cp server/config.toml.dist server/config.toml
     edit server/config.toml
     ```
@@ -42,7 +42,7 @@ This guide assumes that you have Docker (version 19.03 or greater) and the Docke
 
 3. **Configure Docker Compose**
 
-    ```console
+    ```sh
     cp example.env .env
     edit .env
     ```
@@ -54,7 +54,7 @@ This guide assumes that you have Docker (version 19.03 or greater) and the Docke
 4. **Pull the containers**
     This pulls the latest containers from docker.io:
 
-    ```console
+    ```sh
     docker compose pull
     ```
 
@@ -66,7 +66,7 @@ This guide assumes that you have Docker (version 19.03 or greater) and the Docke
 
     Set owner of mount directories (MOUNT_DATA and MOUNT_SQL in the .env) to the user with id 1000:
 
-    ```console
+    ```sh
     sudo chown -R 1000:1000 <MOUNT_DATA>
     sudo chown -R 1000:1000 <MOUNT_SQL>
     ```
@@ -75,13 +75,13 @@ This guide assumes that you have Docker (version 19.03 or greater) and the Docke
 
     To start all containers:
 
-    ```console
+    ```sh
     docker compose up -d
     ```
 
     To view/monitor the application logs:
 
-    ```console
+    ```sh
     docker compose logs -f
     # (CTRL+C to exit)
     ```
@@ -90,7 +90,7 @@ This guide assumes that you have Docker (version 19.03 or greater) and the Docke
 
 To build the client and server containers, run
 
-```console
+```sh
 docker compose build
 ```
 

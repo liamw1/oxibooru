@@ -34,7 +34,7 @@ If you're able to accept these limitations, let's start converting...
 
     Navigate to the Szurubooru source directory and run
 
-    ```console
+    ```sh
     docker compose up -d sql
     docker exec szuru-sql-1 pg_dump -U SZURU_POSTGRES_USER --no-owner --no-privileges szuru > backup.sql
     ```
@@ -45,13 +45,13 @@ If you're able to accept these limitations, let's start converting...
 
     Navigate to the Oxibooru source directory and run
 
-    ```console
+    ```sh
     docker compose up -d sql
     ```
 
     Now move backup.sql to the Oxibooru directory, create a szuru schema in the Oxibooru database and restore the Szurubooru database.
 
-    ```console
+    ```sh
     docker exec oxibooru-sql-1 psql -U POSTGRES_USER -d POSTGRES_DB -c "ALTER SCHEMA public RENAME TO POSTGRES_DB;"
     docker exec oxibooru-sql-1 psql -U POSTGRES_USER -d POSTGRES_DB -c "CREATE SCHEMA public;"
     cat backup.sql | docker exec -i oxibooru-sql-1 psql -U POSTGRES_USER -d POSTGRES_DB
@@ -62,13 +62,13 @@ If you're able to accept these limitations, let's start converting...
 3. **Run conversion script**
     Some Szurubooru tables contain serialized python objects that need to be unserialized to perform the conversion. Because of this, we must enable the PL/Python procedural language in PostgreSQL. To do this, run
 
-    ```console
+    ```sh
     docker exec -i oxibooru-sql-1 bash -s < scripts/install_plpython3u.sh
     ```
 
     Now, we can run the conversion script:
 
-    ```console
+    ```sh
     cat scripts/convert_szuru_database.sql | docker exec -i oxibooru-sql-1 psql -U POSTGRES_USER -d POSTGRES_DB --single-transaction
     ```
 
@@ -84,19 +84,19 @@ If you're able to accept these limitations, let's start converting...
 
     Now, spin up the Oxibooru containers:
 
-    ```console
+    ```sh
     docker compose up -d
     ```
 
     Now, enter Oxibooru's admin cli:
 
-    ```console
+    ```sh
     docker exec -it oxibooru-server-1 ./server --admin
     ```
 
     From there, run the reset_filenames command, which will automatically rename every file in the data directory to match the Oxibooru convention.
 
-    ```console
+    ```sh
     Please select a task: reset_filenames
     ```
 
@@ -104,7 +104,7 @@ If you're able to accept these limitations, let's start converting...
 
     Oxibooru stores thumbnail sizes along with file sizes so it can quickly compute the size of the database. To store sizes of existing thumbnails, run `reset_thumbnail_sizes` in the admin cli:
 
-    ```console
+    ```sh
     Please select a task: reset_thumbnail_sizes
     ```
 
@@ -116,11 +116,11 @@ If you're able to accept these limitations, let's start converting...
 
     Run `recompute_post_checksums` and `recompute_post_signatures` in the admin cli. For databases with many posts, these functions can take a bit of time to complete, so be prepared for that. `recompute_post_checksums` runs at around 240 posts/sec and `recompute_post_signatures` runs at around 150 posts/sec on my machine.
 
-    ```console
+    ```sh
     Please select a task: recompute_post_checksums
     ```
 
-    ```console
+    ```sh
     Please select a task: recompute_post_signatures
     ```
 
@@ -130,7 +130,7 @@ If you're able to accept these limitations, let's start converting...
 
     Upon entering `reset_password` in the admin cli, you will be prompted for the username whose password you want to reset and the new password you would like for that user.
 
-    ```console
+    ```sh
     Please select a task: reset_password
     ```
 
