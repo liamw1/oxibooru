@@ -32,10 +32,13 @@ This guide assumes that you have Docker (version 19.03 or greater) and the Docke
     edit server/config.toml
     ```
 
-    Pay extra attention to these fields:
+    It's strongly recommended to at least change these fields:
 
     - password_secret
     - content_secret
+
+    Any fields not present will default to their corresponding value
+    in the original `config.toml.dist`
 
 3. **Configure Docker Compose**
 

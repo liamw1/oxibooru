@@ -199,10 +199,9 @@ List of possible error names:
 - `AlreadyInTransaction`
 - `ArgumentListTooLong`
 - `BadConnection`
-- `BadExtension`
-- `BadHeader`
 - `BrokenPipe`
 - `BrokenTransactionManager`
+- `BytesRejection`
 - `CheckViolation`
 - `ClosedConnection`
 - `CommentNotFound`
@@ -239,26 +238,30 @@ List of possible error names:
 - `EnvironmentVariableNotPresent`
 - `EnvironmentVariableNotUnicode`
 - `ExecutableFileBusy`
+- `ExpiredToken`
 - `ExpressionFailsRegex`
 - `FailedAlready`
 - `FailedConnection`
 - `FailedDecoding`
 - `FailedEmailTransport`
 - `FailedEncoding`
+- `FailedToDeserializeQueryString`
 - `FileAlreadyExists`
 - `FileNotFound`
 - `FileTooLarge`
 - `ForeignKeyViolation`
 - `FromStrError`
+- `HeaderDeserialization`
 - `HostUnreachable`
 - `InsufficientMemory`
 - `InsufficientPrivileges`
 - `Interrupted`
 - `InvalidAuthType`
+- `InvalidBoundary`
 - `InvalidByte`
-- `InvalidCString`
 - `InvalidCharacter`
 - `InvalidConnectionUrl`
+- `InvalidCString`
 - `InvalidData`
 - `InvalidDigit`
 - `InvalidEncoding`
@@ -270,19 +273,20 @@ List of possible error names:
 - `InvalidInput`
 - `InvalidLastSymbol`
 - `InvalidLength`
-- `InvalidMetadataType`
 - `InvalidPadding`
 - `InvalidPassword`
 - `InvalidPhcStringField`
 - `InvalidResizeParameters`
 - `InvalidSort`
-- `InvalidToken`
 - `InvalidUserRank`
+- `InvalidUtf8InPathParam`
 - `InvalidVersion`
 - `IsADirectory`
+- `JsonDataError`
 - `JsonInvalidData`
 - `JsonInvalidSyntax`
 - `JsonIoError`
+- `JsonSyntaxError`
 - `JsonUnexpectedEOF`
 - `MalformedCredentials`
 - `MalformedToken`
@@ -291,7 +295,9 @@ List of possible error names:
 - `MissingContent`
 - `MissingContentType`
 - `MissingFormData`
+- `MissingJsonContentType`
 - `MissingMetadata`
+- `MissingPathParams`
 - `MissingSmtpInfo`
 - `MultipartError`
 - `NegativeOverflow`
@@ -311,12 +317,21 @@ List of possible error names:
 - `ParamNameDuplicated`
 - `ParamNameInvalid`
 - `ParamsMaxExceeded`
+- `PathDeserializeError`
+- `PathParseError`
+- `PathParseErrorAtIndex`
+- `PathParseErrorAtKey`
 - `PermissionDenied`
 - `PhcStringTrailingData`
+- `PoolCategoryNameAlreadyExists`
 - `PoolCategoryNotFound`
+- `PoolNameAlreadyExists`
 - `PoolNotFound`
+- `PoolPostAlreadyExists`
 - `PositiveOverflow`
+- `PostAlreadyFeatured`
 - `PostNotFound`
+- `PostRelationAlreadyExists`
 - `QueryBuilderError`
 - `QuotaExceeded`
 - `ReadExhausted`
@@ -337,17 +352,19 @@ List of possible error names:
 - `SwfIoError`
 - `SwfParseError`
 - `SwfUnsupported`
+- `TagCategoryNameAlreadyExists`
 - `TagCategoryNotFound`
+- `TagNameAlreadyExists`
 - `TagNotFound`
 - `TimedOut`
 - `TooFewArgs`
-- `TooMany`
 - `TooManyArgs`
 - `TooManyLinks`
 - `UnableToSendCommand`
 - `UnauthorizedPasswordReset`
 - `UnexpectedEof`
 - `UnexpectedOutputSize`
+- `UnimplementedFrameFormat`
 - `UninitializedCodec`
 - `UniqueViolation`
 - `Unsupported`
@@ -355,17 +372,24 @@ List of possible error names:
 - `UnsupportedCodecHardwareAccelerationDeviceType`
 - `UnsupportedCodecParameterSets`
 - `UnsupportedColor`
+- `UnsupportedExtension`
 - `UnsupportedFeature`
 - `UnsupportedFormat`
 - `UnsupportedImageDimensions`
-- `UserNotFound`
+- `UnsupportedPathType`
+- `UserEmailAlreadyExists`
+- `UserNameAlreadyExists`
 - `UsernamePasswordMismatch`
+- `UsernameTokenMismatch`
+- `UserNotFound`
+- `UserTokenNotFound`
 - `Utf8ConversionError`
 - `ValueTooLong`
 - `ValueTooShort`
 - `WouldBlock`
 - `WriteRetryLimitReached`
 - `WriteZero`
+- `WrongNumberOfPathParameters`
 - `ZeroNotAllowed`
 
 ### Field selecting
@@ -879,6 +903,7 @@ data.
     | -------------------- | ----------------------------------------------------------                              |
     | `id`                 | having given post number                                                                |
     | `tag`                | having given tag (accepts wildcards)                                                    |
+    | `tag-category`       | having tags from given tag category (accepts wildcards)                                 |
     | `score`              | having given score                                                                      |
     | `uploader`           | uploaded by given user (accepts wildcards)                                              |
     | `upload`             | alias of upload                                                                         |
@@ -886,6 +911,7 @@ data.
     | `comment`            | commented by given user (accepts wildcards)                                             |
     | `fav`                | favorited by given user (accepts wildcards)                                             |
     | `pool`               | belonging to the pool with the given ID                                                 |
+    | `pool-category`      | belonging to pools in the given pool category (accepts wildcards)                       |
     | `tag-count`          | having given number of tags                                                             |
     | `comment-count`      | having given number of comments                                                         |
     | `fav-count`          | favorited by given number of users                                                      |
@@ -1102,13 +1128,14 @@ data.
 
     ```json5
     {
-        "tags":      [<tag1>, <tag2>, <tag3>],
-        "safety":    <safety>,
-        "source":    <source>,                    // optional
-        "relations": [<post1>, <post2>, <post3>], // optional
-        "notes":     [<note1>, <note2>, <note3>], // optional
-        "flags":     [<flag1>, <flag2>],          // optional
-        "anonymous": <anonymous>                  // optional
+        "tags":        [<tag1>, <tag2>, <tag3>],
+        "safety":      <safety>,
+        "source":      <source>,                    // optional
+        "description": <description>,               // optional
+        "relations":   [<post1>, <post2>, <post3>], // optional
+        "notes":       [<note1>, <note2>, <note3>], // optional
+        "flags":       [<flag1>, <flag2>],          // optional
+        "anonymous":   <anonymous>                  // optional
     }
     ```
 
@@ -1792,7 +1819,6 @@ data.
 - **Errors**
 
     - the post does not exist
-    - comment text is empty
     - privileges are too low
 
 - **Description**
@@ -1821,7 +1847,6 @@ data.
 
     - the version is outdated
     - the comment does not exist
-    - new comment text is empty
     - privileges are too low
 
 - **Description**
@@ -2089,6 +2114,7 @@ data.
 
 - **Errors**
 
+    - the user does not exist
     - privileges are too low
 
 - **Description**
@@ -2116,6 +2142,7 @@ data.
 
 - **Errors**
 
+    - the user does not exist
     - privileges are too low
 
 - **Description**
@@ -2146,6 +2173,7 @@ data.
 - **Errors**
 
     - the version is outdated
+    - the user does not exist
     - the user token does not exist
     - privileges are too low
 
@@ -2174,6 +2202,7 @@ data.
 
 - **Errors**
 
+    - the user does not exist
     - the token does not exist
     - privileges are too low
 
