@@ -14,7 +14,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - Here I measure the time it takes for the first "info" request, which gathers statistics about the size of the database.
 
-    **`GET http://localhost:8080/api/info`**
+    ```URL
+    GET http://localhost:8080/api/info
+    ```
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
@@ -29,7 +31,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - Let's start with the simplest case: viewing the first page of posts with no sort tokens or filters. This first page of posts have no tags, so it should be pretty fast.
 
-    **`GET http://localhost:8080/api/posts/?query=&limit=42`**
+    ```URL
+    GET http://localhost:8080/api/posts/?query=&limit=42
+    ```
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
@@ -40,7 +44,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - Here's a more realistic case: the query the client actually performs when viewing the first page of posts with no sort tokens or filters.
 
-    **`GET http://localhost:8080/api/posts/?query=&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
+    ```URL
+    GET http://localhost:8080/api/posts/?query=&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion
+    ```
 
     This is the same query as before, except now we've limited the fields that we're requesting. If you're wondering, `%2C` is just a `,` that has been [percent encoded](https://en.wikipedia.org/wiki/Percent-encoding). I should mention that this first page of posts has no tags, comments, scores, or favorites, so all of these fields are fast to compute.
 
@@ -53,7 +59,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - Let's now add a negative filter for unsafe posts.
 
-    **`GET http://localhost:8080/api/posts/?query=-rating%3Aunsafe&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
+    ```URL
+    GET http://localhost:8080/api/posts/?query=-rating%3Aunsafe&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion
+    ```
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
@@ -64,7 +72,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - What about with a huge offset? This query is fairly challenging, not only because of the large offset, but also because we have to retrieve posts with tags. This can be expensive because we need to retrieve statistics about those tags, like usage counts.
 
-    **`GET http://localhost:8080/api/posts/?query=-rating%3Aunsafe&offset=33726&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
+    ```URL
+    GET http://localhost:8080/api/posts/?query=-rating%3Aunsafe&offset=33726&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion
+    ```
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
@@ -75,7 +85,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - One very common use case is to search for posts with a particular tag. Let's search for all posts with the tag `tagme`.
 
-    **`GET http://localhost:8080/api/posts/?query=tagme&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
+    ```URL
+    GET http://localhost:8080/api/posts/?query=tagme&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion
+    ```
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
@@ -86,7 +98,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - Onto a more challenging query: sorting by tag count.
 
-    **`GET http://localhost:8080/api/posts/?query=sort%3Atag-count&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion`**
+    ```URL
+    GET http://localhost:8080/api/posts/?query=sort%3Atag-count&limit=42&fields=id%2CthumbnailUrl%2Ctype%2Csafety%2Cscore%2CfavoriteCount%2CcommentCount%2Ctags%2Cversion
+    ```
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
@@ -99,7 +113,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - Just like posts, we'll start by benchmarking listing the first page of tags:
 
-    **`GET http://localhost:8080/api/tags/?limit=50&fields=names%2Csuggestions%2Cimplications%2CcreationTime%2Cusages%2Ccategory`**
+    ```URL
+    GET http://localhost:8080/api/tags/?limit=50&fields=names%2Csuggestions%2Cimplications%2CcreationTime%2Cusages%2Ccategory
+    ```
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
@@ -110,7 +126,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - Now let's try sorting by usage count:
 
-    **`GET http://localhost:8080/api/tags/?query=sort%3Ausages&limit=50&fields=names%2Csuggestions%2Cimplications%2CcreationTime%2Cusages%2Ccategory`**
+    ```URL
+    GET http://localhost:8080/api/tags/?query=sort%3Ausages&limit=50&fields=names%2Csuggestions%2Cimplications%2CcreationTime%2Cusages%2Ccategory
+    ```
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
@@ -121,7 +139,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - Finally, we'll try the query used when performing autocomplete when the user types the word `e` in the search bar:
 
-    **`GET http://localhost:8080/api/tags/?query=e*%20sort%3Ausages&limit=15&fields=names%2Ccategory%2Cusages`**
+    ```URL
+    GET http://localhost:8080/api/tags/?query=e*%20sort%3Ausages&limit=15&fields=names%2Ccategory%2Cusages
+    ```
 
     | Database          | Time (ms) |
     | ----------------- | --------- |
@@ -134,7 +154,9 @@ These benchmarks were performed on the same database consisting of about 125k im
 
 - First, let's try to batch upload 50 small images each around 40-300kb. This way, we're mostly timing signature search and comparison rather than signature creation, which can be very expensive for large images. Additionally, these images don't match on any images in the database. Otherwise the time spent retrieving field data about similar posts could pollute the results.
 
-    **`POST http://localhost:8080/api/posts/reverse-search`**
+    ```URL
+    POST http://localhost:8080/api/posts/reverse-search
+    ```
 
     | Database          | Total Reverse Search Time (s) |
     | ----------------- | ----------------------------- |
