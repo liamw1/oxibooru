@@ -23,7 +23,7 @@ pub fn routes() -> Router<AppState> {
         .route("/tag-category/{name}/default", routing::put(set_default))
 }
 
-/// See [listing-tag-categories](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-tag-categories)
+/// See [listing-tag-categories](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-tag-categories)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -40,7 +40,7 @@ async fn list(
         .map_err(ApiError::from)
 }
 
-/// See [getting-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag-category)
+/// See [getting-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-tag-category)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -70,7 +70,7 @@ struct CreateBody {
     color: SmallString,
 }
 
-/// See [creating-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-tag-category)
+/// See [creating-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-tag-category)
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -113,7 +113,7 @@ struct UpdateBody {
     color: Option<SmallString>,
 }
 
-/// See [updating-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-tag-category)
+/// See [updating-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-tag-category)
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -158,7 +158,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [setting-default-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#setting-default-tag-category)
+/// See [setting-default-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#setting-default-tag-category)
 async fn set_default(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -216,7 +216,7 @@ async fn set_default(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-tag-category)
+/// See [deleting-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-tag-category)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

@@ -26,7 +26,7 @@ pub fn routes() -> Router<AppState> {
 
 const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 
-/// See [listing-comments](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-comments)
+/// See [listing-comments](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-comments)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -52,7 +52,7 @@ async fn list(
     })
 }
 
-/// See [getting-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-comment)
+/// See [getting-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-comment)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -81,7 +81,7 @@ struct CreateBody {
     text: String,
 }
 
-/// See [creating-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-comment)
+/// See [creating-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-comment)
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -115,7 +115,7 @@ struct UpdateBody {
     text: String,
 }
 
-/// See [updating-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-comment)
+/// See [updating-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-comment)
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -152,7 +152,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [rating-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#rating-comment)
+/// See [rating-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#rating-comment)
 async fn rate(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -186,7 +186,7 @@ async fn rate(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-comment](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-comment)
+/// See [deleting-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-comment)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

@@ -33,7 +33,7 @@ pub fn routes() -> Router<AppState> {
 const MAX_TAGS_PER_PAGE: i64 = 1000;
 const MAX_TAG_SIBLINGS: i64 = 1000;
 
-/// See [listing-tags](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-tags)
+/// See [listing-tags](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-tags)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -60,7 +60,7 @@ async fn list(
     })
 }
 
-/// See [getting-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag)
+/// See [getting-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-tag)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -94,7 +94,7 @@ struct TagSiblings {
     results: Vec<TagSibling>,
 }
 
-/// See [getting-tag-siblings](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag-siblings)
+/// See [getting-tag-siblings](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-tag-siblings)
 async fn get_siblings(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -146,7 +146,7 @@ struct CreateBody {
     suggestions: Option<Vec<SmallString>>,
 }
 
-/// See [creating-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-tag)
+/// See [creating-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-tag)
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -209,7 +209,7 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-/// See [merging-tags](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-tags)
+/// See [merging-tags](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-tags)
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -259,7 +259,7 @@ struct UpdateBody {
     suggestions: Option<Vec<SmallString>>,
 }
 
-/// See [updating-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-tag)
+/// See [updating-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-tag)
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -338,7 +338,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-tag)
+/// See [deleting-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-tag)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

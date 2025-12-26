@@ -32,7 +32,7 @@ struct Response {
     config: PublicConfig,
 }
 
-/// See [getting-global-info](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-global-info)
+/// See [getting-global-info](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-global-info)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

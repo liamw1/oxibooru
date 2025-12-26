@@ -11,7 +11,7 @@ data_dir = "/data"
 
 # Webhooks to call when events occur (such as post/tag/user/etc. changes)
 # the listed urls will be called with a HTTP POST request with a payload
-# containing a snapshot resource as JSON. See doc/API.md for details
+# containing a snapshot resource as JSON. See docs/API.md for details
 webhooks = []
 
 # Delete thumbnails and source files on post delete

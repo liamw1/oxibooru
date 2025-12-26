@@ -23,7 +23,7 @@ pub fn routes() -> Router<AppState> {
         .route("/pool-category/{name}/default", routing::put(set_default))
 }
 
-/// See [listing-pool-categories](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-pool-categories)
+/// See [listing-pool-categories](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-pool-categories)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -40,7 +40,7 @@ async fn list(
         .map_err(ApiError::from)
 }
 
-/// See [getting-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-pool-category)
+/// See [getting-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-pool-category)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -69,7 +69,7 @@ struct CreateBody {
     color: SmallString,
 }
 
-/// See [creating-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-pool-category)
+/// See [creating-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-pool-category)
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -110,7 +110,7 @@ struct UpdateBody {
     color: Option<SmallString>,
 }
 
-/// See [updating-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-pool-category)
+/// See [updating-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-pool-category)
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -151,7 +151,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [setting-default-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#setting-default-pool-category)
+/// See [setting-default-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#setting-default-pool-category)
 async fn set_default(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -210,7 +210,7 @@ async fn set_default(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-pool-category)
+/// See [deleting-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-pool-category)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

@@ -31,7 +31,7 @@ pub fn routes() -> Router<AppState> {
 
 const MAX_POOLS_PER_PAGE: i64 = 1000;
 
-/// See [lsting-pools](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-pools)
+/// See [lsting-pools](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-pools)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -58,7 +58,7 @@ async fn list(
     })
 }
 
-/// See [getting-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-pool)
+/// See [getting-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-pool)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -88,7 +88,7 @@ struct CreateBody {
     posts: Option<Vec<i64>>,
 }
 
-/// See [creating-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-pool)
+/// See [creating-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-pool)
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -137,7 +137,7 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-/// See [merging-pools](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-pools)
+/// See [merging-pools](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-pools)
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -187,7 +187,7 @@ struct UpdateBody {
     posts: Option<Vec<i64>>,
 }
 
-/// See [updating-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-pool)
+/// See [updating-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-pool)
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -253,7 +253,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-pool)
+/// See [deleting-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-pool)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

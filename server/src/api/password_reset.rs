@@ -38,7 +38,7 @@ fn get_user_info(
         .ok_or(ApiError::NotFound(ResourceType::User))
 }
 
-/// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#request-password-reset)
+/// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#request-password-reset)
 async fn request_reset(State(state): State<AppState>, Path(identifier): Path<String>) -> ApiResult<Json<()>> {
     let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
@@ -118,7 +118,7 @@ fn generate_temporary_password(length: u8) -> String {
         .collect()
 }
 
-/// See [confirm-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#confirm-password-reset)
+/// See [confirm-password-reset](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#confirm-password-reset)
 async fn reset_password(
     State(state): State<AppState>,
     Path(username): Path<String>,
