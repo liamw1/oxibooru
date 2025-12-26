@@ -3,7 +3,8 @@ use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
-use crate::model::enums::ResourceType;
+use crate::config::Config;
+use crate::model::enums::{ResourceType, UserRank};
 use crate::model::tag::{NewTag, Tag};
 use crate::resource::tag::TagInfo;
 use crate::schema::{post_tag, tag, tag_category, tag_name};
@@ -31,7 +32,7 @@ pub fn routes() -> Router<AppState> {
 }
 
 const MAX_TAGS_PER_PAGE: i64 = 1000;
-const MAX_TAG_SIBLINGS: i64 = 1000;
+const MAX_TAG_SIBLINGS: i64 = 50;
 
 /// See [listing-tags](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-tags)
 async fn list(
@@ -46,7 +47,7 @@ async fn list(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_tags) = query_builder.list(conn)?;
@@ -64,19 +65,14 @@ async fn list(
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagInfo>> {
     api::verify_privilege(client, state.config.privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let tag_id = tag_name::table
-            .select(tag_name::tag_id)
-            .filter(tag_name::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+        let tag_id = verify_visibility(conn, &state.config, client, &name)?;
         TagInfo::new_from_id(conn, tag_id, &fields)
             .map(Json)
             .map_err(ApiError::from)
@@ -98,41 +94,47 @@ struct TagSiblings {
 async fn get_siblings(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagSiblings>> {
     api::verify_privilege(client, state.config.privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let tag_id: i64 = tag::table
-            .select(tag::id)
-            .inner_join(tag_name::table)
-            .filter(tag_name::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+        let tag_id = verify_visibility(conn, &state.config, client, &name)?;
         let posts_tagged_on = post_tag::table
             .select(post_tag::post_id)
             .filter(post_tag::tag_id.eq(tag_id))
             .into_boxed();
-        let (sibling_ids, common_post_counts): (Vec<_>, Vec<_>) = post_tag::table
+        let mut sibling_query = post_tag::table
             .group_by(post_tag::tag_id)
             .select((post_tag::tag_id, count_star()))
             .filter(post_tag::post_id.eq_any(posts_tagged_on))
             .filter(post_tag::tag_id.ne(tag_id))
             .order_by((count_star().desc(), post_tag::tag_id))
             .limit(MAX_TAG_SIBLINGS)
-            .load::<(i64, i64)>(conn)?
-            .into_iter()
-            .unzip();
+            .into_boxed();
 
-        let siblings = TagInfo::new_batch_from_ids(conn, &sibling_ids, &fields)?
+        if client.rank == UserRank::Anonymous {
+            let preferences = &state.config.anonymous_preferences;
+            let hidden_tags = tag::table
+                .select(tag::id)
+                .inner_join(tag_category::table)
+                .inner_join(tag_name::table)
+                .filter(tag_name::name.eq_any(&preferences.tag_blacklist))
+                .or_filter(tag_category::name.eq_any(&preferences.tag_category_blacklist));
+            sibling_query = sibling_query.filter(post_tag::tag_id.ne_all(hidden_tags));
+        }
+
+        let (sibling_ids, common_post_counts): (Vec<i64>, Vec<i64>) =
+            sibling_query.load::<(i64, i64)>(conn)?.into_iter().unzip();
+
+        let results = TagInfo::new_batch_from_ids(conn, &sibling_ids, &fields)?
             .into_iter()
             .zip(common_post_counts)
             .map(|(tag, occurrences)| TagSibling { tag, occurrences })
             .collect();
-        Ok(Json(TagSiblings { results: siblings }))
+        Ok(Json(TagSiblings { results }))
     })
 }
 
@@ -263,7 +265,7 @@ struct UpdateBody {
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<TagInfo>> {
@@ -342,7 +344,7 @@ async fn update(
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().tag_delete)?;
@@ -366,10 +368,34 @@ async fn delete(
     })
 }
 
+fn verify_visibility(
+    conn: &mut PgConnection,
+    config: &Config,
+    client: Client,
+    tag_name: &SmallString,
+) -> ApiResult<i64> {
+    let (tag_id, category_name): (i64, SmallString) = tag::table
+        .inner_join(tag_name::table)
+        .inner_join(tag_category::table)
+        .select((tag::id, tag_category::name))
+        .filter(tag_name::name.eq(tag_name))
+        .first(conn)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+
+    if client.rank == UserRank::Anonymous {
+        let preferences = &config.anonymous_preferences;
+        if preferences.tag_blacklist.contains(tag_name) || preferences.tag_category_blacklist.contains(&category_name) {
+            return Err(ApiError::Hidden(ResourceType::Tag));
+        }
+    }
+    Ok(tag_id)
+}
+
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
-    use crate::model::enums::ResourceType;
+    use crate::model::enums::{ResourceType, UserRank};
     use crate::model::tag::Tag;
     use crate::schema::{database_statistics, tag, tag_name, tag_statistics};
     use crate::search::tag::Token;
@@ -582,6 +608,39 @@ mod test {
         assert_eq!(new_usage_count, usage_count);
         assert_eq!(new_implication_count, implication_count);
         assert_eq!(new_suggestion_count, suggestion_count);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn preferences() -> ApiResult<()> {
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /tags/?query=-sort:name&limit=9&fields=names,implications,suggestions",
+            "tag/list_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /tag/tagme", "tag/get_with_preferences").await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /tag-siblings/rock/?fields=names,implications,suggestions",
+            "tag/get_siblings_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /tag-siblings/rock/?fields=names,implications,suggestions",
+            "tag/get_siblings_of_blacklisted",
+        )
+        .await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "PUT /tag/river/?fields=names,implications,suggestions",
+            "tag/edit_with_preferences",
+        )
+        .await?;
+
+        reset_database();
         Ok(())
     }
 

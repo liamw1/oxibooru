@@ -1,5 +1,7 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
+use crate::config::Config;
+use crate::model::enums::UserRank;
 use crate::model::tag::TagName;
 use crate::schema::{
     database_statistics, tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion,
@@ -45,14 +47,6 @@ pub struct QueryBuilder<'a> {
 impl<'a> Builder<'a> for QueryBuilder<'a> {
     type Token = Token;
     type BoxedQuery = BoxedQuery;
-
-    fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::Name).map_err(Box::from)?;
-        Ok(Self {
-            search,
-            cache_state: CacheState::new(),
-        })
-    }
 
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
         &mut self.search
@@ -124,6 +118,38 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             None => query,
         }
         .load(conn)
+    }
+}
+
+impl<'a> QueryBuilder<'a> {
+    pub fn new(config: &'a Config, client: Client, search_criteria: &'a str) -> ApiResult<Self> {
+        let mut search = SearchCriteria::new(client, search_criteria, Token::Name).map_err(Box::from)?;
+        if client.rank == UserRank::Anonymous {
+            let preferences = &config.anonymous_preferences;
+
+            let tag_blacklist_filters = preferences.tag_blacklist.iter().map(|condition| UnparsedFilter {
+                kind: Token::Name,
+                condition,
+                negated: true,
+            });
+            search.filters.extend(tag_blacklist_filters);
+
+            let category_blacklist_filters =
+                preferences
+                    .tag_category_blacklist
+                    .iter()
+                    .map(|condition| UnparsedFilter {
+                        kind: Token::Category,
+                        condition,
+                        negated: true,
+                    });
+            search.filters.extend(category_blacklist_filters);
+        }
+
+        Ok(Self {
+            search,
+            cache_state: CacheState::new(),
+        })
     }
 }
 

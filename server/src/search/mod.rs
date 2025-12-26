@@ -11,6 +11,7 @@ mod macros;
 mod parse;
 pub mod pool;
 pub mod post;
+pub mod preferences;
 pub mod snapshot;
 pub mod tag;
 mod temp;
@@ -20,9 +21,6 @@ pub mod user;
 pub trait Builder<'a>: Sized {
     type Token;
     type BoxedQuery;
-
-    /// Constructs a new query builder that contains filters and sorts parsed from `search_criteria`.
-    fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self>;
 
     /// Returns a stored [`SearchCriteria`] as a mutable reference.
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token>;

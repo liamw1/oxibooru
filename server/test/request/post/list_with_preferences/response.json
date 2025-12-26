@@ -1,0 +1,28 @@
+{
+    "limit": 9,
+    "offset": 0,
+    "query": "-sort:id",
+    "results": [
+        {
+            "id": 1,
+            "relationCount": 2,
+            "relations": [
+                {
+                    "id": 2,
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
+                }
+            ]
+        },
+        {
+            "id": 2,
+            "relationCount": 1,
+            "relations": [
+                {
+                    "id": 1,
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
+                }
+            ]
+        }
+    ],
+    "total": 2
+}

@@ -1,0 +1,21 @@
+{
+    "type": "object change",
+    "value": {
+        "implications": {
+            "added": [
+                "sky"
+            ],
+            "removed": [],
+            "type": "list change"
+        },
+        "suggestions": {
+            "added": [
+                "rock"
+            ],
+            "removed": [
+                "plant"
+            ],
+            "type": "list change"
+        }
+    }
+}

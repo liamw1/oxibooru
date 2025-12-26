@@ -1,0 +1,90 @@
+{
+    "results": [
+        {
+            "occurrences": 2,
+            "tag": {
+                "implications": [],
+                "names": [
+                    "plant",
+                    "foliage"
+                ],
+                "suggestions": []
+            }
+        },
+        {
+            "occurrences": 1,
+            "tag": {
+                "implications": [
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "plant",
+                            "foliage"
+                        ],
+                        "usages": 2
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "tree"
+                        ],
+                        "usages": 1
+                    }
+                ],
+                "names": [
+                    "forest",
+                    "woods"
+                ],
+                "suggestions": []
+            }
+        },
+        {
+            "occurrences": 1,
+            "tag": {
+                "implications": [],
+                "names": [
+                    "water",
+                    "agua"
+                ],
+                "suggestions": []
+            }
+        },
+        {
+            "occurrences": 1,
+            "tag": {
+                "implications": [
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "water",
+                            "agua"
+                        ],
+                        "usages": 1
+                    }
+                ],
+                "names": [
+                    "river",
+                    "stream",
+                    "creek"
+                ],
+                "suggestions": [
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "plant",
+                            "foliage"
+                        ],
+                        "usages": 2
+                    },
+                    {
+                        "category": "Surroundings",
+                        "names": [
+                            "sand"
+                        ],
+                        "usages": 0
+                    }
+                ]
+            }
+        }
+    ]
+}

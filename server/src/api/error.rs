@@ -36,6 +36,8 @@ pub enum ApiError {
     FailedQuery(#[from] diesel::result::Error),
     FromStr(#[from] Box<dyn std::error::Error + Send + Sync>),
     HeaderDeserialization(#[from] axum::http::header::ToStrError),
+    #[error("{0} hidden")]
+    Hidden(ResourceType),
     #[error("Insufficient privileges")]
     InsufficientPrivileges,
     InvalidEmailAddress(#[from] lettre::address::AddressError),
@@ -129,7 +131,7 @@ impl ApiError {
             | Self::SelfMerge(_) => StatusCode::BAD_REQUEST,
             Self::NotLoggedIn | Self::Password(_) | Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
-            Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::Hidden(_) | Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::FailedEmailTransport(_)
@@ -169,6 +171,7 @@ impl ApiError {
             Self::FailedQuery(_) => "Failed Query",
             Self::FromStr(_) => "FromStr Error",
             Self::HeaderDeserialization(_) => "Header Deserialization",
+            Self::Hidden(_) => "Resource Hidden",
             Self::InsufficientPrivileges => "Insufficient Privileges",
             Self::InvalidEmailAddress(_) => "Invalid Email Address",
             Self::InvalidEmail(_) => "Invalid Email",

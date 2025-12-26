@@ -50,6 +50,25 @@ pub struct SmtpConfig {
     pub from: Mailbox,
 }
 
+#[derive(Deserialize)]
+pub struct AnonymousPreferences {
+    pub tag_blacklist: Vec<SmallString>,
+    pub tag_category_blacklist: Vec<SmallString>,
+    pub hide_unsafe: bool,
+    pub hide_sketchy: bool,
+    pub hide_untagged: bool,
+}
+
+impl AnonymousPreferences {
+    pub fn is_empty(&self) -> bool {
+        self.tag_blacklist.is_empty()
+            && self.tag_category_blacklist.is_empty()
+            && !self.hide_unsafe
+            && !self.hide_sketchy
+            && !self.hide_untagged
+    }
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 pub struct PrivilegeConfig {
     pub user_create_self: UserRank,
@@ -196,6 +215,7 @@ pub struct Config {
     pub auto_explain: bool,
     pub thumbnails: ThumbnailConfig,
     pub smtp: Option<SmtpConfig>,
+    pub anonymous_preferences: AnonymousPreferences,
     pub public_info: PublicConfig,
 }
 

@@ -1,0 +1,5 @@
+[anonymous_preferences]
+hide_untagged = true
+
+[public_info.privileges]
+post_list = "anonymous"

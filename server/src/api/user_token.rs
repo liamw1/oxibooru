@@ -33,7 +33,7 @@ pub fn routes() -> Router<AppState> {
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UnpagedResponse<UserTokenInfo>>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -59,7 +59,6 @@ async fn list(
             .map_err(ApiError::from)
     })?;
 
-    let username = SmallString::new(username);
     let results = user_tokens
         .into_iter()
         .map(|user_token| {
@@ -82,7 +81,7 @@ struct CreateBody {
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<CreateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
@@ -126,11 +125,7 @@ async fn create(
         .get_result(conn)?;
         Ok::<_, ApiError>((user_token, avatar_style))
     })?;
-    Ok(Json(UserTokenInfo::new(
-        MicroUser::new(&state.config, username.into(), avatar_style),
-        user_token,
-        &fields,
-    )))
+    Ok(Json(UserTokenInfo::new(MicroUser::new(&state.config, username, avatar_style), user_token, &fields)))
 }
 
 #[derive(Deserialize)]

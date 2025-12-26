@@ -1,0 +1,6 @@
+[anonymous_preferences]
+tag_blacklist = ["rock", "stone", "sand", "tree"]
+tag_category_blacklist = ["source", "meta"]
+
+[public_info.privileges]
+tag_category_list = "anonymous"

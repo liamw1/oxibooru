@@ -1,5 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
+use crate::config::Config;
 use crate::content::hash::Checksum;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
 use crate::schema::{
@@ -8,12 +9,13 @@ use crate::schema::{
 };
 use crate::search::{
     self, Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
+    preferences,
 };
 use crate::{
     apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
     apply_time_filter, update_filter_cache, update_nonmatching_filter_cache,
 };
-use diesel::dsl::{Eq, InnerJoin, InnerJoinOn, IntoBoxed, LeftJoin, Select, count, sql};
+use diesel::dsl::{Eq, InnerJoin, InnerJoinOn, IntoBoxed, LeftJoin, Select, count, exists, not, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::sql_types::{Float, SmallInt};
@@ -88,6 +90,7 @@ pub enum Token {
 
 pub struct QueryBuilder<'a> {
     search: SearchCriteria<'a, Token>,
+    config: &'a Config,
     cache_state: CacheState,
 }
 
@@ -95,29 +98,12 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     type Token = Token;
     type BoxedQuery = BoxedQuery;
 
-    fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::Tag).map_err(Box::from)?;
-        for sort in &search.sorts {
-            if matches!(
-                sort.kind,
-                Token::ContentChecksum | Token::NoteText | Token::PoolCategory | Token::Special | Token::TagCategory
-            ) {
-                return Err(ApiError::InvalidSort);
-            }
-        }
-
-        Ok(Self {
-            search,
-            cache_state: CacheState::new(),
-        })
-    }
-
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
         &mut self.search
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() {
+        if self.search.has_filter() || preferences::has_preferences(self.config, self.search.client) {
             let unsorted_query = self.build_filtered(conn)?;
             unsorted_query.count().first(conn)
         } else {
@@ -138,7 +124,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             .inner_join(post_statistics::table)
             .left_join(user::table)
             .into_boxed();
-        let query = self
+        let mut query = self
             .search
             .filters
             .iter()
@@ -179,6 +165,9 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             })?;
         if let Some(nonmatching) = nonmatching_posts {
             update_nonmatching_filter_cache!(conn, nonmatching, self.cache_state)?;
+        }
+        if let Some(hidden_posts) = preferences::hidden_posts(self.config, self.search.client, post::id) {
+            query = query.filter(not(exists(hidden_posts)));
         }
         Ok(apply_cache_filters!(query, post::id, self.cache_state))
     }
@@ -229,6 +218,26 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             None => query,
         }
         .load(conn)
+    }
+}
+
+impl<'a> QueryBuilder<'a> {
+    pub fn new(config: &'a Config, client: Client, search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(client, search_criteria, Token::Tag).map_err(Box::from)?;
+        for sort in &search.sorts {
+            if matches!(
+                sort.kind,
+                Token::ContentChecksum | Token::NoteText | Token::PoolCategory | Token::Special | Token::TagCategory
+            ) {
+                return Err(ApiError::InvalidSort);
+            }
+        }
+
+        Ok(Self {
+            search,
+            config,
+            cache_state: CacheState::new(),
+        })
     }
 }
 

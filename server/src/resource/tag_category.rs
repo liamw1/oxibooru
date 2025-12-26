@@ -1,9 +1,12 @@
+use crate::auth::Client;
+use crate::config::Config;
+use crate::model::enums::UserRank;
 use crate::model::tag_category::TagCategory;
 use crate::resource::BoolFill;
 use crate::schema::{tag_category, tag_category_statistics};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use diesel::{PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
+use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use strum::{EnumString, EnumTable};
@@ -52,12 +55,23 @@ impl TagCategoryInfo {
         })
     }
 
-    pub fn all(conn: &mut PgConnection, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
-        let tag_categories: Vec<(TagCategory, i64)> = tag_category::table
+    pub fn all(
+        conn: &mut PgConnection,
+        config: &Config,
+        client: Client,
+        fields: &FieldTable<bool>,
+    ) -> QueryResult<Vec<Self>> {
+        let mut tag_categories = tag_category::table
             .inner_join(tag_category_statistics::table)
             .select((TagCategory::as_select(), tag_category_statistics::usage_count))
             .order(tag_category::order)
-            .load(conn)?;
+            .into_boxed();
+        if client.rank == UserRank::Anonymous {
+            tag_categories =
+                tag_categories.filter(tag_category::name.ne_all(&config.anonymous_preferences.tag_category_blacklist));
+        }
+
+        let tag_categories: Vec<(TagCategory, i64)> = tag_categories.load(conn)?;
         Ok(tag_categories
             .into_iter()
             .map(|(category, usages)| Self {

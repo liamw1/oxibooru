@@ -1,0 +1,5 @@
+[anonymous_preferences]
+tag_blacklist = ["rock"]
+
+[public_info.privileges]
+tag_view = "anonymous"

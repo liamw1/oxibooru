@@ -1,0 +1,12 @@
+{
+    "type": "object change",
+    "value": {
+        "posts": {
+            "type": "list change",
+            "added": [],
+            "removed": [
+                5
+            ]
+        }
+    }
+}

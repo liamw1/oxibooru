@@ -3,18 +3,19 @@ use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
+use crate::config::Config;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::CommentInfo;
 use crate::schema::{comment, comment_score};
-use crate::search::Builder;
 use crate::search::comment::QueryBuilder;
+use crate::search::{Builder, preferences};
 use crate::time::DateTime;
 use crate::{api, resource};
 use axum::extract::{Extension, State};
 use axum::{Router, routing};
 use diesel::dsl::exists;
-use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
@@ -38,7 +39,7 @@ async fn list(
     let limit = std::cmp::min(params.limit.get(), MAX_COMMENTS_PER_PAGE);
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_comments) = query_builder.list(conn)?;
@@ -63,10 +64,7 @@ async fn get(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).first(conn)?;
-        if !comment_exists {
-            return Err(ApiError::NotFound(ResourceType::Comment));
-        }
+        verify_visibility(conn, &state.config, client, comment_id)?;
         CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields)
             .map(Json)
             .map_err(ApiError::from)
@@ -212,6 +210,22 @@ async fn delete(
         diesel::delete(comment::table.find(comment_id)).execute(conn)?;
         Ok(Json(()))
     })
+}
+
+fn verify_visibility(conn: &mut PgConnection, config: &Config, client: Client, comment_id: i64) -> ApiResult<()> {
+    let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).first(conn)?;
+    if !comment_exists {
+        return Err(ApiError::NotFound(ResourceType::Comment));
+    }
+
+    if let Some(hidden_posts) = preferences::hidden_posts(config, client, comment::post_id) {
+        let comment_lookup = comment::table.find(comment_id).filter(exists(hidden_posts));
+        let comment_hidden: bool = diesel::select(exists(comment_lookup)).first(conn)?;
+        if comment_hidden {
+            return Err(ApiError::Hidden(ResourceType::Comment));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -388,6 +402,18 @@ mod test {
         assert_eq!(new_score, score);
         assert_eq!(new_last_edit_time, last_edit_time);
         Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn preferences() -> ApiResult<()> {
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /comments/?query=-sort:id&limit=9&fields=id",
+            "comment/list_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /comment/1", "comment/get_with_preferences").await
     }
 
     #[tokio::test]

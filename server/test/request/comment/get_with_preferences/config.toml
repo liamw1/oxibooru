@@ -1,0 +1,5 @@
+[anonymous_preferences]
+tag_blacklist = ["classic_literature"]
+
+[public_info.privileges]
+comment_view = "anonymous"

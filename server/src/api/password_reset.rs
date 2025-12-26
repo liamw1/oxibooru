@@ -121,7 +121,7 @@ fn generate_temporary_password(length: u8) -> String {
 /// See [confirm-password-reset](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#confirm-password-reset)
 async fn reset_password(
     State(state): State<AppState>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Json(confirmation): Json<ResetToken>,
 ) -> ApiResult<Json<NewPassword>> {
     const TEMPORARY_PASSWORD_LENGTH: u8 = 16;

@@ -1,0 +1,6 @@
+[anonymous_preferences]
+tag_category_blacklist = ["default"]
+hide_unsafe = true
+
+[public_info.privileges]
+post_list = "anonymous"

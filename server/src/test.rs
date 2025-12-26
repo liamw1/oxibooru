@@ -4,7 +4,7 @@ use crate::app::AppState;
 use crate::auth::header;
 use crate::config::Config;
 use crate::content::hash::{Checksum, Md5Checksum, PostHash};
-use crate::content::signature::{COMPRESSED_SIGNATURE_LEN, NUM_WORDS};
+use crate::content::{FileContents, decode, signature};
 use crate::db::ConnectionResult;
 use crate::filesystem::Directory;
 use crate::model::comment::{NewComment, NewCommentScore};
@@ -14,8 +14,7 @@ use crate::model::enums::{
 use crate::model::pool::{NewPool, NewPoolName, PoolPost};
 use crate::model::pool_category::NewPoolCategory;
 use crate::model::post::{
-    CompressedSignature, NewPost, NewPostFeature, NewPostNote, NewPostSignature, PostFavorite, PostRelation, PostScore,
-    PostTag, SignatureIndexes,
+    NewPost, NewPostFeature, NewPostNote, NewPostSignature, PostFavorite, PostRelation, PostScore, PostTag,
 };
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
 use crate::model::tag_category::NewTagCategory;
@@ -168,6 +167,15 @@ pub async fn verify_response_with_credentials(
         request.await
     };
 
+    if let Some(expected_response) = expected_response {
+        let actual_response: Value = serde_json::from_slice(response.as_bytes()).unwrap_or_else(|_| {
+            panic!("Response for {relative_path} is not JSON.\nBody:\n{}", String::from_utf8_lossy(response.as_bytes()))
+        });
+        verify_json(relative_path, "response body", &expected_response, &actual_response);
+    } else {
+        panic!("Missing response.json in {relative_path}");
+    }
+
     // Optionally check an expected snapshot
     if let Some(expected_snapshot) = expected_snapshot {
         let mut conn = get_connection()?;
@@ -176,15 +184,6 @@ pub async fn verify_response_with_credentials(
             .order_by(snapshot::id.desc())
             .first(&mut conn)?;
         verify_json(relative_path, "snapshot data", &expected_snapshot, &actual_snapshot);
-    }
-
-    if let Some(expected_response) = expected_response {
-        let actual_response: Value = serde_json::from_slice(response.as_bytes()).unwrap_or_else(|_| {
-            panic!("Response for {relative_path} is not JSON.\nBody:\n{}", String::from_utf8_lossy(response.as_bytes()))
-        });
-        verify_json(relative_path, "response body", &expected_response, &actual_response);
-    } else {
-        panic!("Missing response.json in {relative_path}");
     }
     Ok(())
 }
@@ -318,6 +317,7 @@ const POST_5_TAGS: &[&str] = &[
 ];
 const POST_TAGS: &[&[&str]] = &[POST_1_TAGS, POST_2_TAGS, POST_3_TAGS, POST_4_TAGS, POST_5_TAGS];
 
+/// (`pool_name`, `post_id`)
 const POOL_POSTS: &[(&str, i64)] = &[
     ("fantasy", 1),
     ("fantasy", 2),
@@ -612,10 +612,21 @@ fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> 
             .get_result(conn)?;
 
         // Simulate uploads
+        let image_path = media_path("1_pixel.png");
+        let data = std::fs::read(&image_path)?;
+
+        let file_contents = FileContents {
+            data,
+            mime_type: MimeType::Png,
+        };
+        let image = decode::representative_image(config, &file_contents, &image_path).unwrap();
+        let signature = signature::compute(&image);
+        let words = signature::generate_indexes(&signature);
+
         let post_signature = NewPostSignature {
             post_id,
-            signature: CompressedSignature::from([0; COMPRESSED_SIGNATURE_LEN]),
-            words: SignatureIndexes::from([0; NUM_WORDS]),
+            signature: signature.into(),
+            words: words.into(),
         };
         diesel::insert_into(post_signature::table)
             .values(post_signature)

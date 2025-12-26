@@ -339,6 +339,7 @@ List of possible error names:
 - `ReadOnlyTransaction`
 - `RequestError`
 - `ResourceBusy`
+- `ResourceHidden`
 - `ResourceModified`
 - `RollbackTransaction`
 - `RowNotFound`

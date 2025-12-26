@@ -50,6 +50,13 @@ post_height   = 300
 # password = # example: "groovy123"
 # from     = # example: "App <noreply@example.com>"
 
+[anonymous_preferences]
+tag_blacklist = []
+tag_category_blacklist = []
+hide_unsafe = false
+hide_sketchy = false
+hide_untagged = false
+
 [public_info]
 # Shown in the website title and on the front page
 name = "oxibooru"
