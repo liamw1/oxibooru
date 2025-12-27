@@ -50,6 +50,7 @@ post_height   = 300
 # password = # example: "groovy123"
 # from     = # example: "App <noreply@example.com>"
 
+# Preferences that are automatically applied to anonymous users
 [anonymous_preferences]
 tag_blacklist = []
 tag_category_blacklist = []
