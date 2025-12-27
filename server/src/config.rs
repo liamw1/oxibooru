@@ -41,13 +41,32 @@ impl ThumbnailConfig {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Deserialize)]
 pub struct SmtpConfig {
     pub host: SmallString,
     pub port: Option<u16>,
     pub username: Option<SmallString>,
     pub password: Option<SmallString>,
     pub from: Mailbox,
+}
+
+#[derive(Deserialize)]
+pub struct AnonymousPreferences {
+    pub tag_blacklist: Vec<SmallString>,
+    pub tag_category_blacklist: Vec<SmallString>,
+    pub hide_unsafe: bool,
+    pub hide_sketchy: bool,
+    pub hide_untagged: bool,
+}
+
+impl AnonymousPreferences {
+    pub fn is_empty(&self) -> bool {
+        self.tag_blacklist.is_empty()
+            && self.tag_category_blacklist.is_empty()
+            && !self.hide_unsafe
+            && !self.hide_sketchy
+            && !self.hide_untagged
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -196,6 +215,7 @@ pub struct Config {
     pub auto_explain: bool,
     pub thumbnails: ThumbnailConfig,
     pub smtp: Option<SmtpConfig>,
+    pub anonymous_preferences: AnonymousPreferences,
     pub public_info: PublicConfig,
 }
 
@@ -224,13 +244,7 @@ impl Config {
     }
 
     pub fn path(&self, directory: Directory) -> PathBuf {
-        let folder = match directory {
-            Directory::Avatars => "avatars",
-            Directory::Posts => "posts",
-            Directory::GeneratedThumbnails => "generated-thumbnails",
-            Directory::CustomThumbnails => "custom-thumbnails",
-            Directory::TemporaryUploads => "temporary-uploads",
-        };
+        let folder: &str = directory.into();
         self.data_dir.join(folder)
     }
 
@@ -249,14 +263,17 @@ impl Config {
 /// Deserializes the `config.toml`.
 /// Any values not present will default to the corresponding value in `config.toml.dist`.
 pub fn create() -> Config {
-    assert!(!cfg!(test), "Production config disallowed in test build!");
-    create_config(Some("config"))
+    if cfg!(test) {
+        panic!("Production config disallowed in test build!")
+    } else {
+        create_config(Some("config"))
+    }
 }
 
 /// Creates a test config with an optional `override_relative_path` to override the default config.
 #[cfg(test)]
 pub fn test_config(override_relative_path: Option<&str>) -> Config {
-    let override_path = override_relative_path.map(|relative_path| format!("test/queries/{relative_path}/config"));
+    let override_path = override_relative_path.map(|relative_path| format!("test/request/{relative_path}/config"));
     create_config(override_path.as_deref())
 }
 

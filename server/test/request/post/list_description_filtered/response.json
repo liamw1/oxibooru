@@ -1,0 +1,14 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "description:*00* -sort:id",
+    "results": [
+        {
+            "id": 1
+        },
+        {
+            "id": 4
+        }
+    ],
+    "total": 2
+}

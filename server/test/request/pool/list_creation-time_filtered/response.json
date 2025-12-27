@@ -1,0 +1,7 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "creation-time:2000..2020 -sort:creation-time",
+    "results": [],
+    "total": 0
+}

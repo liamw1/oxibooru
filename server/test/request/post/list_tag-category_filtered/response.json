@@ -1,0 +1,17 @@
+{
+    "query": "tag-category:s* -sort:id",
+    "offset": 0,
+    "limit": 40,
+    "total": 3,
+    "results": [
+        {
+            "id": 1
+        },
+        {
+            "id": 2
+        },
+        {
+            "id": 5
+        }
+    ]
+}

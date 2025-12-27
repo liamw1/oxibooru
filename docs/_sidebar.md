@@ -1,0 +1,8 @@
+<!-- markdownlint-disable MD041 -->
+- [Install Oxibooru](INSTALL.md)
+- [Migrate from Szurubooru](CONVERSION.md)
+- [Benchmarks](BENCHMARKS.md)
+- [Development Guide](DEV.md)
+- [API](API.md)
+- [License](LICENSE.md)
+- [Source Code](https://github.com/liamw1/oxibooru/)

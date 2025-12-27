@@ -1,0 +1,191 @@
+/* ####################################### */
+/* Fixes and edits not supported by docsify-themable */
+/* ####################################### */
+
+/*
+Logo:
+  recolor
+*/
+
+.app-name-link {
+  /* filter: contrast(0) sepia(100%) hue-rotate(180deg) saturate(1000%) var(--custom_logo_invert) ; */
+  filter:
+    contrast(0)
+    sepia(100%)
+    hue-rotate(180deg)
+    saturate(1000%)
+    brightness(80%);
+}
+
+/* 
+Header Edit Button:
+  color + location
+*/
+
+.edit-page {
+  fill: var(--base-color);
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/*
+Search:
+  fix clear button location
+*/
+
+.sidebar .search .clear-button {
+	padding: 10px;
+}
+
+/*
+Notice:
+  remove border 
+  background
+  drop shadow
+  Important Style
+  Tip Notice content color fix
+*/
+
+.alert {
+  border-top: none !important;
+  border-right: none !important;
+  border-bottom: none !important;
+  filter: drop-shadow(0 0 0.5rem var(--notice-shadow-color));
+  background-color: var(--notice-background) !important;
+}
+
+.alert.callout.note {
+	border-left-color: var(--notice-note-border-color);
+}
+.alert.callout.note .title {
+	color: var(--notice-note-color) !important;
+}
+
+.alert.callout.tip {
+	border-left-color: var(--notice-tip-border-color);
+}
+.alert.callout.tip .title {
+	color: var(--notice-tip-color) !important;
+}
+
+.alert.callout.warning {
+	border-left-color: var(--notice-warning-border-color);
+}
+.alert.callout.warning .title {
+	color: var(--notice-warning-color) !important;
+}
+
+.alert.callout.attention {
+	border-left-color: var(--notice-attention-border-color);
+}
+.alert.callout.attention .title {
+	color: var(--notice-attention-color) !important;
+}
+
+.alert.callout.important {
+	border-left-color: var(--notice-important-border-color);
+}
+.alert.callout.important .title {
+	color: var(--notice-important-color) !important;
+}
+
+.alert.callout.important .icon-important {
+  background-image: url("data:image/svg+xml;charset=utf-8,<svg width='16' height='16' viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'><path fill='placeholder' d='M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z'/></svg>");
+}
+
+.markdown-section .tip {
+  color: inherit;
+}
+
+/*
+Sidebar: 
+  drop shadow
+  move Scrollbar to the left
+  hide drop shadow when closed
+*/
+
+.sidebar {
+  scrollbar-width: thin;
+  direction: rtl;
+  filter: drop-shadow(0 0 1rem var(--sidebar-shadow-color));
+}
+
+.sidebar-nav,
+.search,
+nav {
+  direction: ltr;
+}
+
+.close main .sidebar {
+  filter: unset;
+}
+
+/* 
+Codeblock:
+Image:
+  rounded corners
+  drop shadow
+*/
+
+pre,
+.medium-zoom-image {
+  /* filter: drop-shadow(0 0 1rem var(--zoomimage-shadow-color)); */
+  border-radius: 0.20rem;
+}
+
+/* 
+Image:
+  hide drop shadow when zoomed
+  blur background
+*/
+
+.medium-zoom-overlay {
+  background: none !important;
+  backdrop-filter: blur(10px);
+}
+
+.medium-zoom-image--opened {
+  filter: unset;
+}
+
+/*
+Table
+ drop shadow
+*/
+
+table {
+  filter: drop-shadow(0 0 0.75rem var(--table-shadow-color));
+}
+
+/* 
+ToC
+  selection color
+  background color
+  drop shadow
+  to more to right - disabled
+*/
+
+.page_toc div {
+  border-left-color: transparent;
+}
+
+.page_toc div.active {
+	border-left-color: var(--toc-side-indicator-active);
+}
+
+@media only screen and (max-width: 1299px) {
+  aside.toc-nav {
+    background: var(--toc-mobile-background);
+    filter: drop-shadow(0 0 0.75rem var(--toc-shadow-color));
+    border-radius: 0.20rem;
+    /* transition: width 2s, opacity 400ms; */
+  }
+}
+
+/* aside.toc-nav {
+	right: -1% !important;
+} */

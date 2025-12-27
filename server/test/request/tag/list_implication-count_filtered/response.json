@@ -1,0 +1,36 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "-implication-count:0 -sort:name",
+    "results": [
+        {
+            "names": [
+                "desert"
+            ]
+        },
+        {
+            "names": [
+                "forest",
+                "woods"
+            ]
+        },
+        {
+            "names": [
+                "night_sky"
+            ]
+        },
+        {
+            "names": [
+                "river",
+                "stream",
+                "creek"
+            ]
+        },
+        {
+            "names": [
+                "tree"
+            ]
+        }
+    ],
+    "total": 5
+}

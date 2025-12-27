@@ -1,0 +1,16 @@
+{
+    "results": [
+        {
+            "name": "default"
+        },
+        {
+            "name": "Artist"
+        },
+        {
+            "name": "Character"
+        },
+        {
+            "name": "Surroundings"
+        }
+    ]
+}

@@ -1,14 +1,15 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
+use crate::config::Config;
 use crate::schema::{comment, comment_statistics, database_statistics, user};
-use crate::search::{Builder, Order, ParsedSort, SearchCriteria};
+use crate::search::{Builder, Order, ParsedSort, SearchCriteria, preferences};
 use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
-use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select};
+use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, exists, not};
 use diesel::pg::Pg;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
-use strum::EnumString;
+use strum::{Display, EnumIter, EnumString, EnumTable};
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Token {
     Id,
@@ -30,24 +31,20 @@ pub enum Token {
 
 pub struct QueryBuilder<'a> {
     search: SearchCriteria<'a, Token>,
+    config: &'a Config,
 }
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
     type Token = Token;
-    type BoxedQuery = BoxedQuery<'a>;
+    type BoxedQuery = BoxedQuery;
 
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
         &mut self.search
     }
 
-    fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
-        let query = self.build_filtered()?;
-        self.get_ordered_ids(conn, query).map_err(ApiError::from)
-    }
-
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() {
-            let unsorted_query = self.build_filtered()?;
+        if self.search.has_filter() || preferences::has_preferences(self.config, self.search.client) {
+            let unsorted_query = self.build_filtered(conn)?;
             unsorted_query.count().first(conn)
         } else {
             database_statistics::table
@@ -56,21 +53,15 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
         }
         .map_err(ApiError::from)
     }
-}
 
-impl<'a> QueryBuilder<'a> {
-    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::Text).map_err(Box::from)?;
-        Ok(Self { search })
-    }
-
-    fn build_filtered(&mut self) -> ApiResult<BoxedQuery<'a>> {
+    fn build_filtered(&mut self, _conn: &mut PgConnection) -> ApiResult<BoxedQuery> {
         let base_query = comment::table
             .select(comment::id)
             .inner_join(comment_statistics::table)
             .left_join(user::table)
             .into_boxed();
-        self.search
+        let mut query = self
+            .search
             .filters
             .iter()
             .try_fold(base_query, |query, filter| match filter.kind {
@@ -81,10 +72,16 @@ impl<'a> QueryBuilder<'a> {
                 Token::LastEditTime => apply_time_filter!(query, comment::last_edit_time, filter),
                 Token::User => Ok(apply_str_filter!(query, user::name, filter)),
                 Token::Score => apply_filter!(query, comment_statistics::score, filter, i64),
-            })
+            })?;
+
+        // Apply preference filters to comments
+        if let Some(hidden_posts) = preferences::hidden_posts(self.config, self.search.client, comment::post_id) {
+            query = query.filter(not(exists(hidden_posts)));
+        }
+        Ok(query)
     }
 
-    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
+    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
             return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
@@ -112,5 +109,28 @@ impl<'a> QueryBuilder<'a> {
     }
 }
 
-type BoxedQuery<'a> =
-    IntoBoxed<'a, LeftJoin<InnerJoin<Select<comment::table, comment::id>, comment_statistics::table>, user::table>, Pg>;
+impl<'a> QueryBuilder<'a> {
+    pub fn new(config: &'a Config, client: Client, search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(client, search_criteria, Token::Text).map_err(Box::from)?;
+        Ok(Self { search, config })
+    }
+}
+
+type BoxedQuery = IntoBoxed<
+    'static,
+    LeftJoin<InnerJoin<Select<comment::table, comment::id>, comment_statistics::table>, user::table>,
+    Pg,
+>;
+
+#[cfg(test)]
+pub fn filter_table() -> TokenTable<&'static str> {
+    TokenTable {
+        _id: "-2..4",
+        _post: "1,3,5",
+        _text: "*this*",
+        _creation_time: "2016",
+        _last_edit_time: "-2016",
+        _user: "-*user*",
+        _score: "-0..",
+    }
+}

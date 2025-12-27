@@ -1,0 +1,41 @@
+{
+    "implications": [
+        {
+            "category": "Surroundings",
+            "names": [
+                "sky"
+            ],
+            "usages": 1
+        },
+        {
+            "category": "Surroundings",
+            "names": [
+                "water",
+                "agua"
+            ],
+            "usages": 1
+        }
+    ],
+    "names": [
+        "river",
+        "stream",
+        "creek"
+    ],
+    "suggestions": [
+        {
+            "category": "Surroundings",
+            "names": [
+                "rock",
+                "stone"
+            ],
+            "usages": 2
+        },
+        {
+            "category": "Surroundings",
+            "names": [
+                "sand"
+            ],
+            "usages": 0
+        }
+    ]
+}

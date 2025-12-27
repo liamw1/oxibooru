@@ -38,7 +38,7 @@ fn get_user_info(
         .ok_or(ApiError::NotFound(ResourceType::User))
 }
 
-/// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#request-password-reset)
+/// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#request-password-reset)
 async fn request_reset(State(state): State<AppState>, Path(identifier): Path<String>) -> ApiResult<Json<()>> {
     let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
@@ -118,10 +118,10 @@ fn generate_temporary_password(length: u8) -> String {
         .collect()
 }
 
-/// See [confirm-password-reset](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#confirm-password-reset)
+/// See [confirm-password-reset](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#confirm-password-reset)
 async fn reset_password(
     State(state): State<AppState>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Json(confirmation): Json<ResetToken>,
 ) -> ApiResult<Json<NewPassword>> {
     const TEMPORARY_PASSWORD_LENGTH: u8 = 16;
@@ -155,14 +155,14 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /password-reset/no_one", "password_reset/request_for_nonexistent_user").await?;
-        verify_query("POST /password-reset/nobody", "password_reset/confirm_for_nonexistent_user").await?;
+        verify_response("GET /password-reset/no_one", "password_reset/request_for_nonexistent_user").await?;
+        verify_response("POST /password-reset/nobody", "password_reset/confirm_for_nonexistent_user").await?;
 
-        verify_query("GET /password-reset/moderator", "password_reset/no_email").await?;
-        verify_query("GET /password-reset/restricted_user", "password_reset/invalid_email").await?;
-        verify_query("GET /password-reset/regular_user", "password_reset/reset_disabled").await?;
-        verify_query("POST /password-reset/regular_user", "password_reset/invalid_token").await?;
-        verify_query("POST /password-reset/regular_user", "password_reset/missing_token").await?;
+        verify_response("GET /password-reset/moderator", "password_reset/no_email").await?;
+        verify_response("GET /password-reset/restricted_user", "password_reset/invalid_email").await?;
+        verify_response("GET /password-reset/regular_user", "password_reset/reset_disabled").await?;
+        verify_response("POST /password-reset/regular_user", "password_reset/invalid_token").await?;
+        verify_response("POST /password-reset/regular_user", "password_reset/missing_token").await?;
         Ok(())
     }
 }

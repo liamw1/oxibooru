@@ -17,7 +17,7 @@ pub fn routes() -> Router<AppState> {
 
 const MAX_SNAPSHOTS_PER_PAGE: i64 = 1000;
 
-/// See [listing-snapshots](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-snapshots)
+/// See [listing-snapshots](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-snapshots)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

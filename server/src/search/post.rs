@@ -1,25 +1,29 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
+use crate::config::Config;
 use crate::content::hash::Checksum;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
 use crate::schema::{
-    comment, database_statistics, pool_post, post, post_favorite, post_feature, post_note, post_score, post_statistics,
-    post_tag, tag_name, user,
+    comment, database_statistics, pool, pool_category, pool_post, post, post_favorite, post_feature, post_note,
+    post_score, post_statistics, post_tag, tag, tag_category, tag_name, user,
 };
-use crate::search::{Builder, CacheState, Order, ParsedSort, SearchCriteria, UnparsedFilter, parse};
+use crate::search::{
+    self, Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
+    preferences,
+};
 use crate::{
     apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
-    apply_time_filter, update_filter_cache,
+    apply_time_filter, update_filter_cache, update_nonmatching_filter_cache,
 };
-use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, count, sql};
+use diesel::dsl::{Eq, InnerJoin, InnerJoinOn, IntoBoxed, LeftJoin, Select, count, exists, not, sql};
 use diesel::expression::{SqlLiteral, UncheckedBind};
 use diesel::pg::Pg;
 use diesel::sql_types::{Float, SmallInt};
-use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
+use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl, TextExpressionMethods};
 use std::str::FromStr;
-use strum::{EnumIter, EnumString, IntoStaticStr};
+use strum::{Display, EnumIter, EnumString, EnumTable};
 
-#[derive(Clone, Copy, EnumIter, EnumString, IntoStaticStr)]
+#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 #[strum(use_phf)]
 pub enum Token {
@@ -60,7 +64,9 @@ pub enum Token {
     )]
     LastEditTime,
     Tag,
+    TagCategory,
     Pool,
+    PoolCategory,
     #[strum(serialize = "submit", serialize = "upload", serialize = "uploader")]
     Uploader,
     Fav,
@@ -84,24 +90,20 @@ pub enum Token {
 
 pub struct QueryBuilder<'a> {
     search: SearchCriteria<'a, Token>,
+    config: &'a Config,
     cache_state: CacheState,
 }
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
     type Token = Token;
-    type BoxedQuery = BoxedQuery<'a>;
+    type BoxedQuery = BoxedQuery;
 
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
         &mut self.search
     }
 
-    fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
-        let query = self.build_filtered(conn)?;
-        self.get_ordered_ids(conn, query).map_err(ApiError::from)
-    }
-
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() {
+        if self.search.has_filter() || preferences::has_preferences(self.config, self.search.client) {
             let unsorted_query = self.build_filtered(conn)?;
             unsorted_query.count().first(conn)
         } else {
@@ -111,31 +113,18 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
         }
         .map_err(ApiError::from)
     }
-}
 
-impl<'a> QueryBuilder<'a> {
-    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::Tag).map_err(Box::from)?;
-        for sort in &search.sorts {
-            match sort.kind {
-                Token::ContentChecksum | Token::NoteText | Token::Special => return Err(ApiError::InvalidSort),
-                _ => (),
-            }
-        }
+    fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery> {
+        let mut nonmatching_posts = None;
+        let nonmatching = &mut nonmatching_posts;
+        let state = &mut self.cache_state;
 
-        Ok(Self {
-            search,
-            cache_state: CacheState::new(),
-        })
-    }
-
-    fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
         let base_query = post::table
             .select(post::id)
             .inner_join(post_statistics::table)
             .left_join(user::table)
             .into_boxed();
-        let query = self
+        let mut query = self
             .search
             .filters
             .iter()
@@ -154,12 +143,14 @@ impl<'a> QueryBuilder<'a> {
                 Token::Description => Ok(apply_str_filter!(query, post::description, filter)),
                 Token::CreationTime => apply_time_filter!(query, post::creation_time, filter),
                 Token::LastEditTime => apply_time_filter!(query, post::last_edit_time, filter),
-                Token::Tag => apply_tag_filter(conn, query, filter, &mut self.cache_state),
-                Token::Pool => apply_pool_filter(conn, query, filter, &mut self.cache_state),
+                Token::Tag => apply_tag_filter(conn, query, nonmatching, filter, state),
+                Token::TagCategory => apply_tag_category_filter(conn, query, filter, state),
+                Token::Pool => apply_pool_filter(conn, query, filter, state),
+                Token::PoolCategory => apply_pool_category_filter(conn, query, filter, state),
                 Token::Uploader => Ok(apply_str_filter!(query, user::name, filter)),
-                Token::Fav => apply_favorite_filter(conn, query, filter, &mut self.cache_state),
-                Token::Comment => apply_comment_filter(conn, query, filter, &mut self.cache_state),
-                Token::NoteText => apply_note_text_filter(conn, query, filter, &mut self.cache_state),
+                Token::Fav => apply_favorite_filter(conn, query, filter, state),
+                Token::Comment => apply_comment_filter(conn, query, filter, state),
+                Token::NoteText => apply_note_text_filter(conn, query, filter, state),
                 Token::TagCount => apply_filter!(query, post_statistics::tag_count, filter, i64),
                 Token::CommentCount => apply_filter!(query, post_statistics::comment_count, filter, i64),
                 Token::RelationCount => apply_filter!(query, post_statistics::relation_count, filter, i64),
@@ -167,15 +158,21 @@ impl<'a> QueryBuilder<'a> {
                 Token::FavCount => apply_filter!(query, post_statistics::favorite_count, filter, i64),
                 Token::FeatureCount => apply_filter!(query, post_statistics::feature_count, filter, i64),
                 Token::Score => apply_filter!(query, post_statistics::score, filter, i64),
-                Token::CommentTime => apply_comment_time_filter(conn, query, filter, &mut self.cache_state),
-                Token::FavTime => apply_favorite_time_filter(conn, query, filter, &mut self.cache_state),
-                Token::FeatureTime => apply_feature_time_filter(conn, query, filter, &mut self.cache_state),
-                Token::Special => apply_special_filter(conn, query, self.search.client, filter, &mut self.cache_state),
+                Token::CommentTime => apply_comment_time_filter(conn, query, filter, state),
+                Token::FavTime => apply_favorite_time_filter(conn, query, filter, state),
+                Token::FeatureTime => apply_feature_time_filter(conn, query, filter, state),
+                Token::Special => apply_special_filter(conn, query, self.search.client, filter, state),
             })?;
+        if let Some(nonmatching) = nonmatching_posts {
+            update_nonmatching_filter_cache!(conn, nonmatching, self.cache_state)?;
+        }
+        if let Some(hidden_posts) = preferences::hidden_posts(self.config, self.search.client, post::id) {
+            query = query.filter(not(exists(hidden_posts)));
+        }
         Ok(apply_cache_filters!(query, post::id, self.cache_state))
     }
 
-    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
+    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
             return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
@@ -212,7 +209,9 @@ impl<'a> QueryBuilder<'a> {
             Token::CommentTime => apply_sort!(query, post_statistics::last_comment_time, sort),
             Token::FavTime => apply_sort!(query, post_statistics::last_favorite_time, sort),
             Token::FeatureTime => apply_sort!(query, post_statistics::last_feature_time, sort),
-            Token::ContentChecksum | Token::NoteText | Token::Special => panic!("Invalid sort-style token!"),
+            Token::ContentChecksum | Token::NoteText | Token::PoolCategory | Token::Special | Token::TagCategory => {
+                unreachable!()
+            }
         });
         match self.search.extra_args {
             Some(args) => query.offset(args.offset).limit(args.limit),
@@ -222,8 +221,34 @@ impl<'a> QueryBuilder<'a> {
     }
 }
 
-type BoxedQuery<'a> =
-    IntoBoxed<'a, LeftJoin<InnerJoin<Select<post::table, post::id>, post_statistics::table>, user::table>, Pg>;
+impl<'a> QueryBuilder<'a> {
+    pub fn new(config: &'a Config, client: Client, search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(client, search_criteria, Token::Tag).map_err(Box::from)?;
+        for sort in &search.sorts {
+            if matches!(
+                sort.kind,
+                Token::ContentChecksum | Token::NoteText | Token::PoolCategory | Token::Special | Token::TagCategory
+            ) {
+                return Err(ApiError::InvalidSort);
+            }
+        }
+
+        Ok(Self {
+            search,
+            config,
+            cache_state: CacheState::new(),
+        })
+    }
+}
+
+type BoxedQuery =
+    IntoBoxed<'static, LeftJoin<InnerJoin<Select<post::table, post::id>, post_statistics::table>, user::table>, Pg>;
+
+type NonmatchingPostTags = IntoBoxed<
+    'static,
+    InnerJoinOn<Select<post_tag::table, post_tag::post_id>, tag_name::table, Eq<post_tag::tag_id, tag_name::tag_id>>,
+    Pg,
+>;
 
 #[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "kebab-case")]
@@ -246,7 +271,7 @@ fn aspect_ratio() -> SqlLiteral<Float, Bind> {
         .sql(" AS REAL)")
 }
 
-fn apply_checksum_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> ApiResult<BoxedQuery<'a>> {
+fn apply_checksum_filter(query: BoxedQuery, filter: UnparsedFilter<Token>) -> ApiResult<BoxedQuery> {
     // Checksums can only be searched by exact value(s)
     let checksums: Vec<Checksum> = parse::values(filter.condition)?;
     Ok(if filter.negated {
@@ -256,7 +281,7 @@ fn apply_checksum_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, T
     })
 }
 
-fn apply_flag_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token>) -> ApiResult<BoxedQuery<'a>> {
+fn apply_flag_filter(query: BoxedQuery, filter: UnparsedFilter<Token>) -> ApiResult<BoxedQuery> {
     let flags: Vec<PostFlag> = parse::values(filter.condition)?;
     let value = flags.into_iter().fold(PostFlags::new(), |value, flag| value | flag);
     let bitwise_and = sql::<SmallInt>("")
@@ -270,28 +295,64 @@ fn apply_flag_filter<'a>(query: BoxedQuery<'a>, filter: UnparsedFilter<'a, Token
     })
 }
 
-fn apply_tag_filter<'a>(
+fn apply_tag_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
+    nonmatching_posts: &mut Option<NonmatchingPostTags>,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let post_tags = post_tag::table
         .select(post_tag::post_id)
         .inner_join(tag_name::table.on(post_tag::tag_id.eq(tag_name::tag_id)))
         .into_boxed();
-    let post_tags = apply_distinct_if_multivalued!(post_tags, filter);
-    let filtered_posts = apply_str_filter!(post_tags, tag_name::name, filter.unnegated());
+
+    if filter.negated {
+        // We can perform an optimization here for negative tag filters. Instead of querying to insert nonmatching
+        // posts into the TEMP table one filter at a time, we can union together the filters to produce a single
+        // query to retrieve all posts that are excluded by the negative filters.
+        let nonmatching = nonmatching_posts.take().unwrap_or(post_tags.distinct());
+        let nonmatching = match parse::str_condition(filter.condition) {
+            StrCondition::Regular(Condition::Values(values)) => nonmatching.or_filter(tag_name::name.eq_any(values)),
+            StrCondition::Regular(Condition::GreaterEq(value)) => nonmatching.or_filter(tag_name::name.ge(value)),
+            StrCondition::Regular(Condition::LessEq(value)) => nonmatching.or_filter(tag_name::name.le(value)),
+            StrCondition::Regular(Condition::Range(range)) => {
+                nonmatching.or_filter(tag_name::name.between(range.start, range.end))
+            }
+            StrCondition::WildCard(pattern) => nonmatching.or_filter(search::lower(tag_name::name).like(pattern)),
+        };
+        nonmatching_posts.replace(nonmatching);
+    } else {
+        let post_tags = apply_distinct_if_multivalued!(post_tags, filter);
+        let filtered_posts = apply_str_filter!(post_tags, tag_name::name, filter.unnegated());
+        update_filter_cache!(conn, filtered_posts, post_tag::post_id, filter, state)?;
+    }
+    Ok(query)
+}
+
+fn apply_tag_category_filter(
+    conn: &mut PgConnection,
+    query: BoxedQuery,
+    filter: UnparsedFilter<Token>,
+    state: &mut CacheState,
+) -> ApiResult<BoxedQuery> {
+    let post_tags = tag::table
+        .inner_join(tag_category::table)
+        .inner_join(post_tag::table)
+        .select(post_tag::post_id)
+        .distinct()
+        .into_boxed();
+    let filtered_posts = apply_str_filter!(post_tags, tag_category::name, filter.unnegated());
     update_filter_cache!(conn, filtered_posts, post_tag::post_id, filter, state)?;
     Ok(query)
 }
 
-fn apply_pool_filter<'a>(
+fn apply_pool_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
     let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
     let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
@@ -299,12 +360,29 @@ fn apply_pool_filter<'a>(
     Ok(query)
 }
 
-fn apply_favorite_filter<'a>(
+fn apply_pool_category_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
+    let pool_posts = pool::table
+        .inner_join(pool_category::table)
+        .inner_join(pool_post::table)
+        .select(pool_post::post_id)
+        .distinct()
+        .into_boxed();
+    let filtered_posts = apply_str_filter!(pool_posts, pool_category::name, filter.unnegated());
+    update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
+    Ok(query)
+}
+
+fn apply_favorite_filter(
+    conn: &mut PgConnection,
+    query: BoxedQuery,
+    filter: UnparsedFilter<Token>,
+    state: &mut CacheState,
+) -> ApiResult<BoxedQuery> {
     let favorites = post_favorite::table
         .select(post_favorite::post_id)
         .inner_join(user::table)
@@ -315,12 +393,12 @@ fn apply_favorite_filter<'a>(
     Ok(query)
 }
 
-fn apply_comment_filter<'a>(
+fn apply_comment_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let comments = comment::table
         .select(comment::post_id)
         .distinct()
@@ -331,36 +409,36 @@ fn apply_comment_filter<'a>(
     Ok(query)
 }
 
-fn apply_note_text_filter<'a>(
+fn apply_note_text_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let post_notes = post_note::table.select(post_note::post_id).distinct().into_boxed();
     let filtered_posts = apply_str_filter!(post_notes, post_note::text, filter.unnegated());
     update_filter_cache!(conn, filtered_posts, post_note::post_id, filter, state)?;
     Ok(query)
 }
 
-fn apply_comment_time_filter<'a>(
+fn apply_comment_time_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let comments = comment::table.select(comment::post_id).distinct().into_boxed();
     let filtered_posts = apply_time_filter!(comments, comment::creation_time, filter.unnegated())?;
     update_filter_cache!(conn, filtered_posts, comment::post_id, filter, state)?;
     Ok(query)
 }
 
-fn apply_favorite_time_filter<'a>(
+fn apply_favorite_time_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let post_favorites = post_favorite::table
         .select(post_favorite::post_id)
         .distinct()
@@ -370,12 +448,12 @@ fn apply_favorite_time_filter<'a>(
     Ok(query)
 }
 
-fn apply_feature_time_filter<'a>(
+fn apply_feature_time_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let post_features = post_feature::table
         .select(post_feature::post_id)
         .distinct()
@@ -385,13 +463,13 @@ fn apply_feature_time_filter<'a>(
     Ok(query)
 }
 
-fn apply_special_filter<'a>(
+fn apply_special_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     client: Client,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let special_token = SpecialToken::from_str(filter.condition).map_err(Box::from)?;
     match special_token {
         SpecialToken::Liked => client.id.ok_or(ApiError::NotLoggedIn).map(|client_id| {
@@ -427,4 +505,43 @@ fn apply_special_filter<'a>(
         }
     }??;
     Ok(query)
+}
+
+#[cfg(test)]
+pub fn filter_table() -> TokenTable<&'static str> {
+    TokenTable {
+        _id: "-3..4",
+        _file_size: "-..1000",
+        _width: "1",
+        _height: "-1,2,3",
+        _area: "1,1000",
+        _aspect_ratio: "1.1..2.5",
+        _safety: "-sketchy,unsafe",
+        _type: "-image",
+        _content_checksum: "3031000000000000000000000000000000000000000000000000000000000000",
+        _flag: "sound",
+        _source: "-*_*",
+        _description: "*00*",
+        _creation_time: "-2012",
+        _last_edit_time: "2012",
+        _tag: "-plant,sky,tagme",
+        _tag_category: "s*",
+        _pool: "-2",
+        _pool_category: "style",
+        _uploader: "-restricted_user",
+        _fav: "*user*",
+        _comment: "-*user*",
+        _note_text: "*fav*",
+        _tag_count: "1..5",
+        _comment_count: "-1..",
+        _relation_count: "1,2,3",
+        _note_count: "-0",
+        _fav_count: "1..",
+        _feature_count: "0",
+        _score: "..1",
+        _comment_time: "-2020",
+        _fav_time: "-2020..2021",
+        _feature_time: "-2020..2022",
+        _special: "fav",
+    }
 }

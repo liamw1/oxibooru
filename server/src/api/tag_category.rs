@@ -3,8 +3,8 @@ use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
 use crate::app::AppState;
 use crate::auth::Client;
-use crate::config::RegexType;
-use crate::model::enums::{ResourceProperty, ResourceType};
+use crate::config::{Config, RegexType};
+use crate::model::enums::{ResourceProperty, ResourceType, UserRank};
 use crate::model::tag_category::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::schema::{tag, tag_category};
@@ -13,7 +13,9 @@ use crate::time::DateTime;
 use crate::{api, resource, snapshot};
 use axum::extract::{Extension, State};
 use axum::{Router, routing};
-use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
+use diesel::{
+    Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
+};
 use serde::Deserialize;
 
 pub fn routes() -> Router<AppState> {
@@ -23,7 +25,7 @@ pub fn routes() -> Router<AppState> {
         .route("/tag-category/{name}/default", routing::put(set_default))
 }
 
-/// See [listing-tag-categories](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-tag-categories)
+/// See [listing-tag-categories](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-tag-categories)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -34,28 +36,24 @@ async fn list(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state
         .get_connection()?
-        .transaction(|conn| TagCategoryInfo::all(conn, &fields))
+        .transaction(|conn| TagCategoryInfo::all(conn, &state.config, client, &fields))
         .map(|results| UnpagedResponse { results })
         .map(Json)
         .map_err(ApiError::from)
 }
 
-/// See [getting-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag-category)
+/// See [getting-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-tag-category)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
     api::verify_privilege(client, state.config.privileges().tag_category_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let category = tag_category::table
-            .filter(tag_category::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+        let category = verify_visibility(conn, &state.config, client, &name)?;
         TagCategoryInfo::new(conn, category, &fields)
             .map(Json)
             .map_err(ApiError::from)
@@ -70,7 +68,7 @@ struct CreateBody {
     color: SmallString,
 }
 
-/// See [creating-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-tag-category)
+/// See [creating-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-tag-category)
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -113,11 +111,11 @@ struct UpdateBody {
     color: Option<SmallString>,
 }
 
-/// See [updating-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-tag-category)
+/// See [updating-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-tag-category)
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
@@ -158,11 +156,11 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [setting-default-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#setting-default-tag-category)
+/// See [setting-default-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#setting-default-tag-category)
 async fn set_default(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
     api::verify_privilege(client, state.config.privileges().tag_category_set_default)?;
@@ -216,11 +214,11 @@ async fn set_default(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-tag-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-tag-category)
+/// See [deleting-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-tag-category)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().tag_category_delete)?;
@@ -242,10 +240,32 @@ async fn delete(
     })
 }
 
+fn verify_visibility(
+    conn: &mut PgConnection,
+    config: &Config,
+    client: Client,
+    category_name: &SmallString,
+) -> ApiResult<TagCategory> {
+    if client.rank == UserRank::Anonymous
+        && config
+            .anonymous_preferences
+            .tag_category_blacklist
+            .contains(category_name)
+    {
+        return Err(ApiError::Hidden(ResourceType::TagCategory));
+    }
+
+    tag_category::table
+        .filter(tag_category::name.eq(category_name))
+        .first(conn)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::TagCategory))
+}
+
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
-    use crate::model::enums::ResourceType;
+    use crate::model::enums::{ResourceType, UserRank};
     use crate::model::tag_category::TagCategory;
     use crate::schema::{tag_category, tag_category_statistics};
     use crate::test::*;
@@ -259,7 +279,7 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn list() -> ApiResult<()> {
-        verify_query(&format!("GET /tag-categories/?{FIELDS}"), "tag_category/list").await
+        verify_response(&format!("GET /tag-categories/?{FIELDS}"), "tag_category/list").await
     }
 
     #[tokio::test]
@@ -276,7 +296,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /tag-category/{NAME}/?{FIELDS}"), "tag_category/get").await?;
+        verify_response(&format!("GET /tag-category/{NAME}/?{FIELDS}"), "tag_category/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -289,7 +309,7 @@ mod test {
         let mut conn = get_connection()?;
         let category_count: i64 = tag_category::table.count().first(&mut conn)?;
 
-        verify_query(&format!("POST /tag-categories/?{FIELDS}"), "tag_category/create").await?;
+        verify_response(&format!("POST /tag-categories/?{FIELDS}"), "tag_category/create").await?;
 
         let category_name: String = tag_category::table
             .select(tag_category::name)
@@ -305,7 +325,7 @@ mod test {
         assert_eq!(new_category_count, category_count + 1);
         assert_eq!(usage_count, 0);
 
-        verify_query(&format!("DELETE /tag-category/{category_name}"), "tag_category/delete").await?;
+        verify_response(&format!("DELETE /tag-category/{category_name}"), "tag_category/delete").await?;
 
         let new_category_count: i64 = tag_category::table.count().first(&mut conn)?;
         assert_eq!(new_category_count, category_count);
@@ -322,7 +342,7 @@ mod test {
             .filter(tag_category::name.eq(NAME))
             .first(&mut conn)?;
 
-        verify_query(&format!("PUT /tag-category/{NAME}/?{FIELDS}"), "tag_category/edit").await?;
+        verify_response(&format!("PUT /tag-category/{NAME}/?{FIELDS}"), "tag_category/edit").await?;
 
         let updated_category: TagCategory = tag_category::table
             .filter(tag_category::id.eq(category.id))
@@ -332,7 +352,7 @@ mod test {
         assert!(updated_category.last_edit_time > category.last_edit_time);
 
         let new_name = updated_category.name;
-        verify_query(&format!("PUT /tag-category/{new_name}/?{FIELDS}"), "tag_category/edit_restore").await
+        verify_response(&format!("PUT /tag-category/{new_name}/?{FIELDS}"), "tag_category/edit_restore").await
     }
 
     #[tokio::test]
@@ -347,13 +367,14 @@ mod test {
             Ok(category_id == 0)
         };
 
-        verify_query(&format!("PUT /tag-category/{NAME}/default/?{FIELDS}"), "tag_category/set_default").await?;
+        verify_response(&format!("PUT /tag-category/{NAME}/default/?{FIELDS}"), "tag_category/set_default").await?;
 
         let mut conn = get_connection()?;
         let default = is_default(&mut conn)?;
         assert!(default);
 
-        verify_query(&format!("PUT /tag-category/default/default/?{FIELDS}"), "tag_category/restore_default").await?;
+        verify_response(&format!("PUT /tag-category/default/default/?{FIELDS}"), "tag_category/restore_default")
+            .await?;
 
         let default = is_default(&mut conn)?;
         assert!(!default);
@@ -362,17 +383,30 @@ mod test {
 
     #[tokio::test]
     #[parallel]
-    async fn error() -> ApiResult<()> {
-        verify_query("GET /tag-category/none", "tag_category/get_nonexistent").await?;
-        verify_query("PUT /tag-category/none", "tag_category/edit_nonexistent").await?;
-        verify_query("PUT /tag-category/none/default", "tag_category/default_nonexistent").await?;
-        verify_query("DELETE /tag-category/none", "tag_category/delete_nonexistent").await?;
+    async fn preferences() -> ApiResult<()> {
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /tag-categories/?fields=name",
+            "tag_category/list_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /tag-category/meta", "tag_category/get_with_preferences")
+            .await
+    }
 
-        verify_query("POST /tag-categories", "tag_category/create_invalid").await?;
-        verify_query("POST /tag-categories", "tag_category/create_name_clash").await?;
-        verify_query("PUT /tag-category/default", "tag_category/edit_invalid").await?;
-        verify_query("PUT /tag-category/default", "tag_category/edit_name_clash").await?;
-        verify_query("DELETE /tag-category/default", "tag_category/delete_default").await?;
+    #[tokio::test]
+    #[parallel]
+    async fn error() -> ApiResult<()> {
+        verify_response("GET /tag-category/none", "tag_category/get_nonexistent").await?;
+        verify_response("PUT /tag-category/none", "tag_category/edit_nonexistent").await?;
+        verify_response("PUT /tag-category/none/default", "tag_category/default_nonexistent").await?;
+        verify_response("DELETE /tag-category/none", "tag_category/delete_nonexistent").await?;
+
+        verify_response("POST /tag-categories", "tag_category/create_invalid").await?;
+        verify_response("POST /tag-categories", "tag_category/create_name_clash").await?;
+        verify_response("PUT /tag-category/default", "tag_category/edit_invalid").await?;
+        verify_response("PUT /tag-category/default", "tag_category/edit_name_clash").await?;
+        verify_response("DELETE /tag-category/default", "tag_category/delete_default").await?;
 
         reset_sequence(ResourceType::PoolCategory)?;
         Ok(())

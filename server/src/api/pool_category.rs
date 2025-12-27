@@ -23,7 +23,7 @@ pub fn routes() -> Router<AppState> {
         .route("/pool-category/{name}/default", routing::put(set_default))
 }
 
-/// See [listing-pool-categories](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-pool-categories)
+/// See [listing-pool-categories](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-pool-categories)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -40,11 +40,11 @@ async fn list(
         .map_err(ApiError::from)
 }
 
-/// See [getting-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-pool-category)
+/// See [getting-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-pool-category)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     api::verify_privilege(client, state.config.privileges().pool_category_view)?;
@@ -69,7 +69,7 @@ struct CreateBody {
     color: SmallString,
 }
 
-/// See [creating-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-pool-category)
+/// See [creating-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-pool-category)
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -110,11 +110,11 @@ struct UpdateBody {
     color: Option<SmallString>,
 }
 
-/// See [updating-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-pool-category)
+/// See [updating-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-pool-category)
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
@@ -151,11 +151,11 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [setting-default-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#setting-default-pool-category)
+/// See [setting-default-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#setting-default-pool-category)
 async fn set_default(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     api::verify_privilege(client, state.config.privileges().pool_category_set_default)?;
@@ -210,11 +210,11 @@ async fn set_default(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-pool-category](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-pool-category)
+/// See [deleting-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-pool-category)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().pool_category_delete)?;
@@ -254,7 +254,7 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn list() -> ApiResult<()> {
-        verify_query(&format!("GET /pool-categories/?{FIELDS}"), "pool_category/list").await
+        verify_response(&format!("GET /pool-categories/?{FIELDS}"), "pool_category/list").await
     }
 
     #[tokio::test]
@@ -271,7 +271,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /pool-category/{NAME}/?{FIELDS}"), "pool_category/get").await?;
+        verify_response(&format!("GET /pool-category/{NAME}/?{FIELDS}"), "pool_category/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -284,7 +284,7 @@ mod test {
         let mut conn = get_connection()?;
         let category_count: i64 = pool_category::table.count().first(&mut conn)?;
 
-        verify_query(&format!("POST /pool-categories/?{FIELDS}"), "pool_category/create").await?;
+        verify_response(&format!("POST /pool-categories/?{FIELDS}"), "pool_category/create").await?;
 
         let category_name: SmallString = pool_category::table
             .select(pool_category::name)
@@ -300,7 +300,7 @@ mod test {
         assert_eq!(new_category_count, category_count + 1);
         assert_eq!(usage_count, 0);
 
-        verify_query(&format!("DELETE /pool-category/{category_name}"), "pool_category/delete").await?;
+        verify_response(&format!("DELETE /pool-category/{category_name}"), "pool_category/delete").await?;
 
         let new_category_count: i64 = pool_category::table.count().first(&mut conn)?;
         assert_eq!(new_category_count, category_count);
@@ -317,7 +317,7 @@ mod test {
             .filter(pool_category::name.eq(NAME))
             .first(&mut conn)?;
 
-        verify_query(&format!("PUT /pool-category/{NAME}/?{FIELDS}"), "pool_category/edit").await?;
+        verify_response(&format!("PUT /pool-category/{NAME}/?{FIELDS}"), "pool_category/edit").await?;
 
         let updated_category: PoolCategory = pool_category::table
             .filter(pool_category::id.eq(category.id))
@@ -327,7 +327,7 @@ mod test {
         assert!(updated_category.last_edit_time > category.last_edit_time);
 
         let new_name = updated_category.name;
-        verify_query(&format!("PUT /pool-category/{new_name}/?{FIELDS}"), "pool_category/edit_restore").await
+        verify_response(&format!("PUT /pool-category/{new_name}/?{FIELDS}"), "pool_category/edit_restore").await
     }
 
     #[tokio::test]
@@ -342,13 +342,14 @@ mod test {
             Ok(category_id == 0)
         };
 
-        verify_query(&format!("PUT /pool-category/{NAME}/default/?{FIELDS}"), "pool_category/set_default").await?;
+        verify_response(&format!("PUT /pool-category/{NAME}/default/?{FIELDS}"), "pool_category/set_default").await?;
 
         let mut conn = get_connection()?;
         let default = is_default(&mut conn)?;
         assert!(default);
 
-        verify_query(&format!("PUT /pool-category/default/default/?{FIELDS}"), "pool_category/restore_default").await?;
+        verify_response(&format!("PUT /pool-category/default/default/?{FIELDS}"), "pool_category/restore_default")
+            .await?;
 
         let default = is_default(&mut conn)?;
         assert!(!default);
@@ -358,16 +359,16 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /pool-category/none", "pool_category/get_nonexistent").await?;
-        verify_query("PUT /pool-category/none", "pool_category/edit_nonexistent").await?;
-        verify_query("PUT /pool-category/none/default", "pool_category/default_nonexistent").await?;
-        verify_query("DELETE /pool-category/none", "pool_category/delete_nonexistent").await?;
+        verify_response("GET /pool-category/none", "pool_category/get_nonexistent").await?;
+        verify_response("PUT /pool-category/none", "pool_category/edit_nonexistent").await?;
+        verify_response("PUT /pool-category/none/default", "pool_category/default_nonexistent").await?;
+        verify_response("DELETE /pool-category/none", "pool_category/delete_nonexistent").await?;
 
-        verify_query("POST /pool-categories", "pool_category/create_invalid").await?;
-        verify_query("POST /pool-categories", "pool_category/create_name_clash").await?;
-        verify_query("PUT /pool-category/default", "pool_category/edit_invalid").await?;
-        verify_query("PUT /pool-category/default", "pool_category/edit_name_clash").await?;
-        verify_query("DELETE /pool-category/default", "pool_category/delete_default").await?;
+        verify_response("POST /pool-categories", "pool_category/create_invalid").await?;
+        verify_response("POST /pool-categories", "pool_category/create_name_clash").await?;
+        verify_response("PUT /pool-category/default", "pool_category/edit_invalid").await?;
+        verify_response("PUT /pool-category/default", "pool_category/edit_name_clash").await?;
+        verify_response("DELETE /pool-category/default", "pool_category/delete_default").await?;
 
         reset_sequence(ResourceType::PoolCategory)?;
         Ok(())

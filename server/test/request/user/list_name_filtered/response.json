@@ -1,0 +1,17 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "name:*user* -sort:name",
+    "results": [
+        {
+            "name": "power_user"
+        },
+        {
+            "name": "regular_user"
+        },
+        {
+            "name": "restricted_user"
+        }
+    ],
+    "total": 3
+}

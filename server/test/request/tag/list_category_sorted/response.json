@@ -1,0 +1,172 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "sort:category -sort:name",
+    "results": [
+        {
+            "names": [
+                "desert"
+            ]
+        },
+        {
+            "names": [
+                "forest",
+                "woods"
+            ]
+        },
+        {
+            "names": [
+                "night"
+            ]
+        },
+        {
+            "names": [
+                "night_sky"
+            ]
+        },
+        {
+            "names": [
+                "plant",
+                "foliage"
+            ]
+        },
+        {
+            "names": [
+                "river",
+                "stream",
+                "creek"
+            ]
+        },
+        {
+            "names": [
+                "rock",
+                "stone"
+            ]
+        },
+        {
+            "names": [
+                "sand"
+            ]
+        },
+        {
+            "names": [
+                "sky"
+            ]
+        },
+        {
+            "names": [
+                "tree"
+            ]
+        },
+        {
+            "names": [
+                "water",
+                "agua"
+            ]
+        },
+        {
+            "names": [
+                "classic_literature"
+            ]
+        },
+        {
+            "names": [
+                "sekiro"
+            ]
+        },
+        {
+            "names": [
+                "star_wars"
+            ]
+        },
+        {
+            "names": [
+                "16:9_aspect_ratio"
+            ]
+        },
+        {
+            "names": [
+                "high_resolution",
+                "high_res"
+            ]
+        },
+        {
+            "names": [
+                "tagme",
+                "tag_me"
+            ]
+        },
+        {
+            "names": [
+                "admiral_ackbar"
+            ]
+        },
+        {
+            "names": [
+                "black_hat_badger"
+            ]
+        },
+        {
+            "names": [
+                "claudius"
+            ]
+        },
+        {
+            "names": [
+                "darth_vader",
+                "annakin_skywalker"
+            ]
+        },
+        {
+            "names": [
+                "isshin_ashina"
+            ]
+        },
+        {
+            "names": [
+                "kuro"
+            ]
+        },
+        {
+            "names": [
+                "laertes"
+            ]
+        },
+        {
+            "names": [
+                "luke_skywalker"
+            ]
+        },
+        {
+            "names": [
+                "ophelia"
+            ]
+        },
+        {
+            "names": [
+                "princess_leia"
+            ]
+        },
+        {
+            "names": [
+                "sekiro_(sekiro)"
+            ]
+        },
+        {
+            "names": [
+                "george_lucas"
+            ]
+        },
+        {
+            "names": [
+                "hidetaka_miyazaki"
+            ]
+        },
+        {
+            "names": [
+                "shakespeare"
+            ]
+        }
+    ],
+    "total": 31
+}

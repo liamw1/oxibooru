@@ -1,0 +1,5 @@
+{
+    "description": "Cannot create an anonymous user",
+    "name": "InvalidUserRank",
+    "title": "Invalid User Rank"
+}

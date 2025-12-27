@@ -41,7 +41,7 @@ pub fn routes() -> Router<AppState> {
 
 const MAX_USERS_PER_PAGE: i64 = 1000;
 
-/// See [listing-users](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-users)
+/// See [listing-users](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-users)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -74,11 +74,11 @@ async fn list(
     })
 }
 
-/// See [getting-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
+/// See [getting-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-user)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UserInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
@@ -121,7 +121,7 @@ struct CreateBody {
     avatar_url: Option<Url>,
 }
 
-/// See [creating-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
+/// See [creating-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-user)
 async fn create(
     state: AppState,
     client: Client,
@@ -242,11 +242,11 @@ struct UpdateBody {
     avatar_url: Option<Url>,
 }
 
-/// See [updating-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-user)
+/// See [updating-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-user)
 async fn update(
     state: AppState,
     client: Client,
-    username: String,
+    username: &str,
     params: ResourceParams,
     body: UpdateBody,
 ) -> ApiResult<Json<UserInfo>> {
@@ -307,6 +307,10 @@ async fn update(
             error::map_unique_violation(update_result, ResourceProperty::UserEmail)?;
         }
         if let Some(rank) = body.rank {
+            if rank == UserRank::Anonymous {
+                return Err(ApiError::InvalidUserRank);
+            }
+
             let required_rank = if editing_self {
                 state.config.privileges().user_edit_self_rank
             } else {
@@ -341,7 +345,7 @@ async fn update(
             };
             api::verify_privilege(client, required_rank)?;
 
-            update::user::avatar(conn, &state.config, user_id, &username, &avatar)?;
+            update::user::avatar(conn, &state.config, user_id, username, &avatar)?;
         }
         if let Some(new_name) = body.name.as_deref() {
             let required_rank = if editing_self {
@@ -358,7 +362,7 @@ async fn update(
                 .execute(conn);
             error::map_unique_violation(update_result, ResourceProperty::UserName)?;
 
-            let old_custom_avatar_path = state.config.custom_avatar_path(&username);
+            let old_custom_avatar_path = state.config.custom_avatar_path(username);
             if old_custom_avatar_path.try_exists()? {
                 let new_custom_avatar_path = state.config.custom_avatar_path(new_name);
                 filesystem::move_file(&old_custom_avatar_path, &new_custom_avatar_path)?;
@@ -377,19 +381,19 @@ async fn update(
 async fn update_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams>,
     body: JsonOrMultipart<UpdateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => update(state, client, username, params, payload).await,
+        JsonOrMultipart::Json(payload) => update(state, client, &username, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut user_update: UpdateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar)] = decoded_body.files {
                 user_update.avatar = Some(avatar);
-                update(state, client, username, params, user_update).await
+                update(state, client, &username, params, user_update).await
             } else {
                 Err(ApiError::MissingFormData)
             }
@@ -397,11 +401,11 @@ async fn update_handler(
     }
 }
 
-/// See [deleting-user](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-user)
+/// See [deleting-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-user)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(username): Path<String>,
+    Path(username): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     state.get_connection()?.transaction(|conn| {
@@ -432,11 +436,13 @@ mod test {
     use crate::model::enums::{ResourceType, UserRank};
     use crate::model::user::User;
     use crate::schema::{database_statistics, user, user_statistics};
+    use crate::search::user::Token;
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
     use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
     use serial_test::{parallel, serial};
+    use strum::IntoEnumIterator;
 
     // Exclude fields that involve creation_time or last_edit_time
     const FIELDS: &str = "&fields=name,email,rank,avatarStyle,avatarUrl,commentCount,uploadedPostCount,likedPostCount,dislikedPostCount,favoritePostCount";
@@ -445,9 +451,26 @@ mod test {
     #[parallel]
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /users/?query";
-        const SORT: &str = "-sort:name&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "user/list").await?;
-        verify_query(&format!("{QUERY}=name:*user* {SORT}{FIELDS}"), "user/list_has_user_in_name").await
+        const PARAMS: &str = "-sort:name&limit=40&fields=name";
+        verify_response(&format!("{QUERY}=-sort:name&limit=40{FIELDS}"), "user/list").await?;
+
+        let filter_table = crate::search::user::filter_table();
+        for token in Token::iter() {
+            let filter = filter_table[token];
+            let (sign, filter) = if filter.starts_with('-') {
+                filter.split_at(1)
+            } else {
+                ("", filter)
+            };
+            let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
+            let path = format!("user/list_{token}_filtered");
+            verify_response(&query, &path).await?;
+
+            let query = format!("{QUERY}=sort:{token} {PARAMS}");
+            let path = format!("user/list_{token}_sorted");
+            verify_response(&query, &path).await?;
+        }
+        Ok(())
     }
 
     #[tokio::test]
@@ -464,8 +487,8 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /user/{NAME}/?{FIELDS}"), "user/get").await?;
-        verify_query_with_user(UserRank::Regular, &format!("GET /user/{NAME}/?{FIELDS}"), "user/get_self").await?;
+        verify_response(&format!("GET /user/{NAME}/?{FIELDS}"), "user/get").await?;
+        verify_response_with_user(UserRank::Regular, &format!("GET /user/{NAME}/?{FIELDS}"), "user/get_self").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -484,7 +507,7 @@ mod test {
         let mut conn = get_connection()?;
         let user_count = get_user_count(&mut conn)?;
 
-        verify_query(&format!("POST /users/?{FIELDS}"), "user/create").await?;
+        verify_response(&format!("POST /users/?{FIELDS}"), "user/create").await?;
 
         let (user_id, name): (i64, String) = user::table
             .select((user::id, user::name))
@@ -494,7 +517,7 @@ mod test {
         let new_user_count = get_user_count(&mut conn)?;
         assert_eq!(new_user_count, user_count + 1);
 
-        verify_query(&format!("DELETE /user/{name}"), "user/delete").await?;
+        verify_response(&format!("DELETE /user/{name}"), "user/delete").await?;
 
         let new_user_count = get_user_count(&mut conn)?;
         let has_user: bool = diesel::select(exists(user::table.find(user_id))).first(&mut conn)?;
@@ -529,7 +552,7 @@ mod test {
 
         let (user, comment_count, favorite_count, upload_count) = get_user_info(&mut conn)?;
 
-        verify_query(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/edit").await?;
+        verify_response(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/edit").await?;
 
         let (new_user, new_comment_count, new_favorite_count, new_upload_count) = get_user_info(&mut conn)?;
         assert_eq!(new_user.id, user.id);
@@ -547,7 +570,7 @@ mod test {
         assert_eq!(new_upload_count, upload_count);
 
         let new_name = &new_user.name;
-        verify_query(&format!("PUT /user/{new_name}/?{FIELDS}"), "user/edit_restore").await?;
+        verify_response(&format!("PUT /user/{new_name}/?{FIELDS}"), "user/edit_restore").await?;
 
         let (new_user, new_comment_count, new_favorite_count, new_upload_count) = get_user_info(&mut conn)?;
         assert_eq!(new_user.id, user.id);
@@ -569,32 +592,34 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /user/fake_user", "user/get_nonexistent").await?;
-        verify_query("PUT /user/fake_user", "user/edit_nonexistent").await?;
-        verify_query("DELETE /user/fake_user", "user/delete_nonexistent").await?;
+        verify_response("GET /user/fake_user", "user/get_nonexistent").await?;
+        verify_response("PUT /user/fake_user", "user/edit_nonexistent").await?;
+        verify_response("DELETE /user/fake_user", "user/delete_nonexistent").await?;
 
-        verify_query("POST /users", "user/create_name_clash").await?;
-        verify_query("POST /users", "user/create_email_clash").await?;
-        verify_query("POST /users", "user/create_invalid_name").await?;
-        verify_query("POST /users", "user/create_invalid_rank").await?;
-        verify_query("POST /users", "user/create_invalid_email").await?;
-        verify_query("POST /users", "user/create_invalid_password").await?;
-        verify_query("POST /users", "user/create_missing_custom_avatar").await?;
+        verify_response("POST /users", "user/create_anonymous").await?;
+        verify_response("POST /users", "user/create_name_clash").await?;
+        verify_response("POST /users", "user/create_email_clash").await?;
+        verify_response("POST /users", "user/create_invalid_name").await?;
+        verify_response("POST /users", "user/create_invalid_rank").await?;
+        verify_response("POST /users", "user/create_invalid_email").await?;
+        verify_response("POST /users", "user/create_invalid_password").await?;
+        verify_response("POST /users", "user/create_missing_custom_avatar").await?;
 
-        verify_query("PUT /user/regular_user", "user/edit_name_clash").await?;
-        verify_query("PUT /user/regular_user", "user/edit_email_clash").await?;
-        verify_query("PUT /user/regular_user", "user/edit_invalid_name").await?;
-        verify_query("PUT /user/regular_user", "user/edit_invalid_rank").await?;
-        verify_query("PUT /user/regular_user", "user/edit_invalid_email").await?;
-        verify_query("PUT /user/regular_user", "user/edit_invalid_password").await?;
-        verify_query("PUT /user/regular_user", "user/edit_missing_custom_avatar").await?;
+        verify_response("PUT /user/regular_user", "user/edit_anonymous").await?;
+        verify_response("PUT /user/regular_user", "user/edit_name_clash").await?;
+        verify_response("PUT /user/regular_user", "user/edit_email_clash").await?;
+        verify_response("PUT /user/regular_user", "user/edit_invalid_name").await?;
+        verify_response("PUT /user/regular_user", "user/edit_invalid_rank").await?;
+        verify_response("PUT /user/regular_user", "user/edit_invalid_email").await?;
+        verify_response("PUT /user/regular_user", "user/edit_invalid_password").await?;
+        verify_response("PUT /user/regular_user", "user/edit_missing_custom_avatar").await?;
 
         // User has permissions to edit/delete self, but not another
-        verify_query_with_user(UserRank::Regular, "PUT /user/power_user", "user/edit_another").await?;
-        verify_query_with_user(UserRank::Regular, "DELETE /user/power_user", "user/delete_another").await?;
+        verify_response_with_user(UserRank::Regular, "PUT /user/power_user", "user/edit_another").await?;
+        verify_response_with_user(UserRank::Regular, "DELETE /user/power_user", "user/delete_another").await?;
 
-        verify_query_with_user(UserRank::Regular, "POST /users", "user/create_higher_rank").await?;
-        verify_query_with_user(UserRank::Regular, "PUT /user/restricted_user", "user/edit_higher_rank").await?;
+        verify_response_with_user(UserRank::Regular, "POST /users", "user/create_higher_rank").await?;
+        verify_response_with_user(UserRank::Regular, "PUT /user/restricted_user", "user/edit_higher_rank").await?;
 
         reset_sequence(ResourceType::User)?;
         Ok(())

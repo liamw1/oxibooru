@@ -1,0 +1,57 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "-sort:creation-time",
+    "results": [
+        {
+            "id": 1,
+            "postCount": 0,
+            "posts": []
+        },
+        {
+            "id": 2,
+            "postCount": 3,
+            "posts": [
+                {
+                    "id": 2,
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
+                },
+                {
+                    "id": 5,
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.jpg"
+                }
+            ]
+        },
+        {
+            "id": 3,
+            "postCount": 0,
+            "posts": []
+        },
+        {
+            "id": 4,
+            "postCount": 1,
+            "posts": [
+                {
+                    "id": 2,
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
+                }
+            ]
+        },
+        {
+            "id": 5,
+            "postCount": 1,
+            "posts": []
+        },
+        {
+            "id": 6,
+            "postCount": 1,
+            "posts": [
+                {
+                    "id": 5,
+                    "thumbnailUrl": "data/generated-thumbnails/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.jpg"
+                }
+            ]
+        }
+    ],
+    "total": 6
+}

@@ -71,42 +71,20 @@ macro_rules! apply_distinct_if_multivalued {
     };
 }
 
-/// Stores the results of a complex filter to one of the TEMP tables.
-/// Positive filter results will be intersected with the `matching` table while
-/// negative filter results will be unioned with the `nonmatching` table.
-///
-/// `filtered_ids` should be a query that returns the IDs of the resources matching the unnegated filter.
-/// `column` should be a column that represents the ID of the resource.
 #[macro_export]
-macro_rules! update_filter_cache {
-    ($conn:expr, $filtered_ids:expr, $column:expr, $filter:expr, $state:expr) => {{
+macro_rules! update_matching_filter_cache {
+    ($conn:expr, $filtered_ids:expr, $column:expr, $state:expr) => {
         if !$state.completed {
-            if $filter.negated {
-                // Nonmatches are unioned
-                let insert_statement = diesel::insert_into($crate::search::temp::nonmatching::table)
-                    .values($filtered_ids)
-                    .into_columns($crate::search::temp::nonmatching::id);
-
-                if $state.has_nonmatching {
-                    // Avoid primary key conflicts if nonmatching table already has rows
-                    insert_statement.on_conflict_do_nothing().execute($conn)
-                } else {
-                    $state.has_nonmatching = true;
-                    diesel::sql_query("CREATE TEMP TABLE nonmatching (id BIGINT PRIMARY KEY) ON COMMIT DROP")
-                        .execute($conn)?;
-
-                    insert_statement.execute($conn)
-                }
-            } else if $state.has_matching {
+            if $state.has_matching {
                 // Matches are intersected
-                let intersecting_subselect = $filtered_ids
+                let intersecting_subquery = $filtered_ids
                     .select(diesel::dsl::sql::<diesel::sql_types::Integer>("0"))
                     .filter(
                         diesel::dsl::sql::<diesel::sql_types::Bool>("")
                             .bind($column.eq($crate::search::temp::matching::id)),
                     );
                 diesel::delete($crate::search::temp::matching::table)
-                    .filter(diesel::dsl::not(diesel::dsl::exists(intersecting_subselect)))
+                    .filter(diesel::dsl::not(diesel::dsl::exists(intersecting_subquery)))
                     .execute($conn)
             } else {
                 $state.has_matching = true;
@@ -122,7 +100,49 @@ macro_rules! update_filter_cache {
         } else {
             Ok(0)
         }
-    }};
+    };
+}
+
+#[macro_export]
+macro_rules! update_nonmatching_filter_cache {
+    ($conn:expr, $filtered_ids:expr, $state:expr) => {
+        if !$state.completed {
+            // Nonmatches are unioned
+            let insert_statement = diesel::insert_into($crate::search::temp::nonmatching::table)
+                .values($filtered_ids)
+                .into_columns($crate::search::temp::nonmatching::id);
+
+            if $state.has_nonmatching {
+                // Avoid primary key conflicts if nonmatching table already has rows
+                insert_statement.on_conflict_do_nothing().execute($conn)
+            } else {
+                $state.has_nonmatching = true;
+                diesel::sql_query("CREATE TEMP TABLE nonmatching (id BIGINT PRIMARY KEY) ON COMMIT DROP")
+                    .execute($conn)?;
+
+                insert_statement.execute($conn)
+            }
+        } else {
+            Ok(0)
+        }
+    };
+}
+
+/// Stores the results of a complex filter to one of the TEMP tables.
+/// Positive filter results will be intersected with the `matching` table while
+/// negative filter results will be unioned with the `nonmatching` table.
+///
+/// `filtered_ids` should be a query that returns the IDs of the resources matching the unnegated filter.
+/// `column` should be a column that represents the ID of the resource.
+#[macro_export]
+macro_rules! update_filter_cache {
+    ($conn:expr, $filtered_ids:expr, $column:expr, $filter:expr, $state:expr) => {
+        if $filter.negated {
+            $crate::update_nonmatching_filter_cache!($conn, $filtered_ids, $state)
+        } else {
+            $crate::update_matching_filter_cache!($conn, $filtered_ids, $column, $state)
+        }
+    };
 }
 
 /// Applies the cached results in the `matching` and `nonmatching` TEMP tables
@@ -134,18 +154,18 @@ macro_rules! apply_cache_filters {
     ($query:expr, $column:expr, $state:expr) => {{
         $state.completed = true;
         let query = if $state.has_matching {
-            let matching_subselect = $crate::search::temp::matching::table
+            let matching_subquery = $crate::search::temp::matching::table
                 .select(diesel::dsl::sql::<diesel::sql_types::Integer>("0"))
                 .filter($crate::search::temp::matching::id.eq($column));
-            $query.filter(diesel::dsl::exists(matching_subselect))
+            $query.filter(diesel::dsl::exists(matching_subquery))
         } else {
             $query
         };
         if $state.has_nonmatching {
-            let nonmatching_subselect = $crate::search::temp::nonmatching::table
+            let nonmatching_subquery = $crate::search::temp::nonmatching::table
                 .select(diesel::dsl::sql::<diesel::sql_types::Integer>("0"))
                 .filter($crate::search::temp::nonmatching::id.eq($column));
-            query.filter(diesel::dsl::not(diesel::dsl::exists(nonmatching_subselect)))
+            query.filter(diesel::dsl::not(diesel::dsl::exists(nonmatching_subquery)))
         } else {
             query
         }
@@ -171,7 +191,7 @@ macro_rules! apply_random_sort {
     ($conn:expr, $client:expr, $query:expr, $criteria:expr) => {{
         if let Err(err) = $crate::search::set_seed($conn, $client) {
             tracing::warn!(
-                "Unable to set seed for random sort. Results may not be consistent between queries. Details:\n{err}"
+                "Unable to set seed for random sort. Results may not be consistent between requests. Details:\n{err}"
             );
         }
         match $criteria.extra_args {

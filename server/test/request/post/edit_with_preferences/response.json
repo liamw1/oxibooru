@@ -1,0 +1,14 @@
+{
+    "id": 1,
+    "relationCount": 3,
+    "relations": [
+        {
+            "id": 2,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
+        },
+        {
+            "id": 4,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/4_78-cbid-2Ci2jMEqspr2LjF8OTP0kQUVVlCb53twMRw.jpg"
+        }
+    ]
+}

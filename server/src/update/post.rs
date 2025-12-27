@@ -1,4 +1,5 @@
 use crate::api::error::{self, ApiResult};
+use crate::auth::Client;
 use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::ThumbnailCategory;
@@ -14,7 +15,9 @@ use crate::schema::{
     comment, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature,
     post_tag,
 };
+use crate::search::preferences;
 use crate::time::DateTime;
+use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use image::DynamicImage;
 use std::collections::HashSet;
@@ -48,12 +51,22 @@ pub fn thumbnail(
 }
 
 /// Replaces the current set of relations with `relations` for post associated with `post_id`.
-pub fn set_relations(conn: &mut PgConnection, post_id: i64, new_related_posts: &[i64]) -> ApiResult<()> {
-    let new_relations: Vec<_> = new_related_posts
-        .iter()
-        .filter(|&&id| id != post_id)
-        .flat_map(|&other_id| PostRelation::new_pair(post_id, other_id))
-        .collect();
+pub fn set_relations(
+    conn: &mut PgConnection,
+    config: &Config,
+    client: Client,
+    post_id: i64,
+    new_related_posts: &mut Vec<i64>,
+) -> ApiResult<()> {
+    // Add relations client doesn't know about
+    if let Some(hidden_posts) = preferences::hidden_posts(config, client, post_relation::child_id) {
+        let hidden_relations: Vec<i64> = post_relation::table
+            .select(post_relation::child_id)
+            .filter(post_relation::parent_id.eq(post_id))
+            .filter(exists(hidden_posts))
+            .load(conn)?;
+        new_related_posts.extend(hidden_relations);
+    }
 
     // Delete old relations and return old related posts ids.
     // Post relations are bi-directional, so it doesn't matter whether we return parent_id or child_id.
@@ -62,19 +75,31 @@ pub fn set_relations(conn: &mut PgConnection, post_id: i64, new_related_posts: &
         .or_filter(post_relation::child_id.eq(post_id))
         .returning(post_relation::child_id)
         .get_results(conn)?;
-    let insert_result = new_relations.insert_into(post_relation::table).execute(conn);
-    error::map_unique_or_foreign_key_violation(insert_result, ResourceProperty::PostRelation, ResourceType::Post)?;
+
+    add_relations(conn, post_id, new_related_posts)?;
 
     // Update last edit time for any posts involved in removed or added relations.
     let updated_posts: Vec<_> = old_related_posts
         .iter()
-        .chain(new_related_posts)
+        .chain(new_related_posts.iter())
         .filter(|&&id| id != post_id)
         .collect();
     diesel::update(post::table)
         .set(post::last_edit_time.eq(DateTime::now()))
         .filter(post::id.eq_any(updated_posts))
         .execute(conn)?;
+    Ok(())
+}
+
+/// Inserts relations between `post_id` and `new_related_posts`, bidirectionally.
+pub fn add_relations(conn: &mut PgConnection, post_id: i64, new_related_posts: &[i64]) -> ApiResult<()> {
+    let new_relations: Vec<_> = new_related_posts
+        .iter()
+        .filter(|&&id| id != post_id)
+        .flat_map(|&other_id| PostRelation::new_pair(post_id, other_id))
+        .collect();
+    let insert_result = new_relations.insert_into(post_relation::table).execute(conn);
+    error::map_unique_or_foreign_key_violation(insert_result, ResourceProperty::PostRelation, ResourceType::Post)?;
     Ok(())
 }
 

@@ -1,0 +1,7 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "last-login-time:2000..2001 -sort:name",
+    "results": [],
+    "total": 0
+}

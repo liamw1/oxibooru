@@ -1,0 +1,26 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "-last-edit-time:2000..2020 -sort:creation-time",
+    "results": [
+        {
+            "id": 1
+        },
+        {
+            "id": 2
+        },
+        {
+            "id": 3
+        },
+        {
+            "id": 4
+        },
+        {
+            "id": 5
+        },
+        {
+            "id": 6
+        }
+    ],
+    "total": 6
+}

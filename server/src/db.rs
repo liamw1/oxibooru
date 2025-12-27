@@ -20,21 +20,23 @@ pub type ConnectionResult = Result<Connection, PoolError>;
 
 /// Creates a connection pool to the database.
 pub fn create_connection_pool() -> ConnectionPool {
-    assert!(!cfg!(test), "Connection to production database disallowed in test build!");
+    if cfg!(test) {
+        panic!("Connection to production database disallowed in test build!")
+    } else {
+        let num_tokio_threads = tokio::runtime::Handle::try_current()
+            .map(|handle| handle.metrics().num_workers())
+            .unwrap_or(1);
+        let num_threads = std::cmp::max(num_tokio_threads, app::num_rayon_threads()) as u32;
 
-    let num_tokio_threads = tokio::runtime::Handle::try_current()
-        .map(|handle| handle.metrics().num_workers())
-        .unwrap_or(1);
-    let num_threads = std::cmp::max(num_tokio_threads, app::num_rayon_threads()) as u32;
-
-    Pool::builder()
-        .max_size(num_threads + 1)
-        .max_lifetime(None)
-        .idle_timeout(None)
-        .test_on_check_out(true)
-        .connection_customizer(Box::new(ConnectionInitialzier {}))
-        .build(ConnectionManager::new(config::database_url(None)))
-        .expect("Connection pool must be constructible")
+        Pool::builder()
+            .max_size(num_threads + 1)
+            .max_lifetime(None)
+            .idle_timeout(None)
+            .test_on_check_out(true)
+            .connection_customizer(Box::new(ConnectionInitialzier {}))
+            .build(ConnectionManager::new(config::database_url(None)))
+            .expect("Connection pool must be constructible")
+    }
 }
 
 /// Runs embedded migrations on the database. Used to update database for end-users who don't build server themselves.

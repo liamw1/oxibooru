@@ -3,6 +3,7 @@ use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
 use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
+use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::content::signature::SignatureCache;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
@@ -14,18 +15,18 @@ use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourcePro
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
 use crate::resource::post::{Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
-use crate::search::Builder;
 use crate::search::post::QueryBuilder;
+use crate::search::{Builder, preferences};
 use crate::snapshot::post::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, db, filesystem, resource, snapshot, update};
 use axum::extract::{DefaultBodyLimit, Extension, State};
 use axum::{Router, routing};
-use diesel::dsl::{exists, sql};
+use diesel::dsl::{exists, not, sql};
 use diesel::sql_types::Integer;
 use diesel::{
-    Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl,
+    Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
     SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
@@ -81,7 +82,7 @@ where
     connection_pool.get()?.transaction(update)
 }
 
-/// See [listing-posts](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-posts)
+/// See [listing-posts](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-posts)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -94,7 +95,7 @@ async fn list(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_posts) = query_builder.list(conn)?;
@@ -108,7 +109,7 @@ async fn list(
     })
 }
 
-/// See [getting-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-post)
+/// See [getting-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-post)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -119,10 +120,7 @@ async fn get(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
-        if !post_exists {
-            return Err(ApiError::NotFound(ResourceType::Post));
-        }
+        verify_visibility(conn, &state.config, client, post_id)?;
         PostInfo::new_from_id(conn, &state.config, client, post_id, &fields)
             .map(Json)
             .map_err(ApiError::from)
@@ -135,7 +133,7 @@ struct PostNeighbors {
     next: Option<PostInfo>,
 }
 
-/// See [getting-around-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-around-post)
+/// See [getting-around-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-around-post)
 async fn get_neighbors(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -156,26 +154,24 @@ async fn get_neighbors(
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+    let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
     state.get_connection()?.transaction(|conn| {
-        const INITIAL_LIMIT: i64 = 100;
-        const LIMIT_GROWTH: i64 = 8;
+        const INITIAL_LIMIT: i64 = 1000;
+        const LIMIT_GROWTH: i64 = 10;
 
-        let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
-        if !post_exists {
-            return Err(ApiError::NotFound(ResourceType::Post))?;
-        }
+        verify_visibility(conn, &state.config, client, post_id)?;
 
-        // Handle special cases first
-        if !query_builder.criteria().has_filter() && !query_builder.criteria().has_sort() {
-            // Optimized neighbor retrieval for simplest use case
-            let previous_post = post::table
+        if !query_builder.criteria().has_sort() {
+            // Optimized neighbor retrieval if no sort is specified
+            let previous_post = query_builder
+                .build_filtered(conn)?
                 .select(Post::as_select())
                 .filter(post::id.gt(post_id))
                 .order_by(post::id.asc())
                 .first(conn)
                 .optional()?;
-            let next_post = post::table
+            let next_post = query_builder
+                .build_filtered(conn)?
                 .select(Post::as_select())
                 .filter(post::id.lt(post_id))
                 .order_by(post::id.desc())
@@ -195,16 +191,17 @@ async fn get_neighbors(
             query_builder.set_offset_and_limit(offset, limit);
             let post_id_batch = query_builder.load(conn)?;
 
-            let post_index = post_id_batch.iter().position(|&id| id == post_id);
+            let post_position = post_id_batch.iter().position(|&id| id == post_id);
             if post_id_batch.len() < usize::try_from(limit).unwrap_or(usize::MAX)
+                || limit == i64::MAX
                 || post_id_batch.len() == usize::MAX
-                || (post_index.is_some() && post_index != Some(post_id_batch.len().saturating_sub(1)))
+                || (post_position.is_some() && post_position != Some(post_id_batch.len().saturating_sub(1)))
             {
-                let prev_post_id = post_index
+                let prev_post_id = post_position
                     .and_then(|index| index.checked_sub(1))
                     .and_then(|prev_index| post_id_batch.get(prev_index))
                     .copied();
-                let next_post_id = post_index
+                let next_post_id = post_position
                     .and_then(|index| index.checked_add(1))
                     .and_then(|next_index| post_id_batch.get(next_index))
                     .copied();
@@ -221,7 +218,7 @@ async fn get_neighbors(
     })
 }
 
-/// See [getting-featured-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-featured-post)
+/// See [getting-featured-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-featured-post)
 async fn get_featured(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -231,12 +228,17 @@ async fn get_featured(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let featured_post_id: Option<i64> = post_feature::table
+        let mut featured = post_feature::table
             .select(post_feature::post_id)
             .order_by(post_feature::time.desc())
-            .first(conn)
-            .optional()?;
+            .into_boxed();
 
+        // Apply preferences to post features
+        if let Some(hidden_posts) = preferences::hidden_posts(&state.config, client, post_feature::post_id) {
+            featured = featured.filter(not(exists(hidden_posts)));
+        }
+
+        let featured_post_id: Option<i64> = featured.first(conn).optional()?;
         featured_post_id
             .map(|post_id| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
             .transpose()
@@ -251,7 +253,7 @@ struct FeatureBody {
     id: i64,
 }
 
-/// See [featuring-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#featuring-post)
+/// See [featuring-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#featuring-post)
 async fn feature(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -312,7 +314,7 @@ struct ReverseSearchResponse {
     similar_posts: Vec<SimilarPost>,
 }
 
-/// See [reverse-image-search](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#reverse-image-search)
+/// See [reverse-image-search](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#reverse-image-search)
 async fn reverse_search(
     state: AppState,
     client: Client,
@@ -434,7 +436,7 @@ struct CreateBody {
     flags: Option<Vec<PostFlag>>,
 }
 
-/// See [creating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-post)
+/// See [creating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-post)
 async fn create(
     state: AppState,
     client: Client,
@@ -486,7 +488,7 @@ async fn create(
 
         // Add tags, relations, and notes
         update::post::set_tags(conn, post.id, &tag_ids)?;
-        update::post::set_relations(conn, post.id, &relations)?;
+        update::post::add_relations(conn, post.id, &relations)?;
         update::post::set_notes(conn, post.id, &notes)?;
 
         NewPostSignature {
@@ -564,7 +566,7 @@ struct PostMergeBody {
     replace_content: bool,
 }
 
-/// See [merging-posts](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-posts)
+/// See [merging-posts](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-posts)
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -606,7 +608,7 @@ async fn merge(
         .map_err(ApiError::from)
 }
 
-/// See [adding-post-to-favorites](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#adding-post-to-favorites)
+/// See [adding-post-to-favorites](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#adding-post-to-favorites)
 async fn favorite(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -634,7 +636,7 @@ async fn favorite(
         .map_err(ApiError::from)
 }
 
-/// See [rating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-post)
+/// See [rating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-post)
 async fn rate(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -691,7 +693,7 @@ struct UpdateBody {
     thumbnail_url: Option<Url>,
 }
 
-/// See [updating-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-post)
+/// See [updating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-post)
 async fn update(
     state: AppState,
     client: Client,
@@ -749,10 +751,10 @@ async fn update(
             new_post.description = description.clone();
             new_snapshot_data.description = description;
         }
-        if let Some(relations) = body.relations {
+        if let Some(mut relations) = body.relations {
             api::verify_privilege(client, state.config.privileges().post_edit_relation)?;
 
-            update::post::set_relations(conn, post_id, &relations)?;
+            update::post::set_relations(conn, &state.config, client, post_id, &mut relations)?;
             new_snapshot_data.relations = relations;
         }
         if let Some(tags) = body.tags {
@@ -844,7 +846,7 @@ async fn update_handler(
     }
 }
 
-/// See [deleting-post](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-post)
+/// See [deleting-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-post)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -891,7 +893,7 @@ async fn delete(
     Ok(Json(()))
 }
 
-/// See [removing-post-from-favorites](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#removing-post-from-favorites)
+/// See [removing-post-from-favorites](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#removing-post-from-favorites)
 async fn unfavorite(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -914,11 +916,27 @@ async fn unfavorite(
         .map_err(ApiError::from)
 }
 
+fn verify_visibility(conn: &mut PgConnection, config: &Config, client: Client, post_id: i64) -> ApiResult<()> {
+    let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
+    if !post_exists {
+        return Err(ApiError::NotFound(ResourceType::Post));
+    }
+
+    if let Some(hidden_posts) = preferences::hidden_posts(config, client, post_statistics::post_id) {
+        let post_lookup = hidden_posts.filter(post_statistics::post_id.eq(post_id));
+        let post_hidden: bool = diesel::select(exists(post_lookup)).first(conn)?;
+        if post_hidden {
+            return Err(ApiError::Hidden(ResourceType::Post));
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
     use crate::filesystem::Directory;
-    use crate::model::enums::ResourceType;
+    use crate::model::enums::{ResourceType, UserRank};
     use crate::model::post::Post;
     use crate::schema::{post, post_feature, post_statistics, tag, tag_name, user, user_statistics};
     use crate::search::post::Token;
@@ -938,31 +956,28 @@ mod test {
     #[parallel]
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /posts/?query";
-        const SORT: &str = "-sort:id&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "post/list").await?;
+        const PARAMS: &str = "-sort:id&limit=40&fields=id";
+        verify_response(&format!("{QUERY}=-sort:id&limit=40{FIELDS}"), "post/list").await?;
 
-        // Test sorts
+        let filter_table = crate::search::post::filter_table();
         for token in Token::iter() {
-            match token {
-                Token::Id | Token::ContentChecksum | Token::NoteText | Token::Special => continue,
-                _ => (),
-            }
-            let token_str: &'static str = token.into();
-            let query = format!("{QUERY}=sort:{token_str} {SORT}&fields=id");
-            let path = format!("post/list_{token_str}_sorted");
-            verify_query(&query, &path).await?;
-        }
+            let filter = filter_table[token];
+            let (sign, filter) = if filter.starts_with('-') {
+                filter.split_at(1)
+            } else {
+                ("", filter)
+            };
+            let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
+            let path = format!("post/list_{token}_filtered");
+            verify_response(&query, &path).await?;
 
-        // Test filters
-        verify_query(&format!("{QUERY}=-plant,sky,tagme {SORT}&fields=id"), "post/list_tag_filtered").await?;
-        verify_query(&format!("{QUERY}=-pool:2 {SORT}&fields=id"), "post/list_pool_filtered").await?;
-        verify_query(&format!("{QUERY}=fav:*user* {SORT}&fields=id"), "post/list_fav_filtered").await?;
-        verify_query(&format!("{QUERY}=-comment:*user* {SORT}&fields=id"), "post/list_comment_filtered").await?;
-        verify_query(&format!("{QUERY}=note-text:*fav* {SORT}&fields=id"), "post/list_note-text_filtered").await?;
-        verify_query(&format!("{QUERY}=special:liked {SORT}&fields=id"), "post/list_liked_filtered").await?;
-        verify_query(&format!("{QUERY}=special:disliked {SORT}&fields=id"), "post/list_disliked_filtered").await?;
-        verify_query(&format!("{QUERY}=special:fav {SORT}&fields=id"), "post/list_special-fav_filtered").await?;
-        verify_query(&format!("{QUERY}=special:tumbleweed {SORT}&fields=id"), "post/list_tumbleweed_filtered").await
+            let query = format!("{QUERY}=sort:{token} {PARAMS}");
+            let path = format!("post/list_{token}_sorted");
+            verify_response(&query, &path).await?;
+        }
+        verify_response(&format!("{QUERY}=special:liked {PARAMS}"), "post/list_liked_filtered").await?;
+        verify_response(&format!("{QUERY}=special:disliked {PARAMS}"), "post/list_disliked_filtered").await?;
+        verify_response(&format!("{QUERY}=special:tumbleweed {PARAMS}"), "post/list_tumbleweed_filtered").await
     }
 
     #[tokio::test]
@@ -979,7 +994,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /post/{POST_ID}/?{FIELDS}"), "post/get").await?;
+        verify_response(&format!("GET /post/{POST_ID}/?{FIELDS}"), "post/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -990,15 +1005,15 @@ mod test {
     #[parallel]
     async fn get_neighbors() -> ApiResult<()> {
         const QUERY: &str = "around/?query=-sort:id";
-        verify_query(&format!("GET /post/1/{QUERY}{FIELDS}"), "post/get_1_neighbors").await?;
-        verify_query(&format!("GET /post/4/{QUERY}{FIELDS}"), "post/get_4_neighbors").await?;
-        verify_query(&format!("GET /post/5/{QUERY}{FIELDS}"), "post/get_5_neighbors").await
+        verify_response(&format!("GET /post/1/{QUERY}{FIELDS}"), "post/get_1_neighbors").await?;
+        verify_response(&format!("GET /post/4/{QUERY}{FIELDS}"), "post/get_4_neighbors").await?;
+        verify_response(&format!("GET /post/5/{QUERY}{FIELDS}"), "post/get_5_neighbors").await
     }
 
     #[tokio::test]
     #[parallel]
     async fn get_featured() -> ApiResult<()> {
-        verify_query(&format!("GET /featured-post/?{FIELDS}"), "post/get_featured").await
+        verify_response(&format!("GET /featured-post/?{FIELDS}"), "post/get_featured").await
     }
 
     #[tokio::test]
@@ -1016,7 +1031,7 @@ mod test {
         let mut conn = get_connection()?;
         let (feature_count, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("POST /featured-post/?{FIELDS}"), "post/feature").await?;
+        verify_response(&format!("POST /featured-post/?{FIELDS}"), "post/feature").await?;
 
         let (new_feature_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_feature_count, feature_count + 1);
@@ -1034,10 +1049,17 @@ mod test {
     }
 
     #[tokio::test]
+    #[parallel]
+    async fn reverse_search() -> ApiResult<()> {
+        simulate_upload("1_pixel.png", "upload_for_reverse_search.png")?;
+        verify_response(&format!("POST /posts/reverse-search/?{FIELDS}"), "post/reverse_search").await
+    }
+
+    #[tokio::test]
     #[serial]
     async fn create() -> ApiResult<()> {
         simulate_upload("1_pixel.png", "cool_post.png")?;
-        verify_query(&format!("POST /posts/?{FIELDS}"), "post/create").await?;
+        verify_response(&format!("POST /posts/?{FIELDS}"), "post/create").await?;
 
         let state = get_state();
         let post_path = state.config.path(Directory::Posts);
@@ -1065,7 +1087,7 @@ mod test {
         let mut conn = get_connection()?;
         let post = get_post(&mut conn)?;
 
-        verify_query(&format!("POST /post-merge/?{FIELDS}"), "post/merge").await?;
+        verify_response(&format!("POST /post-merge/?{FIELDS}"), "post/merge").await?;
 
         let has_post: bool = diesel::select(exists(post::table.find(REMOVE_ID))).first(&mut conn)?;
         assert!(!has_post);
@@ -1110,14 +1132,14 @@ mod test {
         let mut conn = get_connection()?;
         let (favorite_count, admin_favorite_count, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("POST /post/{POST_ID}/favorite/?{FIELDS}"), "post/favorite").await?;
+        verify_response(&format!("POST /post/{POST_ID}/favorite/?{FIELDS}"), "post/favorite").await?;
 
         let (new_favorite_count, new_admin_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_favorite_count, favorite_count + 1);
         assert_eq!(new_admin_favorite_count, admin_favorite_count + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("DELETE /post/{POST_ID}/favorite/?{FIELDS}"), "post/unfavorite").await?;
+        verify_response(&format!("DELETE /post/{POST_ID}/favorite/?{FIELDS}"), "post/unfavorite").await?;
 
         let (new_favorite_count, new_admin_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_favorite_count, favorite_count);
@@ -1141,19 +1163,19 @@ mod test {
         let mut conn = get_connection()?;
         let (score, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/like").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/like").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/dislike").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/dislike").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score - 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_query(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/remove_score").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/remove_score").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score);
@@ -1176,7 +1198,7 @@ mod test {
         let mut conn = get_connection()?;
         let (post, tag_count, relation_count) = get_post_info(&mut conn)?;
 
-        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit").await?;
 
         let (new_post, new_tag_count, new_relation_count) = get_post_info(&mut conn)?;
         assert_eq!(new_post.user_id, post.user_id);
@@ -1196,7 +1218,7 @@ mod test {
         assert_ne!(new_tag_count, tag_count);
         assert_ne!(new_relation_count, relation_count);
 
-        verify_query(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit_restore").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit_restore").await?;
 
         let new_tag_id: i64 = tag::table
             .select(tag::id)
@@ -1226,38 +1248,81 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
+    async fn preferences() -> ApiResult<()> {
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /posts/?query=-sort:id&limit=9&fields=id,relations,relationCount",
+            "post/list_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /post/5", "post/get_with_preferences").await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /post/4/around", "post/get_around_blacklisted").await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /post/4/around/?fields=id,relations,relationCount",
+            "post/get_around_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /featured-post/?fields=id,relations,relationCount",
+            "post/get_featured_with_preferences",
+        )
+        .await?;
+
+        simulate_upload("1_pixel.png", "upload_for_reverse_search.png")?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "POST /posts/reverse-search/?fields=id,relations,relationCount",
+            "post/reverse_search_with_preferences",
+        )
+        .await?;
+
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "PUT /post/1/?fields=id,relations,relationCount",
+            "post/edit_with_preferences",
+        )
+        .await?;
+
+        reset_database();
+        Ok(())
+    }
+
+    #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /post/99", "post/get_nonexistent").await?;
-        verify_query("GET /post/99/around", "post/get_around_nonexistent").await?;
-        verify_query("POST /featured-post", "post/feature_nonexistent").await?;
-        verify_query("POST /post-merge", "post/merge_to_nonexistent").await?;
-        verify_query("POST /post-merge", "post/merge_from_nonexistent").await?;
-        verify_query("POST /post/99/favorite", "post/favorite_nonexistent").await?;
-        verify_query("PUT /post/99/score", "post/rate_nonexistent").await?;
-        verify_query("PUT /post/99", "post/edit_nonexistent").await?;
-        verify_query("DELETE /post/99", "post/delete_nonexistent").await?;
-        verify_query("DELETE /post/99/favorite", "post/unfavorite_nonexistent").await?;
+        verify_response("GET /post/99", "post/get_nonexistent").await?;
+        verify_response("GET /post/99/around", "post/get_around_nonexistent").await?;
+        verify_response("POST /featured-post", "post/feature_nonexistent").await?;
+        verify_response("POST /post-merge", "post/merge_to_nonexistent").await?;
+        verify_response("POST /post-merge", "post/merge_from_nonexistent").await?;
+        verify_response("POST /post/99/favorite", "post/favorite_nonexistent").await?;
+        verify_response("PUT /post/99/score", "post/rate_nonexistent").await?;
+        verify_response("PUT /post/99", "post/edit_nonexistent").await?;
+        verify_response("DELETE /post/99", "post/delete_nonexistent").await?;
+        verify_response("DELETE /post/99/favorite", "post/unfavorite_nonexistent").await?;
 
         simulate_upload("1_pixel.png", "upload.png")?;
-        verify_query("POST /posts", "post/create_invalid_tag").await?;
-        verify_query("POST /posts", "post/create_invalid_safety").await?;
-        verify_query("POST /posts", "post/create_invalid_note").await?;
-        verify_query("POST /posts", "post/create_invalid_flag").await?;
-        verify_query("POST /posts", "post/create_missing_content").await?;
-        verify_query("POST /posts", "post/create_duplicate_relation").await?;
-        verify_query("POST /posts", "post/create_nonexistent_relation").await?;
+        verify_response("POST /posts", "post/create_invalid_tag").await?;
+        verify_response("POST /posts", "post/create_invalid_safety").await?;
+        verify_response("POST /posts", "post/create_invalid_note").await?;
+        verify_response("POST /posts", "post/create_invalid_flag").await?;
+        verify_response("POST /posts", "post/create_missing_content").await?;
+        verify_response("POST /posts", "post/create_duplicate_relation").await?;
+        verify_response("POST /posts", "post/create_nonexistent_relation").await?;
 
-        verify_query("PUT /post/1", "post/edit_invalid_tag").await?;
-        verify_query("PUT /post/1", "post/edit_invalid_safety").await?;
-        verify_query("PUT /post/1", "post/edit_invalid_note").await?;
-        verify_query("PUT /post/1", "post/edit_invalid_flag").await?;
-        verify_query("PUT /post/1", "post/edit_duplicate_relation").await?;
-        verify_query("PUT /post/1", "post/edit_nonexistent_relation").await?;
+        verify_response("PUT /post/1", "post/edit_invalid_tag").await?;
+        verify_response("PUT /post/1", "post/edit_invalid_safety").await?;
+        verify_response("PUT /post/1", "post/edit_invalid_note").await?;
+        verify_response("PUT /post/1", "post/edit_invalid_flag").await?;
+        verify_response("PUT /post/1", "post/edit_duplicate_relation").await?;
+        verify_response("PUT /post/1", "post/edit_nonexistent_relation").await?;
 
-        verify_query("PUT /post/1/score", "post/invalid_rating").await?;
-        verify_query("POST /featured-post", "post/double_feature").await?;
-        verify_query("POST /post-merge", "post/self-merge").await?;
+        verify_response("PUT /post/1/score", "post/invalid_rating").await?;
+        verify_response("POST /featured-post", "post/double_feature").await?;
+        verify_response("POST /post-merge", "post/self-merge").await?;
 
         reset_sequence(ResourceType::Post)?;
         Ok(())

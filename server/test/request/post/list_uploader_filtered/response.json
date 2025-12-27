@@ -1,0 +1,17 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "-uploader:restricted_user -sort:id",
+    "results": [
+        {
+            "id": 2
+        },
+        {
+            "id": 3
+        },
+        {
+            "id": 4
+        }
+    ],
+    "total": 3
+}

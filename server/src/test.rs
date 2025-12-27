@@ -4,7 +4,7 @@ use crate::app::AppState;
 use crate::auth::header;
 use crate::config::Config;
 use crate::content::hash::{Checksum, Md5Checksum, PostHash};
-use crate::content::signature::{COMPRESSED_SIGNATURE_LEN, NUM_WORDS};
+use crate::content::{FileContents, decode, signature};
 use crate::db::ConnectionResult;
 use crate::filesystem::Directory;
 use crate::model::comment::{NewComment, NewCommentScore};
@@ -14,8 +14,7 @@ use crate::model::enums::{
 use crate::model::pool::{NewPool, NewPoolName, PoolPost};
 use crate::model::pool_category::NewPoolCategory;
 use crate::model::post::{
-    CompressedSignature, NewPost, NewPostFeature, NewPostNote, NewPostSignature, PostFavorite, PostRelation, PostScore,
-    PostTag, SignatureIndexes,
+    NewPost, NewPostFeature, NewPostNote, NewPostSignature, PostFavorite, PostRelation, PostScore, PostTag,
 };
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
 use crate::model::tag_category::NewTagCategory;
@@ -75,7 +74,6 @@ pub fn reset_database() {
 /// Useful after a table's sequence gets updated as an unintended side-effect.
 /// This can happen when attempting to insert a row but it fails due to a constraint violation.
 pub fn reset_sequence(table: ResourceType) -> ApiResult<()> {
-    let table: &str = table.into();
     let query = format!(
         "SELECT setval(pg_get_serial_sequence('{table}', 'id'), GREATEST((SELECT MAX(id) FROM \"{table}\"), 1));"
     );
@@ -90,6 +88,8 @@ pub fn media_path(filename: &str) -> PathBuf {
     asset_path("media", filename)
 }
 
+/// Simulates content upload by copying `test/media/media_filename` to `temp_uploads/temp_name`.
+/// `temp_name` can then be used as a `contentToken` for requests that require it.
 pub fn simulate_upload(media_filename: &str, temp_name: &str) -> std::io::Result<u64> {
     let state = get_state();
     let temporary_uploads_path = state.config.path(Directory::TemporaryUploads);
@@ -99,32 +99,33 @@ pub fn simulate_upload(media_filename: &str, temp_name: &str) -> std::io::Result
     std::fs::copy(media_path, temporary_uploads_path.join(temp_name))
 }
 
-/// Verifies that a given `query` matches the contents of a `repsonse.json`
-/// that lies in the `test/queries/relative_path` directory. A `snapshot.json`
-/// will also be checked if it exists. A `body.json` and `config.toml` can be
-/// specified if they exist.
+/// Verifies that the response of a given `request` matches the contents of a `repsonse.json`
+/// that lies in the `test/request/relative_path` directory. A `snapshot.json` will also be
+/// checked if it exists. A `body.json` and `config.toml` can be optionally specified.
 ///
-/// `query` must be of the form `METHOD path` (e.g. `GET /post/1`).
-pub async fn verify_query(query: &str, relative_path: &str) -> ApiResult<()> {
-    verify_query_with_user(UserRank::Administrator, query, relative_path).await
+/// `request` must be of the form `METHOD /path` (e.g. `GET /post/1`).
+pub async fn verify_response(request: &str, relative_path: &str) -> ApiResult<()> {
+    verify_response_with_user(UserRank::Administrator, request, relative_path).await
 }
 
-pub async fn verify_query_with_user(user: UserRank, query: &str, relative_path: &str) -> ApiResult<()> {
+pub async fn verify_response_with_user(user: UserRank, request: &str, relative_path: &str) -> ApiResult<()> {
     let credentials = (user != UserRank::Anonymous)
         .then(|| header::basic_credentials_for(USERS[user as usize - 1].name, TEST_PASSWORD));
-    verify_query_with_credentials(credentials, query, relative_path).await
+    verify_response_with_credentials(credentials, request, relative_path).await
 }
 
-pub async fn verify_query_with_credentials(
+pub async fn verify_response_with_credentials(
     credentials: Option<String>,
-    query: &str,
+    request: &str,
     relative_path: &str,
 ) -> ApiResult<()> {
     let mut expected_response: Option<Value> = None;
     let mut expected_snapshot: Option<Value> = None;
     let mut body: Option<Value> = None;
     let mut config: Option<Config> = None;
-    for entry in std::fs::read_dir(asset_path("queries", relative_path))? {
+    for entry in std::fs::read_dir(asset_path("request", relative_path))
+        .unwrap_or_else(|err| panic!("Could not read {relative_path}. Details: {err}"))
+    {
         let path = entry?.path();
         let file_contents = std::fs::read_to_string(&path)?;
         match path.file_name().and_then(OsStr::to_str) {
@@ -146,10 +147,10 @@ pub async fn verify_query_with_credentials(
     }
 
     let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(app_state));
-    let (method, path) = query
+    let (method, path) = request
         .split_once(' ')
-        .expect("Query string must have method and path separated by a space");
-    let method = Method::try_from(method).expect("Query string must start with a valid method");
+        .expect("Request string must have method and path separated by a space");
+    let method = Method::try_from(method).expect("Request string must start with a valid method");
     let path = path.replace(' ', "%20"); // Percent-encode all spaces
 
     let server =
@@ -166,6 +167,15 @@ pub async fn verify_query_with_credentials(
         request.await
     };
 
+    if let Some(expected_response) = expected_response {
+        let actual_response: Value = serde_json::from_slice(response.as_bytes()).unwrap_or_else(|_| {
+            panic!("Response for {relative_path} is not JSON.\nBody:\n{}", String::from_utf8_lossy(response.as_bytes()))
+        });
+        verify_json(relative_path, "response body", &expected_response, &actual_response);
+    } else {
+        panic!("Missing response.json in {relative_path}");
+    }
+
     // Optionally check an expected snapshot
     if let Some(expected_snapshot) = expected_snapshot {
         let mut conn = get_connection()?;
@@ -174,15 +184,6 @@ pub async fn verify_query_with_credentials(
             .order_by(snapshot::id.desc())
             .first(&mut conn)?;
         verify_json(relative_path, "snapshot data", &expected_snapshot, &actual_snapshot);
-    }
-
-    if let Some(expected_response) = expected_response {
-        let actual_response: Value = serde_json::from_slice(response.as_bytes()).unwrap_or_else(|_| {
-            panic!("Response for {relative_path} is not JSON.\nBody:\n{}", String::from_utf8_lossy(response.as_bytes()))
-        });
-        verify_json(relative_path, "response body", &expected_response, &actual_response);
-    } else {
-        panic!("Missing response.json in {relative_path}");
     }
     Ok(())
 }
@@ -316,6 +317,7 @@ const POST_5_TAGS: &[&str] = &[
 ];
 const POST_TAGS: &[&[&str]] = &[POST_1_TAGS, POST_2_TAGS, POST_3_TAGS, POST_4_TAGS, POST_5_TAGS];
 
+/// (`pool_name`, `post_id`)
 const POOL_POSTS: &[(&str, i64)] = &[
     ("fantasy", 1),
     ("fantasy", 2),
@@ -501,42 +503,39 @@ const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRan
     }
 }
 
-fn create_tag_categories(conn: &mut PgConnection) -> QueryResult<usize> {
-    let new_categories: Vec<_> = TAG_CATEGORY_NAMES
-        .iter()
-        .enumerate()
-        .map(|(i, name)| NewTagCategory {
-            order: i as i32 + 1,
-            name,
-            color: "default",
-        })
-        .collect();
-    new_categories.insert_into(tag_category::table).execute(conn)
+// Some inserts here are not batched intentionally to ensure that creation times are distinct
+
+fn create_tag_categories(conn: &mut PgConnection) -> QueryResult<()> {
+    let new_categories = TAG_CATEGORY_NAMES.iter().enumerate().map(|(i, name)| NewTagCategory {
+        order: i as i32 + 1,
+        name,
+        color: "default",
+    });
+    for new_category in new_categories {
+        new_category.insert_into(tag_category::table).execute(conn)?;
+    }
+    Ok(())
 }
 
 fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
     for (i, tags) in TAG_GROUPS.iter().enumerate() {
-        let new_tags: Vec<_> = tags
-            .iter()
-            .map(|_| NewTag {
-                category_id: i as i64,
-                description: "",
-            })
-            .collect();
-        let tag_ids = new_tags.insert_into(tag::table).returning(tag::id).get_results(conn)?;
-
-        let new_tag_names: Vec<_> = tag_ids
-            .iter()
-            .zip(*tags)
-            .flat_map(|(&tag_id, names)| {
-                names.iter().enumerate().map(move |(i, name)| NewTagName {
+        let new_tags = tags.iter().map(|_| NewTag {
+            category_id: i as i64,
+            description: "",
+        });
+        for (new_tag, names) in new_tags.zip(*tags) {
+            let tag_id = new_tag.insert_into(tag::table).returning(tag::id).get_result(conn)?;
+            let new_names: Vec<_> = names
+                .iter()
+                .enumerate()
+                .map(|(i, name)| NewTagName {
                     tag_id,
                     order: i as i32,
                     name,
                 })
-            })
-            .collect();
-        new_tag_names.insert_into(tag_name::table).execute(conn)?;
+                .collect();
+            new_names.insert_into(tag_name::table).execute(conn)?;
+        }
     }
 
     for (parent, child) in TAG_IMPLICATIONS {
@@ -572,56 +571,62 @@ fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
     Ok(())
 }
 
-fn create_pool_categories(conn: &mut PgConnection) -> QueryResult<usize> {
-    let new_categories: Vec<_> = POOL_CATEGORY_NAMES
+fn create_pool_categories(conn: &mut PgConnection) -> QueryResult<()> {
+    let new_categories = POOL_CATEGORY_NAMES
         .iter()
-        .map(|name| NewPoolCategory { name, color: "default" })
-        .collect();
-    new_categories.insert_into(pool_category::table).execute(conn)
+        .map(|name| NewPoolCategory { name, color: "default" });
+    for new_category in new_categories {
+        new_category.insert_into(pool_category::table).execute(conn)?;
+    }
+    Ok(())
 }
 
 fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
     for (i, pools) in POOL_GROUPS.iter().enumerate() {
-        let new_pools: Vec<_> = pools
-            .iter()
-            .map(|_| NewPool {
-                category_id: i as i64,
-                description: "",
-            })
-            .collect();
-        let pool_ids = new_pools
-            .insert_into(pool::table)
-            .returning(pool::id)
-            .get_results(conn)?;
-
-        let new_pool_names: Vec<_> = pool_ids
-            .iter()
-            .zip(*pools)
-            .flat_map(|(&pool_id, names)| {
-                names.iter().enumerate().map(move |(i, name)| NewPoolName {
+        let new_pools = pools.iter().map(|_| NewPool {
+            category_id: i as i64,
+            description: "",
+        });
+        for (new_pool, names) in new_pools.zip(*pools) {
+            let pool_id = new_pool.insert_into(pool::table).returning(pool::id).get_result(conn)?;
+            let new_names: Vec<_> = names
+                .iter()
+                .enumerate()
+                .map(move |(i, name)| NewPoolName {
                     pool_id,
                     order: i as i32,
                     name,
                 })
-            })
-            .collect();
-        new_pool_names.insert_into(pool_name::table).execute(conn)?;
+                .collect();
+            new_names.insert_into(pool_name::table).execute(conn)?;
+        }
     }
     Ok(())
 }
 
 fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> {
-    let post_data: Vec<(i64, MimeType, String)> = POSTS
-        .insert_into(post::table)
-        .returning((post::id, post::mime_type, post::source))
-        .get_results(conn)?;
+    for new_post in POSTS {
+        let (post_id, mime_type, source): (i64, MimeType, String) = new_post
+            .insert_into(post::table)
+            .returning((post::id, post::mime_type, post::source))
+            .get_result(conn)?;
 
-    // Simulate uploads
-    for (post_id, mime_type, source) in post_data {
+        // Simulate uploads
+        let image_path = media_path("1_pixel.png");
+        let data = std::fs::read(&image_path)?;
+
+        let file_contents = FileContents {
+            data,
+            mime_type: MimeType::Png,
+        };
+        let image = decode::representative_image(config, &file_contents, &image_path).unwrap();
+        let signature = signature::compute(&image);
+        let words = signature::generate_indexes(&signature);
+
         let post_signature = NewPostSignature {
             post_id,
-            signature: CompressedSignature::from([0; COMPRESSED_SIGNATURE_LEN]),
-            words: SignatureIndexes::from([0; NUM_WORDS]),
+            signature: signature.into(),
+            words: words.into(),
         };
         diesel::insert_into(post_signature::table)
             .values(post_signature)

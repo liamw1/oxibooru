@@ -1,0 +1,23 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "sort:name -sort:name",
+    "results": [
+        {
+            "name": "restricted_user"
+        },
+        {
+            "name": "regular_user"
+        },
+        {
+            "name": "power_user"
+        },
+        {
+            "name": "moderator"
+        },
+        {
+            "name": "administrator"
+        }
+    ],
+    "total": 5
+}

@@ -1,0 +1,7 @@
+[anonymous_preferences]
+tag_blacklist = ["rock", "stone", "tree"]
+tag_category_blacklist = ["artist", "source"]
+
+[public_info.privileges]
+tag_edit_implication = "anonymous"
+tag_edit_suggestion = "anonymous"

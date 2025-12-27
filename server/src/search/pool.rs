@@ -10,9 +10,9 @@ use crate::{
 use diesel::dsl::{InnerJoin, IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
-use strum::EnumString;
+use strum::{Display, EnumIter, EnumString, EnumTable};
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Token {
     #[strum(serialize = "creation-date", serialize = "creation-time")]
@@ -36,15 +36,10 @@ pub struct QueryBuilder<'a> {
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
     type Token = Token;
-    type BoxedQuery = BoxedQuery<'a>;
+    type BoxedQuery = BoxedQuery;
 
     fn criteria(&mut self) -> &mut SearchCriteria<'a, Self::Token> {
         &mut self.search
-    }
-
-    fn load(&mut self, conn: &mut PgConnection) -> ApiResult<Vec<i64>> {
-        let query = self.build_filtered(conn)?;
-        self.get_ordered_ids(conn, query).map_err(ApiError::from)
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
@@ -58,18 +53,8 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
         }
         .map_err(ApiError::from)
     }
-}
 
-impl<'a> QueryBuilder<'a> {
-    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::Name).map_err(Box::from)?;
-        Ok(Self {
-            search,
-            cache_state: CacheState::new(),
-        })
-    }
-
-    fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery<'a>> {
+    fn build_filtered(&mut self, conn: &mut PgConnection) -> ApiResult<BoxedQuery> {
         let base_query = pool::table
             .select(pool::id)
             .inner_join(pool_statistics::table)
@@ -89,7 +74,7 @@ impl<'a> QueryBuilder<'a> {
         Ok(apply_cache_filters!(query, pool::id, self.cache_state))
     }
 
-    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery<'a>) -> QueryResult<Vec<i64>> {
+    fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
             return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
@@ -102,7 +87,7 @@ impl<'a> QueryBuilder<'a> {
         let sorts = self.search.sorts.iter().copied().chain(default_sort);
         let unsorted_query = unsorted_query.inner_join(pool_name::table).filter(PoolName::primary());
         let query = sorts.fold(unsorted_query, |query, sort| match sort.kind {
-            Token::CreationTime => apply_sort!(query, pool::id, sort),
+            Token::CreationTime => apply_sort!(query, pool::creation_time, sort),
             Token::LastEditTime => apply_sort!(query, pool::last_edit_time, sort),
             Token::Name => apply_sort!(query, pool_name::name, sort),
             Token::Category => apply_sort!(query, pool_category::name, sort),
@@ -116,21 +101,42 @@ impl<'a> QueryBuilder<'a> {
     }
 }
 
-type BoxedQuery<'a> = IntoBoxed<
-    'a,
+impl<'a> QueryBuilder<'a> {
+    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(client, search_criteria, Token::Name).map_err(Box::from)?;
+        Ok(Self {
+            search,
+            cache_state: CacheState::new(),
+        })
+    }
+}
+
+type BoxedQuery = IntoBoxed<
+    'static,
     InnerJoin<InnerJoin<Select<pool::table, pool::id>, pool_statistics::table>, pool_category::table>,
     Pg,
 >;
 
-fn apply_name_filter<'a>(
+fn apply_name_filter(
     conn: &mut PgConnection,
-    query: BoxedQuery<'a>,
+    query: BoxedQuery,
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
-) -> ApiResult<BoxedQuery<'a>> {
+) -> ApiResult<BoxedQuery> {
     let names = pool_name::table.select(pool_name::pool_id).into_boxed();
     let names = apply_distinct_if_multivalued!(names, filter);
     let filtered_pools = apply_str_filter!(names, pool_name::name, filter.unnegated());
     update_filter_cache!(conn, filtered_pools, pool_name::pool_id, filter, state)?;
     Ok(query)
+}
+
+#[cfg(test)]
+pub fn filter_table() -> TokenTable<&'static str> {
+    TokenTable {
+        _creation_time: "2000..2020",
+        _last_edit_time: "-2000..2020",
+        _name: "*punk*",
+        _category: "Setting",
+        _post_count: "-0..1",
+    }
 }

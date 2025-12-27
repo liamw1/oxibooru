@@ -1,0 +1,14 @@
+{
+    "query": "pool-category:style -sort:id",
+    "offset": 0,
+    "limit": 40,
+    "total": 2,
+    "results": [
+        {
+            "id": 4
+        },
+        {
+            "id": 5
+        }
+    ]
+}

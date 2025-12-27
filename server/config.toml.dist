@@ -11,7 +11,7 @@ data_dir = "/data"
 
 # Webhooks to call when events occur (such as post/tag/user/etc. changes)
 # the listed urls will be called with a HTTP POST request with a payload
-# containing a snapshot resource as JSON. See doc/API.md for details
+# containing a snapshot resource as JSON. See docs/API.md for details
 webhooks = []
 
 # Delete thumbnails and source files on post delete
@@ -49,6 +49,13 @@ post_height   = 300
 # username = # example: "bot"
 # password = # example: "groovy123"
 # from     = # example: "App <noreply@example.com>"
+
+[anonymous_preferences]
+tag_blacklist = []
+tag_category_blacklist = []
+hide_unsafe = false
+hide_sketchy = false
+hide_untagged = false
 
 [public_info]
 # Shown in the website title and on the front page

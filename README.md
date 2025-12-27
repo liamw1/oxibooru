@@ -2,9 +2,9 @@
 
 Oxibooru is an image board engine based on [Szurubooru](https://github.com/rr-/szurubooru). The backend has been entirely rewritten in Rust with a focus on performance 🚀.
 
-If you're interested in migrating a Szurubooru instance to an Oxibooru one, see the [conversion guide](doc/CONVERSION.md). 
+If you're interested in migrating a Szurubooru instance to an Oxibooru one, see the [conversion guide](docs/CONVERSION.md). 
 
-If you're interested in contributing, see the [development guide](doc/DEV.md).
+If you're interested in contributing, see the [development guide](docs/DEV.md).
 
 ## Features
 
@@ -12,7 +12,7 @@ If you're interested in contributing, see the [development guide](doc/DEV.md).
 - Post comments
 - Post descriptions
 - Post notes / annotations, including arbitrary polygons
-- Rich JSON REST API ([see documentation](doc/API.md))
+- Rich JSON REST API ([see documentation](docs/API.md))
 - Token based authentication for clients
 - Rich search system
 - Rich privilege system
@@ -30,7 +30,7 @@ If you're interested in contributing, see the [development guide](doc/DEV.md).
 
 ## Installation
 
-It is recommended that you use Docker for deployment. See [installation instructions.](doc/INSTALL.md)
+It is recommended that you use Docker for deployment. See [installation instructions.](docs/INSTALL.md)
 
 ## License
 

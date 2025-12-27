@@ -3,7 +3,8 @@ use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
-use crate::model::enums::ResourceType;
+use crate::config::Config;
+use crate::model::enums::{ResourceType, UserRank};
 use crate::model::tag::{NewTag, Tag};
 use crate::resource::tag::TagInfo;
 use crate::schema::{post_tag, tag, tag_category, tag_name};
@@ -31,9 +32,9 @@ pub fn routes() -> Router<AppState> {
 }
 
 const MAX_TAGS_PER_PAGE: i64 = 1000;
-const MAX_TAG_SIBLINGS: i64 = 1000;
+const MAX_TAG_SIBLINGS: i64 = 50;
 
-/// See [listing-tags](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-tags)
+/// See [listing-tags](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-tags)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -46,7 +47,7 @@ async fn list(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_tags) = query_builder.list(conn)?;
@@ -60,23 +61,18 @@ async fn list(
     })
 }
 
-/// See [getting-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag)
+/// See [getting-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-tag)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagInfo>> {
     api::verify_privilege(client, state.config.privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let tag_id = tag_name::table
-            .select(tag_name::tag_id)
-            .filter(tag_name::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+        let tag_id = verify_visibility(conn, &state.config, client, &name)?;
         TagInfo::new_from_id(conn, tag_id, &fields)
             .map(Json)
             .map_err(ApiError::from)
@@ -94,45 +90,51 @@ struct TagSiblings {
     results: Vec<TagSibling>,
 }
 
-/// See [getting-tag-siblings](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-tag-siblings)
+/// See [getting-tag-siblings](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-tag-siblings)
 async fn get_siblings(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<TagSiblings>> {
     api::verify_privilege(client, state.config.privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let tag_id: i64 = tag::table
-            .select(tag::id)
-            .inner_join(tag_name::table)
-            .filter(tag_name::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+        let tag_id = verify_visibility(conn, &state.config, client, &name)?;
         let posts_tagged_on = post_tag::table
             .select(post_tag::post_id)
             .filter(post_tag::tag_id.eq(tag_id))
             .into_boxed();
-        let (sibling_ids, common_post_counts): (Vec<_>, Vec<_>) = post_tag::table
+        let mut sibling_query = post_tag::table
             .group_by(post_tag::tag_id)
             .select((post_tag::tag_id, count_star()))
             .filter(post_tag::post_id.eq_any(posts_tagged_on))
             .filter(post_tag::tag_id.ne(tag_id))
             .order_by((count_star().desc(), post_tag::tag_id))
             .limit(MAX_TAG_SIBLINGS)
-            .load::<(i64, i64)>(conn)?
-            .into_iter()
-            .unzip();
+            .into_boxed();
 
-        let siblings = TagInfo::new_batch_from_ids(conn, &sibling_ids, &fields)?
+        if client.rank == UserRank::Anonymous {
+            let preferences = &state.config.anonymous_preferences;
+            let hidden_tags = tag::table
+                .select(tag::id)
+                .inner_join(tag_category::table)
+                .inner_join(tag_name::table)
+                .filter(tag_name::name.eq_any(&preferences.tag_blacklist))
+                .or_filter(tag_category::name.eq_any(&preferences.tag_category_blacklist));
+            sibling_query = sibling_query.filter(post_tag::tag_id.ne_all(hidden_tags));
+        }
+
+        let (sibling_ids, common_post_counts): (Vec<i64>, Vec<i64>) =
+            sibling_query.load::<(i64, i64)>(conn)?.into_iter().unzip();
+
+        let results = TagInfo::new_batch_from_ids(conn, &sibling_ids, &fields)?
             .into_iter()
             .zip(common_post_counts)
             .map(|(tag, occurrences)| TagSibling { tag, occurrences })
             .collect();
-        Ok(Json(TagSiblings { results: siblings }))
+        Ok(Json(TagSiblings { results }))
     })
 }
 
@@ -146,7 +148,7 @@ struct CreateBody {
     suggestions: Option<Vec<SmallString>>,
 }
 
-/// See [creating-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-tag)
+/// See [creating-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-tag)
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -209,7 +211,7 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-/// See [merging-tags](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-tags)
+/// See [merging-tags](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-tags)
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -259,11 +261,11 @@ struct UpdateBody {
     suggestions: Option<Vec<SmallString>>,
 }
 
-/// See [updating-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-tag)
+/// See [updating-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-tag)
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<UpdateBody>,
 ) -> ApiResult<Json<TagInfo>> {
@@ -338,11 +340,11 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-tag](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-tag)
+/// See [deleting-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-tag)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path(name): Path<String>,
+    Path(name): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().tag_delete)?;
@@ -366,18 +368,44 @@ async fn delete(
     })
 }
 
+fn verify_visibility(
+    conn: &mut PgConnection,
+    config: &Config,
+    client: Client,
+    tag_name: &SmallString,
+) -> ApiResult<i64> {
+    let (tag_id, category_name): (i64, SmallString) = tag::table
+        .inner_join(tag_name::table)
+        .inner_join(tag_category::table)
+        .select((tag::id, tag_category::name))
+        .filter(tag_name::name.eq(tag_name))
+        .first(conn)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+
+    if client.rank == UserRank::Anonymous {
+        let preferences = &config.anonymous_preferences;
+        if preferences.tag_blacklist.contains(tag_name) || preferences.tag_category_blacklist.contains(&category_name) {
+            return Err(ApiError::Hidden(ResourceType::Tag));
+        }
+    }
+    Ok(tag_id)
+}
+
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
-    use crate::model::enums::ResourceType;
+    use crate::model::enums::{ResourceType, UserRank};
     use crate::model::tag::Tag;
     use crate::schema::{database_statistics, tag, tag_name, tag_statistics};
+    use crate::search::tag::Token;
     use crate::string::SmallString;
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
     use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
     use serial_test::{parallel, serial};
+    use strum::IntoEnumIterator;
 
     // Exclude fields that involve creation_time or last_edit_time
     const FIELDS: &str = "&fields=description,category,names,implications,suggestions,usages";
@@ -386,11 +414,25 @@ mod test {
     #[parallel]
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /tags/?query";
-        const SORT: &str = "-sort:name&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "tag/list").await?;
-        verify_query(&format!("{QUERY}=sort:usage-count -sort:name&limit=1{FIELDS}"), "tag/list_most_used").await?;
-        verify_query(&format!("{QUERY}=category:Character {SORT}{FIELDS}"), "tag/list_category_character").await?;
-        verify_query(&format!("{QUERY}=*sky* {SORT}{FIELDS}"), "tag/list_has_sky_in_name").await?;
+        const PARAMS: &str = "-sort:name&limit=40&fields=names";
+        verify_response(&format!("{QUERY}=-sort:name&limit=40{FIELDS}"), "tag/list").await?;
+
+        let filter_table = crate::search::tag::filter_table();
+        for token in Token::iter() {
+            let filter = filter_table[token];
+            let (sign, filter) = if filter.starts_with('-') {
+                filter.split_at(1)
+            } else {
+                ("", filter)
+            };
+            let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
+            let path = format!("tag/list_{token}_filtered");
+            verify_response(&query, &path).await?;
+
+            let query = format!("{QUERY}=sort:{token} {PARAMS}");
+            let path = format!("tag/list_{token}_sorted");
+            verify_response(&query, &path).await?;
+        }
         Ok(())
     }
 
@@ -409,7 +451,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /tag/{NAME}/?{FIELDS}"), "tag/get").await?;
+        verify_response(&format!("GET /tag/{NAME}/?{FIELDS}"), "tag/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -431,7 +473,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /tag-siblings/{NAME}/?{FIELDS}"), "tag/get_siblings").await?;
+        verify_response(&format!("GET /tag-siblings/{NAME}/?{FIELDS}"), "tag/get_siblings").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -450,7 +492,7 @@ mod test {
         let mut conn = get_connection()?;
         let tag_count = get_tag_count(&mut conn)?;
 
-        verify_query(&format!("POST /tags/?{FIELDS}"), "tag/create").await?;
+        verify_response(&format!("POST /tags/?{FIELDS}"), "tag/create").await?;
 
         let (tag_id, name): (i64, SmallString) = tag_name::table
             .select((tag_name::tag_id, tag_name::name))
@@ -460,7 +502,7 @@ mod test {
         let new_tag_count = get_tag_count(&mut conn)?;
         assert_eq!(new_tag_count, tag_count + 1);
 
-        verify_query(&format!("DELETE /tag/{name}/?{FIELDS}"), "tag/delete").await?;
+        verify_response(&format!("DELETE /tag/{name}/?{FIELDS}"), "tag/delete").await?;
 
         let new_tag_count = get_tag_count(&mut conn)?;
         let has_tag: bool = diesel::select(exists(tag::table.find(tag_id))).first(&mut conn)?;
@@ -495,7 +537,7 @@ mod test {
             .filter(tag_name::name.eq(REMOVE))
             .first(&mut conn)?;
 
-        verify_query(&format!("POST /tag-merge/?{FIELDS}"), "tag/merge").await?;
+        verify_response(&format!("POST /tag-merge/?{FIELDS}"), "tag/merge").await?;
 
         let has_tag: bool = diesel::select(exists(tag::table.find(remove_id))).first(&mut conn)?;
         assert!(!has_tag);
@@ -534,7 +576,7 @@ mod test {
         let mut conn = get_connection()?;
         let (tag, usage_count, implication_count, suggestion_count) = get_tag_info(&mut conn, NAME)?;
 
-        verify_query(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/edit").await?;
+        verify_response(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/edit").await?;
 
         let new_name: SmallString = tag_name::table
             .select(tag_name::name)
@@ -552,7 +594,7 @@ mod test {
         assert_ne!(new_implication_count, implication_count);
         assert_ne!(new_suggestion_count, suggestion_count);
 
-        verify_query(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/edit_restore").await?;
+        verify_response(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/edit_restore").await?;
 
         let new_tag_id: i64 = tag::table.select(tag::id).order_by(tag::id.desc()).first(&mut conn)?;
         diesel::delete(tag::table.find(new_tag_id)).execute(&mut conn)?;
@@ -570,30 +612,63 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
+    async fn preferences() -> ApiResult<()> {
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /tags/?query=-sort:name&limit=9&fields=names,implications,suggestions",
+            "tag/list_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /tag/tagme", "tag/get_with_preferences").await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /tag-siblings/rock/?fields=names,implications,suggestions",
+            "tag/get_siblings_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /tag-siblings/rock/?fields=names,implications,suggestions",
+            "tag/get_siblings_of_blacklisted",
+        )
+        .await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "PUT /tag/river/?fields=names,implications,suggestions",
+            "tag/edit_with_preferences",
+        )
+        .await?;
+
+        reset_database();
+        Ok(())
+    }
+
+    #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /tag/none", "tag/get_nonexistent").await?;
-        verify_query("GET /tag-siblings/none", "tag/get_siblings_of_nonexistent").await?;
-        verify_query("POST /tag-merge", "tag/merge_to_nonexistent").await?;
-        verify_query("POST /tag-merge", "tag/merge_with_nonexistent").await?;
-        verify_query("PUT /tag/none", "tag/edit_nonexistent").await?;
-        verify_query("DELETE /tag/none", "tag/delete_nonexistent").await?;
+        verify_response("GET /tag/none", "tag/get_nonexistent").await?;
+        verify_response("GET /tag-siblings/none", "tag/get_siblings_of_nonexistent").await?;
+        verify_response("POST /tag-merge", "tag/merge_to_nonexistent").await?;
+        verify_response("POST /tag-merge", "tag/merge_with_nonexistent").await?;
+        verify_response("PUT /tag/none", "tag/edit_nonexistent").await?;
+        verify_response("DELETE /tag/none", "tag/delete_nonexistent").await?;
 
-        verify_query("POST /tags", "tag/create_nameless").await?;
-        verify_query("POST /tags", "tag/create_name_clash").await?;
-        verify_query("POST /tags", "tag/create_invalid_name").await?;
-        verify_query("POST /tags", "tag/create_invalid_category").await?;
-        verify_query("POST /tags", "tag/create_invalid_suggestion").await?;
-        verify_query("POST /tags", "tag/create_invalid_implication").await?;
-        verify_query("POST /tag-merge", "tag/self-merge").await?;
+        verify_response("POST /tags", "tag/create_nameless").await?;
+        verify_response("POST /tags", "tag/create_name_clash").await?;
+        verify_response("POST /tags", "tag/create_invalid_name").await?;
+        verify_response("POST /tags", "tag/create_invalid_category").await?;
+        verify_response("POST /tags", "tag/create_invalid_suggestion").await?;
+        verify_response("POST /tags", "tag/create_invalid_implication").await?;
+        verify_response("POST /tag-merge", "tag/self-merge").await?;
 
-        verify_query("PUT /tag/sky", "tag/edit_nameless").await?;
-        verify_query("PUT /tag/sky", "tag/edit_name_clash").await?;
-        verify_query("PUT /tag/sky", "tag/edit_invalid_name").await?;
-        verify_query("PUT /tag/sky", "tag/edit_invalid_category").await?;
-        verify_query("PUT /tag/sky", "tag/edit_invalid_suggestion").await?;
-        verify_query("PUT /tag/sky", "tag/edit_invalid_implication").await?;
-        verify_query("PUT /tag/plant", "tag/edit_cyclic_implication").await?;
+        verify_response("PUT /tag/sky", "tag/edit_nameless").await?;
+        verify_response("PUT /tag/sky", "tag/edit_name_clash").await?;
+        verify_response("PUT /tag/sky", "tag/edit_invalid_name").await?;
+        verify_response("PUT /tag/sky", "tag/edit_invalid_category").await?;
+        verify_response("PUT /tag/sky", "tag/edit_invalid_suggestion").await?;
+        verify_response("PUT /tag/sky", "tag/edit_invalid_implication").await?;
+        verify_response("PUT /tag/plant", "tag/edit_cyclic_implication").await?;
 
         reset_sequence(ResourceType::Tag)?;
         Ok(())

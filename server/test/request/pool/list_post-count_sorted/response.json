@@ -1,0 +1,26 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "sort:post-count -sort:creation-time",
+    "results": [
+        {
+            "id": 2
+        },
+        {
+            "id": 4
+        },
+        {
+            "id": 5
+        },
+        {
+            "id": 6
+        },
+        {
+            "id": 1
+        },
+        {
+            "id": 3
+        }
+    ],
+    "total": 6
+}

@@ -31,7 +31,7 @@ pub fn routes() -> Router<AppState> {
 
 const MAX_POOLS_PER_PAGE: i64 = 1000;
 
-/// See [lsting-pools](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#listing-pools)
+/// See [lsting-pools](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-pools)
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -53,12 +53,12 @@ async fn list(
             offset,
             limit,
             total,
-            results: PoolInfo::new_batch_from_ids(conn, &state.config, &selected_pools, &fields)?,
+            results: PoolInfo::new_batch_from_ids(conn, &state.config, client, &selected_pools, &fields)?,
         }))
     })
 }
 
-/// See [getting-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#getting-pool)
+/// See [getting-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-pool)
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -73,7 +73,7 @@ async fn get(
         if !pool_exists {
             return Err(ApiError::NotFound(ResourceType::Pool));
         }
-        PoolInfo::new_from_id(conn, &state.config, pool_id, &fields)
+        PoolInfo::new_from_id(conn, &state.config, client, pool_id, &fields)
             .map(Json)
             .map_err(ApiError::from)
     })
@@ -88,7 +88,7 @@ struct CreateBody {
     posts: Option<Vec<i64>>,
 }
 
-/// See [creating-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#creating-pool)
+/// See [creating-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-pool)
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -121,7 +121,7 @@ async fn create(
 
         // Set names and posts
         update::pool::set_names(conn, &state.config, pool.id, &body.names)?;
-        update::pool::set_posts(conn, pool.id, &posts)?;
+        update::pool::add_posts(conn, pool.id, 0, &posts)?;
 
         let pool_data = SnapshotData {
             description: body.description.unwrap_or_default(),
@@ -132,12 +132,12 @@ async fn create(
         snapshot::pool::creation_snapshot(conn, client, pool.id, pool_data)?;
         Ok::<_, ApiError>(pool)
     })?;
-    conn.transaction(|conn| PoolInfo::new(conn, &state.config, pool, &fields))
+    conn.transaction(|conn| PoolInfo::new(conn, &state.config, client, pool, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
 
-/// See [merging-pools](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#merging-pools)
+/// See [merging-pools](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-pools)
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -172,7 +172,7 @@ async fn merge(
         update::pool::merge(conn, absorbed_id, merge_to_id)?;
         snapshot::pool::merge_snapshot(conn, client, absorbed_id, merge_to_id).map_err(ApiError::from)
     })?;
-    conn.transaction(|conn| PoolInfo::new_from_id(conn, &state.config, merge_to_id, &fields))
+    conn.transaction(|conn| PoolInfo::new_from_id(conn, &state.config, client, merge_to_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
@@ -187,7 +187,7 @@ struct UpdateBody {
     posts: Option<Vec<i64>>,
 }
 
-/// See [updating-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#updating-pool)
+/// See [updating-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-pool)
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -236,10 +236,10 @@ async fn update(
             update::pool::set_names(conn, &state.config, pool_id, &names)?;
             new_snapshot_data.names = names;
         }
-        if let Some(posts) = body.posts {
+        if let Some(mut posts) = body.posts {
             api::verify_privilege(client, state.config.privileges().pool_edit_post)?;
 
-            update::pool::set_posts(conn, pool_id, &posts)?;
+            update::pool::set_posts(conn, &state.config, client, pool_id, &mut posts)?;
             new_snapshot_data.posts = posts;
         }
 
@@ -248,12 +248,12 @@ async fn update(
         snapshot::pool::modification_snapshot(conn, client, pool_id, old_snapshot_data, new_snapshot_data)?;
         Ok(())
     })?;
-    conn.transaction(|conn| PoolInfo::new_from_id(conn, &state.config, pool_id, &fields))
+    conn.transaction(|conn| PoolInfo::new_from_id(conn, &state.config, client, pool_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
 }
 
-/// See [deleting-pool](https://github.com/liamw1/oxibooru/blob/master/doc/API.md#deleting-pool)
+/// See [deleting-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-pool)
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -282,14 +282,16 @@ async fn delete(
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
-    use crate::model::enums::ResourceType;
+    use crate::model::enums::{ResourceType, UserRank};
     use crate::model::pool::Pool;
     use crate::schema::{database_statistics, pool, pool_statistics};
+    use crate::search::pool::Token;
     use crate::test::*;
     use crate::time::DateTime;
     use diesel::dsl::exists;
     use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
     use serial_test::{parallel, serial};
+    use strum::IntoEnumIterator;
 
     // Exclude fields that involve creation_time or last_edit_time
     const FIELDS: &str = "&fields=id,description,category,names,posts,postCount";
@@ -298,11 +300,26 @@ mod test {
     #[parallel]
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /pools/?query";
-        const SORT: &str = "-sort:creation-time&limit=40";
-        verify_query(&format!("{QUERY}={SORT}{FIELDS}"), "pool/list").await?;
-        verify_query(&format!("{QUERY}=sort:post-count&limit=1{FIELDS}"), "pool/list_most_posts").await?;
-        verify_query(&format!("{QUERY}=category:Setting {SORT}{FIELDS}"), "pool/list_category_setting").await?;
-        verify_query(&format!("{QUERY}=name:*punk* {SORT}{FIELDS}"), "pool/list_name_punk").await
+        const PARAMS: &str = "-sort:creation-time&limit=40&fields=id";
+        verify_response(&format!("{QUERY}=-sort:creation-time&limit=40{FIELDS}"), "pool/list").await?;
+
+        let filter_table = crate::search::pool::filter_table();
+        for token in Token::iter() {
+            let filter = filter_table[token];
+            let (sign, filter) = if filter.starts_with('-') {
+                filter.split_at(1)
+            } else {
+                ("", filter)
+            };
+            let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
+            let path = format!("pool/list_{token}_filtered");
+            verify_response(&query, &path).await?;
+
+            let query = format!("{QUERY}=sort:{token} {PARAMS}");
+            let path = format!("pool/list_{token}_sorted");
+            verify_response(&query, &path).await?;
+        }
+        Ok(())
     }
 
     #[tokio::test]
@@ -319,7 +336,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_query(&format!("GET /pool/{POOL_ID}/?{FIELDS}"), "pool/get").await?;
+        verify_response(&format!("GET /pool/{POOL_ID}/?{FIELDS}"), "pool/get").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -338,7 +355,7 @@ mod test {
         let mut conn = get_connection()?;
         let pool_count = get_pool_count(&mut conn)?;
 
-        verify_query(&format!("POST /pool/?{FIELDS}"), "pool/create").await?;
+        verify_response(&format!("POST /pool/?{FIELDS}"), "pool/create").await?;
 
         let pool_id: i64 = pool::table
             .select(pool::id)
@@ -353,7 +370,7 @@ mod test {
         assert_eq!(new_pool_count, pool_count + 1);
         assert_eq!(post_count, 2);
 
-        verify_query(&format!("DELETE /pool/{pool_id}/?{FIELDS}"), "pool/delete").await?;
+        verify_response(&format!("DELETE /pool/{pool_id}/?{FIELDS}"), "pool/delete").await?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
         let has_pool: bool = diesel::select(exists(pool::table.find(pool_id))).first(&mut conn)?;
@@ -378,7 +395,7 @@ mod test {
         let mut conn = get_connection()?;
         let (pool, post_count) = get_pool_info(&mut conn)?;
 
-        verify_query(&format!("POST /pool-merge/?{FIELDS}"), "pool/merge").await?;
+        verify_response(&format!("POST /pool-merge/?{FIELDS}"), "pool/merge").await?;
 
         let has_pool: bool = diesel::select(exists(pool::table.find(REMOVE_ID))).first(&mut conn)?;
         assert!(!has_pool);
@@ -408,7 +425,7 @@ mod test {
         let mut conn = get_connection()?;
         let (pool, post_count) = get_pool_info(&mut conn)?;
 
-        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit").await?;
+        verify_response(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit").await?;
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
         assert_ne!(new_pool.category_id, pool.category_id);
@@ -417,7 +434,7 @@ mod test {
         assert!(new_pool.last_edit_time > pool.last_edit_time);
         assert_ne!(new_post_count, post_count);
 
-        verify_query(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit_restore").await?;
+        verify_response(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit_restore").await?;
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
         assert_eq!(new_pool.category_id, pool.category_id);
@@ -429,28 +446,48 @@ mod test {
     }
 
     #[tokio::test]
+    #[serial]
+    async fn preferences() -> ApiResult<()> {
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /pools/?query=-sort:creation-time&limit=40&fields=id,posts,postCount",
+            "pool/list_with_preferences",
+        )
+        .await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "PUT /pool/2/?fields=id,posts,postCount",
+            "pool/edit_with_preferences",
+        )
+        .await?;
+
+        reset_database();
+        Ok(())
+    }
+
+    #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_query("GET /pool/99", "pool/get_nonexistent").await?;
-        verify_query("POST /pool-merge", "pool/merge_to_nonexistent").await?;
-        verify_query("POST /pool-merge", "pool/merge_with_nonexistent").await?;
-        verify_query("PUT /pool/99", "pool/edit_nonexistent").await?;
-        verify_query("DELETE /pool/99", "pool/delete_nonexistent").await?;
+        verify_response("GET /pool/99", "pool/get_nonexistent").await?;
+        verify_response("POST /pool-merge", "pool/merge_to_nonexistent").await?;
+        verify_response("POST /pool-merge", "pool/merge_with_nonexistent").await?;
+        verify_response("PUT /pool/99", "pool/edit_nonexistent").await?;
+        verify_response("DELETE /pool/99", "pool/delete_nonexistent").await?;
 
-        verify_query("POST /pool", "pool/create_nameless").await?;
-        verify_query("POST /pool", "pool/create_name_clash").await?;
-        verify_query("POST /pool", "pool/create_invalid_name").await?;
-        verify_query("POST /pool", "pool/create_invalid_post").await?;
-        verify_query("POST /pool", "pool/create_invalid_category").await?;
-        verify_query("POST /pool", "pool/create_duplicate_post").await?;
-        verify_query("POST /pool-merge", "pool/self-merge").await?;
+        verify_response("POST /pool", "pool/create_nameless").await?;
+        verify_response("POST /pool", "pool/create_name_clash").await?;
+        verify_response("POST /pool", "pool/create_invalid_name").await?;
+        verify_response("POST /pool", "pool/create_invalid_post").await?;
+        verify_response("POST /pool", "pool/create_invalid_category").await?;
+        verify_response("POST /pool", "pool/create_duplicate_post").await?;
+        verify_response("POST /pool-merge", "pool/self-merge").await?;
 
-        verify_query("PUT /pool/1", "pool/edit_nameless").await?;
-        verify_query("PUT /pool/1", "pool/edit_name_clash").await?;
-        verify_query("PUT /pool/1", "pool/edit_invalid_name").await?;
-        verify_query("PUT /pool/1", "pool/edit_invalid_post").await?;
-        verify_query("PUT /pool/1", "pool/edit_invalid_category").await?;
-        verify_query("PUT /pool/1", "pool/edit_duplicate_post").await?;
+        verify_response("PUT /pool/1", "pool/edit_nameless").await?;
+        verify_response("PUT /pool/1", "pool/edit_name_clash").await?;
+        verify_response("PUT /pool/1", "pool/edit_invalid_name").await?;
+        verify_response("PUT /pool/1", "pool/edit_invalid_post").await?;
+        verify_response("PUT /pool/1", "pool/edit_invalid_category").await?;
+        verify_response("PUT /pool/1", "pool/edit_duplicate_post").await?;
 
         reset_sequence(ResourceType::Pool)?;
         Ok(())

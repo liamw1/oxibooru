@@ -1,0 +1,29 @@
+{
+    "limit": 40,
+    "offset": 0,
+    "query": "name:*sky* -sort:name",
+    "results": [
+        {
+            "names": [
+                "darth_vader",
+                "annakin_skywalker"
+            ]
+        },
+        {
+            "names": [
+                "luke_skywalker"
+            ]
+        },
+        {
+            "names": [
+                "night_sky"
+            ]
+        },
+        {
+            "names": [
+                "sky"
+            ]
+        }
+    ],
+    "total": 4
+}
