@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
+use crate::api::{DeleteBody, ResourceParams, TAG_CATEGORY_TAG, UnpagedResponse, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::{Config, RegexType};
@@ -12,20 +12,22 @@ use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, resource, snapshot};
 use axum::extract::{Extension, State};
-use axum::{Router, routing};
 use diesel::{
     Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/tag-categories", routing::get(list).post(create))
-        .route("/tag-category/{name}", routing::get(get).put(update).delete(delete))
-        .route("/tag-category/{name}/default", routing::put(set_default))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list, create))
+        .routes(routes!(get, update, delete))
+        .routes(routes!(set_default))
 }
 
-/// See [listing-tag-categories](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-tag-categories)
+#[utoipa::path(get, path = "/tag-categories", tag = TAG_CATEGORY_TAG)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -42,7 +44,7 @@ async fn list(
         .map_err(ApiError::from)
 }
 
-/// See [getting-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-tag-category)
+#[utoipa::path(get, path = "/tag-category/{name}", tag = TAG_CATEGORY_TAG)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -60,7 +62,7 @@ async fn get(
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct CreateBody {
     order: i32,
@@ -68,7 +70,7 @@ struct CreateBody {
     color: SmallString,
 }
 
-/// See [creating-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-tag-category)
+#[utoipa::path(post, path = "/tag-categories", tag = TAG_CATEGORY_TAG)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -102,7 +104,7 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct UpdateBody {
     version: DateTime,
@@ -111,7 +113,7 @@ struct UpdateBody {
     color: Option<SmallString>,
 }
 
-/// See [updating-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-tag-category)
+#[utoipa::path(put, path = "/tag-category/{name}", tag = TAG_CATEGORY_TAG)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -156,7 +158,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [setting-default-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#setting-default-tag-category)
+#[utoipa::path(put, path = "/tag-category/{name}/default", tag = TAG_CATEGORY_TAG)]
 async fn set_default(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -214,7 +216,7 @@ async fn set_default(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-tag-category)
+#[utoipa::path(delete, path = "/tag-category/{name}", tag = TAG_CATEGORY_TAG)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

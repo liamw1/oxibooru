@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{DeleteBody, MergeBody, POOL_TAG, PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::enums::ResourceType;
@@ -14,24 +14,26 @@ use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, resource, snapshot, update};
 use axum::extract::{Extension, State};
-use axum::{Router, routing};
 use diesel::dsl::exists;
 use diesel::{
     Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/pools", routing::get(list))
-        .route("/pool", routing::post(create))
-        .route("/pool/{id}", routing::get(get).put(update).delete(delete))
-        .route("/pool-merge", routing::post(merge))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(get, update, delete))
+        .routes(routes!(merge))
 }
 
 const MAX_POOLS_PER_PAGE: i64 = 1000;
 
-/// See [lsting-pools](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-pools)
+#[utoipa::path(get, path = "/pools", tag = POOL_TAG)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -58,7 +60,7 @@ async fn list(
     })
 }
 
-/// See [getting-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-pool)
+#[utoipa::path(get, path = "/pool/{id}", tag = POOL_TAG)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -79,7 +81,7 @@ async fn get(
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct CreateBody {
     names: Vec<SmallString>,
@@ -88,7 +90,7 @@ struct CreateBody {
     posts: Option<Vec<i64>>,
 }
 
-/// See [creating-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-pool)
+#[utoipa::path(post, path = "/pool", tag = POOL_TAG)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -137,7 +139,7 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-/// See [merging-pools](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-pools)
+#[utoipa::path(post, path = "/pool-merge", tag = POOL_TAG)]
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -177,7 +179,7 @@ async fn merge(
         .map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct UpdateBody {
     version: DateTime,
@@ -187,7 +189,7 @@ struct UpdateBody {
     posts: Option<Vec<i64>>,
 }
 
-/// See [updating-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-pool)
+#[utoipa::path(put, path = "/pool/{id}", tag = POOL_TAG)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -253,7 +255,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-pool)
+#[utoipa::path(delete, path = "/pool/{id}", tag = POOL_TAG)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

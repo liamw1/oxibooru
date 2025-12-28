@@ -1,3 +1,4 @@
+use crate::api::PASSWORD_RESET_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path};
 use crate::app::AppState;
@@ -9,7 +10,6 @@ use crate::string::SmallString;
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::extract::State;
-use axum::{Router, routing};
 use diesel::{
     BoolExpressionMethods, Connection, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl,
 };
@@ -21,9 +21,12 @@ use lettre::{Message, SmtpTransport, Transport};
 use percent_encoding::NON_ALPHANUMERIC;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new().route("/password-reset/{identifier}", routing::get(request_reset).post(reset_password))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new().routes(routes!(request_reset, reset_password))
 }
 
 fn get_user_info(
@@ -38,7 +41,7 @@ fn get_user_info(
         .ok_or(ApiError::NotFound(ResourceType::User))
 }
 
-/// See [request-password-reset](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#request-password-reset)
+#[utoipa::path(get, path = "/password-reset/{identifier}", tag = PASSWORD_RESET_TAG)]
 async fn request_reset(State(state): State<AppState>, Path(identifier): Path<String>) -> ApiResult<Json<()>> {
     let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
@@ -96,7 +99,7 @@ async fn request_reset(State(state): State<AppState>, Path(identifier): Path<Str
     mailer.send(&email).map(|_| Json(())).map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct ResetToken {
     token: String,
@@ -118,7 +121,7 @@ fn generate_temporary_password(length: u8) -> String {
         .collect()
 }
 
-/// See [confirm-password-reset](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#confirm-password-reset)
+#[utoipa::path(post, path = "/password-reset/{identifier}", tag = PASSWORD_RESET_TAG)]
 async fn reset_password(
     State(state): State<AppState>,
     Path(username): Path<SmallString>,

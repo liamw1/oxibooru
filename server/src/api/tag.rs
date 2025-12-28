@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
+use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams, TAG_TAG};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::Config;
@@ -15,26 +15,28 @@ use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, resource, snapshot, update};
 use axum::extract::{Extension, State};
-use axum::{Router, routing};
 use diesel::dsl::count_star;
 use diesel::{
     Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
     SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/tags", routing::get(list).post(create))
-        .route("/tag/{name}", routing::get(get).put(update).delete(delete))
-        .route("/tag-siblings/{name}", routing::get(get_siblings))
-        .route("/tag-merge", routing::post(merge))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list, create))
+        .routes(routes!(get, update, delete))
+        .routes(routes!(get_siblings))
+        .routes(routes!(merge))
 }
 
 const MAX_TAGS_PER_PAGE: i64 = 1000;
 const MAX_TAG_SIBLINGS: i64 = 50;
 
-/// See [listing-tags](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-tags)
+#[utoipa::path(get, path = "/tags", tag = TAG_TAG)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -61,7 +63,7 @@ async fn list(
     })
 }
 
-/// See [getting-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-tag)
+#[utoipa::path(get, path = "/tag/{name}", tag = TAG_TAG)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -90,7 +92,7 @@ struct TagSiblings {
     results: Vec<TagSibling>,
 }
 
-/// See [getting-tag-siblings](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-tag-siblings)
+#[utoipa::path(get, path = "/tag-siblings/{name}", tag = TAG_TAG)]
 async fn get_siblings(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -138,7 +140,7 @@ async fn get_siblings(
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct CreateBody {
     category: SmallString,
@@ -148,7 +150,7 @@ struct CreateBody {
     suggestions: Option<Vec<SmallString>>,
 }
 
-/// See [creating-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-tag)
+#[utoipa::path(post, path = "/tags", tag = TAG_TAG)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -211,7 +213,7 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-/// See [merging-tags](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-tags)
+#[utoipa::path(post, path = "/tag-merge", tag = TAG_TAG)]
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -250,7 +252,7 @@ async fn merge(
         .map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct UpdateBody {
     version: DateTime,
@@ -261,7 +263,7 @@ struct UpdateBody {
     suggestions: Option<Vec<SmallString>>,
 }
 
-/// See [updating-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-tag)
+#[utoipa::path(put, path = "/tag/{name}", tag = TAG_TAG)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -340,7 +342,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-tag](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-tag)
+#[utoipa::path(delete, path = "/tag/{name}", tag = TAG_TAG)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

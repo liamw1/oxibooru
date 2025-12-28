@@ -1,6 +1,6 @@
-use crate::api::ResourceParams;
 use crate::api::error::ApiResult;
 use crate::api::extract::{Json, Query};
+use crate::api::{INFO_TAG, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::PublicConfig;
@@ -11,12 +11,13 @@ use crate::schema::{database_statistics, post_feature, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use axum::extract::{Extension, State};
-use axum::routing::{self, Router};
 use diesel::{Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Serialize;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new().route("/info", routing::get(get))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new().routes(routes!(get))
 }
 
 // TODO: Remove renames by changing references to these names in client
@@ -32,7 +33,7 @@ struct Response {
     config: PublicConfig,
 }
 
-/// See [getting-global-info](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-global-info)
+#[utoipa::path(get, path = "/info", tag = INFO_TAG)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
+use crate::api::{DeleteBody, POOL_CATEGORY_TAG, ResourceParams, UnpagedResponse, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::RegexType;
@@ -12,18 +12,20 @@ use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, resource, snapshot};
 use axum::extract::{Extension, State};
-use axum::{Router, routing};
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/pool-categories", routing::get(list).post(create))
-        .route("/pool-category/{name}", routing::get(get).put(update).delete(delete))
-        .route("/pool-category/{name}/default", routing::put(set_default))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list, create))
+        .routes(routes!(get, update, delete))
+        .routes(routes!(set_default))
 }
 
-/// See [listing-pool-categories](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-pool-categories)
+#[utoipa::path(get, path = "/pool-categories", tag = POOL_CATEGORY_TAG)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -40,7 +42,7 @@ async fn list(
         .map_err(ApiError::from)
 }
 
-/// See [getting-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-pool-category)
+#[utoipa::path(get, path = "/pool-category/{name}", tag = POOL_CATEGORY_TAG)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -62,14 +64,14 @@ async fn get(
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct CreateBody {
     name: SmallString,
     color: SmallString,
 }
 
-/// See [creating-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-pool-category)
+#[utoipa::path(post, path = "/pool-categories", tag = POOL_CATEGORY_TAG)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -102,7 +104,7 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct UpdateBody {
     version: DateTime,
@@ -110,7 +112,7 @@ struct UpdateBody {
     color: Option<SmallString>,
 }
 
-/// See [updating-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-pool-category)
+#[utoipa::path(put, path = "/pool-category/{name}", tag = POOL_CATEGORY_TAG)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -151,7 +153,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [setting-default-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#setting-default-pool-category)
+#[utoipa::path(put, path = "/pool-category/{name}/default", tag = POOL_CATEGORY_TAG)]
 async fn set_default(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -210,7 +212,7 @@ async fn set_default(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-pool-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-pool-category)
+#[utoipa::path(delete, path = "/pool-category/{name}", tag = POOL_CATEGORY_TAG)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

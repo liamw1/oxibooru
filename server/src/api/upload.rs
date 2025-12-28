@@ -1,20 +1,21 @@
-use crate::api;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::Json;
 use crate::api::extract::JsonOrMultipart;
+use crate::api::{self, UPLOAD_TAG};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::Config;
 use crate::content::download;
 use crate::content::upload::{self, MAX_UPLOAD_SIZE, PartName};
 use axum::extract::{DefaultBodyLimit, Extension, State};
-use axum::{Router, routing};
 use serde::{Deserialize, Serialize};
 use url::Url;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/uploads", routing::post(upload_handler))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(upload_handler))
         .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
 }
 
@@ -30,13 +31,12 @@ struct UploadResponse {
     token: String,
 }
 
-/// See [uploading-temporary-file](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#uploading-temporary-file)
 async fn upload_from_url(config: &Config, body: UploadBody) -> ApiResult<Json<UploadResponse>> {
     let token = download::from_url(config, body.content_url).await?;
     Ok(Json(UploadResponse { token }))
 }
 
-/// See [uploading-temporary-file](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#uploading-temporary-file)
+#[utoipa::path(post, path = "/uploads", tag = UPLOAD_TAG)]
 async fn upload_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

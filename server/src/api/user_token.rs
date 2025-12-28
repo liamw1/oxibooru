@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{ResourceParams, UnpagedResponse};
+use crate::api::{ResourceParams, USER_TOKEN_TAG, UnpagedResponse};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::enums::{AvatarStyle, ResourceType};
@@ -12,7 +12,6 @@ use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, resource};
 use axum::extract::{Extension, State};
-use axum::{Router, routing};
 use diesel::dsl::sql;
 use diesel::sql_types::Integer;
 use diesel::{
@@ -20,16 +19,19 @@ use diesel::{
     SaveChangesDsl,
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 use uuid::Uuid;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/user-tokens/{username}", routing::get(list))
-        .route("/user-token/{username}", routing::post(create))
-        .route("/user-token/{username}/{token}", routing::put(update).delete(delete))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(update, delete))
 }
 
-/// See [listing-user-tokens](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-user-tokens)
+#[utoipa::path(get, path = "/user-tokens/{username}", tag = USER_TOKEN_TAG)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -68,7 +70,7 @@ async fn list(
     Ok(Json(UnpagedResponse { results }))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct CreateBody {
@@ -77,7 +79,7 @@ struct CreateBody {
     expiration_time: Option<DateTime>,
 }
 
-/// See [creating-user-token](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-user-token)
+#[utoipa::path(post, path = "/user-token/{username}", tag = USER_TOKEN_TAG)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -128,7 +130,7 @@ async fn create(
     Ok(Json(UserTokenInfo::new(MicroUser::new(&state.config, username, avatar_style), user_token, &fields)))
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct UpdateBody {
@@ -139,7 +141,7 @@ struct UpdateBody {
     expiration_time: Option<Option<DateTime>>,
 }
 
-/// See [updating-user-token](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-user-token)
+#[utoipa::path(put, path = "/user-token/{username}/{token}", tag = USER_TOKEN_TAG)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -194,7 +196,7 @@ async fn update(
     )))
 }
 
-/// See [deleting-user-token](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-user-token)
+#[utoipa::path(delete, path = "/user-token/{username}/{token}", tag = USER_TOKEN_TAG)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
+use crate::api::{COMMENT_TAG, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::Config;
@@ -13,21 +13,23 @@ use crate::search::{Builder, preferences};
 use crate::time::DateTime;
 use crate::{api, resource};
 use axum::extract::{Extension, State};
-use axum::{Router, routing};
 use diesel::dsl::exists;
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/comments", routing::get(list).post(create))
-        .route("/comment/{id}", routing::get(get).put(update).delete(delete))
-        .route("/comment/{id}/score", routing::put(rate))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list, create))
+        .routes(routes!(get, update, delete))
+        .routes(routes!(rate))
 }
 
 const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 
-/// See [listing-comments](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-comments)
+#[utoipa::path(get, path = "/comments", tag = COMMENT_TAG)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -53,7 +55,7 @@ async fn list(
     })
 }
 
-/// See [getting-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-comment)
+#[utoipa::path(get, path = "/comment/{id}", tag = COMMENT_TAG)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -71,7 +73,7 @@ async fn get(
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct CreateBody {
@@ -79,7 +81,7 @@ struct CreateBody {
     text: String,
 }
 
-/// See [creating-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-comment)
+#[utoipa::path(post, path = "/comments", tag = COMMENT_TAG)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -106,14 +108,14 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct UpdateBody {
     version: DateTime,
     text: String,
 }
 
-/// See [updating-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-comment)
+#[utoipa::path(put, path = "/comment/{id}", tag = COMMENT_TAG)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -150,7 +152,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [rating-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#rating-comment)
+#[utoipa::path(put, path = "/comment/{id}/score", tag = COMMENT_TAG)]
 async fn rate(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -184,7 +186,7 @@ async fn rate(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-comment)
+#[utoipa::path(delete, path = "/comment/{id}", tag = COMMENT_TAG)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

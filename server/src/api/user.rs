@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
-use crate::api::{DeleteBody, PageParams, PagedResponse, ResourceParams, error};
+use crate::api::{DeleteBody, PageParams, PagedResponse, ResourceParams, USER_TAG, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::auth::password;
@@ -20,28 +20,24 @@ use crate::{api, filesystem, resource, update};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use axum::extract::{DefaultBodyLimit, Extension, State};
-use axum::{Router, routing};
 use diesel::dsl::exists;
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
 use url::Url;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/users", routing::get(list).post(create_handler))
-        .route(
-            "/user/{name}",
-            routing::get(get)
-                .put(update_handler)
-                .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
-                .delete(delete),
-        )
-        .layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list, create_handler))
+        .routes(routes!(get, update_handler, delete))
+        .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
 }
 
 const MAX_USERS_PER_PAGE: i64 = 1000;
 
-/// See [listing-users](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-users)
+#[utoipa::path(get, path = "/users", tag = USER_TAG)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -74,7 +70,7 @@ async fn list(
     })
 }
 
-/// See [getting-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-user)
+#[utoipa::path(get, path = "/user/{name}", tag = USER_TAG)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -106,7 +102,7 @@ async fn get(
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct CreateBody {
@@ -121,7 +117,6 @@ struct CreateBody {
     avatar_url: Option<Url>,
 }
 
-/// See [creating-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-user)
 async fn create(
     state: AppState,
     client: Client,
@@ -202,7 +197,7 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-/// Creates a user from either a JSON body or a multipart form.
+#[utoipa::path(post, path = "/users", tag = USER_TAG)]
 async fn create_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -225,7 +220,7 @@ async fn create_handler(
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct UpdateBody {
@@ -242,7 +237,6 @@ struct UpdateBody {
     avatar_url: Option<Url>,
 }
 
-/// See [updating-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-user)
 async fn update(
     state: AppState,
     client: Client,
@@ -377,7 +371,7 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// Updates a user from either a JSON body or a multipart form.
+#[utoipa::path(put, path = "/user/{name}", tag = USER_TAG)]
 async fn update_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -401,7 +395,7 @@ async fn update_handler(
     }
 }
 
-/// See [deleting-user](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-user)
+#[utoipa::path(delete, path = "/user/{name}", tag = USER_TAG)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

@@ -11,6 +11,7 @@ use std::ops::{BitOr, BitOrAssign};
 use std::path::Path;
 use strum::{Display, EnumCount, EnumIter, EnumString, FromRepr, IntoEnumIterator, IntoStaticStr};
 use thiserror::Error;
+use utoipa::ToSchema;
 
 /// In general, the order of these enums should not be changed.
 /// They are encoded in the database as an integer, so changing
@@ -28,7 +29,9 @@ pub struct ParseExtensionError {
 #[error("Cannot convert None to Score")]
 pub struct FromRatingError;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize, ToSchema,
+)]
 #[serde(rename_all = "lowercase")]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
@@ -346,6 +349,7 @@ impl Serialize for PostFlags {
     FromSqlRow,
     Serialize,
     Deserialize,
+    ToSchema,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -374,7 +378,7 @@ impl FromSql<SmallInt, Pg> for UserRank {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, Default, Clone, Copy, Serialize_repr, Deserialize_repr, ToSchema)]
 #[repr(i16)]
 pub enum Rating {
     Dislike = -1,

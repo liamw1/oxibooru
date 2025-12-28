@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
-use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
+use crate::api::{DeleteBody, MergeBody, POST_TAG, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::Config;
@@ -22,7 +22,6 @@ use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, db, filesystem, resource, snapshot, update};
 use axum::extract::{DefaultBodyLimit, Extension, State};
-use axum::{Router, routing};
 use diesel::dsl::{exists, not, sql};
 use diesel::sql_types::Integer;
 use diesel::{
@@ -34,26 +33,21 @@ use std::sync::LazyLock;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::info;
 use url::Url;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/posts", routing::get(list).post(create_handler))
-        .route(
-            "/post/{id}",
-            routing::get(get)
-                .put(update_handler)
-                .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
-                .delete(delete),
-        )
-        .route("/post/{id}/around", routing::get(get_neighbors))
-        .route("/featured-post", routing::get(get_featured).post(feature))
-        .route(
-            "/posts/reverse-search",
-            routing::post(reverse_search_handler).route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE)),
-        )
-        .route("/post-merge", routing::post(merge))
-        .route("/post/{id}/favorite", routing::post(favorite).delete(unfavorite))
-        .route("/post/{id}/score", routing::put(rate))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list, create_handler))
+        .routes(routes!(get, update_handler, delete))
+        .routes(routes!(get_neighbors))
+        .routes(routes!(get_featured, feature))
+        .routes(routes!(reverse_search_handler))
+        .routes(routes!(merge))
+        .routes(routes!(favorite, unfavorite))
+        .routes(routes!(rate))
+        .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
 }
 
 const MAX_POSTS_PER_PAGE: i64 = 1000;
@@ -82,7 +76,7 @@ where
     connection_pool.get()?.transaction(update)
 }
 
-/// See [listing-posts](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-posts)
+#[utoipa::path(get, path = "/posts", tag = POST_TAG)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -109,7 +103,7 @@ async fn list(
     })
 }
 
-/// See [getting-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-post)
+#[utoipa::path(get, path = "/post/{id}", tag = POST_TAG)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -133,7 +127,7 @@ struct PostNeighbors {
     next: Option<PostInfo>,
 }
 
-/// See [getting-around-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-around-post)
+#[utoipa::path(get, path = "/post/{id}/around", tag = POST_TAG)]
 async fn get_neighbors(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -218,7 +212,7 @@ async fn get_neighbors(
     })
 }
 
-/// See [getting-featured-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-featured-post)
+#[utoipa::path(get, path = "/featured-post", tag = POST_TAG)]
 async fn get_featured(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -247,13 +241,13 @@ async fn get_featured(
     })
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct FeatureBody {
     id: i64,
 }
 
-/// See [featuring-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#featuring-post)
+#[utoipa::path(post, path = "/featured-post", tag = POST_TAG)]
 async fn feature(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -314,7 +308,6 @@ struct ReverseSearchResponse {
     similar_posts: Vec<SimilarPost>,
 }
 
-/// See [reverse-image-search](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#reverse-image-search)
 async fn reverse_search(
     state: AppState,
     client: Client,
@@ -385,7 +378,7 @@ async fn reverse_search(
         .map(Json)
 }
 
-/// Performs reverse image search using either a JSON body or a multipart form.
+#[utoipa::path(post, path = "/posts/reverse-search", tag = POST_TAG)]
 async fn reverse_search_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -436,7 +429,6 @@ struct CreateBody {
     flags: Option<Vec<PostFlag>>,
 }
 
-/// See [creating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-post)
 async fn create(
     state: AppState,
     client: Client,
@@ -536,6 +528,7 @@ async fn create(
 }
 
 /// Creates a post from either a JSON body or a multipart form.
+#[utoipa::path(post, path = "/posts", tag = POST_TAG)]
 async fn create_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -557,7 +550,7 @@ async fn create_handler(
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct PostMergeBody {
@@ -566,7 +559,7 @@ struct PostMergeBody {
     replace_content: bool,
 }
 
-/// See [merging-posts](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-posts)
+#[utoipa::path(post, path = "/post-merge", tag = POST_TAG)]
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -608,7 +601,7 @@ async fn merge(
         .map_err(ApiError::from)
 }
 
-/// See [adding-post-to-favorites](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#adding-post-to-favorites)
+#[utoipa::path(post, path = "/post/{id}/favorite", tag = POST_TAG)]
 async fn favorite(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -636,7 +629,7 @@ async fn favorite(
         .map_err(ApiError::from)
 }
 
-/// See [rating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-post)
+#[utoipa::path(put, path = "/post/{id}/score", tag = POST_TAG)]
 async fn rate(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -693,7 +686,6 @@ struct UpdateBody {
     thumbnail_url: Option<Url>,
 }
 
-/// See [updating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-post)
 async fn update(
     state: AppState,
     client: Client,
@@ -824,6 +816,7 @@ async fn update(
 }
 
 /// Updates post from either a JSON body or a multipart form.
+#[utoipa::path(put, path = "/post/{id}", tag = POST_TAG)]
 async fn update_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -846,7 +839,7 @@ async fn update_handler(
     }
 }
 
-/// See [deleting-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-post)
+#[utoipa::path(delete, path = "/post/{id}", tag = POST_TAG)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -893,7 +886,7 @@ async fn delete(
     Ok(Json(()))
 }
 
-/// See [removing-post-from-favorites](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#removing-post-from-favorites)
+#[utoipa::path(delete, path = "/post/{id}/favorite", tag = POST_TAG)]
 async fn unfavorite(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

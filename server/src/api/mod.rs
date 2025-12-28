@@ -5,14 +5,15 @@ use crate::config::{Config, RegexType};
 use crate::model::enums::{Rating, UserRank};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use axum::Router;
 use axum::http::StatusCode;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::num::NonZero;
+use std::num::NonZeroI64;
 use std::ops::Deref;
 use std::time::Duration;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
+use utoipa::{OpenApi, ToSchema};
+use utoipa_axum::router::OpenApiRouter;
 
 mod comment;
 pub mod error;
@@ -30,20 +31,20 @@ mod upload;
 mod user;
 mod user_token;
 
-pub fn routes(state: AppState) -> Router {
-    Router::new()
+pub fn routes(state: AppState) -> OpenApiRouter {
+    OpenApiRouter::with_openapi(ApiDoc::openapi())
         .merge(comment::routes())
         .merge(info::routes())
         .merge(password_reset::routes())
-        .merge(pool_category::routes())
         .merge(pool::routes())
+        .merge(pool_category::routes())
         .merge(post::routes())
         .merge(snapshot::routes())
-        .merge(tag_category::routes())
         .merge(tag::routes())
+        .merge(tag_category::routes())
         .merge(upload::routes())
-        .merge(user_token::routes())
         .merge(user::routes())
+        .merge(user_token::routes())
         .layer((
             TraceLayer::new_for_http(),
             // Graceful shutdown will wait for outstanding requests to complete.
@@ -83,8 +84,40 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
     }
 }
 
+const COMMENT_TAG: &str = "comment";
+const INFO_TAG: &str = "info";
+const PASSWORD_RESET_TAG: &str = "password_reset";
+const POOL_TAG: &str = "pool";
+const POOL_CATEGORY_TAG: &str = "pool_category";
+const POST_TAG: &str = "post";
+const SNAPSHOT_TAG: &str = "snapshot";
+const TAG_TAG: &str = "tag";
+const TAG_CATEGORY_TAG: &str = "tag_category";
+const UPLOAD_TAG: &str = "upload";
+const USER_TAG: &str = "user";
+const USER_TOKEN_TAG: &str = "user_token";
+
+#[derive(OpenApi)]
+#[openapi(
+    tags(
+        (name = COMMENT_TAG, description = "Comment API endpoints"),
+        (name = INFO_TAG, description = "Info API endpoints"),
+        (name = PASSWORD_RESET_TAG, description = "Password reset API endpoints"),
+        (name = POOL_TAG, description = "Pool API endpoints"),
+        (name = POOL_CATEGORY_TAG, description = "Pool category API endpoints"),
+        (name = POST_TAG, description = "Post API endpoints"),
+        (name = SNAPSHOT_TAG, description = "Snapshot API endpoints"),
+        (name = TAG_TAG, description = "Tag API endpoints"),
+        (name = TAG_CATEGORY_TAG, description = "Tag category API endpoints"),
+        (name = UPLOAD_TAG, description = "Upload API endpoints"),
+        (name = USER_TAG, description = "User API endpoints"),
+        (name = USER_TOKEN_TAG, description = "User token API endpoints"),
+    )
+)]
+struct ApiDoc;
+
 /// Represents body of a request to apply/change a score.
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct RatingBody {
     score: Rating,
@@ -98,7 +131,7 @@ impl Deref for RatingBody {
 }
 
 /// Represents body of a request to delete a resource.
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct DeleteBody {
     version: DateTime,
@@ -112,7 +145,7 @@ impl Deref for DeleteBody {
 }
 
 /// Represents body of a request to merge two resources.
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct MergeBody<T> {
     remove: T,
@@ -122,7 +155,7 @@ struct MergeBody<T> {
 }
 
 /// Represents parameters of a request to retrieve one or more resources.
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 struct ResourceParams {
     query: Option<String>,
     fields: Option<String>,
@@ -139,10 +172,12 @@ impl ResourceParams {
 }
 
 /// Represents parameters of a request to retrieve multiple resources, paged.
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 struct PageParams {
     offset: Option<i64>,
-    limit: NonZero<i64>,
+    #[schema(value_type = i64)]
+    limit: NonZeroI64,
+    #[schema(inline)]
     #[serde(flatten)]
     params: ResourceParams,
 }
@@ -163,14 +198,14 @@ impl PageParams {
 
 /// Represents a response to a request to retrieve multiple resources.
 /// Used for resources which are not paged.
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 struct UnpagedResponse<T> {
     results: Vec<T>,
 }
 
 /// Represents a response to a request to retrieve multiple resources.
 /// Used for resources which are paged.
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 struct PagedResponse<T> {
     query: Option<String>,
     offset: i64,

@@ -1,23 +1,24 @@
 use crate::api::error::ApiResult;
 use crate::api::extract::{Json, Query};
-use crate::api::{PageParams, PagedResponse};
+use crate::api::{PageParams, PagedResponse, SNAPSHOT_TAG};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::resource::snapshot::SnapshotInfo;
 use crate::search::Builder;
 use crate::search::snapshot::QueryBuilder;
 use crate::{api, resource};
-use axum::extract::State;
-use axum::{Extension, Router, routing};
+use axum::extract::{Extension, State};
 use diesel::Connection;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new().route("/snapshots", routing::get(list))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new().routes(routes!(list))
 }
 
 const MAX_SNAPSHOTS_PER_PAGE: i64 = 1000;
 
-/// See [listing-snapshots](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-snapshots)
+#[utoipa::path(get, path = "/snapshots", tag = SNAPSHOT_TAG)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
