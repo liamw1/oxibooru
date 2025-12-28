@@ -66,7 +66,7 @@ async fn get(
 
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct CreateBody {
+struct PoolCategoryCreateBody {
     name: SmallString,
     color: SmallString,
 }
@@ -76,7 +76,7 @@ async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<CreateBody>,
+    Json(body): Json<PoolCategoryCreateBody>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     api::verify_privilege(client, state.config.privileges().pool_category_create)?;
     api::verify_matches_regex(&state.config, &body.name, RegexType::PoolCategory)?;
@@ -106,7 +106,7 @@ async fn create(
 
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct UpdateBody {
+struct PoolCategoryUpdateBody {
     version: DateTime,
     name: Option<SmallString>,
     color: Option<SmallString>,
@@ -118,7 +118,7 @@ async fn update(
     Extension(client): Extension<Client>,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<UpdateBody>,
+    Json(body): Json<PoolCategoryUpdateBody>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 

@@ -73,7 +73,7 @@ async fn list(
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct CreateBody {
+struct UserTokenCreateBody {
     enabled: bool,
     note: Option<String>,
     expiration_time: Option<DateTime>,
@@ -85,7 +85,7 @@ async fn create(
     Extension(client): Extension<Client>,
     Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<CreateBody>,
+    Json(body): Json<UserTokenCreateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
@@ -133,7 +133,7 @@ async fn create(
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct UpdateBody {
+struct UserTokenUpdateBody {
     version: DateTime,
     enabled: Option<bool>,
     note: Option<LargeString>,
@@ -147,7 +147,7 @@ async fn update(
     Extension(client): Extension<Client>,
     Path((username, token)): Path<(String, Uuid)>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<UpdateBody>,
+    Json(body): Json<UserTokenUpdateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 

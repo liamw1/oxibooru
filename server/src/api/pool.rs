@@ -83,7 +83,7 @@ async fn get(
 
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct CreateBody {
+struct PoolCreateBody {
     names: Vec<SmallString>,
     category: SmallString,
     description: Option<LargeString>,
@@ -95,7 +95,7 @@ async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<CreateBody>,
+    Json(body): Json<PoolCreateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
     api::verify_privilege(client, state.config.privileges().pool_create)?;
 
@@ -181,7 +181,7 @@ async fn merge(
 
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct UpdateBody {
+struct PoolUpdateBody {
     version: DateTime,
     category: Option<SmallString>,
     description: Option<LargeString>,
@@ -195,7 +195,7 @@ async fn update(
     Extension(client): Extension<Client>,
     Path(pool_id): Path<i64>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<UpdateBody>,
+    Json(body): Json<PoolUpdateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 

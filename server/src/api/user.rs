@@ -105,7 +105,7 @@ async fn get(
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct CreateBody {
+struct UserCreateBody {
     name: SmallString,
     password: SmallString,
     email: Option<SmallString>,
@@ -121,7 +121,7 @@ async fn create(
     state: AppState,
     client: Client,
     params: ResourceParams,
-    body: CreateBody,
+    body: UserCreateBody,
 ) -> ApiResult<Json<UserInfo>> {
     let creation_rank = body.rank.unwrap_or(state.config.default_rank());
     if creation_rank == UserRank::Anonymous {
@@ -202,14 +202,14 @@ async fn create_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    body: JsonOrMultipart<CreateBody>,
+    body: JsonOrMultipart<UserCreateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
         JsonOrMultipart::Json(payload) => create(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
-            let mut new_user: CreateBody = serde_json::from_slice(&metadata)?;
+            let mut new_user: UserCreateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar)] = decoded_body.files {
                 new_user.avatar = Some(avatar);
                 create(state, client, params, new_user).await
@@ -223,7 +223,7 @@ async fn create_handler(
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct UpdateBody {
+struct UserUpdateBody {
     version: DateTime,
     name: Option<SmallString>,
     password: Option<SmallString>,
@@ -242,7 +242,7 @@ async fn update(
     client: Client,
     username: &str,
     params: ResourceParams,
-    body: UpdateBody,
+    body: UserUpdateBody,
 ) -> ApiResult<Json<UserInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
@@ -377,14 +377,14 @@ async fn update_handler(
     Extension(client): Extension<Client>,
     Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams>,
-    body: JsonOrMultipart<UpdateBody>,
+    body: JsonOrMultipart<UserUpdateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
         JsonOrMultipart::Json(payload) => update(state, client, &username, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
-            let mut user_update: UpdateBody = serde_json::from_slice(&metadata)?;
+            let mut user_update: UserUpdateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar)] = decoded_body.files {
                 user_update.avatar = Some(avatar);
                 update(state, client, &username, params, user_update).await

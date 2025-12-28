@@ -142,7 +142,7 @@ async fn get_siblings(
 
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct CreateBody {
+struct TagCreateBody {
     category: SmallString,
     description: Option<LargeString>,
     names: Vec<SmallString>,
@@ -155,7 +155,7 @@ async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<CreateBody>,
+    Json(body): Json<TagCreateBody>,
 ) -> ApiResult<Json<TagInfo>> {
     api::verify_privilege(client, state.config.privileges().tag_create)?;
 
@@ -254,7 +254,7 @@ async fn merge(
 
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct UpdateBody {
+struct TagUpdateBody {
     version: DateTime,
     category: Option<SmallString>,
     description: Option<LargeString>,
@@ -269,7 +269,7 @@ async fn update(
     Extension(client): Extension<Client>,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<UpdateBody>,
+    Json(body): Json<TagUpdateBody>,
 ) -> ApiResult<Json<TagInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 

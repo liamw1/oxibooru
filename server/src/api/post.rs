@@ -410,7 +410,7 @@ async fn reverse_search_handler(
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct CreateBody {
+struct PostCreateBody {
     safety: PostSafety,
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
@@ -433,7 +433,7 @@ async fn create(
     state: AppState,
     client: Client,
     params: ResourceParams,
-    body: CreateBody,
+    body: PostCreateBody,
 ) -> ApiResult<Json<PostInfo>> {
     let required_rank = if body.anonymous.unwrap_or(false) {
         state.config.privileges().post_create_anonymous
@@ -533,14 +533,14 @@ async fn create_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    body: JsonOrMultipart<CreateBody>,
+    body: JsonOrMultipart<PostCreateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
         JsonOrMultipart::Json(payload) => create(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
-            let mut new_post: CreateBody = serde_json::from_slice(&metadata)?;
+            let mut new_post: PostCreateBody = serde_json::from_slice(&metadata)?;
             let [content, thumbnail] = decoded_body.files;
 
             new_post.content = content;
@@ -667,7 +667,7 @@ async fn rate(
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct UpdateBody {
+struct PostUpdateBody {
     version: DateTime,
     safety: Option<PostSafety>,
     source: Option<LargeString>,
@@ -691,7 +691,7 @@ async fn update(
     client: Client,
     post_id: i64,
     params: ResourceParams,
-    body: UpdateBody,
+    body: PostUpdateBody,
 ) -> ApiResult<Json<PostInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let post_hash = PostHash::new(&state.config, post_id);
@@ -822,14 +822,14 @@ async fn update_handler(
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
-    body: JsonOrMultipart<UpdateBody>,
+    body: JsonOrMultipart<PostUpdateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
         JsonOrMultipart::Json(payload) => update(state, client, post_id, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
-            let mut post_update: UpdateBody = serde_json::from_slice(&metadata)?;
+            let mut post_update: PostUpdateBody = serde_json::from_slice(&metadata)?;
             let [content, thumbnail] = decoded_body.files;
 
             post_update.content = content;

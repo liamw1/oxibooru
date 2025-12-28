@@ -76,7 +76,7 @@ async fn get(
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
-struct CreateBody {
+struct CommentCreateBody {
     post_id: i64,
     text: String,
 }
@@ -86,7 +86,7 @@ async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<CreateBody>,
+    Json(body): Json<CommentCreateBody>,
 ) -> ApiResult<Json<CommentInfo>> {
     api::verify_privilege(client, state.config.privileges().comment_create)?;
 
@@ -110,7 +110,7 @@ async fn create(
 
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct UpdateBody {
+struct CommentUpdateBody {
     version: DateTime,
     text: String,
 }
@@ -121,7 +121,7 @@ async fn update(
     Extension(client): Extension<Client>,
     Path(comment_id): Path<i64>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<UpdateBody>,
+    Json(body): Json<CommentUpdateBody>,
 ) -> ApiResult<Json<CommentInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
