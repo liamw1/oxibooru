@@ -1,6 +1,7 @@
+use crate::api::doc::POOL_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{DeleteBody, MergeBody, POOL_TAG, PageParams, PagedResponse, ResourceParams};
+use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::enums::ResourceType;

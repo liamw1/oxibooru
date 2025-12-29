@@ -1,6 +1,7 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{COMMENT_TAG, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
+use crate::api::doc::COMMENT_TAG;
+use crate::api::{DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::Config;
@@ -29,7 +30,46 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 
-#[utoipa::path(get, path = "/comments", tag = COMMENT_TAG)]
+/// Lists comments.
+///
+/// **Anonymous tokens**
+///
+/// Same as `text` token.
+///
+/// **Named tokens**
+///
+/// | Key                                                          | Description                                    |
+/// | ------------------------------------------------------------ | ---------------------------------------------- |
+/// | `id`                                                         | specific comment ID                            |
+/// | `post`                                                       | specific post ID                               |
+/// | `user`, `author`                                             | created by given user (accepts wildcards)      |
+/// | `text`                                                       | containing given text (accepts wildcards)      |
+/// | `creation-date`, `creation-time`                             | created at given date                          |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | whose most recent edit date matches given date |
+///
+/// **Sort style tokens**
+///
+/// | Value                                                        | Description               |
+/// | ------------------------------------------------------------ | ------------------------- |
+/// | `random`                                                     | as random as it can get   |
+/// | `user`, `author`                                             | author name, A to Z       |
+/// | `post`                                                       | post ID, newest to oldest |
+/// | `creation-date`, `creation-time`                             | newest to oldest          |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first     |
+///
+/// **Special tokens**
+///
+/// None.
+#[utoipa::path(
+    get,
+    path = "/comments",
+    tag = COMMENT_TAG,
+    params(PageParams),
+    responses(
+        (status = 200, body = PagedResponse<CommentInfo>, description = "Paged list of comments"),
+        (status = 403, description = "Privileges are too low"),
+    )
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -55,7 +95,21 @@ async fn list(
     })
 }
 
-#[utoipa::path(get, path = "/comment/{id}", tag = COMMENT_TAG)]
+/// Retrieves information about an existing comment.
+#[utoipa::path(
+    get,
+    path = "/comment/{id}",
+    tag = COMMENT_TAG,
+    params(
+        ("id" = i64, Path, description = "Comment ID", example = 1),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = CommentInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Comment does not exist"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -73,15 +127,32 @@ async fn get(
     })
 }
 
+/// Request body for creating a comment.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct CommentCreateBody {
+    /// ID of the post to comment on.
+    #[schema(examples(1))]
     post_id: i64,
+    /// Comment text.
+    #[schema(examples("This is a test comment"))]
     text: String,
 }
 
-#[utoipa::path(post, path = "/comments", tag = COMMENT_TAG)]
+/// Creates a new comment under given post.
+#[utoipa::path(
+    post, 
+    path = "/comments", 
+    tag = COMMENT_TAG,
+    params(ResourceParams),
+    request_body = CommentCreateBody,
+    responses(
+        (status = 200, body = CommentInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+    ),
+)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -108,14 +179,33 @@ async fn create(
         .map_err(ApiError::from)
 }
 
+/// Request body for updating a comment.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct CommentUpdateBody {
+    /// Resource version. See [versioning](#/Versioning).
     version: DateTime,
+    /// New comment text.
     text: String,
 }
 
-#[utoipa::path(put, path = "/comment/{id}", tag = COMMENT_TAG)]
+/// Updates an existing comment.
+#[utoipa::path(
+    put, 
+    path = "/comment/{id}", 
+    tag = COMMENT_TAG,
+    params(
+        ("id" = i64, Path, description = "Comment ID"),
+        ResourceParams,
+    ),
+    request_body = CommentUpdateBody,
+    responses(
+        (status = 200, body = CommentInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Comment does not exist"),
+        (status = 409, description = "Version is outdated"),
+    ),
+)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -152,7 +242,25 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(put, path = "/comment/{id}/score", tag = COMMENT_TAG)]
+/// Updates score of authenticated user for given comment.
+///
+/// Valid scores are -1, 0, and 1.
+#[utoipa::path(
+    put, 
+    path = "/comment/{id}/score", 
+    tag = COMMENT_TAG,
+    params(
+        ("id" = i64, Path, description = "Comment ID"),
+        ResourceParams,
+    ),
+    request_body = RatingBody,
+    responses(
+        (status = 200, body = CommentInfo),
+        (status = 400, description = "Score is invalid"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Comment does not exist"),
+    ),
+)]
 async fn rate(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -186,7 +294,22 @@ async fn rate(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(delete, path = "/comment/{id}", tag = COMMENT_TAG)]
+/// Deletes existing comment.
+#[utoipa::path(
+    delete, 
+    path = "/comment/{id}", 
+    tag = COMMENT_TAG,
+    params(
+        ("id" = i64, Path, description = "Comment ID"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = ()),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Comment does not exist"),
+        (status = 409, description = "Version is outdated"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

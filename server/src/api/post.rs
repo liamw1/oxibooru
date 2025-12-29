@@ -1,6 +1,7 @@
+use crate::api::doc::POST_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
-use crate::api::{DeleteBody, MergeBody, POST_TAG, PageParams, PagedResponse, RatingBody, ResourceParams, error};
+use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::Config;
@@ -554,6 +555,7 @@ async fn create_handler(
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct PostMergeBody {
+    #[schema(inline)]
     #[serde(flatten)]
     post_info: MergeBody<i64>,
     replace_content: bool,

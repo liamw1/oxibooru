@@ -1,6 +1,7 @@
+use crate::api::doc::SNAPSHOT_TAG;
 use crate::api::error::ApiResult;
 use crate::api::extract::{Json, Query};
-use crate::api::{PageParams, PagedResponse, SNAPSHOT_TAG};
+use crate::api::{PageParams, PagedResponse};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::resource::snapshot::SnapshotInfo;

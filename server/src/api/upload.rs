@@ -1,7 +1,8 @@
+use crate::api;
+use crate::api::doc::UPLOAD_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::Json;
 use crate::api::extract::JsonOrMultipart;
-use crate::api::{self, UPLOAD_TAG};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::Config;

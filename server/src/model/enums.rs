@@ -11,7 +11,9 @@ use std::ops::{BitOr, BitOrAssign};
 use std::path::Path;
 use strum::{Display, EnumCount, EnumIter, EnumString, FromRepr, IntoEnumIterator, IntoStaticStr};
 use thiserror::Error;
-use utoipa::ToSchema;
+use utoipa::openapi::schema::{Schema, SchemaType};
+use utoipa::openapi::{ObjectBuilder, RefOr, Type};
+use utoipa::{PartialSchema, ToSchema};
 
 /// In general, the order of these enums should not be changed.
 /// They are encoded in the database as an integer, so changing
@@ -378,7 +380,7 @@ impl FromSql<SmallInt, Pg> for UserRank {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, Serialize_repr, Deserialize_repr, ToSchema)]
+#[derive(Debug, Default, Clone, Copy, Serialize_repr, Deserialize_repr)]
 #[repr(i16)]
 pub enum Rating {
     Dislike = -1,
@@ -393,6 +395,24 @@ impl From<Score> for Rating {
             Score::Dislike => Self::Dislike,
             Score::Like => Self::Like,
         }
+    }
+}
+
+impl ToSchema for Rating {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("Rating")
+    }
+}
+
+impl PartialSchema for Rating {
+    fn schema() -> RefOr<Schema> {
+        ObjectBuilder::new()
+            .schema_type(SchemaType::new(Type::Integer))
+            .description(Some("Rating value: -1 (dislike), 0 (none), or 1 (like)"))
+            .minimum(Some(-1))
+            .maximum(Some(1))
+            .examples([-1, 0, 1])
+            .into()
     }
 }
 

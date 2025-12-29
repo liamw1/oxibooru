@@ -1,6 +1,7 @@
+use crate::api::doc::USER_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
-use crate::api::{DeleteBody, PageParams, PagedResponse, ResourceParams, USER_TAG, error};
+use crate::api::{DeleteBody, PageParams, PagedResponse, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::auth::password;

@@ -1,6 +1,7 @@
+use crate::api::doc::POOL_CATEGORY_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{DeleteBody, POOL_CATEGORY_TAG, ResourceParams, UnpagedResponse, error};
+use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::RegexType;

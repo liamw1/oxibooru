@@ -30,6 +30,7 @@ serde_json = "1.0.138"
 serde_regex = "1.1.0"
 serde_repr = "0.1.19"
 serde_with = "3.12.0"
+server-macros = { path = "macros" }
 strum = { version = "0.27.0", features = ["derive", "phf"] }
 swf = "0.2.2"
 thiserror = "2.0.11"

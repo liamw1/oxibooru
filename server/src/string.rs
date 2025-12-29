@@ -20,7 +20,7 @@ use utoipa::ToSchema;
     Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, AsExpression, FromSqlRow, ToSchema,
 )]
 #[diesel(sql_type = Text, sql_type = Citext)]
-#[schema(value_type = String)]
+#[schema(value_type = String, description = "")]
 pub struct SmallString(CompactString);
 
 impl SmallString {
@@ -97,7 +97,7 @@ where
 /// Meant for potentially large string, like post descriptions.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, AsExpression, FromSqlRow, ToSchema)]
 #[diesel(sql_type = Text)]
-#[schema(value_type = String)]
+#[schema(value_type = String, description = "")]
 pub struct LargeString(Arc<str>);
 
 impl LargeString {

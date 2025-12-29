@@ -1,3 +1,4 @@
+use crate::api::doc::ApiDoc;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::auth::Client;
@@ -12,10 +13,11 @@ use std::ops::Deref;
 use std::time::Duration;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
-use utoipa::{OpenApi, ToSchema};
+use utoipa::{IntoParams, OpenApi, ToSchema};
 use utoipa_axum::router::OpenApiRouter;
 
 mod comment;
+mod doc;
 pub mod error;
 mod extract;
 mod info;
@@ -84,39 +86,7 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
     }
 }
 
-const COMMENT_TAG: &str = "comment";
-const INFO_TAG: &str = "info";
-const PASSWORD_RESET_TAG: &str = "password_reset";
-const POOL_TAG: &str = "pool";
-const POOL_CATEGORY_TAG: &str = "pool_category";
-const POST_TAG: &str = "post";
-const SNAPSHOT_TAG: &str = "snapshot";
-const TAG_TAG: &str = "tag";
-const TAG_CATEGORY_TAG: &str = "tag_category";
-const UPLOAD_TAG: &str = "upload";
-const USER_TAG: &str = "user";
-const USER_TOKEN_TAG: &str = "user_token";
-
-#[derive(OpenApi)]
-#[openapi(
-    tags(
-        (name = COMMENT_TAG, description = "Comment API endpoints"),
-        (name = INFO_TAG, description = "Info API endpoints"),
-        (name = PASSWORD_RESET_TAG, description = "Password reset API endpoints"),
-        (name = POOL_TAG, description = "Pool API endpoints"),
-        (name = POOL_CATEGORY_TAG, description = "Pool category API endpoints"),
-        (name = POST_TAG, description = "Post API endpoints"),
-        (name = SNAPSHOT_TAG, description = "Snapshot API endpoints"),
-        (name = TAG_TAG, description = "Tag API endpoints"),
-        (name = TAG_CATEGORY_TAG, description = "Tag category API endpoints"),
-        (name = UPLOAD_TAG, description = "Upload API endpoints"),
-        (name = USER_TAG, description = "User API endpoints"),
-        (name = USER_TOKEN_TAG, description = "User token API endpoints"),
-    )
-)]
-struct ApiDoc;
-
-/// Represents body of a request to apply/change a score.
+/// Request body to apply/change a score.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct RatingBody {
@@ -130,10 +100,11 @@ impl Deref for RatingBody {
     }
 }
 
-/// Represents body of a request to delete a resource.
+/// Request body for deleting a resource.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct DeleteBody {
+    /// Resource version. See [versioning](#/Versioning).
     version: DateTime,
 }
 
@@ -155,9 +126,15 @@ struct MergeBody<T> {
 }
 
 /// Represents parameters of a request to retrieve one or more resources.
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, IntoParams, ToSchema)]
 struct ResourceParams {
+    /// Query search string
+    #[param(example = "anonymous_token")]
+    #[schema(examples("anonymous_token named_token:value1,value2,value3 sort:sort_token"))]
     query: Option<String>,
+    /// Comma-separated list of fields to include in the response. See [field selection](#/Field-Selection) for details.
+    #[param(example = "field1,field2")]
+    #[schema(examples("field1,field2,field3"))]
     fields: Option<String>,
 }
 
@@ -172,12 +149,15 @@ impl ResourceParams {
 }
 
 /// Represents parameters of a request to retrieve multiple resources, paged.
-#[derive(Deserialize, ToSchema)]
+#[derive(Deserialize, IntoParams)]
 struct PageParams {
+    /// Starting position in the result set
+    #[param(example = 0)]
     offset: Option<i64>,
-    #[schema(value_type = i64)]
+    /// Maximum number of results to return
+    #[param(value_type = i64, minimum = 1, example = 40)]
     limit: NonZeroI64,
-    #[schema(inline)]
+    #[param(inline)]
     #[serde(flatten)]
     params: ResourceParams,
 }
@@ -207,9 +187,13 @@ struct UnpagedResponse<T> {
 /// Used for resources which are paged.
 #[derive(Serialize, ToSchema)]
 struct PagedResponse<T> {
+    #[schema(examples("anonymous_token named_token:value1,value2,value3 sort:sort_token"))]
     query: Option<String>,
+    #[schema(examples(0))]
     offset: i64,
+    #[schema(examples(40))]
     limit: i64,
+    #[schema(examples(1729))]
     total: i64,
     results: Vec<T>,
 }

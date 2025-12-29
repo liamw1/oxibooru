@@ -1,4 +1,4 @@
-use crate::api::PASSWORD_RESET_TAG;
+use crate::api::doc::PASSWORD_RESET_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path};
 use crate::app::AppState;

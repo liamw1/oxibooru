@@ -13,11 +13,16 @@ use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, Quer
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use strum::{EnumString, EnumTable};
+use utoipa::ToSchema;
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroUser {
+    /// The user name.
+    #[schema(examples("username"))]
     name: SmallString,
+    /// The URL to the avatar.
+    #[schema(examples("https://gravatar.com/avatar/60602eb3c4f?d=retro&s=300"))]
     avatar_url: String,
 }
 

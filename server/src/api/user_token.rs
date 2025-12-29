@@ -1,6 +1,7 @@
+use crate::api::doc::USER_TOKEN_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::{ResourceParams, USER_TOKEN_TAG, UnpagedResponse};
+use crate::api::{ResourceParams, UnpagedResponse};
 use crate::app::AppState;
 use crate::auth::Client;
 use crate::model::enums::{AvatarStyle, ResourceType};

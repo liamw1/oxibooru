@@ -274,7 +274,7 @@ pub fn map_unique_or_foreign_key_violation<T>(
     }
 }
 
-/// Represents a response if an error occured.
+/// Response body for errors.
 #[derive(Serialize)]
 struct ErrorResponse {
     title: &'static str,

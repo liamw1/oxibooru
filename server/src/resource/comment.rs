@@ -10,7 +10,9 @@ use crate::time::DateTime;
 use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use server_macros::non_nullable_options;
 use strum::{EnumString, EnumTable};
+use utoipa::ToSchema;
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
 #[strum(serialize_all = "camelCase")]
@@ -32,18 +34,37 @@ impl BoolFill for FieldTable<bool> {
     }
 }
 
+/// A comment under a post.
+#[non_nullable_options]
 #[skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
+#[schema(examples(json!({
+    "id": 1,
+    "post_id": 9,
+    "text": "This is a comment",
+    "score": 12,
+    "user": null
+})))]
 pub struct CommentInfo {
+    /// Resource version. See [versioning](#/Versioning) for details.
     pub version: Option<DateTime>, // TODO: Remove last_edit_time as it fills the same role as version here
+    /// The comment identifier.
     pub id: Option<i64>,
+    /// ID of the post the comment is for.
     pub post_id: Option<i64>,
+    /// The comment content. The client should render this as Markdown.
     pub text: Option<LargeString>,
+    /// Time the comment was created.
     pub creation_time: Option<DateTime>,
+    /// Time the comment was last edited.
     pub last_edit_time: Option<DateTime>,
+    /// A micro user resource for the comment author, or null if anonymous.
+    #[schema(nullable)]
     pub user: Option<Option<MicroUser>>,
+    /// The collective score (+1/-1 rating) of the comment.
     pub score: Option<i64>,
+    /// The score (+1/-1 rating) of the comment by the authenticated user.
     pub own_score: Option<Rating>,
 }
 
