@@ -2143,6 +2143,58 @@ dependencies = [
 ]
 
 [[package]]
+name = "oxibooru_server"
+version = "0.7.2"
+dependencies = [
+ "argon2",
+ "axum",
+ "axum-test",
+ "base64",
+ "blake3",
+ "byteorder",
+ "compact_str",
+ "config",
+ "diesel",
+ "diesel_migrations",
+ "dotenvy",
+ "flate2",
+ "hex",
+ "image",
+ "lettre",
+ "md5",
+ "mimalloc",
+ "num-traits",
+ "percent-encoding",
+ "rayon",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_regex",
+ "serde_repr",
+ "serde_with",
+ "serial_test",
+ "server-macros",
+ "strum",
+ "swf",
+ "thiserror 2.0.16",
+ "time",
+ "tokio",
+ "tower",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+ "utoipa",
+ "utoipa-axum",
+ "utoipa-swagger-ui",
+ "utoipa-swagger-ui-vendored",
+ "uuid",
+ "video-rs",
+ "walkdir",
+]
+
+[[package]]
 name = "parking_lot"
 version = "0.12.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3035,58 +3087,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "server"
-version = "0.7.2"
-dependencies = [
- "argon2",
- "axum",
- "axum-test",
- "base64",
- "blake3",
- "byteorder",
- "compact_str",
- "config",
- "diesel",
- "diesel_migrations",
- "dotenvy",
- "flate2",
- "hex",
- "image",
- "lettre",
- "md5",
- "mimalloc",
- "num-traits",
- "percent-encoding",
- "rayon",
- "regex",
- "reqwest",
- "serde",
- "serde_json",
- "serde_regex",
- "serde_repr",
- "serde_with",
- "serial_test",
- "server-macros",
- "strum",
- "swf",
- "thiserror 2.0.16",
- "time",
- "tokio",
- "tower",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "url",
- "utoipa",
- "utoipa-axum",
- "utoipa-swagger-ui",
- "utoipa-swagger-ui-vendored",
- "uuid",
- "video-rs",
- "walkdir",
 ]
 
 [[package]]

@@ -161,7 +161,7 @@ where
     get,
     path = "/posts",
     tag = POST_TAG,
-    params(PageParams),
+    params(ResourceParams, PageParams),
     responses(
         (status = 200, body = PagedResponse<PostInfo>),
         (status = 403, description = "Privileges are too low"),
@@ -170,21 +170,22 @@ where
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Query(params): Query<PageParams>,
+    Query(resource): Query<ResourceParams>,
+    Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PostInfo>>> {
     api::verify_privilege(client, state.config.privileges().post_list)?;
 
-    let offset = params.offset.unwrap_or(0);
-    let limit = std::cmp::min(params.limit.get(), MAX_POSTS_PER_PAGE);
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let offset = page.offset.unwrap_or(0);
+    let limit = std::cmp::min(page.limit.get(), MAX_POSTS_PER_PAGE);
+    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_posts) = query_builder.list(conn)?;
         Ok(Json(PagedResponse {
-            query: params.into_query(),
+            query: resource.query,
             offset,
             limit,
             total,
@@ -436,10 +437,8 @@ async fn feature(
 
 /// Request body for reverse image search.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct ReverseSearchBody {
-    #[schema(ignore)]
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     /// Token referencing previously uploaded content.
@@ -580,19 +579,16 @@ async fn reverse_search_handler(
 
 /// Request body for creating a post.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct PostCreateBody {
     /// Post safety rating.
     safety: PostSafety,
-    #[schema(ignore)]
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     /// Token referencing previously uploaded content.
     content_token: Option<String>,
     /// URL to fetch content from.
     content_url: Option<Url>,
-    #[schema(ignore)]
     #[serde(skip_deserializing)]
     thumbnail: Option<FileContents>,
     /// Token referencing previously uploaded thumbnail.
@@ -765,8 +761,7 @@ async fn create_handler(
 
 /// Request body for merging posts.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct PostMergeBody {
     #[schema(inline)]
     #[serde(flatten)]
@@ -933,8 +928,7 @@ async fn rate(
 
 /// Request body for updating a post.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct PostUpdateBody {
     // Resource version. See [versioning](#Versioning).
     version: DateTime,
@@ -952,14 +946,12 @@ struct PostUpdateBody {
     notes: Option<Vec<Note>>,
     /// Post flags: `loop` or `sound`.
     flags: Option<Vec<PostFlag>>,
-    #[schema(ignore)]
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     /// Token referencing previously uploaded content.
     content_token: Option<String>,
     /// URL to fetch content from.
     content_url: Option<Url>,
-    #[schema(ignore)]
     #[serde(skip_deserializing)]
     thumbnail: Option<FileContents>,
     /// Token referencing previously uploaded thumbnail.

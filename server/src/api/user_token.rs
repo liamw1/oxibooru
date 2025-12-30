@@ -87,11 +87,10 @@ async fn list(
 
 /// Request body for creating a user token.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct UserTokenCreateBody {
-    /// Whether the token is enabled.
-    enabled: bool,
+    /// Whether the token is enabled. Defaults to `true` if not present.
+    enabled: Option<bool>,
     /// Optional note describing the token's purpose.
     note: Option<String>,
     /// Optional expiration time for the token.
@@ -156,7 +155,7 @@ async fn create(
             id: Uuid::new_v4(),
             user_id,
             note: body.note.as_deref(),
-            enabled: body.enabled,
+            enabled: body.enabled.unwrap_or(true),
             expiration_time: body.expiration_time,
         }
         .insert_into(user_token::table)
@@ -168,8 +167,7 @@ async fn create(
 
 /// Request body for updating a user token.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct UserTokenUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,

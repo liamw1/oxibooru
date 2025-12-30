@@ -23,8 +23,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 /// Request body for uploading a temporary file.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct UploadBody {
     /// URL to fetch content from.
     content_url: Url,

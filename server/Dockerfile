@@ -53,7 +53,7 @@ RUN mkdir -p /opt/app /data \
  && chown -R app:app /opt/app /data
 
 # Copy over application binary
-COPY --from=builder /opt/app/target/release/server server
+COPY --from=builder /opt/app/target/release/oxibooru_server server
 
 # Run it!
 USER app

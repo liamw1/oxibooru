@@ -130,15 +130,13 @@ struct MergeBody<T> {
 }
 
 /// Represents parameters of a request to retrieve one or more resources.
-#[derive(Deserialize, IntoParams, ToSchema)]
+#[derive(Deserialize, IntoParams)]
 struct ResourceParams {
     /// Query search string
     #[param(example = "anonymous_token")]
-    #[schema(examples("anonymous_token named_token:value1,value2,value3 sort:sort_token"))]
     query: Option<String>,
     /// Comma-separated list of fields to include in the response. See [field selection](#Field-Selection) for details.
     #[param(example = "field1,field2")]
-    #[schema(examples("field1,field2,field3"))]
     fields: Option<String>,
 }
 
@@ -161,23 +159,6 @@ struct PageParams {
     /// Maximum number of results to return
     #[param(value_type = i64, minimum = 1, example = 40)]
     limit: NonZeroI64,
-    #[param(inline)]
-    #[serde(flatten)]
-    params: ResourceParams,
-}
-
-impl PageParams {
-    fn criteria(&self) -> &str {
-        self.params.criteria()
-    }
-
-    fn fields(&self) -> Option<&str> {
-        self.params.fields()
-    }
-
-    fn into_query(self) -> Option<String> {
-        self.params.query
-    }
 }
 
 /// A result of search operation that doesn't involve paging.

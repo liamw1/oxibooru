@@ -68,7 +68,7 @@ const MAX_POOLS_PER_PAGE: i64 = 1000;
     get,
     path = "/pools",
     tag = POOL_TAG,
-    params(PageParams),
+    params(ResourceParams, PageParams),
     responses(
         (status = 200, body = PagedResponse<PoolInfo>),
         (status = 403, description = "Privileges are too low"),
@@ -77,21 +77,22 @@ const MAX_POOLS_PER_PAGE: i64 = 1000;
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Query(params): Query<PageParams>,
+    Query(resource): Query<ResourceParams>,
+    Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PoolInfo>>> {
     api::verify_privilege(client, state.config.privileges().pool_list)?;
 
-    let offset = params.offset.unwrap_or(0);
-    let limit = std::cmp::min(params.limit.get(), MAX_POOLS_PER_PAGE);
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let offset = page.offset.unwrap_or(0);
+    let limit = std::cmp::min(page.limit.get(), MAX_POOLS_PER_PAGE);
+    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_pools) = query_builder.list(conn)?;
         Ok(Json(PagedResponse {
-            query: params.into_query(),
+            query: resource.query,
             offset,
             limit,
             total,

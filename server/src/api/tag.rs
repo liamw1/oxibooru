@@ -79,7 +79,7 @@ const MAX_TAG_SIBLINGS: i64 = 50;
     get,
     path = "/tags",
     tag = TAG_TAG,
-    params(PageParams),
+    params(ResourceParams, PageParams),
     responses(
         (status = 200, body = PagedResponse<TagInfo>),
         (status = 403, description = "Privileges are too low"),
@@ -88,21 +88,22 @@ const MAX_TAG_SIBLINGS: i64 = 50;
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Query(params): Query<PageParams>,
+    Query(resource): Query<ResourceParams>,
+    Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<TagInfo>>> {
     api::verify_privilege(client, state.config.privileges().tag_list)?;
 
-    let offset = params.offset.unwrap_or(0);
-    let limit = std::cmp::min(params.limit.get(), MAX_TAGS_PER_PAGE);
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let offset = page.offset.unwrap_or(0);
+    let limit = std::cmp::min(page.limit.get(), MAX_TAGS_PER_PAGE);
+    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_tags) = query_builder.list(conn)?;
         Ok(Json(PagedResponse {
-            query: params.into_query(),
+            query: resource.query,
             offset,
             limit,
             total,

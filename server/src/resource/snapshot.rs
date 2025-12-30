@@ -240,9 +240,9 @@ pub struct SnapshotInfo {
     #[schema(nullable)]
     user: Option<Option<MicroUser>>,
     operation: Option<ResourceOperation>,
-    #[serde(rename(serialize = "type"))]
+    #[serde(rename = "type")]
     resource_type: Option<ResourceType>,
-    #[serde(rename(serialize = "id"))]
+    #[serde(rename = "id")]
     resource_id: Option<SmallString>,
     data: Option<Value>,
     time: Option<DateTime>,

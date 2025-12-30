@@ -36,7 +36,6 @@ use utoipa::ToSchema;
 #[serde(deny_unknown_fields)]
 pub struct Note {
     #[serde(skip)]
-    #[schema(ignore)]
     id: i64,
     /// Where to draw the annotation. Each point must have coordinates within 0 to 1.
     /// For example, `[[0,0],[0,1],[1,1],[1,0]]` will draw the annotation on the whole post,

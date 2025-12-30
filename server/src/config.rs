@@ -176,18 +176,17 @@ pub struct PrivilegeConfig {
 }
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all(serialize = "camelCase"))]
+#[schema(rename_all = "camelCase")] // ToSchema doesn't detect serde(rename_all(serialize = ...))
+#[serde(deny_unknown_fields, rename_all(serialize = "camelCase"))]
 pub struct PublicConfig {
     pub name: SmallString,
     pub default_user_rank: UserRank,
     pub enable_safety: bool,
     pub contact_email: Option<SmallString>,
-    #[serde(skip_deserializing)]
+    #[serde(default)]
     pub can_send_mails: bool,
-    #[schema(value_type = String)]
-    #[serde(with = "serde_regex")]
-    #[serde(rename(serialize = "userNameRegex"))]
+    #[schema(rename = "userNameRegex", value_type = String)]
+    #[serde(rename(serialize = "userNameRegex"), with = "serde_regex")]
     pub username_regex: Regex,
     #[schema(value_type = String)]
     #[serde(with = "serde_regex")]
