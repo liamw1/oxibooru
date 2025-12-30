@@ -26,7 +26,19 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(set_default))
 }
 
-#[utoipa::path(get, path = "/pool-categories", tag = POOL_CATEGORY_TAG)]
+/// Lists all pool categories.
+///
+/// Doesn't use paging.
+#[utoipa::path(
+    get, 
+    path = "/pool-categories", 
+    tag = POOL_CATEGORY_TAG,
+    params(ResourceParams),
+    responses(
+        (status = 200, description = "List of pool categories", body = UnpagedResponse<PoolCategoryInfo>),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -43,7 +55,21 @@ async fn list(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(get, path = "/pool-category/{name}", tag = POOL_CATEGORY_TAG)]
+/// Retrieves information about an existing pool category.
+#[utoipa::path(
+    get, 
+    path = "/pool-category/{name}", 
+    tag = POOL_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Pool category name"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = PoolCategoryInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Pool category does not exist"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -65,14 +91,33 @@ async fn get(
     })
 }
 
+/// Request body for creating a pool category.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct PoolCategoryCreateBody {
+    /// Category name.
     name: SmallString,
+    /// Category color.
     color: SmallString,
 }
 
-#[utoipa::path(post, path = "/pool-categories", tag = POOL_CATEGORY_TAG)]
+/// Creates a new pool category using specified parameters.
+///
+/// Name must match `pool_category_name_regex` from server's configuration.
+/// Names are case insensitive.
+#[utoipa::path(
+    post, 
+    path = "/pool-categories", 
+    tag = POOL_CATEGORY_TAG,
+    params(ResourceParams),
+    request_body = PoolCategoryCreateBody,
+    responses(
+        (status = 200, body = PoolCategoryInfo),
+        (status = 400, description = "Name or color is invalid or missing"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 409, description = "Name is used by an existing pool category"),
+    ),
+)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -105,15 +150,40 @@ async fn create(
         .map_err(ApiError::from)
 }
 
+/// Request body for updating a pool category.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct PoolCategoryUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
+    /// New category name.
     name: Option<SmallString>,
+    /// New category color.
     color: Option<SmallString>,
 }
 
-#[utoipa::path(put, path = "/pool-category/{name}", tag = POOL_CATEGORY_TAG)]
+/// Updates an existing pool category using specified parameters.
+///
+/// Name must match `pool_category_name_regex` from server's configuration.
+/// Names are case insensitive. All fields except `version` are optional -
+/// update concerns only provided fields.
+#[utoipa::path(
+    put, 
+    path = "/pool-category/{name}", 
+    tag = POOL_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Pool category name"),
+        ResourceParams,
+    ),
+    request_body = PoolCategoryUpdateBody,
+    responses(
+        (status = 200, description = "Updated pool category", body = PoolCategoryInfo),
+        (status = 400, description = "Name or color is invalid"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Pool category does not exist"),
+        (status = 409, description = "Version is outdated or name is used by an existing pool category"),
+    ),
+)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -154,7 +224,23 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(put, path = "/pool-category/{name}/default", tag = POOL_CATEGORY_TAG)]
+/// Sets given pool category as default.
+///
+/// All new pools created manually or automatically will have this category.
+#[utoipa::path(
+    put, 
+    path = "/pool-category/{name}/default", 
+    tag = POOL_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Pool category name"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = PoolCategoryInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Pool category does not exist"),
+    ),
+)]
 async fn set_default(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -213,7 +299,25 @@ async fn set_default(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(delete, path = "/pool-category/{name}", tag = POOL_CATEGORY_TAG)]
+/// Deletes an existing non-default pool category.
+///
+/// Pools belonging to this category will be moved to the default category.
+#[utoipa::path(
+    delete, 
+    path = "/pool-category/{name}", 
+    tag = POOL_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Pool category name"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = ()),
+        (status = 400, description = "Pool category is the default category"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Pool category does not exist"),
+        (status = 409, description = "Version is outdated"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

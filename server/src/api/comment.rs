@@ -133,10 +133,8 @@ async fn get(
 #[serde(rename_all = "camelCase")]
 struct CommentCreateBody {
     /// ID of the post to comment on.
-    #[schema(examples(1))]
     post_id: i64,
     /// Comment text.
-    #[schema(examples("This is a test comment"))]
     text: String,
 }
 
