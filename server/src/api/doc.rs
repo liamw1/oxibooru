@@ -98,7 +98,7 @@ yt-dlp can be configured with the `'uploads:use_downloader'` permission
 Finally, in some cases the user might want to reuse one file between the
 requests to save the bandwidth (for example, reverse search + consecutive
 upload). In this case one should use [temporary file
-uploads](#File-Uploads), and pass the tokens returned by the API as
+uploads](#Upload), and pass the tokens returned by the API as
 regular fields appended with a `Token` suffix. For example, to use previously
 uploaded data, which was given token `deadbeef`, in an API that accepts a file
 named `content`, the client should pass `{"contentToken":"deadbeef"}` as part

@@ -49,8 +49,8 @@ struct InfoResponse {
 /// consistent with other dates. Values in the `config` key are taken directly
 /// from the server config.
 #[utoipa::path(
-    get, 
-    path = "/info", 
+    get,
+    path = "/info",
     tag = INFO_TAG,
     params(ResourceParams),
     responses(

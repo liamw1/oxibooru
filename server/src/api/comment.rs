@@ -1,6 +1,6 @@
+use crate::api::doc::COMMENT_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
-use crate::api::doc::COMMENT_TAG;
 use crate::api::{DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::AppState;
 use crate::auth::Client;
@@ -140,8 +140,8 @@ struct CommentCreateBody {
 
 /// Creates a new comment under given post.
 #[utoipa::path(
-    post, 
-    path = "/comments", 
+    post,
+    path = "/comments",
     tag = COMMENT_TAG,
     params(ResourceParams),
     request_body = CommentCreateBody,
@@ -189,8 +189,8 @@ struct CommentUpdateBody {
 
 /// Updates an existing comment.
 #[utoipa::path(
-    put, 
-    path = "/comment/{id}", 
+    put,
+    path = "/comment/{id}",
     tag = COMMENT_TAG,
     params(
         ("id" = i64, Path, description = "Comment ID"),
@@ -244,8 +244,8 @@ async fn update(
 ///
 /// Valid scores are -1, 0, and 1.
 #[utoipa::path(
-    put, 
-    path = "/comment/{id}/score", 
+    put,
+    path = "/comment/{id}/score",
     tag = COMMENT_TAG,
     params(
         ("id" = i64, Path, description = "Comment ID"),
@@ -294,8 +294,8 @@ async fn rate(
 
 /// Deletes existing comment.
 #[utoipa::path(
-    delete, 
-    path = "/comment/{id}", 
+    delete,
+    path = "/comment/{id}",
     tag = COMMENT_TAG,
     params(
         ("id" = i64, Path, description = "Comment ID"),

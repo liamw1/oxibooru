@@ -30,8 +30,8 @@ pub fn routes() -> OpenApiRouter<AppState> {
 ///
 /// Doesn't use paging.
 #[utoipa::path(
-    get, 
-    path = "/pool-categories", 
+    get,
+    path = "/pool-categories",
     tag = POOL_CATEGORY_TAG,
     params(ResourceParams),
     responses(
@@ -57,8 +57,8 @@ async fn list(
 
 /// Retrieves information about an existing pool category.
 #[utoipa::path(
-    get, 
-    path = "/pool-category/{name}", 
+    get,
+    path = "/pool-category/{name}",
     tag = POOL_CATEGORY_TAG,
     params(
         ("name" = String, Path, description = "Pool category name"),
@@ -106,8 +106,8 @@ struct PoolCategoryCreateBody {
 /// Name must match `pool_category_name_regex` from server's configuration.
 /// Names are case insensitive.
 #[utoipa::path(
-    post, 
-    path = "/pool-categories", 
+    post,
+    path = "/pool-categories",
     tag = POOL_CATEGORY_TAG,
     params(ResourceParams),
     request_body = PoolCategoryCreateBody,
@@ -168,8 +168,8 @@ struct PoolCategoryUpdateBody {
 /// Names are case insensitive. All fields except `version` are optional -
 /// update concerns only provided fields.
 #[utoipa::path(
-    put, 
-    path = "/pool-category/{name}", 
+    put,
+    path = "/pool-category/{name}",
     tag = POOL_CATEGORY_TAG,
     params(
         ("name" = String, Path, description = "Pool category name"),
@@ -228,8 +228,8 @@ async fn update(
 ///
 /// All new pools created manually or automatically will have this category.
 #[utoipa::path(
-    put, 
-    path = "/pool-category/{name}/default", 
+    put,
+    path = "/pool-category/{name}/default",
     tag = POOL_CATEGORY_TAG,
     params(
         ("name" = String, Path, description = "Pool category name"),
@@ -303,8 +303,8 @@ async fn set_default(
 ///
 /// Pools belonging to this category will be moved to the default category.
 #[utoipa::path(
-    delete, 
-    path = "/pool-category/{name}", 
+    delete,
+    path = "/pool-category/{name}",
     tag = POOL_CATEGORY_TAG,
     params(
         ("name" = String, Path, description = "Pool category name"),

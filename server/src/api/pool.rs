@@ -42,7 +42,7 @@ const MAX_POOLS_PER_PAGE: i64 = 1000;
 ///
 /// **Named tokens**
 ///
-/// | `<key>`                                                      | Description                               |
+/// | Key                                                          | Description                               |
 /// | ------------------------------------------------------------ | ----------------------------------------- |
 /// | `name`                                                       | having given name (accepts wildcards)     |
 /// | `category`                                                   | having given category (accepts wildcards) |
@@ -50,23 +50,23 @@ const MAX_POOLS_PER_PAGE: i64 = 1000;
 /// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | edited at given date                      |
 /// | `post-count`                                                 | used in given number of posts             |
 ///
-/// **Sort style tokens** 
+/// **Sort style tokens**
 ///
-/// | `<value>`                                                    | Description                  |
-/// | ------------------------------------------------------------ | ---------------------------- |
-/// | `random`                                                     | as random as it can get      |
-/// | `name`                                                       | A to Z                       |
-/// | `category`                                                   | category (A to Z)            |
-/// | `creation-date`, `creation-time`                             | recently created first       |
-/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first        |
-/// | `post-count`                                                 | used in most posts first     |
+/// | Value                                                        | Description              |
+/// | ------------------------------------------------------------ | ------------------------ |
+/// | `random`                                                     | as random as it can get  |
+/// | `name`                                                       | A to Z                   |
+/// | `category`                                                   | category (A to Z)        |
+/// | `creation-date`, `creation-time`                             | recently created first   |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first    |
+/// | `post-count`                                                 | used in most posts first |
 ///
 /// **Special tokens**
 ///
 /// None.
 #[utoipa::path(
-    get, 
-    path = "/pools", 
+    get,
+    path = "/pools",
     tag = POOL_TAG,
     params(PageParams),
     responses(
@@ -102,8 +102,8 @@ async fn list(
 
 /// Retrieves information about an existing pool.
 #[utoipa::path(
-    get, 
-    path = "/pool/{id}", 
+    get,
+    path = "/pool/{id}",
     tag = POOL_TAG,
     params(
         ("id" = i64, Path, description = "Pool ID"),
@@ -156,8 +156,8 @@ struct PoolCreateBody {
 /// pool category resource. `posts` is an optional list of integer post IDs.
 /// If the specified posts do not exist, an error will be thrown.
 #[utoipa::path(
-    post, 
-    path = "/pool", 
+    post,
+    path = "/pool",
     tag = POOL_TAG,
     params(ResourceParams),
     request_body = PoolCreateBody,
@@ -223,8 +223,8 @@ async fn create(
 ///
 /// Other pool properties such as category do not get transferred and are discarded.
 #[utoipa::path(
-    post, 
-    path = "/pool-merge", 
+    post,
+    path = "/pool-merge",
     tag = POOL_TAG,
     params(ResourceParams),
     request_body = MergeBody<i64>,
@@ -301,8 +301,8 @@ struct PoolUpdateBody {
 /// and the previous list of posts will be replaced with the new one.
 /// All fields except `version` are optional - update concerns only provided fields.
 #[utoipa::path(
-    put, 
-    path = "/pool/{id}", 
+    put,
+    path = "/pool/{id}",
     tag = POOL_TAG,
     params(
         ("id" = i64, Path, description = "Pool ID"),
@@ -390,8 +390,8 @@ async fn update(
 ///
 /// All posts in the pool will only have their relation to the pool removed.
 #[utoipa::path(
-    delete, 
-    path = "/pool/{id}", 
+    delete,
+    path = "/pool/{id}",
     tag = POOL_TAG,
     params(
         ("id" = i64, Path, description = "Pool ID"),

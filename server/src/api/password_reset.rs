@@ -145,8 +145,8 @@ fn generate_temporary_password(length: u8) -> String {
 ///
 /// Password is sent as plain-text, so it is recommended to connect through HTTPS.
 #[utoipa::path(
-    post, 
-    path = "/password-reset/{identifier}", 
+    post,
+    path = "/password-reset/{identifier}",
     tag = PASSWORD_RESET_TAG,
     params(
         ("identifier" = String, Path, description = "User email or username"),
