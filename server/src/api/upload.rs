@@ -11,6 +11,7 @@ use crate::content::upload::{self, MAX_UPLOAD_SIZE, PartName};
 use axum::extract::{DefaultBodyLimit, Extension, State};
 use serde::{Deserialize, Serialize};
 use url::Url;
+use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -20,15 +21,19 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
 }
 
-#[derive(Deserialize)]
+/// Request body for uploading a temporary file.
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct UploadBody {
+    /// URL to fetch content from.
     content_url: Url,
 }
 
-#[derive(Serialize)]
+/// Response containing the upload token.
+#[derive(Serialize, ToSchema)]
 struct UploadResponse {
+    /// Token to reference this upload in other requests.
     token: String,
 }
 
@@ -37,7 +42,21 @@ async fn upload_from_url(config: &Config, body: UploadBody) -> ApiResult<Json<Up
     Ok(Json(UploadResponse { token }))
 }
 
-#[utoipa::path(post, path = "/uploads", tag = UPLOAD_TAG)]
+/// Puts a file in temporary storage and assigns it a token.
+///
+/// The token can be used in other requests. Files uploaded this way are
+/// deleted after a short while so clients shouldn't use it as a free upload
+/// service. Note that in this particular API, one can't use token-based uploads.
+#[utoipa::path(
+    post,
+    path = "/uploads",
+    tag = UPLOAD_TAG,
+    request_body = UploadBody,
+    responses(
+        (status = 200, body = UploadResponse),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn upload_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
