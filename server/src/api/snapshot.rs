@@ -19,7 +19,39 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 const MAX_SNAPSHOTS_PER_PAGE: i64 = 1000;
 
-#[utoipa::path(get, path = "/snapshots", tag = SNAPSHOT_TAG)]
+/// Lists recent resource snapshots.
+///
+/// **Anonymous tokens**
+///
+/// Not supported.
+///
+/// **Named tokens**
+///
+/// | Key            | Description                                                      |
+/// | -------------- | ---------------------------------------------------------------- |
+/// | `type`         | involving given resource type                                    |
+/// | `id`           | involving given resource id                                      |
+/// | `date`, `time` | created at given date                                            |
+/// | `operation`    | `modified`, `created`, `deleted` or `merged`                     |
+/// | `user`         | name of the user that created given snapshot (accepts wildcards) |
+///
+/// **Sort style tokens**
+///
+/// None. The snapshots are always sorted by creation time.
+///
+/// **Special tokens**
+///
+/// None.
+#[utoipa::path(
+    get,
+    path = "/snapshots",
+    tag = SNAPSHOT_TAG,
+    params(PageParams),
+    responses(
+        (status = 200, body = PagedResponse<SnapshotInfo>),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
