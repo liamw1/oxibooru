@@ -25,7 +25,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 /// Server information response.
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct Response {
+struct InfoResponse {
     /// Total number of posts on the server.
     post_count: i64,
     /// Total disk usage in bytes.
@@ -54,14 +54,14 @@ struct Response {
     tag = INFO_TAG,
     params(ResourceParams),
     responses(
-        (status = 200, body = Response, description = "Server information"),
+        (status = 200, description = "Server information", body = InfoResponse),
     ),
 )]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-) -> ApiResult<Json<Response>> {
+) -> ApiResult<Json<InfoResponse>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
         let (post_count, disk_usage) = database_statistics::table
@@ -87,7 +87,7 @@ async fn get(
             .transpose()?
             .flatten();
 
-        Ok(Json(Response {
+        Ok(Json(InfoResponse {
             post_count,
             disk_usage,
             featured_post,

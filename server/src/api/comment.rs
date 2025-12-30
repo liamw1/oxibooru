@@ -66,7 +66,7 @@ const MAX_COMMENTS_PER_PAGE: i64 = 1000;
     tag = COMMENT_TAG,
     params(PageParams),
     responses(
-        (status = 200, body = PagedResponse<CommentInfo>, description = "Paged list of comments"),
+        (status = 200, description = "Paged list of comments", body = PagedResponse<CommentInfo>),
         (status = 403, description = "Privileges are too low"),
     )
 )]

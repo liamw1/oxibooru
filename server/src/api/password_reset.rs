@@ -41,8 +41,26 @@ fn get_user_info(
         .ok_or(ApiError::NotFound(ResourceType::User))
 }
 
-#[utoipa::path(get, path = "/password-reset/{identifier}", tag = PASSWORD_RESET_TAG)]
-async fn request_reset(State(state): State<AppState>, Path(identifier): Path<String>) -> ApiResult<Json<()>> {
+/// Sends a confirmation email to given user.
+///
+/// The email contains a link containing a token. The token cannot be guessed,
+/// thus using such link proves that the person who requested to reset the
+/// password also owns the mailbox, which is a strong indication they are the
+/// rightful owner of the account.
+#[utoipa::path(
+    get,
+    path = "/password-reset/{identifier}",
+    tag = PASSWORD_RESET_TAG,
+    params(
+        ("identifier" = SmallString, Path, description = "User email or username"),
+    ),
+    responses(
+        (status = 200, description = "Password reset email sent", body = ()),
+        (status = 400, description = "User hasn't provided an email address"),
+        (status = 404, description = "User does not exist"),
+    ),
+)]
+async fn request_reset(State(state): State<AppState>, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
     let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
     let mut conn = state.get_connection()?;
@@ -99,13 +117,15 @@ async fn request_reset(State(state): State<AppState>, Path(identifier): Path<Str
     mailer.send(&email).map(|_| Json(())).map_err(ApiError::from)
 }
 
+/// Token from password reset email.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct ResetToken {
     token: String,
 }
 
-#[derive(Serialize)]
+/// Response containing the new temporary password. Sent as plain-text.
+#[derive(Serialize, ToSchema)]
 struct NewPassword {
     password: String,
 }
@@ -121,7 +141,23 @@ fn generate_temporary_password(length: u8) -> String {
         .collect()
 }
 
-#[utoipa::path(post, path = "/password-reset/{identifier}", tag = PASSWORD_RESET_TAG)]
+/// Generates a new password for given user.
+///
+/// Password is sent as plain-text, so it is recommended to connect through HTTPS.
+#[utoipa::path(
+    post, 
+    path = "/password-reset/{identifier}", 
+    tag = PASSWORD_RESET_TAG,
+    params(
+        ("identifier" = String, Path, description = "User email or username"),
+    ),
+    request_body = ResetToken,
+    responses(
+        (status = 200, description = "New password generated", body = NewPassword),
+        (status = 400, description = "Token is missing or invalid"),
+        (status = 404, description = "User does not exist"),
+    ),
+)]
 async fn reset_password(
     State(state): State<AppState>,
     Path(username): Path<SmallString>,
