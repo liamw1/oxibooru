@@ -12,6 +12,7 @@ use diesel::dsl::count_star;
 use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use server_macros::non_nullable_options;
 use strum::{EnumString, EnumTable};
 use utoipa::ToSchema;
 
@@ -67,22 +68,41 @@ impl BoolFill for FieldTable<bool> {
     }
 }
 
+/// A single user.
+#[non_nullable_options]
 #[skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
+    /// Resource version. See [versioning](#Versioning).
     version: Option<DateTime>,
+    /// The user name.
     name: Option<SmallString>,
+    /// The user email. It is available only if the request is authenticated by the same user,
+    /// or the authenticated user can change the email. If it's unavailable, the server returns `false`.
+    /// If the user hasn't specified an email, the server returns `null`.
     email: Option<PrivateData<Option<SmallString>>>,
+    /// The user rank, which effectively affects their privileges.
     rank: Option<UserRank>,
+    /// The last login time.
     last_login_time: Option<DateTime>,
+    /// The user registration time.
     creation_time: Option<DateTime>,
+    /// How to render the user avatar.
     avatar_style: Option<AvatarStyle>,
+    /// The URL to the avatar.
     avatar_url: Option<String>,
+    /// Number of comments.
     comment_count: Option<i64>,
+    /// Number of uploaded posts.
     uploaded_post_count: Option<i64>,
+    /// Nubmer of liked posts. It is available only if the request is authenticated by the same user.
+    /// If it's unavailable, the server returns `false`.
     liked_post_count: Option<PrivateData<i64>>,
+    /// Number of disliked posts. It is available only if the request is authenticated by the same user.
+    /// If it's unavailable, the server returns `false`.
     disliked_post_count: Option<PrivateData<i64>>,
+    /// Number of favorited posts.
     favorite_post_count: Option<i64>,
 }
 
@@ -175,7 +195,7 @@ impl UserInfo {
     }
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone, Serialize, ToSchema)]
 #[serde(untagged)]
 enum PrivateData<T> {
     Expose(T),

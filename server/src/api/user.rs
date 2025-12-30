@@ -38,7 +38,42 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 const MAX_USERS_PER_PAGE: i64 = 1000;
 
-#[utoipa::path(get, path = "/users", tag = USER_TAG)]
+/// Searches for users.
+///
+/// **Anonymous tokens**
+///
+/// Same as `name` token.
+///
+/// **Named tokens**
+///
+/// | Key                                                              | Description                                     |
+/// | ---------------------------------------------------------------- | ----------------------------------------------- |
+/// | `name`                                                           | having given name (accepts wildcards)           |
+/// | `creation-date`, `creation-time`                                 | registered at given date                        |
+/// | `last-login-date`, `last-login-time`, `login-date`, `login-time` | whose most recent login date matches given date |
+///
+/// **Sort style tokens**
+///
+/// | Value                                                            | Description             |
+/// | ---------------------------------------------------------------- | ----------------------- |
+/// | `random`                                                         | as random as it can get |
+/// | `name`                                                           | A to Z                  |
+/// | `creation-date`, `creation-time`                                 | newest to oldest        |
+/// | `last-login-date`, `last-login-time`, `login-date`, `login-time` | recently active first   |
+///
+/// **Special tokens**
+///
+/// None.
+#[utoipa::path(
+    get,
+    path = "/users",
+    tag = USER_TAG,
+    params(PageParams),
+    responses(
+        (status = 200, body = PagedResponse<UserInfo>),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -71,7 +106,21 @@ async fn list(
     })
 }
 
-#[utoipa::path(get, path = "/user/{name}", tag = USER_TAG)]
+/// Retrieves information about an existing user.
+#[utoipa::path(
+    get,
+    path = "/user/{name}",
+    tag = USER_TAG,
+    params(
+        ("name" = String, Path, description = "Username"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = UserInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The user does not exist"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -103,18 +152,26 @@ async fn get(
     })
 }
 
+/// Request body for creating a user.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct UserCreateBody {
+    /// Username. Must match `user_name_regex` from server's configuration.
     name: SmallString,
+    /// Password. Must match `password_regex` from server's configuration.
     password: SmallString,
+    /// Email address.
     email: Option<SmallString>,
+    /// User rank. Defaults to `default_rank` from server's configuration.
     rank: Option<UserRank>,
+    /// Avatar style.
     avatar_style: Option<AvatarStyle>,
     #[serde(skip_deserializing)]
     avatar: Option<FileContents>,
+    /// Token referencing previously uploaded avatar.
     avatar_token: Option<String>,
+    /// URL to fetch avatar from.
     avatar_url: Option<Url>,
 }
 
@@ -198,7 +255,34 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(post, path = "/users", tag = USER_TAG)]
+/// Creates a new user using specified parameters.
+///
+/// Names and passwords must match `user_name_regex` and `password_regex` from
+/// server's configuration, respectively. Email address, rank and avatar fields
+/// are optional. Avatar style can be either `gravatar` or `manual`. `manual`
+/// avatar style requires client to pass also `avatar` file - see
+/// [file uploads](#tag/File-Uploads) for details. If the rank is empty and the
+/// user happens to be the first user ever created, become an administrator,
+/// whereas subsequent users will be given the rank indicated by `default_rank`
+/// in the server's configuration.
+#[utoipa::path(
+    post,
+    path = "/users",
+    tag = USER_TAG,
+    params(ResourceParams),
+    request_body = UserCreateBody,
+    responses(
+        (status = 200, body = UserInfo),
+        (status = 400, description = "User name is invalid"),
+        (status = 400, description = "Password is invalid"),
+        (status = 400, description = "Email is invalid"),
+        (status = 400, description = "Rank is invalid"),
+        (status = 400, description = "Avatar is missing for manual avatar style"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 403, description = "Trying to set rank higher than own rank"),
+        (status = 409, description = "A user with such name already exists"),
+    ),
+)]
 async fn create_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -221,20 +305,29 @@ async fn create_handler(
     }
 }
 
+/// Request body for updating a user.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct UserUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
+    /// New username. Must match `user_name_regex` from server's configuration.
     name: Option<SmallString>,
+    /// New password. Must match `password_regex` from server's configuration.
     password: Option<SmallString>,
+    /// Email address. Set to null to remove.
     #[serde(default, deserialize_with = "api::deserialize_some")]
     email: Option<Option<SmallString>>,
+    /// User rank.
     rank: Option<UserRank>,
+    /// Avatar style.
     avatar_style: Option<AvatarStyle>,
     #[serde(skip_deserializing)]
     avatar: Option<FileContents>,
+    /// Token referencing previously uploaded avatar.
     avatar_token: Option<String>,
+    /// URL to fetch avatar from.
     avatar_url: Option<Url>,
 }
 
@@ -372,7 +465,37 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(put, path = "/user/{name}", tag = USER_TAG)]
+/// Updates an existing user using specified parameters.
+///
+/// Names and passwords must match `user_name_regex` and `password_regex` from
+/// server's configuration, respectively. Avatar style can be either `gravatar`
+/// or `manual`. `manual` avatar style requires client to pass also `avatar`
+/// file - see [file uploads](#tag/File-Uploads) for details. All fields except
+/// `version` are optional - update concerns only provided fields. To update
+/// last login time, see [authentication](#tag/Authentication).
+#[utoipa::path(
+    put,
+    path = "/user/{name}",
+    tag = USER_TAG,
+    params(
+        ("name" = String, Path, description = "Username"),
+        ResourceParams,
+    ),
+    request_body = UserUpdateBody,
+    responses(
+        (status = 200, body = UserInfo),
+        (status = 400, description = "User name is invalid"),
+        (status = 400, description = "Password is invalid"),
+        (status = 400, description = "Email is invalid"),
+        (status = 400, description = "Rank is invalid"),
+        (status = 400, description = "Avatar is missing for manual avatar style"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 403, description = "Trying to set rank higher than own rank"),
+        (status = 404, description = "The user does not exist"),
+        (status = 409, description = "The version is outdated"),
+        (status = 409, description = "A user with new name already exists"),
+    ),
+)]
 async fn update_handler(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -396,7 +519,22 @@ async fn update_handler(
     }
 }
 
-#[utoipa::path(delete, path = "/user/{name}", tag = USER_TAG)]
+/// Deletes existing user.
+#[utoipa::path(
+    delete,
+    path = "/user/{name}",
+    tag = USER_TAG,
+    params(
+        ("name" = String, Path, description = "Username"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = Object),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The user does not exist"),
+        (status = 409, description = "The version is outdated"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
