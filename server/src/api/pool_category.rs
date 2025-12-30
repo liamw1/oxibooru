@@ -95,7 +95,7 @@ async fn get(
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct PoolCategoryCreateBody {
-    /// Category name.
+    /// Category name. Must match `pool_category_name_regex` from server's configuration.
     name: SmallString,
     /// Category color.
     color: SmallString,
@@ -156,7 +156,7 @@ async fn create(
 struct PoolCategoryUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,
-    /// New category name.
+    /// New category name. Must match `pool_category_name_regex` from server's configuration.
     name: Option<SmallString>,
     /// New category color.
     color: Option<SmallString>,

@@ -14,6 +14,7 @@ use diesel::{
 };
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use server_macros::non_nullable_options;
 use std::rc::Rc;
 use strum::{EnumString, EnumTable};
 use utoipa::ToSchema;
@@ -55,18 +56,29 @@ impl BoolFill for FieldTable<bool> {
     }
 }
 
+/// An ordered list of posts, with a description and category.
+#[non_nullable_options]
 #[skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PoolInfo {
+    /// Resource version. See [versioning](#Versioning).
     version: Option<DateTime>,
+    /// The pool identifier.
     id: Option<i64>,
+    /// The pool description (instructions how to use, history etc.). The client should render it as Markdown.
     description: Option<LargeString>,
+    /// Time the pool was created.
     creation_time: Option<DateTime>,
+    /// Time the pool was edited.
     last_edit_time: Option<DateTime>,
+    /// The name of the category the given pool belongs to.
     category: Option<SmallString>,
+    /// A list of pool names (aliases).
     names: Option<Vec<SmallString>>,
+    /// An ordered list of posts. Posts are ordered by insertion by default.
     posts: Option<Vec<MicroPost>>,
+    /// The number of posts the pool has.
     post_count: Option<i64>,
 }
 

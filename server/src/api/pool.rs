@@ -34,7 +34,46 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 const MAX_POOLS_PER_PAGE: i64 = 1000;
 
-#[utoipa::path(get, path = "/pools", tag = POOL_TAG)]
+/// Searches for pools.
+///
+/// **Anonymous tokens**
+///
+/// Same as `name` token.
+///
+/// **Named tokens**
+///
+/// | `<key>`                                                      | Description                               |
+/// | ------------------------------------------------------------ | ----------------------------------------- |
+/// | `name`                                                       | having given name (accepts wildcards)     |
+/// | `category`                                                   | having given category (accepts wildcards) |
+/// | `creation-date`, `creation-time`                             | created at given date                     |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | edited at given date                      |
+/// | `post-count`                                                 | used in given number of posts             |
+///
+/// **Sort style tokens** 
+///
+/// | `<value>`                                                    | Description                  |
+/// | ------------------------------------------------------------ | ---------------------------- |
+/// | `random`                                                     | as random as it can get      |
+/// | `name`                                                       | A to Z                       |
+/// | `category`                                                   | category (A to Z)            |
+/// | `creation-date`, `creation-time`                             | recently created first       |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first        |
+/// | `post-count`                                                 | used in most posts first     |
+///
+/// **Special tokens**
+///
+/// None.
+#[utoipa::path(
+    get, 
+    path = "/pools", 
+    tag = POOL_TAG,
+    params(PageParams),
+    responses(
+        (status = 200, body = PagedResponse<PoolInfo>),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -61,7 +100,21 @@ async fn list(
     })
 }
 
-#[utoipa::path(get, path = "/pool/{id}", tag = POOL_TAG)]
+/// Retrieves information about an existing pool.
+#[utoipa::path(
+    get, 
+    path = "/pool/{id}", 
+    tag = POOL_TAG,
+    params(
+        ("id" = i64, Path, description = "Pool ID"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = PoolInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Pool does not exist"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -82,16 +135,42 @@ async fn get(
     })
 }
 
+/// Request body for creating a pool.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct PoolCreateBody {
+    /// Pool names. Must match `pool_name_regex` from server's configuration.
     names: Vec<SmallString>,
+    /// Category name. Must match an existing pool category.
     category: SmallString,
+    /// Pool description.
     description: Option<LargeString>,
+    /// List of post IDs to include in the pool.
     posts: Option<Vec<i64>>,
 }
 
-#[utoipa::path(post, path = "/pool", tag = POOL_TAG)]
+/// Creates a new pool using specified parameters.
+///
+/// Names must match `pool_name_regex` from server's configuration.
+/// Category must exist and is the same as `name` field within the
+/// pool category resource. `posts` is an optional list of integer post IDs.
+/// If the specified posts do not exist, an error will be thrown.
+#[utoipa::path(
+    post, 
+    path = "/pool", 
+    tag = POOL_TAG,
+    params(ResourceParams),
+    request_body = PoolCreateBody,
+    responses(
+        (status = 200, body = PoolInfo),
+        (status = 400, description = "Any name is invalid"),
+        (status = 400, description = "No name was specified"),
+        (status = 400, description = "Category is invalid"),
+        (status = 400, description = "There is at least one duplicate post"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "At least one post ID does not exist"),
+    ),
+)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -140,7 +219,23 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(post, path = "/pool-merge", tag = POOL_TAG)]
+/// Removes source pool and merges all of its posts and aliases with the target pool.
+///
+/// Other pool properties such as category do not get transferred and are discarded.
+#[utoipa::path(
+    post, 
+    path = "/pool-merge", 
+    tag = POOL_TAG,
+    params(ResourceParams),
+    request_body = MergeBody<i64>,
+    responses(
+        (status = 200, body = PoolInfo),
+        (status = 400, description = "The source pool is the same as the target pool"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The source or target pool does not exist"),
+        (status = 409, description = "The version of either pool is outdated"),
+    ),
+)]
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -180,17 +275,52 @@ async fn merge(
         .map_err(ApiError::from)
 }
 
+/// Request body for updating a pool.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct PoolUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
+    /// Category name. Must match an existing pool category.
     category: Option<SmallString>,
+    /// Pool description.
     description: Option<LargeString>,
+    /// Pool names. Must match `pool_name_regex` from server's configuration.
     names: Option<Vec<SmallString>>,
+    /// List of post IDs. Replaces the previous list.
     posts: Option<Vec<i64>>,
 }
 
-#[utoipa::path(put, path = "/pool/{id}", tag = POOL_TAG)]
+/// Updates an existing pool using specified parameters.
+///
+/// Names must match `pool_name_regex` from server's configuration.
+/// Category must exist and is the same as `name` field within the
+/// pool category resource. `posts` is an optional list of integer post IDs.
+/// If the specified posts do not exist yet, an error will be thrown.
+/// The full list of post IDs must be provided if they are being updated,
+/// and the previous list of posts will be replaced with the new one.
+/// All fields except `version` are optional - update concerns only provided fields.
+#[utoipa::path(
+    put, 
+    path = "/pool/{id}", 
+    tag = POOL_TAG,
+    params(
+        ("id" = i64, Path, description = "Pool ID"),
+        ResourceParams,
+    ),
+    request_body = PoolUpdateBody,
+    responses(
+        (status = 200, body = PoolInfo),
+        (status = 400, description = "Any name is invalid"),
+        (status = 400, description = "No name was specified"),
+        (status = 400, description = "Category is invalid"),
+        (status = 400, description = "There is at least one duplicate post"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The pool does not exist"),
+        (status = 404, description = "At least one post ID does not exist"),
+        (status = 409, description = "The version is outdated"),
+    ),
+)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -256,7 +386,24 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(delete, path = "/pool/{id}", tag = POOL_TAG)]
+/// Deletes existing pool.
+///
+/// All posts in the pool will only have their relation to the pool removed.
+#[utoipa::path(
+    delete, 
+    path = "/pool/{id}", 
+    tag = POOL_TAG,
+    params(
+        ("id" = i64, Path, description = "Pool ID"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = ()),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The pool does not exist"),
+        (status = 409, description = "The version is outdated"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

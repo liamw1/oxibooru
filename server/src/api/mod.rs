@@ -115,13 +115,17 @@ impl Deref for DeleteBody {
     }
 }
 
-/// Represents body of a request to merge two resources.
+/// Request body for merging resources.
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct MergeBody<T> {
+    /// ID of the source resource to be removed.
     remove: T,
+    /// ID of the target resource to merge into.
     merge_to: T,
+    /// Version of the source resource. See [versioning](#Versioning).
     remove_version: DateTime,
+    /// Version of the target resource. See [versioning](#Versioning).
     merge_to_version: DateTime,
 }
 

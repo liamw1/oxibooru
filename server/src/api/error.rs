@@ -106,9 +106,7 @@ impl ApiError {
             Self::MultipartRejection(err) => err.status(),
             Self::PathRejection(err) => err.status(),
             Self::QueryRejection(err) => err.status(),
-            Self::AlreadyExists(_)
-            | Self::ContentTypeMismatch(..)
-            | Self::CyclicDependency(_)
+            Self::ContentTypeMismatch(..)
             | Self::DeleteDefault(_)
             | Self::EmptySwf
             | Self::EmptyVideo
@@ -132,7 +130,7 @@ impl ApiError {
             Self::NotLoggedIn | Self::Password(_) | Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
             Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::Hidden(_) | Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::ResourceModified => StatusCode::CONFLICT,
+            Self::AlreadyExists(_) | Self::CyclicDependency(_) | Self::ResourceModified => StatusCode::CONFLICT,
             Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::FailedEmailTransport(_)
             | Self::InvalidHeader(_)
