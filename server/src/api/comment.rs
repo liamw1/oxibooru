@@ -183,7 +183,7 @@ async fn create(
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct CommentUpdateBody {
-    /// Resource version. See [versioning](#/Versioning).
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
     /// New comment text.
     text: String,

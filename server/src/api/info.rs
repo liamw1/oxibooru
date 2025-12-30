@@ -14,6 +14,7 @@ use crate::time::DateTime;
 use axum::extract::{Extension, State};
 use diesel::{Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Serialize;
+use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -21,20 +22,41 @@ pub fn routes() -> OpenApiRouter<AppState> {
     OpenApiRouter::new().routes(routes!(get))
 }
 
-// TODO: Remove renames by changing references to these names in client
-#[derive(Serialize)]
+/// Server information response.
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct Response {
+    /// Total number of posts on the server.
     post_count: i64,
+    /// Total disk usage in bytes.
     disk_usage: i64,
+    /// The currently featured post, or null if none.
     featured_post: Option<PostInfo>,
+    /// Time when the currently featured post was featured.
     featuring_time: Option<DateTime>,
+    /// Username of the user who featured the currently featured post.
     featuring_user: Option<SmallString>,
+    /// Current server time.
     server_time: DateTime,
+    /// Public server configuration.
     config: PublicConfig,
 }
 
-#[utoipa::path(get, path = "/info", tag = INFO_TAG)]
+/// Retrieves simple statistics.
+///
+/// `featuredPost` is null if there is no featured post yet. `serverTime` is
+/// pretty much the same as the `Date` HTTP field, only formatted in a manner
+/// consistent with other dates. Values in the `config` key are taken directly
+/// from the server config.
+#[utoipa::path(
+    get, 
+    path = "/info", 
+    tag = INFO_TAG,
+    params(ResourceParams),
+    responses(
+        (status = 200, body = Response, description = "Server information"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

@@ -16,14 +16,22 @@ use serde::Serialize;
 use serde_with::skip_serializing_none;
 use std::rc::Rc;
 use strum::{EnumString, EnumTable};
+use utoipa::ToSchema;
 
-#[derive(Serialize)]
+/// A pool resource stripped down to `id`, `names`, `category`, `description` and `postCount` fields.
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroPool {
+    /// Resource version. See [versioning](#Versioning).
     pub id: i64,
+    /// List of pool names (aliases).
+    #[schema(value_type = Vec<SmallString>)]
     pub names: Rc<[SmallString]>,
+    /// The name of the category the given pool belongs to.
     pub category: SmallString,
+    /// The pool description (instructions how to use, history etc.). The client should render it as Markdown.
     pub description: LargeString,
+    /// The number of posts the pool has.
     pub post_count: i64,
 }
 

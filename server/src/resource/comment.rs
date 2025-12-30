@@ -39,15 +39,8 @@ impl BoolFill for FieldTable<bool> {
 #[skip_serializing_none]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-#[schema(examples(json!({
-    "id": 1,
-    "post_id": 9,
-    "text": "This is a comment",
-    "score": 12,
-    "user": null
-})))]
 pub struct CommentInfo {
-    /// Resource version. See [versioning](#/Versioning) for details.
+    /// Resource version. See [versioning](#Versioning) for details.
     pub version: Option<DateTime>, // TODO: Remove last_edit_time as it fills the same role as version here
     /// The comment identifier.
     pub id: Option<i64>,

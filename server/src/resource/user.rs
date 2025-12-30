@@ -15,6 +15,7 @@ use serde_with::skip_serializing_none;
 use strum::{EnumString, EnumTable};
 use utoipa::ToSchema;
 
+/// A user resource stripped down to `name` and `avatarUrl` fields.
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroUser {

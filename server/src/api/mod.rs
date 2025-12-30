@@ -104,7 +104,7 @@ impl Deref for RatingBody {
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct DeleteBody {
-    /// Resource version. See [versioning](#/Versioning).
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
 }
 
@@ -132,7 +132,7 @@ struct ResourceParams {
     #[param(example = "anonymous_token")]
     #[schema(examples("anonymous_token named_token:value1,value2,value3 sort:sort_token"))]
     query: Option<String>,
-    /// Comma-separated list of fields to include in the response. See [field selection](#/Field-Selection) for details.
+    /// Comma-separated list of fields to include in the response. See [field selection](#Field-Selection) for details.
     #[param(example = "field1,field2")]
     #[schema(examples("field1,field2,field3"))]
     fields: Option<String>,
@@ -176,23 +176,25 @@ impl PageParams {
     }
 }
 
-/// Represents a response to a request to retrieve multiple resources.
-/// Used for resources which are not paged.
+/// A result of search operation that doesn't involve paging.
 #[derive(Serialize, ToSchema)]
 struct UnpagedResponse<T> {
     results: Vec<T>,
 }
 
-/// Represents a response to a request to retrieve multiple resources.
-/// Used for resources which are paged.
+/// A result of search operation that involves paging.
 #[derive(Serialize, ToSchema)]
 struct PagedResponse<T> {
+    /// The query passed in the original request that contains a standard [search query](#Search).
     #[schema(examples("anonymous_token named_token:value1,value2,value3 sort:sort_token"))]
     query: Option<String>,
+    /// The record starting offset, passed in the original request.
     #[schema(examples(0))]
     offset: i64,
+    /// Number of records on one page.
     #[schema(examples(40))]
     limit: i64,
+    /// How many resources were found. To get the page count, divide this number by `limit`.
     #[schema(examples(1729))]
     total: i64,
     results: Vec<T>,

@@ -12,12 +12,18 @@ use serde_with::skip_serializing_none;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use strum::{EnumString, EnumTable};
+use utoipa::ToSchema;
 
-#[derive(Serialize)]
+/// A tag resource stripped down to `names`, `category` and `usages` fields.
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroTag {
+    /// A list of tag names (aliases). Tagging a post with any name will automatically assign the first name from this list.
+    #[schema(value_type = Vec<SmallString>)]
     pub names: Rc<[SmallString]>,
+    /// The name of the category the given tag belongs to.
     pub category: SmallString,
+    /// The number of posts the tag was used in.
     pub usages: i64,
 }
 
