@@ -261,7 +261,7 @@ async fn create(
 /// server's configuration, respectively. Email address, rank and avatar fields
 /// are optional. Avatar style can be either `gravatar` or `manual`. `manual`
 /// avatar style requires client to pass also `avatar` file - see
-/// [file uploads](#tag/File-Uploads) for details. If the rank is empty and the
+/// [file uploads](#Upload) for details. If the rank is empty and the
 /// user happens to be the first user ever created, become an administrator,
 /// whereas subsequent users will be given the rank indicated by `default_rank`
 /// in the server's configuration.
@@ -470,9 +470,9 @@ async fn update(
 /// Names and passwords must match `user_name_regex` and `password_regex` from
 /// server's configuration, respectively. Avatar style can be either `gravatar`
 /// or `manual`. `manual` avatar style requires client to pass also `avatar`
-/// file - see [file uploads](#tag/File-Uploads) for details. All fields except
+/// file - see [file uploads](#Upload) for details. All fields except
 /// `version` are optional - update concerns only provided fields. To update
-/// last login time, see [authentication](#tag/Authentication).
+/// last login time, see [authentication](#Authentication).
 #[utoipa::path(
     put,
     path = "/user/{name}",

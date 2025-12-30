@@ -57,8 +57,7 @@ impl BoolFill for FieldTable<bool> {
 ///     | `"pool"`          | pool ID                          |
 ///     | `"pool_category"` | pool category name at given time |
 ///
-/// - `<issuer>`: a [micro user resource](#micro-user) representing the user who
-///     has made the change.
+/// - `<issuer>`: the user who made the change.
 ///
 /// - `<data>`: the snapshot data, of which content depends on the `<operation>`.
 ///    More explained later.
@@ -112,8 +111,6 @@ impl BoolFill for FieldTable<bool> {
 ///         "featured": false
 ///     }
 ///     ```
-///     
-///     `<note>`s are serialized the same way as [note resources](#note).
 ///
 /// - Pool category snapshot data (`<resource-type> = "pool_category"`)
 ///

@@ -725,7 +725,7 @@ async fn create(
 /// set to truthy value, the uploader name won't be recorded (privilege
 /// verification still applies; it's possible to disallow anonymous uploads
 /// completely from config.) For details on how to pass `content` and
-/// `thumbnail`, see [file uploads](#File-Uploads).
+/// `thumbnail`, see [file uploads](#Upload).
 #[utoipa::path(
     post,
     path = "/posts",
@@ -1106,7 +1106,7 @@ async fn update(
 /// `flag` can be either `loop` to enable looping for video posts or `sound` to
 /// indicate sound. Sending empty `thumbnail` will reset the post thumbnail to
 /// default. For details how to pass `content` and `thumbnail`, see
-/// [file uploads](#File-Uploads). All fields except `version` are optional -
+/// [file uploads](#Upload). All fields except `version` are optional -
 /// update concerns only provided fields.
 #[utoipa::path(
     put,
