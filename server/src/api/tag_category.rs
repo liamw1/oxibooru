@@ -28,7 +28,19 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(set_default))
 }
 
-#[utoipa::path(get, path = "/tag-categories", tag = TAG_CATEGORY_TAG)]
+/// Lists all tag categories.
+///
+/// Doesn't use paging.
+#[utoipa::path(
+    get,
+    path = "/tag-categories",
+    tag = TAG_CATEGORY_TAG,
+    params(ResourceParams),
+    responses(
+        (status = 200, body = UnpagedResponse<TagCategoryInfo>),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -45,7 +57,21 @@ async fn list(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(get, path = "/tag-category/{name}", tag = TAG_CATEGORY_TAG)]
+/// Retrieves information about an existing tag category.
+#[utoipa::path(
+    get,
+    path = "/tag-category/{name}",
+    tag = TAG_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Tag category name"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = TagCategoryInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The tag category does not exist"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -63,15 +89,35 @@ async fn get(
     })
 }
 
+/// Request body for creating a tag category.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct TagCategoryCreateBody {
+    /// Display order for the category.
     order: i32,
+    /// Category name. Must match `tag_category_name_regex` from server's configuration.
     name: SmallString,
+    /// Category color.
     color: SmallString,
 }
 
-#[utoipa::path(post, path = "/tag-categories", tag = TAG_CATEGORY_TAG)]
+/// Creates a new tag category using specified parameters.
+///
+/// Names are case insensitive.
+#[utoipa::path(
+    post,
+    path = "/tag-categories",
+    tag = TAG_CATEGORY_TAG,
+    params(ResourceParams),
+    request_body = TagCategoryCreateBody,
+    responses(
+        (status = 200, body = TagCategoryInfo),
+        (status = 400, description = "The name is invalid or missing"),
+        (status = 400, description = "The color is invalid or missing"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 409, description = "The name is used by an existing tag category"),
+    ),
+)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -105,16 +151,44 @@ async fn create(
         .map_err(ApiError::from)
 }
 
+/// Request body for updating a tag category.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct TagCategoryUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
+    /// Display order for the category.
     order: Option<i32>,
+    /// New category name. Must match `tag_category_name_regex` from server's configuration.
     name: Option<SmallString>,
+    /// New category color.
     color: Option<SmallString>,
 }
 
-#[utoipa::path(put, path = "/tag-category/{name}", tag = TAG_CATEGORY_TAG)]
+/// Updates an existing tag category using specified parameters.
+///
+/// Name must match `tag_category_name_regex` from server's configuration.
+/// Names are case insensitive. All fields except `version` are optional -
+/// update concerns only provided fields.
+#[utoipa::path(
+    put,
+    path = "/tag-category/{name}",
+    tag = TAG_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Tag category name"),
+        ResourceParams,
+    ),
+    request_body = TagCategoryUpdateBody,
+    responses(
+        (status = 200, body = TagCategoryInfo),
+        (status = 400, description = "The name is invalid"),
+        (status = 400, description = "The color is invalid"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The tag category does not exist"),
+        (status = 409, description = "The version is outdated"),
+        (status = 409, description = "The name is used by an existing tag category"),
+    ),
+)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -159,7 +233,24 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(put, path = "/tag-category/{name}/default", tag = TAG_CATEGORY_TAG)]
+/// Sets given tag category as default.
+///
+/// All new tags created manually or automatically will have this category.
+#[utoipa::path(
+    put,
+    path = "/tag-category/{name}/default",
+    tag = TAG_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Tag category name"),
+        ResourceParams,
+    ),
+    request_body = Object,
+    responses(
+        (status = 200, body = TagCategoryInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The tag category does not exist"),
+    ),
+)]
 async fn set_default(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -217,7 +308,25 @@ async fn set_default(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(delete, path = "/tag-category/{name}", tag = TAG_CATEGORY_TAG)]
+/// Deletes an existing non-default tag category.
+///
+/// Tags belonging to this category will be moved to the default category.
+#[utoipa::path(
+    delete,
+    path = "/tag-category/{name}",
+    tag = TAG_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Tag category name"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = Object),
+        (status = 400, description = "The tag category is the default category"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The tag category does not exist"),
+        (status = 409, description = "The version is outdated"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

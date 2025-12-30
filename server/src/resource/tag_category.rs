@@ -9,7 +9,9 @@ use crate::time::DateTime;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use server_macros::non_nullable_options;
 use strum::{EnumString, EnumTable};
+use utoipa::ToSchema;
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
 #[strum(serialize_all = "camelCase")]
@@ -28,14 +30,24 @@ impl BoolFill for FieldTable<bool> {
     }
 }
 
+/// A single tag category. The primary purpose of tag categories is to distinguish
+/// certain tag types (such as characters, media type etc.), which improves user
+/// experience.
+#[non_nullable_options]
 #[skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct TagCategoryInfo {
+    /// Resource version. See [versioning](#Versioning).
     version: Option<DateTime>,
+    /// The category name.
     name: Option<SmallString>,
+    /// The category color.
     color: Option<SmallString>,
+    /// How many tags is the given category used with.
     usages: Option<i64>,
+    /// The order in which tags with this category are displayed, ascending.
     order: Option<i32>,
+    /// Whether the tag category is the default one.
     default: Option<bool>,
 }
 

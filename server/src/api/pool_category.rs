@@ -113,9 +113,10 @@ struct PoolCategoryCreateBody {
     request_body = PoolCategoryCreateBody,
     responses(
         (status = 200, body = PoolCategoryInfo),
-        (status = 400, description = "Name or color is invalid or missing"),
+        (status = 400, description = "The name is invalid or missing"),
+        (status = 400, description = "The color is invalid or missing"),
         (status = 403, description = "Privileges are too low"),
-        (status = 409, description = "Name is used by an existing pool category"),
+        (status = 409, description = "The Name is used by an existing pool category"),
     ),
 )]
 async fn create(
@@ -178,10 +179,12 @@ struct PoolCategoryUpdateBody {
     request_body = PoolCategoryUpdateBody,
     responses(
         (status = 200, description = "Updated pool category", body = PoolCategoryInfo),
-        (status = 400, description = "Name or color is invalid"),
+        (status = 400, description = "The name is invalid"),
+        (status = 400, description = "The color is invalid"),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Pool category does not exist"),
-        (status = 409, description = "Version is outdated or name is used by an existing pool category"),
+        (status = 404, description = "The Pool category does not exist"),
+        (status = 409, description = "The version is outdated"),
+        (status = 409, description = "The name is used by an existing pool category"),
     ),
 )]
 async fn update(
@@ -315,7 +318,7 @@ async fn set_default(
         (status = 400, description = "Pool category is the default category"),
         (status = 403, description = "Privileges are too low"),
         (status = 404, description = "Pool category does not exist"),
-        (status = 409, description = "Version is outdated"),
+        (status = 409, description = "The version is outdated"),
     ),
 )]
 async fn delete(

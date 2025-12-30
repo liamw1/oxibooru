@@ -107,7 +107,7 @@ async fn list(
     responses(
         (status = 200, body = CommentInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Comment does not exist"),
+        (status = 404, description = "The comment does not exist"),
     ),
 )]
 async fn get(
@@ -148,7 +148,7 @@ struct CommentCreateBody {
     responses(
         (status = 200, body = CommentInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Post does not exist"),
+        (status = 404, description = "The post does not exist"),
     ),
 )]
 async fn create(
@@ -200,8 +200,8 @@ struct CommentUpdateBody {
     responses(
         (status = 200, body = CommentInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Comment does not exist"),
-        (status = 409, description = "Version is outdated"),
+        (status = 404, description = "The comment does not exist"),
+        (status = 409, description = "The version is outdated"),
     ),
 )]
 async fn update(
