@@ -240,6 +240,7 @@ impl BoolFill for FieldTable<bool> {
 #[skip_serializing_none]
 #[derive(Serialize, ToSchema)]
 pub struct SnapshotInfo {
+    #[schema(nullable)]
     user: Option<Option<MicroUser>>,
     operation: Option<ResourceOperation>,
     #[serde(rename(serialize = "type"))]

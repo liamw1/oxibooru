@@ -32,7 +32,21 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(update, delete))
 }
 
-#[utoipa::path(get, path = "/user-tokens/{username}", tag = USER_TOKEN_TAG)]
+/// Searches for user tokens for the given user.
+#[utoipa::path(
+    get,
+    path = "/user-tokens/{username}",
+    tag = USER_TOKEN_TAG,
+    params(
+        ("username" = String, Path, description = "Username"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = UnpagedResponse<UserTokenInfo>),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The user does not exist"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -71,16 +85,37 @@ async fn list(
     Ok(Json(UnpagedResponse { results }))
 }
 
+/// Request body for creating a user token.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct UserTokenCreateBody {
+    /// Whether the token is enabled.
     enabled: bool,
+    /// Optional note describing the token's purpose.
     note: Option<String>,
+    /// Optional expiration time for the token.
     expiration_time: Option<DateTime>,
 }
 
-#[utoipa::path(post, path = "/user-token/{username}", tag = USER_TOKEN_TAG)]
+/// Creates a new user token for authentication.
+///
+/// The token can be used for authentication of API endpoints instead of a password.
+#[utoipa::path(
+    post,
+    path = "/user-token/{username}",
+    tag = USER_TOKEN_TAG,
+    params(
+        ("username" = String, Path, description = "Username"),
+        ResourceParams,
+    ),
+    request_body = UserTokenCreateBody,
+    responses(
+        (status = 200, body = UserTokenInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The user does not exist"),
+    ),
+)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -131,18 +166,43 @@ async fn create(
     Ok(Json(UserTokenInfo::new(MicroUser::new(&state.config, username, avatar_style), user_token, &fields)))
 }
 
+/// Request body for updating a user token.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 #[serde(rename_all = "camelCase")]
 struct UserTokenUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
+    /// Whether the token is enabled.
     enabled: Option<bool>,
+    /// Optional note describing the token's purpose.
     note: Option<LargeString>,
+    /// Optional expiration time for the token. Set to null to remove expiration.
     #[serde(default, deserialize_with = "api::deserialize_some")]
     expiration_time: Option<Option<DateTime>>,
 }
 
-#[utoipa::path(put, path = "/user-token/{username}/{token}", tag = USER_TOKEN_TAG)]
+/// Updates an existing user token using specified parameters.
+///
+/// All fields except `version` are optional - update concerns only provided fields.
+#[utoipa::path(
+    put,
+    path = "/user-token/{username}/{token}",
+    tag = USER_TOKEN_TAG,
+    params(
+        ("username" = String, Path, description = "Username"),
+        ("token" = Uuid, Path, description = "User token UUID"),
+        ResourceParams,
+    ),
+    request_body = UserTokenUpdateBody,
+    responses(
+        (status = 200, body = UserTokenInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The user does not exist"),
+        (status = 404, description = "The user token does not exist"),
+        (status = 409, description = "The version is outdated"),
+    ),
+)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -197,7 +257,23 @@ async fn update(
     )))
 }
 
-#[utoipa::path(delete, path = "/user-token/{username}/{token}", tag = USER_TOKEN_TAG)]
+/// Deletes existing user token.
+#[utoipa::path(
+    delete,
+    path = "/user-token/{username}/{token}",
+    tag = USER_TOKEN_TAG,
+    params(
+        ("username" = String, Path, description = "Username"),
+        ("token" = Uuid, Path, description = "User token UUID"),
+    ),
+    request_body = Object,
+    responses(
+        (status = 200, body = Object),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The user does not exist"),
+        (status = 404, description = "The token does not exist"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
