@@ -168,7 +168,7 @@ pub struct PostInfo {
     description: Option<LargeString>,
     /// Time the tag was created.
     creation_time: Option<DateTime>,
-    /// Time the tag was edited.
+    /// Time the tag was last edited.
     last_edit_time: Option<DateTime>,
     /// Where the post content is located.
     content_url: Option<String>,

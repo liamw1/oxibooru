@@ -37,7 +37,54 @@ pub fn routes() -> OpenApiRouter<AppState> {
 const MAX_TAGS_PER_PAGE: i64 = 1000;
 const MAX_TAG_SIBLINGS: i64 = 50;
 
-#[utoipa::path(get, path = "/tags", tag = TAG_TAG)]
+/// Searches for tags.
+///
+/// **Anonymous tokens**
+///
+/// Same as `name` token.
+///
+/// **Named tokens**
+///
+/// | Key                                                          | Description                                                   |
+/// | -------------------                                          | ------------------------------------------------------------- |
+/// | `name`                                                       | having given name (accepts wildcards)                         |
+/// | `category`                                                   | having given category (accepts wildcards)                     |
+/// | `description`                                                | having given description (accepts wildcards)                  |
+/// | `creation-date`, `creation-time`                             | created at given date                                         |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | edited at given date                                          |
+/// | `usages`, `usage-count`, `post-count`                        | used in given number of posts                                 |
+/// | `suggestion-count`                                           | with given number of suggestions                              |
+/// | `implication-count`                                          | with given number of implications                             |
+/// | `implies`                                                    | having an implication with the given name (accepts wildcards) |
+/// | `suggests`                                                   | having a suggestion with the given name (accepts wildcards)   |
+///
+/// **Sort style tokens**
+///
+/// | Value                                                        | Description                  |
+/// | -------------------                                          | ---------------------------- |
+/// | `random`                                                     | as random as it can get      |
+/// | `name`                                                       | A to Z                       |
+/// | `category`                                                   | category (A to Z)            |
+/// | `description`                                                | description (A to Z)         |
+/// | `creation-date`, `creation-time`                             | recently created first       |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first        |
+/// | `usages`, `usage-count`, `post-count`                        | used in most posts first     |
+/// | `implication-count`, `implies`                               | with most implications first |
+/// | `suggestion-count`, `suggests`                               | with most suggestions first  |
+///
+/// **Special tokens**
+///
+/// None.
+#[utoipa::path(
+    get,
+    path = "/tags",
+    tag = TAG_TAG,
+    params(PageParams),
+    responses(
+        (status = 200, body = PagedResponse<TagInfo>),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -64,7 +111,21 @@ async fn list(
     })
 }
 
-#[utoipa::path(get, path = "/tag/{name}", tag = TAG_TAG)]
+/// Retrieves information about an existing tag.
+#[utoipa::path(
+    get,
+    path = "/tag/{name}",
+    tag = TAG_TAG,
+    params(
+        ("name" = String, Path, description = "Tag name"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = TagInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The tag does not exist"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -82,18 +143,41 @@ async fn get(
     })
 }
 
-#[derive(Serialize)]
+/// A sibling tag with its co-occurrence count.
+#[derive(Serialize, ToSchema)]
 struct TagSibling {
+    /// The sibling tag.
     tag: TagInfo,
+    /// Number of times this tag appears with the queried tag.
     occurrences: i64,
 }
 
-#[derive(Serialize)]
+/// Response containing tag siblings.
+#[derive(Serialize, ToSchema)]
 struct TagSiblings {
+    /// List of sibling tags sorted by occurrence count.
     results: Vec<TagSibling>,
 }
 
-#[utoipa::path(get, path = "/tag-siblings/{name}", tag = TAG_TAG)]
+/// Lists siblings of given tag.
+///
+/// Siblings are tags that were used in the same posts as the given tag.
+/// `occurrences` field signifies how many times a given sibling appears with
+/// the given tag. Results are sorted by occurrences count and the list is
+/// truncated to the first 50 elements. Doesn't use paging.
+#[utoipa::path(
+    get,
+    path = "/tag-siblings/{name}",
+    tag = TAG_TAG,
+    params(
+        ("name" = String, Path, description = "Tag name"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = TagSiblings),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn get_siblings(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -141,17 +225,47 @@ async fn get_siblings(
     })
 }
 
+/// Request body for creating a tag.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct TagCreateBody {
+    /// Category name. Must match an existing tag category.
     category: SmallString,
+    /// Tag description.
     description: Option<LargeString>,
+    /// Tag names. Must match `tag_name_regex` from server's configuration.
     names: Vec<SmallString>,
+    /// Implied tags. Non-existent tags will be created automatically.
     implications: Option<Vec<SmallString>>,
+    /// Suggested tags. Non-existent tags will be created automatically.
     suggestions: Option<Vec<SmallString>>,
 }
 
-#[utoipa::path(post, path = "/tags", tag = TAG_TAG)]
+/// Creates a new tag using specified parameters.
+///
+/// Names, suggestions and implications must match `tag_name_regex` from
+/// server's configuration. Category must exist and is the same as `name` field
+/// within the tag category resource. Suggestions and implications are optional.
+/// If specified implied tags or suggested tags do not exist yet, they will be
+/// automatically created. Tags created automatically have no implications, no
+/// suggestions, one name and their category is set to the first tag category
+/// found. If there are no tag categories established yet, an error will be thrown.
+#[utoipa::path(
+    post,
+    path = "/tags",
+    tag = TAG_TAG,
+    params(ResourceParams),
+    request_body = TagCreateBody,
+    responses(
+        (status = 200, body = TagInfo),
+        (status = 400, description = "Any name is used by an existing tag"),
+        (status = 400, description = "Any name, implication or suggestion is invalid"),
+        (status = 400, description = "Category is invalid"),
+        (status = 400, description = "No name was specified"),
+        (status = 400, description = "Implications or suggestions create a cyclic dependency"),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -214,7 +328,25 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(post, path = "/tag-merge", tag = TAG_TAG)]
+/// Removes source tag and merges all of its data to the target tag.
+///
+/// Merges all usages, suggestions and implications from the source to the
+/// target tag. Other tag properties such as category and aliases do not get
+/// transferred and are discarded.
+#[utoipa::path(
+    post,
+    path = "/tag-merge",
+    tag = TAG_TAG,
+    params(ResourceParams),
+    request_body = MergeBody<SmallString>,
+    responses(
+        (status = 200, body = TagInfo),
+        (status = 400, description = "The source tag is the same as the target tag"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The source or target tag does not exist"),
+        (status = 409, description = "The version of either tag is outdated"),
+    ),
+)]
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -253,18 +385,53 @@ async fn merge(
         .map_err(ApiError::from)
 }
 
+/// Request body for updating a tag.
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct TagUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
+    /// Category name. Must match an existing tag category.
     category: Option<SmallString>,
+    /// Tag description.
     description: Option<LargeString>,
+    /// Tag names. Must match `tag_name_regex` from server's configuration.
     names: Option<Vec<SmallString>>,
+    /// Implied tags. Non-existent tags will be created automatically.
     implications: Option<Vec<SmallString>>,
+    /// Suggested tags. Non-existent tags will be created automatically.
     suggestions: Option<Vec<SmallString>>,
 }
 
-#[utoipa::path(put, path = "/tag/{name}", tag = TAG_TAG)]
+/// Updates an existing tag using specified parameters.
+///
+/// Names, suggestions and implications must match `tag_name_regex` from
+/// server's configuration. Category must exist and is the same as `name` field
+/// within the tag category resource. If specified implied tags or suggested
+/// tags do not exist yet, they will be automatically created. Tags created
+/// automatically have no implications, no suggestions, one name and their
+/// category is set to the first tag category found. All fields except
+/// `version` are optional - update concerns only provided fields.
+#[utoipa::path(
+    put,
+    path = "/tag/{name}",
+    tag = TAG_TAG,
+    params(
+        ("name" = String, Path, description = "Tag name"),
+        ResourceParams,
+    ),
+    request_body = TagUpdateBody,
+    responses(
+        (status = 200, body = TagInfo),
+        (status = 400, description = "Any name is used by an existing tag"),
+        (status = 400, description = "Any name, implication or suggestion name is invalid"),
+        (status = 400, description = "Category is invalid"),
+        (status = 400, description = "Implications or suggestions create a cyclic dependency"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The tag does not exist"),
+        (status = 409, description = "The version is outdated"),
+    ),
+)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -343,7 +510,25 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-#[utoipa::path(delete, path = "/tag/{name}", tag = TAG_TAG)]
+/// Deletes existing tag.
+///
+/// The tag to be deleted must have no usages.
+#[utoipa::path(
+    delete,
+    path = "/tag/{name}",
+    tag = TAG_TAG,
+    params(
+        ("name" = String, Path, description = "Tag name"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = Object),
+        (status = 400, description = "The tag has usages"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "The tag does not exist"),
+        (status = 409, description = "The version is outdated"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

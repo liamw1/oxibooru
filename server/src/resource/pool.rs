@@ -70,7 +70,7 @@ pub struct PoolInfo {
     description: Option<LargeString>,
     /// Time the pool was created.
     creation_time: Option<DateTime>,
-    /// Time the pool was edited.
+    /// Time the pool was last edited.
     last_edit_time: Option<DateTime>,
     /// The name of the category the given pool belongs to.
     category: Option<SmallString>,
