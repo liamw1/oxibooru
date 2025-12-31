@@ -3,19 +3,20 @@ use crate::config::Config;
 use crate::content::cache::RingCache;
 use crate::db::{ConnectionPool, ConnectionResult};
 use crate::{admin, api, config, db, filesystem};
-use axum::ServiceExt;
 use axum::extract::Request;
+use axum::{Router, ServiceExt};
 use std::error::Error;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
 use tokio::signal::unix::SignalKind;
-use tower::layer::Layer;
+use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -96,7 +97,13 @@ pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
 }
 
 pub async fn run(state: AppState) -> std::io::Result<()> {
-    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(state));
+    let (router, api) = api::routes(state).split_for_parts();
+    let normalized_router = ServiceBuilder::new()
+        .layer(NormalizePathLayer::trim_trailing_slash())
+        .service(router);
+    let app = Router::new()
+        .merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api))
+        .fallback_service(normalized_router);
 
     let address = format!("0.0.0.0:{}", config::port());
     let listener = TcpListener::bind(address).await?;

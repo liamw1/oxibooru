@@ -21,6 +21,10 @@ RUN apk update && apk add --no-cache pkgconfig clang-dev postgresql-dev dav1d-de
 
 COPY --from=planner /opt/app/recipe.json recipe.json
 
+# Copy local dependencies for cargo chef cook
+COPY macros/Cargo.toml macros/Cargo.toml
+COPY macros/src macros/src
+
 # Build dependencies (this will be cached for future builds)
 ARG TARGET_CPU
 ARG CODEGEN_OPTIONS="-C target-feature=-crt-static -C target-cpu=$TARGET_CPU"
@@ -49,7 +53,7 @@ RUN mkdir -p /opt/app /data \
  && chown -R app:app /opt/app /data
 
 # Copy over application binary
-COPY --from=builder /opt/app/target/release/server server
+COPY --from=builder /opt/app/target/release/oxibooru_server server
 
 # Run it!
 USER app

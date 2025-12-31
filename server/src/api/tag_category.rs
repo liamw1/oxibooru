@@ -1,3 +1,4 @@
+use crate::api::doc::TAG_CATEGORY_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
@@ -12,20 +13,34 @@ use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, resource, snapshot};
 use axum::extract::{Extension, State};
-use axum::{Router, routing};
 use diesel::{
     Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/tag-categories", routing::get(list).post(create))
-        .route("/tag-category/{name}", routing::get(get).put(update).delete(delete))
-        .route("/tag-category/{name}/default", routing::put(set_default))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list, create))
+        .routes(routes!(get, update, delete))
+        .routes(routes!(set_default))
 }
 
-/// See [listing-tag-categories](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-tag-categories)
+/// Lists all tag categories.
+///
+/// Doesn't use paging.
+#[utoipa::path(
+    get,
+    path = "/tag-categories",
+    tag = TAG_CATEGORY_TAG,
+    params(ResourceParams),
+    responses(
+        (status = 200, body = UnpagedResponse<TagCategoryInfo>),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -42,7 +57,22 @@ async fn list(
         .map_err(ApiError::from)
 }
 
-/// See [getting-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-tag-category)
+/// Retrieves information about an existing tag category.
+#[utoipa::path(
+    get,
+    path = "/tag-category/{name}",
+    tag = TAG_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Tag category name"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = TagCategoryInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 403, description = "Tag category is hidden"),
+        (status = 404, description = "Tag category does not exist"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -60,20 +90,40 @@ async fn get(
     })
 }
 
-#[derive(Deserialize)]
+/// Request body for creating a tag category.
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct CreateBody {
+struct TagCategoryCreateBody {
+    /// Display order for the category.
     order: i32,
+    /// Category name. Must match `tag_category_name_regex` from server's configuration.
     name: SmallString,
+    /// Category color.
     color: SmallString,
 }
 
-/// See [creating-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-tag-category)
+/// Creates a new tag category using specified parameters.
+///
+/// Names are case insensitive.
+#[utoipa::path(
+    post,
+    path = "/tag-categories",
+    tag = TAG_CATEGORY_TAG,
+    params(ResourceParams),
+    request_body = TagCategoryCreateBody,
+    responses(
+        (status = 200, body = TagCategoryInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 409, description = "Name is used by an existing tag category"),
+        (status = 422, description = "Name is invalid or missing"),
+        (status = 422, description = "Color is invalid or missing"),
+    ),
+)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<CreateBody>,
+    Json(body): Json<TagCategoryCreateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
     api::verify_privilege(client, state.config.privileges().tag_category_create)?;
     api::verify_matches_regex(&state.config, &body.name, RegexType::TagCategory)?;
@@ -102,22 +152,50 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
+/// Request body for updating a tag category.
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct UpdateBody {
+struct TagCategoryUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
+    /// Display order for the category.
     order: Option<i32>,
+    /// New category name. Must match `tag_category_name_regex` from server's configuration.
     name: Option<SmallString>,
+    /// New category color.
     color: Option<SmallString>,
 }
 
-/// See [updating-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-tag-category)
+/// Updates an existing tag category using specified parameters.
+///
+/// Name must match `tag_category_name_regex` from server's configuration.
+/// Names are case insensitive. All fields except `version` are optional -
+/// update concerns only provided fields.
+#[utoipa::path(
+    put,
+    path = "/tag-category/{name}",
+    tag = TAG_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Tag category name"),
+        ResourceParams,
+    ),
+    request_body = TagCategoryUpdateBody,
+    responses(
+        (status = 200, body = TagCategoryInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Tag category does not exist"),
+        (status = 409, description = "Version is outdated"),
+        (status = 409, description = "Name is used by an existing tag category"),
+        (status = 422, description = "Name is invalid"),
+        (status = 422, description = "Color is invalid"),
+    ),
+)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<UpdateBody>,
+    Json(body): Json<TagCategoryUpdateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
@@ -156,7 +234,24 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [setting-default-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#setting-default-tag-category)
+/// Sets given tag category as default.
+///
+/// All new tags created manually or automatically will have this category.
+#[utoipa::path(
+    put,
+    path = "/tag-category/{name}/default",
+    tag = TAG_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Tag category name"),
+        ResourceParams,
+    ),
+    request_body = Object,
+    responses(
+        (status = 200, body = TagCategoryInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Tag category does not exist"),
+    ),
+)]
 async fn set_default(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -214,7 +309,25 @@ async fn set_default(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-tag-category](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-tag-category)
+/// Deletes an existing non-default tag category.
+///
+/// Tags belonging to this category will be moved to the default category.
+#[utoipa::path(
+    delete,
+    path = "/tag-category/{name}",
+    tag = TAG_CATEGORY_TAG,
+    params(
+        ("name" = String, Path, description = "Tag category name"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = Object),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Tag category does not exist"),
+        (status = 409, description = "Version is outdated"),
+        (status = 422, description = "Tag category is the default category"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

@@ -1,3 +1,4 @@
+use crate::api::doc::USER_TOKEN_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
 use crate::api::{ResourceParams, UnpagedResponse};
@@ -12,7 +13,6 @@ use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, resource};
 use axum::extract::{Extension, State};
-use axum::{Router, routing};
 use diesel::dsl::sql;
 use diesel::sql_types::Integer;
 use diesel::{
@@ -20,16 +20,33 @@ use diesel::{
     SaveChangesDsl,
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 use uuid::Uuid;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/user-tokens/{username}", routing::get(list))
-        .route("/user-token/{username}", routing::post(create))
-        .route("/user-token/{username}/{token}", routing::put(update).delete(delete))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(update, delete))
 }
 
-/// See [listing-user-tokens](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-user-tokens)
+/// Searches for user tokens for the given user.
+#[utoipa::path(
+    get,
+    path = "/user-tokens/{username}",
+    tag = USER_TOKEN_TAG,
+    params(
+        ("username" = String, Path, description = "Username"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = UnpagedResponse<UserTokenInfo>),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "User does not exist"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -68,22 +85,42 @@ async fn list(
     Ok(Json(UnpagedResponse { results }))
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-struct CreateBody {
-    enabled: bool,
+/// Request body for creating a user token.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct UserTokenCreateBody {
+    /// Whether the token is enabled. Defaults to `true` if not present.
+    enabled: Option<bool>,
+    /// Optional note describing the token's purpose.
     note: Option<String>,
+    /// Optional expiration time for the token.
     expiration_time: Option<DateTime>,
 }
 
-/// See [creating-user-token](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-user-token)
+/// Creates a new user token for authentication.
+///
+/// The token can be used for authentication of API endpoints instead of a password.
+#[utoipa::path(
+    post,
+    path = "/user-token/{username}",
+    tag = USER_TOKEN_TAG,
+    params(
+        ("username" = String, Path, description = "Username"),
+        ResourceParams,
+    ),
+    request_body = UserTokenCreateBody,
+    responses(
+        (status = 200, body = UserTokenInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "User does not exist"),
+    ),
+)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<CreateBody>,
+    Json(body): Json<UserTokenCreateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
@@ -118,7 +155,7 @@ async fn create(
             id: Uuid::new_v4(),
             user_id,
             note: body.note.as_deref(),
-            enabled: body.enabled,
+            enabled: body.enabled.unwrap_or(true),
             expiration_time: body.expiration_time,
         }
         .insert_into(user_token::table)
@@ -128,24 +165,48 @@ async fn create(
     Ok(Json(UserTokenInfo::new(MicroUser::new(&state.config, username, avatar_style), user_token, &fields)))
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-struct UpdateBody {
+/// Request body for updating a user token.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct UserTokenUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
+    /// Whether the token is enabled.
     enabled: Option<bool>,
+    /// Optional note describing the token's purpose.
     note: Option<LargeString>,
+    /// Optional expiration time for the token. Set to null to remove expiration.
     #[serde(default, deserialize_with = "api::deserialize_some")]
     expiration_time: Option<Option<DateTime>>,
 }
 
-/// See [updating-user-token](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-user-token)
+/// Updates an existing user token using specified parameters.
+///
+/// All fields except `version` are optional - update concerns only provided fields.
+#[utoipa::path(
+    put,
+    path = "/user-token/{username}/{token}",
+    tag = USER_TOKEN_TAG,
+    params(
+        ("username" = String, Path, description = "Username"),
+        ("token" = Uuid, Path, description = "User token UUID"),
+        ResourceParams,
+    ),
+    request_body = UserTokenUpdateBody,
+    responses(
+        (status = 200, body = UserTokenInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "User does not exist"),
+        (status = 404, description = "User token does not exist"),
+        (status = 409, description = "Version is outdated"),
+    ),
+)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path((username, token)): Path<(String, Uuid)>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<UpdateBody>,
+    Json(body): Json<UserTokenUpdateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
@@ -194,7 +255,23 @@ async fn update(
     )))
 }
 
-/// See [deleting-user-token](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-user-token)
+/// Deletes existing user token.
+#[utoipa::path(
+    delete,
+    path = "/user-token/{username}/{token}",
+    tag = USER_TOKEN_TAG,
+    params(
+        ("username" = String, Path, description = "Username"),
+        ("token" = Uuid, Path, description = "User token UUID"),
+    ),
+    request_body = Object,
+    responses(
+        (status = 200, body = Object),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "User does not exist"),
+        (status = 404, description = "Token does not exist"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

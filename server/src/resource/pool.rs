@@ -14,16 +14,25 @@ use diesel::{
 };
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use server_macros::non_nullable_options;
 use std::rc::Rc;
 use strum::{EnumString, EnumTable};
+use utoipa::ToSchema;
 
-#[derive(Serialize)]
+/// A pool resource stripped down to `id`, `names`, `category`, `description` and `postCount` fields.
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroPool {
+    /// Resource version. See [versioning](#Versioning).
     pub id: i64,
+    /// List of pool names (aliases).
+    #[schema(value_type = Vec<SmallString>)]
     pub names: Rc<[SmallString]>,
+    /// The name of the category the given pool belongs to.
     pub category: SmallString,
+    /// The pool description (instructions how to use, history etc.). The client should render it as Markdown.
     pub description: LargeString,
+    /// The number of posts the pool has.
     pub post_count: i64,
 }
 
@@ -47,18 +56,29 @@ impl BoolFill for FieldTable<bool> {
     }
 }
 
+/// An ordered list of posts, with a description and category.
+#[non_nullable_options]
 #[skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PoolInfo {
+    /// Resource version. See [versioning](#Versioning).
     version: Option<DateTime>,
+    /// The pool identifier.
     id: Option<i64>,
+    /// The pool description (instructions how to use, history etc.). The client should render it as Markdown.
     description: Option<LargeString>,
+    /// Time the pool was created.
     creation_time: Option<DateTime>,
+    /// Time the pool was last edited.
     last_edit_time: Option<DateTime>,
+    /// The name of the category the given pool belongs to.
     category: Option<SmallString>,
+    /// A list of pool names (aliases).
     names: Option<Vec<SmallString>>,
+    /// An ordered list of posts. Posts are ordered by insertion by default.
     posts: Option<Vec<MicroPost>>,
+    /// The number of posts the pool has.
     post_count: Option<i64>,
 }
 

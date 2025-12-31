@@ -15,32 +15,16 @@
             <td>having given category (accepts wildcards)</td>
         </tr>
         <tr>
-            <td><code>creation-date</code></td>
+            <td><code>creation-date</code>, <code>creation-time</code></td>
             <td>created at given date</td>
         </tr>
         <tr>
-            <td><code>creation-time</code></td>
-            <td>alias of <code>creation-date</code></td>
-        </tr>
-        <tr>
-            <td><code>last-edit-date</code></td>
+            <td><code>last-edit-date</code>, <code>last-edit-time</code>, <code>edit-date</code>, <code>edit-time</code></td>
             <td>edited at given date</td>
         </tr>
         <tr>
-            <td><code>last-edit-time</code></td>
-            <td>alias of <code>last-edit-date</code></td>
-        </tr>
-        <tr>
-            <td><code>edit-date</code></td>
-            <td>alias of <code>last-edit-date</code></td>
-        </tr>
-        <tr>
-            <td><code>edit-time</code></td>
-            <td>alias of <code>last-edit-date</code></td>
-        </tr>
-        <tr>
             <td><code>post-count</code></td>
-            <td>alias of <code>usages</code></td>
+            <td>used in given number of posts</td>
         </tr>
     </tbody>
 </table>
@@ -62,32 +46,16 @@
             <td>category (A to Z)</td>
         </tr>
         <tr>
-            <td><code>creation-date</code></td>
+            <td><code>creation-date</code>, <code>creation-time</code></td>
             <td>recently created first</td>
         </tr>
         <tr>
-            <td><code>creation-time</code></td>
-            <td>alias of <code>creation-date</code></td>
-        </tr>
-        <tr>
-            <td><code>last-edit-date</code></td>
+            <td><code>last-edit-date</code>, <code>last-edit-time</code>, <code>edit-date</code>, <code>edit-time</code></td>
             <td>recently edited first</td>
         </tr>
         <tr>
-            <td><code>last-edit-time</code></td>
-            <td>alias of <code>creation-time</code></td>
-        </tr>
-        <tr>
-            <td><code>edit-date</code></td>
-            <td>alias of <code>creation-time</code></td>
-        </tr>
-        <tr>
-            <td><code>edit-time</code></td>
-            <td>alias of <code>creation-time</code></td>
-        </tr>
-        <tr>
             <td><code>post-count</code></td>
-            <td>number of posts</td>
+            <td>used in most posts first</td>
         </tr>
     </tbody>
 </table>

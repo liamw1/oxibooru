@@ -9,15 +9,22 @@ use diesel::{
 };
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use server_macros::non_nullable_options;
 use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 use strum::{EnumString, EnumTable};
+use utoipa::ToSchema;
 
-#[derive(Serialize)]
+/// A tag resource stripped down to `names`, `category` and `usages` fields.
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroTag {
+    /// A list of tag names (aliases). Tagging a post with any name will automatically assign the first name from this list.
+    #[schema(value_type = Vec<SmallString>)]
     pub names: Rc<[SmallString]>,
+    /// The name of the category the given tag belongs to.
     pub category: SmallString,
+    /// The number of posts the tag was used in.
     pub usages: i64,
 }
 
@@ -41,18 +48,29 @@ impl BoolFill for FieldTable<bool> {
     }
 }
 
+/// A single tag. Tags are used to let users search for posts.
+#[non_nullable_options]
 #[skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagInfo {
+    /// Resource version. See [versioning](#Versioning).
     version: Option<DateTime>,
+    /// The tag description (instructions how to use, history etc.). The client should render is as Markdown.
     description: Option<LargeString>,
+    /// Time the tag was created.
     creation_time: Option<DateTime>,
+    /// Time the tag was last edited.
     last_edit_time: Option<DateTime>,
+    /// The name of the category the given tag belongs to.
     category: Option<SmallString>,
+    /// A list of tag names (aliases). Tagging a post with any name will automatically assign the first name from this list.
     names: Option<Vec<SmallString>>,
+    /// A list of implied tags. Implied tags are automatically appended by the web client on usage.
     implications: Option<Vec<MicroTag>>,
+    /// A list of suggested tags. Suggested tags are shown to the user by the web client on usage.
     suggestions: Option<Vec<MicroTag>>,
+    /// The number of posts the tag was used in.
     usages: Option<i64>,
 }
 

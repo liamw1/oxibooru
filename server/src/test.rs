@@ -146,7 +146,8 @@ pub async fn verify_response_with_credentials(
         app_state.config = Arc::new(config);
     }
 
-    let app = NormalizePathLayer::trim_trailing_slash().layer(api::routes(app_state));
+    let (router, _) = api::routes(app_state).split_for_parts();
+    let app = NormalizePathLayer::trim_trailing_slash().layer(router);
     let (method, path) = request
         .split_once(' ')
         .expect("Request string must have method and path separated by a space");

@@ -5,7 +5,9 @@ use crate::string::LargeString;
 use crate::time::DateTime;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use server_macros::non_nullable_options;
 use strum::{EnumString, EnumTable};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
@@ -28,18 +30,30 @@ impl BoolFill for FieldTable<bool> {
     }
 }
 
+/// A single user token.
+#[non_nullable_options]
 #[skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserTokenInfo {
+    /// Resource version. See [versioning](#Versioning).
     version: Option<DateTime>,
+    /// The user that owns the token.
     user: Option<MicroUser>,
+    /// The token that can be used to authenticate the user.
     token: Option<Uuid>,
+    /// A note that describes the token.
     note: Option<LargeString>,
+    /// Whether the token is still valid for authentication.
     enabled: Option<bool>,
+    /// Time when the token expires.
+    #[schema(nullable)]
     expiration_time: Option<Option<DateTime>>,
+    /// Time the user token was created.
     creation_time: Option<DateTime>,
+    /// Time the user token was last edited.
     last_edit_time: Option<DateTime>,
+    /// The last time this token was used during a login involving `?bump-login`.
     last_usage_time: Option<DateTime>,
 }
 

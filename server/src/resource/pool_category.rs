@@ -6,7 +6,9 @@ use crate::time::DateTime;
 use diesel::{PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
+use server_macros::non_nullable_options;
 use strum::{EnumString, EnumTable};
+use utoipa::ToSchema;
 
 #[derive(Clone, Copy, EnumString, EnumTable)]
 #[strum(serialize_all = "camelCase")]
@@ -24,13 +26,22 @@ impl BoolFill for FieldTable<bool> {
     }
 }
 
+/// A single pool category. The primary purpose of pool categories is to distinguish
+/// certain pool types (such as series, relations etc.), which improves user
+/// experience.
+#[non_nullable_options]
 #[skip_serializing_none]
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct PoolCategoryInfo {
+    /// Resource version. See [versioning](#Versioning).
     version: Option<DateTime>,
+    /// The category name.
     name: Option<SmallString>,
+    /// The category color.
     color: Option<SmallString>,
+    /// How many pools is the given category used with.
     usages: Option<i64>,
+    /// Whether the pool category is the default one.
     default: Option<bool>,
 }
 

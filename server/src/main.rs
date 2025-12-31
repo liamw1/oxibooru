@@ -1,6 +1,6 @@
 #![warn(clippy::pedantic)]
-// Gives warnings on EnumTables
-#![allow(clippy::too_many_arguments)]
+// Gives warnings on derives
+#![allow(clippy::needless_for_each, clippy::large_stack_arrays, clippy::too_many_arguments)]
 // Gives warnings for integer casts in const context
 #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 // Option<Option<T>> is convenient for deserializing optional nullable JSON fields
