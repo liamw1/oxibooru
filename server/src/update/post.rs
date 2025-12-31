@@ -70,19 +70,21 @@ pub fn set_relations(
 
     // Delete old relations and return old related posts ids.
     // Post relations are bi-directional, so it doesn't matter whether we return parent_id or child_id.
-    let old_related_posts: Vec<i64> = diesel::delete(post_relation::table)
+    let old_related_posts: HashSet<_> = diesel::delete(post_relation::table)
         .filter(post_relation::parent_id.eq(post_id))
         .or_filter(post_relation::child_id.eq(post_id))
         .returning(post_relation::child_id)
-        .get_results(conn)?;
+        .get_results(conn)?
+        .into_iter()
+        .collect();
 
     add_relations(conn, post_id, new_related_posts)?;
 
     // Update last edit time for any posts involved in removed or added relations.
+    let new_related_posts: HashSet<_> = new_related_posts.iter().copied().collect();
     let updated_posts: Vec<_> = old_related_posts
-        .iter()
-        .chain(new_related_posts.iter())
-        .filter(|&&id| id != post_id)
+        .symmetric_difference(&new_related_posts)
+        .copied()
         .collect();
     diesel::update(post::table)
         .set(post::last_edit_time.eq(DateTime::now()))
