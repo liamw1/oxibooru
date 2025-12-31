@@ -54,7 +54,7 @@ struct InfoResponse {
     tag = INFO_TAG,
     params(ResourceParams),
     responses(
-        (status = 200, description = "Server information", body = InfoResponse),
+        (status = 200, body = InfoResponse),
     ),
 )]
 async fn get(

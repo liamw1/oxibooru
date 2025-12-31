@@ -35,7 +35,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     tag = POOL_CATEGORY_TAG,
     params(ResourceParams),
     responses(
-        (status = 200, description = "List of pool categories", body = UnpagedResponse<PoolCategoryInfo>),
+        (status = 200, body = UnpagedResponse<PoolCategoryInfo>),
         (status = 403, description = "Privileges are too low"),
     ),
 )]
@@ -113,10 +113,10 @@ struct PoolCategoryCreateBody {
     request_body = PoolCategoryCreateBody,
     responses(
         (status = 200, body = PoolCategoryInfo),
-        (status = 400, description = "The name is invalid or missing"),
-        (status = 400, description = "The color is invalid or missing"),
         (status = 403, description = "Privileges are too low"),
-        (status = 409, description = "The Name is used by an existing pool category"),
+        (status = 409, description = "Name is used by an existing pool category"),
+        (status = 422, description = "Name is invalid or missing"),
+        (status = 422, description = "Color is invalid or missing"),
     ),
 )]
 async fn create(
@@ -178,13 +178,13 @@ struct PoolCategoryUpdateBody {
     ),
     request_body = PoolCategoryUpdateBody,
     responses(
-        (status = 200, description = "Updated pool category", body = PoolCategoryInfo),
-        (status = 400, description = "The name is invalid"),
-        (status = 400, description = "The color is invalid"),
+        (status = 200, body = PoolCategoryInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The Pool category does not exist"),
-        (status = 409, description = "The version is outdated"),
-        (status = 409, description = "The name is used by an existing pool category"),
+        (status = 404, description = "Pool category does not exist"),
+        (status = 409, description = "Version is outdated"),
+        (status = 409, description = "Name is used by an existing pool category"),
+        (status = 422, description = "Name is invalid"),
+        (status = 422, description = "Color is invalid"),
     ),
 )]
 async fn update(
@@ -315,10 +315,10 @@ async fn set_default(
     request_body = DeleteBody,
     responses(
         (status = 200, body = ()),
-        (status = 400, description = "Pool category is the default category"),
         (status = 403, description = "Privileges are too low"),
         (status = 404, description = "Pool category does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 409, description = "Version is outdated"),
+        (status = 422, description = "Pool category is the default category"),
     ),
 )]
 async fn delete(

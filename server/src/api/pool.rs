@@ -164,12 +164,13 @@ struct PoolCreateBody {
     request_body = PoolCreateBody,
     responses(
         (status = 200, body = PoolInfo),
-        (status = 400, description = "Any name is invalid"),
-        (status = 400, description = "No name was specified"),
-        (status = 400, description = "Category is invalid"),
-        (status = 400, description = "There is at least one duplicate post"),
         (status = 403, description = "Privileges are too low"),
         (status = 404, description = "At least one post ID does not exist"),
+        (status = 409, description = "Any name is used by an existing pool"),
+        (status = 409, description = "There is at least one duplicate post"),
+        (status = 422, description = "A name is invalid"),
+        (status = 422, description = "No name was specified"),
+        (status = 422, description = "Category is missing or invalid"),
     ),
 )]
 async fn create(
@@ -231,10 +232,10 @@ async fn create(
     request_body = MergeBody<i64>,
     responses(
         (status = 200, body = PoolInfo),
-        (status = 400, description = "The source pool is the same as the target pool"),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The source or target pool does not exist"),
-        (status = 409, description = "The version of either pool is outdated"),
+        (status = 404, description = "Source or target pool does not exist"),
+        (status = 409, description = "Version of either pool is outdated"),
+        (status = 422, description = "Source pool is the same as the target pool"),
     ),
 )]
 async fn merge(
@@ -312,14 +313,15 @@ struct PoolUpdateBody {
     request_body = PoolUpdateBody,
     responses(
         (status = 200, body = PoolInfo),
-        (status = 400, description = "Any name is invalid"),
-        (status = 400, description = "No name was specified"),
-        (status = 400, description = "Category is invalid"),
-        (status = 400, description = "There is at least one duplicate post"),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The pool does not exist"),
+        (status = 404, description = "Pool does not exist"),
         (status = 404, description = "At least one post ID does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 409, description = "Version is outdated"),
+        (status = 409, description = "Any name is used by an existing pool"),
+        (status = 409, description = "There is at least one duplicate post"),
+        (status = 422, description = "A name is invalid"),
+        (status = 422, description = "No name was specified"),
+        (status = 422, description = "Category is invalid"),
     ),
 )]
 async fn update(
@@ -401,8 +403,8 @@ async fn update(
     responses(
         (status = 200, body = ()),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The pool does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 404, description = "Pool does not exist"),
+        (status = 409, description = "Version is outdated"),
     ),
 )]
 async fn delete(

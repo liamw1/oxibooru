@@ -124,7 +124,8 @@ async fn list(
     responses(
         (status = 200, body = TagInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The tag does not exist"),
+        (status = 403, description = "Tag is hidden"),
+        (status = 404, description = "Tag does not exist"),
     ),
 )]
 async fn get(
@@ -177,6 +178,8 @@ struct TagSiblings {
     responses(
         (status = 200, body = TagSiblings),
         (status = 403, description = "Privileges are too low"),
+        (status = 403, description = "Tag is hidden"),
+        (status = 404, description = "Tag does not exist"),
     ),
 )]
 async fn get_siblings(
@@ -259,12 +262,12 @@ struct TagCreateBody {
     request_body = TagCreateBody,
     responses(
         (status = 200, body = TagInfo),
-        (status = 400, description = "Any name is used by an existing tag"),
-        (status = 400, description = "Any name, implication or suggestion is invalid"),
-        (status = 400, description = "Category is invalid"),
-        (status = 400, description = "No name was specified"),
-        (status = 400, description = "Implications or suggestions create a cyclic dependency"),
         (status = 403, description = "Privileges are too low"),
+        (status = 409, description = "Any name is used by an existing tag"),
+        (status = 422, description = "No name was specified"),
+        (status = 422, description = "Category is missing or invalid"),
+        (status = 422, description = "Any name, implication or suggestion is invalid"),
+        (status = 422, description = "Implications or suggestions create a cyclic dependency"),
     ),
 )]
 async fn create(
@@ -342,10 +345,10 @@ async fn create(
     request_body = MergeBody<SmallString>,
     responses(
         (status = 200, body = TagInfo),
-        (status = 400, description = "The source tag is the same as the target tag"),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The source or target tag does not exist"),
-        (status = 409, description = "The version of either tag is outdated"),
+        (status = 404, description = "Source or target tag does not exist"),
+        (status = 409, description = "Version of either tag is outdated"),
+        (status = 422, description = "Source tag is the same as the target tag"),
     ),
 )]
 async fn merge(
@@ -424,13 +427,13 @@ struct TagUpdateBody {
     request_body = TagUpdateBody,
     responses(
         (status = 200, body = TagInfo),
-        (status = 400, description = "Any name is used by an existing tag"),
-        (status = 400, description = "Any name, implication or suggestion name is invalid"),
-        (status = 400, description = "Category is invalid"),
-        (status = 400, description = "Implications or suggestions create a cyclic dependency"),
         (status = 403, description = "Privileges are too low"),
         (status = 404, description = "The tag does not exist"),
         (status = 409, description = "The version is outdated"),
+        (status = 409, description = "Any name is used by an existing tag"),
+        (status = 422, description = "Category is invalid"),
+        (status = 422, description = "Any name, implication or suggestion name is invalid"),
+        (status = 422, description = "Implications or suggestions create a cyclic dependency"),
     ),
 )]
 async fn update(
@@ -524,10 +527,9 @@ async fn update(
     request_body = DeleteBody,
     responses(
         (status = 200, body = Object),
-        (status = 400, description = "The tag has usages"),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The tag does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 404, description = "Tag does not exist"),
+        (status = 409, description = "Version is outdated"),
     ),
 )]
 async fn delete(

@@ -129,7 +129,7 @@ async fn list(
     responses(
         (status = 200, body = UserInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The user does not exist"),
+        (status = 404, description = "User does not exist"),
     ),
 )]
 async fn get(
@@ -288,14 +288,14 @@ struct UserCreateBody {
     ),
     responses(
         (status = 200, body = UserInfo),
-        (status = 400, description = "User name is invalid"),
-        (status = 400, description = "Password is invalid"),
-        (status = 400, description = "Email is invalid"),
-        (status = 400, description = "Rank is invalid"),
         (status = 400, description = "Avatar is missing for manual avatar style"),
         (status = 403, description = "Privileges are too low"),
         (status = 403, description = "Trying to set rank higher than own rank"),
         (status = 409, description = "A user with such name already exists"),
+        (status = 422, description = "User name is missing or invalid"),
+        (status = 422, description = "Password is missing or invalid"),
+        (status = 422, description = "Email is invalid"),
+        (status = 422, description = "Rank is invalid"),
     ),
 )]
 async fn create(
@@ -503,16 +503,16 @@ struct UserUpdateBody {
     ),
     responses(
         (status = 200, body = UserInfo),
-        (status = 400, description = "User name is invalid"),
-        (status = 400, description = "Password is invalid"),
-        (status = 400, description = "Email is invalid"),
-        (status = 400, description = "Rank is invalid"),
         (status = 400, description = "Avatar is missing for manual avatar style"),
         (status = 403, description = "Privileges are too low"),
         (status = 403, description = "Trying to set rank higher than own rank"),
-        (status = 404, description = "The user does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 404, description = "User does not exist"),
+        (status = 409, description = "Version is outdated"),
         (status = 409, description = "A user with new name already exists"),
+        (status = 422, description = "User name is invalid"),
+        (status = 422, description = "Password is invalid"),
+        (status = 422, description = "Email is invalid"),
+        (status = 422, description = "Rank is invalid"),
     ),
 )]
 async fn update(
@@ -550,8 +550,8 @@ async fn update(
     responses(
         (status = 200, body = Object),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The user does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 404, description = "User does not exist"),
+        (status = 409, description = "Version is outdated"),
     ),
 )]
 async fn delete(

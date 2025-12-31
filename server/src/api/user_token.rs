@@ -44,7 +44,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
     responses(
         (status = 200, body = UnpagedResponse<UserTokenInfo>),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The user does not exist"),
+        (status = 404, description = "User does not exist"),
     ),
 )]
 async fn list(
@@ -112,7 +112,7 @@ struct UserTokenCreateBody {
     responses(
         (status = 200, body = UserTokenInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The user does not exist"),
+        (status = 404, description = "User does not exist"),
     ),
 )]
 async fn create(
@@ -196,9 +196,9 @@ struct UserTokenUpdateBody {
     responses(
         (status = 200, body = UserTokenInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The user does not exist"),
-        (status = 404, description = "The user token does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 404, description = "User does not exist"),
+        (status = 404, description = "User token does not exist"),
+        (status = 409, description = "Version is outdated"),
     ),
 )]
 async fn update(
@@ -268,8 +268,8 @@ async fn update(
     responses(
         (status = 200, body = Object),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The user does not exist"),
-        (status = 404, description = "The token does not exist"),
+        (status = 404, description = "User does not exist"),
+        (status = 404, description = "Token does not exist"),
     ),
 )]
 async fn delete(

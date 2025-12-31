@@ -105,40 +105,40 @@ impl ApiError {
             Self::Multipart(err) => err.status(),
             Self::MultipartRejection(err) => err.status(),
             Self::PathRejection(err) => err.status(),
+            Self::Request(err) => err.status().unwrap_or(StatusCode::BAD_REQUEST),
             Self::QueryRejection(err) => err.status(),
             Self::ContentTypeMismatch(..)
+            | Self::HeaderDeserialization(_)
+            | Self::MissingContent(_)
+            | Self::MissingContentType
+            | Self::MissingFormData
+            | Self::MissingMetadata => StatusCode::BAD_REQUEST,
+            Self::NotLoggedIn | Self::Password(_) | Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
+            Self::Hidden(_) | Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
+            Self::NotFound(_) => StatusCode::NOT_FOUND,
+            Self::AlreadyExists(_) | Self::ResourceModified => StatusCode::CONFLICT,
+            Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::CyclicDependency(_)
             | Self::DeleteDefault(_)
             | Self::EmptySwf
             | Self::EmptyVideo
             | Self::ExpressionFailsRegex(..)
             | Self::FromStr(_)
-            | Self::HeaderDeserialization(_)
+            | Self::Image(_)
             | Self::InvalidEmail(_)
             | Self::InvalidEmailAddress(_)
             | Self::InvalidSort
             | Self::InvalidTime(_)
             | Self::InvalidUserRank
-            | Self::MissingContent(_)
-            | Self::MissingContentType
-            | Self::MissingFormData
-            | Self::MissingMetadata
             | Self::NoEmail
             | Self::NoNamesGiven(_)
             | Self::NotAnInteger(_)
-            | Self::Request(_)
-            | Self::SelfMerge(_) => StatusCode::BAD_REQUEST,
-            Self::NotLoggedIn | Self::Password(_) | Self::UnauthorizedPasswordReset => StatusCode::UNAUTHORIZED,
-            Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
-            Self::Hidden(_) | Self::NotFound(_) => StatusCode::NOT_FOUND,
-            Self::AlreadyExists(_) | Self::CyclicDependency(_) | Self::ResourceModified => StatusCode::CONFLICT,
-            Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            Self::FailedEmailTransport(_)
-            | Self::InvalidHeader(_)
-            | Self::Image(_)
-            | Self::MissingSmtpInfo
-            | Self::StdIo(_)
+            | Self::SelfMerge(_)
             | Self::SwfDecoding(_)
-            | Self::VideoDecoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | Self::VideoDecoding(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            Self::FailedEmailTransport(_) | Self::InvalidHeader(_) | Self::MissingSmtpInfo | Self::StdIo(_) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
             Self::UnimplementedFrameFormat(_) => StatusCode::NOT_IMPLEMENTED,
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedAuthentication(err) => match err {

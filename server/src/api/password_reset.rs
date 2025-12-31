@@ -56,8 +56,8 @@ fn get_user_info(
     ),
     responses(
         (status = 200, description = "Password reset email sent", body = ()),
-        (status = 400, description = "The user hasn't provided an email address"),
-        (status = 404, description = "The user does not exist"),
+        (status = 404, description = "User does not exist"),
+        (status = 422, description = "User hasn't provided an email address"),
     ),
 )]
 async fn request_reset(State(state): State<AppState>, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
@@ -154,9 +154,8 @@ fn generate_temporary_password(length: u8) -> String {
     request_body = ResetToken,
     responses(
         (status = 200, description = "New password generated", body = NewPassword),
-        (status = 400, description = "The token is missing"),
-        (status = 400, description = "The token is invalid"),
-        (status = 404, description = "The user does not exist"),
+        (status = 400, description = "Token is missing or invalid"),
+        (status = 404, description = "User does not exist"),
     ),
 )]
 async fn reset_password(

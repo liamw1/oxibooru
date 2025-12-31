@@ -69,7 +69,8 @@ async fn list(
     responses(
         (status = 200, body = TagCategoryInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The tag category does not exist"),
+        (status = 403, description = "Tag category is hidden"),
+        (status = 404, description = "Tag category does not exist"),
     ),
 )]
 async fn get(
@@ -112,10 +113,10 @@ struct TagCategoryCreateBody {
     request_body = TagCategoryCreateBody,
     responses(
         (status = 200, body = TagCategoryInfo),
-        (status = 400, description = "The name is invalid or missing"),
-        (status = 400, description = "The color is invalid or missing"),
         (status = 403, description = "Privileges are too low"),
-        (status = 409, description = "The name is used by an existing tag category"),
+        (status = 409, description = "Name is used by an existing tag category"),
+        (status = 422, description = "Name is invalid or missing"),
+        (status = 422, description = "Color is invalid or missing"),
     ),
 )]
 async fn create(
@@ -181,12 +182,12 @@ struct TagCategoryUpdateBody {
     request_body = TagCategoryUpdateBody,
     responses(
         (status = 200, body = TagCategoryInfo),
-        (status = 400, description = "The name is invalid"),
-        (status = 400, description = "The color is invalid"),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The tag category does not exist"),
-        (status = 409, description = "The version is outdated"),
-        (status = 409, description = "The name is used by an existing tag category"),
+        (status = 404, description = "Tag category does not exist"),
+        (status = 409, description = "Version is outdated"),
+        (status = 409, description = "Name is used by an existing tag category"),
+        (status = 422, description = "Name is invalid"),
+        (status = 422, description = "Color is invalid"),
     ),
 )]
 async fn update(
@@ -248,7 +249,7 @@ async fn update(
     responses(
         (status = 200, body = TagCategoryInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The tag category does not exist"),
+        (status = 404, description = "Tag category does not exist"),
     ),
 )]
 async fn set_default(
@@ -321,10 +322,10 @@ async fn set_default(
     request_body = DeleteBody,
     responses(
         (status = 200, body = Object),
-        (status = 400, description = "The tag category is the default category"),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The tag category does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 404, description = "Tag category does not exist"),
+        (status = 409, description = "Version is outdated"),
+        (status = 422, description = "Tag category is the default category"),
     ),
 )]
 async fn delete(

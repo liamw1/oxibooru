@@ -66,7 +66,7 @@ const MAX_COMMENTS_PER_PAGE: i64 = 1000;
     tag = COMMENT_TAG,
     params(ResourceParams, PageParams),
     responses(
-        (status = 200, description = "Paged list of comments", body = PagedResponse<CommentInfo>),
+        (status = 200, body = PagedResponse<CommentInfo>),
         (status = 403, description = "Privileges are too low"),
     )
 )]
@@ -108,7 +108,8 @@ async fn list(
     responses(
         (status = 200, body = CommentInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The comment does not exist"),
+        (status = 403, description = "Comment is hidden"),
+        (status = 404, description = "Comment does not exist"),
     ),
 )]
 async fn get(
@@ -148,7 +149,7 @@ struct CommentCreateBody {
     responses(
         (status = 200, body = CommentInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The post does not exist"),
+        (status = 404, description = "Post does not exist"),
     ),
 )]
 async fn create(
@@ -200,8 +201,8 @@ struct CommentUpdateBody {
     responses(
         (status = 200, body = CommentInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The comment does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 404, description = "Comment does not exist"),
+        (status = 409, description = "Version is outdated"),
     ),
 )]
 async fn update(

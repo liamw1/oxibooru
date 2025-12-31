@@ -219,7 +219,8 @@ async fn list(
     responses(
         (status = 200, body = PostInfo),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The post does not exist"),
+        (status = 403, description = "Post is hidden"),
+        (status = 404, description = "Post does not exist"),
     ),
 )]
 async fn get(
@@ -260,7 +261,8 @@ struct PostNeighbors {
     responses(
         (status = 200, body = PostNeighbors),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The post does not exist"),
+        (status = 403, description = "Post is hidden"),
+        (status = 404, description = "Post does not exist"),
     ),
 )]
 async fn get_neighbors(
@@ -407,8 +409,8 @@ struct FeatureBody {
     request_body = FeatureBody,
     responses(
         (status = 200, body = PostInfo),
-        (status = 400, description = "Trying to feature a post that is currently featured"),
         (status = 403, description = "Privileges are too low"),
+        (status = 409, description = "Trying to feature a post that is currently featured"),
     ),
 )]
 async fn feature(
@@ -564,6 +566,7 @@ struct ReverseSearchResponse {
     ),
     responses(
         (status = 200, body = ReverseSearchResponse),
+        (status = 400, description = "Reverse search content is missing"),
         (status = 403, description = "Privileges are too low"),
     ),
 )]
@@ -753,12 +756,13 @@ struct PostCreateBody {
     ),
     responses(
         (status = 200, body = PostInfo),
-        (status = 400, description = "Tags have invalid names"),
-        (status = 400, description = "Safety is invalid"),
-        (status = 400, description = "Notes are invalid"),
-        (status = 400, description = "Flags are invalid"),
-        (status = 400, description = "Relations refer to non-existing posts"),
+        (status = 400, description = "Post content is missing"),
         (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Relations refer to non-existing posts"),
+        (status = 422, description = "A Tag has an invalid name"),
+        (status = 422, description = "Safety is invalid"),
+        (status = 422, description = "Notes are invalid"),
+        (status = 422, description = "Flags are invalid"),
     ),
 )]
 async fn create(
@@ -809,10 +813,10 @@ struct PostMergeBody {
     request_body = PostMergeBody,
     responses(
         (status = 200, body = PostInfo),
-        (status = 400, description = "The source post is the same as the target post"),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The source or target post does not exist"),
-        (status = 409, description = "The version of either post is outdated"),
+        (status = 404, description = "Source or target post does not exist"),
+        (status = 409, description = "Version of either post is outdated"),
+        (status = 422, description = "Source post is the same as the target post"),
     ),
 )]
 async fn merge(
@@ -910,9 +914,9 @@ async fn favorite(
     request_body = RatingBody,
     responses(
         (status = 200, body = PostInfo),
-        (status = 400, description = "Score is invalid"),
         (status = 403, description = "Privileges are too low"),
         (status = 404, description = "Post does not exist"),
+        (status = 422, description = "Score is invalid"),
     ),
 )]
 async fn rate(
@@ -1139,14 +1143,14 @@ struct PostUpdateBody {
     ),
     responses(
         (status = 200, body = PostInfo),
-        (status = 400, description = "Tags have invalid names"),
-        (status = 400, description = "Safety is invalid"),
-        (status = 400, description = "Notes are invalid"),
-        (status = 400, description = "Flags are invalid"),
-        (status = 400, description = "Relations refer to non-existing posts"),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The post does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 404, description = "Post does not exist"),
+        (status = 404, description = "Relations refer to non-existing posts"),
+        (status = 409, description = "Version is outdated"),
+        (status = 422, description = "A tag has an invalid name"),
+        (status = 422, description = "Safety is invalid"),
+        (status = 422, description = "Notes are invalid"),
+        (status = 422, description = "Flags are invalid"),
     ),
 )]
 async fn update(
@@ -1185,8 +1189,8 @@ async fn update(
     responses(
         (status = 200, body = Object),
         (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "The post does not exist"),
-        (status = 409, description = "The version is outdated"),
+        (status = 404, description = "Post does not exist"),
+        (status = 409, description = "Version is outdated"),
     ),
 )]
 async fn delete(
