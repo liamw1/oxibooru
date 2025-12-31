@@ -55,7 +55,7 @@ client "session" (where the definition of a session is up to the client), so
 that the user's last login time is kept up to date.
 "#;
 
-const USER_TOKEN_AUTHENTICATION_DESCRIPTION: &str = r#"
+const USER_TOKEN_AUTHENTICATION_DESCRIPTION: &str = r"
 User token authentication works similarly to [basic HTTP
 auth](https://en.wikipedia.org/wiki/Basic_access_authentication). Because it
 operates similarly to ***basic HTTP auth*** it is still recommended to connect
@@ -71,12 +71,12 @@ The benefit of token authentication is that beyond the initial login to acquire
 the first token, there is no need to transmit the user password in plaintext
 via basic auth. Additionally tokens can be revoked at anytime allowing a
 cleaner interface for isolating clients from user credentials.
-"#;
+";
 
-const BASIC_REQUESTS_DESCRIPTION: &str = r#"
+const BASIC_REQUESTS_DESCRIPTION: &str = r"
 Every request must use `Content-Type: application/json` and `Accept:
 application/json`. An exception to this rule are requests that upload files.
-"#;
+";
 
 const FILE_UPLOADS_DESCRIPTION: &str = r#"
 Requests that upload files must use `multipart/form-data` encoding. Any request
@@ -106,7 +106,7 @@ of the JSON message body. If the file with the particular token doesn't exist
 or it has expired, the server will show an error.
 "#;
 
-const FIELD_SELECTION_DESCRIPTION: &str = r#"
+const FIELD_SELECTION_DESCRIPTION: &str = r"
 For performance considerations, sometimes the client might want to choose the
 fields the server sends to it in order to improve the query speed. This
 customization is available for top-level fields of most resources. To choose 
@@ -119,7 +119,7 @@ should send a `GET` query like this:
 ```
 GET /posts/?fields=id,tags
 ```
-"#;
+";
 
 const VERSIONING_DESCRIPTION: &str = r#"
 To prevent problems with concurrent resource modification, oxibooru
@@ -143,15 +143,15 @@ about missing parameter. If someone has edited the post in the mean time, the se
 will reject the request as well, in which case the client is encouraged to notify the
 user about the situation."#;
 
-const WEBHOOKS_DESCRIPTION: &str = r#"
+const WEBHOOKS_DESCRIPTION: &str = r"
 System administrators can choose to configure webhooks to track events.
 Webhook URIs can be configured in `config.toml` (See `config.toml.dist` for
 example). Upon any event, the API will send a `POST` request to the listed
 URIs with a snapshot resource generated with anonymous user privileges as the
 message body, in JSON format.
-"#;
+";
 
-const SEARCH_DESCRIPTION: &str = r#"
+const SEARCH_DESCRIPTION: &str = r"
 Search queries are built of tokens that are separated by spaces. Each token can
 be of following form:
 
@@ -203,7 +203,7 @@ Searching for posts with `re:zero` will show an error message about unknown
 named token.
 
 Searching for posts with `re\:zero` will show posts tagged with `re:zero`.
-"#;
+";
 
 const ERROR_DESCRIPTION: &str = r#"
 All errors (except for unhandled fatal server errors) send relevant HTTP status

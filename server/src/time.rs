@@ -41,6 +41,7 @@ impl Drop for Timer<'_> {
 }
 
 /// A wrapper for [`OffsetDateTime`] that serializes/deserializes according to RFC 3339.
+#[allow(clippy::unsafe_derive_deserialize)]
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, AsExpression, FromSqlRow, ToSchema,
 )]
