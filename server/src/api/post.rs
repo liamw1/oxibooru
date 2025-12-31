@@ -40,11 +40,11 @@ use utoipa_axum::routes;
 
 pub fn routes() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
-        .routes(routes!(list, create_handler))
-        .routes(routes!(get, update_handler, delete))
+        .routes(routes!(list, create))
+        .routes(routes!(get, update, delete))
         .routes(routes!(get_neighbors))
         .routes(routes!(get_featured, feature))
-        .routes(routes!(reverse_search_handler))
+        .routes(routes!(reverse_search))
         .routes(routes!(merge))
         .routes(routes!(favorite, unfavorite))
         .routes(routes!(rate))
@@ -54,6 +54,19 @@ pub fn routes() -> OpenApiRouter<AppState> {
 const MAX_POSTS_PER_PAGE: i64 = 1000;
 
 static POST_TAG_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
+
+#[allow(dead_code)]
+#[derive(ToSchema)]
+struct Multipart<T> {
+    /// JSON metadata (same structure as JSON request body).
+    metadata: T,
+    /// Content file (image, video, etc.).
+    #[schema(format = Binary)]
+    content: Option<String>,
+    /// Thumbnail file.
+    #[schema(format = Binary)]
+    thumbnail: Option<String>,
+}
 
 /// Runs an `update` that may add `tags` to a post as a transaction.
 ///
@@ -435,39 +448,7 @@ async fn feature(
         .map_err(ApiError::from)
 }
 
-/// Request body for reverse image search.
-#[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct ReverseSearchBody {
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
-    /// Token referencing previously uploaded content.
-    content_token: Option<String>,
-    /// URL to fetch image content from.
-    content_url: Option<Url>,
-}
-
-/// A post with its visual similarity distance.
-#[derive(Serialize, ToSchema)]
-struct SimilarPost {
-    /// Visual similarity distance. Lower is more similar.
-    #[schema(minimum = 0.0, maximum = 1.0)]
-    distance: f64,
-    /// The similar post.
-    post: PostInfo,
-}
-
-/// Response from reverse image search.
-#[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct ReverseSearchResponse {
-    /// Exact match if found (same checksum).
-    exact_post: Option<PostInfo>,
-    /// Posts that are visually similar to the input image.
-    similar_posts: Vec<SimilarPost>,
-}
-
-async fn reverse_search(
+async fn reverse_search_impl(
     state: AppState,
     client: Client,
     params: ResourceParams,
@@ -537,19 +518,56 @@ async fn reverse_search(
         .map(Json)
 }
 
+/// Request body for reverse image search.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ReverseSearchBody {
+    #[serde(skip_deserializing)]
+    content: Option<FileContents>,
+    /// Token referencing previously uploaded content.
+    content_token: Option<String>,
+    /// URL to fetch image content from.
+    content_url: Option<Url>,
+}
+
+/// A post with its visual similarity distance.
+#[derive(Serialize, ToSchema)]
+struct SimilarPost {
+    /// Visual similarity distance. Lower is more similar.
+    #[schema(minimum = 0.0, maximum = 1.0)]
+    distance: f64,
+    /// The similar post.
+    post: PostInfo,
+}
+
+/// Response from reverse image search.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct ReverseSearchResponse {
+    /// Exact match if found (same checksum).
+    exact_post: Option<PostInfo>,
+    /// Posts that are visually similar to the input image.
+    similar_posts: Vec<SimilarPost>,
+}
+
 /// Retrieves posts that look like the input image.
 #[utoipa::path(
     post,
     path = "/posts/reverse-search",
     tag = POST_TAG,
     params(ResourceParams),
-    request_body = ReverseSearchBody,
+    request_body(
+        content(
+            (ReverseSearchBody = "application/json"),
+            (Multipart<ReverseSearchBody> = "multipart/form-data"),
+        )
+    ),
     responses(
         (status = 200, body = ReverseSearchResponse),
         (status = 403, description = "Privileges are too low"),
     ),
 )]
-async fn reverse_search_handler(
+async fn reverse_search(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -558,7 +576,7 @@ async fn reverse_search_handler(
     api::verify_privilege(client, state.config.privileges().post_reverse_search)?;
 
     match body {
-        JsonOrMultipart::Json(payload) => reverse_search(state, client, params, payload).await,
+        JsonOrMultipart::Json(payload) => reverse_search_impl(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content]).await?;
             let reverse_search_body = if let [Some(content)] = decoded_body.files {
@@ -572,46 +590,12 @@ async fn reverse_search_handler(
             } else {
                 return Err(ApiError::MissingFormData);
             };
-            reverse_search(state, client, params, reverse_search_body).await
+            reverse_search_impl(state, client, params, reverse_search_body).await
         }
     }
 }
 
-/// Request body for creating a post.
-#[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct PostCreateBody {
-    /// Post safety rating.
-    safety: PostSafety,
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
-    /// Token referencing previously uploaded content.
-    content_token: Option<String>,
-    /// URL to fetch content from.
-    content_url: Option<Url>,
-    #[serde(skip_deserializing)]
-    thumbnail: Option<FileContents>,
-    /// Token referencing previously uploaded thumbnail.
-    thumbnail_token: Option<String>,
-    /// URL to fetch thumbnail from.
-    thumbnail_url: Option<Url>,
-    /// Source URL or description.
-    source: Option<String>,
-    /// Post description.
-    description: Option<String>,
-    /// IDs of related posts.
-    relations: Option<Vec<i64>>,
-    /// If true, the uploader name won't be recorded.
-    anonymous: Option<bool>,
-    /// Tags to apply. Non-existent tags will be created automatically.
-    tags: Option<Vec<SmallString>>,
-    /// Post annotations.
-    notes: Option<Vec<Note>>,
-    /// Post flags: `loop` or `sound`.
-    flags: Option<Vec<PostFlag>>,
-}
-
-async fn create(
+async fn create_impl(
     state: AppState,
     client: Client,
     params: ResourceParams,
@@ -709,6 +693,40 @@ async fn create(
         .map_err(ApiError::from)
 }
 
+/// Request body for creating a post.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PostCreateBody {
+    /// Post safety rating.
+    safety: PostSafety,
+    #[serde(skip_deserializing)]
+    content: Option<FileContents>,
+    /// Token referencing previously uploaded content.
+    content_token: Option<String>,
+    /// URL to fetch content from.
+    content_url: Option<Url>,
+    #[serde(skip_deserializing)]
+    thumbnail: Option<FileContents>,
+    /// Token referencing previously uploaded thumbnail.
+    thumbnail_token: Option<String>,
+    /// URL to fetch thumbnail from.
+    thumbnail_url: Option<Url>,
+    /// Source URL or description.
+    source: Option<String>,
+    /// Post description.
+    description: Option<String>,
+    /// IDs of related posts.
+    relations: Option<Vec<i64>>,
+    /// If true, the uploader name won't be recorded.
+    anonymous: Option<bool>,
+    /// Tags to apply. Non-existent tags will be created automatically.
+    tags: Option<Vec<SmallString>>,
+    /// Post annotations.
+    notes: Option<Vec<Note>>,
+    /// Post flags: `loop` or `sound`.
+    flags: Option<Vec<PostFlag>>,
+}
+
 /// Creates a new post.
 ///
 /// If specified tags do not exist yet, they will be automatically created.
@@ -727,7 +745,12 @@ async fn create(
     path = "/posts",
     tag = POST_TAG,
     params(ResourceParams),
-    request_body = PostCreateBody,
+    request_body(
+        content(
+            (PostCreateBody = "application/json"),
+            (Multipart<PostCreateBody> = "multipart/form-data"),
+        )
+    ),
     responses(
         (status = 200, body = PostInfo),
         (status = 400, description = "Tags have invalid names"),
@@ -738,14 +761,14 @@ async fn create(
         (status = 403, description = "Privileges are too low"),
     ),
 )]
-async fn create_handler(
+async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     body: JsonOrMultipart<PostCreateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => create(state, client, params, payload).await,
+        JsonOrMultipart::Json(payload) => create_impl(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
@@ -754,7 +777,7 @@ async fn create_handler(
 
             new_post.content = content;
             new_post.thumbnail = thumbnail;
-            create(state, client, params, new_post).await
+            create_impl(state, client, params, new_post).await
         }
     }
 }
@@ -926,41 +949,7 @@ async fn rate(
         .map_err(ApiError::from)
 }
 
-/// Request body for updating a post.
-#[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct PostUpdateBody {
-    // Resource version. See [versioning](#Versioning).
-    version: DateTime,
-    /// Post safety rating.
-    safety: Option<PostSafety>,
-    /// Source URL or description.
-    source: Option<LargeString>,
-    /// Post description.
-    description: Option<LargeString>,
-    /// IDs of related posts.
-    relations: Option<Vec<i64>>,
-    /// Tags to apply. Non-existent tags will be created automatically.
-    tags: Option<Vec<SmallString>>,
-    /// Post annotations.
-    notes: Option<Vec<Note>>,
-    /// Post flags: `loop` or `sound`.
-    flags: Option<Vec<PostFlag>>,
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
-    /// Token referencing previously uploaded content.
-    content_token: Option<String>,
-    /// URL to fetch content from.
-    content_url: Option<Url>,
-    #[serde(skip_deserializing)]
-    thumbnail: Option<FileContents>,
-    /// Token referencing previously uploaded thumbnail.
-    thumbnail_token: Option<String>,
-    /// URL to fetch thumbnail from.
-    thumbnail_url: Option<Url>,
-}
-
-async fn update(
+async fn update_impl(
     state: AppState,
     client: Client,
     post_id: i64,
@@ -1089,6 +1078,40 @@ async fn update(
         .map_err(ApiError::from)
 }
 
+/// Request body for updating a post.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PostUpdateBody {
+    // Resource version. See [versioning](#Versioning).
+    version: DateTime,
+    /// Post safety rating.
+    safety: Option<PostSafety>,
+    /// Source URL or description.
+    source: Option<LargeString>,
+    /// Post description.
+    description: Option<LargeString>,
+    /// IDs of related posts.
+    relations: Option<Vec<i64>>,
+    /// Tags to apply. Non-existent tags will be created automatically.
+    tags: Option<Vec<SmallString>>,
+    /// Post annotations.
+    notes: Option<Vec<Note>>,
+    /// Post flags: `loop` or `sound`.
+    flags: Option<Vec<PostFlag>>,
+    #[serde(skip_deserializing)]
+    content: Option<FileContents>,
+    /// Token referencing previously uploaded content.
+    content_token: Option<String>,
+    /// URL to fetch content from.
+    content_url: Option<Url>,
+    #[serde(skip_deserializing)]
+    thumbnail: Option<FileContents>,
+    /// Token referencing previously uploaded thumbnail.
+    thumbnail_token: Option<String>,
+    /// URL to fetch thumbnail from.
+    thumbnail_url: Option<Url>,
+}
+
 /// Updates existing post.
 ///
 /// If specified tags do not exist yet, they will be automatically created.
@@ -1108,7 +1131,12 @@ async fn update(
         ("id" = i64, Path, description = "Post ID"),
         ResourceParams,
     ),
-    request_body = PostUpdateBody,
+    request_body(
+        content(
+            (PostUpdateBody = "application/json"),
+            (Multipart<PostUpdateBody> = "multipart/form-data"),
+        )
+    ),
     responses(
         (status = 200, body = PostInfo),
         (status = 400, description = "Tags have invalid names"),
@@ -1121,7 +1149,7 @@ async fn update(
         (status = 409, description = "The version is outdated"),
     ),
 )]
-async fn update_handler(
+async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
@@ -1129,7 +1157,7 @@ async fn update_handler(
     body: JsonOrMultipart<PostUpdateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => update(state, client, post_id, params, payload).await,
+        JsonOrMultipart::Json(payload) => update_impl(state, client, post_id, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
@@ -1138,7 +1166,7 @@ async fn update_handler(
 
             post_update.content = content;
             post_update.thumbnail = thumbnail;
-            update(state, client, post_id, params, post_update).await
+            update_impl(state, client, post_id, params, post_update).await
         }
     }
 }

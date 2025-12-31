@@ -31,12 +31,22 @@ use utoipa_axum::routes;
 
 pub fn routes() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
-        .routes(routes!(list, create_handler))
-        .routes(routes!(get, update_handler, delete))
+        .routes(routes!(list, create))
+        .routes(routes!(get, update, delete))
         .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
 }
 
 const MAX_USERS_PER_PAGE: i64 = 1000;
+
+#[allow(dead_code)]
+#[derive(ToSchema)]
+struct Multipart<T> {
+    /// JSON metadata (same structure as JSON request body).
+    metadata: T,
+    /// Avatar file.
+    #[schema(format = Binary)]
+    avatar: Option<String>,
+}
 
 /// Searches for users.
 ///
@@ -153,29 +163,7 @@ async fn get(
     })
 }
 
-/// Request body for creating a user.
-#[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct UserCreateBody {
-    /// Username. Must match `user_name_regex` from server's configuration.
-    name: SmallString,
-    /// Password. Must match `password_regex` from server's configuration.
-    password: SmallString,
-    /// Email address.
-    email: Option<SmallString>,
-    /// User rank. Defaults to `default_rank` from server's configuration.
-    rank: Option<UserRank>,
-    /// Avatar style.
-    avatar_style: Option<AvatarStyle>,
-    #[serde(skip_deserializing)]
-    avatar: Option<FileContents>,
-    /// Token referencing previously uploaded avatar.
-    avatar_token: Option<String>,
-    /// URL to fetch avatar from.
-    avatar_url: Option<Url>,
-}
-
-async fn create(
+async fn create_impl(
     state: AppState,
     client: Client,
     params: ResourceParams,
@@ -255,6 +243,28 @@ async fn create(
         .map_err(ApiError::from)
 }
 
+/// Request body for creating a user.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct UserCreateBody {
+    /// Username. Must match `user_name_regex` from server's configuration.
+    name: SmallString,
+    /// Password. Must match `password_regex` from server's configuration.
+    password: SmallString,
+    /// Email address.
+    email: Option<SmallString>,
+    /// User rank. Defaults to `default_rank` from server's configuration.
+    rank: Option<UserRank>,
+    /// Avatar style.
+    avatar_style: Option<AvatarStyle>,
+    #[serde(skip_deserializing)]
+    avatar: Option<FileContents>,
+    /// Token referencing previously uploaded avatar.
+    avatar_token: Option<String>,
+    /// URL to fetch avatar from.
+    avatar_url: Option<Url>,
+}
+
 /// Creates a new user using specified parameters.
 ///
 /// Names and passwords must match `user_name_regex` and `password_regex` from
@@ -270,7 +280,12 @@ async fn create(
     path = "/users",
     tag = USER_TAG,
     params(ResourceParams),
-    request_body = UserCreateBody,
+    request_body(
+        content(
+            (UserCreateBody = "application/json"),
+            (Multipart<UserCreateBody> = "multipart/form-data"),
+        )
+    ),
     responses(
         (status = 200, body = UserInfo),
         (status = 400, description = "User name is invalid"),
@@ -283,21 +298,21 @@ async fn create(
         (status = 409, description = "A user with such name already exists"),
     ),
 )]
-async fn create_handler(
+async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
     body: JsonOrMultipart<UserCreateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => create(state, client, params, payload).await,
+        JsonOrMultipart::Json(payload) => create_impl(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut new_user: UserCreateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar)] = decoded_body.files {
                 new_user.avatar = Some(avatar);
-                create(state, client, params, new_user).await
+                create_impl(state, client, params, new_user).await
             } else {
                 Err(ApiError::MissingFormData)
             }
@@ -305,32 +320,7 @@ async fn create_handler(
     }
 }
 
-/// Request body for updating a user.
-#[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-struct UserUpdateBody {
-    /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
-    /// New username. Must match `user_name_regex` from server's configuration.
-    name: Option<SmallString>,
-    /// New password. Must match `password_regex` from server's configuration.
-    password: Option<SmallString>,
-    /// Email address. Set to null to remove.
-    #[serde(default, deserialize_with = "api::deserialize_some")]
-    email: Option<Option<SmallString>>,
-    /// User rank.
-    rank: Option<UserRank>,
-    /// Avatar style.
-    avatar_style: Option<AvatarStyle>,
-    #[serde(skip_deserializing)]
-    avatar: Option<FileContents>,
-    /// Token referencing previously uploaded avatar.
-    avatar_token: Option<String>,
-    /// URL to fetch avatar from.
-    avatar_url: Option<Url>,
-}
-
-async fn update(
+async fn update_impl(
     state: AppState,
     client: Client,
     username: &str,
@@ -464,6 +454,31 @@ async fn update(
         .map_err(ApiError::from)
 }
 
+/// Request body for updating a user.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct UserUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
+    version: DateTime,
+    /// New username. Must match `user_name_regex` from server's configuration.
+    name: Option<SmallString>,
+    /// New password. Must match `password_regex` from server's configuration.
+    password: Option<SmallString>,
+    /// Email address. Set to null to remove.
+    #[serde(default, deserialize_with = "api::deserialize_some")]
+    email: Option<Option<SmallString>>,
+    /// User rank.
+    rank: Option<UserRank>,
+    /// Avatar style.
+    avatar_style: Option<AvatarStyle>,
+    #[serde(skip_deserializing)]
+    avatar: Option<FileContents>,
+    /// Token referencing previously uploaded avatar.
+    avatar_token: Option<String>,
+    /// URL to fetch avatar from.
+    avatar_url: Option<Url>,
+}
+
 /// Updates an existing user using specified parameters.
 ///
 /// Names and passwords must match `user_name_regex` and `password_regex` from
@@ -480,7 +495,12 @@ async fn update(
         ("name" = String, Path, description = "Username"),
         ResourceParams,
     ),
-    request_body = UserUpdateBody,
+    request_body(
+        content(
+            (UserUpdateBody = "application/json"),
+            (Multipart<UserUpdateBody> = "multipart/form-data"),
+        )
+    ),
     responses(
         (status = 200, body = UserInfo),
         (status = 400, description = "User name is invalid"),
@@ -495,7 +515,7 @@ async fn update(
         (status = 409, description = "A user with new name already exists"),
     ),
 )]
-async fn update_handler(
+async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(username): Path<SmallString>,
@@ -503,14 +523,14 @@ async fn update_handler(
     body: JsonOrMultipart<UserUpdateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => update(state, client, &username, params, payload).await,
+        JsonOrMultipart::Json(payload) => update_impl(state, client, &username, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut user_update: UserUpdateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar)] = decoded_body.files {
                 user_update.avatar = Some(avatar);
-                update(state, client, &username, params, user_update).await
+                update_impl(state, client, &username, params, user_update).await
             } else {
                 Err(ApiError::MissingFormData)
             }

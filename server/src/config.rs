@@ -185,16 +185,16 @@ pub struct PublicConfig {
     pub contact_email: Option<SmallString>,
     #[serde(default)]
     pub can_send_mails: bool,
-    #[schema(rename = "userNameRegex", value_type = String)]
+    #[schema(rename = "userNameRegex", value_type = String, format = Regex)]
     #[serde(rename(serialize = "userNameRegex"), with = "serde_regex")]
     pub username_regex: Regex,
-    #[schema(value_type = String)]
+    #[schema(value_type = String, format = Regex)]
     #[serde(with = "serde_regex")]
     pub password_regex: Regex,
-    #[schema(value_type = String)]
+    #[schema(value_type = String, format = Regex)]
     #[serde(with = "serde_regex")]
     pub tag_name_regex: Regex,
-    #[schema(value_type = String)]
+    #[schema(value_type = String, format = Regex)]
     #[serde(with = "serde_regex")]
     pub tag_category_name_regex: Regex,
     pub privileges: PrivilegeConfig,

@@ -17,7 +17,7 @@ use utoipa_axum::routes;
 
 pub fn routes() -> OpenApiRouter<AppState> {
     OpenApiRouter::new()
-        .routes(routes!(upload_handler))
+        .routes(routes!(upload))
         .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
 }
 
@@ -27,6 +27,17 @@ pub fn routes() -> OpenApiRouter<AppState> {
 struct UploadBody {
     /// URL to fetch content from.
     content_url: Url,
+}
+
+/// Multipart form for file uploads.
+#[allow(dead_code)]
+#[derive(ToSchema)]
+struct MultipartUpload {
+    /// JSON metadata (same structure as JSON request body).
+    metadata: UploadBody,
+    /// Content file (image, video, etc.).
+    #[schema(format = Binary)]
+    content: Option<String>,
 }
 
 /// Response containing the upload token.
@@ -50,13 +61,18 @@ async fn upload_from_url(config: &Config, body: UploadBody) -> ApiResult<Json<Up
     post,
     path = "/uploads",
     tag = UPLOAD_TAG,
-    request_body = UploadBody,
+    request_body(
+        content(
+            (UploadBody = "application/json"),
+            (MultipartUpload = "multipart/form-data"),
+        )
+    ),
     responses(
         (status = 200, body = UploadResponse),
         (status = 403, description = "Privileges are too low"),
     ),
 )]
-async fn upload_handler(
+async fn upload(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     body: JsonOrMultipart<UploadBody>,
