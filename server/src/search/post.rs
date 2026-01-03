@@ -25,7 +25,6 @@ use strum::{Display, EnumIter, EnumString, EnumTable};
 
 #[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
 #[strum(serialize_all = "kebab-case")]
-#[strum(use_phf)]
 pub enum Token {
     Id,
     FileSize,

@@ -16,6 +16,8 @@
 // WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
 // SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+// Code borrowed from Ruffle (https://github.com/ruffle-rs/ruffle/blob/master/render/src/utils.rs).
+
 use flate2::bufread::ZlibDecoder;
 use image::{DynamicImage, ImageFormat, RgbaImage};
 use std::borrow::Cow;

@@ -93,12 +93,6 @@ pub enum ApiError {
 impl ApiError {
     fn status_code(&self) -> StatusCode {
         use serde_json::error::Category;
-        type QueryError = diesel::result::Error;
-
-        let query_error_status_code = |err: &QueryError| match err {
-            QueryError::NotFound => StatusCode::NOT_FOUND,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        };
 
         match self {
             Self::JsonRejection(err) => err.status(),
@@ -145,14 +139,14 @@ impl ApiError {
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
-                AuthenticationError::FailedQuery(err) => query_error_status_code(err),
+                AuthenticationError::FailedQuery(_) => StatusCode::INTERNAL_SERVER_ERROR,
                 _ => StatusCode::UNAUTHORIZED,
             },
             Self::JsonSerialization(err) => match err.classify() {
                 Category::Io | Category::Eof => StatusCode::INTERNAL_SERVER_ERROR,
                 Category::Syntax | Category::Data => StatusCode::BAD_REQUEST,
             },
-            Self::FailedQuery(err) => query_error_status_code(err),
+            Self::FailedQuery(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
