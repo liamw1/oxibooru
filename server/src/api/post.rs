@@ -333,18 +333,10 @@ async fn reverse_search(
             let _timer = crate::time::Timer::new("reverse search");
 
             // Check for exact match
-            let exact_post = post::table
+            let exact_post: Option<Post> = post::table
                 .filter(post::checksum.eq(content_properties.checksum))
                 .first(conn)
                 .optional()?;
-            if exact_post.is_some() {
-                return Ok(ReverseSearchResponse {
-                    exact_post: exact_post
-                        .map(|post_id| PostInfo::new(conn, &state.config, client, post_id, &fields))
-                        .transpose()?,
-                    similar_posts: Vec::new(),
-                });
-            }
 
             // Search for similar images candidates
             let similar_signature_candidates = PostSignature::find_similar_candidates(
@@ -357,24 +349,20 @@ async fn reverse_search(
             let content_signature_cache = SignatureCache::new(&content_properties.signature);
             let mut similar_signatures: Vec<_> = similar_signature_candidates
                 .into_iter()
+                .filter(|post_signature| Some(post_signature.post_id) != exact_post.as_ref().map(|post| post.id))
                 .filter_map(|post_signature| {
                     let distance = signature::distance(&content_signature_cache, &post_signature.signature);
                     let distance_threshold = 1.0 - state.config.post_similarity_threshold;
                     (distance < distance_threshold).then_some((post_signature.post_id, distance))
                 })
                 .collect();
-            if similar_signatures.is_empty() {
-                return Ok(ReverseSearchResponse {
-                    exact_post: None,
-                    similar_posts: Vec::new(),
-                });
-            }
-
             similar_signatures.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.total_cmp(dist_b));
 
             let (post_ids, distances): (Vec<_>, Vec<_>) = similar_signatures.into_iter().unzip();
             Ok(ReverseSearchResponse {
-                exact_post: None,
+                exact_post: exact_post
+                    .map(|post| PostInfo::new(conn, &state.config, client, post, &fields))
+                    .transpose()?,
                 similar_posts: PostInfo::new_batch_from_ids(conn, &state.config, client, &post_ids, &fields)?
                     .into_iter()
                     .zip(distances)
