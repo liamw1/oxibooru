@@ -129,6 +129,7 @@ impl ApiError {
             Self::ResourceModified => StatusCode::CONFLICT,
             Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::FailedEmailTransport(_)
+            | Self::FailedQuery(_)
             | Self::InvalidHeader(_)
             | Self::Image(_)
             | Self::MissingSmtpInfo
@@ -146,7 +147,6 @@ impl ApiError {
                 Category::Io | Category::Eof => StatusCode::INTERNAL_SERVER_ERROR,
                 Category::Syntax | Category::Data => StatusCode::BAD_REQUEST,
             },
-            Self::FailedQuery(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
