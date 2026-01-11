@@ -18,11 +18,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          fetch-tags: true
 
       - name: Determine metadata
         run: |
-          CLOSEST_VER="$(git describe --tags --abbrev=0 $GITHUB_SHA)"
+          CLOSEST_VER="$(git tag --sort=-v:refname | head -n1 || echo '0.0.0')"
           CLOSEST_MAJOR_VER="$(echo ${CLOSEST_VER} | cut -d'.' -f1)"
           CLOSEST_MINOR_VER="$(echo ${CLOSEST_VER} | cut -d'.' -f2)"
           SHORT_COMMIT=$(echo $GITHUB_SHA | cut -c1-8)
@@ -71,11 +70,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          fetch-tags: true
 
       - name: Determine metadata
         run: |
-          CLOSEST_VER="$(git describe --tags --abbrev=0 $GITHUB_SHA)"
+          CLOSEST_VER="$(git tag --sort=-v:refname | head -n1 || echo '0.0.0')"
           CLOSEST_MAJOR_VER="$(echo ${CLOSEST_VER} | cut -d'.' -f1)"
           CLOSEST_MINOR_VER="$(echo ${CLOSEST_VER} | cut -d'.' -f2)"
           SHORT_COMMIT=$(echo $GITHUB_SHA | cut -c1-8)
