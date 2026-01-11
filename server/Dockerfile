@@ -61,9 +61,15 @@ EXPOSE ${SERVER_PORT}
 
 VOLUME ["/data/"]
 
+ARG DOCKER_REPO
+ARG BUILD_DATE
+ARG SOURCE_COMMIT
 LABEL \
-  maintainer="" \
-  org.opencontainers.image.title="oxibooru/server" \
-  org.opencontainers.image.url="https://github.com/liamw1/oxibooru" \
-  org.opencontainers.image.source="https://github.com/liamw1/oxibooru" \
-  org.opencontainers.image.licenses="GPL-3.0"
+    maintainer="" \
+    org.opencontainers.image.title="${DOCKER_REPO}" \
+    org.opencontainers.image.url="https://github.com/liamw1/oxibooru" \
+    org.opencontainers.image.documentation="https://github.com/liamw1/oxibooru/blob/${SOURCE_COMMIT}/docs/INSTALL.md" \
+    org.opencontainers.image.created="${BUILD_DATE}" \
+    org.opencontainers.image.source="https://github.com/liamw1/oxibooru" \
+    org.opencontainers.image.revision="${SOURCE_COMMIT}" \
+    org.opencontainers.image.licenses="GPL-3.0"

@@ -1,0 +1,117 @@
+name: Build server Docker container
+on:
+  push:
+    branches: [master]
+    paths:
+      - "server/**"
+jobs:
+  build-server:
+    name: Build server Docker container (${{ matrix.suffix }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      matrix:
+        include:
+          - runner: ubuntu-latest
+            platform: linux/amd64
+            suffix: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            suffix: arm64
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine metadata
+        run: |
+          CLOSEST_VER="$(git tag --sort=-v:refname | head -n1 || echo '0.0.0')"
+          CLOSEST_MAJOR_VER="$(echo ${CLOSEST_VER} | cut -d'.' -f1)"
+          CLOSEST_MINOR_VER="$(echo ${CLOSEST_VER} | cut -d'.' -f2)"
+          SHORT_COMMIT=$(echo $GITHUB_SHA | cut -c1-8)
+          BUILD_INFO="v${CLOSEST_VER}-${SHORT_COMMIT}"
+          BUILD_DATE="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+          echo "major_tag=${CLOSEST_MAJOR_VER}" >> $GITHUB_ENV
+          echo "minor_tag=${CLOSEST_MAJOR_VER}.${CLOSEST_MINOR_VER}" >> $GITHUB_ENV
+          echo "build_info=${BUILD_INFO}" >> $GITHUB_ENV
+          echo "build_date=${BUILD_DATE}" >> $GITHUB_ENV
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./server
+          platforms: ${{ matrix.platform }}
+          build-args: |
+            BUILD_INFO=${{ env.build_info }}
+            BUILD_DATE=${{ env.build_date }}
+            SOURCE_COMMIT=${{ github.sha }}
+            DOCKER_REPO=oxibooru/server
+          outputs: type=image,name=oxibooru/server,push-by-digest=true,name-canonical=true,push=true
+
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@v6
+        with:
+          name: digests-${{ matrix.suffix }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge:
+    name: Create multi-arch manifest
+    runs-on: ubuntu-latest
+    needs: build-server
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine metadata
+        run: |
+          CLOSEST_VER="$(git tag --sort=-v:refname | head -n1 || echo '0.0.0')"
+          CLOSEST_MAJOR_VER="$(echo ${CLOSEST_VER} | cut -d'.' -f1)"
+          CLOSEST_MINOR_VER="$(echo ${CLOSEST_VER} | cut -d'.' -f2)"
+          echo "major_tag=${CLOSEST_MAJOR_VER}" >> $GITHUB_ENV
+          echo "minor_tag=${CLOSEST_MAJOR_VER}.${CLOSEST_MINOR_VER}" >> $GITHUB_ENV
+
+      - name: Download digests
+        uses: actions/download-artifact@v7
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        run: |
+          docker buildx imagetools create \
+            -t oxibooru/server:latest \
+            -t oxibooru/server:${{ env.major_tag }} \
+            -t oxibooru/server:${{ env.minor_tag }} \
+            $(printf 'oxibooru/server@sha256:%s ' *)
