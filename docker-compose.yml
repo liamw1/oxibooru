@@ -11,7 +11,7 @@ services:
         # Setting this to `native` can give small performance gains for some 
         # operations such as reverse search, but makes binary less portable.
         # Leave blank to let Rust determine the target CPU. 
-        TARGET_CPU:
+        TARGET_CPU: native
     depends_on:
       - sql
     environment:

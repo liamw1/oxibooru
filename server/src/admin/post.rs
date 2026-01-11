@@ -1,4 +1,5 @@
-use crate::admin::{DatabaseError, DatabaseResult, LoopState, PRINT_INTERVAL, ProgressReporter};
+use crate::admin::input::{self, TaskCompleter};
+use crate::admin::{DatabaseResult, LoopState, PRINT_INTERVAL, ProgressReporter};
 use crate::app::AppState;
 use crate::content::hash::{Checksum, PostHash};
 use crate::content::signature::SIGNATURE_VERSION;
@@ -10,9 +11,10 @@ use crate::schema::{database_statistics, post, post_signature};
 use crate::time::{DateTime, Timer};
 use crate::{admin, update};
 use diesel::dsl::exists;
-use diesel::r2d2::PoolError;
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rustyline::Editor;
+use rustyline::history::DefaultHistory;
 use tracing::{error, warn};
 
 /// Checks the integrity of all posts on the filesystem by comparing the stored
@@ -27,8 +29,7 @@ pub fn check_integrity(state: &AppState) -> DatabaseResult<()> {
     let post_data: Vec<_> = post::table.select(post::id).load(&mut conn)?;
     post_data
         .into_par_iter()
-        .try_for_each(|post_id| check_integrity_in_parallel(state, post_id, &progress, &failures))
-        .map_err(DatabaseError::from)?;
+        .try_for_each(|post_id| check_integrity_in_parallel(state, post_id, &progress, &failures))?;
     failures.report();
     Ok(())
 }
@@ -44,8 +45,7 @@ pub fn recompute_checksums(state: &AppState) -> DatabaseResult<()> {
     let post_ids: Vec<_> = post::table.select(post::id).load(&mut conn)?;
     post_ids
         .into_par_iter()
-        .try_for_each(|post_id| recompute_checksum_in_parallel(state, post_id, &progress, &duplicate_count))
-        .map_err(DatabaseError::from)?;
+        .try_for_each(|post_id| recompute_checksum_in_parallel(state, post_id, &progress, &duplicate_count))?;
     duplicate_count.report();
     Ok(())
 }
@@ -69,7 +69,6 @@ pub fn recompute_signatures(state: &AppState) -> DatabaseResult<()> {
     post_ids
         .into_par_iter()
         .try_for_each(|post_id| recompute_signature_in_parallel(state, post_id, &progress))
-        .map_err(DatabaseError::from)
 }
 
 /// Recomputes post signature indexes.
@@ -86,7 +85,6 @@ pub fn recompute_indexes(state: &AppState) -> DatabaseResult<()> {
     post_ids
         .into_par_iter()
         .try_for_each(|post_id| recompute_index_in_parallel(state, post_id, &progress))
-        .map_err(DatabaseError::from)
 }
 
 pub fn regenerate_thumbnails(state: &AppState) -> DatabaseResult<()> {
@@ -98,17 +96,16 @@ pub fn regenerate_thumbnails(state: &AppState) -> DatabaseResult<()> {
     post_ids
         .into_par_iter()
         .try_for_each(|post_id| regenerate_thumbnail_in_parallel(state, post_id, &progress))
-        .map_err(DatabaseError::from)
 }
 
 /// Prompts the user for input again to regenerate specific thumbnails.
 pub fn regenerate_thumbnail(state: &AppState) {
-    admin::user_input_loop(state, |state: &AppState, buffer: &mut String| {
+    admin::user_input_loop(state, |state: &AppState, editor: &mut Editor<TaskCompleter, DefaultHistory>| {
         println!("Please enter the post ID you would like to generate a thumbnail for. Enter \"done\" when finished.");
-        let user_input = admin::prompt_user_input("Post ID", buffer);
-        if let Ok(state) = LoopState::try_from(user_input) {
-            return Ok(state);
-        }
+        let user_input = match input::read("Post ID: ", editor) {
+            Ok(input) => input,
+            Err(state) => return Ok(state),
+        };
 
         let post_id = user_input
             .parse::<i64>()
@@ -121,7 +118,9 @@ pub fn regenerate_thumbnail(state: &AppState) {
             .find(post_id)
             .select(post::mime_type)
             .first(&mut conn)
-            .map_err(|err| format!("Cannot retrieve MIME type for post {post_id} for reason: {err}"))?;
+            .optional()
+            .map_err(|err| format!("Cannot retrieve MIME type for post {post_id} for reason: {err}"))?
+            .ok_or_else(|| format!("Post {post_id} does not exist"))?;
 
         let post_hash = PostHash::new(&state.config, post_id);
         let content_path = post_hash.content_path(mime_type);
@@ -146,7 +145,9 @@ fn check_integrity_in_parallel(
     post_id: i64,
     progress: &ProgressReporter,
     failures: &ProgressReporter,
-) -> Result<(), PoolError> {
+) -> DatabaseResult<()> {
+    admin::is_cancelled()?;
+
     let mut conn = state.get_connection()?;
     let (mime_type, checksum): (MimeType, Checksum) = match post::table
         .find(post_id)
@@ -181,7 +182,9 @@ fn check_integrity_in_parallel(
 }
 
 /// Recomputes index for post with id `post_id`. Designed to operate in a parallel iterator.
-fn recompute_index_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> Result<(), PoolError> {
+fn recompute_index_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
+    admin::is_cancelled()?;
+
     let mut conn = state.get_connection()?;
     let signature: CompressedSignature = post_signature::table
         .find(post_id)
@@ -207,7 +210,9 @@ fn recompute_checksum_in_parallel(
     post_id: i64,
     progress: &ProgressReporter,
     duplicate_count: &ProgressReporter,
-) -> Result<(), PoolError> {
+) -> DatabaseResult<()> {
+    admin::is_cancelled()?;
+
     let mut conn = state.get_connection()?;
     let mime_type = match post::table
         .find(post_id)
@@ -268,11 +273,9 @@ fn recompute_checksum_in_parallel(
 }
 
 /// Recomputes signature for post with id `post_id`. Designed to operate in a parallel iterator.
-fn recompute_signature_in_parallel(
-    state: &AppState,
-    post_id: i64,
-    progress: &ProgressReporter,
-) -> Result<(), PoolError> {
+fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
+    admin::is_cancelled()?;
+
     let mut conn = state.get_connection()?;
     let mime_type = match post::table
         .find(post_id)
@@ -342,11 +345,9 @@ fn recompute_signature_in_parallel(
 }
 
 /// Regenerates thumbnail for post with id `post_id`. Designed to operate in a parallel iterator.
-fn regenerate_thumbnail_in_parallel(
-    state: &AppState,
-    post_id: i64,
-    progress: &ProgressReporter,
-) -> Result<(), PoolError> {
+fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
+    admin::is_cancelled()?;
+
     let mut conn = state.get_connection()?;
     let mime_type = match post::table
         .find(post_id)

@@ -24,6 +24,8 @@ pub fn reset_filenames(state: &AppState) -> DatabaseResult<()> {
     if state.config.path(Directory::GeneratedThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Generated thumbnails renamed", PRINT_INTERVAL);
         for entry in WalkDir::new(state.config.path(Directory::GeneratedThumbnails)) {
+            admin::is_cancelled()?;
+
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
@@ -47,6 +49,8 @@ pub fn reset_filenames(state: &AppState) -> DatabaseResult<()> {
     if state.config.path(Directory::CustomThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Custom thumbnails renamed", PRINT_INTERVAL);
         for entry in WalkDir::new(state.config.path(Directory::CustomThumbnails)) {
+            admin::is_cancelled()?;
+
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
@@ -70,6 +74,8 @@ pub fn reset_filenames(state: &AppState) -> DatabaseResult<()> {
     if state.config.path(Directory::Posts).try_exists()? {
         let progress = ProgressReporter::new("Posts renamed", PRINT_INTERVAL);
         for entry in WalkDir::new(state.config.path(Directory::Posts)) {
+            admin::is_cancelled()?;
+
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
@@ -113,6 +119,8 @@ pub fn reset_thumbnail_sizes(state: &AppState) -> DatabaseResult<()> {
     if state.config.path(Directory::Avatars).try_exists()? {
         let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
         for entry in WalkDir::new(state.config.path(Directory::Avatars)) {
+            admin::is_cancelled()?;
+
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
@@ -135,6 +143,8 @@ pub fn reset_thumbnail_sizes(state: &AppState) -> DatabaseResult<()> {
     if state.config.path(Directory::GeneratedThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Generated thumbnail sizes cached", PRINT_INTERVAL);
         for entry in WalkDir::new(state.config.path(Directory::GeneratedThumbnails)) {
+            admin::is_cancelled()?;
+
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
@@ -157,6 +167,8 @@ pub fn reset_thumbnail_sizes(state: &AppState) -> DatabaseResult<()> {
     if state.config.path(Directory::CustomThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Custom thumbnails sizes cached", PRINT_INTERVAL);
         for entry in WalkDir::new(state.config.path(Directory::CustomThumbnails)) {
+            admin::is_cancelled()?;
+
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
@@ -210,6 +222,7 @@ pub fn reset_relation_stats(state: &AppState) -> DatabaseResult<()> {
         .load(&mut conn)?;
     let progress = ProgressReporter::new("Comment statistics calculated", PRINT_INTERVAL);
     for (comment_id, score) in comment_stats {
+        admin::is_cancelled()?;
         diesel::update(comment_statistics::table.find(comment_id))
             .set(comment_statistics::score.eq(score.unwrap_or(0)))
             .execute(&mut conn)?;
@@ -223,6 +236,7 @@ pub fn reset_relation_stats(state: &AppState) -> DatabaseResult<()> {
         .load(&mut conn)?;
     let progress = ProgressReporter::new("Pool category statistics calculated", PRINT_INTERVAL);
     for (category_id, usage_count) in pool_category_stats {
+        admin::is_cancelled()?;
         diesel::update(pool_category_statistics::table.find(category_id))
             .set(pool_category_statistics::usage_count.eq(usage_count.unwrap_or(0)))
             .execute(&mut conn)?;
@@ -236,6 +250,7 @@ pub fn reset_relation_stats(state: &AppState) -> DatabaseResult<()> {
         .load(&mut conn)?;
     let progress = ProgressReporter::new("Pool statistics calculated", PRINT_INTERVAL);
     for (pool_id, post_count) in pool_stats {
+        admin::is_cancelled()?;
         diesel::update(pool_statistics::table.find(pool_id))
             .set(pool_statistics::post_count.eq(post_count.unwrap_or(0)))
             .execute(&mut conn)?;
@@ -249,6 +264,7 @@ pub fn reset_relation_stats(state: &AppState) -> DatabaseResult<()> {
         .load(&mut conn)?;
     let progress = ProgressReporter::new("Tag category statistics calculated", PRINT_INTERVAL);
     for (category_id, usage_count) in tag_category_stats {
+        admin::is_cancelled()?;
         diesel::update(tag_category_statistics::table.find(category_id))
             .set(tag_category_statistics::usage_count.eq(usage_count.unwrap_or(0)))
             .execute(&mut conn)?;
@@ -258,6 +274,7 @@ pub fn reset_relation_stats(state: &AppState) -> DatabaseResult<()> {
     let tag_ids: Vec<i64> = tag::table.select(tag::id).load(&mut conn)?;
     let progress = ProgressReporter::new("Tag statistics calculated", PRINT_INTERVAL);
     for tag_id in tag_ids {
+        admin::is_cancelled()?;
         let usage_count: i64 = post_tag::table
             .filter(post_tag::tag_id.eq(tag_id))
             .count()
@@ -283,6 +300,7 @@ pub fn reset_relation_stats(state: &AppState) -> DatabaseResult<()> {
     let user_ids: Vec<i64> = user::table.select(user::id).load(&mut conn)?;
     let progress = ProgressReporter::new("User statistics calculated", PRINT_INTERVAL);
     for user_id in user_ids {
+        admin::is_cancelled()?;
         let comment_count: i64 = comment::table
             .filter(comment::user_id.eq(user_id))
             .count()
@@ -305,6 +323,7 @@ pub fn reset_relation_stats(state: &AppState) -> DatabaseResult<()> {
     let post_ids: Vec<i64> = post::table.select(post::id).load(&mut conn)?;
     let progress = ProgressReporter::new("Post statistics calculated", PRINT_INTERVAL);
     for post_id in post_ids {
+        admin::is_cancelled()?;
         let tag_count: i64 = post_tag::table
             .filter(post_tag::post_id.eq(post_id))
             .count()
@@ -385,6 +404,8 @@ pub fn reset_statistics(state: &AppState) -> DatabaseResult<()> {
     if state.config.path(Directory::Posts).try_exists()? {
         let progress = ProgressReporter::new("Posts content sizes cached", PRINT_INTERVAL);
         for entry in WalkDir::new(state.config.path(Directory::Posts)) {
+            admin::is_cancelled()?;
+
             let entry = entry?;
             let path = entry.path();
             if path.is_dir() {

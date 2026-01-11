@@ -1,41 +1,61 @@
+use crate::admin::input::TaskCompleter;
 use crate::app::{self, AppState};
 use diesel::r2d2::PoolError;
 use rayon::ThreadPoolBuilder;
-use std::io::Write;
+use rustyline::history::DefaultHistory;
+use rustyline::{CompletionType, Config, Editor};
+use signal_hook::consts::{SIGINT, SIGTERM};
 use std::path::Path;
 use std::str::FromStr;
-use std::sync::atomic::{AtomicU64, Ordering};
-use strum::{EnumIter, EnumString, IntoEnumIterator, IntoStaticStr};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, LazyLock};
+use strum::{EnumIter, EnumMessage, EnumString, IntoEnumIterator, IntoStaticStr};
 use thiserror::Error;
 use tracing::{error, info};
 
 pub mod database;
+mod input;
 pub mod post;
 mod user;
 
 pub type DatabaseResult<T> = Result<T, DatabaseError>;
 
 #[derive(Debug, Error)]
+#[error("Task was cancelled")]
+pub struct CancellationError;
+
+#[derive(Debug, Error)]
 #[error(transparent)]
 pub enum DatabaseError {
+    Cancelled(#[from] CancellationError),
     Connection(#[from] PoolError),
     Query(#[from] diesel::result::Error),
     Io(#[from] std::io::Error),
     WalkDir(#[from] walkdir::Error),
 }
 
-#[derive(Clone, Copy, EnumString, EnumIter, IntoStaticStr)]
+#[derive(Clone, Copy, EnumIter, EnumString, EnumMessage, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum AdminTask {
+    #[strum(message = "Checks integrity of post files")]
     CheckPostIntegrity,
+    #[strum(message = "Recompute post checksums")]
     RecomputePostChecksums,
+    #[strum(message = "Rebuild post signatures")]
     RecomputePostSignatures,
+    #[strum(message = "Rebuild search index")]
     RecomputePostSignatureIndexes,
+    #[strum(message = "Regenerate all post thumbnails")]
     RegenerateThumbnails,
+    #[strum(message = "Regenerate specific post thumbnails")]
     RegenerateThumbnail,
+    #[strum(message = "Reset individual user passwords")]
     ResetPassword,
+    #[strum(message = "Rebuild data directory")]
     ResetFilenames,
+    #[strum(message = "Rebuild table statistics")]
     ResetStatistics,
+    #[strum(message = "Cache thumbnail sizes")]
     ResetThumbnailSizes,
 }
 
@@ -46,21 +66,25 @@ pub fn enabled() -> bool {
 
 /// Starts server CLI.
 pub fn command_line_mode(state: &AppState) {
-    print_info();
+    println!("Running Oxibooru admin command line interface on {} threads.", app::num_rayon_threads());
+    println!("Enter \"help\" for a list of commands and \"exit\" when finished.\n");
+
+    // Set up signal handlers to cancel long-running tasks
+    install_signal_handlers();
 
     ThreadPoolBuilder::new()
         .num_threads(app::num_rayon_threads())
         .build_global()
         .expect("Must be able to configure to global rayon thread pool");
 
-    user_input_loop(state, |state: &AppState, buffer: &mut String| {
-        let user_input = prompt_user_input("Please select a task", buffer);
-        if let Ok(state) = LoopState::try_from(user_input) {
-            return Ok(state);
-        }
+    user_input_loop(state, |state: &AppState, editor: &mut Editor<TaskCompleter, DefaultHistory>| {
+        let user_input = match input::read("Please select a task: ", editor) {
+            Ok(input) => input,
+            Err(state) => return Ok(state),
+        };
 
-        let task = AdminTask::from_str(user_input).map_err(|_| {
-            let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
+        let task = AdminTask::from_str(&user_input).map_err(|_| {
+            let possible_arguments: Vec<&str> = AdminTask::iter().map(AdminTask::into).collect();
             format!("Command line arguments must be one of {possible_arguments:?}")
         })?;
         run_task(state, task).map_err(|err| err.to_string())?;
@@ -71,6 +95,7 @@ pub fn command_line_mode(state: &AppState) {
 }
 
 const PRINT_INTERVAL: Option<u64> = Some(1000);
+static CANCELLED: LazyLock<Arc<AtomicBool>> = LazyLock::new(|| Arc::new(AtomicBool::new(false)));
 
 enum LoopState {
     Continue,
@@ -123,41 +148,11 @@ impl ProgressReporter {
     }
 }
 
-/// Prints some helpful information about the CLI to the console.
-fn print_info() {
-    let possible_arguments: Vec<&'static str> = AdminTask::iter().map(AdminTask::into).collect();
-    println!(
-        "Running Oxibooru admin command line interface on {} threads.
-        Enter \"help\" for a list of commands and \"exit\" when finished.",
-        app::num_rayon_threads()
-    );
-    println!("Available commands: {possible_arguments:?}\n");
-}
-
-/// Prompts the user for input with message `prompt`.
-fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
-    let stdin = std::io::stdin();
-    let mut stdout = std::io::stdout();
-    loop {
-        print!("{prompt}: ");
-        if let Err(err) = stdout.flush() {
-            error!("{err}\n");
-            continue;
-        }
-
-        buffer.clear();
-        if let Err(err) = stdin.read_line(buffer) {
-            error!("{err}\n");
-            continue;
-        }
-
-        match buffer.trim() {
-            "help" => {
-                println!();
-                print_info();
-            }
-            _ => return buffer.trim(),
-        }
+fn is_cancelled() -> Result<(), CancellationError> {
+    if CANCELLED.load(Ordering::SeqCst) {
+        Err(CancellationError)
+    } else {
+        Ok(())
     }
 }
 
@@ -166,11 +161,13 @@ fn prompt_user_input<'a>(prompt: &str, buffer: &'a mut String) -> &'a str {
 /// the program immediately.
 fn user_input_loop<F>(state: &AppState, mut function: F)
 where
-    F: FnMut(&AppState, &mut String) -> Result<LoopState, String>,
+    F: FnMut(&AppState, &mut Editor<TaskCompleter, DefaultHistory>) -> Result<LoopState, String>,
 {
-    let mut buffer = String::new();
+    let editor_config = Config::builder().completion_type(CompletionType::List).build();
+    let mut editor = Editor::with_config(editor_config).expect("Must be able to construct editor");
+    editor.set_helper(Some(TaskCompleter));
     loop {
-        match function(state, &mut buffer) {
+        match function(state, &mut editor) {
             Ok(LoopState::Continue) => (),
             Ok(LoopState::Stop) => break,
             Ok(LoopState::Exit) => std::process::exit(0),
@@ -185,8 +182,10 @@ where
 /// if necessary. That way users can run tasks that don't require database connection without
 /// spinning up the database.
 fn run_task(state: &AppState, task: AdminTask) -> DatabaseResult<()> {
+    CANCELLED.store(false, Ordering::SeqCst);
     info!("Starting task...");
 
+    dbg!(state.config.path(crate::filesystem::Directory::GeneratedThumbnails));
     match task {
         AdminTask::CheckPostIntegrity => post::check_integrity(state),
         AdminTask::RecomputePostChecksums => post::recompute_checksums(state),
@@ -212,4 +211,10 @@ fn get_post_id(path: &Path) -> Option<i64> {
     let path_str = path.file_name()?.to_string_lossy();
     let (post_id, _tail) = path_str.split_once('_')?;
     post_id.parse().ok()
+}
+
+fn install_signal_handlers() {
+    const MESSAGE: &str = "Must be able to register signal handler";
+    signal_hook::flag::register(SIGINT, CANCELLED.clone()).expect(MESSAGE);
+    signal_hook::flag::register(SIGTERM, CANCELLED.clone()).expect(MESSAGE);
 }

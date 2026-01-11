@@ -1,4 +1,5 @@
-use crate::admin::LoopState;
+use crate::admin::input::TaskCompleter;
+use crate::admin::{LoopState, input};
 use crate::app::AppState;
 use crate::auth::password;
 use crate::config::RegexType;
@@ -8,17 +9,19 @@ use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
+use rustyline::Editor;
+use rustyline::history::DefaultHistory;
 
 /// This function prompts the user for input again to reset passwords for specific users.
 pub fn reset_password(state: &AppState) {
-    admin::user_input_loop(state, |state: &AppState, buffer: &mut String| {
+    admin::user_input_loop(state, |state: &AppState, editor: &mut Editor<TaskCompleter, DefaultHistory>| {
         println!(
             "Please enter the username of the user you would like to reset a password for. Enter \"done\" when finished."
         );
-        let user = admin::prompt_user_input("Username", buffer).to_owned();
-        if let Ok(state) = LoopState::try_from(user.as_str()) {
-            return Ok(state);
-        }
+        let user = match input::read("Username: ", editor) {
+            Ok(input) => input,
+            Err(state) => return Ok(state),
+        };
 
         // Check if user exists
         let mut conn = state
@@ -30,14 +33,14 @@ pub fn reset_password(state: &AppState) {
             Err(err) => return Err(format!("Could not determine if user exists for reason: {err}")),
         }
 
-        let password = admin::prompt_user_input("New password", buffer);
-        if let Ok(state) = LoopState::try_from(password) {
-            return Ok(state);
-        }
-        api::verify_matches_regex(&state.config, password, RegexType::Password).map_err(|err| err.to_string())?;
+        let password = match input::read("New password: ", editor) {
+            Ok(input) => input,
+            Err(state) => return Ok(state),
+        };
+        api::verify_matches_regex(&state.config, &password, RegexType::Password).map_err(|err| err.to_string())?;
 
         let salt = SaltString::generate(&mut OsRng);
-        let hash = password::hash_password(&state.config, password, &salt)
+        let hash = password::hash_password(&state.config, &password, &salt)
             .map_err(|err| format!("Could not hash password for reason: {err}"))?;
         diesel::update(user::table)
             .filter(user::name.eq(user))
