@@ -1,4 +1,6 @@
 -- ================================== Setup ================================== --
+SET client_min_messages = error;
+
 -- Enable PL/Python for python helper functions
 CREATE EXTENSION plpython3u;
 
