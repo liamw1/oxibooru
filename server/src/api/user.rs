@@ -28,7 +28,12 @@ use url::Url;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
-        .route("/users", routing::get(list).post(create_handler))
+        .route(
+            "/users",
+            routing::get(list)
+                .post(create_handler)
+                .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE)),
+        )
         .route(
             "/user/{name}",
             routing::get(get)
