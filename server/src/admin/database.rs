@@ -1,4 +1,4 @@
-use crate::admin::{DatabaseResult, PRINT_INTERVAL, ProgressReporter};
+use crate::admin::{AdminResult, PRINT_INTERVAL, ProgressReporter};
 use crate::app::AppState;
 use crate::content::hash::PostHash;
 use crate::filesystem::Directory;
@@ -19,7 +19,13 @@ use walkdir::WalkDir;
 
 /// Renames post files and thumbnails.
 /// Useful when the content hash changes.
-pub fn reset_filenames(state: &AppState) -> DatabaseResult<()> {
+pub fn reset_filenames(state: &AppState) {
+    if let Err(err) = reset_filenames_impl(state) {
+        error!("{err}");
+    }
+}
+
+pub fn reset_filenames_impl(state: &AppState) -> AdminResult<()> {
     let _timer = Timer::new("reset_filenames");
     if state.config.path(Directory::GeneratedThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Generated thumbnails renamed", PRINT_INTERVAL);
@@ -113,7 +119,13 @@ pub fn reset_filenames(state: &AppState) -> DatabaseResult<()> {
 }
 
 /// Updates database values for thumbnail size.
-pub fn reset_thumbnail_sizes(state: &AppState) -> DatabaseResult<()> {
+pub fn reset_thumbnail_sizes(state: &AppState) {
+    if let Err(err) = reset_thumbnail_sizes_impl(state) {
+        error!("{err}");
+    }
+}
+
+pub fn reset_thumbnail_sizes_impl(state: &AppState) -> AdminResult<()> {
     let mut conn = state.get_connection()?;
 
     if state.config.path(Directory::Avatars).try_exists()? {
@@ -197,7 +209,7 @@ pub fn reset_thumbnail_sizes(state: &AppState) -> DatabaseResult<()> {
 /// Because it computes statistics one row at a time, this function is fairly slow.
 /// A much faster version of this is done in `scripts/convert_szuru_database.sql`,
 /// but it would be very tricky to implement in Diesel.
-pub fn reset_relation_stats(state: &AppState) -> DatabaseResult<()> {
+pub fn reset_relation_stats(state: &AppState) -> AdminResult<()> {
     let mut conn = state.get_connection()?;
 
     let comment_count: i64 = comment::table.count().first(&mut conn)?;
@@ -391,7 +403,13 @@ pub fn reset_relation_stats(state: &AppState) -> DatabaseResult<()> {
 /// Recalculates cached file sizes, row counts, and table statistics.
 /// Useful for when the statistics become inconsistent with database
 /// or when migrating from an older version without statistics.
-pub fn reset_statistics(state: &AppState) -> DatabaseResult<()> {
+pub fn reset_statistics(state: &AppState) {
+    if let Err(err) = reset_statistics_impl(state) {
+        error!("{err}");
+    }
+}
+
+pub fn reset_statistics_impl(state: &AppState) -> AdminResult<()> {
     let _timer = Timer::new("reset_statistics");
 
     // Disk usage will automatically be incremented via triggers as we calculate
@@ -425,6 +443,6 @@ pub fn reset_statistics(state: &AppState) -> DatabaseResult<()> {
             progress.increment();
         }
     }
-    reset_thumbnail_sizes(state)?;
+    reset_thumbnail_sizes_impl(state)?;
     reset_relation_stats(state)
 }

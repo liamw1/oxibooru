@@ -6,9 +6,9 @@ use crate::{apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
 use diesel::dsl::{IntoBoxed, Select};
 use diesel::pg::Pg;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
-use strum::{Display, EnumIter, EnumString, EnumTable};
+use strum::{Display, EnumIter, EnumString, EnumTable, IntoStaticStr};
 
-#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
+#[derive(Display, Clone, Copy, EnumIter, EnumString, EnumTable, IntoStaticStr)]
 pub enum Token {
     #[strum(serialize = "name")]
     Name,

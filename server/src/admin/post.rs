@@ -1,5 +1,5 @@
-use crate::admin::input::{self, TaskCompleter};
-use crate::admin::{DatabaseResult, LoopState, PRINT_INTERVAL, ProgressReporter};
+use crate::admin::input::PostEditor;
+use crate::admin::{AdminResult, PRINT_INTERVAL, ProgressReporter, input};
 use crate::app::AppState;
 use crate::content::hash::{Checksum, PostHash};
 use crate::content::signature::SIGNATURE_VERSION;
@@ -8,67 +8,69 @@ use crate::content::{FileContents, decode, hash, signature, thumbnail};
 use crate::model::enums::MimeType;
 use crate::model::post::{CompressedSignature, NewPostSignature};
 use crate::schema::{database_statistics, post, post_signature};
+use crate::search::Builder;
+use crate::search::post::QueryBuilder;
 use crate::time::{DateTime, Timer};
 use crate::{admin, update};
 use diesel::dsl::exists;
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use rustyline::Editor;
-use rustyline::history::DefaultHistory;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 /// Checks the integrity of all posts on the filesystem by comparing the stored
 /// checksum with the checksum of the post content in its current state.
 /// Meant to detect file corruption or silent modification.
-pub fn check_integrity(state: &AppState) -> DatabaseResult<()> {
-    let _timer = Timer::new("check_integrity");
-    let progress = ProgressReporter::new("Posts checked", PRINT_INTERVAL);
-    let failures = ProgressReporter::new("Integrity checks failed", None);
+pub fn check_integrity(state: &AppState, editor: &mut PostEditor) {
+    input::user_input_loop(state, editor, |state: &AppState, editor: &mut PostEditor| {
+        let post_ids = user_query(state, editor)?;
 
-    let mut conn = state.get_connection()?;
-    let post_data: Vec<_> = post::table.select(post::id).load(&mut conn)?;
-    post_data
-        .into_par_iter()
-        .try_for_each(|post_id| check_integrity_in_parallel(state, post_id, &progress, &failures))?;
-    failures.report();
-    Ok(())
+        let _timer = Timer::new("check_integrity");
+        let progress = ProgressReporter::new("Posts checked", PRINT_INTERVAL);
+        let failures = ProgressReporter::new("Integrity checks failed", None);
+        post_ids
+            .into_par_iter()
+            .try_for_each(|post_id| check_integrity_in_parallel(state, post_id, &progress, &failures))?;
+        failures.report();
+        Ok(())
+    })
 }
 
 /// Recomputes posts checksums.
 /// Useful when the way we compute checksums changes.
-pub fn recompute_checksums(state: &AppState) -> DatabaseResult<()> {
-    let _timer = Timer::new("recompute_checksums");
-    let progress = ProgressReporter::new("Checksums computed", PRINT_INTERVAL);
-    let duplicate_count = ProgressReporter::new("Duplicates found", PRINT_INTERVAL);
+pub fn recompute_checksums(state: &AppState, editor: &mut PostEditor) {
+    input::user_input_loop(state, editor, |state: &AppState, editor: &mut PostEditor| {
+        let post_ids = user_query(state, editor)?;
 
-    let mut conn = state.get_connection()?;
-    let post_ids: Vec<_> = post::table.select(post::id).load(&mut conn)?;
-    post_ids
-        .into_par_iter()
-        .try_for_each(|post_id| recompute_checksum_in_parallel(state, post_id, &progress, &duplicate_count))?;
-    duplicate_count.report();
-    Ok(())
+        let _timer = Timer::new("recompute_checksums");
+        let progress = ProgressReporter::new("Checksums computed", PRINT_INTERVAL);
+        let duplicate_count = ProgressReporter::new("Duplicates found", PRINT_INTERVAL);
+        post_ids
+            .into_par_iter()
+            .try_for_each(|post_id| recompute_checksum_in_parallel(state, post_id, &progress, &duplicate_count))?;
+        duplicate_count.report();
+        Ok(())
+    })
 }
 
 /// Recomputes both post signatures and signature indexes.
 /// Useful when the post signature parameters change.
-pub fn recompute_signatures(state: &AppState) -> DatabaseResult<()> {
-    let _timer = Timer::new("recompute_signatures");
-    let progress = ProgressReporter::new("Signatures computed", PRINT_INTERVAL);
+pub fn recompute_signatures(state: &AppState, editor: &mut PostEditor) {
+    input::user_input_loop(state, editor, |state: &AppState, editor: &mut PostEditor| {
+        let post_ids = user_query(state, editor)?;
 
-    let mut conn = state.get_connection()?;
-    let post_ids: Vec<_> = post::table.select(post::id).load(&mut conn)?;
+        // Update signature version only after a successful data retrieval.
+        // We do this before actually recomputing signatures so that server
+        // can continue running during computation.
+        diesel::update(database_statistics::table)
+            .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
+            .execute(&mut state.get_connection()?)?;
 
-    // Update signature version only after a successful data retrieval.
-    // We do this before actually recomputing signatures so that server
-    // can continue running during computation.
-    diesel::update(database_statistics::table)
-        .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
-        .execute(&mut conn)?;
-
-    post_ids
-        .into_par_iter()
-        .try_for_each(|post_id| recompute_signature_in_parallel(state, post_id, &progress))
+        let _timer = Timer::new("recompute_signatures");
+        let progress = ProgressReporter::new("Signatures computed", PRINT_INTERVAL);
+        post_ids
+            .into_par_iter()
+            .try_for_each(|post_id| recompute_signature_in_parallel(state, post_id, &progress))
+    })
 }
 
 /// Recomputes post signature indexes.
@@ -76,67 +78,28 @@ pub fn recompute_signatures(state: &AppState) -> DatabaseResult<()> {
 ///
 /// This is much faster than recomputing the signatures, as this function doesn't require
 /// reading post content from disk.
-pub fn recompute_indexes(state: &AppState) -> DatabaseResult<()> {
-    let _timer = Timer::new("recompute_indexes");
-    let progress = ProgressReporter::new("Indexes computed", PRINT_INTERVAL);
+pub fn recompute_indexes(state: &AppState, editor: &mut PostEditor) {
+    input::user_input_loop(state, editor, |state: &AppState, editor: &mut PostEditor| {
+        let post_ids = user_query(state, editor)?;
 
-    let mut conn = state.get_connection()?;
-    let post_ids: Vec<_> = post::table.select(post::id).load(&mut conn)?;
-    post_ids
-        .into_par_iter()
-        .try_for_each(|post_id| recompute_index_in_parallel(state, post_id, &progress))
+        let _timer = Timer::new("recompute_indexes");
+        let progress = ProgressReporter::new("Indexes computed", PRINT_INTERVAL);
+        post_ids
+            .into_par_iter()
+            .try_for_each(|post_id| recompute_index_in_parallel(state, post_id, &progress))
+    })
 }
 
-pub fn regenerate_thumbnails(state: &AppState) -> DatabaseResult<()> {
-    let _timer = Timer::new("regenerate_thumbnails");
-    let progress = ProgressReporter::new("Thumbnails regenerated", PRINT_INTERVAL);
+pub fn regenerate_thumbnails(state: &AppState, editor: &mut PostEditor) {
+    input::user_input_loop(state, editor, |state: &AppState, editor: &mut PostEditor| {
+        let post_ids = user_query(state, editor)?;
 
-    let mut conn = state.get_connection()?;
-    let post_ids: Vec<_> = post::table.select(post::id).load(&mut conn)?;
-    post_ids
-        .into_par_iter()
-        .try_for_each(|post_id| regenerate_thumbnail_in_parallel(state, post_id, &progress))
-}
-
-/// Prompts the user for input again to regenerate specific thumbnails.
-pub fn regenerate_thumbnail(state: &AppState) {
-    admin::user_input_loop(state, |state: &AppState, editor: &mut Editor<TaskCompleter, DefaultHistory>| {
-        println!("Please enter the post ID you would like to generate a thumbnail for. Enter \"done\" when finished.");
-        let user_input = match input::read("Post ID: ", editor) {
-            Ok(input) => input,
-            Err(state) => return Ok(state),
-        };
-
-        let post_id = user_input
-            .parse::<i64>()
-            .map_err(|_| "Post ID must be an integer".to_owned())?;
-
-        let mut conn = state
-            .get_connection()
-            .map_err(|_| "Could not establish a connection to the database for reason: {err}")?;
-        let mime_type = post::table
-            .find(post_id)
-            .select(post::mime_type)
-            .first(&mut conn)
-            .optional()
-            .map_err(|err| format!("Cannot retrieve MIME type for post {post_id} for reason: {err}"))?
-            .ok_or_else(|| format!("Post {post_id} does not exist"))?;
-
-        let post_hash = PostHash::new(&state.config, post_id);
-        let content_path = post_hash.content_path(mime_type);
-        let data = std::fs::read(&content_path)
-            .map_err(|err| format!("Cannot read content for post {post_id} for reason: {err}"))?;
-
-        let file_contents = FileContents { data, mime_type };
-        let thumbnail = decode::representative_image(&state.config, &file_contents, &content_path)
-            .map(|image| thumbnail::create(&state.config, &image, ThumbnailType::Post))
-            .map_err(|err| format!("Cannot decode content for post {post_id} for reason: {err}"))?;
-        update::post::thumbnail(&mut conn, &post_hash, &thumbnail, ThumbnailCategory::Generated)
-            .map_err(|err| format!("Cannot save thumbnail for post {post_id} for reason: {err}"))?;
-
-        println!("Thumbnail regeneration successful.\n");
-        Ok(LoopState::Continue)
-    });
+        let _timer = Timer::new("regenerate_thumbnails");
+        let progress = ProgressReporter::new("Thumbnails regenerated", PRINT_INTERVAL);
+        post_ids
+            .into_par_iter()
+            .try_for_each(|post_id| regenerate_thumbnail_in_parallel(state, post_id, &progress))
+    })
 }
 
 /// Checks content integrity for post with id `post_id`. Designed to operate in a parallel iterator.
@@ -145,7 +108,7 @@ fn check_integrity_in_parallel(
     post_id: i64,
     progress: &ProgressReporter,
     failures: &ProgressReporter,
-) -> DatabaseResult<()> {
+) -> AdminResult<()> {
     admin::is_cancelled()?;
 
     let mut conn = state.get_connection()?;
@@ -182,7 +145,7 @@ fn check_integrity_in_parallel(
 }
 
 /// Recomputes index for post with id `post_id`. Designed to operate in a parallel iterator.
-fn recompute_index_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
+fn recompute_index_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> AdminResult<()> {
     admin::is_cancelled()?;
 
     let mut conn = state.get_connection()?;
@@ -210,7 +173,7 @@ fn recompute_checksum_in_parallel(
     post_id: i64,
     progress: &ProgressReporter,
     duplicate_count: &ProgressReporter,
-) -> DatabaseResult<()> {
+) -> AdminResult<()> {
     admin::is_cancelled()?;
 
     let mut conn = state.get_connection()?;
@@ -273,7 +236,7 @@ fn recompute_checksum_in_parallel(
 }
 
 /// Recomputes signature for post with id `post_id`. Designed to operate in a parallel iterator.
-fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
+fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> AdminResult<()> {
     admin::is_cancelled()?;
 
     let mut conn = state.get_connection()?;
@@ -345,7 +308,7 @@ fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &Pr
 }
 
 /// Regenerates thumbnail for post with id `post_id`. Designed to operate in a parallel iterator.
-fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> DatabaseResult<()> {
+fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> AdminResult<()> {
     admin::is_cancelled()?;
 
     let mut conn = state.get_connection()?;
@@ -387,4 +350,19 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
         progress.increment();
     }
     Ok(())
+}
+
+fn user_query(state: &AppState, editor: &mut PostEditor) -> AdminResult<Vec<i64>> {
+    loop {
+        let user_input = input::read("Select posts (leave blank to select all): ", editor)?;
+        match QueryBuilder::new(&state.config, admin::client(), &user_input) {
+            Err(err) => error!("Could not parse query for reason: {err}"),
+            Ok(mut builder) => {
+                let mut conn = state.get_connection()?;
+                let post_ids = conn.transaction(|conn| builder.load(conn))?;
+                info!("Found {} posts", post_ids.len());
+                return Ok(post_ids);
+            }
+        }
+    }
 }

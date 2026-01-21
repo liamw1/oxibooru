@@ -80,18 +80,18 @@ pub fn run_server_migrations(
 
     // Update filenames if migrating primary keys to BIGINT
     if migration_range.contains(&12) {
-        admin::database::reset_filenames(state)?;
+        admin::database::reset_filenames_impl(state)?;
     }
 
     // Cache thumbnail sizes if migrating to statistics system
     if migration_range.contains(&13) {
-        admin::database::reset_thumbnail_sizes(state)?;
+        admin::database::reset_thumbnail_sizes_impl(state)?;
     }
 
     // Migrate to new post storage structure and fix checksum bug
     if migration_range.contains(&21) {
-        admin::database::reset_filenames(state)?;
-        admin::post::recompute_checksums(state)?;
+        admin::database::reset_filenames_impl(state)?;
+        admin::post::recompute_checksums(state, &mut admin::mock_editor());
     }
 
     Ok(())

@@ -1,9 +1,10 @@
-use crate::admin::input::TaskCompleter;
+use crate::admin::input::{CancelType, PostEditor, TaskEditor, UserEditor};
+use crate::api::error::ApiError;
 use crate::app::{self, AppState};
+use crate::auth::Client;
+use crate::model::enums::UserRank;
 use diesel::r2d2::PoolError;
 use rayon::ThreadPoolBuilder;
-use rustyline::history::DefaultHistory;
-use rustyline::{CompletionType, Config, Editor};
 use signal_hook::consts::{SIGINT, SIGTERM};
 use std::path::Path;
 use std::str::FromStr;
@@ -18,20 +19,56 @@ mod input;
 pub mod post;
 mod user;
 
-pub type DatabaseResult<T> = Result<T, DatabaseError>;
-
-#[derive(Debug, Error)]
-#[error("Task was cancelled")]
-pub struct CancellationError;
+pub type AdminResult<T> = Result<T, AdminError>;
 
 #[derive(Debug, Error)]
 #[error(transparent)]
-pub enum DatabaseError {
-    Cancelled(#[from] CancellationError),
-    Connection(#[from] PoolError),
-    Query(#[from] diesel::result::Error),
-    Io(#[from] std::io::Error),
-    WalkDir(#[from] walkdir::Error),
+pub enum AdminError {
+    Cancel(#[from] CancelType),
+    #[error("{0}")]
+    Error(String),
+}
+
+impl From<&str> for AdminError {
+    fn from(value: &str) -> Self {
+        Self::Error(value.to_owned())
+    }
+}
+
+impl From<String> for AdminError {
+    fn from(value: String) -> Self {
+        Self::Error(value)
+    }
+}
+
+impl From<PoolError> for AdminError {
+    fn from(value: PoolError) -> Self {
+        Self::Error(value.to_string())
+    }
+}
+
+impl From<diesel::result::Error> for AdminError {
+    fn from(value: diesel::result::Error) -> Self {
+        Self::Error(value.to_string())
+    }
+}
+
+impl From<std::io::Error> for AdminError {
+    fn from(value: std::io::Error) -> Self {
+        Self::Error(value.to_string())
+    }
+}
+
+impl From<walkdir::Error> for AdminError {
+    fn from(value: walkdir::Error) -> Self {
+        Self::Error(value.to_string())
+    }
+}
+
+impl From<ApiError> for AdminError {
+    fn from(value: ApiError) -> Self {
+        Self::Error(value.to_string())
+    }
 }
 
 #[derive(Clone, Copy, EnumIter, EnumString, EnumMessage, IntoStaticStr)]
@@ -45,10 +82,8 @@ pub enum AdminTask {
     RecomputePostSignatures,
     #[strum(message = "Rebuild search index")]
     RecomputePostSignatureIndexes,
-    #[strum(message = "Regenerate all post thumbnails")]
+    #[strum(message = "Regenerate post thumbnails")]
     RegenerateThumbnails,
-    #[strum(message = "Regenerate specific post thumbnails")]
-    RegenerateThumbnail,
     #[strum(message = "Reset individual user passwords")]
     ResetPassword,
     #[strum(message = "Rebuild data directory")]
@@ -77,42 +112,31 @@ pub fn command_line_mode(state: &AppState) {
         .build_global()
         .expect("Must be able to configure to global rayon thread pool");
 
-    user_input_loop(state, |state: &AppState, editor: &mut Editor<TaskCompleter, DefaultHistory>| {
-        let user_input = match input::read("Please select a task: ", editor) {
-            Ok(input) => input,
-            Err(state) => return Ok(state),
-        };
+    let mut post_editor = input::create_editor();
+    let mut task_editor = input::create_editor();
+    let mut user_editor = input::create_editor();
+    input::user_input_loop(state, &mut task_editor, |state: &AppState, editor: &mut TaskEditor| {
+        let user_input = input::read("Please select a task: ", editor)?;
 
         let task = AdminTask::from_str(&user_input).map_err(|_| {
             let possible_arguments: Vec<&str> = AdminTask::iter().map(AdminTask::into).collect();
             format!("Command line arguments must be one of {possible_arguments:?}")
         })?;
-        run_task(state, task).map_err(|err| err.to_string())?;
+        run_task(state, task, &mut post_editor, &mut user_editor);
 
-        println!("Task finished.\n");
-        Ok(LoopState::Continue)
+        if CANCELLED.load(Ordering::SeqCst) {
+            error!("Task aborted.\n");
+        }
+        Ok(())
     });
+}
+
+pub fn mock_editor() -> PostEditor {
+    input::create_mock_editor()
 }
 
 const PRINT_INTERVAL: Option<u64> = Some(1000);
 static CANCELLED: LazyLock<Arc<AtomicBool>> = LazyLock::new(|| Arc::new(AtomicBool::new(false)));
-
-enum LoopState {
-    Continue,
-    Stop,
-    Exit,
-}
-
-impl TryFrom<&str> for LoopState {
-    type Error = ();
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
-        match value {
-            "done" => Ok(LoopState::Stop),
-            "exit" => Ok(LoopState::Exit),
-            _ => Err(()),
-        }
-    }
-}
 
 /// An atomic counter that prints message with the current count at regular intervals.
 struct ProgressReporter {
@@ -148,58 +172,33 @@ impl ProgressReporter {
     }
 }
 
-fn is_cancelled() -> Result<(), CancellationError> {
+fn is_cancelled() -> Result<(), CancelType> {
     if CANCELLED.load(Ordering::SeqCst) {
-        Err(CancellationError)
+        Err(CancelType::Stop)
     } else {
         Ok(())
     }
 }
 
-/// Repeatedly performs some `function` that prompts for user input until it returns
-/// either [`LoopState::Stop`] or [`LoopState::Exit`], the latter of which terminates
-/// the program immediately.
-fn user_input_loop<F>(state: &AppState, mut function: F)
-where
-    F: FnMut(&AppState, &mut Editor<TaskCompleter, DefaultHistory>) -> Result<LoopState, String>,
-{
-    let editor_config = Config::builder().completion_type(CompletionType::List).build();
-    let mut editor = Editor::with_config(editor_config).expect("Must be able to construct editor");
-    editor.set_helper(Some(TaskCompleter));
-    loop {
-        match function(state, &mut editor) {
-            Ok(LoopState::Continue) => (),
-            Ok(LoopState::Stop) => break,
-            Ok(LoopState::Exit) => std::process::exit(0),
-            Err(err) => {
-                error!("{err}\n");
-            }
-        }
+fn client() -> Client {
+    Client {
+        id: None,
+        rank: UserRank::Administrator,
     }
 }
 
 /// Runs a single task. This function is designed to only establish a connection to the database
 /// if necessary. That way users can run tasks that don't require database connection without
 /// spinning up the database.
-fn run_task(state: &AppState, task: AdminTask) -> DatabaseResult<()> {
+fn run_task(state: &AppState, task: AdminTask, post_editor: &mut PostEditor, user_editor: &mut UserEditor) {
     CANCELLED.store(false, Ordering::SeqCst);
-    info!("Starting task...");
-
-    dbg!(state.config.path(crate::filesystem::Directory::GeneratedThumbnails));
     match task {
-        AdminTask::CheckPostIntegrity => post::check_integrity(state),
-        AdminTask::RecomputePostChecksums => post::recompute_checksums(state),
-        AdminTask::RecomputePostSignatures => post::recompute_signatures(state),
-        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(state),
-        AdminTask::RegenerateThumbnails => post::regenerate_thumbnails(state),
-        AdminTask::RegenerateThumbnail => {
-            post::regenerate_thumbnail(state);
-            Ok(())
-        }
-        AdminTask::ResetPassword => {
-            user::reset_password(state);
-            Ok(())
-        }
+        AdminTask::CheckPostIntegrity => post::check_integrity(state, post_editor),
+        AdminTask::RecomputePostChecksums => post::recompute_checksums(state, post_editor),
+        AdminTask::RecomputePostSignatures => post::recompute_signatures(state, post_editor),
+        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(state, post_editor),
+        AdminTask::RegenerateThumbnails => post::regenerate_thumbnails(state, post_editor),
+        AdminTask::ResetPassword => user::reset_password(state, user_editor),
         AdminTask::ResetFilenames => database::reset_filenames(state),
         AdminTask::ResetStatistics => database::reset_statistics(state),
         AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(state),

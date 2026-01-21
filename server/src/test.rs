@@ -1,4 +1,4 @@
-use crate::admin::DatabaseResult;
+use crate::admin::AdminResult;
 use crate::api::error::ApiResult;
 use crate::app::AppState;
 use crate::auth::header;
@@ -457,7 +457,7 @@ fn get_state_guard() -> MutexGuard<'static, Option<AppState>> {
     }
 }
 
-fn recreate_database() -> DatabaseResult<AppState> {
+fn recreate_database() -> AdminResult<AppState> {
     let rng = &mut OsRng;
     let test_data_directory = std::env::temp_dir().join(rng.next_u64().to_string());
 
@@ -604,7 +604,7 @@ fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
     Ok(())
 }
 
-fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> {
+fn create_posts(conn: &mut PgConnection, config: &Config) -> AdminResult<()> {
     for new_post in POSTS {
         let (post_id, mime_type, source): (i64, MimeType, String) = new_post
             .insert_into(post::table)
@@ -641,7 +641,7 @@ fn create_posts(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> 
     Ok(())
 }
 
-fn populate_database(conn: &mut PgConnection, config: &Config) -> DatabaseResult<()> {
+fn populate_database(conn: &mut PgConnection, config: &Config) -> AdminResult<()> {
     // Create users
     USERS.insert_into(user::table).execute(conn)?;
 
@@ -792,7 +792,7 @@ mod statistics_tests {
 
     #[test]
     #[parallel]
-    fn database_statistics() -> DatabaseResult<()> {
+    fn database_statistics() -> AdminResult<()> {
         let expected_disk_usage: i64 = POSTS.iter().map(|post| post.file_size).sum();
         let expected_pool_count: i64 = POOL_GROUPS.iter().map(|group| group.len() as i64).sum();
         let expected_tag_count: i64 = TAG_GROUPS.iter().map(|group| group.len() as i64).sum();
@@ -821,7 +821,7 @@ mod statistics_tests {
 
     #[test]
     #[parallel]
-    fn comment_statistics() -> DatabaseResult<()> {
+    fn comment_statistics() -> AdminResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(i64, i64)> = comment_statistics::table.load(&mut conn)?;
         for (comment_id, total_score) in stats {
@@ -837,7 +837,7 @@ mod statistics_tests {
 
     #[test]
     #[parallel]
-    fn pool_category_statistics() -> DatabaseResult<()> {
+    fn pool_category_statistics() -> AdminResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(i64, i64)> = pool_category_statistics::table.load(&mut conn)?;
         for (category_id, usage_count) in stats {
@@ -849,7 +849,7 @@ mod statistics_tests {
 
     #[test]
     #[parallel]
-    fn pool_statistics() -> DatabaseResult<()> {
+    fn pool_statistics() -> AdminResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(SmallString, i64)> = pool_statistics::table
             .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool_statistics::pool_id)))
@@ -865,7 +865,7 @@ mod statistics_tests {
 
     #[test]
     #[parallel]
-    fn post_statistics() -> DatabaseResult<()> {
+    fn post_statistics() -> AdminResult<()> {
         type PostData =
             (i64, i64, i64, i64, i64, i64, i64, i64, i64, Option<DateTime>, Option<DateTime>, Option<DateTime>);
 
@@ -914,7 +914,7 @@ mod statistics_tests {
 
     #[test]
     #[parallel]
-    fn tag_category_statistics() -> DatabaseResult<()> {
+    fn tag_category_statistics() -> AdminResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(i64, i64)> = tag_category_statistics::table.load(&mut conn)?;
         for (category_id, usage_count) in stats {
@@ -926,7 +926,7 @@ mod statistics_tests {
 
     #[test]
     #[parallel]
-    fn tag_statistics() -> DatabaseResult<()> {
+    fn tag_statistics() -> AdminResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(SmallString, i64)> = tag_statistics::table
             .inner_join(tag_name::table.on(tag_name::tag_id.eq(tag_statistics::tag_id)))
@@ -945,7 +945,7 @@ mod statistics_tests {
 
     #[test]
     #[parallel]
-    fn user_statistics() -> DatabaseResult<()> {
+    fn user_statistics() -> AdminResult<()> {
         let mut conn = get_connection()?;
         let stats: Vec<(i64, i64, i64, i64)> = user_statistics::table.load(&mut conn)?;
         for (user_id, comment_count, favorite_count, upload_count) in stats {
@@ -962,7 +962,7 @@ mod statistics_tests {
 
     #[test]
     #[serial]
-    fn reset_statistics() -> DatabaseResult<()> {
+    fn reset_statistics() -> AdminResult<()> {
         database::reset_relation_stats(&get_state())?;
         database_statistics()?;
         comment_statistics()?;

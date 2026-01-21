@@ -21,9 +21,9 @@ use diesel::pg::Pg;
 use diesel::sql_types::{Float, SmallInt};
 use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl, TextExpressionMethods};
 use std::str::FromStr;
-use strum::{Display, EnumIter, EnumString, EnumTable};
+use strum::{Display, EnumIter, EnumString, EnumTable, IntoStaticStr};
 
-#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
+#[derive(Display, Clone, Copy, EnumIter, EnumString, EnumTable, IntoStaticStr)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Token {
     Id,

@@ -1,17 +1,64 @@
-use crate::admin::{AdminTask, LoopState};
-use crate::app;
+use crate::admin::{AdminError, AdminResult, AdminTask};
+use crate::app::{self, AppState};
+use crate::search::post::Token as PostToken;
+use crate::search::user::Token as UserToken;
 use rustyline::completion::{Completer, Pair};
 use rustyline::error::ReadlineError;
 use rustyline::highlight::Highlighter;
 use rustyline::hint::Hinter;
 use rustyline::history::DefaultHistory;
 use rustyline::validate::Validator;
-use rustyline::{Context, Editor, Helper};
+use rustyline::{CompletionType, Config, Context, Editor, Helper};
+use std::marker::PhantomData;
 use strum::{EnumMessage, IntoEnumIterator};
+use thiserror::Error;
+use tracing::error;
 
-pub struct TaskCompleter;
+pub type PostEditor = Editor<EnumCompleter<PostToken>, DefaultHistory>;
+pub type TaskEditor = Editor<EnumCompleter<AdminTask>, DefaultHistory>;
+pub type UserEditor = Editor<EnumCompleter<UserToken>, DefaultHistory>;
 
-impl Completer for TaskCompleter {
+#[derive(Debug, Error)]
+pub enum CancelType {
+    #[error("User has cancelled task")]
+    Stop,
+    #[error("User has exited program")]
+    Exit,
+}
+
+impl TryFrom<&str> for CancelType {
+    type Error = ();
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "done" => Ok(CancelType::Stop),
+            "exit" => Ok(CancelType::Exit),
+            _ => Err(()),
+        }
+    }
+}
+
+pub struct EnumCompleter<E> {
+    response_count: Option<usize>,
+    _phantom_data: PhantomData<E>,
+}
+
+impl<E> EnumCompleter<E> {
+    pub fn new() -> Self {
+        Self {
+            response_count: None,
+            _phantom_data: PhantomData,
+        }
+    }
+
+    pub fn mocked() -> Self {
+        Self {
+            response_count: Some(0),
+            _phantom_data: PhantomData,
+        }
+    }
+}
+
+impl<E: IntoEnumIterator + Into<&'static str>> Completer for EnumCompleter<E> {
     type Candidate = Pair;
 
     fn complete(&self, line: &str, pos: usize, _ctx: &Context<'_>) -> rustyline::Result<(usize, Vec<Pair>)> {
@@ -19,8 +66,8 @@ impl Completer for TaskCompleter {
         let start = line[..pos].rfind(' ').map_or(0, |i| i + 1);
         let prefix = &line[start..pos];
 
-        let matches: Vec<Pair> = AdminTask::iter()
-            .map(AdminTask::into)
+        let matches: Vec<Pair> = E::iter()
+            .map(E::into)
             .filter(|task: &&str| task.starts_with(prefix))
             .map(|task| Pair {
                 display: task.to_owned(),
@@ -32,16 +79,48 @@ impl Completer for TaskCompleter {
     }
 }
 
-impl Hinter for TaskCompleter {
+impl<E> Hinter for EnumCompleter<E> {
     type Hint = String;
 }
-impl Highlighter for TaskCompleter {}
-impl Validator for TaskCompleter {}
-impl Helper for TaskCompleter {}
+impl<E> Highlighter for EnumCompleter<E> {}
+impl<E> Validator for EnumCompleter<E> {}
+impl<E: IntoEnumIterator + Into<&'static str>> Helper for EnumCompleter<E> {}
+
+pub fn create_editor<E>() -> Editor<EnumCompleter<E>, DefaultHistory>
+where
+    E: IntoEnumIterator + Into<&'static str>,
+{
+    let editor_config = Config::builder().completion_type(CompletionType::List).build();
+    let mut editor = Editor::with_config(editor_config).expect("Must be able to construct editor");
+    editor.set_helper(Some(EnumCompleter::new()));
+    editor
+}
+
+pub fn create_mock_editor<E>() -> Editor<EnumCompleter<E>, DefaultHistory>
+where
+    E: IntoEnumIterator + Into<&'static str>,
+{
+    let editor_config = Config::builder().completion_type(CompletionType::List).build();
+    let mut editor = Editor::with_config(editor_config).expect("Must be able to construct editor");
+    editor.set_helper(Some(EnumCompleter::mocked()));
+    editor
+}
 
 /// Prompts the user for input with message `prompt` and reads resulting input.
-pub fn read(prompt: &str, editor: &mut Editor<TaskCompleter, DefaultHistory>) -> Result<String, LoopState> {
+pub fn read<E>(prompt: &str, editor: &mut Editor<EnumCompleter<E>, DefaultHistory>) -> Result<String, CancelType>
+where
+    E: IntoEnumIterator + Into<&'static str>,
+{
     loop {
+        if let Some(response_count) = editor.helper_mut().and_then(|helper| helper.response_count.as_mut()) {
+            let result = match response_count {
+                0 => Ok(String::new()),
+                _ => Err(CancelType::Stop),
+            };
+            *response_count += 1;
+            return result;
+        }
+
         match editor.readline(prompt) {
             Ok(line) => {
                 let trimmed = line.trim();
@@ -56,17 +135,37 @@ pub fn read(prompt: &str, editor: &mut Editor<TaskCompleter, DefaultHistory>) ->
                     continue;
                 }
 
-                return match LoopState::try_from(trimmed) {
+                return match CancelType::try_from(trimmed) {
                     Ok(state) => Err(state),
                     Err(()) => Ok(trimmed.to_owned()),
                 };
             }
             Err(ReadlineError::Interrupted) => {
                 println!("^C");
-                return Err(LoopState::Exit);
+                return Err(CancelType::Exit);
             }
             Err(err) => {
                 eprintln!("Error: {err}");
+            }
+        }
+    }
+}
+
+/// Repeatedly performs some `function` that prompts for user input until it returns
+/// either [`LoopState::Stop`] or [`LoopState::Exit`], the latter of which terminates
+/// the program immediately.
+pub fn user_input_loop<F, E>(state: &AppState, editor: &mut Editor<EnumCompleter<E>, DefaultHistory>, mut function: F)
+where
+    F: FnMut(&AppState, &mut Editor<EnumCompleter<E>, DefaultHistory>) -> AdminResult<()>,
+    E: IntoEnumIterator + Into<&'static str>,
+{
+    loop {
+        match function(state, editor) {
+            Ok(()) => (),
+            Err(AdminError::Cancel(CancelType::Stop)) => break,
+            Err(AdminError::Cancel(CancelType::Exit)) => std::process::exit(0),
+            Err(err) => {
+                error!("{err}\n");
             }
         }
     }
