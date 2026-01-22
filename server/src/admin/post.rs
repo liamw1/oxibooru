@@ -32,7 +32,7 @@ pub fn check_integrity(state: &AppState, editor: &mut PostEditor) {
             .try_for_each(|post_id| check_integrity_in_parallel(state, post_id, &progress, &failures))?;
         failures.report();
         Ok(())
-    })
+    });
 }
 
 /// Recomputes posts checksums.
@@ -49,7 +49,7 @@ pub fn recompute_checksums(state: &AppState, editor: &mut PostEditor) {
             .try_for_each(|post_id| recompute_checksum_in_parallel(state, post_id, &progress, &duplicate_count))?;
         duplicate_count.report();
         Ok(())
-    })
+    });
 }
 
 /// Recomputes both post signatures and signature indexes.
@@ -70,7 +70,7 @@ pub fn recompute_signatures(state: &AppState, editor: &mut PostEditor) {
         post_ids
             .into_par_iter()
             .try_for_each(|post_id| recompute_signature_in_parallel(state, post_id, &progress))
-    })
+    });
 }
 
 /// Recomputes post signature indexes.
@@ -87,7 +87,7 @@ pub fn recompute_indexes(state: &AppState, editor: &mut PostEditor) {
         post_ids
             .into_par_iter()
             .try_for_each(|post_id| recompute_index_in_parallel(state, post_id, &progress))
-    })
+    });
 }
 
 pub fn regenerate_thumbnails(state: &AppState, editor: &mut PostEditor) {
@@ -99,7 +99,7 @@ pub fn regenerate_thumbnails(state: &AppState, editor: &mut PostEditor) {
         post_ids
             .into_par_iter()
             .try_for_each(|post_id| regenerate_thumbnail_in_parallel(state, post_id, &progress))
-    })
+    });
 }
 
 /// Checks content integrity for post with id `post_id`. Designed to operate in a parallel iterator.

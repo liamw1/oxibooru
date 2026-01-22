@@ -175,9 +175,9 @@ where
 fn print_info() {
     println!("Oxibooru admin CLI - running on {} threads\n", app::num_rayon_threads());
     println!("Commands:");
-    println!("  {:12} {}", "help", "Show this help message");
-    println!("  {:12} {}", "clear", "Clear the screen");
-    println!("  {:12} {}", "exit", "Exit the CLI");
+    println!("  {:12} Show this help message", "help");
+    println!("  {:12} Clear the screen", "clear");
+    println!("  {:12} Exit the CLI", "exit");
     println!();
     println!("Tasks:");
     for task in AdminTask::iter() {
