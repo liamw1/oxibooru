@@ -37,10 +37,14 @@ cleanup() {
 # Trap SIGINT (Ctrl+C) and SIGTERM
 trap cleanup SIGINT SIGTERM
 
-# Helper function to run docker exec commands interruptibly
+# Helper functions to run docker exec commands interruptibly
 run_admin_command() {
     local command="$1"
     printf '%s\nexit\n' "$command" | docker exec -i "$OXI_SERVER_CONTAINER" ./server --admin
+}
+run_admin_post_command() {
+    local command="$1"
+    printf '%s\n\nexit\n' "$command" | docker exec -i "$OXI_SERVER_CONTAINER" ./server --admin
 }
 
 # Colors for output
@@ -468,13 +472,13 @@ print_header "Step 7: Recomputing Post Properties"
 
 print_step 7 "Recomputing post checksums (this may take a while for large databases)..."
 
-run_admin_command "recompute_post_checksums"
+run_admin_post_command "recompute_post_checksums"
 
 print_info "Checksums recomputed"
 
 print_step 7 "Recomputing post signatures (this may take a while for large databases)..."
 
-run_admin_command "recompute_post_signatures"
+run_admin_post_command "recompute_post_signatures"
 
 print_info "Signatures recomputed"
 

@@ -102,7 +102,7 @@ pub fn enabled() -> bool {
 /// Starts server CLI.
 pub fn command_line_mode(state: &AppState) {
     println!("Running Oxibooru admin command line interface on {} threads.", app::num_rayon_threads());
-    println!("Enter \"help\" for a list of commands and \"exit\" when finished.\n");
+    println!("Enter \"help\" for a list of commands, \"done\" to escape current task and \"exit\" when finished.\n");
 
     // Set up signal handlers to cancel long-running tasks
     install_signal_handlers();
