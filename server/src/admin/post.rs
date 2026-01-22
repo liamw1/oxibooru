@@ -9,7 +9,7 @@ use crate::model::enums::MimeType;
 use crate::model::post::{CompressedSignature, NewPostSignature};
 use crate::schema::{database_statistics, post, post_signature};
 use crate::search::Builder;
-use crate::search::post::QueryBuilder;
+use crate::search::post::{QueryBuilder, Token};
 use crate::time::{DateTime, Timer};
 use crate::{admin, update};
 use diesel::dsl::exists;
@@ -355,7 +355,7 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
 fn user_query(state: &AppState, editor: &mut PostEditor) -> AdminResult<Vec<i64>> {
     loop {
         let user_input = input::read("Select posts (leave blank to select all): ", editor)?;
-        match QueryBuilder::new(&state.config, admin::client(), &user_input) {
+        match QueryBuilder::new_with_anonymous_token(&state.config, admin::client(), &user_input, Token::Id) {
             Err(err) => error!("Could not parse query for reason: {err}"),
             Ok(mut builder) => {
                 let mut conn = state.get_connection()?;

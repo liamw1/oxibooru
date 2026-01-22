@@ -126,8 +126,8 @@ pub fn reset_thumbnail_sizes(state: &AppState) {
 }
 
 pub fn reset_thumbnail_sizes_impl(state: &AppState) -> AdminResult<()> {
+    let _timer = Timer::new("reset_thumbnail_sizes");
     let mut conn = state.get_connection()?;
-
     if state.config.path(Directory::Avatars).try_exists()? {
         let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
         for entry in WalkDir::new(state.config.path(Directory::Avatars)) {

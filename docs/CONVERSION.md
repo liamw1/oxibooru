@@ -14,7 +14,7 @@ Some aspects of a Szurubooru instance can't be converted to an Oxibooru instance
 
 1. **Passwords**
 
-    Password hashing is done a bit differently in Oxibooru, so this unfortunately means that passwords can't be migrated over at the moment. Passwords can be reset individually via the admin cli or can be reset via reset requests if SMTP information is provided in the `config.toml`.
+    Password hashing is done a bit differently in Oxibooru, so this unfortunately means that passwords can't be migrated over at the moment. Passwords can be reset individually via the admin CLI or can be reset via reset requests if SMTP information is provided in the `config.toml`.
 
 2. **Some image formats**
 
@@ -50,16 +50,16 @@ By default, the script will copy the Szurubooru data directory. If this is too s
 
 ### Reset User Passwords
 
-After running the script, users won't be able to login using their original passwords due to differences in how Oxibooru hashes and salts passwords. To reset a user's password, enter the admin cli:
+After running the script, users won't be able to login using their original passwords due to differences in how Oxibooru hashes and salts passwords. To reset a user's password, enter the admin CLI:
 
 ```sh
 docker exec -it oxibooru-server-1 ./server --admin
 ```
 
-Then run the `reset_password` command and follow the prompts:
+Then run the `reset_passwords` command and follow the prompts:
 
 ```
-Please select a task: reset_password
+Please select a task: reset_passwords
 ```
 
 Alternatively, if SMTP is configured in `config.toml`, users can use the password reset feature on the login page.

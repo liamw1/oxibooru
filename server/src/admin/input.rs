@@ -1,5 +1,5 @@
 use crate::admin::{AdminError, AdminResult, AdminTask};
-use crate::app::{self, AppState};
+use crate::app::AppState;
 use crate::search::post::Token as PostToken;
 use crate::search::user::Token as UserToken;
 use rustyline::completion::{Completer, Pair};
@@ -173,7 +173,13 @@ where
 
 /// Prints some helpful information about the CLI to the console.
 fn print_info() {
-    println!("Oxibooru admin CLI - running on {} threads\n", app::num_rayon_threads());
+    let task_spacing = AdminTask::iter()
+        .map(AdminTask::into)
+        .map(|name: &str| name.len())
+        .max()
+        .unwrap_or(0)
+        + 4;
+
     println!("Commands:");
     println!("  {:12} Show this help message", "help");
     println!("  {:12} Clear the screen", "clear");
@@ -182,7 +188,17 @@ fn print_info() {
     println!("Tasks:");
     for task in AdminTask::iter() {
         let name: &str = task.into();
-        println!("  {:35} {}", name, task.get_message().unwrap_or_default());
+        println!("  {:task_spacing$} {}", name, task.get_message().unwrap_or_default());
     }
+    println!();
+    println!("Post Selection:");
+    println!("  When prompted to select posts, enter a search query to filter results.");
+    println!("  Leave blank to select all posts. Supports anonymous ID filters and named filters.");
+    println!();
+    println!("    Example: 100..500 -tag::tagme");
+    println!();
+    println!("  This will operate on all posts with an ID between 100 and 500 that aren't tagged with `tagme`.");
+    println!();
+    println!("Tip: Press Ctrl+C to gracefully cancel a running task.");
     println!();
 }

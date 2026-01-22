@@ -108,18 +108,18 @@ pub fn check_signature_version(conn: &mut PgConnection) -> QueryResult<()> {
         return Ok(());
     }
 
-    let task: &str = AdminTask::RecomputePostSignatures.into();
+    let task: &str = AdminTask::RecomputeSignatures.into();
     error!(
         "Post signatures are out of date and need to be recomputed.
 
-        This can be done via the admin cli, which can be entered by passing
+        This can be done via the admin CLI, which can be entered by passing
         the --admin flag to the server executable. If you are deploying with
         docker, you can do this by navigating to the source directory and
         executing the following command:
         
            docker exec -it oxibooru-server-1 ./server --admin
             
-        While in the admin cli, simply run the {task} task.
+        While in the admin CLI, simply run the {task} task on all posts.
         Once this task has started, this server instance will resume operations
         while the signatures recompute in the background. Reverse search may be
         inaccurate during this process, so you may wish to suspend post uploads

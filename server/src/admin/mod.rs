@@ -75,17 +75,17 @@ impl From<ApiError> for AdminError {
 #[strum(serialize_all = "snake_case")]
 pub enum AdminTask {
     #[strum(message = "Checks integrity of post files")]
-    CheckPostIntegrity,
+    CheckIntegrity,
     #[strum(message = "Recompute post checksums")]
-    RecomputePostChecksums,
+    RecomputeChecksums,
     #[strum(message = "Rebuild post signatures")]
-    RecomputePostSignatures,
-    #[strum(message = "Rebuild search index")]
-    RecomputePostSignatureIndexes,
+    RecomputeSignatures,
+    #[strum(message = "Rebuild reverse search index")]
+    RecomputeIndex,
     #[strum(message = "Regenerate post thumbnails")]
     RegenerateThumbnails,
-    #[strum(message = "Reset individual user passwords")]
-    ResetPassword,
+    #[strum(message = "Reset user passwords")]
+    ResetPasswords,
     #[strum(message = "Rebuild data directory")]
     ResetFilenames,
     #[strum(message = "Rebuild table statistics")]
@@ -193,12 +193,12 @@ fn client() -> Client {
 fn run_task(state: &AppState, task: AdminTask, post_editor: &mut PostEditor, user_editor: &mut UserEditor) {
     CANCELLED.store(false, Ordering::SeqCst);
     match task {
-        AdminTask::CheckPostIntegrity => post::check_integrity(state, post_editor),
-        AdminTask::RecomputePostChecksums => post::recompute_checksums(state, post_editor),
-        AdminTask::RecomputePostSignatures => post::recompute_signatures(state, post_editor),
-        AdminTask::RecomputePostSignatureIndexes => post::recompute_indexes(state, post_editor),
+        AdminTask::CheckIntegrity => post::check_integrity(state, post_editor),
+        AdminTask::RecomputeChecksums => post::recompute_checksums(state, post_editor),
+        AdminTask::RecomputeSignatures => post::recompute_signatures(state, post_editor),
+        AdminTask::RecomputeIndex => post::recompute_indexes(state, post_editor),
         AdminTask::RegenerateThumbnails => post::regenerate_thumbnails(state, post_editor),
-        AdminTask::ResetPassword => user::reset_password(state, user_editor),
+        AdminTask::ResetPasswords => user::reset_password(state, user_editor),
         AdminTask::ResetFilenames => database::reset_filenames(state),
         AdminTask::ResetStatistics => database::reset_statistics(state),
         AdminTask::ResetThumbnailSizes => database::reset_thumbnail_sizes(state),
