@@ -11,6 +11,9 @@ use std::ops::{BitOr, BitOrAssign};
 use std::path::Path;
 use strum::{Display, EnumCount, EnumIter, EnumString, FromRepr, IntoEnumIterator, IntoStaticStr};
 use thiserror::Error;
+use utoipa::openapi::schema::{Schema, SchemaType};
+use utoipa::openapi::{ObjectBuilder, RefOr, Type};
+use utoipa::{PartialSchema, ToSchema};
 
 /// In general, the order of these enums should not be changed.
 /// They are encoded in the database as an integer, so changing
@@ -28,7 +31,9 @@ pub struct ParseExtensionError {
 #[error("Cannot convert None to Score")]
 pub struct FromRatingError;
 
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
+#[derive(
+    Debug, Default, Clone, Copy, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize, ToSchema,
+)]
 #[serde(rename_all = "lowercase")]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
@@ -52,7 +57,9 @@ impl FromSql<SmallInt, Pg> for AvatarStyle {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize, ToSchema,
+)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 #[diesel(sql_type = SmallInt)]
@@ -90,7 +97,19 @@ impl FromSql<SmallInt, Pg> for PostType {
 }
 
 #[derive(
-    Debug, Display, Copy, Clone, PartialEq, Eq, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize,
+    Debug,
+    Display,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    EnumString,
+    FromRepr,
+    AsExpression,
+    FromSqlRow,
+    Serialize,
+    Deserialize,
+    ToSchema,
 )]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
@@ -214,6 +233,7 @@ impl FromSql<SmallInt, Pg> for MimeType {
     FromSqlRow,
     Serialize,
     Deserialize,
+    ToSchema,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -239,7 +259,7 @@ impl FromSql<SmallInt, Pg> for PostSafety {
     }
 }
 
-#[derive(Clone, Copy, EnumCount, EnumIter, EnumString, FromRepr, IntoStaticStr, Deserialize)]
+#[derive(Clone, Copy, EnumCount, EnumIter, EnumString, FromRepr, IntoStaticStr, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum PostFlag {
@@ -253,23 +273,20 @@ impl From<PostFlag> for u16 {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, AsExpression, FromSqlRow, ToSchema)]
 #[diesel(sql_type = SmallInt)]
-pub struct PostFlags {
-    flags: u16, // Bit mask of possible flags
-}
+#[schema(value_type = Vec<PostFlag>)]
+pub struct PostFlags(u16); // Bit mask of possible flags
 
 impl PostFlags {
     /// Constructs a new [`PostFlags`] with no flags set.
     pub const fn new() -> Self {
-        Self { flags: 0 }
+        Self(0)
     }
 
     /// Constructs a new [`PostFlags`] with a single `flag` set.
     pub const fn new_with(flag: PostFlag) -> Self {
-        Self {
-            flags: 1 << flag as u16,
-        }
+        Self(1 << flag as u16)
     }
 
     /// Constructs a new [`PostFlags`] with a set of `flags` set.
@@ -280,37 +297,33 @@ impl PostFlags {
 
 impl From<PostFlags> for u16 {
     fn from(value: PostFlags) -> Self {
-        value.flags
+        value.0
     }
 }
 
 impl<T: Into<u16>> BitOr<T> for PostFlags {
     type Output = Self;
     fn bitor(self, rhs: T) -> Self::Output {
-        Self {
-            flags: self.flags | rhs.into(),
-        }
+        Self(self.0 | rhs.into())
     }
 }
 
 impl<T: Into<u16>> BitOrAssign<T> for PostFlags {
     fn bitor_assign(&mut self, rhs: T) {
-        self.flags |= rhs.into();
+        self.0 |= rhs.into();
     }
 }
 
 impl ToSql<SmallInt, Pg> for PostFlags {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(self.flags as i16)?;
+        out.write_i16::<NetworkEndian>(self.0 as i16)?;
         Ok(IsNull::No)
     }
 }
 
 impl FromSql<SmallInt, Pg> for PostFlags {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
-        i16::from_sql(value).map(|database_value| Self {
-            flags: database_value.cast_unsigned(),
-        })
+        i16::from_sql(value).map(|database_value| Self(database_value.cast_unsigned()))
     }
 }
 
@@ -324,7 +337,7 @@ impl Serialize for PostFlags {
         let flags: Vec<&'static str> = PostFlag::iter()
             .filter(|&flag| {
                 let bit = flag as u16;
-                self.flags & (1 << bit) != 0 // Check if flag is set
+                self.0 & (1 << bit) != 0 // Check if flag is set
             })
             .map(Into::into)
             .collect();
@@ -346,6 +359,7 @@ impl Serialize for PostFlags {
     FromSqlRow,
     Serialize,
     Deserialize,
+    ToSchema,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -392,6 +406,24 @@ impl From<Score> for Rating {
     }
 }
 
+impl ToSchema for Rating {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::Borrowed("Rating")
+    }
+}
+
+impl PartialSchema for Rating {
+    fn schema() -> RefOr<Schema> {
+        ObjectBuilder::new()
+            .schema_type(SchemaType::new(Type::Integer))
+            .description(Some("Rating value: -1 (dislike), 0 (none), or 1 (like)"))
+            .minimum(Some(-1))
+            .maximum(Some(1))
+            .examples([-1, 0, 1])
+            .into()
+    }
+}
+
 #[derive(Debug, Clone, Copy, FromRepr, AsExpression, FromSqlRow)]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
@@ -425,7 +457,7 @@ impl FromSql<SmallInt, Pg> for Score {
     }
 }
 
-#[derive(Debug, Clone, Copy, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize)]
+#[derive(Debug, Clone, Copy, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
@@ -450,7 +482,7 @@ impl FromSql<SmallInt, Pg> for ResourceOperation {
     }
 }
 
-#[derive(Debug, Display, Clone, Copy, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize)]
+#[derive(Debug, Display, Clone, Copy, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 #[diesel(sql_type = SmallInt)]

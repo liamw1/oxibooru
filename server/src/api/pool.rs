@@ -1,3 +1,4 @@
+use crate::api::doc::POOL_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
@@ -14,42 +15,84 @@ use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, resource, snapshot, update};
 use axum::extract::{Extension, State};
-use axum::{Router, routing};
 use diesel::dsl::exists;
 use diesel::{
     Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/pools", routing::get(list))
-        .route("/pool", routing::post(create))
-        .route("/pool/{id}", routing::get(get).put(update).delete(delete))
-        .route("/pool-merge", routing::post(merge))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(create))
+        .routes(routes!(get, update, delete))
+        .routes(routes!(merge))
 }
 
 const MAX_POOLS_PER_PAGE: i64 = 1000;
 
-/// See [lsting-pools](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-pools)
+/// Searches for pools.
+///
+/// **Anonymous tokens**
+///
+/// Same as `name` token.
+///
+/// **Named tokens**
+///
+/// | Key                                                          | Description                               |
+/// | ------------------------------------------------------------ | ----------------------------------------- |
+/// | `name`                                                       | having given name (accepts wildcards)     |
+/// | `category`                                                   | having given category (accepts wildcards) |
+/// | `creation-date`, `creation-time`                             | created at given date                     |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | edited at given date                      |
+/// | `post-count`                                                 | used in given number of posts             |
+///
+/// **Sort style tokens**
+///
+/// | Value                                                        | Description              |
+/// | ------------------------------------------------------------ | ------------------------ |
+/// | `random`                                                     | as random as it can get  |
+/// | `name`                                                       | A to Z                   |
+/// | `category`                                                   | category (A to Z)        |
+/// | `creation-date`, `creation-time`                             | recently created first   |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first    |
+/// | `post-count`                                                 | used in most posts first |
+///
+/// **Special tokens**
+///
+/// None.
+#[utoipa::path(
+    get,
+    path = "/pools",
+    tag = POOL_TAG,
+    params(ResourceParams, PageParams),
+    responses(
+        (status = 200, body = PagedResponse<PoolInfo>),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Query(params): Query<PageParams>,
+    Query(resource): Query<ResourceParams>,
+    Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PoolInfo>>> {
     api::verify_privilege(client, state.config.privileges().pool_list)?;
 
-    let offset = params.offset.unwrap_or(0);
-    let limit = std::cmp::min(params.limit.get(), MAX_POOLS_PER_PAGE);
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let offset = page.offset.unwrap_or(0);
+    let limit = std::cmp::min(page.limit.get(), MAX_POOLS_PER_PAGE);
+    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_pools) = query_builder.list(conn)?;
         Ok(Json(PagedResponse {
-            query: params.into_query(),
+            query: resource.query,
             offset,
             limit,
             total,
@@ -58,7 +101,21 @@ async fn list(
     })
 }
 
-/// See [getting-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-pool)
+/// Retrieves information about an existing pool.
+#[utoipa::path(
+    get,
+    path = "/pool/{id}",
+    tag = POOL_TAG,
+    params(
+        ("id" = i64, Path, description = "Pool ID"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = PoolInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Pool does not exist"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -79,21 +136,48 @@ async fn get(
     })
 }
 
-#[derive(Deserialize)]
+/// Request body for creating a pool.
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct CreateBody {
+struct PoolCreateBody {
+    /// Pool names. Must match `pool_name_regex` from server's configuration.
     names: Vec<SmallString>,
+    /// Category name. Must match an existing pool category.
     category: SmallString,
+    /// Pool description.
     description: Option<LargeString>,
+    /// List of post IDs to include in the pool.
     posts: Option<Vec<i64>>,
 }
 
-/// See [creating-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-pool)
+/// Creates a new pool using specified parameters.
+///
+/// Names must match `pool_name_regex` from server's configuration.
+/// Category must exist and is the same as `name` field within the
+/// pool category resource. `posts` is an optional list of integer post IDs.
+/// If the specified posts do not exist, an error will be thrown.
+#[utoipa::path(
+    post,
+    path = "/pool",
+    tag = POOL_TAG,
+    params(ResourceParams),
+    request_body = PoolCreateBody,
+    responses(
+        (status = 200, body = PoolInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "At least one post ID does not exist"),
+        (status = 409, description = "Any name is used by an existing pool"),
+        (status = 409, description = "There is at least one duplicate post"),
+        (status = 422, description = "A name is invalid"),
+        (status = 422, description = "No name was specified"),
+        (status = 422, description = "Category is missing or invalid"),
+    ),
+)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<CreateBody>,
+    Json(body): Json<PoolCreateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
     api::verify_privilege(client, state.config.privileges().pool_create)?;
 
@@ -137,7 +221,23 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-/// See [merging-pools](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-pools)
+/// Removes source pool and merges all of its posts and aliases with the target pool.
+///
+/// Other pool properties such as category do not get transferred and are discarded.
+#[utoipa::path(
+    post,
+    path = "/pool-merge",
+    tag = POOL_TAG,
+    params(ResourceParams),
+    request_body = MergeBody<i64>,
+    responses(
+        (status = 200, body = PoolInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Source or target pool does not exist"),
+        (status = 409, description = "Version of either pool is outdated"),
+        (status = 422, description = "Source pool is the same as the target pool"),
+    ),
+)]
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -177,23 +277,59 @@ async fn merge(
         .map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
+/// Request body for updating a pool.
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct UpdateBody {
+struct PoolUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
+    /// Category name. Must match an existing pool category.
     category: Option<SmallString>,
+    /// Pool description.
     description: Option<LargeString>,
+    /// Pool names. Must match `pool_name_regex` from server's configuration.
     names: Option<Vec<SmallString>>,
+    /// List of post IDs. Replaces the previous list.
     posts: Option<Vec<i64>>,
 }
 
-/// See [updating-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-pool)
+/// Updates an existing pool using specified parameters.
+///
+/// Names must match `pool_name_regex` from server's configuration.
+/// Category must exist and is the same as `name` field within the
+/// pool category resource. `posts` is an optional list of integer post IDs.
+/// If the specified posts do not exist yet, an error will be thrown.
+/// The full list of post IDs must be provided if they are being updated,
+/// and the previous list of posts will be replaced with the new one.
+/// All fields except `version` are optional - update concerns only provided fields.
+#[utoipa::path(
+    put,
+    path = "/pool/{id}",
+    tag = POOL_TAG,
+    params(
+        ("id" = i64, Path, description = "Pool ID"),
+        ResourceParams,
+    ),
+    request_body = PoolUpdateBody,
+    responses(
+        (status = 200, body = PoolInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Pool does not exist"),
+        (status = 404, description = "At least one post ID does not exist"),
+        (status = 409, description = "Version is outdated"),
+        (status = 409, description = "Any name is used by an existing pool"),
+        (status = 409, description = "There is at least one duplicate post"),
+        (status = 422, description = "A name is invalid"),
+        (status = 422, description = "No name was specified"),
+        (status = 422, description = "Category is invalid"),
+    ),
+)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(pool_id): Path<i64>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<UpdateBody>,
+    Json(body): Json<PoolUpdateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
@@ -253,7 +389,24 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-pool](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-pool)
+/// Deletes existing pool.
+///
+/// All posts in the pool will only have their relation to the pool removed.
+#[utoipa::path(
+    delete,
+    path = "/pool/{id}",
+    tag = POOL_TAG,
+    params(
+        ("id" = i64, Path, description = "Pool ID"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = ()),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Pool does not exist"),
+        (status = 409, description = "Version is outdated"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

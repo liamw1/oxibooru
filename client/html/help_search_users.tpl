@@ -11,28 +11,12 @@
             <td>having given name (accepts wildcards)</td>
         </tr>
         <tr>
-            <td><code>creation-date</code></td>
+            <td><code>creation-date</code>, <code>creation-time</code></td>
             <td>registered at given date</td>
         </tr>
         <tr>
-            <td><code>creation-time</code></td>
-            <td>alias of <code>creation-date</code></td>
-        </tr>
-        <tr>
-            <td><code>last-login-date</code>
+            <td><code>last-login-date</code>, <code>last-login-time</code>, <code>login-date</code>, <code>login-time</code></td>
             <td>whose most recent login date matches given date</td>
-        </tr>
-        <tr>
-            <td><code>last-login-time</code>
-            <td>alias of <code>last-login-date</code>
-        </tr>
-        <tr>
-            <td><code>login-date</code>
-            <td>alias of <code>last-login-date</code>
-        </tr>
-        <tr>
-            <td><code>login-time</code></td>
-            <td>alias of <code>last-login-date</code>
         </tr>
     </tbody>
 </table>
@@ -50,28 +34,12 @@
             <td>A to Z</td>
         </tr>
         <tr>
-            <td><code>creation-date</code></td>
+            <td><code>creation-date</code>, <code>creation-time</code></td>
             <td>newest to oldest</td>
         </tr>
         <tr>
-            <td><code>creation-time</code></td>
-            <td>alias of <code>creation-date</code></td>
-        </tr>
-        <tr>
-            <td><code>last-login-date</code></td>
+            <td><code>last-login-date</code>, <code>last-login-time</code>, <code>login-date</code>, <code>login-time</code></td>
             <td>recently active first</td>
-        </tr>
-        <tr>
-            <td><code>last-login-time</code></td>
-            <td>alias of <code>last-login-date</code></td>
-        </tr>
-        <tr>
-            <td><code>login-date</code></td>
-            <td>alias of <code>last-login-date</code></td>
-        </tr>
-        <tr>
-            <td><code>login-time</code></td>
-            <td>alias of <code>last-login-date</code></td>
         </tr>
     </tbody>
 </table>

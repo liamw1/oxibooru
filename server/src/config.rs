@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use strum::Display;
 use url::Url;
+use utoipa::ToSchema;
 
 #[derive(Debug, Display, Clone, Copy)]
 #[strum(serialize_all = "lowercase")]
@@ -69,7 +70,7 @@ impl AnonymousPreferences {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
 pub struct PrivilegeConfig {
     pub user_create_self: UserRank,
     pub user_create_any: UserRank,
@@ -174,23 +175,26 @@ pub struct PrivilegeConfig {
     pub upload_use_downloader: UserRank,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all(serialize = "camelCase"))]
+#[derive(Clone, Serialize, Deserialize, ToSchema)]
+#[schema(rename_all = "camelCase")] // ToSchema doesn't detect serde(rename_all(serialize = ...))
+#[serde(deny_unknown_fields, rename_all(serialize = "camelCase"))]
 pub struct PublicConfig {
     pub name: SmallString,
     pub default_user_rank: UserRank,
     pub enable_safety: bool,
     pub contact_email: Option<SmallString>,
-    #[serde(skip_deserializing)]
+    #[serde(default)]
     pub can_send_mails: bool,
-    #[serde(with = "serde_regex")]
-    #[serde(rename(serialize = "userNameRegex"))]
+    #[schema(rename = "userNameRegex", value_type = String, format = Regex)]
+    #[serde(rename(serialize = "userNameRegex"), with = "serde_regex")]
     pub username_regex: Regex,
+    #[schema(value_type = String, format = Regex)]
     #[serde(with = "serde_regex")]
     pub password_regex: Regex,
+    #[schema(value_type = String, format = Regex)]
     #[serde(with = "serde_regex")]
     pub tag_name_regex: Regex,
+    #[schema(value_type = String, format = Regex)]
     #[serde(with = "serde_regex")]
     pub tag_category_name_regex: Regex,
     pub privileges: PrivilegeConfig,

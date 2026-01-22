@@ -1,3 +1,4 @@
+use crate::api::doc::POST_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
 use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
@@ -22,7 +23,6 @@ use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, db, filesystem, resource, snapshot, update};
 use axum::extract::{DefaultBodyLimit, Extension, State};
-use axum::{Router, routing};
 use diesel::dsl::{exists, not, sql};
 use diesel::sql_types::Integer;
 use diesel::{
@@ -34,36 +34,43 @@ use std::sync::LazyLock;
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::info;
 use url::Url;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route(
-            "/posts",
-            routing::get(list)
-                .post(create_handler)
-                .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE)),
-        )
-        .route(
-            "/post/{id}",
-            routing::get(get)
-                .put(update_handler)
-                .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE))
-                .delete(delete),
-        )
-        .route("/post/{id}/around", routing::get(get_neighbors))
-        .route("/featured-post", routing::get(get_featured).post(feature))
-        .route(
-            "/posts/reverse-search",
-            routing::post(reverse_search_handler).route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE)),
-        )
-        .route("/post-merge", routing::post(merge))
-        .route("/post/{id}/favorite", routing::post(favorite).delete(unfavorite))
-        .route("/post/{id}/score", routing::put(rate))
+pub fn routes() -> OpenApiRouter<AppState> {
+    let upload_capable_routes = OpenApiRouter::new()
+        .routes(routes!(reverse_search))
+        .routes(routes!(create))
+        .routes(routes!(update))
+        .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE));
+    OpenApiRouter::new()
+        .routes(routes!(list))
+        .routes(routes!(get, delete))
+        .routes(routes!(get_neighbors))
+        .routes(routes!(get_featured, feature))
+        .routes(routes!(merge))
+        .routes(routes!(favorite, unfavorite))
+        .routes(routes!(rate))
+        .merge(upload_capable_routes)
 }
 
 const MAX_POSTS_PER_PAGE: i64 = 1000;
 
 static POST_TAG_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
+
+#[allow(dead_code)]
+#[derive(ToSchema)]
+struct Multipart<T> {
+    /// JSON metadata (same structure as JSON request body).
+    metadata: T,
+    /// Content file (image, video, etc.).
+    #[schema(format = Binary)]
+    content: Option<String>,
+    /// Thumbnail file.
+    #[schema(format = Binary)]
+    thumbnail: Option<String>,
+}
 
 /// Runs an `update` that may add `tags` to a post as a transaction.
 ///
@@ -87,25 +94,115 @@ where
     connection_pool.get()?.transaction(update)
 }
 
-/// See [listing-posts](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-posts)
+/// Searches for posts.
+///
+/// **Anonymous tokens**
+///
+/// Same as `tag` token.
+///
+/// **Named tokens**
+///
+/// | Key                                                          | Description                                                             |
+/// | ------------------------------------------------------------ | ----------------------------------------------------------------------- |
+/// | `id`                                                         | having given post number                                                |
+/// | `tag`                                                        | having given tag (accepts wildcards)                                    |
+/// | `tag-category`                                               | having tags from given tag category (accepts wildcards)                 |
+/// | `score`                                                      | having given score                                                      |
+/// | `uploader`, `upload`, `submit`                               | uploaded by given user (accepts wildcards)                              |
+/// | `comment`                                                    | commented by given user (accepts wildcards)                             |
+/// | `fav`                                                        | favorited by given user (accepts wildcards)                             |
+/// | `pool`                                                       | belonging to the pool with the given ID                                 |
+/// | `pool-category`                                              | belonging to pools in the given pool category (accepts wildcards)       |
+/// | `tag-count`                                                  | having given number of tags                                             |
+/// | `comment-count`                                              | having given number of comments                                         |
+/// | `fav-count`                                                  | favorited by given number of users                                      |
+/// | `note-count`                                                 | having given number of annotations                                      |
+/// | `note-text`                                                  | having given note text (accepts wildcards)                              |
+/// | `relation-count`                                             | having given number of relations                                        |
+/// | `feature-count`                                              | having been featured given number of times                              |
+/// | `type`                                                       | type of posts (can be either `image`, `animation`, `flash`, or `video`) |
+/// | `content-checksum`                                           | having given BLAKE3 checksum                                            |
+/// | `flag`                                                       | having given flag (can be either `loop` or `sound`)                     |
+/// | `source`                                                     | having given source                                                     |
+/// | `file-size`                                                  | having given file size (in bytes)                                       |
+/// | `image-width`, `width`                                       | having given image width (where applicable)                             |
+/// | `image-height`, `height`                                     | having given image height (where applicable)                            |
+/// | `image-area`, `area`                                         | having given number of pixels (image width * image height)              |
+/// | `image-aspect-ratio`, `image-ar`, `ar`, `aspect-ratio`       | having given aspect ratio (image width / image height)                  |
+/// | `creation-date`, `creation-time`, `date`, `time`             | posted at given date                                                    |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | edited at given date                                                    |
+/// | `comment-date`, `comment-time`                               | commented at given date                                                 |
+/// | `fav-date`, `fav-time`                                       | last favorited at given date                                            |
+/// | `feature-date`, `feature-time`                               | featured at given date                                                  |
+/// | `safety`, `rating`                                           | having given safety (can be either `safe`, `sketchy`, or `unsafe`)      |
+///
+/// **Sort style tokens**
+///
+/// | Value                                                        | Description                                      |
+/// | ------------------------------------------------------------ | ------------------------------------------------ |
+/// | `random`                                                     | as random as it can get                          |
+/// | `id`                                                         | highest to lowest post number                    |
+/// | `score`                                                      | highest scored                                   |
+/// | `uploader`, `upload`, `submit`                               | uploader name alphabetically                     |
+/// | `pool`                                                       | in most pools                                    |
+/// | `tag-count`, `tag`                                           | with most tags                                   |
+/// | `comment-count`, `comment`                                   | most commented first                             |
+/// | `fav-count`, `fav`                                           | loved by most                                    |
+/// | `note-count`                                                 | with most annotations                            |
+/// | `relation-count`                                             | with most relations                              |
+/// | `feature-count`                                              | most often featured                              |
+/// | `type`                                                       | grouped by content type                          |
+/// | `flag`                                                       | grouped by flags                                 |
+/// | `source`                                                     | sorted by source                                 |
+/// | `file-size`                                                  | largest files first                              |
+/// | `image-width`, `width`                                       | widest images first                              |
+/// | `image-height`, `height`                                     | tallest images first                             |
+/// | `image-area`, `area`                                         | largest images first                             |
+/// | `image-aspect-ratio`, `image-ar`, `ar`, `aspect-ratio`       | highest aspect ratio first                       |
+/// | `creation-date`, `creation-time`, `date`, `time`             | newest to oldest (pretty much same as id)        |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | like creation-date, only looks at last edit time |
+/// | `comment-date`, `comment-time`                               | recently commented by anyone                     |
+/// | `fav-date`, `fav-time`                                       | recently added to favorites by anyone            |
+/// | `feature-date`, `feature-time`                               | recently featured                                |
+/// | `safety`, `rating`                                           | most unsafe first                                |
+///
+/// **Special tokens**
+///
+/// | Value        | Description                                                   |
+/// | ------------ | ------------------------------------------------------------- |
+/// | `liked`      | posts liked by currently logged in user                       |
+/// | `disliked`   | posts disliked by currently logged in user                    |
+/// | `fav`        | posts added to favorites by currently logged in user          |
+/// | `tumbleweed` | posts with score of 0, without comments and without favorites |
+#[utoipa::path(
+    get,
+    path = "/posts",
+    tag = POST_TAG,
+    params(ResourceParams, PageParams),
+    responses(
+        (status = 200, body = PagedResponse<PostInfo>),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Query(params): Query<PageParams>,
+    Query(resource): Query<ResourceParams>,
+    Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PostInfo>>> {
     api::verify_privilege(client, state.config.privileges().post_list)?;
 
-    let offset = params.offset.unwrap_or(0);
-    let limit = std::cmp::min(params.limit.get(), MAX_POSTS_PER_PAGE);
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let offset = page.offset.unwrap_or(0);
+    let limit = std::cmp::min(page.limit.get(), MAX_POSTS_PER_PAGE);
+    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_posts) = query_builder.list(conn)?;
         Ok(Json(PagedResponse {
-            query: params.into_query(),
+            query: resource.query,
             offset,
             limit,
             total,
@@ -114,7 +211,22 @@ async fn list(
     })
 }
 
-/// See [getting-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-post)
+/// Retrieves information about an existing post.
+#[utoipa::path(
+    get,
+    path = "/post/{id}",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 403, description = "Post is hidden"),
+        (status = 404, description = "Post does not exist"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -132,13 +244,31 @@ async fn get(
     })
 }
 
-#[derive(Serialize)]
+/// Response containing neighboring posts.
+#[derive(Serialize, ToSchema)]
 struct PostNeighbors {
+    /// The previous post, or null if none.
     prev: Option<PostInfo>,
+    /// The next post, or null if none.
     next: Option<PostInfo>,
 }
 
-/// See [getting-around-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-around-post)
+/// Retrieves information about posts that are before or after an existing post.
+#[utoipa::path(
+    get,
+    path = "/post/{id}/around",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = PostNeighbors),
+        (status = 403, description = "Privileges are too low"),
+        (status = 403, description = "Post is hidden"),
+        (status = 404, description = "Post does not exist"),
+    ),
+)]
 async fn get_neighbors(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -223,7 +353,21 @@ async fn get_neighbors(
     })
 }
 
-/// See [getting-featured-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-featured-post)
+/// Retrieves the post that is currently featured on the main page in web client.
+///
+/// If no post is featured, the response is null. Note that this method exists
+/// mostly for compatibility with setting featured post - most of the time,
+/// you'd want to use query global info which contains more information.
+#[utoipa::path(
+    get,
+    path = "/featured-post",
+    tag = POST_TAG,
+    params(ResourceParams),
+    responses(
+        (status = 200, body = Option<PostInfo>),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
 async fn get_featured(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -252,13 +396,27 @@ async fn get_featured(
     })
 }
 
-#[derive(Deserialize)]
+/// Request body for featuring a post.
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct FeatureBody {
+    /// ID of the post to feature.
     id: i64,
 }
 
-/// See [featuring-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#featuring-post)
+/// Features a post on the main page in web client.
+#[utoipa::path(
+    post,
+    path = "/featured-post",
+    tag = POST_TAG,
+    params(ResourceParams),
+    request_body = FeatureBody,
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 409, description = "Trying to feature a post that is currently featured"),
+    ),
+)]
 async fn feature(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -296,31 +454,7 @@ async fn feature(
         .map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-struct ReverseSearchBody {
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
-    content_token: Option<String>,
-    content_url: Option<Url>,
-}
-
-#[derive(Serialize)]
-struct SimilarPost {
-    distance: f64,
-    post: PostInfo,
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-struct ReverseSearchResponse {
-    exact_post: Option<PostInfo>,
-    similar_posts: Vec<SimilarPost>,
-}
-
-/// See [reverse-image-search](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#reverse-image-search)
-async fn reverse_search(
+async fn reverse_search_impl(
     state: AppState,
     client: Client,
     params: ResourceParams,
@@ -378,8 +512,57 @@ async fn reverse_search(
         .map(Json)
 }
 
-/// Performs reverse image search using either a JSON body or a multipart form.
-async fn reverse_search_handler(
+/// Request body for reverse image search.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct ReverseSearchBody {
+    #[serde(skip_deserializing)]
+    content: Option<FileContents>,
+    /// Token referencing previously uploaded content.
+    content_token: Option<String>,
+    /// URL to fetch image content from.
+    content_url: Option<Url>,
+}
+
+/// A post with its visual similarity distance.
+#[derive(Serialize, ToSchema)]
+struct SimilarPost {
+    /// Visual similarity distance. Lower is more similar.
+    #[schema(minimum = 0.0, maximum = 1.0)]
+    distance: f64,
+    /// The similar post.
+    post: PostInfo,
+}
+
+/// Response from reverse image search.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+struct ReverseSearchResponse {
+    /// Exact match if found (same checksum).
+    exact_post: Option<PostInfo>,
+    /// Posts that are visually similar to the input image.
+    similar_posts: Vec<SimilarPost>,
+}
+
+/// Retrieves posts that look like the input image.
+#[utoipa::path(
+    post,
+    path = "/posts/reverse-search",
+    tag = POST_TAG,
+    params(ResourceParams),
+    request_body(
+        content(
+            (ReverseSearchBody = "application/json"),
+            (Multipart<ReverseSearchBody> = "multipart/form-data"),
+        )
+    ),
+    responses(
+        (status = 200, body = ReverseSearchResponse),
+        (status = 400, description = "Reverse search content is missing"),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
+async fn reverse_search(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
@@ -388,7 +571,7 @@ async fn reverse_search_handler(
     api::verify_privilege(client, state.config.privileges().post_reverse_search)?;
 
     match body {
-        JsonOrMultipart::Json(payload) => reverse_search(state, client, params, payload).await,
+        JsonOrMultipart::Json(payload) => reverse_search_impl(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content]).await?;
             let reverse_search_body = if let [Some(content)] = decoded_body.files {
@@ -402,39 +585,16 @@ async fn reverse_search_handler(
             } else {
                 return Err(ApiError::MissingFormData);
             };
-            reverse_search(state, client, params, reverse_search_body).await
+            reverse_search_impl(state, client, params, reverse_search_body).await
         }
     }
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-struct CreateBody {
-    safety: PostSafety,
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
-    content_token: Option<String>,
-    content_url: Option<Url>,
-    #[serde(skip_deserializing)]
-    thumbnail: Option<FileContents>,
-    thumbnail_token: Option<String>,
-    thumbnail_url: Option<Url>,
-    source: Option<String>,
-    description: Option<String>,
-    relations: Option<Vec<i64>>,
-    anonymous: Option<bool>,
-    tags: Option<Vec<SmallString>>,
-    notes: Option<Vec<Note>>,
-    flags: Option<Vec<PostFlag>>,
-}
-
-/// See [creating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-post)
-async fn create(
+async fn create_impl(
     state: AppState,
     client: Client,
     params: ResourceParams,
-    body: CreateBody,
+    body: PostCreateBody,
 ) -> ApiResult<Json<PostInfo>> {
     let required_rank = if body.anonymous.unwrap_or(false) {
         state.config.privileges().post_create_anonymous
@@ -528,38 +688,129 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-/// Creates a post from either a JSON body or a multipart form.
-async fn create_handler(
+/// Request body for creating a post.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PostCreateBody {
+    /// Post safety rating.
+    safety: PostSafety,
+    #[serde(skip_deserializing)]
+    content: Option<FileContents>,
+    /// Token referencing previously uploaded content.
+    content_token: Option<String>,
+    /// URL to fetch content from.
+    content_url: Option<Url>,
+    #[serde(skip_deserializing)]
+    thumbnail: Option<FileContents>,
+    /// Token referencing previously uploaded thumbnail.
+    thumbnail_token: Option<String>,
+    /// URL to fetch thumbnail from.
+    thumbnail_url: Option<Url>,
+    /// Source URL or description.
+    source: Option<String>,
+    /// Post description.
+    description: Option<String>,
+    /// IDs of related posts.
+    relations: Option<Vec<i64>>,
+    /// If true, the uploader name won't be recorded.
+    anonymous: Option<bool>,
+    /// Tags to apply. Non-existent tags will be created automatically.
+    tags: Option<Vec<SmallString>>,
+    /// Post annotations.
+    notes: Option<Vec<Note>>,
+    /// Post flags: `loop` or `sound`.
+    flags: Option<Vec<PostFlag>>,
+}
+
+/// Creates a new post.
+///
+/// If specified tags do not exist yet, they will be automatically created.
+/// Tags created automatically have no implications, no suggestions, one name
+/// and their category is set to the first tag category found. Safety must be
+/// any of `safe`, `sketchy` or `unsafe`. Relations must contain valid post IDs.
+/// If `flags` is omitted, they will be defined by default (`loop` will be set
+/// for all video posts, and `sound` will be auto-detected). Sending empty
+/// `thumbnail` will cause the post to use default thumbnail. If `anonymous` is
+/// set to truthy value, the uploader name won't be recorded (privilege
+/// verification still applies; it's possible to disallow anonymous uploads
+/// completely from config.) For details on how to pass `content` and
+/// `thumbnail`, see [file uploads](#Upload).
+#[utoipa::path(
+    post,
+    path = "/posts",
+    tag = POST_TAG,
+    params(ResourceParams),
+    request_body(
+        content(
+            (PostCreateBody = "application/json"),
+            (Multipart<PostCreateBody> = "multipart/form-data"),
+        )
+    ),
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 400, description = "Post content is missing"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Relations refer to non-existing posts"),
+        (status = 422, description = "A Tag has an invalid name"),
+        (status = 422, description = "Safety is invalid"),
+        (status = 422, description = "Notes are invalid"),
+        (status = 422, description = "Flags are invalid"),
+    ),
+)]
+async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    body: JsonOrMultipart<CreateBody>,
+    body: JsonOrMultipart<PostCreateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => create(state, client, params, payload).await,
+        JsonOrMultipart::Json(payload) => create_impl(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
-            let mut new_post: CreateBody = serde_json::from_slice(&metadata)?;
+            let mut new_post: PostCreateBody = serde_json::from_slice(&metadata)?;
             let [content, thumbnail] = decoded_body.files;
 
             new_post.content = content;
             new_post.thumbnail = thumbnail;
-            create(state, client, params, new_post).await
+            create_impl(state, client, params, new_post).await
         }
     }
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
+/// Request body for merging posts.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct PostMergeBody {
+    #[schema(inline)]
     #[serde(flatten)]
     post_info: MergeBody<i64>,
+    /// If true, replace target post content with source post content.
     replace_content: bool,
 }
 
-/// See [merging-posts](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#merging-posts)
+/// Removes source post and merges all of its data to the target post.
+///
+/// Merges all tags, relations, scores, favorites and comments from the source
+/// to the target post. If `replaceContent` is set to true, content of the
+/// target post is replaced using the content of the source post; otherwise it
+/// remains unchanged. Source post properties such as its safety, source,
+/// whether to loop the video and other scalar values do not get transferred
+/// and are discarded.
+#[utoipa::path(
+    post,
+    path = "/post-merge",
+    tag = POST_TAG,
+    params(ResourceParams),
+    request_body = PostMergeBody,
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Source or target post does not exist"),
+        (status = 409, description = "Version of either post is outdated"),
+        (status = 422, description = "Source post is the same as the target post"),
+    ),
+)]
 async fn merge(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -601,7 +852,21 @@ async fn merge(
         .map_err(ApiError::from)
 }
 
-/// See [adding-post-to-favorites](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#adding-post-to-favorites)
+/// Marks the post as favorite for authenticated user.
+#[utoipa::path(
+    post,
+    path = "/post/{id}/favorite",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+    ),
+)]
 async fn favorite(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -629,7 +894,23 @@ async fn favorite(
         .map_err(ApiError::from)
 }
 
-/// See [rating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-post)
+/// Updates score of authenticated user for given post.
+#[utoipa::path(
+    put,
+    path = "/post/{id}/score",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+        ResourceParams,
+    ),
+    request_body = RatingBody,
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+        (status = 422, description = "Score is invalid"),
+    ),
+)]
 async fn rate(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -664,35 +945,12 @@ async fn rate(
         .map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-struct UpdateBody {
-    version: DateTime,
-    safety: Option<PostSafety>,
-    source: Option<LargeString>,
-    description: Option<LargeString>,
-    relations: Option<Vec<i64>>,
-    tags: Option<Vec<SmallString>>,
-    notes: Option<Vec<Note>>,
-    flags: Option<Vec<PostFlag>>,
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
-    content_token: Option<String>,
-    content_url: Option<Url>,
-    #[serde(skip_deserializing)]
-    thumbnail: Option<FileContents>,
-    thumbnail_token: Option<String>,
-    thumbnail_url: Option<Url>,
-}
-
-/// See [updating-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-post)
-async fn update(
+async fn update_impl(
     state: AppState,
     client: Client,
     post_id: i64,
     params: ResourceParams,
-    body: UpdateBody,
+    body: PostUpdateBody,
 ) -> ApiResult<Json<PostInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let post_hash = PostHash::new(&state.config, post_id);
@@ -816,30 +1074,117 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// Updates post from either a JSON body or a multipart form.
-async fn update_handler(
+/// Request body for updating a post.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct PostUpdateBody {
+    // Resource version. See [versioning](#Versioning).
+    version: DateTime,
+    /// Post safety rating.
+    safety: Option<PostSafety>,
+    /// Source URL or description.
+    source: Option<LargeString>,
+    /// Post description.
+    description: Option<LargeString>,
+    /// IDs of related posts.
+    relations: Option<Vec<i64>>,
+    /// Tags to apply. Non-existent tags will be created automatically.
+    tags: Option<Vec<SmallString>>,
+    /// Post annotations.
+    notes: Option<Vec<Note>>,
+    /// Post flags: `loop` or `sound`.
+    flags: Option<Vec<PostFlag>>,
+    #[serde(skip_deserializing)]
+    content: Option<FileContents>,
+    /// Token referencing previously uploaded content.
+    content_token: Option<String>,
+    /// URL to fetch content from.
+    content_url: Option<Url>,
+    #[serde(skip_deserializing)]
+    thumbnail: Option<FileContents>,
+    /// Token referencing previously uploaded thumbnail.
+    thumbnail_token: Option<String>,
+    /// URL to fetch thumbnail from.
+    thumbnail_url: Option<Url>,
+}
+
+/// Updates existing post.
+///
+/// If specified tags do not exist yet, they will be automatically created.
+/// Tags created automatically have no implications, no suggestions, one name
+/// and their category is set to the first tag category found. Safety must be
+/// any of `safe`, `sketchy` or `unsafe`. Relations must contain valid post IDs.
+/// `flag` can be either `loop` to enable looping for video posts or `sound` to
+/// indicate sound. Sending empty `thumbnail` will reset the post thumbnail to
+/// default. For details how to pass `content` and `thumbnail`, see
+/// [file uploads](#Upload). All fields except `version` are optional -
+/// update concerns only provided fields.
+#[utoipa::path(
+    put,
+    path = "/post/{id}",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+        ResourceParams,
+    ),
+    request_body(
+        content(
+            (PostUpdateBody = "application/json"),
+            (Multipart<PostUpdateBody> = "multipart/form-data"),
+        )
+    ),
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+        (status = 404, description = "Relations refer to non-existing posts"),
+        (status = 409, description = "Version is outdated"),
+        (status = 422, description = "A tag has an invalid name"),
+        (status = 422, description = "Safety is invalid"),
+        (status = 422, description = "Notes are invalid"),
+        (status = 422, description = "Flags are invalid"),
+    ),
+)]
+async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams>,
-    body: JsonOrMultipart<UpdateBody>,
+    body: JsonOrMultipart<PostUpdateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => update(state, client, post_id, params, payload).await,
+        JsonOrMultipart::Json(payload) => update_impl(state, client, post_id, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
-            let mut post_update: UpdateBody = serde_json::from_slice(&metadata)?;
+            let mut post_update: PostUpdateBody = serde_json::from_slice(&metadata)?;
             let [content, thumbnail] = decoded_body.files;
 
             post_update.content = content;
             post_update.thumbnail = thumbnail;
-            update(state, client, post_id, params, post_update).await
+            update_impl(state, client, post_id, params, post_update).await
         }
     }
 }
 
-/// See [deleting-post](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-post)
+/// Deletes existing post.
+///
+/// Related posts and tags are kept.
+#[utoipa::path(
+    delete,
+    path = "/post/{id}",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = Object),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+        (status = 409, description = "Version is outdated"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -886,7 +1231,21 @@ async fn delete(
     Ok(Json(()))
 }
 
-/// See [removing-post-from-favorites](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#removing-post-from-favorites)
+/// Unmarks the post as favorite for authenticated user.
+#[utoipa::path(
+    delete,
+    path = "/post/{id}/favorite",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+    ),
+)]
 async fn unfavorite(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
