@@ -1,5 +1,5 @@
 ARG ALPINE_VERSION=3.22
-ARG RUST_VERSION=1.91.1
+ARG RUST_VERSION=1.93
 ARG CHEF_VERSION=0.1.73
 
 ############################## Planning Phase ##############################
