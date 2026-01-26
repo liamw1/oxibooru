@@ -264,6 +264,7 @@ struct UserCreateBody {
     #[serde(skip_deserializing)]
     avatar: Option<FileContents>,
     /// Token referencing previously uploaded avatar.
+    #[schema(value_type = Option<String>)]
     avatar_token: Option<UploadToken>,
     /// URL to fetch avatar from.
     avatar_url: Option<Url>,
@@ -478,6 +479,7 @@ struct UserUpdateBody {
     #[serde(skip_deserializing)]
     avatar: Option<FileContents>,
     /// Token referencing previously uploaded avatar.
+    #[schema(value_type = Option<String>)]
     avatar_token: Option<UploadToken>,
     /// URL to fetch avatar from.
     avatar_url: Option<Url>,

@@ -11,15 +11,15 @@ use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use strum::IntoStaticStr;
-use utoipa::ToSchema;
 use uuid::Uuid;
 
 pub const MAX_UPLOAD_SIZE: usize = 4 * 1024_usize.pow(3);
 
-#[derive(Clone, PartialEq, Eq, Serialize, ToSchema)]
-#[schema(as = String)]
+#[derive(Clone, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
 pub struct UploadToken {
     token: String,
+    #[serde(skip)]
     mime_type: MimeType,
 }
 

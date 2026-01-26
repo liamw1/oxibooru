@@ -44,6 +44,7 @@ struct MultipartUpload {
 #[derive(Serialize, ToSchema)]
 struct UploadResponse {
     /// Token to reference this upload in other requests.
+    #[schema(value_type = String)]
     token: UploadToken,
 }
 

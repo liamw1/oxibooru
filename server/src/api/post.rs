@@ -518,6 +518,7 @@ struct ReverseSearchBody {
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     /// Token referencing previously uploaded content.
+    #[schema(value_type = Option<String>)]
     content_token: Option<UploadToken>,
     /// URL to fetch image content from.
     content_url: Option<Url>,
@@ -693,12 +694,14 @@ struct PostCreateBody {
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     /// Token referencing previously uploaded content.
+    #[schema(value_type = Option<String>)]
     content_token: Option<UploadToken>,
     /// URL to fetch content from.
     content_url: Option<Url>,
     #[serde(skip_deserializing)]
     thumbnail: Option<FileContents>,
     /// Token referencing previously uploaded thumbnail.
+    #[schema(value_type = Option<String>)]
     thumbnail_token: Option<UploadToken>,
     /// URL to fetch thumbnail from.
     thumbnail_url: Option<Url>,
@@ -1090,12 +1093,14 @@ struct PostUpdateBody {
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     /// Token referencing previously uploaded content.
+    #[schema(value_type = Option<String>)]
     content_token: Option<UploadToken>,
     /// URL to fetch content from.
     content_url: Option<Url>,
     #[serde(skip_deserializing)]
     thumbnail: Option<FileContents>,
     /// Token referencing previously uploaded thumbnail.
+    #[schema(value_type = Option<String>)]
     thumbnail_token: Option<UploadToken>,
     /// URL to fetch thumbnail from.
     thumbnail_url: Option<Url>,
