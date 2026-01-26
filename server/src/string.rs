@@ -11,12 +11,16 @@ use std::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
+use utoipa::ToSchema;
 
 /// A wrapper over [`CompactString`] that can be serialized to or deserialized from the database.
 /// Implements Small String Optimization (SSO), so it doesn't allocate if the length is 24 bytes or less.
 /// Ideal for strings that are typically short, such as tag names.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, AsExpression, FromSqlRow)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, AsExpression, FromSqlRow, ToSchema,
+)]
 #[diesel(sql_type = Text, sql_type = Citext)]
+#[schema(value_type = String, description = "")]
 pub struct SmallString(CompactString);
 
 impl SmallString {
@@ -69,13 +73,13 @@ impl Display for SmallString {
 
 impl ToSql<Text, Pg> for SmallString {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        <str as ToSql<Text, Pg>>::to_sql(self.0.as_str(), out)
+        <str as ToSql<Text, Pg>>::to_sql(self, out)
     }
 }
 
 impl ToSql<Citext, Pg> for SmallString {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        <str as ToSql<Citext, Pg>>::to_sql(self.0.as_str(), out)
+        <str as ToSql<Citext, Pg>>::to_sql(self, out)
     }
 }
 
@@ -91,20 +95,21 @@ where
 /// A wrapper over [`Arc<str>`] that can be serialized to or deserialized from the database.
 /// It's immutable, but can be cheaply cloned and sent across threads.
 /// Meant for potentially large string, like post descriptions.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, AsExpression, FromSqlRow, ToSchema)]
 #[diesel(sql_type = Text)]
+#[schema(value_type = String, description = "")]
 pub struct LargeString(Arc<str>);
 
 impl LargeString {
     pub fn new() -> Self {
-        Self(Arc::from(String::new()))
+        Self(Arc::from(""))
     }
 }
 
 impl Deref for LargeString {
     type Target = str;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0.trim()
     }
 }
 
@@ -123,6 +128,13 @@ impl FromSql<Text, Pg> for LargeString {
 
 impl ToSql<Text, Pg> for LargeString {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        <str as ToSql<Text, Pg>>::to_sql(&self.0, out)
+        <str as ToSql<Text, Pg>>::to_sql(self, out)
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for LargeString {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.trim() == other.0.trim()
     }
 }

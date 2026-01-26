@@ -21,9 +21,9 @@ use diesel::pg::Pg;
 use diesel::sql_types::{Float, SmallInt};
 use diesel::{ExpressionMethods, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl, TextExpressionMethods};
 use std::str::FromStr;
-use strum::{Display, EnumIter, EnumString, EnumTable};
+use strum::{Display, EnumIter, EnumString, EnumTable, IntoStaticStr};
 
-#[derive(Display, Clone, Copy, EnumTable, EnumIter, EnumString)]
+#[derive(Display, Clone, Copy, EnumIter, EnumString, EnumTable, IntoStaticStr)]
 #[strum(serialize_all = "kebab-case")]
 pub enum Token {
     Id,
@@ -222,7 +222,16 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 
 impl<'a> QueryBuilder<'a> {
     pub fn new(config: &'a Config, client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::Tag).map_err(Box::from)?;
+        Self::new_with_anonymous_token(config, client, search_criteria, Token::Tag)
+    }
+
+    pub fn new_with_anonymous_token(
+        config: &'a Config,
+        client: Client,
+        search_criteria: &'a str,
+        anonymous_token: Token,
+    ) -> ApiResult<Self> {
+        let search = SearchCriteria::new(client, search_criteria, anonymous_token).map_err(Box::from)?;
         for sort in &search.sorts {
             if matches!(
                 sort.kind,

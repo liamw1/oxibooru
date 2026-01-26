@@ -1,3 +1,4 @@
+use crate::api::doc::COMMENT_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
@@ -13,38 +14,80 @@ use crate::search::{Builder, preferences};
 use crate::time::DateTime;
 use crate::{api, resource};
 use axum::extract::{Extension, State};
-use axum::{Router, routing};
 use diesel::dsl::exists;
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
+use utoipa::ToSchema;
+use utoipa_axum::router::OpenApiRouter;
+use utoipa_axum::routes;
 
-pub fn routes() -> Router<AppState> {
-    Router::new()
-        .route("/comments", routing::get(list).post(create))
-        .route("/comment/{id}", routing::get(get).put(update).delete(delete))
-        .route("/comment/{id}/score", routing::put(rate))
+pub fn routes() -> OpenApiRouter<AppState> {
+    OpenApiRouter::new()
+        .routes(routes!(list, create))
+        .routes(routes!(get, update, delete))
+        .routes(routes!(rate))
 }
 
 const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 
-/// See [listing-comments](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#listing-comments)
+/// Lists comments.
+///
+/// **Anonymous tokens**
+///
+/// Same as `text` token.
+///
+/// **Named tokens**
+///
+/// | Key                                                          | Description                                    |
+/// | ------------------------------------------------------------ | ---------------------------------------------- |
+/// | `id`                                                         | specific comment ID                            |
+/// | `post`                                                       | specific post ID                               |
+/// | `user`, `author`                                             | created by given user (accepts wildcards)      |
+/// | `text`                                                       | containing given text (accepts wildcards)      |
+/// | `creation-date`, `creation-time`                             | created at given date                          |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | whose most recent edit date matches given date |
+///
+/// **Sort style tokens**
+///
+/// | Value                                                        | Description               |
+/// | ------------------------------------------------------------ | ------------------------- |
+/// | `random`                                                     | as random as it can get   |
+/// | `user`, `author`                                             | author name, A to Z       |
+/// | `post`                                                       | post ID, newest to oldest |
+/// | `creation-date`, `creation-time`                             | newest to oldest          |
+/// | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first     |
+///
+/// **Special tokens**
+///
+/// None.
+#[utoipa::path(
+    get,
+    path = "/comments",
+    tag = COMMENT_TAG,
+    params(ResourceParams, PageParams),
+    responses(
+        (status = 200, body = PagedResponse<CommentInfo>),
+        (status = 403, description = "Privileges are too low"),
+    )
+)]
 async fn list(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Query(params): Query<PageParams>,
+    Query(resource): Query<ResourceParams>,
+    Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<CommentInfo>>> {
     api::verify_privilege(client, state.config.privileges().comment_list)?;
 
-    let offset = params.offset.unwrap_or(0);
-    let limit = std::cmp::min(params.limit.get(), MAX_COMMENTS_PER_PAGE);
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let offset = page.offset.unwrap_or(0);
+    let limit = std::cmp::min(page.limit.get(), MAX_COMMENTS_PER_PAGE);
+    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
     state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
+        let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
         let (total, selected_comments) = query_builder.list(conn)?;
         Ok(Json(PagedResponse {
-            query: params.into_query(),
+            query: resource.query,
             offset,
             limit,
             total,
@@ -53,7 +96,22 @@ async fn list(
     })
 }
 
-/// See [getting-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#getting-comment)
+/// Retrieves information about an existing comment.
+#[utoipa::path(
+    get,
+    path = "/comment/{id}",
+    tag = COMMENT_TAG,
+    params(
+        ("id" = i64, Path, description = "Comment ID", example = 1),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = CommentInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 403, description = "Comment is hidden"),
+        (status = 404, description = "Comment does not exist"),
+    ),
+)]
 async fn get(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -71,20 +129,34 @@ async fn get(
     })
 }
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-#[serde(rename_all = "camelCase")]
-struct CreateBody {
+/// Request body for creating a comment.
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+struct CommentCreateBody {
+    /// ID of the post to comment on.
     post_id: i64,
+    /// Comment text.
     text: String,
 }
 
-/// See [creating-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#creating-comment)
+/// Creates a new comment under given post.
+#[utoipa::path(
+    post,
+    path = "/comments",
+    tag = COMMENT_TAG,
+    params(ResourceParams),
+    request_body = CommentCreateBody,
+    responses(
+        (status = 200, body = CommentInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+    ),
+)]
 async fn create(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<CreateBody>,
+    Json(body): Json<CommentCreateBody>,
 ) -> ApiResult<Json<CommentInfo>> {
     api::verify_privilege(client, state.config.privileges().comment_create)?;
 
@@ -106,20 +178,39 @@ async fn create(
         .map_err(ApiError::from)
 }
 
-#[derive(Deserialize)]
+/// Request body for updating a comment.
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
-struct UpdateBody {
+struct CommentUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
+    /// New comment text.
     text: String,
 }
 
-/// See [updating-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#updating-comment)
+/// Updates an existing comment.
+#[utoipa::path(
+    put,
+    path = "/comment/{id}",
+    tag = COMMENT_TAG,
+    params(
+        ("id" = i64, Path, description = "Comment ID"),
+        ResourceParams,
+    ),
+    request_body = CommentUpdateBody,
+    responses(
+        (status = 200, body = CommentInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Comment does not exist"),
+        (status = 409, description = "Version is outdated"),
+    ),
+)]
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
     Path(comment_id): Path<i64>,
     Query(params): Query<ResourceParams>,
-    Json(body): Json<UpdateBody>,
+    Json(body): Json<CommentUpdateBody>,
 ) -> ApiResult<Json<CommentInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
@@ -150,7 +241,25 @@ async fn update(
         .map_err(ApiError::from)
 }
 
-/// See [rating-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#rating-comment)
+/// Updates score of authenticated user for given comment.
+///
+/// Valid scores are -1, 0, and 1.
+#[utoipa::path(
+    put,
+    path = "/comment/{id}/score",
+    tag = COMMENT_TAG,
+    params(
+        ("id" = i64, Path, description = "Comment ID"),
+        ResourceParams,
+    ),
+    request_body = RatingBody,
+    responses(
+        (status = 200, body = CommentInfo),
+        (status = 400, description = "Score is invalid"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Comment does not exist"),
+    ),
+)]
 async fn rate(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
@@ -184,7 +293,22 @@ async fn rate(
         .map_err(ApiError::from)
 }
 
-/// See [deleting-comment](https://github.com/liamw1/oxibooru/blob/master/docs/API.md#deleting-comment)
+/// Deletes existing comment.
+#[utoipa::path(
+    delete,
+    path = "/comment/{id}",
+    tag = COMMENT_TAG,
+    params(
+        ("id" = i64, Path, description = "Comment ID"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = ()),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Comment does not exist"),
+        (status = 409, description = "Version is outdated"),
+    ),
+)]
 async fn delete(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,

@@ -28,7 +28,7 @@ pool_category_regex = "^[^\\s%+#/]+$"
 # Directive for controlling log verbosity for different parts of the server
 # Valid log levels are trace, debug, info, warn, and error
 # For additional options, see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
-log_filter = "server=info,tower_http=debug,axum=trace"
+log_filter = "oxibooru_server=info,tower_http=debug,axum=trace"
 
 # Enables/disables auto_explain in PostgreSQL
 # When enabled, causes SQL queries to be logged and explained automatically

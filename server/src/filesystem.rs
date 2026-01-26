@@ -1,6 +1,7 @@
 use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::ThumbnailCategory;
+use crate::content::upload::UploadToken;
 use crate::model::enums::MimeType;
 use image::error::ImageError;
 use image::{DynamicImage, ImageResult};
@@ -10,7 +11,6 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use strum::IntoStaticStr;
 use tracing::warn;
-use uuid::Uuid;
 
 /// Represents important data directories.
 #[derive(Clone, Copy, IntoStaticStr)]
@@ -31,9 +31,9 @@ pub fn file_size(path: &Path) -> std::io::Result<i64> {
 
 /// Saves raw bytes to temporary upload folder as a `mime_type`-file to disk.
 /// Returns name of the file written.
-pub fn save_uploaded_file(config: &Config, data: &[u8], mime_type: MimeType) -> std::io::Result<String> {
-    let upload_token = format!("{}.{}", Uuid::new_v4(), mime_type.extension());
-    let upload_path = config.path(Directory::TemporaryUploads).join(&upload_token);
+pub fn save_uploaded_file(config: &Config, data: &[u8], mime_type: MimeType) -> std::io::Result<UploadToken> {
+    let upload_token = UploadToken::new(mime_type);
+    let upload_path = upload_token.path(config);
     create_parent_directories(&upload_path)?;
 
     std::fs::write(upload_path, data)?;

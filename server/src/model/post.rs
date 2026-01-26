@@ -163,18 +163,6 @@ pub struct PostScore {
 #[diesel(sql_type = Array<Nullable<BigInt>>)]
 pub struct CompressedSignature([i64; COMPRESSED_SIGNATURE_LEN]);
 
-impl ToSql<Array<Nullable<BigInt>>, Pg> for CompressedSignature {
-    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        <[i64] as ToSql<Array<BigInt>, Pg>>::to_sql(self.0.as_slice(), out)
-    }
-}
-
-impl FromSql<Array<Nullable<BigInt>>, Pg> for CompressedSignature {
-    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
-        deserialize_array(value).map(Self)
-    }
-}
-
 impl Deref for CompressedSignature {
     type Target = [i64; COMPRESSED_SIGNATURE_LEN];
     fn deref(&self) -> &Self::Target {
@@ -188,9 +176,27 @@ impl From<[i64; COMPRESSED_SIGNATURE_LEN]> for CompressedSignature {
     }
 }
 
+impl ToSql<Array<Nullable<BigInt>>, Pg> for CompressedSignature {
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        <[i64] as ToSql<Array<BigInt>, Pg>>::to_sql(self.0.as_slice(), out)
+    }
+}
+
+impl FromSql<Array<Nullable<BigInt>>, Pg> for CompressedSignature {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        deserialize_array(value).map(Self)
+    }
+}
+
 #[derive(Debug, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Array<Nullable<Integer>>)]
 pub struct SignatureIndexes([i32; NUM_WORDS]);
+
+impl From<[i32; NUM_WORDS]> for SignatureIndexes {
+    fn from(value: [i32; NUM_WORDS]) -> Self {
+        Self(value)
+    }
+}
 
 impl ToSql<Array<Nullable<Integer>>, Pg> for SignatureIndexes {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
@@ -201,12 +207,6 @@ impl ToSql<Array<Nullable<Integer>>, Pg> for SignatureIndexes {
 impl FromSql<Array<Nullable<Integer>>, Pg> for SignatureIndexes {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         deserialize_array(value).map(Self)
-    }
-}
-
-impl From<[i32; NUM_WORDS]> for SignatureIndexes {
-    fn from(value: [i32; NUM_WORDS]) -> Self {
-        Self(value)
     }
 }
 

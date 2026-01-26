@@ -1,3 +1,4 @@
+use crate::api::doc::ApiDoc;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::auth::Client;
@@ -5,16 +6,18 @@ use crate::config::{Config, RegexType};
 use crate::model::enums::{Rating, UserRank};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use axum::Router;
 use axum::http::StatusCode;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::num::NonZero;
+use std::num::NonZeroI64;
 use std::ops::Deref;
 use std::time::Duration;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
+use utoipa::{IntoParams, OpenApi, ToSchema};
+use utoipa_axum::router::OpenApiRouter;
 
 mod comment;
+mod doc;
 pub mod error;
 mod extract;
 mod info;
@@ -30,20 +33,20 @@ mod upload;
 mod user;
 mod user_token;
 
-pub fn routes(state: AppState) -> Router {
-    Router::new()
+pub fn routes(state: AppState) -> OpenApiRouter {
+    OpenApiRouter::with_openapi(ApiDoc::openapi())
         .merge(comment::routes())
         .merge(info::routes())
         .merge(password_reset::routes())
-        .merge(pool_category::routes())
         .merge(pool::routes())
+        .merge(pool_category::routes())
         .merge(post::routes())
         .merge(snapshot::routes())
-        .merge(tag_category::routes())
         .merge(tag::routes())
+        .merge(tag_category::routes())
         .merge(upload::routes())
-        .merge(user_token::routes())
         .merge(user::routes())
+        .merge(user_token::routes())
         .layer((
             TraceLayer::new_for_http(),
             // Graceful shutdown will wait for outstanding requests to complete.
@@ -83,8 +86,8 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
     }
 }
 
-/// Represents body of a request to apply/change a score.
-#[derive(Deserialize)]
+/// Request body to apply/change a score.
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct RatingBody {
     score: Rating,
@@ -97,10 +100,11 @@ impl Deref for RatingBody {
     }
 }
 
-/// Represents body of a request to delete a resource.
-#[derive(Deserialize)]
+/// Request body for deleting a resource.
+#[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 struct DeleteBody {
+    /// Resource version. See [versioning](#Versioning).
     version: DateTime,
 }
 
@@ -111,20 +115,28 @@ impl Deref for DeleteBody {
     }
 }
 
-/// Represents body of a request to merge two resources.
-#[derive(Deserialize)]
+/// Request body for merging resources.
+#[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct MergeBody<T> {
+    /// ID of the source resource to be removed.
     remove: T,
+    /// ID of the target resource to merge into.
     merge_to: T,
+    /// Version of the source resource. See [versioning](#Versioning).
     remove_version: DateTime,
+    /// Version of the target resource. See [versioning](#Versioning).
     merge_to_version: DateTime,
 }
 
 /// Represents parameters of a request to retrieve one or more resources.
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
 struct ResourceParams {
+    /// Query search string
+    #[param(example = "anonymous_token")]
     query: Option<String>,
+    /// Comma-separated list of fields to include in the response. See [field selection](#Field-Selection) for details.
+    #[param(example = "field1,field2")]
     fields: Option<String>,
 }
 
@@ -139,42 +151,36 @@ impl ResourceParams {
 }
 
 /// Represents parameters of a request to retrieve multiple resources, paged.
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
 struct PageParams {
+    /// Starting position in the result set
+    #[param(example = 0)]
     offset: Option<i64>,
-    limit: NonZero<i64>,
-    #[serde(flatten)]
-    params: ResourceParams,
+    /// Maximum number of results to return
+    #[param(value_type = i64, minimum = 1, example = 40)]
+    limit: NonZeroI64,
 }
 
-impl PageParams {
-    fn criteria(&self) -> &str {
-        self.params.criteria()
-    }
-
-    fn fields(&self) -> Option<&str> {
-        self.params.fields()
-    }
-
-    fn into_query(self) -> Option<String> {
-        self.params.query
-    }
-}
-
-/// Represents a response to a request to retrieve multiple resources.
-/// Used for resources which are not paged.
-#[derive(Serialize)]
+/// A result of search operation that doesn't involve paging.
+#[derive(Serialize, ToSchema)]
 struct UnpagedResponse<T> {
     results: Vec<T>,
 }
 
-/// Represents a response to a request to retrieve multiple resources.
-/// Used for resources which are paged.
-#[derive(Serialize)]
+/// A result of search operation that involves paging.
+#[derive(Serialize, ToSchema)]
 struct PagedResponse<T> {
+    /// The query passed in the original request that contains a standard [search query](#Search).
+    #[schema(examples("anonymous_token named_token:value1,value2,value3 sort:sort_token"))]
     query: Option<String>,
+    /// The record starting offset, passed in the original request.
+    #[schema(examples(0))]
     offset: i64,
+    /// Number of records on one page.
+    #[schema(examples(40))]
     limit: i64,
+    /// How many resources were found. To get the page count, divide this number by `limit`.
+    #[schema(examples(1729))]
     total: i64,
     results: Vec<T>,
 }

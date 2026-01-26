@@ -80,18 +80,18 @@ pub fn run_server_migrations(
 
     // Update filenames if migrating primary keys to BIGINT
     if migration_range.contains(&12) {
-        admin::database::reset_filenames(state)?;
+        admin::database::reset_filenames_impl(state)?;
     }
 
     // Cache thumbnail sizes if migrating to statistics system
     if migration_range.contains(&13) {
-        admin::database::reset_thumbnail_sizes(state)?;
+        admin::database::reset_thumbnail_sizes_impl(state)?;
     }
 
     // Migrate to new post storage structure and fix checksum bug
     if migration_range.contains(&21) {
-        admin::database::reset_filenames(state)?;
-        admin::post::recompute_checksums(state)?;
+        admin::database::reset_filenames_impl(state)?;
+        admin::post::recompute_checksums(state, &mut admin::mock_editor());
     }
 
     Ok(())
@@ -108,18 +108,18 @@ pub fn check_signature_version(conn: &mut PgConnection) -> QueryResult<()> {
         return Ok(());
     }
 
-    let task: &str = AdminTask::RecomputePostSignatures.into();
+    let task: &str = AdminTask::RecomputeSignatures.into();
     error!(
         "Post signatures are out of date and need to be recomputed.
 
-        This can be done via the admin cli, which can be entered by passing
+        This can be done via the admin CLI, which can be entered by passing
         the --admin flag to the server executable. If you are deploying with
         docker, you can do this by navigating to the source directory and
         executing the following command:
         
            docker exec -it oxibooru-server-1 ./server --admin
             
-        While in the admin cli, simply run the {task} task.
+        While in the admin CLI, simply run the {task} task on all posts.
         Once this task has started, this server instance will resume operations
         while the signatures recompute in the background. Reverse search may be
         inaccurate during this process, so you may wish to suspend post uploads

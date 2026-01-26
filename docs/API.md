@@ -278,6 +278,7 @@ List of possible error names:
 - `InvalidPhcStringField`
 - `InvalidResizeParameters`
 - `InvalidSort`
+- `InvalidUploadToken`
 - `InvalidUserRank`
 - `InvalidUtf8InPathParam`
 - `InvalidVersion`

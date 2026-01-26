@@ -9,6 +9,7 @@ use time::error::ComponentRange;
 use time::serde::rfc3339;
 use time::{Date, Month, OffsetDateTime, PrimitiveDateTime};
 use tracing::info;
+use utoipa::ToSchema;
 
 /// Used for timing things. Prints how long the object lived when dropped.
 pub struct Timer<'a> {
@@ -41,8 +42,11 @@ impl Drop for Timer<'_> {
 
 /// A wrapper for [`OffsetDateTime`] that serializes/deserializes according to RFC 3339.
 #[allow(clippy::unsafe_derive_deserialize)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, AsExpression, FromSqlRow)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, AsExpression, FromSqlRow, ToSchema,
+)]
 #[diesel(sql_type = Timestamptz)]
+#[schema(description = "A RFC 3339 formatted datetime string")]
 pub struct DateTime(#[serde(with = "rfc3339")] OffsetDateTime);
 
 impl DateTime {
@@ -108,7 +112,7 @@ impl From<OffsetDateTime> for DateTime {
 
 impl ToSql<Timestamptz, Pg> for DateTime {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        <OffsetDateTime as ToSql<Timestamptz, Pg>>::to_sql(&self.0, out)
+        <OffsetDateTime as ToSql<Timestamptz, Pg>>::to_sql(self, out)
     }
 }
 

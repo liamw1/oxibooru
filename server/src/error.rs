@@ -461,6 +461,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::InvalidHeader(_) => "InvalidHeader",
             Self::InvalidSort => "InvalidSort",
             Self::InvalidTime(err) => err.kind(),
+            Self::InvalidUploadToken => "InvalidUploadToken",
             Self::InvalidUserRank => "InvalidUserRank",
             Self::Image(err) => err.kind(),
             Self::JsonRejection(err) => err.kind(),
