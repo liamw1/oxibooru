@@ -102,7 +102,7 @@ pub async fn run(state: AppState) -> std::io::Result<()> {
         .layer(NormalizePathLayer::trim_trailing_slash())
         .service(router);
     let app = Router::new()
-        .merge(SwaggerUi::new("/swagger-ui").url("/apidoc/openapi.json", api))
+        .merge(SwaggerUi::new("/docs").url("/apidoc/openapi.json", api))
         .fallback_service(normalized_router);
 
     let address = format!("0.0.0.0:{}", config::port());

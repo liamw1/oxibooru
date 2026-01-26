@@ -27,8 +27,8 @@ http {
         listen 80 default_server;
 
         # Add Swagger UI proxying
-        location /swagger-ui {
-            proxy_pass http://backend/swagger-ui;
+        location /docs {
+            proxy_pass http://backend/docs;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
