@@ -7,7 +7,6 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Text;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-use std::convert::AsRef;
 use std::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;
@@ -74,13 +73,13 @@ impl Display for SmallString {
 
 impl ToSql<Text, Pg> for SmallString {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        <str as ToSql<Text, Pg>>::to_sql(self.0.as_str(), out)
+        <str as ToSql<Text, Pg>>::to_sql(self, out)
     }
 }
 
 impl ToSql<Citext, Pg> for SmallString {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        <str as ToSql<Citext, Pg>>::to_sql(self.0.as_str(), out)
+        <str as ToSql<Citext, Pg>>::to_sql(self, out)
     }
 }
 
@@ -96,21 +95,21 @@ where
 /// A wrapper over [`Arc<str>`] that can be serialized to or deserialized from the database.
 /// It's immutable, but can be cheaply cloned and sent across threads.
 /// Meant for potentially large string, like post descriptions.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, AsExpression, FromSqlRow, ToSchema)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, AsExpression, FromSqlRow, ToSchema)]
 #[diesel(sql_type = Text)]
 #[schema(value_type = String, description = "")]
 pub struct LargeString(Arc<str>);
 
 impl LargeString {
     pub fn new() -> Self {
-        Self(Arc::from(String::new()))
+        Self(Arc::from(""))
     }
 }
 
 impl Deref for LargeString {
     type Target = str;
     fn deref(&self) -> &Self::Target {
-        &self.0
+        self.0.trim()
     }
 }
 
@@ -129,6 +128,13 @@ impl FromSql<Text, Pg> for LargeString {
 
 impl ToSql<Text, Pg> for LargeString {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        <str as ToSql<Text, Pg>>::to_sql(&self.0, out)
+        <str as ToSql<Text, Pg>>::to_sql(self, out)
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for LargeString {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.trim() == other.0.trim()
     }
 }

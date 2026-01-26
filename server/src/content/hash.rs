@@ -132,7 +132,7 @@ where
 
 impl<const N: usize> ToSql<Bytea, Pg> for GenericChecksum<N> {
     fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
-        <[u8] as ToSql<Bytea, Pg>>::to_sql(self.0.as_slice(), out)
+        <[u8] as ToSql<Bytea, Pg>>::to_sql(self.as_ref(), out)
     }
 }
 
