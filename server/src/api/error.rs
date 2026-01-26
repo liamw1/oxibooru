@@ -46,6 +46,8 @@ pub enum ApiError {
     #[error("Invalid sort token")]
     InvalidSort,
     InvalidTime(#[from] crate::search::TimeParsingError),
+    #[error("Upload token is invalid")]
+    InvalidUploadToken,
     #[error("Cannot create an anonymous user")]
     InvalidUserRank,
     Image(#[from] image::ImageError),
@@ -123,6 +125,7 @@ impl ApiError {
             | Self::InvalidEmailAddress(_)
             | Self::InvalidSort
             | Self::InvalidTime(_)
+            | Self::InvalidUploadToken
             | Self::InvalidUserRank
             | Self::NoEmail
             | Self::NoNamesGiven(_)
@@ -171,6 +174,7 @@ impl ApiError {
             Self::InvalidHeader(_) => "Invalid Header",
             Self::InvalidSort => "Invalid Sort",
             Self::InvalidTime(_) => "Invalid Time",
+            Self::InvalidUploadToken => "Invalid Upload Token",
             Self::InvalidUserRank => "Invalid User Rank",
             Self::Image(_) => "Image Error",
             Self::JsonRejection(_) => "JSON Rejection",

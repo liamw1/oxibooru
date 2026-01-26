@@ -1,15 +1,58 @@
 use crate::api::error::{ApiError, ApiResult};
+use crate::config::Config;
 use crate::content::FileContents;
+use crate::filesystem::Directory;
 use crate::model::enums::MimeType;
 use crate::string::SmallString;
 use axum::extract::multipart::{Field, Multipart};
 use axum::extract::rejection::{JsonRejection, MissingJsonContentType};
+use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use strum::IntoStaticStr;
+use utoipa::ToSchema;
+use uuid::Uuid;
 
 pub const MAX_UPLOAD_SIZE: usize = 4 * 1024_usize.pow(3);
+
+#[derive(Clone, PartialEq, Eq, Serialize, ToSchema)]
+#[schema(as = String)]
+pub struct UploadToken {
+    token: String,
+    mime_type: MimeType,
+}
+
+impl UploadToken {
+    pub fn new(mime_type: MimeType) -> Self {
+        let token = format!("{}.{}", Uuid::new_v4(), mime_type.extension());
+        Self { token, mime_type }
+    }
+
+    pub fn mime_type(&self) -> MimeType {
+        self.mime_type
+    }
+
+    pub fn path(&self, config: &Config) -> PathBuf {
+        config.path(Directory::TemporaryUploads).join(&self.token)
+    }
+}
+
+impl<'de> Deserialize<'de> for UploadToken {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let token = String::deserialize(deserializer)?;
+        if token.contains('/') || token.contains('\\') {
+            return Err(serde::de::Error::custom("invalid upload token"));
+        }
+
+        let (_uuid, extension) = token.split_once('.').unwrap_or((&token, ""));
+        let mime_type = MimeType::from_extension(extension).map_err(serde::de::Error::custom)?;
+        Ok(Self { token, mime_type })
+    }
+}
 
 #[derive(Clone, Copy, PartialEq, Eq, IntoStaticStr)]
 #[strum(serialize_all = "lowercase")]

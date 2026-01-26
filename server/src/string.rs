@@ -7,6 +7,7 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Text;
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::convert::AsRef;
 use std::fmt::Display;
 use std::ops::Deref;
 use std::str::FromStr;

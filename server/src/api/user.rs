@@ -7,7 +7,7 @@ use crate::auth::Client;
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::ThumbnailType;
-use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
+use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
 use crate::content::{Content, FileContents, upload};
 use crate::model::enums::{AvatarStyle, ResourceProperty, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
@@ -264,7 +264,7 @@ struct UserCreateBody {
     #[serde(skip_deserializing)]
     avatar: Option<FileContents>,
     /// Token referencing previously uploaded avatar.
-    avatar_token: Option<String>,
+    avatar_token: Option<UploadToken>,
     /// URL to fetch avatar from.
     avatar_url: Option<Url>,
 }
@@ -478,7 +478,7 @@ struct UserUpdateBody {
     #[serde(skip_deserializing)]
     avatar: Option<FileContents>,
     /// Token referencing previously uploaded avatar.
-    avatar_token: Option<String>,
+    avatar_token: Option<UploadToken>,
     /// URL to fetch avatar from.
     avatar_url: Option<Url>,
 }
@@ -759,6 +759,7 @@ mod test {
         verify_response("POST /users", "user/create_invalid_rank").await?;
         verify_response("POST /users", "user/create_invalid_email").await?;
         verify_response("POST /users", "user/create_invalid_password").await?;
+        verify_response("POST /users", "user/create_invalid_avatar_token").await?;
         verify_response("POST /users", "user/create_missing_custom_avatar").await?;
 
         verify_response("PUT /user/regular_user", "user/edit_anonymous").await?;
@@ -768,6 +769,7 @@ mod test {
         verify_response("PUT /user/regular_user", "user/edit_invalid_rank").await?;
         verify_response("PUT /user/regular_user", "user/edit_invalid_email").await?;
         verify_response("PUT /user/regular_user", "user/edit_invalid_password").await?;
+        verify_response("PUT /user/regular_user", "user/edit_invalid_avatar_token").await?;
         verify_response("PUT /user/regular_user", "user/edit_missing_custom_avatar").await?;
 
         // User has permissions to edit/delete self, but not another
@@ -779,5 +781,16 @@ mod test {
 
         reset_sequence(ResourceType::User)?;
         Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn malicious_token() -> ApiResult<()> {
+        // Place a file outside of the temporary uploads directory
+        simulate_upload("1_pixel.png", "../upload.png")?;
+
+        // Test responses that attempt to access file outside temporary uploads directory
+        verify_response("POST /users", "user/create_malicious_avatar_token").await?;
+        verify_response("PUT /user/regular_user", "user/edit_malicious_avatar_token").await
     }
 }

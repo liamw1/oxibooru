@@ -1,0 +1,5 @@
+{
+    "description": "Failed to deserialize the JSON body into the target type: thumbnailToken: invalid upload token at line 1 column 81",
+    "name": "JsonDataError",
+    "title": "JSON Rejection"
+}

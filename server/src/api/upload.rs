@@ -7,7 +7,7 @@ use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::Config;
 use crate::content::download;
-use crate::content::upload::{self, MAX_UPLOAD_SIZE, PartName};
+use crate::content::upload::{self, MAX_UPLOAD_SIZE, PartName, UploadToken};
 use axum::extract::{DefaultBodyLimit, Extension, State};
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -44,7 +44,7 @@ struct MultipartUpload {
 #[derive(Serialize, ToSchema)]
 struct UploadResponse {
     /// Token to reference this upload in other requests.
-    token: String,
+    token: UploadToken,
 }
 
 async fn upload_from_url(config: &Config, body: UploadBody) -> ApiResult<Json<UploadResponse>> {

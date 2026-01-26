@@ -1,5 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
+use crate::content::upload::UploadToken;
 use crate::filesystem;
 use crate::model::enums::MimeType;
 use reqwest::Client;
@@ -10,7 +11,7 @@ use url::Url;
 /// Attempts to download file at the specified `url`.
 /// If successful, the file is saved in the temporary uploads directory
 /// and a content token is returned.
-pub async fn from_url(config: &Config, url: Url) -> ApiResult<String> {
+pub async fn from_url(config: &Config, url: Url) -> ApiResult<UploadToken> {
     // Some websites expect a user-agent
     const FAKE_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0";
 

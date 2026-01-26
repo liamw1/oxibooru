@@ -8,10 +8,9 @@ use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::content::signature::SignatureCache;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::upload::{MAX_UPLOAD_SIZE, PartName};
+use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
 use crate::content::{Content, FileContents, signature, upload};
 use crate::db::ConnectionPool;
-use crate::filesystem::Directory;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceProperty, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
 use crate::resource::post::{Note, PostInfo};
@@ -519,7 +518,7 @@ struct ReverseSearchBody {
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     /// Token referencing previously uploaded content.
-    content_token: Option<String>,
+    content_token: Option<UploadToken>,
     /// URL to fetch image content from.
     content_url: Option<Url>,
 }
@@ -653,10 +652,7 @@ async fn create_impl(
         .execute(conn)?;
 
         // Move content to permanent location
-        let temp_path = state
-            .config
-            .path(Directory::TemporaryUploads)
-            .join(&content_properties.token);
+        let temp_path = content_properties.token.path(&state.config);
         filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
         // Create thumbnails
@@ -697,13 +693,13 @@ struct PostCreateBody {
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     /// Token referencing previously uploaded content.
-    content_token: Option<String>,
+    content_token: Option<UploadToken>,
     /// URL to fetch content from.
     content_url: Option<Url>,
     #[serde(skip_deserializing)]
     thumbnail: Option<FileContents>,
     /// Token referencing previously uploaded thumbnail.
-    thumbnail_token: Option<String>,
+    thumbnail_token: Option<UploadToken>,
     /// URL to fetch thumbnail from.
     thumbnail_url: Option<Url>,
     /// Source URL or description.
@@ -1046,10 +1042,7 @@ async fn update_impl(
             new_post_signature.insert_into(post_signature::table).execute(conn)?;
 
             // Replace content
-            let temp_path = state
-                .config
-                .path(Directory::TemporaryUploads)
-                .join(&content_properties.token);
+            let temp_path = content_properties.token.path(&state.config);
             filesystem::delete_content(&post_hash, old_mime_type)?;
             filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
@@ -1097,13 +1090,13 @@ struct PostUpdateBody {
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
     /// Token referencing previously uploaded content.
-    content_token: Option<String>,
+    content_token: Option<UploadToken>,
     /// URL to fetch content from.
     content_url: Option<Url>,
     #[serde(skip_deserializing)]
     thumbnail: Option<FileContents>,
     /// Token referencing previously uploaded thumbnail.
-    thumbnail_token: Option<String>,
+    thumbnail_token: Option<UploadToken>,
     /// URL to fetch thumbnail from.
     thumbnail_url: Option<Url>,
 }
@@ -1657,10 +1650,14 @@ mod test {
         verify_response("DELETE /post/99/favorite", "post/unfavorite_nonexistent").await?;
 
         simulate_upload("1_pixel.png", "upload.png")?;
+        verify_response("POST /posts/reverse-search", "post/reverse_search_invalid_token").await?;
+
         verify_response("POST /posts", "post/create_invalid_tag").await?;
         verify_response("POST /posts", "post/create_invalid_safety").await?;
         verify_response("POST /posts", "post/create_invalid_note").await?;
         verify_response("POST /posts", "post/create_invalid_flag").await?;
+        verify_response("POST /posts", "post/create_invalid_content_token").await?;
+        verify_response("POST /posts", "post/create_invalid_thumbnail_token").await?;
         verify_response("POST /posts", "post/create_missing_content").await?;
         verify_response("POST /posts", "post/create_duplicate_relation").await?;
         verify_response("POST /posts", "post/create_nonexistent_relation").await?;
@@ -1669,6 +1666,8 @@ mod test {
         verify_response("PUT /post/1", "post/edit_invalid_safety").await?;
         verify_response("PUT /post/1", "post/edit_invalid_note").await?;
         verify_response("PUT /post/1", "post/edit_invalid_flag").await?;
+        verify_response("PUT /post/1", "post/edit_invalid_content_token").await?;
+        verify_response("PUT /post/1", "post/edit_invalid_thumbnail_token").await?;
         verify_response("PUT /post/1", "post/edit_duplicate_relation").await?;
         verify_response("PUT /post/1", "post/edit_nonexistent_relation").await?;
 
@@ -1678,5 +1677,20 @@ mod test {
 
         reset_sequence(ResourceType::Post)?;
         Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn malicious_token() -> ApiResult<()> {
+        // Place a file outside of the temporary uploads directory
+        simulate_upload("1_pixel.png", "../upload.png")?;
+
+        // Test responses that attempt to access file outside temporary uploads directory
+        simulate_upload("1_pixel.png", "cool_post.png")?;
+        verify_response("POST /posts/reverse-search", "post/reverse_search_malicious_token").await?;
+        verify_response("POST /posts", "post/create_malicious_content_token").await?;
+        verify_response("POST /posts", "post/create_malicious_thumbnail_token").await?;
+        verify_response("PUT /post/1", "post/edit_malicious_content_token").await?;
+        verify_response("PUT /post/1", "post/edit_malicious_thumbnail_token").await
     }
 }
