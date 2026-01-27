@@ -1,6 +1,6 @@
 # Benchmarks
 
-These benchmarks are meant to give a rough idea of the relative speed differences between szurubooru and oxibooru for various operations. My methodology here is very crude (often just taking a few measurements) and there's a lot of external factors that could affect the results, so take them with a grain of salt.
+These benchmarks are meant to give a rough idea of the relative speed differences between Szurubooru and Oxibooru for various operations. My methodology here is very crude (often just taking a few measurements) and there's a lot of external factors that could affect the results, so take them with a grain of salt.
 
 These benchmarks were performed on the same database consisting of about 125k images and 25k tags. Everything is containerized with Docker and all requests are made anonymously, so time to authenticate isn't included.
 
@@ -23,13 +23,13 @@ These benchmarks were performed on the same database consisting of about 125k im
     | szurubooru        |      1561 |
     | oxibooru          |         3 |
 
-    Oxibooru blows Szurubooru out of the water here. The reason for this is that Szurubooru calculates the disk usage by iterating over the entire data directory, summing up the sizes of all the files it contains. This process is quite slow for directories with many files. This request is the main reason that Szurubooru is unresponsive for so long after a cold start. In my experience it can take 10 seconds or more to become usable, much longer than the time of a single info request. That's because the server actually makes _two_ info request on startup, and it seems like they interfere with each other in a way that makes them slower than if they were run sequentially.
+    The difference in speed here looks impressive, but is entirely due to caching on Oxibooru's side. Szurubooru calculates the disk usage by iterating over the entire data directory, summing up the sizes of all the files it contains. This process is quite slow for directories with many files. This request is the main reason that Szurubooru is unresponsive for so long after a cold start. In my experience it can take 10 seconds or more to become usable, much longer than the time of a single info request. That's because the server actually makes _two_ info request on startup, and it seems like they interfere with each other in a way that makes them slower than if they were run sequentially.
 
     Oxibooru avoids this by storing a running total of the disk usage inside the database, which can be retrieved almost instantly. This makes cold starts lightning fast.
 
 ## Listing Posts
 
-- Let's start with the simplest case: viewing the first page of posts with no sort tokens or filters. This first page of posts have no tags, so it should be pretty fast.
+- Let's start with the simplest case: viewing the first page of posts with no sort tokens or filters. For this particular case the first page of posts have no tags, so it should be pretty fast.
 
     ```URL
     GET http://localhost:8080/api/posts/?query=&limit=42
@@ -81,7 +81,7 @@ These benchmarks were performed on the same database consisting of about 125k im
     | szurubooru        |      2490 |
     | oxibooru          |       125 |
 
-    Here Oxibooru is almost 20x faster than Szurubooru! One big thing that helps Oxibooru go fast here is that it keeps track of usage counts for each tag with triggers rather than counting them every time. This does come at a cost (slower updates), but I think this trade-off is worth it for read-heavy applications like this.
+    This is where Oxibooru starts to shine; it's almost 20x faster than Szurubooru here! One big thing that helps Oxibooru go fast here is that it keeps track of usage counts for each tag with triggers rather than counting them every time. This does come at a cost (slightly slower updates), but I think this trade-off is worth it for read-heavy applications like this.
 
 - One very common use case is to search for posts with a particular tag. Let's search for all posts with the tag `tagme`.
 
@@ -135,7 +135,7 @@ These benchmarks were performed on the same database consisting of about 125k im
     | szurubooru        |      6033 |
     | oxibooru          |        62 |
 
-    Oxibooru just crushes Szurubooru here. It's almost 100x faster. Because Oxibooru keeps track of tag usages, sorting by tag count is just as fast as sorting by creation time.
+    This is probably the single most favorable measurement for Oxibooru, clocking in at a 100x performance improvement. Because Oxibooru keeps track of tag usages, sorting by tag count is just as fast as sorting by creation time.
 
 - Finally, we'll try the query used when performing autocomplete when the user types the word `e` in the search bar:
 
