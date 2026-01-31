@@ -1,9 +1,9 @@
-ARG ALPINE_VERSION=3.22
+ARG DEBIAN_VERSION=13.3
 ARG RUST_VERSION=1.91.1
 ARG CHEF_VERSION=0.1.73
 
 ############################## Planning Phase ##############################
-FROM lukemathwalker/cargo-chef:${CHEF_VERSION}-rust-${RUST_VERSION}-alpine AS chef
+FROM lukemathwalker/cargo-chef:${CHEF_VERSION}-rust-${RUST_VERSION}-slim-trixie AS chef
 WORKDIR /opt/app
 
 # Create recipe of crate dependencies
@@ -17,7 +17,17 @@ FROM chef AS builder
 ENV DOCKER_DEPLOYMENT=1
 
 # Install system dependencies
-RUN apk update && apk add --no-cache pkgconfig clang-dev postgresql-dev dav1d-dev ffmpeg-dev
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    clang \
+    pkg-config \
+    libpq-dev \
+    libdav1d-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libavutil-dev \
+    libavfilter-dev \
+    libavdevice-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=planner /opt/app/recipe.json recipe.json
 
@@ -27,7 +37,7 @@ COPY macros/src macros/src
 
 # Build dependencies (this will be cached for future builds)
 ARG TARGET_CPU
-ARG CODEGEN_OPTIONS="-C target-feature=-crt-static -C target-cpu=$TARGET_CPU"
+ARG CODEGEN_OPTIONS="-C target-cpu=$TARGET_CPU"
 RUN RUSTFLAGS=${CODEGEN_OPTIONS} cargo chef cook --release --recipe-path recipe.json
 
 # Buid application
@@ -35,7 +45,7 @@ COPY . .
 RUN RUSTFLAGS=${CODEGEN_OPTIONS} cargo build --release
 
 ################################# Run Phase ################################
-FROM alpine:${ALPINE_VERSION} AS runtime
+FROM debian:${DEBIAN_VERSION}-slim AS runtime
 WORKDIR /opt/app
 
 ENV RUST_BACKTRACE=full
@@ -44,16 +54,25 @@ ARG PUID=1000
 ARG PGID=1000
 
 # Install dynamic libs needed at runtime
-RUN apk update && apk add --no-cache libpq ffmpeg-libavdevice
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    libdav1d7 \
+    libavcodec61 \
+    libavformat61 \
+    libavutil59 \
+    libavfilter10 \
+    libavdevice61 \
+    && rm -rf /var/lib/apt/lists/*
 
 # Set permissions
 RUN mkdir -p /opt/app /data \
- && addgroup -g ${PGID} app \
- && adduser -SDH -h /opt/app -g '' -G app -u ${PUID} app \
- && chown -R app:app /opt/app /data
+    && groupadd -g ${PGID} app \
+    && useradd -u ${PUID} -g ${PGID} -r -M -d /opt/app -s /sbin/nologin app \
+    && chown -R app:app /opt/app /data
 
-# Copy over application binary
+# Copy over application binary and bundled dependencies
 COPY --from=builder /opt/app/target/release/oxibooru_server server
+COPY --from=builder /opt/app/target/release/libwebgpu_dawn.so /usr/lib/libwebgpu_dawn.so
 
 # Run it!
 USER app

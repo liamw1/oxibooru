@@ -145,7 +145,7 @@ where
                 return Err(CancelType::Exit);
             }
             Err(err) => {
-                eprintln!("Error: {err}");
+                error!("{err}");
             }
         }
     }

@@ -16,6 +16,7 @@ mod admin;
 mod api;
 mod app;
 mod auth;
+mod autotag;
 mod config;
 mod content;
 mod db;
@@ -41,15 +42,21 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() {
-    let state = app::AppState::new(db::create_connection_pool(), config::create());
+    let config = config::create();
+    app::enable_tracing(&config);
 
-    app::enable_tracing(&state);
-    if let Err(err) = app::initialize(&state) {
+    let auto_tagger = autotag::AutoTagSession::new(&config).unwrap_or_else(|err| {
+        tracing::error!("Unable to intialize auto-tagger. Details:\n{err}");
+        std::process::exit(1)
+    });
+    let state = app::AppState::new(db::create_connection_pool(), config, auto_tagger);
+
+    app::initialize(&state).unwrap_or_else(|err| {
         tracing::error!("An error occurred during initialization. Details:\n{err}");
-        std::process::exit(1);
-    }
-    if let Err(err) = app::run(state).await {
+        std::process::exit(1)
+    });
+    app::run(state).await.unwrap_or_else(|err| {
         tracing::error!("Unable to start server. Details:\n{err}");
-        std::process::exit(1);
-    }
+        std::process::exit(1)
+    });
 }

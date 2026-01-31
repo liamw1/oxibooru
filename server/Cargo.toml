@@ -22,6 +22,7 @@ image = { version = "0.25.5", features = ["avif-native"] }
 lettre = { version = "0.11.12", features = ["serde"] }
 md5 = "0.7.0"
 num-traits = "0.2.19"
+ort = { version = "2.0.0-rc.11", features = ["webgpu"] }
 percent-encoding = "2.3.1"
 rayon = "1.10.0"
 regex = "1.11.1"

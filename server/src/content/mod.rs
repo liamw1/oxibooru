@@ -7,6 +7,7 @@ use crate::content::upload::UploadToken;
 use crate::filesystem;
 use crate::model::enums::MimeType;
 use image::DynamicImage;
+use std::sync::Arc;
 use url::Url;
 
 pub mod cache;
@@ -81,13 +82,13 @@ impl Content {
     }
 
     /// Computes properties for uploaded content.
-    pub async fn compute_properties(self, state: &AppState) -> ApiResult<CachedProperties> {
+    pub async fn compute_properties(self, state: &AppState) -> ApiResult<Arc<CachedProperties>> {
         let token = self.save(&state.config).await?;
         cache::compute_properties(state, token)
     }
 
     /// Retrieves content properties from cache or computes them if not present in cache.
-    pub async fn get_or_compute_properties(self, state: &AppState) -> ApiResult<CachedProperties> {
+    pub async fn get_or_compute_properties(self, state: &AppState) -> ApiResult<Arc<CachedProperties>> {
         let token = self.save(&state.config).await?;
         cache::get_or_compute_properties(state, token)
     }

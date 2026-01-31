@@ -70,6 +70,15 @@ impl AnonymousPreferences {
     }
 }
 
+#[derive(Deserialize)]
+pub struct AutoTagConfig {
+    pub on_creation: bool,
+    pub model: String,
+    pub labels: String,
+    pub general_threshold: f32,
+    pub character_threshold: f32,
+}
+
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 pub struct PrivilegeConfig {
     pub user_create_self: UserRank,
@@ -220,6 +229,7 @@ pub struct Config {
     pub thumbnails: ThumbnailConfig,
     pub smtp: Option<SmtpConfig>,
     pub anonymous_preferences: AnonymousPreferences,
+    pub auto_tag: Option<AutoTagConfig>,
     pub public_info: PublicConfig,
 }
 

@@ -1,4 +1,5 @@
 use crate::api::middleware;
+use crate::autotag::AutoTagSession;
 use crate::config::Config;
 use crate::content::cache::RingCache;
 use crate::db::{ConnectionPool, ConnectionResult};
@@ -23,16 +24,18 @@ pub struct AppState {
     pub connection_pool: ConnectionPool,
     pub config: Arc<Config>,
     pub content_cache: Arc<Mutex<RingCache>>,
+    pub auto_tag_session: Arc<Option<AutoTagSession>>,
 }
 
 impl AppState {
-    pub fn new(connection_pool: ConnectionPool, config: Config) -> Self {
+    pub fn new(connection_pool: ConnectionPool, config: Config, auto_tagging: Option<AutoTagSession>) -> Self {
         /// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
         const CONTENT_CACHE_SIZE: usize = 10;
         AppState {
             connection_pool,
             config: Arc::new(config),
             content_cache: Arc::new(Mutex::new(RingCache::new(CONTENT_CACHE_SIZE))),
+            auto_tag_session: Arc::new(auto_tagging),
         }
     }
 
@@ -63,12 +66,12 @@ pub fn num_rayon_threads() -> usize {
 }
 
 /// Initializes logging using [`tracing_subscriber`].
-pub fn enable_tracing(state: &AppState) {
-    let filter = match EnvFilter::try_new(&state.config.log_filter) {
+pub fn enable_tracing(config: &Config) {
+    let filter = match EnvFilter::try_new(&config.log_filter) {
         Ok(filter) => filter,
         Err(err) => {
             warn!("Log filter is invalid. Some or all directives may be ignored. Details:\n{err}");
-            EnvFilter::new(&state.config.log_filter)
+            EnvFilter::new(&config.log_filter)
         }
     };
     tracing_subscriber::registry()

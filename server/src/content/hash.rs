@@ -90,7 +90,7 @@ pub type Md5Checksum = GenericChecksum<16>;
 
 /// Represents a fixed-size checksum of length `N`.
 /// Can be deserialized from the database without allocation.
-#[derive(Debug, Clone, PartialEq, Eq, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsExpression, FromSqlRow)]
 #[diesel(sql_type = Bytea)]
 pub struct GenericChecksum<const N: usize>([u8; N]);
 

@@ -10,13 +10,14 @@ use crate::{content, filesystem};
 use image::DynamicImage;
 use image::error::LimitErrorKind;
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 /// Stores properties of content that are costly to compute (usually require reading/decoding entire file).
-#[derive(Clone)]
 pub struct CachedProperties {
     pub token: UploadToken,
     pub checksum: Checksum,
     pub md5_checksum: Md5Checksum,
+    pub tensor_data: Vec<f32>,
     pub signature: [i64; COMPRESSED_SIGNATURE_LEN],
     pub thumbnail: DynamicImage,
     pub width: i32,
@@ -28,7 +29,7 @@ pub struct CachedProperties {
 
 /// A simple ring buffer that stores [`CachedProperties`].
 pub struct RingCache {
-    data: VecDeque<(UploadToken, CachedProperties)>,
+    data: VecDeque<(UploadToken, Arc<CachedProperties>)>,
     max_size: usize,
 }
 
@@ -44,14 +45,14 @@ impl RingCache {
         self.data = VecDeque::new();
     }
 
-    fn insert(&mut self, key: UploadToken, value: CachedProperties) {
+    fn insert(&mut self, key: UploadToken, value: Arc<CachedProperties>) {
         self.data.push_back((key, value));
         if self.data.len() > self.max_size {
             self.data.pop_front();
         }
     }
 
-    fn remove(&mut self, key: &UploadToken) -> Option<CachedProperties> {
+    fn remove(&mut self, key: &UploadToken) -> Option<Arc<CachedProperties>> {
         self.data
             .iter()
             .position(|(cache_key, _)| cache_key == key)
@@ -61,22 +62,18 @@ impl RingCache {
 }
 
 /// Computes content properties and caches them in memory.
-pub fn compute_properties(state: &AppState, content_token: UploadToken) -> ApiResult<CachedProperties> {
-    let properties = compute_properties_no_cache(state, content_token.clone())?;
-
-    // Clone this here to make sure we aren't holding onto lock for longer than necessary
-    let properties_copy = properties.clone();
-    state.get_content_cache().insert(content_token, properties_copy);
-
+pub fn compute_properties(state: &AppState, content_token: UploadToken) -> ApiResult<Arc<CachedProperties>> {
+    let properties = compute_properties_no_cache(state, content_token.clone()).map(Arc::new)?;
+    state.get_content_cache().insert(content_token, properties.clone());
     Ok(properties)
 }
 
 /// Returns cached properties of content or computes them if not in cache.
-pub fn get_or_compute_properties(state: &AppState, content_token: UploadToken) -> ApiResult<CachedProperties> {
+pub fn get_or_compute_properties(state: &AppState, content_token: UploadToken) -> ApiResult<Arc<CachedProperties>> {
     let maybe_properties = state.get_content_cache().remove(&content_token);
     match maybe_properties {
         Some(properties) => Ok(properties),
-        None => compute_properties_no_cache(state, content_token),
+        None => compute_properties_no_cache(state, content_token).map(Arc::new),
     }
 }
 
@@ -103,11 +100,17 @@ fn compute_properties_no_cache(state: &AppState, token: UploadToken) -> ApiResul
 
     let file_contents = FileContents { data, mime_type };
     let image = decode::representative_image(&state.config, &file_contents, &temp_path)?;
+    let tensor_data = (*state.auto_tag_session)
+        .as_ref()
+        .map(|session| session.compute_image_tensor_data(&image))
+        .transpose()?
+        .unwrap_or_default();
 
     Ok(CachedProperties {
         token,
         checksum,
         md5_checksum,
+        tensor_data,
         signature: signature::compute(&image),
         thumbnail: thumbnail::create(&state.config, &image, ThumbnailType::Post),
         width: i32::try_from(image.width()).map_err(|_| LimitErrorKind::DimensionError)?,

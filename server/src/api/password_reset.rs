@@ -1,5 +1,5 @@
 use crate::api::doc::PASSWORD_RESET_TAG;
-use crate::api::error::{ApiError, ApiResult};
+use crate::api::error::{ApiError, ApiResult, OptionalFeature};
 use crate::api::extract::{Json, Path};
 use crate::app::AppState;
 use crate::auth::password;
@@ -61,7 +61,10 @@ fn get_user_info(
     ),
 )]
 async fn request_reset(State(state): State<AppState>, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
-    let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
+    let smtp_info = state
+        .config
+        .smtp()
+        .ok_or(ApiError::FeatureDisabled(OptionalFeature::PasswordReset))?;
 
     let mut conn = state.get_connection()?;
     let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;

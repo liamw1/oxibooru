@@ -614,6 +614,11 @@ async fn create_impl(
     };
     let flags = content_properties.flags | PostFlags::from_slice(&body.flags.unwrap_or_default());
 
+    let auto_tags = (*state.auto_tag_session)
+        .as_ref()
+        .map(|session| session.infer_tags(&state.config, content_properties.tensor_data.clone()))
+        .transpose()?;
+
     let new_post = NewPost {
         user_id: client.id,
         file_size: content_properties.file_size,
@@ -630,9 +635,15 @@ async fn create_impl(
     };
 
     let post_id = tagging_update(&state.connection_pool, body.tags.is_some(), |conn| {
+        let tag_names = body
+            .tags
+            .into_iter()
+            .flatten()
+            .chain(auto_tags.into_iter().flatten())
+            .collect();
+
         // We do this before post insertion so that the post sequence isn't incremented if it fails
-        let (tag_ids, tags) =
-            update::tag::get_or_create_tag_ids(conn, &state.config, client, body.tags.unwrap_or_default(), false)?;
+        let (tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, &state.config, client, tag_names, false)?;
         let relations = body.relations.unwrap_or_default();
         let notes = body.notes.unwrap_or_default();
 
@@ -665,7 +676,7 @@ async fn create_impl(
 
         let post_data = SnapshotData {
             safety: post.safety,
-            checksum: hex::encode(&post.checksum),
+            checksum: hex::encode(post.checksum),
             flags: post.flags,
             source: post.source,
             description: post.description,

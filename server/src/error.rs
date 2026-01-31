@@ -233,7 +233,7 @@ impl ErrorKind for image::error::ParameterErrorKind {
         match self {
             Self::DimensionMismatch => "DimensionMismatch",
             Self::FailedAlready => "FailedAlready",
-            Self::Generic(_) => "GenericError",
+            Self::Generic(_) => "GenericImageError",
             Self::NoMoreData => "NoMoreData",
             _ => "UnknownImageParameterError",
         }
@@ -289,6 +289,25 @@ impl ErrorKind for lettre::error::Error {
             Self::CannotParseFilename => "EmailCannotParseFilename",
             Self::Io(err) => err.kind().kind(),
             Self::NonAsciiChars => "EmailNonAsciiChars",
+        }
+    }
+}
+
+impl ErrorKind for ort::ErrorCode {
+    fn kind(&self) -> &'static str {
+        match self {
+            Self::GenericFailure => "GenericOrtFailure",
+            Self::InvalidArgument => "InvalidArgument",
+            Self::NoSuchFile => "NoSuchFile",
+            Self::NoModel => "NoModel",
+            Self::EngineError => "EngineError",
+            Self::RuntimeException => "RuntimeException",
+            Self::InvalidProtobuf => "InvalidProtobuf",
+            Self::ModelLoaded => "ModelLoadedError",
+            Self::NotImplemented => "NotImplemented",
+            Self::InvalidGraph => "InvalidGraph",
+            Self::ExecutionProviderFailure => "ExecutionProviderFailure",
+            _ => "UnknownOrtError",
         }
     }
 }
@@ -452,6 +471,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::FailedConnection(_) => "FailedConnection",
             Self::FailedEmailTransport(_) => "FailedEmailTransport",
             Self::FailedQuery(err) => err.kind(),
+            Self::FeatureDisabled(_) => "FeatureDisabled",
             Self::FromStr(_) => "FromStrError",
             Self::HeaderDeserialization(_) => "HeaderDeserialization",
             Self::Hidden(_) => "ResourceHidden",
@@ -471,13 +491,13 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::MissingContentType => "MissingContentType",
             Self::MissingFormData => "MissingFormData",
             Self::MissingMetadata => "MissingMetadata",
-            Self::MissingSmtpInfo => "MissingSmtpInfo",
             Self::Multipart(_) => "MultipartError",
             Self::MultipartRejection(err) => err.kind(),
             Self::NoNamesGiven(_) => "NoNamesGiven",
             Self::NotAnInteger(err) => err.kind().kind(),
             Self::NotFound(err) => err.kind(),
             Self::NotLoggedIn => "NotLoggedIn",
+            Self::Ort(err) => err.code().kind(),
             Self::Password(err) => err.kind(),
             Self::PathRejection(err) => err.kind(),
             Self::QueryRejection(err) => err.kind(),

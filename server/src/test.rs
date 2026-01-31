@@ -490,7 +490,7 @@ fn recreate_database() -> AdminResult<AppState> {
 
     let mut conn = test_connection_pool.get()?;
     populate_database(&mut conn, &test_config)?;
-    Ok(AppState::new(test_connection_pool, test_config))
+    Ok(AppState::new(test_connection_pool, test_config, None))
 }
 
 const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRank) -> NewUser<'static> {

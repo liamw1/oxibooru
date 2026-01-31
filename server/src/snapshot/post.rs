@@ -50,7 +50,7 @@ impl SnapshotData {
             .optional()?;
         Ok(Self {
             safety: post.safety,
-            checksum: hex::encode(&post.checksum),
+            checksum: hex::encode(post.checksum),
             flags: post.flags,
             source: post.source,
             description: post.description,

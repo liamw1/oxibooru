@@ -20,6 +20,7 @@ pub enum Directory {
     Posts,
     GeneratedThumbnails,
     CustomThumbnails,
+    Models,
     TemporaryUploads,
 }
 

@@ -9,6 +9,14 @@ use axum::response::{IntoResponse, Response};
 use diesel::QueryResult;
 use image::error::{ImageError, LimitError, LimitErrorKind};
 use serde::Serialize;
+use strum::Display;
+
+#[derive(Debug, Display)]
+#[strum(serialize_all = "snake_case")]
+pub enum OptionalFeature {
+    AutoTag,
+    PasswordReset,
+}
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
@@ -34,6 +42,8 @@ pub enum ApiError {
     FailedConnection(#[from] diesel::r2d2::PoolError),
     FailedEmailTransport(#[from] lettre::transport::smtp::Error),
     FailedQuery(#[from] diesel::result::Error),
+    #[error("Feature `{0}` is disabled")]
+    FeatureDisabled(OptionalFeature),
     FromStr(#[from] Box<dyn std::error::Error + Send + Sync>),
     HeaderDeserialization(#[from] axum::http::header::ToStrError),
     #[error("{0} hidden")]
@@ -61,8 +71,6 @@ pub enum ApiError {
     MissingFormData,
     #[error("Missing metadata form")]
     MissingMetadata,
-    #[error("Missing smtp info")]
-    MissingSmtpInfo,
     Multipart(#[from] axum::extract::multipart::MultipartError),
     MultipartRejection(#[from] axum::extract::multipart::MultipartRejection),
     #[error("User has no email")]
@@ -74,6 +82,7 @@ pub enum ApiError {
     NotFound(ResourceType),
     #[error("This action requires you to be logged in")]
     NotLoggedIn,
+    Ort(#[from] ort::Error),
     Password(#[from] argon2::password_hash::Error),
     PathRejection(#[from] axum::extract::rejection::PathRejection),
     QueryRejection(#[from] axum::extract::rejection::QueryRejection),
@@ -120,7 +129,6 @@ impl ApiError {
             | Self::EmptyVideo
             | Self::ExpressionFailsRegex(..)
             | Self::FromStr(_)
-            | Self::Image(_)
             | Self::InvalidEmail(_)
             | Self::InvalidEmailAddress(_)
             | Self::InvalidSort
@@ -130,15 +138,16 @@ impl ApiError {
             | Self::NoEmail
             | Self::NoNamesGiven(_)
             | Self::NotAnInteger(_)
-            | Self::SelfMerge(_)
-            | Self::SwfDecoding(_)
-            | Self::VideoDecoding(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            | Self::SelfMerge(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::FailedEmailTransport(_)
             | Self::FailedQuery(_)
+            | Self::Image(_)
             | Self::InvalidHeader(_)
-            | Self::MissingSmtpInfo
-            | Self::StdIo(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::UnimplementedFrameFormat(_) => StatusCode::NOT_IMPLEMENTED,
+            | Self::Ort(_)
+            | Self::StdIo(_)
+            | Self::SwfDecoding(_)
+            | Self::VideoDecoding(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::FeatureDisabled(_) | Self::UnimplementedFrameFormat(_) => StatusCode::NOT_IMPLEMENTED,
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
@@ -165,6 +174,7 @@ impl ApiError {
             Self::FailedConnection(_) => "Failed Connection",
             Self::FailedEmailTransport(_) => "Failed Email Transport",
             Self::FailedQuery(_) => "Failed Query",
+            Self::FeatureDisabled(_) => "Feature Disabled",
             Self::FromStr(_) => "FromStr Error",
             Self::HeaderDeserialization(_) => "Header Deserialization",
             Self::Hidden(_) => "Resource Hidden",
@@ -183,7 +193,6 @@ impl ApiError {
             Self::MissingContentType => "Missing Content Type",
             Self::MissingFormData => "Missing Form Data",
             Self::MissingMetadata => "Missing Metadata",
-            Self::MissingSmtpInfo => "Missing SMTP Info",
             Self::Multipart(_) => "Multipart/Form-Data Error",
             Self::MultipartRejection(_) => "Multipart Rejection",
             Self::NoEmail => "No Email",
@@ -191,6 +200,7 @@ impl ApiError {
             Self::NotAnInteger(_) => "Parse Int Error",
             Self::NotFound(_) => "Resource Not Found",
             Self::NotLoggedIn => "Not Logged In",
+            Self::Ort(_) => "ONNX Runtime",
             Self::Password(_) => "Password Error",
             Self::PathRejection(_) => "Path Rejection",
             Self::QueryRejection(_) => "Query Rejection",

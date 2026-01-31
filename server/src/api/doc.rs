@@ -260,9 +260,11 @@ List of possible error names:
 - `EmptySwf`
 - `EmptyValue`
 - `EmptyVideo`
+- `EngineError`
 - `EnvironmentVariableNotPresent`
 - `EnvironmentVariableNotUnicode`
 - `ExecutableFileBusy`
+- `ExecutionProviderFailure`
 - `ExpiredToken`
 - `ExpressionFailsRegex`
 - `FailedAlready`
@@ -271,6 +273,7 @@ List of possible error names:
 - `FailedEmailTransport`
 - `FailedEncoding`
 - `FailedToDeserializeQueryString`
+- `FeatureDisabled`
 - `FileAlreadyExists`
 - `FileNotFound`
 - `FileTooLarge`
@@ -281,6 +284,7 @@ List of possible error names:
 - `InsufficientMemory`
 - `InsufficientPrivileges`
 - `Interrupted`
+- `InvalidArgument`
 - `InvalidAuthType`
 - `InvalidBoundary`
 - `InvalidByte`
@@ -294,6 +298,7 @@ List of possible error names:
 - `InvalidFilename`
 - `InvalidFormat`
 - `InvalidFrameFormat`
+- `InvalidGraph`
 - `InvalidHeader`
 - `InvalidInput`
 - `InvalidLastSymbol`
@@ -301,6 +306,7 @@ List of possible error names:
 - `InvalidPadding`
 - `InvalidPassword`
 - `InvalidPhcStringField`
+- `InvalidProtobuf`
 - `InvalidResizeParameters`
 - `InvalidSort`
 - `InvalidUploadToken`
@@ -324,16 +330,19 @@ List of possible error names:
 - `MissingJsonContentType`
 - `MissingMetadata`
 - `MissingPathParams`
-- `MissingSmtpInfo`
+- `ModelLoadedError`
 - `MultipartError`
 - `NegativeOverflow`
 - `NetworkDown`
 - `NetworkUnreachable`
 - `NoEmail`
+- `NoModel`
 - `NoMoreData`
 - `NoNamesGiven`
+- `NoSuchFile`
 - `NotADirectory`
 - `NotConnected`
+- `NotImplemented`
 - `NotInTransaction`
 - `NotLoggedIn`
 - `NotNullViolation`
@@ -369,6 +378,7 @@ List of possible error names:
 - `ResourceModified`
 - `RollbackTransaction`
 - `RowNotFound`
+- `RuntimeException`
 - `SelfMerge`
 - `SerializationError`
 - `SerializationFailure`
