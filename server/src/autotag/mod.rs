@@ -9,8 +9,8 @@ use ort::inputs;
 use ort::session::Session;
 use ort::value::{Outlet, Tensor};
 use std::path::Path;
-use std::sync::Mutex;
 use strum::FromRepr;
+use tokio::sync::Mutex;
 use tracing::{error, warn};
 
 pub struct AutoTagSession {
@@ -86,17 +86,9 @@ impl AutoTagSession {
             .collect())
     }
 
-    pub fn infer_tags(&self, config: &Config, image_tensor_data: Vec<f32>) -> ApiResult<Vec<SmallString>> {
+    pub async fn infer_tags(&self, config: &Config, image_tensor_data: Vec<f32>) -> ApiResult<Vec<SmallString>> {
         let auto_tag_config = get_config(config)?;
-        let mut session = match self.session.lock() {
-            Ok(session) => session,
-            Err(err) => {
-                error!("Auto-tag session has been poisoned! Resetting...");
-                let mut inner = err.into_inner();
-                *inner = create_session(config)?;
-                inner
-            }
-        };
+        let mut session = self.session.lock().await;
 
         let _timer = crate::time::Timer::new("Inference");
         let image_tensor = Tensor::from_array(([1, 448, 448, 3], image_tensor_data)).map_err(ApiError::from)?;
