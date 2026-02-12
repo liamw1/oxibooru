@@ -21,6 +21,7 @@ mod doc;
 pub mod error;
 mod extract;
 mod info;
+mod legacy;
 pub mod middleware;
 mod password_reset;
 mod pool;
@@ -37,6 +38,7 @@ pub fn routes(state: AppState) -> OpenApiRouter {
     OpenApiRouter::with_openapi(ApiDoc::openapi())
         .merge(comment::routes())
         .merge(info::routes())
+        .merge(legacy::routes())
         .merge(password_reset::routes())
         .merge(pool::routes())
         .merge(pool_category::routes())
