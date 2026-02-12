@@ -24,12 +24,8 @@ pub struct PostHash<'a> {
 
 impl<'a> PostHash<'a> {
     pub fn new(config: &'a Config, post_id: i64) -> Self {
-        let mut key = [0; KEY_LEN];
-        for (key_byte, &value) in key.iter_mut().zip(config.content_secret.as_bytes()) {
-            *key_byte = value;
-        }
+        let key: [u8; KEY_LEN] = std::array::from_fn(|i| config.content_secret.as_bytes().get(i).copied().unwrap_or(0));
         let hash = blake3::keyed_hash(&key, &post_id.to_le_bytes());
-
         Self {
             hash: URL_SAFE_NO_PAD.encode(hash.as_bytes()),
             post_id,
@@ -43,7 +39,8 @@ impl<'a> PostHash<'a> {
 
     /// Returns URL to post content.
     pub fn content_url(&self, content_type: MimeType) -> String {
-        format!("{}/posts/{self}.{}", self.config.data_url, content_type.extension())
+        const POSTS_DIRECTORY: Directory = Directory::Posts;
+        format!("{}/{POSTS_DIRECTORY}/{self}.{}", self.config.data_url, content_type.extension())
     }
 
     /// Returns URL to post thumbnail. Will be a generated thumbnail by default or
@@ -51,11 +48,11 @@ impl<'a> PostHash<'a> {
     pub fn thumbnail_url(&self) -> String {
         // Note: this requires interacting with the filesystem and might be slow
         let thumbnail_folder = if self.custom_thumbnail_path().exists() {
-            "custom-thumbnails"
+            Directory::CustomThumbnails
         } else {
-            "generated-thumbnails"
+            Directory::GeneratedThumbnails
         };
-        format!("{}/{thumbnail_folder}/{self}.jpg", self.config.data_url)
+        format!("{}/{thumbnail_folder}/{self}.{THUMBNAIL_EXTENSION}", self.config.data_url)
     }
 
     /// Returns path to post content on disk.
@@ -66,13 +63,13 @@ impl<'a> PostHash<'a> {
 
     /// Returns path to generated post thumbnail on disk.
     pub fn generated_thumbnail_path(&self) -> PathBuf {
-        let filename = format!("{self}.jpg");
+        let filename = format!("{self}.{THUMBNAIL_EXTENSION}");
         self.config.path(Directory::GeneratedThumbnails).join(filename)
     }
 
     /// Returns path to custom post thumbnail on disk.
     pub fn custom_thumbnail_path(&self) -> PathBuf {
-        let filename = format!("{self}.jpg");
+        let filename = format!("{self}.{THUMBNAIL_EXTENSION}");
         self.config.path(Directory::CustomThumbnails).join(filename)
     }
 }
@@ -168,3 +165,5 @@ pub fn compute_url_safe_hash(content: &[u8]) -> String {
     let hash = blake3::hash(content);
     URL_SAFE_NO_PAD.encode(hash.as_bytes())
 }
+
+const THUMBNAIL_EXTENSION: &str = "jpg";

@@ -1,6 +1,6 @@
 # Used to salt the users' password hashes
 password_secret = "change"
-# Used to generate filenames for static content
+# Used to generate filenames for static content (any bytes after the first 32 will be ignored)
 content_secret = "change"
 
 # full url to the homepage of this szurubooru site, with no trailing slash
