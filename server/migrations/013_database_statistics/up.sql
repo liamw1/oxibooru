@@ -78,7 +78,7 @@ SELECT tag_count."id", tag_count.count, pool_count.count, note_count.count, comm
      GROUP BY "id") tag_count
 INNER JOIN
     (SELECT "post"."id", COUNT("post_note"."id") as count FROM "post"
-     LEFT JOIN "post_note" ON "post_note"."id" = "post"."id"
+     LEFT JOIN "post_note" ON "post_note"."post_id" = "post"."id"
      GROUP BY "post"."id") note_count ON note_count."id" = tag_count."id"
 INNER JOIN
     (SELECT "id", COUNT("pool_id") as count FROM "post"
@@ -86,7 +86,7 @@ INNER JOIN
      GROUP BY "id") pool_count ON pool_count."id" = tag_count."id"
 INNER JOIN
     (SELECT "post"."id", COUNT("comment"."id") as count FROM "post"
-     LEFT JOIN "comment" ON "comment"."id" = "post"."id"
+     LEFT JOIN "comment" ON "comment"."post_id" = "post"."id"
      GROUP BY "post"."id") comment_count ON comment_count."id" = tag_count."id"
 INNER JOIN
     (SELECT "id", COUNT("child_id") as count FROM "post"
