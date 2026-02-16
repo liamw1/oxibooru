@@ -41,17 +41,6 @@ class SjisWrapper extends BaseMarkdownWrapper {
     }
 }
 
-// fix \ before ~ being stripped away
-class TildeWrapper extends BaseMarkdownWrapper {
-    preprocess(text) {
-        return text.replace(/\\~/g, "%%%T");
-    }
-
-    postprocess(text) {
-        return text.replace(/%%%T/g, "\\~");
-    }
-}
-
 // prevent ^#... from being treated as headers, due to tag permalinks
 class TagPermalinkFixWrapper extends BaseMarkdownWrapper {
     preprocess(text) {
@@ -104,13 +93,6 @@ class SmallWrapper extends BaseMarkdownWrapper {
     }
 }
 
-class StrikeThroughWrapper extends BaseMarkdownWrapper {
-    postprocess(text) {
-        text = text.replace(/(^|[^\\])(~~|~)([^~]+)\2/g, "$1<del>$3</del>");
-        return text.replace(/\\~/g, "~");
-    }
-}
-
 class FaviconWrapper extends BaseMarkdownWrapper {
     preprocess(text) {
         return text.replace(
@@ -157,13 +139,11 @@ function formatMarkdown(text) {
     };
     let wrappers = [
         new SjisWrapper(),
-        new TildeWrapper(),
         new TagPermalinkFixWrapper(),
         new EntityPermalinkWrapper(),
         new SearchPermalinkWrapper(),
         new SpoilersWrapper(),
         new SmallWrapper(),
-        new StrikeThroughWrapper(),
         new FaviconWrapper(),
     ];
 
@@ -191,12 +171,10 @@ function formatInlineMarkdown(text) {
         headerIds: false,
     };
     let wrappers = [
-        new TildeWrapper(),
         new EntityPermalinkWrapper(),
         new SearchPermalinkWrapper(),
         new SpoilersWrapper(),
         new SmallWrapper(),
-        new StrikeThroughWrapper(),
         new FaviconWrapper(),
     ];
     const turndownService = new TurndownService();
