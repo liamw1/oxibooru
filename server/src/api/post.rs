@@ -636,7 +636,13 @@ async fn create_impl(
         let relations = body.relations.unwrap_or_default();
         let notes = body.notes.unwrap_or_default();
 
-        let post: Post = new_post.insert_into(post::table).get_result(conn)?;
+        let post: Post = new_post
+            .insert_into(post::table)
+            .on_conflict(post::checksum)
+            .do_nothing()
+            .get_result(conn)
+            .optional()?
+            .ok_or(ApiError::AlreadyExists(ResourceProperty::PostContent))?;
         let post_hash = PostHash::new(&state.config, post.id);
 
         // Add tags, relations, and notes
@@ -750,6 +756,7 @@ struct PostCreateBody {
         (status = 400, description = "Post content is missing"),
         (status = 403, description = "Privileges are too low"),
         (status = 404, description = "Relations refer to non-existing posts"),
+        (status = 409, description = "Post content already exists"),
         (status = 422, description = "A Tag has an invalid name"),
         (status = 422, description = "Safety is invalid"),
         (status = 422, description = "Notes are invalid"),
@@ -1058,7 +1065,7 @@ async fn update_impl(
         }
 
         new_post.last_edit_time = DateTime::now();
-        let _: Post = new_post.save_changes(conn)?;
+        let _: Post = error::map_unique_violation(new_post.save_changes(conn), ResourceProperty::PostContent)?;
         snapshot::post::modification_snapshot(conn, client, post_id, old_snapshot_data, new_snapshot_data)?;
         Ok(())
     })
@@ -1137,6 +1144,7 @@ struct PostUpdateBody {
         (status = 404, description = "Post does not exist"),
         (status = 404, description = "Relations refer to non-existing posts"),
         (status = 409, description = "Version is outdated"),
+        (status = 409, description = "Post content already exists"),
         (status = 422, description = "A tag has an invalid name"),
         (status = 422, description = "Safety is invalid"),
         (status = 422, description = "Notes are invalid"),
@@ -1417,6 +1425,10 @@ mod test {
 
         assert!(post_path.exists());
         assert!(thumbnail_path.exists());
+
+        simulate_upload("1_pixel.png", "duplicate.png")?;
+        verify_response("POST /posts", "post/create_duplicate").await?;
+        verify_response("PUT /post/1", "post/edit_duplicate").await?;
 
         reset_database();
         Ok(())

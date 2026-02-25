@@ -219,6 +219,7 @@ List of possible error names:
 - `DimensionLimitsExceeded`
 - `DimensionMismatch`
 - `DirectoryNotEmpty`
+- `DuplicatePost`
 - `EmailAddressInvalidDomain`
 - `EmailAddressInvalidInput`
 - `EmailAddressInvalidUser`
