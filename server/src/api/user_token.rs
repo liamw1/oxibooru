@@ -71,6 +71,7 @@ async fn list(
 
         user_token::table
             .filter(user_token::user_id.eq(user_id))
+            .order(user_token::creation_time.desc())
             .load(conn)
             .map(|tokens| (avatar_style, tokens))
             .map_err(ApiError::from)
