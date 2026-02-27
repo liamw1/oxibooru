@@ -438,7 +438,7 @@ mod test {
 
         let comment_id: i64 = comment::table
             .select(comment::id)
-            .order_by(comment::id.desc())
+            .order(comment::id.desc())
             .first(&mut conn)?;
 
         let (new_comment_count, new_admin_comment_count) = get_comment_counts(&mut conn)?;

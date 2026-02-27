@@ -426,7 +426,7 @@ mod test {
 
         let category_name: String = tag_category::table
             .select(tag_category::name)
-            .order_by(tag_category::id.desc())
+            .order(tag_category::id.desc())
             .first(&mut conn)?;
 
         let new_category_count: i64 = tag_category::table.count().first(&mut conn)?;

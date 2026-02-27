@@ -68,7 +68,7 @@ async fn get(
             .select((database_statistics::post_count, database_statistics::disk_usage))
             .first(conn)?;
         let latest_feature: Option<PostFeature> = post_feature::table
-            .order_by(post_feature::time.desc())
+            .order(post_feature::time.desc())
             .first(conn)
             .optional()?;
         let featured_post: Option<PostInfo> = latest_feature

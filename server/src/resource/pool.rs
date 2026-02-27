@@ -169,7 +169,7 @@ fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Sm
 
 fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<SmallString>>> {
     Ok(PoolName::belonging_to(pools)
-        .order_by(pool_name::order)
+        .order(pool_name::order)
         .load::<PoolName>(conn)?
         .grouped_by(pools)
         .into_iter()
@@ -183,7 +183,7 @@ fn get_posts(
     client: Client,
     pools: &[Pool],
 ) -> QueryResult<Vec<Vec<MicroPost>>> {
-    let mut pool_posts = PoolPost::belonging_to(pools).order_by(pool_post::order).into_boxed();
+    let mut pool_posts = PoolPost::belonging_to(pools).order(pool_post::order).into_boxed();
 
     // Apply preference filters to pool posts
     if let Some(hidden_posts) = preferences::hidden_posts(config, client, pool_post::post_id) {

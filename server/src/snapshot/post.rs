@@ -45,7 +45,7 @@ impl SnapshotData {
             .load(conn)?;
         let latest_feature = post_feature::table
             .select(post_feature::post_id)
-            .order_by(post_feature::time.desc())
+            .order(post_feature::time.desc())
             .first(conn)
             .optional()?;
         Ok(Self {

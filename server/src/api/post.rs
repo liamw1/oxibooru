@@ -301,14 +301,14 @@ async fn get_neighbors(
                 .build_filtered(conn)?
                 .select(Post::as_select())
                 .filter(post::id.gt(post_id))
-                .order_by(post::id.asc())
+                .order(post::id.asc())
                 .first(conn)
                 .optional()?;
             let next_post = query_builder
                 .build_filtered(conn)?
                 .select(Post::as_select())
                 .filter(post::id.lt(post_id))
-                .order_by(post::id.desc())
+                .order(post::id.desc())
                 .first(conn)
                 .optional()?;
 
@@ -378,7 +378,7 @@ async fn get_featured(
     state.get_connection()?.transaction(|conn| {
         let mut featured = post_feature::table
             .select(post_feature::post_id)
-            .order_by(post_feature::time.desc())
+            .order(post_feature::time.desc())
             .into_boxed();
 
         // Apply preferences to post features
@@ -436,7 +436,7 @@ async fn feature(
     conn.transaction(|conn| {
         let previous_feature_id = post_feature::table
             .select(post_feature::post_id)
-            .order_by(post_feature::time.desc())
+            .order(post_feature::time.desc())
             .first(conn)
             .optional()?;
         if previous_feature_id == Some(new_post_feature.post_id) {
@@ -1397,7 +1397,7 @@ mod test {
 
         let last_feature_time: DateTime = post_feature::table
             .select(post_feature::time)
-            .order_by(post_feature::time.desc())
+            .order(post_feature::time.desc())
             .first(&mut conn)?;
         diesel::delete(post_feature::table)
             .filter(post_feature::post_id.eq(POST_ID))

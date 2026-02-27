@@ -398,7 +398,7 @@ mod test {
 
         let category_name: SmallString = pool_category::table
             .select(pool_category::name)
-            .order_by(pool_category::id.desc())
+            .order(pool_category::id.desc())
             .first(&mut conn)?;
 
         let new_category_count: i64 = pool_category::table.count().first(&mut conn)?;

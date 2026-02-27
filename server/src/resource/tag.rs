@@ -157,7 +157,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
         .inner_join(implication_info.on(tag::id.eq(tag_implication::child_id)))
         .select((TagImplication::as_select(), tag::category_id, tag_statistics::usage_count))
         .filter(TagName::primary())
-        .order_by(tag_name::name)
+        .order(tag_name::name)
         .load(conn)?;
     let implication_ids: HashSet<i64> = implications
         .iter()
@@ -167,7 +167,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
     let implication_names: Vec<(i64, SmallString)> = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(implication_ids))
-        .order_by((tag_name::tag_id, tag_name::order))
+        .order((tag_name::tag_id, tag_name::order))
         .load(conn)?;
     let names_map = resource::collect_names(implication_names);
 
@@ -199,14 +199,14 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
         .inner_join(suggestion_info.on(tag::id.eq(tag_suggestion::child_id)))
         .select((TagSuggestion::as_select(), tag::category_id, tag_statistics::usage_count))
         .filter(TagName::primary())
-        .order_by(tag_name::name)
+        .order(tag_name::name)
         .load(conn)?;
     let suggestion_ids: HashSet<i64> = suggestions.iter().map(|(suggestion, ..)| suggestion.child_id).collect();
 
     let suggestion_names: Vec<(i64, SmallString)> = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(suggestion_ids))
-        .order_by((tag_name::tag_id, tag_name::order))
+        .order((tag_name::tag_id, tag_name::order))
         .load(conn)?;
     let names_map = resource::collect_names(suggestion_names);
 

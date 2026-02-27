@@ -403,7 +403,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
     let tag_names: Vec<(i64, SmallString)> = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(tag_ids))
-        .order_by((tag_name::tag_id, tag_name::order))
+        .order((tag_name::tag_id, tag_name::order))
         .load(conn)?;
     let names_map = resource::collect_names(tag_names);
 
@@ -563,7 +563,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
 
 fn get_notes(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Note>>> {
     Ok(PostNote::belonging_to(posts)
-        .order_by(post_note::id)
+        .order(post_note::id)
         .load(conn)?
         .grouped_by(posts)
         .into_iter()
@@ -611,7 +611,7 @@ fn get_users_who_favorited(
     let users_who_favorited: Vec<(PostFavorite, SmallString, AvatarStyle)> = PostFavorite::belonging_to(posts)
         .inner_join(user::table)
         .select((PostFavorite::as_select(), user::name, user::avatar_style))
-        .order_by(user::name)
+        .order(user::name)
         .load(conn)?;
     Ok(users_who_favorited
         .grouped_by(posts)

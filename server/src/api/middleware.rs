@@ -54,7 +54,7 @@ pub async fn post_to_webhooks(State(state): State<AppState>, request: Request, n
         let new_snapshots = snapshot::table
             .select(Snapshot::as_select())
             .filter(snapshot::id.gt(last_posted_snapshot))
-            .order_by(snapshot::id)
+            .order(snapshot::id)
             .load(&mut conn)?;
 
         for snapshot in new_snapshots {
@@ -69,7 +69,7 @@ pub async fn post_to_webhooks(State(state): State<AppState>, request: Request, n
 pub fn initialize_snapshot_counter(conn: &mut PgConnection) -> QueryResult<()> {
     let latest_snapshot_id = snapshot::table
         .select(snapshot::id)
-        .order_by(snapshot::id.desc())
+        .order(snapshot::id.desc())
         .first(conn)
         .optional()
         .map(Option::unwrap_or_default)?;

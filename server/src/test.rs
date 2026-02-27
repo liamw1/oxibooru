@@ -182,7 +182,7 @@ pub async fn verify_response_with_credentials(
         let mut conn = get_connection()?;
         let actual_snapshot: Value = snapshot::table
             .select(snapshot::data)
-            .order_by(snapshot::id.desc())
+            .order(snapshot::id.desc())
             .first(&mut conn)?;
         verify_json(relative_path, "snapshot data", &expected_snapshot, &actual_snapshot);
     }

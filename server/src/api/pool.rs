@@ -510,10 +510,7 @@ mod test {
 
         verify_response(&format!("POST /pool/?{FIELDS}"), "pool/create").await?;
 
-        let pool_id: i64 = pool::table
-            .select(pool::id)
-            .order_by(pool::id.desc())
-            .first(&mut conn)?;
+        let pool_id: i64 = pool::table.select(pool::id).order(pool::id.desc()).first(&mut conn)?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
         let post_count: i64 = pool_statistics::table

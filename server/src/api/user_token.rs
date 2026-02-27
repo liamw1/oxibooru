@@ -337,7 +337,7 @@ mod test {
         let mut conn = get_connection()?;
         let token: Uuid = user_token::table
             .select(user_token::id)
-            .order_by(user_token::creation_time.desc())
+            .order(user_token::creation_time.desc())
             .first(&mut conn)?;
 
         verify_response(&format!("DELETE /user-token/{USER}/{token}"), "user_token/delete").await?;

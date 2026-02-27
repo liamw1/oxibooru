@@ -669,7 +669,7 @@ mod test {
 
         let (user_id, name): (i64, String) = user::table
             .select((user::id, user::name))
-            .order_by(user::id.desc())
+            .order(user::id.desc())
             .first(&mut conn)?;
 
         let new_user_count = get_user_count(&mut conn)?;

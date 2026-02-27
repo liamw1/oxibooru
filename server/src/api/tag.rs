@@ -202,7 +202,7 @@ async fn get_siblings(
             .select((post_tag::tag_id, count_star()))
             .filter(post_tag::post_id.eq_any(posts_tagged_on))
             .filter(post_tag::tag_id.ne(tag_id))
-            .order_by((count_star().desc(), post_tag::tag_id))
+            .order((count_star().desc(), post_tag::tag_id))
             .limit(MAX_TAG_SIBLINGS)
             .into_boxed();
 
@@ -687,7 +687,7 @@ mod test {
 
         let (tag_id, name): (i64, SmallString) = tag_name::table
             .select((tag_name::tag_id, tag_name::name))
-            .order_by(tag_name::tag_id.desc())
+            .order(tag_name::tag_id.desc())
             .first(&mut conn)?;
 
         let new_tag_count = get_tag_count(&mut conn)?;
@@ -787,7 +787,7 @@ mod test {
 
         verify_response(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/edit_restore").await?;
 
-        let new_tag_id: i64 = tag::table.select(tag::id).order_by(tag::id.desc()).first(&mut conn)?;
+        let new_tag_id: i64 = tag::table.select(tag::id).order(tag::id.desc()).first(&mut conn)?;
         diesel::delete(tag::table.find(new_tag_id)).execute(&mut conn)?;
 
         let (new_tag, new_usage_count, new_implication_count, new_suggestion_count) = get_tag_info(&mut conn, NAME)?;
