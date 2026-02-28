@@ -93,6 +93,7 @@ pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
     if let Err(err) = filesystem::purge_temporary_uploads(&state.config) {
         warn!("Failed to purge temporary files. Details:\n{err}");
     }
+    filesystem::spawn_temporary_uploads_cleanup_task(state.config.clone());
     Ok(())
 }
 
