@@ -12,7 +12,7 @@ pub fn hash_password(config: &Config, password: &str, salt: &SaltString) -> Resu
     Ok(password_hash.to_string())
 }
 
-/// Returns [`Ok`] if the given `user` and `password` match.
+/// Returns [`Ok`] if the given `password_hash` and `password` match.
 pub fn is_valid_password(config: &Config, password_hash: &str, password: &str) -> Result<(), Error> {
     let argon_context = create_argon_context(config)?;
     PasswordHash::new(password_hash)
