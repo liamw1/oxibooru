@@ -131,7 +131,7 @@ async fn get(
 
 /// Request body for creating a comment.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct CommentCreateBody {
     /// ID of the post to comment on.
     post_id: i64,
@@ -180,7 +180,6 @@ async fn create(
 
 /// Request body for updating a comment.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct CommentUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,

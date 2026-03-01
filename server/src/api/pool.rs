@@ -138,7 +138,6 @@ async fn get(
 
 /// Request body for creating a pool.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct PoolCreateBody {
     /// Pool names. Must match `pool_name_regex` from server's configuration.
     names: Vec<SmallString>,
@@ -279,7 +278,6 @@ async fn merge(
 
 /// Request body for updating a pool.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct PoolUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,

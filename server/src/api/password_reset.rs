@@ -119,7 +119,6 @@ async fn request_reset(State(state): State<AppState>, Path(identifier): Path<Sma
 
 /// Token from password reset email.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct ResetToken {
     token: String,
 }

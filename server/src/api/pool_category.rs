@@ -93,7 +93,6 @@ async fn get(
 
 /// Request body for creating a pool category.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct PoolCategoryCreateBody {
     /// Category name. Must match `pool_category_name_regex` from server's configuration.
     name: SmallString,
@@ -153,7 +152,6 @@ async fn create(
 
 /// Request body for updating a pool category.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct PoolCategoryUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,

@@ -397,7 +397,6 @@ async fn get_featured(
 
 /// Request body for featuring a post.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct FeatureBody {
     /// ID of the post to feature.
     id: i64,
@@ -513,7 +512,7 @@ async fn reverse_search_impl(
 
 /// Request body for reverse image search.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct ReverseSearchBody {
     #[serde(skip_deserializing)]
     content: Option<FileContents>,
@@ -693,7 +692,7 @@ async fn create_impl(
 
 /// Request body for creating a post.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct PostCreateBody {
     /// Post safety rating.
     safety: PostSafety,
@@ -786,7 +785,7 @@ async fn create(
 
 /// Request body for merging posts.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct PostMergeBody {
     #[schema(inline)]
     #[serde(flatten)]
@@ -1079,7 +1078,7 @@ async fn update_impl(
 
 /// Request body for updating a post.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct PostUpdateBody {
     // Resource version. See [versioning](#Versioning).
     version: DateTime,

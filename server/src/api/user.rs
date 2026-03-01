@@ -249,7 +249,7 @@ async fn create_impl(
 
 /// Request body for creating a user.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct UserCreateBody {
     /// Username. Must match `user_name_regex` from server's configuration.
     name: SmallString,
@@ -461,7 +461,7 @@ async fn update_impl(
 
 /// Request body for updating a user.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct UserUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,

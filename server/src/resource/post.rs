@@ -33,7 +33,6 @@ use strum::{EnumString, EnumTable};
 use utoipa::ToSchema;
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 pub struct Note {
     #[serde(skip)]
     id: i64,

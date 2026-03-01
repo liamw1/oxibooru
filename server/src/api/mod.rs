@@ -90,7 +90,6 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
 
 /// Request body to apply/change a score.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct RatingBody {
     score: Rating,
 }
@@ -104,7 +103,6 @@ impl Deref for RatingBody {
 
 /// Request body for deleting a resource.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct DeleteBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,

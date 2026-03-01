@@ -92,7 +92,6 @@ async fn get(
 
 /// Request body for creating a tag category.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct TagCategoryCreateBody {
     /// Display order for the category.
     order: i32,
@@ -154,7 +153,6 @@ async fn create(
 
 /// Request body for updating a tag category.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct TagCategoryUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,

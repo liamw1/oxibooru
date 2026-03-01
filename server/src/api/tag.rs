@@ -231,7 +231,6 @@ async fn get_siblings(
 
 /// Request body for creating a tag.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct TagCreateBody {
     /// Category name. Must match an existing tag category.
     category: SmallString,
@@ -391,7 +390,6 @@ async fn merge(
 
 /// Request body for updating a tag.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct TagUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,

@@ -88,7 +88,7 @@ async fn list(
 
 /// Request body for creating a user token.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct UserTokenCreateBody {
     /// Whether the token is enabled. Defaults to `true` if not present.
     enabled: Option<bool>,
@@ -168,7 +168,7 @@ async fn create(
 
 /// Request body for updating a user token.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct UserTokenUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,
