@@ -121,7 +121,7 @@ impl PoolInfo {
         resource::check_batch_results(batch_size, posts.len());
         resource::check_batch_results(batch_size, post_counts.len());
 
-        let results = pools
+        let mut results = pools
             .into_iter()
             .rev()
             .map(|pool| Self {
@@ -136,7 +136,8 @@ impl PoolInfo {
                 post_count: post_counts.pop(),
             })
             .collect::<Vec<_>>();
-        Ok(results.into_iter().rev().collect())
+        results.reverse();
+        Ok(results)
     }
 
     pub fn new_batch_from_ids(

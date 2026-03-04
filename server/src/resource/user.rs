@@ -157,7 +157,7 @@ impl UserInfo {
         resource::check_batch_results(batch_size, dislike_counts.len());
         resource::check_batch_results(batch_size, favorite_counts.len());
 
-        let results = users
+        let mut results = users
             .into_iter()
             .rev()
             .map(|user| Self {
@@ -179,7 +179,8 @@ impl UserInfo {
                 favorite_post_count: favorite_counts.pop(),
             })
             .collect::<Vec<_>>();
-        Ok(results.into_iter().rev().collect())
+        results.reverse();
+        Ok(results)
     }
 
     pub fn new_batch_from_ids(

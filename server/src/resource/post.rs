@@ -297,7 +297,7 @@ impl PostInfo {
         resource::check_batch_results(batch_size, last_feature_times.len());
         resource::check_batch_results(batch_size, users_who_favorited.len());
 
-        let results = posts
+        let mut results = posts
             .into_iter()
             .rev()
             .map(|post| Self {
@@ -339,7 +339,8 @@ impl PostInfo {
                     .then(|| PostHash::new(config, post.id).custom_thumbnail_path().exists()),
             })
             .collect::<Vec<_>>();
-        Ok(results.into_iter().rev().collect())
+        results.reverse();
+        Ok(results)
     }
 
     pub fn new_batch_from_ids(

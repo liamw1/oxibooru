@@ -99,7 +99,7 @@ impl CommentInfo {
         resource::check_batch_results(batch_size, scores.len());
         resource::check_batch_results(batch_size, client_scores.len());
 
-        let results = comments
+        let mut results = comments
             .into_iter()
             .rev()
             .map(|comment| Self {
@@ -114,7 +114,8 @@ impl CommentInfo {
                 own_score: client_scores.pop(),
             })
             .collect::<Vec<_>>();
-        Ok(results.into_iter().rev().collect())
+        results.reverse();
+        Ok(results)
     }
 
     pub fn new_batch_from_ids(

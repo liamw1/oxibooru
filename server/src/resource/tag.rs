@@ -97,7 +97,7 @@ impl TagInfo {
         resource::check_batch_results(batch_size, suggestions.len());
         resource::check_batch_results(batch_size, usages.len());
 
-        let results = tags
+        let mut results = tags
             .into_iter()
             .rev()
             .map(|tag| Self {
@@ -112,7 +112,8 @@ impl TagInfo {
                 usages: usages.pop(),
             })
             .collect::<Vec<_>>();
-        Ok(results.into_iter().rev().collect())
+        results.reverse();
+        Ok(results)
     }
 
     pub fn new_batch_from_ids(
