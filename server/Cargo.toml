@@ -50,7 +50,7 @@ utoipa-axum = "0.2.0"
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum", "vendored"] }
 utoipa-swagger-ui-vendored = "0.1.2"
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
-video-rs = "0.10.3"
+video-rs = "0.11.0"
 walkdir = "2.5.0"
 
 [target.'cfg(target_env = "musl")'.dependencies]
