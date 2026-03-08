@@ -4,7 +4,7 @@ use std::num::TryFromIntError;
 
 /// Represents a point on a two-dimensional integer lattice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct IPoint2<T: PrimInt> {
+pub struct IPoint2<T> {
     pub i: T,
     pub j: T,
 }

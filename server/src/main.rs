@@ -5,8 +5,6 @@
 #![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
 // Option<Option<T>> is convenient for deserializing optional nullable JSON fields
 #![allow(clippy::option_option)]
-// Buggy
-#![allow(clippy::iter_not_returning_iterator)]
 // Unhelpful
 #![allow(clippy::float_cmp)]
 // Too subjective

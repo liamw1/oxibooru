@@ -6,12 +6,12 @@ use std::ops::AddAssign;
 
 /// Represents a box on a two-dimensional integer lattice.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct IRect<T: PrimInt> {
+pub struct IRect<T> {
     i_bounds: Interval<T>,
     j_bounds: Interval<T>,
 }
 
-impl<T: PrimInt> IRect<T> {
+impl<T: PrimInt + AddAssign> IRect<T> {
     /// Constructs a new [`IRect`] from two intervals `i_bounds` and `j_bounds`.
     pub fn new(i_bounds: Interval<T>, j_bounds: Interval<T>) -> Self {
         Self { i_bounds, j_bounds }
@@ -69,15 +69,12 @@ impl<T: PrimInt> IRect<T> {
     }
 }
 
-pub struct IRectIter<T: PrimInt> {
+pub struct IRectIter<T> {
     rect: IRect<T>,
     current: IPoint2<T>,
 }
 
-impl<T> Iterator for IRectIter<T>
-where
-    T: PrimInt + std::ops::AddAssign<T>,
-{
+impl<T: PrimInt + AddAssign> Iterator for IRectIter<T> {
     type Item = IPoint2<T>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.current > self.rect.max_corner() {
@@ -121,7 +118,7 @@ where
     /// Returns the bounds of the array as an [`IRect`].
     pub fn bounds<I>() -> IRect<I>
     where
-        I: PrimInt + TryFrom<usize>,
+        I: PrimInt + AddAssign + TryFrom<usize>,
         <I as TryFrom<usize>>::Error: Debug,
     {
         IRect::new_zero_based(
@@ -143,7 +140,7 @@ where
     /// Retrieves data stores at given two-dimensional `index`. Returns [`None`] if index is out-of-bounds.
     pub fn get<I>(&self, index: IPoint2<I>) -> Option<T>
     where
-        I: PrimInt + TryFrom<usize>,
+        I: PrimInt + AddAssign + TryFrom<usize>,
         <I as TryFrom<usize>>::Error: Debug,
     {
         Self::bounds::<I>().contains(index).then(|| self.at(index))
