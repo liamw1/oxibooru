@@ -1,6 +1,6 @@
 use crate::auth::header::AuthenticationError;
 use crate::config::RegexType;
-use crate::error::ErrorKind;
+use crate::error::{ErrorKind, ErrorName};
 use crate::model::enums::{MimeType, ResourceProperty, ResourceType};
 use crate::string::SmallString;
 use axum::Json;
@@ -9,6 +9,7 @@ use axum::response::{IntoResponse, Response};
 use diesel::QueryResult;
 use image::error::{ImageError, LimitError, LimitErrorKind};
 use serde::Serialize;
+use utoipa::ToSchema;
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
@@ -272,9 +273,9 @@ pub fn map_unique_or_foreign_key_violation<T>(
 }
 
 /// Response body for errors.
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 struct ErrorResponse {
+    name: ErrorName,
     title: &'static str,
-    name: &'static str,
     description: String,
 }
