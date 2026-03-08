@@ -507,8 +507,8 @@ const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRan
 // Some inserts here are not batched intentionally to ensure that creation times are distinct
 
 fn create_tag_categories(conn: &mut PgConnection) -> QueryResult<()> {
-    let new_categories = TAG_CATEGORY_NAMES.iter().enumerate().map(|(i, name)| NewTagCategory {
-        order: i as i32 + 1,
+    let new_categories = (1..).zip(TAG_CATEGORY_NAMES).map(|(order, name)| NewTagCategory {
+        order,
         name,
         color: "default",
     });
@@ -519,21 +519,16 @@ fn create_tag_categories(conn: &mut PgConnection) -> QueryResult<()> {
 }
 
 fn create_tags(conn: &mut PgConnection) -> QueryResult<()> {
-    for (i, tags) in TAG_GROUPS.iter().enumerate() {
+    for (category_id, tags) in (0..).zip(TAG_GROUPS) {
         let new_tags = tags.iter().map(|_| NewTag {
-            category_id: i as i64,
+            category_id,
             description: "",
         });
         for (new_tag, names) in new_tags.zip(*tags) {
             let tag_id = new_tag.insert_into(tag::table).returning(tag::id).get_result(conn)?;
-            let new_names: Vec<_> = names
-                .iter()
-                .enumerate()
-                .map(|(i, name)| NewTagName {
-                    tag_id,
-                    order: i as i32,
-                    name,
-                })
+            let new_names: Vec<_> = (0..)
+                .zip(*names)
+                .map(|(order, name)| NewTagName { tag_id, order, name })
                 .collect();
             new_names.insert_into(tag_name::table).execute(conn)?;
         }
@@ -583,21 +578,16 @@ fn create_pool_categories(conn: &mut PgConnection) -> QueryResult<()> {
 }
 
 fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
-    for (i, pools) in POOL_GROUPS.iter().enumerate() {
+    for (category_id, pools) in (0..).zip(POOL_GROUPS) {
         let new_pools = pools.iter().map(|_| NewPool {
-            category_id: i as i64,
+            category_id,
             description: "",
         });
         for (new_pool, names) in new_pools.zip(*pools) {
             let pool_id = new_pool.insert_into(pool::table).returning(pool::id).get_result(conn)?;
-            let new_names: Vec<_> = names
-                .iter()
-                .enumerate()
-                .map(move |(i, name)| NewPoolName {
-                    pool_id,
-                    order: i as i32,
-                    name,
-                })
+            let new_names: Vec<_> = (0..)
+                .zip(*names)
+                .map(move |(order, name)| NewPoolName { pool_id, order, name })
                 .collect();
             new_names.insert_into(pool_name::table).execute(conn)?;
         }
@@ -664,25 +654,19 @@ fn populate_database(conn: &mut PgConnection, config: &Config) -> AdminResult<()
     new_post_relations.insert_into(post_relation::table).execute(conn)?;
 
     // Add tags
-    for (i, &tags) in POST_TAGS.iter().enumerate() {
+    for (post_id, &tags) in (1..).zip(POST_TAGS) {
         let tag_ids = tag::table
             .select(tag::id)
             .distinct()
             .inner_join(tag_name::table)
             .filter(tag_name::name.eq_any(tags))
             .load(conn)?;
-        let new_post_tags: Vec<_> = tag_ids
-            .iter()
-            .map(|&tag_id| PostTag {
-                post_id: i as i64 + 1,
-                tag_id,
-            })
-            .collect();
+        let new_post_tags: Vec<_> = tag_ids.iter().map(|&tag_id| PostTag { post_id, tag_id }).collect();
         new_post_tags.insert_into(post_tag::table).execute(conn)?;
     }
 
     // Add pools
-    for (i, &(name, post_id)) in POOL_POSTS.iter().enumerate() {
+    for (order, &(name, post_id)) in (0..).zip(POOL_POSTS) {
         let pool_id = pool::table
             .select(pool::id)
             .inner_join(pool_name::table)
@@ -691,7 +675,7 @@ fn populate_database(conn: &mut PgConnection, config: &Config) -> AdminResult<()
         PoolPost {
             pool_id,
             post_id,
-            order: i as i64,
+            order,
         }
         .insert_into(pool_post::table)
         .execute(conn)?;

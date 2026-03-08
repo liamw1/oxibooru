@@ -26,7 +26,8 @@ pub fn create_connection_pool() -> ConnectionPool {
         let num_tokio_threads = tokio::runtime::Handle::try_current()
             .map(|handle| handle.metrics().num_workers())
             .unwrap_or(1);
-        let num_threads = std::cmp::max(num_tokio_threads, app::num_rayon_threads()) as u32;
+        let num_threads = u32::try_from(std::cmp::max(num_tokio_threads, app::num_rayon_threads()))
+            .expect("Number of threads will never be greater than u32::MAX");
 
         Pool::builder()
             .max_size(num_threads + 1)

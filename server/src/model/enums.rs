@@ -316,7 +316,7 @@ impl<T: Into<u16>> BitOrAssign<T> for PostFlags {
 
 impl ToSql<SmallInt, Pg> for PostFlags {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(self.0 as i16)?;
+        out.write_i16::<NetworkEndian>(self.0.cast_signed())?;
         Ok(IsNull::No)
     }
 }
