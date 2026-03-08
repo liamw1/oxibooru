@@ -1,9 +1,9 @@
-ARG ALPINE_VERSION=3.22
+ARG ALPINE_VERSION=3.23
 ARG RUST_VERSION=1.94.0
 ARG CHEF_VERSION=0.1.77
 
 ############################## Planning Phase ##############################
-FROM lukemathwalker/cargo-chef:${CHEF_VERSION}-rust-${RUST_VERSION}-alpine AS chef
+FROM lukemathwalker/cargo-chef:${CHEF_VERSION}-rust-${RUST_VERSION}-alpine${ALPINE_VERSION} AS chef
 WORKDIR /opt/app
 
 # Create recipe of crate dependencies
