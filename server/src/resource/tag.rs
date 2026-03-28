@@ -185,7 +185,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
             implications_on_tag
                 .into_iter()
                 .map(|(implication, category_id, usages)| MicroTag {
-                    names: names_map[&implication.child_id].clone(),
+                    names: Rc::clone(&names_map[&implication.child_id]),
                     category: category_names[&category_id].clone(),
                     usages,
                 })
@@ -224,7 +224,7 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
             suggestions_on_tag
                 .into_iter()
                 .map(|(suggestion, category_id, usages)| MicroTag {
-                    names: names_map[&suggestion.child_id].clone(),
+                    names: Rc::clone(&names_map[&suggestion.child_id]),
                     category: category_names[&category_id].clone(),
                     usages,
                 })

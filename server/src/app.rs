@@ -29,7 +29,7 @@ impl AppState {
     pub fn new(connection_pool: AsyncConnectionPool, config: Config) -> Self {
         /// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
         const CONTENT_CACHE_SIZE: usize = 10;
-        AppState {
+        Self {
             connection_pool: Arc::new(connection_pool),
             config: Arc::new(config),
             content_cache: Arc::new(Mutex::new(RingCache::new(CONTENT_CACHE_SIZE))),
@@ -97,7 +97,7 @@ pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
     if let Err(err) = filesystem::purge_temporary_uploads(&state.config) {
         warn!("Failed to purge temporary files. Details:\n{err}");
     }
-    filesystem::spawn_temporary_uploads_cleanup_task(state.config.clone());
+    filesystem::spawn_temporary_uploads_cleanup_task(Arc::clone(&state.config));
     Ok(())
 }
 

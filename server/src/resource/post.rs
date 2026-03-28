@@ -29,6 +29,7 @@ use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
+use std::rc::Rc;
 use strum::{EnumString, EnumTable};
 use utoipa::ToSchema;
 
@@ -420,7 +421,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
             tags_on_post
                 .into_iter()
                 .map(|(post_tag, category_id, usages)| MicroTag {
-                    names: names_map[&post_tag.tag_id].clone(),
+                    names: Rc::clone(&names_map[&post_tag.tag_id]),
                     category: category_names[&category_id].clone(),
                     usages,
                 })
@@ -551,7 +552,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
                 .into_iter()
                 .map(|(pool_post, category_id, post_count)| MicroPool {
                     id: pool_post.pool_id,
-                    names: names_map[&pool_post.pool_id].clone(),
+                    names: Rc::clone(&names_map[&pool_post.pool_id]),
                     category: category_names[&category_id].clone(),
                     description: pool_descriptions[&pool_post.pool_id].clone(),
                     post_count,

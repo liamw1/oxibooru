@@ -21,7 +21,8 @@ pub type AsyncConnectionResult<'a> = Result<AsyncConnection<'a>, PoolError>;
 
 pub struct AsyncConnection<'a> {
     conn: Connection,
-    _permit: SemaphorePermit<'a>,
+    #[allow(dead_code)]
+    permit: SemaphorePermit<'a>,
 }
 
 impl Deref for AsyncConnection<'_> {
@@ -44,9 +45,9 @@ pub struct AsyncConnectionPool {
 
 impl AsyncConnectionPool {
     pub async fn get(&self) -> AsyncConnectionResult<'_> {
-        let _permit = self.semaphore.acquire().await.expect("Semaphore should never close");
+        let permit = self.semaphore.acquire().await.expect("Semaphore should never close");
         let conn = self.pool.get()?;
-        Ok(AsyncConnection { conn, _permit })
+        Ok(AsyncConnection { conn, permit })
     }
 
     pub fn get_blocking(&self) -> Result<Connection, PoolError> {
