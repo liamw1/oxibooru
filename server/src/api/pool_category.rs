@@ -48,7 +48,8 @@ async fn list(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state
-        .get_connection()?
+        .get_connection()
+        .await?
         .transaction(|conn| PoolCategoryInfo::all(conn, &fields))
         .map(|results| UnpagedResponse { results })
         .map(Json)
@@ -79,7 +80,7 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().pool_category_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let category = pool_category::table
             .filter(pool_category::name.eq(name))
             .first(conn)
@@ -133,7 +134,7 @@ async fn create(
         color: &body.color,
     };
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let category = conn.transaction(|conn| {
         let category = new_category
             .insert_into(pool_category::table)
@@ -194,7 +195,7 @@ async fn update(
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let updated_category = conn.transaction(|conn| {
         let old_category: PoolCategory = pool_category::table
             .filter(pool_category::name.eq(name))
@@ -251,7 +252,7 @@ async fn set_default(
     api::verify_privilege(client, state.config.privileges().pool_category_set_default)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let new_default_category: PoolCategory = conn.transaction(|conn| {
         let mut category: PoolCategory = pool_category::table
             .filter(pool_category::name.eq(name))
@@ -327,7 +328,7 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().pool_category_delete)?;
 
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let category: PoolCategory = pool_category::table
             .filter(pool_category::name.eq(name))
             .first(conn)

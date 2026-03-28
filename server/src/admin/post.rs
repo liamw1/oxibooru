@@ -63,7 +63,7 @@ pub fn recompute_signatures(state: &AppState, editor: &mut PostEditor) {
         // can continue running during computation.
         diesel::update(database_statistics::table)
             .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
-            .execute(&mut state.get_connection()?)?;
+            .execute(&mut state.get_connection_blocking()?)?;
 
         let _timer = Timer::new("recompute_signatures");
         let progress = ProgressReporter::new("Signatures computed", PRINT_INTERVAL);
@@ -111,7 +111,7 @@ fn check_integrity_in_parallel(
 ) -> AdminResult<()> {
     admin::is_cancelled()?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     let (mime_type, checksum): (MimeType, Checksum) = match post::table
         .find(post_id)
         .select((post::mime_type, post::checksum))
@@ -148,7 +148,7 @@ fn check_integrity_in_parallel(
 fn recompute_index_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> AdminResult<()> {
     admin::is_cancelled()?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     let signature: CompressedSignature = post_signature::table
         .find(post_id)
         .select(post_signature::signature)
@@ -176,7 +176,7 @@ fn recompute_checksum_in_parallel(
 ) -> AdminResult<()> {
     admin::is_cancelled()?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     let mime_type = match post::table
         .find(post_id)
         .select(post::mime_type)
@@ -239,7 +239,7 @@ fn recompute_checksum_in_parallel(
 fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> AdminResult<()> {
     admin::is_cancelled()?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     let mime_type = match post::table
         .find(post_id)
         .select(post::mime_type)
@@ -311,7 +311,7 @@ fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &Pr
 fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> AdminResult<()> {
     admin::is_cancelled()?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     let mime_type = match post::table
         .find(post_id)
         .select(post::mime_type)
@@ -358,7 +358,7 @@ fn user_query(state: &AppState, editor: &mut PostEditor) -> AdminResult<Vec<i64>
         match QueryBuilder::new_with_anonymous_token(&state.config, admin::client(), &user_input, Token::Id) {
             Err(err) => error!("Could not parse query for reason: {err}"),
             Ok(mut builder) => {
-                let mut conn = state.get_connection()?;
+                let mut conn = state.get_connection_blocking()?;
                 let post_ids = conn.transaction(|conn| builder.load(conn))?;
                 info!("Found {} posts", post_ids.len());
                 return Ok(post_ids);

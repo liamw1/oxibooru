@@ -50,7 +50,8 @@ async fn list(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state
-        .get_connection()?
+        .get_connection()
+        .await?
         .transaction(|conn| TagCategoryInfo::all(conn, &state.config, client, &fields))
         .map(|results| UnpagedResponse { results })
         .map(Json)
@@ -82,7 +83,7 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().tag_category_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let category = verify_visibility(conn, &state.config, client, &name)?;
         TagCategoryInfo::new(conn, category, &fields)
             .map(Json)
@@ -134,7 +135,7 @@ async fn create(
         color: &body.color,
     };
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let category = conn.transaction(|conn| {
         let category = new_category
             .insert_into(tag_category::table)
@@ -197,7 +198,7 @@ async fn update(
 ) -> ApiResult<Json<TagCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let updated_category = conn.transaction(|conn| {
         let old_category: TagCategory = tag_category::table
             .filter(tag_category::name.eq(name))
@@ -259,7 +260,7 @@ async fn set_default(
     api::verify_privilege(client, state.config.privileges().tag_category_set_default)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let new_default_category: TagCategory = conn.transaction(|conn| {
         let mut category: TagCategory = tag_category::table
             .filter(tag_category::name.eq(name))
@@ -334,7 +335,7 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().tag_category_delete)?;
 
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let category: TagCategory = tag_category::table
             .filter(tag_category::name.eq(name))
             .first(conn)

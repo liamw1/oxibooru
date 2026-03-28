@@ -63,7 +63,7 @@ async fn get(
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<InfoResponse>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let (post_count, disk_usage) = database_statistics::table
             .select((database_statistics::post_count, database_statistics::disk_usage))
             .first(conn)?;

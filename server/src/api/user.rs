@@ -100,7 +100,7 @@ async fn list(
     let limit = std::cmp::min(page.limit.get(), MAX_USERS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
@@ -143,7 +143,7 @@ async fn get(
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UserInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let user_id = user::table
             .select(user::id)
             .filter(user::name.eq(username))
@@ -213,7 +213,7 @@ async fn create_impl(
         None => None,
     };
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let user = conn.transaction(|conn| {
         let name_exists: bool =
             diesel::select(exists(user::table.select(user::id).filter(user::name.eq(&new_user.name)))).first(conn)?;
@@ -342,7 +342,7 @@ async fn update_impl(
         None => None,
     };
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let (user_id, visibility) = conn.transaction(|conn| {
         let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))
@@ -566,7 +566,7 @@ async fn delete(
     Path(username): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let (user_id, user_version): (i64, DateTime) = user::table
             .select((user::id, user::last_edit_time))
             .filter(user::name.eq(username))

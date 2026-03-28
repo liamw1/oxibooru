@@ -10,7 +10,7 @@ use crate::content::signature::SignatureCache;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
 use crate::content::{Content, FileContents, signature, upload};
-use crate::db::ConnectionPool;
+use crate::db::AsyncConnectionPool;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceProperty, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
 use crate::resource::post::{Note, PostInfo};
@@ -80,7 +80,7 @@ struct Multipart<T> {
 /// more pessimistic than necessary, as parallel updates are safe if the sets of tags are
 /// disjoint. However, allowing disjoint tagging introduces additional complexity so it
 /// isn't being done as of now.
-async fn tagging_update<T, F>(connection_pool: &ConnectionPool, tags_updated: bool, update: F) -> ApiResult<T>
+async fn tagging_update<T, F>(connection_pool: &AsyncConnectionPool, tags_updated: bool, update: F) -> ApiResult<T>
 where
     F: FnOnce(&mut db::Connection) -> ApiResult<T>,
 {
@@ -90,7 +90,7 @@ where
     }
 
     // Get a fresh connection here so that connection isn't being held while waiting on lock
-    connection_pool.get()?.transaction(update)
+    connection_pool.get().await?.transaction(update)
 }
 
 /// Searches for posts.
@@ -195,7 +195,7 @@ async fn list(
     let limit = std::cmp::min(page.limit.get(), MAX_POSTS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
@@ -235,7 +235,7 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().post_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         verify_visibility(conn, &state.config, client, post_id)?;
         PostInfo::new_from_id(conn, &state.config, client, post_id, &fields)
             .map(Json)
@@ -289,7 +289,7 @@ async fn get_neighbors(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         const INITIAL_LIMIT: i64 = 1000;
         const LIMIT_GROWTH: i64 = 10;
 
@@ -375,7 +375,7 @@ async fn get_featured(
     api::verify_privilege(client, state.config.privileges().post_view_featured)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let mut featured = post_feature::table
             .select(post_feature::post_id)
             .order(post_feature::time.desc())
@@ -431,7 +431,7 @@ async fn feature(
         time: DateTime::now(),
     };
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     conn.transaction(|conn| {
         let previous_feature_id = post_feature::table
             .select(post_feature::post_id)
@@ -465,7 +465,8 @@ async fn reverse_search_impl(
         .ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.compute_properties(&state).await?;
     state
-        .get_connection()?
+        .get_connection()
+        .await?
         .transaction(|conn| {
             let _timer = crate::time::Timer::new("reverse search");
 
@@ -684,7 +685,8 @@ async fn create_impl(
     })
     .await?;
     state
-        .get_connection()?
+        .get_connection()
+        .await?
         .transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
@@ -851,7 +853,8 @@ async fn merge(
     })
     .await?;
     state
-        .get_connection()?
+        .get_connection()
+        .await?
         .transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, body.post_info.merge_to, &fields))
         .map(Json)
         .map_err(ApiError::from)
@@ -888,7 +891,7 @@ async fn favorite(
         time: DateTime::now(),
     };
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     conn.transaction(|conn| {
         diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
         let insert_result = new_post_favorite.insert_into(post_favorite::table).execute(conn);
@@ -928,7 +931,7 @@ async fn rate(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     conn.transaction(|conn| {
         diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
@@ -1070,7 +1073,8 @@ async fn update_impl(
     })
     .await?;
     state
-        .get_connection()?
+        .get_connection()
+        .await?
         .transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
         .map(Json)
         .map_err(ApiError::from)
@@ -1205,7 +1209,7 @@ async fn delete(
     let relation_count: i64 = post_statistics::table
         .find(post_id)
         .select(post_statistics::relation_count)
-        .first(&mut state.get_connection()?)
+        .first(&mut *state.get_connection().await?)
         .optional()?
         .ok_or(ApiError::NotFound(ResourceType::Post))?;
 
@@ -1214,7 +1218,7 @@ async fn delete(
         _lock = ANTI_DEADLOCK_MUTEX.lock().await;
     }
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let mime_type = conn.transaction(|conn| {
         let post: Post = post::table
             .find(post_id)
@@ -1262,10 +1266,10 @@ async fn unfavorite(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let _: i32 = diesel::delete(post_favorite::table.find((post_id, user_id)))
         .returning(sql::<Integer>("0"))
-        .get_result(&mut conn)
+        .get_result(&mut *conn)
         .optional()?
         .ok_or(ApiError::NotFound(ResourceType::Post))?;
     conn.transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))

@@ -97,7 +97,7 @@ async fn list(
     let limit = std::cmp::min(page.limit.get(), MAX_TAGS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
@@ -137,7 +137,7 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let tag_id = verify_visibility(conn, &state.config, client, &name)?;
         TagInfo::new_from_id(conn, tag_id, &fields)
             .map(Json)
@@ -191,7 +191,7 @@ async fn get_siblings(
     api::verify_privilege(client, state.config.privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let tag_id = verify_visibility(conn, &state.config, client, &name)?;
         let posts_tagged_on = post_tag::table
             .select(post_tag::post_id)
@@ -282,7 +282,7 @@ async fn create(
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let tag = conn.transaction(|conn| {
         let (category_id, category): (i64, SmallString) = tag_category::table
             .select((tag_category::id, tag_category::name))
@@ -369,7 +369,7 @@ async fn merge(
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let merged_tag_id = conn.transaction(|conn| {
         let (absorbed_id, absorbed_version) = get_tag_info(conn, &body.remove)?;
         let (merge_to_id, merge_to_version) = get_tag_info(conn, &body.merge_to)?;
@@ -443,7 +443,7 @@ async fn update(
 ) -> ApiResult<Json<TagInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let tag_id = conn.transaction(|conn| {
         let old_tag: Tag = tag::table
             .inner_join(tag_name::table)
@@ -538,7 +538,7 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().tag_delete)?;
 
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let tag: Tag = tag::table
             .select(Tag::as_select())
             .inner_join(tag_name::table)

@@ -54,7 +54,7 @@ async fn list(
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UnpagedResponse<UserTokenInfo>>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let (avatar_style, user_tokens) = state.get_connection()?.transaction(|conn| {
+    let (avatar_style, user_tokens) = state.get_connection().await?.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
             .filter(user::name.eq(&username))
@@ -125,7 +125,7 @@ async fn create(
 ) -> ApiResult<Json<UserTokenInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let (user_token, avatar_style) = conn.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
@@ -211,7 +211,7 @@ async fn update(
 ) -> ApiResult<Json<UserTokenInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let (updated_user_token, avatar_style) = conn.transaction(|conn| {
         let (user_id, avatar_style): (i64, AvatarStyle) = user::table
             .select((user::id, user::avatar_style))
@@ -278,7 +278,7 @@ async fn delete(
     Extension(client): Extension<Client>,
     Path((username, token)): Path<(String, Uuid)>,
 ) -> ApiResult<Json<()>> {
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let user_token_owner: i64 = user::table
             .select(user::id)
             .filter(user::name.eq(username))

@@ -63,7 +63,7 @@ async fn list(
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_SNAPSHOTS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 

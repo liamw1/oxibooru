@@ -86,7 +86,7 @@ async fn list(
     let limit = std::cmp::min(page.limit.get(), MAX_POOLS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
@@ -125,7 +125,7 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().pool_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).first(conn)?;
         if !pool_exists {
             return Err(ApiError::NotFound(ResourceType::Pool));
@@ -185,7 +185,7 @@ async fn create(
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let pool = conn.transaction(|conn| {
         let (category_id, category): (i64, SmallString) = pool_category::table
             .select((pool_category::id, pool_category::name))
@@ -261,7 +261,7 @@ async fn merge(
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     conn.transaction(|conn| {
         let remove_version = get_pool_info(conn, absorbed_id)?;
         let merge_to_version = get_pool_info(conn, merge_to_id)?;
@@ -331,7 +331,7 @@ async fn update(
 ) -> ApiResult<Json<PoolInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     conn.transaction(|conn| {
         let old_pool: Pool = pool::table
             .find(pool_id)
@@ -413,7 +413,7 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().pool_delete)?;
 
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let pool: Pool = pool::table
             .find(pool_id)
             .first(conn)

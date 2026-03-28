@@ -1,7 +1,7 @@
 use crate::api::middleware;
 use crate::config::Config;
 use crate::content::cache::RingCache;
-use crate::db::{ConnectionPool, ConnectionResult};
+use crate::db::{AsyncConnectionPool, AsyncConnectionResult, ConnectionResult};
 use crate::{admin, api, config, db, filesystem};
 use axum::extract::Request;
 use axum::{Router, ServiceExt};
@@ -20,24 +20,28 @@ use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub connection_pool: ConnectionPool,
+    pub connection_pool: Arc<AsyncConnectionPool>,
     pub config: Arc<Config>,
     pub content_cache: Arc<Mutex<RingCache>>,
 }
 
 impl AppState {
-    pub fn new(connection_pool: ConnectionPool, config: Config) -> Self {
+    pub fn new(connection_pool: AsyncConnectionPool, config: Config) -> Self {
         /// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
         const CONTENT_CACHE_SIZE: usize = 10;
         AppState {
-            connection_pool,
+            connection_pool: Arc::new(connection_pool),
             config: Arc::new(config),
             content_cache: Arc::new(Mutex::new(RingCache::new(CONTENT_CACHE_SIZE))),
         }
     }
 
-    pub fn get_connection(&self) -> ConnectionResult {
-        self.connection_pool.get()
+    pub async fn get_connection(&self) -> AsyncConnectionResult<'_> {
+        self.connection_pool.get().await
+    }
+
+    pub fn get_connection_blocking(&self) -> ConnectionResult {
+        self.connection_pool.get_blocking()
     }
 
     pub fn get_content_cache(&self) -> MutexGuard<'_, RingCache> {
@@ -86,7 +90,7 @@ pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
         std::process::exit(0);
     }
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     db::check_signature_version(&mut conn)?; // We do this after admin mode check so that users can update signatures
     middleware::initialize_snapshot_counter(&mut conn)?;
 

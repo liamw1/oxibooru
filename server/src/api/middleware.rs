@@ -25,7 +25,7 @@ pub async fn auth(State(state): State<AppState>, mut request: Request, next: Nex
     let auth_header = request.headers().get(AUTHORIZATION);
     let client = if let Some(auth_value) = auth_header {
         let auth_str = auth_value.to_str()?;
-        header::authenticate_user(&state, auth_str)
+        header::authenticate_user(&state, auth_str).await
     } else {
         Ok(AuthClient::new(None, UserRank::Anonymous))
     }?;
@@ -35,7 +35,7 @@ pub async fn auth(State(state): State<AppState>, mut request: Request, next: Nex
         && let Some(query) = request.uri().query()
         && query.contains("bump-login")
     {
-        let mut conn = state.get_connection()?;
+        let mut conn = state.get_connection().await?;
         update::user::last_login_time(&mut conn, user_id)?;
     }
 
@@ -49,13 +49,13 @@ pub async fn post_to_webhooks(State(state): State<AppState>, request: Request, n
     let response = next.run(request).await;
 
     if can_modify_database {
-        let mut conn = state.get_connection()?;
+        let mut conn = state.get_connection().await?;
         let last_posted_snapshot = LAST_POSTED_SNAPSHOT.load(Ordering::SeqCst);
         let new_snapshots = snapshot::table
             .select(Snapshot::as_select())
             .filter(snapshot::id.gt(last_posted_snapshot))
             .order(snapshot::id)
-            .load(&mut conn)?;
+            .load(&mut *conn)?;
 
         for snapshot in new_snapshots {
             post_snapshot(&state, snapshot);

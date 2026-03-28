@@ -81,7 +81,7 @@ async fn list(
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_COMMENTS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
         query_builder.set_offset_and_limit(offset, limit);
 
@@ -121,7 +121,7 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().comment_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         verify_visibility(conn, &state.config, client, comment_id)?;
         CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields)
             .map(Json)
@@ -168,8 +168,8 @@ async fn create(
         creation_time: DateTime::now(),
     };
 
-    let mut conn = state.get_connection()?;
-    let comment = state.get_connection()?.transaction(|conn| {
+    let mut conn = state.get_connection().await?;
+    let comment = conn.transaction(|conn| {
         let insert_result = new_comment.insert_into(comment::table).get_result(conn);
         error::map_foreign_key_violation(insert_result, ResourceType::Post)
     })?;
@@ -213,7 +213,7 @@ async fn update(
 ) -> ApiResult<Json<CommentInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     conn.transaction(|conn| {
         let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
@@ -271,7 +271,7 @@ async fn rate(
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     conn.transaction(|conn| {
         diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
 
@@ -314,7 +314,7 @@ async fn delete(
     Path(comment_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
             .find(comment_id)
             .select((comment::user_id, comment::last_edit_time))

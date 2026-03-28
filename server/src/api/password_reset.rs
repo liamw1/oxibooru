@@ -63,7 +63,7 @@ fn get_user_info(
 async fn request_reset(State(state): State<AppState>, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
     let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
     let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;
     let user_email = user_email.ok_or(ApiError::NoEmail)?;
     let user_mailbox = Mailbox::new(None, Address::from_str(&user_email)?);
@@ -164,7 +164,7 @@ async fn reset_password(
 ) -> ApiResult<Json<NewPassword>> {
     const TEMPORARY_PASSWORD_LENGTH: u8 = 16;
 
-    state.get_connection()?.transaction(|conn| {
+    state.get_connection().await?.transaction(|conn| {
         let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
         if confirmation.token != hash::compute_url_safe_hash(password_salt.as_bytes()) {
             return Err(ApiError::UnauthorizedPasswordReset);

@@ -52,7 +52,7 @@ pub const EXPIRED_TOKEN: Uuid = uuid::uuid!("b7188ca3-1391-4abf-bfc1-7d7dfad7d16
 pub const DISABLED_TOKEN: Uuid = uuid::uuid!("86c5b652-7c9c-4846-8ae3-5ec236f57c4e");
 
 pub fn get_connection() -> ConnectionResult {
-    get_state().connection_pool.get()
+    get_state().connection_pool.get_blocking()
 }
 
 pub fn get_state() -> AppState {
@@ -480,15 +480,10 @@ fn recreate_database() -> AdminResult<AppState> {
     }
 
     let test_url = config::database_url(Some(DATABASE_NAME));
-    let test_connection_pool = Pool::builder()
-        .max_lifetime(None)
-        .idle_timeout(None)
-        .test_on_check_out(true)
-        .build(ConnectionManager::new(test_url))
-        .expect("Test connection pool must be constructible");
+    let test_connection_pool = db::create_test_connection_pool(test_url);
     db::run_database_migrations(&test_connection_pool).expect("Must be able to run test migrations");
 
-    let mut conn = test_connection_pool.get()?;
+    let mut conn = test_connection_pool.get_blocking()?;
     populate_database(&mut conn, &test_config)?;
     Ok(AppState::new(test_connection_pool, test_config))
 }
