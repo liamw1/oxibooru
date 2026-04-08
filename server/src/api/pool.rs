@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::api::doc::POOL_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Path, Query};
@@ -20,6 +18,7 @@ use axum::extract::{Extension, State};
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
+use std::sync::Arc;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;

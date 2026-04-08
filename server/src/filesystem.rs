@@ -34,12 +34,12 @@ pub fn file_size(path: &Path) -> std::io::Result<i64> {
 
 /// Saves raw bytes to temporary upload folder as a `mime_type`-file to disk.
 /// Returns name of the file written.
-pub fn save_uploaded_file(config: &Config, data: &[u8], mime_type: MimeType) -> std::io::Result<UploadToken> {
+pub async fn save_uploaded_file(config: &Config, data: &[u8], mime_type: MimeType) -> std::io::Result<UploadToken> {
     let upload_token = UploadToken::new(mime_type);
     let upload_path = upload_token.path(config);
     create_parent_directories(&upload_path)?;
 
-    std::fs::write(upload_path, data)?;
+    tokio::fs::write(upload_path, data).await?;
     Ok(upload_token)
 }
 

@@ -26,8 +26,8 @@ pub struct FileContents {
 
 impl FileContents {
     /// Saves file data to temporary upload directory and returns the name of the file written.
-    pub fn save(&self, config: &Config) -> std::io::Result<UploadToken> {
-        filesystem::save_uploaded_file(config, &self.data, self.mime_type)
+    pub async fn save(&self, config: &Config) -> std::io::Result<UploadToken> {
+        filesystem::save_uploaded_file(config, &self.data, self.mime_type).await
     }
 }
 
@@ -63,7 +63,7 @@ impl Content {
     /// Saves content to temporary uploads directory and returns the name of the file written.
     pub async fn save(self, config: &Config) -> ApiResult<UploadToken> {
         match self {
-            Self::DirectUpload(file_contents) => file_contents.save(config).map_err(ApiError::from),
+            Self::DirectUpload(file_contents) => file_contents.save(config).await.map_err(ApiError::from),
             Self::Token(token) => Ok(token),
             Self::Url(url) => download::from_url(config, url).await,
         }
@@ -73,23 +73,27 @@ impl Content {
     pub async fn thumbnail(self, config: &Config, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
         let token = self.save(config).await?;
         let temp_path = token.path(config);
-        let data = map_read_result(std::fs::read(&temp_path))?;
+        let data = map_read_result(tokio::fs::read(&temp_path).await)?;
         let mime_type = token.mime_type();
         let file_contents = FileContents { data, mime_type };
-        decode::representative_image(config, &file_contents, &temp_path)
-            .map(|image| thumbnail::create(config, &image, thumbnail_type))
+        tokio::task::block_in_place({
+            || {
+                decode::representative_image(config, &file_contents, &temp_path)
+                    .map(|image| thumbnail::create(config, &image, thumbnail_type))
+            }
+        })
     }
 
     /// Computes properties for uploaded content.
     pub async fn compute_properties(self, state: &AppState) -> ApiResult<CachedProperties> {
         let token = self.save(&state.config).await?;
-        cache::compute_properties(state, token)
+        tokio::task::block_in_place(|| cache::compute_properties(state, token))
     }
 
     /// Retrieves content properties from cache or computes them if not present in cache.
     pub async fn get_or_compute_properties(self, state: &AppState) -> ApiResult<CachedProperties> {
         let token = self.save(&state.config).await?;
-        cache::get_or_compute_properties(state, token)
+        tokio::task::block_in_place(|| cache::get_or_compute_properties(state, token))
     }
 }
 

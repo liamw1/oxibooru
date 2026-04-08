@@ -38,5 +38,7 @@ pub async fn from_url(config: &Config, url: Url) -> ApiResult<UploadToken> {
     let mime_type = MimeType::from_str(content_type.unwrap_or("")).map_err(Box::from)?;
 
     let bytes = response.bytes().await?;
-    filesystem::save_uploaded_file(config, &bytes, mime_type).map_err(ApiError::from)
+    filesystem::save_uploaded_file(config, &bytes, mime_type)
+        .await
+        .map_err(ApiError::from)
 }
