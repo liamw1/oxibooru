@@ -1,4 +1,5 @@
 use crate::admin::AdminTask;
+use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::schema::database_statistics;
@@ -6,11 +7,13 @@ use crate::{admin, app, config};
 use diesel::migration::Migration;
 use diesel::pg::Pg;
 use diesel::r2d2::{ConnectionManager, CustomizeConnection, Pool, PoolError, PooledConnection};
-use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
+use diesel::result::Error as DieselError;
+use diesel::{Connection as _, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
+use std::convert::AsMut;
 use std::error::Error;
 use std::num::ParseIntError;
-use std::ops::{Deref, DerefMut, RangeInclusive};
+use std::ops::RangeInclusive;
 use std::time::Duration;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tracing::{error, info};
@@ -25,15 +28,8 @@ pub struct AsyncConnection<'a> {
     permit: SemaphorePermit<'a>,
 }
 
-impl Deref for AsyncConnection<'_> {
-    type Target = Connection;
-    fn deref(&self) -> &Self::Target {
-        &self.conn
-    }
-}
-
-impl DerefMut for AsyncConnection<'_> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
+impl AsMut<PgConnection> for AsyncConnection<'_> {
+    fn as_mut(&mut self) -> &mut PgConnection {
         &mut self.conn
     }
 }
@@ -45,13 +41,27 @@ pub struct AsyncConnectionPool {
 
 impl AsyncConnectionPool {
     pub async fn get(&self) -> AsyncConnectionResult<'_> {
-        let permit = self.semaphore.acquire().await.expect("Semaphore should never close");
+        let permit = self.semaphore.acquire().await.expect(SEMAPHORE_PANIC_MESSAGE);
         let conn = self.pool.get()?;
         Ok(AsyncConnection { conn, permit })
     }
 
     pub fn get_blocking(&self) -> Result<Connection, PoolError> {
         self.pool.get()
+    }
+
+    pub async fn transaction<T, E, F>(&self, f: F) -> ApiResult<T>
+    where
+        T: Send + 'static,
+        E: From<DieselError> + Send + 'static,
+        F: FnOnce(&mut Connection) -> Result<T, E> + Send + 'static,
+        ApiError: From<E>,
+    {
+        let _permit = self.semaphore.acquire().await.expect(SEMAPHORE_PANIC_MESSAGE);
+        let mut conn = self.pool.get()?;
+        tokio::task::spawn_blocking(move || conn.transaction(f))
+            .await?
+            .map_err(ApiError::from)
     }
 }
 
@@ -183,6 +193,7 @@ pub fn check_signature_version(conn: &mut PgConnection) -> QueryResult<()> {
 }
 
 const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
+const SEMAPHORE_PANIC_MESSAGE: &str = "Semaphore should never close";
 
 #[derive(Debug)]
 struct ConnectionInitialzier {}

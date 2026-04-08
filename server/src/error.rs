@@ -199,6 +199,8 @@ pub enum ErrorName {
     TagCategoryNotFound,
     TagNameAlreadyExists,
     TagNotFound,
+    TaskCancelled,
+    TaskPanicked,
     TimedOut,
     TooFewArgs,
     TooManyArgs,
@@ -640,6 +642,16 @@ impl ErrorKind for swf::error::Error {
     }
 }
 
+impl ErrorKind for tokio::task::JoinError {
+    fn kind(&self) -> ErrorName {
+        if self.is_panic() {
+            ErrorName::TaskPanicked
+        } else {
+            ErrorName::TaskCancelled
+        }
+    }
+}
+
 impl ErrorKind for video_rs::ffmpeg::Error {
     fn kind(&self) -> ErrorName {
         match self {
@@ -743,6 +755,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::SelfMerge(_) => ErrorName::SelfMerge,
             Self::StdIo(err) => err.kind().kind(),
             Self::SwfDecoding(err) => err.kind(),
+            Self::TaskJoin(err) => err.kind(),
             Self::UnimplementedFrameFormat(_) => ErrorName::UnimplementedFrameFormat,
             Self::UnauthorizedPasswordReset => ErrorName::UnauthorizedPasswordReset,
             Self::UnsupportedExtension(_) => ErrorName::UnsupportedExtension,

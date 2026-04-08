@@ -15,7 +15,7 @@ use diesel::{
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
-use std::rc::Rc;
+use std::sync::Arc;
 use strum::{EnumString, EnumTable};
 use utoipa::ToSchema;
 
@@ -27,7 +27,7 @@ pub struct MicroPool {
     pub id: i64,
     /// List of pool names (aliases).
     #[schema(value_type = Vec<SmallString>)]
-    pub names: Rc<[SmallString]>,
+    pub names: Arc<[SmallString]>,
     /// The name of the category the given pool belongs to.
     pub category: SmallString,
     /// The pool description (instructions how to use, history etc.). The client should render it as Markdown.

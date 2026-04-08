@@ -36,7 +36,7 @@ pub async fn auth(State(state): State<AppState>, mut request: Request, next: Nex
         && query.contains("bump-login")
     {
         let mut conn = state.get_connection().await?;
-        update::user::last_login_time(&mut conn, user_id)?;
+        update::user::last_login_time(conn.as_mut(), user_id)?;
     }
 
     request.extensions_mut().insert(client);
@@ -55,7 +55,7 @@ pub async fn post_to_webhooks(State(state): State<AppState>, request: Request, n
             .select(Snapshot::as_select())
             .filter(snapshot::id.gt(last_posted_snapshot))
             .order(snapshot::id)
-            .load(&mut *conn)?;
+            .load(conn.as_mut())?;
 
         for snapshot in new_snapshots {
             post_snapshot(&state, snapshot);

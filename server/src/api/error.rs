@@ -85,6 +85,7 @@ pub enum ApiError {
     SelfMerge(ResourceType),
     StdIo(#[from] std::io::Error),
     SwfDecoding(#[from] swf::error::Error),
+    TaskJoin(#[from] tokio::task::JoinError),
     #[error("Frame format {0:?} is unimplemented")]
     UnimplementedFrameFormat(video_rs::ffmpeg::format::Pixel),
     #[error("Password reset token is invalid")]
@@ -138,7 +139,8 @@ impl ApiError {
             | Self::FailedQuery(_)
             | Self::InvalidHeader(_)
             | Self::MissingSmtpInfo
-            | Self::StdIo(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | Self::StdIo(_)
+            | Self::TaskJoin(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::UnimplementedFrameFormat(_) => StatusCode::NOT_IMPLEMENTED,
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedAuthentication(err) => match err {
@@ -200,6 +202,7 @@ impl ApiError {
             Self::SelfMerge(_) => "Self Merge",
             Self::StdIo(_) => "IO Error",
             Self::SwfDecoding(_) => "SWF Decoding Error",
+            Self::TaskJoin(_) => "Task Join Error",
             Self::UnimplementedFrameFormat(_) => "Unimplemented Frame Format",
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
             Self::UnsupportedExtension(_) => "Unsupported extension",

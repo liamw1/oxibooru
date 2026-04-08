@@ -1,6 +1,6 @@
 use crate::api::ResourceParams;
 use crate::api::doc::INFO_TAG;
-use crate::api::error::ApiResult;
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Query};
 use crate::app::AppState;
 use crate::auth::Client;
@@ -12,7 +12,7 @@ use crate::schema::{database_statistics, post_feature, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use axum::extract::{Extension, State};
-use diesel::{Connection, ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Serialize;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
@@ -63,38 +63,41 @@ async fn get(
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<InfoResponse>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection().await?.transaction(|conn| {
-        let (post_count, disk_usage) = database_statistics::table
-            .select((database_statistics::post_count, database_statistics::disk_usage))
-            .first(conn)?;
-        let latest_feature: Option<PostFeature> = post_feature::table
-            .order(post_feature::time.desc())
-            .first(conn)
-            .optional()?;
-        let featured_post: Option<PostInfo> = latest_feature
-            .as_ref()
-            .map(|feature| PostInfo::new_from_id(conn, &state.config, client, feature.post_id, &fields))
-            .transpose()?;
-        let featuring_user: Option<SmallString> = latest_feature
-            .as_ref()
-            .map(|feature| {
-                user::table
-                    .find(feature.user_id)
-                    .select(user::name)
-                    .first(conn)
-                    .optional()
-            })
-            .transpose()?
-            .flatten();
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let (post_count, disk_usage) = database_statistics::table
+                .select((database_statistics::post_count, database_statistics::disk_usage))
+                .first(conn)?;
+            let latest_feature: Option<PostFeature> = post_feature::table
+                .order(post_feature::time.desc())
+                .first(conn)
+                .optional()?;
+            let featured_post: Option<PostInfo> = latest_feature
+                .as_ref()
+                .map(|feature| PostInfo::new_from_id(conn, &state.config, client, feature.post_id, &fields))
+                .transpose()?;
+            let featuring_user: Option<SmallString> = latest_feature
+                .as_ref()
+                .map(|feature| {
+                    user::table
+                        .find(feature.user_id)
+                        .select(user::name)
+                        .first(conn)
+                        .optional()
+                })
+                .transpose()?
+                .flatten();
 
-        Ok(Json(InfoResponse {
-            post_count,
-            disk_usage,
-            featured_post,
-            featuring_time: latest_feature.as_ref().map(|feature| feature.time),
-            featuring_user,
-            server_time: DateTime::now(),
-            config: state.config.public_info.clone(),
-        }))
-    })
+            Ok::<_, ApiError>(Json(InfoResponse {
+                post_count,
+                disk_usage,
+                featured_post,
+                featuring_time: latest_feature.as_ref().map(|feature| feature.time),
+                featuring_user,
+                server_time: DateTime::now(),
+                config: state.config.public_info.clone(),
+            }))
+        })
+        .await
 }

@@ -74,7 +74,7 @@ async fn basic_access_authentication(state: &AppState, credentials: &str) -> Res
     let (user_id, rank, password_hash): (i64, UserRank, String) = user::table
         .select((user::id, user::rank, user::password_hash))
         .filter(user::name.eq(username))
-        .first(&mut *conn)
+        .first(conn.as_mut())
         .optional()?
         .ok_or(AuthenticationError::UsernamePasswordMismatch)?;
     auth::password::is_valid_password(&state.config, &password_hash, &password)
@@ -95,7 +95,7 @@ async fn token_authentication(state: &AppState, credentials: &str) -> Result<Cli
         .select((user::id, user::rank, user_token::enabled, user_token::expiration_time))
         .filter(user::name.eq(username))
         .filter(user_token::id.eq(token))
-        .first(&mut *conn)
+        .first(conn.as_mut())
         .optional()?
         .ok_or(AuthenticationError::UsernameTokenMismatch)?;
 

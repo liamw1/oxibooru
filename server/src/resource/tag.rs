@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
+use std::sync::Arc;
 use strum::{EnumString, EnumTable};
 use utoipa::ToSchema;
 
@@ -21,7 +21,7 @@ use utoipa::ToSchema;
 pub struct MicroTag {
     /// A list of tag names (aliases). Tagging a post with any name will automatically assign the first name from this list.
     #[schema(value_type = Vec<SmallString>)]
-    pub names: Rc<[SmallString]>,
+    pub names: Arc<[SmallString]>,
     /// The name of the category the given tag belongs to.
     pub category: SmallString,
     /// The number of posts the tag was used in.
@@ -185,7 +185,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
             implications_on_tag
                 .into_iter()
                 .map(|(implication, category_id, usages)| MicroTag {
-                    names: Rc::clone(&names_map[&implication.child_id]),
+                    names: Arc::clone(&names_map[&implication.child_id]),
                     category: category_names[&category_id].clone(),
                     usages,
                 })
@@ -224,7 +224,7 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
             suggestions_on_tag
                 .into_iter()
                 .map(|(suggestion, category_id, usages)| MicroTag {
-                    names: Rc::clone(&names_map[&suggestion.child_id]),
+                    names: Arc::clone(&names_map[&suggestion.child_id]),
                     category: category_names[&category_id].clone(),
                     usages,
                 })
