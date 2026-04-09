@@ -1443,14 +1443,14 @@ mod test {
         Ok(())
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[parallel]
     async fn reverse_search() -> ApiResult<()> {
         simulate_upload("1_pixel.png", "upload_for_reverse_search.png")?;
         verify_response(&format!("POST /posts/reverse-search/?{FIELDS}"), "post/reverse_search").await
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[serial]
     async fn create() -> ApiResult<()> {
         simulate_upload("1_pixel.png", "cool_post.png")?;
@@ -1646,7 +1646,7 @@ mod test {
         Ok(())
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[serial]
     async fn preferences() -> ApiResult<()> {
         verify_response_with_user(
@@ -1689,7 +1689,7 @@ mod test {
         Ok(())
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[parallel]
     async fn error() -> ApiResult<()> {
         verify_response("GET /post/99", "post/get_nonexistent").await?;
