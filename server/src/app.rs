@@ -5,7 +5,7 @@ use crate::config::{Action, Config};
 use crate::content::cache::RingCache;
 use crate::db::AsyncConnectionPool;
 use crate::extract::Ctx;
-use crate::{admin, api, config, db, filesystem};
+use crate::{admin, api, config, db, filesystem, web};
 use axum::Router;
 use std::error::Error;
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -126,13 +126,14 @@ pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
 }
 
 pub async fn run(state: AppState) -> std::io::Result<()> {
-    let (router, api) = api::routes(state).split_for_parts();
-    let normalized_router = ServiceBuilder::new()
+    let (api_router, open_api) = api::routes(state.clone()).split_for_parts();
+    let normalized_api_router = ServiceBuilder::new()
         .layer(NormalizePathLayer::trim_trailing_slash())
-        .service(router);
-    let app = Router::new()
-        .merge(SwaggerUi::new("/docs").url("/apidoc/openapi.json", api))
-        .fallback_service(normalized_router);
+        .service(api_router);
+    let api_router = Router::new()
+        .merge(SwaggerUi::new("/docs").url("/apidoc/openapi.json", open_api))
+        .fallback_service(normalized_api_router);
+    let app = web::routes(state).nest("/api", api_router);
 
     let address = format!("0.0.0.0:{}", config::port());
     let listener = TcpListener::bind(address).await?;
