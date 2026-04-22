@@ -20,6 +20,7 @@ mod test;
 mod time;
 mod unit;
 mod update;
+mod web;
 
 /// Avoid musl's default allocator due to lackluster performance
 /// https://nickb.dev/blog/default-musl-allocator-considered-harmful-to-performance
