@@ -1,0 +1,71 @@
+@import url('colors.css');
+
+.global-comment-list {
+    text-align: left;
+}
+
+.global-comment-list>ul {
+    list-style-type: none;
+    margin: 1em 0 0;
+    padding: 0;
+}
+
+.global-comment-list>ul>li {
+    margin-top: 2em;
+    padding-top: 2em;
+    border-top: 3px solid "$comment-border-color";
+}
+
+.global-comment-list>ul>li:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+@media (max-width:700px) {
+    .global-comment-list>ul .post-thumbnail {
+        margin-bottom: 1em;
+    }
+
+    .global-comment-list>ul .post-thumbnail .thumbnail {
+        width: 50vw;
+        height: 33vw;
+    }
+}
+
+@media (min-width:700px) {
+    .global-comment-list>ul>li {
+        padding-left: 13em;
+    }
+
+    .global-comment-list>ul .post-thumbnail {
+        float: left;
+        margin: 0 0 1em -13em;
+    }
+
+    .global-comment-list>ul .post-thumbnail .thumbnail {
+        width: 12em;
+        height: 8em;
+    }
+}
+
+.global-comment-list>ul>li {
+    clear: both;
+}
+
+.global-comment-list>ul .post-thumbnail {
+    vertical-align: top;
+    margin-right: 1em;
+}
+
+.global-comment-list>ul .post-thumbnail a {
+    display: inline-block;
+}
+
+.global-comment-list>ul .comments-container {
+    width: 100%;
+}
+
+.darktheme .global-comment-list>ul>li {
+    border-top: 3px solid "$comment-border-color-darktheme";
+}

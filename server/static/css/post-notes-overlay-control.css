@@ -1,0 +1,93 @@
+@import url('colors.css');
+
+.post-overlay[data-state=ready-to-draw]:after,
+.post-overlay[data-state=drawing-rectangle]:after,
+.post-overlay[data-state=drawing-polygon]:after {
+    box-sizing: border-box;
+    border: .3em dashed "$active-note-overlay-border-color";
+    background: "$active-note-overlay-background-color";
+    display: block;
+    content: ' ';
+    pointer-events: none;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+}
+
+.post-overlay[data-state=read-only] {
+    pointer-events: none;
+}
+
+.notes-overlay g {
+    stroke-width: 1px;
+}
+
+.notes-overlay g polygon {
+    fill: "$note-background-color";
+    stroke: "$note-border-color";
+    pointer-events: auto;
+}
+
+.notes-overlay g ellipse {
+    display: none;
+}
+
+.notes-overlay g[data-state=editing],
+.notes-overlay g[data-state=drawing] {
+    stroke-width: 2px;
+}
+
+.notes-overlay g[data-state=editing] polygon,
+.notes-overlay g[data-state=drawing] polygon {
+    fill: "$edited-note-background-color";
+    stroke: "$edited-note-border-color";
+}
+
+.notes-overlay g[data-state=editing] ellipse,
+.notes-overlay g[data-state=drawing] ellipse {
+    fill: "$edited-note-border-color";
+    display: block;
+}
+
+.notes-overlay g[data-state=editing] ellipse.nearby,
+.notes-overlay g[data-state=drawing] ellipse.nearby {
+    fill: "$hovered-note-point-color";
+}
+
+.notes-overlay g[data-state=drawing] ellipse:first-of-type {
+    fill: "$first-note-point-color";
+}
+
+.notes-overlay g[data-state=drawing] ellipse:first-of-type.nearby {
+    fill: "$hovered-first-note-point-color";
+}
+
+.note-text {
+    position: absolute;
+    max-width: 22.5em;
+    display: none;
+}
+
+.note-text:not([data-state=read-only]) {
+    pointer-events: none;
+}
+
+.note-text>.wrapper {
+    background: "$note-text-background-color";
+    padding: .3em .6em;
+    border: 1px solid "$note-text-border-color";
+    color: "$note-text-text-color";
+    box-sizing: border-box;
+}
+
+.note-text>.wrapper p:last-of-type {
+    margin-bottom: 0;
+}
+
+.note-text>.wrapper p:first-of-type {
+    margin-top: 0;
+}

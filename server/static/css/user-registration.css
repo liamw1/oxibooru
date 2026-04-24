@@ -1,0 +1,44 @@
+#user-registration {
+    padding-bottom: calc(2vw - 1em) !important;
+}
+
+#user-registration form {
+    float: left;
+    margin-right: 3em;
+    margin-bottom: 1em;
+}
+
+#user-registration .info {
+    float: left;
+    border-radius: .2em;
+    width: 20em;
+    margin-bottom: 1em;
+}
+
+#user-registration .info ul {
+    line-height: 1.8em;
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+#user-registration .info ul li {
+    margin: 0;
+    padding: 0;
+}
+
+#user-registration .info i {
+    margin-right: .5em;
+}
+
+#user-registration .info i.fa {
+    color: "$main-color";
+}
+
+#user-registration .info p:first-child {
+    margin: 0 0 .5em 0;
+}
+
+#user-registration .info p:last-child {
+    margin-bottom: 0;
+}
