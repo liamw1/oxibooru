@@ -1,0 +1,101 @@
+@import url('colors.css');
+
+.snapshot-list {
+    text-align: left;
+}
+
+.snapshot-list ul {
+    margin: 0 auto;
+    padding: 0;
+    width: 100%;
+    max-width: 35em;
+    list-style-type: none;
+}
+
+.snapshot-list ul li {
+    margin-bottom: 1em;
+}
+
+.snapshot-list ul li:last-child {
+    margin-bottom: 0;
+}
+
+.snapshot-list ul li .time {
+    float: right;
+}
+
+.snapshot-list ul li div {
+    padding: .1em .5em;
+}
+
+.snapshot-list ul li div .thumbnail {
+    margin: 0 .4em 0 0;
+}
+
+.snapshot-list ul li div:empty {
+    padding: 0;
+}
+
+.snapshot-list ul li div.operation-created {
+    background: "$snapshot-created-background-color";
+}
+
+.snapshot-list ul li div.operation-created+.details {
+    background: 'alpha(@background, 50%)';
+}
+
+.snapshot-list ul li div.operation-modified {
+    background: "$snapshot-modified-background-color";
+}
+
+.snapshot-list ul li div.operation-modified+.details {
+    background: 'alpha(@background, 50%)';
+}
+
+.snapshot-list ul li div.operation-deleted {
+    background: "$snapshot-deleted-background-color";
+}
+
+.snapshot-list ul li div.operation-deleted+.details {
+    background: 'alpha(@background, 50%)';
+}
+
+.snapshot-list ul li div.operation-merged {
+    background: "$snapshot-merged-background-color";
+}
+
+.snapshot-list ul li div.operation-merged+.details {
+    background: 'alpha(@background, 50%)';
+}
+
+.darktheme .snapshot-list ul li div.operation-created {
+    background: 'darken("$snapshot-created-background-color", 80%)';
+}
+
+.darktheme .snapshot-list ul li div.operation-created+.details {
+    background: 'alpha(@background, 50%)';
+}
+
+.darktheme .snapshot-list ul li div.operation-modified {
+    background: 'darken("$snapshot-modified-background-color", 80%)';
+}
+
+.darktheme .snapshot-list ul li div.operation-modified+.details {
+    background: 'alpha(@background, 50%)';
+}
+
+.darktheme .snapshot-list ul li div.operation-deleted {
+    background: 'darken("$snapshot-deleted-background-color", 80%)';
+}
+
+.darktheme .snapshot-list ul li div.operation-deleted+.details {
+    background: 'alpha(@background, 50%)';
+}
+
+.darktheme .snapshot-list ul li div.operation-merged {
+    background: 'darken("$snapshot-merged-background-color", 80%)';
+}
+
+.darktheme .snapshot-list ul li div.operation-merged+.details {
+    background: 'alpha(@background, 50%)';
+}

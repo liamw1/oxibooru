@@ -1,0 +1,13 @@
+.comments>ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+.comments>ul>li {
+    margin-bottom: 1em;
+}
+
+.comments>ul>li:last-child {
+    margin-bottom: 0;
+}

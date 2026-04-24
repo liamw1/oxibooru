@@ -1,0 +1,22 @@
+<nav id="top-navigation" class="buttons">
+    <ul>
+        <button id="mobile-navigation-toggle">
+            <span class="site-name">{{ config.public_info.name }}</span>
+            <span class="toggle-icon"><i class="fa fa-bars"></i></span>
+        </button>
+
+        {% for item in nav.items %}
+        <li data-name="{{ item.key }}">
+            <a href="{{ item.url }}">
+                <span class="text">{{ item.title }}</span>
+            </a>
+        </li>
+        {% endfor %}
+
+        <li data-name="settings">
+            <a href="/settings">
+                <i class="fa fa-cog"></i>
+            </a>
+        </li>
+    </ul>
+</nav>

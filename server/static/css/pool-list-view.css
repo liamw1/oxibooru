@@ -1,0 +1,99 @@
+@import url('colors.css');
+
+.pool-list table {
+    width: 100%;
+    border-spacing: 0;
+    text-align: left;
+    line-height: 1.3em;
+}
+
+.pool-list table tr:hover td {
+    background: "$top-navigation-color";
+}
+
+.pool-list table th,
+.pool-list table td {
+    padding: .1em .5em;
+}
+
+.pool-list table th {
+    white-space: nowrap;
+    background: "$top-navigation-color";
+}
+
+.pool-list table .names {
+    width: 84%;
+}
+
+.pool-list table .post-count {
+    text-align: center;
+    width: 8%;
+}
+
+.pool-list table .creation-time {
+    text-align: center;
+    width: 8%;
+    white-space: pre;
+}
+
+.pool-list table ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+    display: inline;
+}
+
+.pool-list table ul li {
+    padding: 0;
+    display: inline;
+}
+
+.pool-list table ul li:not(:last-child):after {
+    content: ', ';
+}
+
+@media (max-width:800px) {
+    .pool-list table .posts {
+        display: none;
+    }
+}
+
+.darktheme .pool-list table tr:hover td {
+    background: "$top-navigation-color-darktheme";
+}
+
+.darktheme .pool-list table th {
+    background: "$top-navigation-color-darktheme";
+}
+
+.pool-list-header {
+    text-align: left;
+}
+
+.pool-list-header label {
+    display: none !important;
+}
+
+.pool-list-header form {
+    width: auto;
+}
+
+.pool-list-header input[name=search-text] {
+    width: 25em;
+}
+
+@media (max-width:1000px) {
+    .pool-list-header input[name=search-text] {
+        width: 100%;
+    }
+}
+
+.pool-list-header .append {
+    vertical-align: middle;
+    font-size: .95em;
+    color: "$inactive-link-color";
+}
+
+.darktheme .pool-list-header .append {
+    color: "$inactive-link-color-darktheme";
+}

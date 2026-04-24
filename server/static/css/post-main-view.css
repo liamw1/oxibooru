@@ -1,0 +1,268 @@
+@import url('colors.css');
+
+.post-view {
+    width: 100%;
+    display: flex !important;
+    flex-direction: row;
+}
+
+.post-view>.sidebar {
+    margin-right: 1em;
+    min-width: 21em;
+    max-width: 21em;
+    line-height: 160%;
+}
+
+.post-view>.sidebar a:active {
+    border: 0;
+    outline: 0;
+}
+
+.post-view>.sidebar>nav.buttons,
+.post-view>.content nav.buttons {
+    margin-top: 0;
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.post-view>.sidebar>nav.buttons article,
+.post-view>.content nav.buttons article {
+    flex: 1 0 33%;
+    text-align: center;
+}
+
+.post-view>.sidebar>nav.buttons article a,
+.post-view>.content nav.buttons article a {
+    display: inline-block;
+    width: 100%;
+    padding: .3em 0;
+    text-align: center;
+    vertical-align: middle;
+    transition: background .2s linear, box-shadow .2s linear;
+}
+
+.post-view>.sidebar>nav.buttons article a:not(.inactive):hover,
+.post-view>.content nav.buttons article a:not(.inactive):hover {
+    background: 'lighten("$main-color", 90%)';
+}
+
+.post-view>.sidebar>nav.buttons article i,
+.post-view>.content nav.buttons article i {
+    font-size: 140%;
+}
+
+@media (max-width:800px) {
+
+    .post-view>.sidebar>nav.buttons,
+    .post-view>.content nav.buttons {
+        margin-top: .6em;
+        margin-bottom: .6em;
+    }
+}
+
+.post-view>.content {
+    width: 100%;
+}
+
+.post-view .post-container {
+    margin-bottom: .6em;
+}
+
+.post-view .post-container .post-content {
+    margin: 0;
+    background-size: cover;
+    background-repeat: no-repeat;
+}
+
+.post-view .description-container {
+    background: "$top-navigation-color";
+    padding: .6em;
+}
+
+.post-view #post-description {
+    resize: vertical;
+    min-height: 200px;
+}
+
+.post-view .after-mobile-controls {
+    width: 100%;
+}
+
+.darktheme .post-view>.sidebar nav.buttons article a:not(.inactive):hover,
+.darktheme .post-view>.content nav.buttons article a:not(.inactive):hover {
+    background: unset;
+    box-shadow: inset 0 0 0 .3em "$main-color";
+}
+
+.darktheme .post-view .description-container {
+    background: "$top-navigation-color-darktheme";
+}
+
+@media (max-width:800px) {
+    .post-view {
+        flex-wrap: wrap;
+    }
+
+    .post-view>.after-mobile-controls {
+        order: 3;
+    }
+
+    .post-view>.sidebar {
+        order: 2;
+        min-width: 100%;
+        max-width: 0;
+        margin-right: 0;
+    }
+
+    .post-view>.content {
+        order: 1;
+    }
+}
+
+.post-view .readonly-sidebar .details i {
+    margin-right: .6em;
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+}
+
+.post-view .readonly-sidebar .details .safety-safe {
+    color: "$safety-safe";
+}
+
+.post-view .readonly-sidebar .details .safety-sketchy {
+    color: "$safety-sketchy";
+}
+
+.post-view .readonly-sidebar .details .safety-unsafe {
+    color: "$safety-unsafe";
+}
+
+.post-view .readonly-sidebar .details .upload-info .thumbnail {
+    width: 1em;
+    height: 1em;
+    margin: -.1em .6em 0 0;
+}
+
+.post-view .readonly-sidebar .details .zoom {
+    margin-top: 1em;
+}
+
+.post-view .readonly-sidebar .details .zoom a {
+    display: inline-block;
+}
+
+.post-view .readonly-sidebar .details .zoom .active {
+    text-decoration: underline;
+}
+
+.post-view .readonly-sidebar .details .social {
+    margin-top: 1em;
+}
+
+.post-view .readonly-sidebar .details .social .score-container {
+    float: left;
+    margin-right: 3em;
+}
+
+.post-view .readonly-sidebar .details .social .score-container .downvote i {
+    text-align: right;
+}
+
+.post-view .readonly-sidebar .details .social i {
+    text-align: left;
+    margin: 0;
+}
+
+.post-view .readonly-sidebar .details .social .value {
+    text-align: center;
+    display: inline-block;
+    width: 2em;
+}
+
+.post-view .readonly-sidebar .relations {
+    margin-top: 2em;
+}
+
+.post-view .readonly-sidebar .relations h1 {
+    margin-bottom: .5em;
+}
+
+.post-view .readonly-sidebar .relations .thumbnail {
+    width: 4em;
+    height: 3em;
+    background-position: 50% 30%;
+}
+
+.post-view .readonly-sidebar .relations li {
+    margin: 0 .3em .3em 0;
+    display: inline-block;
+}
+
+.post-view .readonly-sidebar .tags {
+    margin-top: 2em;
+}
+
+.post-view .readonly-sidebar .tags h1 {
+    margin-bottom: .5em;
+}
+
+.post-view .edit-sidebar .expander-content section:not(:last-child) {
+    margin-bottom: 1em;
+}
+
+.post-view .edit-sidebar .safety>label {
+    width: 100%;
+}
+
+.post-view .edit-sidebar .safety .radio-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.post-view .edit-sidebar .safety .radio-wrapper label {
+    flex-grow: 1;
+    display: inline-block;
+}
+
+.post-view .edit-sidebar .management ul {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+.post-view .edit-sidebar .management ul li {
+    margin: 0;
+    padding: 0;
+}
+
+.post-view .edit-sidebar .post-source textarea {
+    white-space: pre;
+    overflow-wrap: normal;
+    overflow-x: scroll;
+}
+
+.post-view .edit-sidebar form {
+    width: auto;
+}
+
+.post-view .edit-sidebar label:not(.file-dropper) {
+    margin-bottom: .3em;
+    display: block;
+}
+
+.post-view .edit-sidebar input[type=submit],
+.post-view .edit-sidebar input[type=button],
+.post-view .edit-sidebar button {
+    width: 100%;
+}
+
+.post-view .edit-sidebar input[type=submit]:focus,
+.post-view .edit-sidebar input[type=button]:focus,
+.post-view .edit-sidebar button:focus {
+    border: 2px solid "$text-color" !important;
+}
+
+.post-view .edit-sidebar .messages {
+    margin-top: 1em;
+}
