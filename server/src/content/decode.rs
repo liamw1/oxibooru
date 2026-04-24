@@ -2,15 +2,14 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
 use crate::content::{FileContents, flash};
 use crate::model::enums::PostType;
-use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, Rgb, RgbImage};
+use ffmpeg_sidecar::command::FfmpegCommand;
+use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
+use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, RgbImage};
 use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::path::Path;
 use swf::Tag;
 use tracing::error;
-use video_rs::Decoder;
-use video_rs::ffmpeg::format::Pixel;
-use video_rs::ffmpeg::media::Type;
 
 /// Returns a representative image for the given content.
 /// For images, this is simply the decoded image.
@@ -35,10 +34,26 @@ pub fn representative_image(
 }
 
 /// Returns if the video at `path` has an audio channel.
-pub fn video_has_audio(path: &Path) -> Result<bool, video_rs::Error> {
-    video_rs::ffmpeg::format::input(path)
-        .map(|context| context.streams().best(Type::Audio).is_some())
-        .map_err(video_rs::Error::from)
+pub fn video_has_audio(path: &Path) -> ApiResult<bool> {
+    let path_str = path.to_string_lossy();
+    let iter = FfmpegCommand::new_with_path("/opt/app/ffmpeg")
+        .input(&path_str)
+        .args(["-vf", "thumbnail,format=rgb24", "-frames:v", "1", "-f", "rawvideo", "-"])
+        .spawn()?
+        .iter()
+        .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
+
+    let mut has_audio = false;
+    for event in iter {
+        match event {
+            FfmpegEvent::ParsedInputStream(stream) if stream.is_audio() => {
+                has_audio = true;
+            }
+            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => return Err(ApiError::FfmpegError(err.into())),
+            _ => {}
+        }
+    }
+    Ok(has_audio)
 }
 
 /// Returns if the swf at `path` has audio.
@@ -70,25 +85,30 @@ pub fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
     reader.decode()
 }
 
-/// Decodes first frame of video contents.
+/// Decodes a representative frame of the video at the given `path`.
 fn video_frame(path: &Path) -> ApiResult<Option<DynamicImage>> {
-    let mut decoder = Decoder::new(path)?;
-    let frame = decoder.decode_raw()?;
+    let path_str = path.to_string_lossy();
+    let iter = FfmpegCommand::new_with_path("/opt/app/ffmpeg")
+        .input(&path_str)
+        .args(["-vf", "thumbnail,format=rgb24", "-frames:v", "1", "-f", "rawvideo", "-"])
+        .spawn()?
+        .iter()
+        .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
 
-    if frame.planes() == 0 {
-        return Ok(None);
+    let mut frame = None;
+    for event in iter {
+        match event {
+            FfmpegEvent::OutputFrame(f) => {
+                let buffer_len = f.data.len();
+                let image = RgbImage::from_raw(f.width, f.height, f.data)
+                    .ok_or(ApiError::FrameBufferMismatch(f.width, f.height, buffer_len))?;
+                frame = Some(DynamicImage::ImageRgb8(image));
+            }
+            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => return Err(ApiError::FfmpegError(err.into())),
+            _ => {}
+        }
     }
-
-    let frame_data = frame.data(0);
-    let width = frame.width();
-    let height = frame.height();
-    let stride = frame.stride(0);
-    match frame.format() {
-        Pixel::RGB24 => Ok(rgb24_frame(frame_data, width, height, stride)),
-        // There's a looooooot of pixel formats, so I'll just implementment them as they come up
-        format => Err(ApiError::UnimplementedFrameFormat(format)),
-    }
-    .map(Some)
+    Ok(frame)
 }
 
 /// Search swf tags for the largest decodable image
@@ -159,13 +179,4 @@ fn image_reader_limits() -> Limits {
     let mut limits = Limits::no_limits();
     limits.max_alloc = Some(4 * GB);
     limits
-}
-
-/// Converts raw `video_frame` into a [`DynamicImage`].
-fn rgb24_frame(video_frame: &[u8], width: u32, height: u32, stride: usize) -> DynamicImage {
-    let rgb_image = RgbImage::from_fn(width, height, |x, y| {
-        let offset = y as usize * stride + x as usize * 3;
-        Rgb([video_frame[offset], video_frame[offset + 1], video_frame[offset + 2]])
-    });
-    DynamicImage::ImageRgb8(rgb_image)
 }

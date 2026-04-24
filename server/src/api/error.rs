@@ -35,6 +35,9 @@ pub enum ApiError {
     FailedConnection(#[from] diesel::r2d2::PoolError),
     FailedEmailTransport(#[from] lettre::transport::smtp::Error),
     FailedQuery(#[from] diesel::result::Error),
+    FfmpegError(Box<dyn std::error::Error + Send + Sync + 'static>),
+    #[error("Image buffer of length {2} does not match dimensions {0}x{1}")]
+    FrameBufferMismatch(u32, u32, usize),
     FromStr(#[from] Box<dyn std::error::Error + Send + Sync>),
     HeaderDeserialization(#[from] axum::http::header::ToStrError),
     #[error("{0} hidden")]
@@ -86,12 +89,9 @@ pub enum ApiError {
     StdIo(#[from] std::io::Error),
     SwfDecoding(#[from] swf::error::Error),
     TaskJoin(#[from] tokio::task::JoinError),
-    #[error("Frame format {0:?} is unimplemented")]
-    UnimplementedFrameFormat(video_rs::ffmpeg::format::Pixel),
     #[error("Password reset token is invalid")]
     UnauthorizedPasswordReset,
     UnsupportedExtension(#[from] crate::model::enums::ParseExtensionError),
-    VideoDecoding(#[from] video_rs::Error),
 }
 
 impl ApiError {
@@ -121,6 +121,8 @@ impl ApiError {
             | Self::EmptySwf
             | Self::EmptyVideo
             | Self::ExpressionFailsRegex(..)
+            | Self::FfmpegError(_)
+            | Self::FrameBufferMismatch(..)
             | Self::FromStr(_)
             | Self::Image(_)
             | Self::InvalidEmail(_)
@@ -133,15 +135,13 @@ impl ApiError {
             | Self::NoNamesGiven(_)
             | Self::NotAnInteger(_)
             | Self::SelfMerge(_)
-            | Self::SwfDecoding(_)
-            | Self::VideoDecoding(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            | Self::SwfDecoding(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::FailedEmailTransport(_)
             | Self::FailedQuery(_)
             | Self::InvalidHeader(_)
             | Self::MissingSmtpInfo
             | Self::StdIo(_)
             | Self::TaskJoin(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::UnimplementedFrameFormat(_) => StatusCode::NOT_IMPLEMENTED,
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedAuthentication(err) => match err {
                 AuthenticationError::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
@@ -168,6 +168,8 @@ impl ApiError {
             Self::FailedConnection(_) => "Failed Connection",
             Self::FailedEmailTransport(_) => "Failed Email Transport",
             Self::FailedQuery(_) => "Failed Query",
+            Self::FfmpegError(_) => "FFmpeg Error",
+            Self::FrameBufferMismatch(..) => "Frame Buffer Mismatch",
             Self::FromStr(_) => "FromStr Error",
             Self::HeaderDeserialization(_) => "Header Deserialization",
             Self::Hidden(_) => "Resource Hidden",
@@ -203,10 +205,8 @@ impl ApiError {
             Self::StdIo(_) => "IO Error",
             Self::SwfDecoding(_) => "SWF Decoding Error",
             Self::TaskJoin(_) => "Task Join Error",
-            Self::UnimplementedFrameFormat(_) => "Unimplemented Frame Format",
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
             Self::UnsupportedExtension(_) => "Unsupported extension",
-            Self::VideoDecoding(_) => "Video Decoding Error",
         }
     }
 

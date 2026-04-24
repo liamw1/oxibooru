@@ -16,14 +16,17 @@ diesel = { version = "2.3.2", features = ["postgres", "r2d2", "time", "uuid", "s
                                           "i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
 diesel_migrations = { version = "2.3.0", features = ["postgres"] }
 dotenvy = "0.15.7"
+ffmpeg-sidecar = { version = "2.5.0", default-features = false }
 flate2 = "1.0.35"
 hex = "0.4.3"
 hmac = "0.12.1"
-image = { version = "0.25.5", features = ["avif-native"] }
+image = { version = "0.25.5" }
 lettre = { version = "0.11.12", features = ["serde"] }
 md5 = "0.7.0"
 num-traits = "0.2.19"
+openssl-sys = { version = "0.9.114", features = ["vendored"] }
 percent-encoding = "2.3.1"
+pq-sys = { version = "0.7.5", features = ["bundled"] }
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version ="0.12.12", features = ["json"] }
@@ -50,7 +53,6 @@ utoipa-axum = "0.2.0"
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum", "vendored"] }
 utoipa-swagger-ui-vendored = "0.1.2"
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
-video-rs = "0.11.0"
 walkdir = "2.5.0"
 
 [target.'cfg(target_env = "musl")'.dependencies]
@@ -59,3 +61,6 @@ mimalloc = "0.1.48"
 [dev-dependencies]
 axum-test = "17.3.0"
 serial_test = "3.2.0"
+
+[profile.release] 
+strip = true

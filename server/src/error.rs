@@ -22,7 +22,6 @@ pub enum ErrorName {
     CryptoError,
     CyclicDependency,
     Deadlock,
-    DecodeExhausted,
     DeleteDefault,
     DeserializationError,
     DimensionLimitsExceeded,
@@ -56,38 +55,12 @@ pub enum ErrorName {
     FailedEmailTransport,
     FailedEncoding,
     FailedToDeserializeQueryString,
-    FFmpegBsfNotFound,
-    FFmpegBufferTooSmall,
-    FFmpegBug1,
-    FFmpegBug2,
-    FFmpegDecoderNotFound,
-    FFmpegDemuxerNotFound,
-    FFmpegEncoderNotFound,
-    FFmpegEof,
-    FFmpegExit,
-    FFmpegExperimental,
-    FFmpegExternal,
-    FFmpegFilterNotFound,
-    FFmpegHttpBadRequest,
-    FFmpegHttpForbidden,
-    FFmpegHttpNotFound,
-    FFmpegHttpOther4xx,
-    FFmpegHttpServerError,
-    FFmpegHttpUnauthorized,
-    FFmpegInputChanged,
-    FFmpegInvalidData,
-    FFmpegMuxerNotFound,
-    FFmpegOptionNotFound,
-    FFmpegOutputChanged,
-    FFmpegPatchWelcome,
-    FFmpegPosixError,
-    FFmpegProtocolNotFound,
-    FFmpegStreamNotFound,
-    FFmpegUnknown,
+    FFmpegError,
     FileAlreadyExists,
     FileNotFound,
     FileTooLarge,
     ForeignKeyViolation,
+    FrameBufferMismatch,
     FromStrError,
     GenericImageError,
     HeaderDeserialization,
@@ -104,10 +77,8 @@ pub enum ErrorName {
     InvalidData,
     InvalidDigit,
     InvalidEncoding,
-    InvalidExtraData,
     InvalidFilename,
     InvalidFormat,
-    InvalidFrameFormat,
     InvalidHeader,
     InvalidInput,
     InvalidLastSymbol,
@@ -115,7 +86,6 @@ pub enum ErrorName {
     InvalidPadding,
     InvalidPassword,
     InvalidPhcStringField,
-    InvalidResizeParameters,
     InvalidSort,
     InvalidUploadToken,
     InvalidUserRank,
@@ -131,7 +101,6 @@ pub enum ErrorName {
     MalformedCredentials,
     MalformedToken,
     MalformedValue,
-    MissingCodecParameters,
     MissingContent,
     MissingContentType,
     MissingFormData,
@@ -176,7 +145,6 @@ pub enum ErrorName {
     PostRelationAlreadyExists,
     QueryBuilderError,
     QuotaExceeded,
-    ReadExhausted,
     ReadOnlyFilesystem,
     ReadOnlyTransaction,
     RequestError,
@@ -209,8 +177,6 @@ pub enum ErrorName {
     UnauthorizedPasswordReset,
     UnexpectedEof,
     UnexpectedOutputSize,
-    UnimplementedFrameFormat,
-    UninitializedCodec,
     UniqueViolation,
     UnknownArgonError,
     UnknownArgonInvalidValue,
@@ -230,8 +196,6 @@ pub enum ErrorName {
     UnknownQueryRejectionError,
     Unsupported,
     UnsupportedAlgorithm,
-    UnsupportedCodecHardwareAccelerationDeviceType,
-    UnsupportedCodecParameterSets,
     UnsupportedColor,
     UnsupportedExtension,
     UnsupportedFeature,
@@ -248,7 +212,6 @@ pub enum ErrorName {
     ValueTooLong,
     ValueTooShort,
     WouldBlock,
-    WriteRetryLimitReached,
     WriteZero,
     WrongNumberOfPathParameters,
     ZeroNotAllowed,
@@ -652,61 +615,6 @@ impl ErrorKind for tokio::task::JoinError {
     }
 }
 
-impl ErrorKind for video_rs::ffmpeg::Error {
-    fn kind(&self) -> ErrorName {
-        match self {
-            Self::Bug => ErrorName::FFmpegBug1,
-            Self::Bug2 => ErrorName::FFmpegBug2,
-            Self::Unknown => ErrorName::FFmpegUnknown,
-            Self::Experimental => ErrorName::FFmpegExperimental,
-            Self::BufferTooSmall => ErrorName::FFmpegBufferTooSmall,
-            Self::Eof => ErrorName::FFmpegEof,
-            Self::Exit => ErrorName::FFmpegExit,
-            Self::External => ErrorName::FFmpegExternal,
-            Self::InvalidData => ErrorName::FFmpegInvalidData,
-            Self::PatchWelcome => ErrorName::FFmpegPatchWelcome,
-            Self::InputChanged => ErrorName::FFmpegInputChanged,
-            Self::OutputChanged => ErrorName::FFmpegOutputChanged,
-            Self::BsfNotFound => ErrorName::FFmpegBsfNotFound,
-            Self::DecoderNotFound => ErrorName::FFmpegDecoderNotFound,
-            Self::DemuxerNotFound => ErrorName::FFmpegDemuxerNotFound,
-            Self::EncoderNotFound => ErrorName::FFmpegEncoderNotFound,
-            Self::OptionNotFound => ErrorName::FFmpegOptionNotFound,
-            Self::MuxerNotFound => ErrorName::FFmpegMuxerNotFound,
-            Self::FilterNotFound => ErrorName::FFmpegFilterNotFound,
-            Self::ProtocolNotFound => ErrorName::FFmpegProtocolNotFound,
-            Self::StreamNotFound => ErrorName::FFmpegStreamNotFound,
-            Self::HttpBadRequest => ErrorName::FFmpegHttpBadRequest,
-            Self::HttpUnauthorized => ErrorName::FFmpegHttpUnauthorized,
-            Self::HttpForbidden => ErrorName::FFmpegHttpForbidden,
-            Self::HttpNotFound => ErrorName::FFmpegHttpNotFound,
-            Self::HttpOther4xx => ErrorName::FFmpegHttpOther4xx,
-            Self::HttpServerError => ErrorName::FFmpegHttpServerError,
-            Self::Other { .. } => ErrorName::FFmpegPosixError,
-        }
-    }
-}
-
-impl ErrorKind for video_rs::Error {
-    fn kind(&self) -> ErrorName {
-        match self {
-            Self::ReadExhausted => ErrorName::ReadExhausted,
-            Self::DecodeExhausted => ErrorName::DecodeExhausted,
-            Self::WriteRetryLimitReached => ErrorName::WriteRetryLimitReached,
-            Self::InvalidFrameFormat => ErrorName::InvalidFrameFormat,
-            Self::InvalidExtraData => ErrorName::InvalidExtraData,
-            Self::MissingCodecParameters => ErrorName::MissingCodecParameters,
-            Self::UnsupportedCodecParameterSets => ErrorName::UnsupportedCodecParameterSets,
-            Self::InvalidResizeParameters => ErrorName::InvalidResizeParameters,
-            Self::UninitializedCodec => ErrorName::UninitializedCodec,
-            Self::UnsupportedCodecHardwareAccelerationDeviceType => {
-                ErrorName::UnsupportedCodecHardwareAccelerationDeviceType
-            }
-            Self::BackendError(err) => err.kind(),
-        }
-    }
-}
-
 impl ErrorKind for crate::api::error::ApiError {
     fn kind(&self) -> ErrorName {
         match self {
@@ -721,6 +629,8 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::FailedConnection(_) => ErrorName::FailedConnection,
             Self::FailedEmailTransport(_) => ErrorName::FailedEmailTransport,
             Self::FailedQuery(err) => err.kind(),
+            Self::FfmpegError(_) => ErrorName::FFmpegError,
+            Self::FrameBufferMismatch(..) => ErrorName::FrameBufferMismatch,
             Self::FromStr(_) => ErrorName::FromStrError,
             Self::HeaderDeserialization(_) => ErrorName::HeaderDeserialization,
             Self::Hidden(_) => ErrorName::ResourceHidden,
@@ -756,10 +666,8 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::StdIo(err) => err.kind().kind(),
             Self::SwfDecoding(err) => err.kind(),
             Self::TaskJoin(err) => err.kind(),
-            Self::UnimplementedFrameFormat(_) => ErrorName::UnimplementedFrameFormat,
             Self::UnauthorizedPasswordReset => ErrorName::UnauthorizedPasswordReset,
             Self::UnsupportedExtension(_) => ErrorName::UnsupportedExtension,
-            Self::VideoDecoding(err) => err.kind(),
         }
     }
 }
