@@ -1,0 +1,57 @@
+@import url('colors.css');
+
+.content-wrapper.tag-categories {
+    width: 100%;
+    max-width: 45em;
+}
+
+.content-wrapper.tag-categories table {
+    border-spacing: 0;
+    width: 100%;
+}
+
+.content-wrapper.tag-categories table tr.default td {
+    background: "$default-tag-category-background-color";
+}
+
+.content-wrapper.tag-categories table td,
+.content-wrapper.tag-categories table th {
+    padding: .4em;
+}
+
+.content-wrapper.tag-categories table td.color input[type=text],
+.content-wrapper.tag-categories table th.color input[type=text] {
+    width: 8em;
+}
+
+.content-wrapper.tag-categories table td.usages,
+.content-wrapper.tag-categories table th.usages {
+    text-align: center;
+}
+
+.content-wrapper.tag-categories table td.remove,
+.content-wrapper.tag-categories table th.remove,
+.content-wrapper.tag-categories table td.set-default,
+.content-wrapper.tag-categories table th.set-default {
+    white-space: pre;
+}
+
+.content-wrapper.tag-categories table th {
+    white-space: nowrap;
+}
+
+.content-wrapper.tag-categories table th:first-child {
+    padding-left: 0;
+}
+
+.content-wrapper.tag-categories table th:last-child {
+    padding-right: 0;
+}
+
+.content-wrapper.tag-categories table tfoot {
+    display: none;
+}
+
+.content-wrapper.tag-categories form {
+    width: auto;
+}

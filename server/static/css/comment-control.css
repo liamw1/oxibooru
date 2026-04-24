@@ -1,0 +1,255 @@
+@import url('colors.css');
+
+.comments-container {
+    margin-top: 2em;
+}
+
+.comment-container {
+    padding: 0 0 0 60px;
+}
+
+.comment-container .avatar {
+    float: left;
+    margin-left: -60px;
+    vertical-align: top;
+}
+
+.comment-container .avatar .thumbnail {
+    width: 40px;
+    height: 40px;
+}
+
+.comment-container .avatar a {
+    outline: none;
+    display: inline-block;
+    position: relative;
+    top: -2px;
+    border: 2px solid transparent;
+}
+
+.comment-container .avatar a:focus {
+    border: 2px solid "$main-color";
+}
+
+.comment-container nav:not(.active),
+.comment-container .tab:not(.active) {
+    display: none;
+}
+
+.comment-container .comment {
+    border: 1px solid "$comment-border-color";
+}
+
+.comment-container .comment header {
+    white-space: nowrap;
+    font-size: 95%;
+    vertical-align: middle;
+    position: relative;
+    background: "$comment-header-background-color";
+    border-bottom: 1px solid "$comment-border-color";
+}
+
+.comment-container .comment header nav.edit {
+    padding: .25em 1em 0 1em;
+    line-height: 2em;
+}
+
+.comment-container .comment header nav.edit ul {
+    list-style-type: none;
+    margin: -1px 0 -1px 0;
+    padding: 0;
+}
+
+.comment-container .comment header nav.edit ul li {
+    display: inline-block;
+    border: 1px solid transparent;
+}
+
+.comment-container .comment header nav.edit ul li a {
+    padding: 0 1em;
+}
+
+.comment-container .comment header nav.edit ul li.active {
+    background: "$window-color";
+    border: 1px solid "$comment-border-color";
+    border-bottom: 1px solid "$window-color";
+}
+
+.comment-container .comment header nav.readonly {
+    padding: 0 1em;
+    line-height: 2.25em;
+}
+
+.comment-container .comment header nav.readonly .date,
+.comment-container .comment header nav.readonly .score-container,
+.comment-container .comment header nav.readonly .edit {
+    margin-right: 2em;
+}
+
+.comment-container .comment header .score-container,
+.comment-container .comment header .link-container {
+    display: inline-block;
+}
+
+.comment-container .comment header:before {
+    position: absolute;
+    display: block;
+    content: ' ';
+    width: 0;
+    height: 0;
+    left: -1.5em;
+    top: calc(50% - 0.75em);
+    border: .75em solid transparent;
+    border-right: .75em solid 'darken("$comment-border-color", 10%)';
+}
+
+.comment-container .comment header:after {
+    position: absolute;
+    display: block;
+    content: ' ';
+    width: 0;
+    height: 0;
+    left: calc(-1.5em + 1px);
+    top: calc(50% - 0.75em);
+    border: .75em solid transparent;
+    border-right: .75em solid "$comment-header-background-color";
+}
+
+.comment-container .comment header .edit:not(.inactive),
+.comment-container .comment header .delete:not(.inactive),
+.comment-container .comment header .score-container a:not(.inactive),
+.comment-container .comment header .nickname a:not(.inactive) {
+    color: 'mix("$main-color", "$inactive-link-color")';
+}
+
+.comment-container .comment header i {
+    margin-right: .3em;
+}
+
+.comment-container .comment header .downvote i {
+    text-align: right;
+}
+
+.comment-container .comment header .upvote i {
+    display: inline-block;
+    width: 1em;
+    margin: 0;
+}
+
+.comment-container .comment header .value {
+    text-align: center;
+    display: inline-block;
+    width: 2em;
+}
+
+.comment-container .comment .body {
+    width: auto;
+    margin: 1em;
+}
+
+.comment-container .comment .body .keep-height {
+    position: relative;
+}
+
+.comment-container .comment .body .keep-height textarea {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+}
+
+.comment-container .comment .body .keep-height .tab.edit {
+    min-height: 150px;
+}
+
+.comment-container .comment .messages {
+    margin: 1em 0;
+}
+
+.darktheme .comment-container .comment {
+    border: 1px solid "$comment-header-background-color-darktheme";
+}
+
+.darktheme .comment-container .comment header {
+    background: "$comment-header-background-color-darktheme";
+    border-bottom: 1px solid "$comment-header-background-color-darktheme";
+}
+
+.darktheme .comment-container .comment header nav.edit ul li.active {
+    background: "$window-color-darktheme";
+    border: 1px solid "$window-color-darktheme";
+}
+
+.darktheme .comment-container .comment header .edit:not(.inactive),
+.darktheme .comment-container .comment header .delete:not(.inactive),
+.darktheme .comment-container .comment header .score-container a:not(.inactive),
+.darktheme .comment-container .comment header .nickname a:not(.inactive) {
+    color: 'mix("$main-color", "$inactive-link-color-darktheme")';
+}
+
+.darktheme .comment-container .comment header:before {
+    border-right: 0;
+}
+
+.darktheme .comment-container .comment header:after {
+    border-right: .75em solid "$comment-header-background-color-darktheme";
+}
+
+.comment-content p {
+    word-wrap: normal;
+    word-break: break-word;
+}
+
+.comment-content ul,
+.comment-content ol {
+    list-style-position: inside;
+    margin: 1em 0;
+    padding: 0 0 0 1.5em;
+}
+
+.comment-content .sjis {
+    font-family: 'MS PGothic', 'ＭＳ Ｐゴシック', 'IPAMonaPGothic', 'Trebuchet MS', Verdana, Futura, Arial, Helvetica, sans-serif;
+    background: #fbfbfb;
+    color: #111;
+    font-size: 1em;
+    line-height: 1;
+    margin: 0;
+    padding: 4px;
+    overflow: auto;
+    white-space: pre;
+    word-wrap: normal;
+}
+
+.comment-content .spoiler {
+    background: #eee;
+    color: #eee;
+}
+
+.comment-content .spoiler:hover {
+    color: #696969;
+}
+
+.comment-content .spoiler:before {
+    content: '[';
+    color: #000;
+}
+
+.comment-content .spoiler:after {
+    content: ']';
+    color: #000;
+}
+
+.comment-content blockquote {
+    border-left: 3px solid #eee;
+    margin-left: 0;
+    padding: .3em .3em .3em .7em;
+    background: #fafafa;
+    color: #444;
+}
+
+.comment-content blockquote :first-child {
+    margin-top: 0;
+}
+
+.comment-content blockquote :last-child {
+    margin-bottom: 0;
+}

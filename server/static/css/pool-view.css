@@ -1,0 +1,51 @@
+#pool {
+    width: 100%;
+    max-width: 40em;
+}
+
+#pool h1 {
+    word-break: break-all;
+    line-height: 130%;
+    margin-top: 0;
+}
+
+#pool form {
+    width: 100%;
+}
+
+#pool .pool-edit textarea {
+    height: 10em;
+}
+
+#pool .pool-summary section.description {
+    margin: 1.5em 0 0 0;
+}
+
+#pool .pool-summary section.details {
+    vertical-align: top;
+    padding-right: .5em;
+}
+
+#pool .pool-summary section.details ul {
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+}
+
+#pool .pool-summary section.details li {
+    display: inline;
+    margin: 0;
+    padding: 0;
+}
+
+#pool .pool-summary section.details li:not(:last-of-type):after {
+    content: ', ';
+}
+
+#pool .pool-summary section.details ul:empty:after {
+    content: '(none)';
+}
+
+#pool .pool-summary section.details section {
+    margin-bottom: 1em;
+}

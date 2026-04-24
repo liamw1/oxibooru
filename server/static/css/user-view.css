@@ -1,0 +1,103 @@
+@import url('colors.css');
+
+#user {
+    width: 100%;
+    max-width: 35em;
+}
+
+#user nav.text-nav {
+    margin-bottom: 1.5em;
+}
+
+#user #user-summary .thumbnail {
+    width: 6em;
+    height: 6em;
+    margin: 0 1.5em 1.5em 0;
+    float: left;
+}
+
+#user #user-summary .basic-info {
+    list-style-type: none;
+    margin: 0;
+}
+
+#user #user-summary div {
+    clear: both;
+}
+
+#user #user-summary nav {
+    float: left;
+    width: 45%;
+    margin-right: 1em;
+}
+
+#user #user-edit form {
+    width: 100%;
+}
+
+#user #user-edit .avatar #avatar-content {
+    float: right;
+    width: 65%;
+    margin-top: .5em;
+}
+
+#user #user-edit .avatar #avatar-radio {
+    float: left;
+    width: 30%;
+}
+
+#user #user-edit .avatar:after {
+    content: ' ';
+    display: block;
+    height: 1px;
+    clear: both;
+}
+
+#user #user-tokens .token-flex-container {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: .5em;
+}
+
+#user #user-tokens .token-flex-container .full-width {
+    width: 100%;
+}
+
+#user #user-tokens .token-flex-container .token-flex-row {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    padding: .2em;
+}
+
+#user #user-tokens .token-flex-container .token-flex-row .no-wrap {
+    white-space: nowrap;
+}
+
+#user #user-tokens .token-flex-container .token-flex-row .token-input {
+    min-height: 2em;
+    line-height: 2em;
+    text-align: center;
+}
+
+#user #user-tokens .token-flex-container .token-flex-column {
+    display: flex;
+    flex-direction: column;
+}
+
+#user #user-tokens .token-flex-container .token-flex-labels {
+    padding-right: .5em;
+}
+
+#user #user-tokens .token-flex-container hr {
+    border-top: 3px solid "$active-tab-background-color";
+}
+
+#user #user-tokens form {
+    width: 100%;
+}
+
+#user #user-delete form {
+    width: 100%;
+}
