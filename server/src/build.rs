@@ -6,4 +6,7 @@ fn main() {
 
     /// Since we embed the default config, also build if it changes
     println!("cargo::rerun-if-changed=config.toml.dist");
+
+    /// Also want to recompile if templates change
+    println!("cargo::rerun-if-changed=templates/");
 }

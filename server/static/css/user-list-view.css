@@ -1,0 +1,74 @@
+@import url('colors.css');
+
+.user-list ul {
+    list-style-type: none;
+    padding: 0;
+    display: flex;
+    align-content: flex-end;
+    flex-wrap: wrap;
+    margin: 0 -.5em;
+}
+
+.user-list ul li {
+    flex-grow: 1;
+    width: 20em;
+    margin: 0 .5em 1em .5em;
+    padding: .75em;
+    vertical-align: top;
+    background: "$top-navigation-color";
+    text-align: left;
+}
+
+.user-list .wrapper {
+    display: flex;
+}
+
+.user-list .details {
+    font-size: 90%;
+    line-height: 130%;
+}
+
+.user-list .image {
+    margin: .25em .6em .25em 0;
+}
+
+.user-list .thumbnail {
+    width: 3em;
+    height: 3em;
+}
+
+.darktheme .user-list ul li {
+    background: "$top-navigation-color-darktheme";
+}
+
+.user-list-header {
+    text-align: left;
+}
+
+.user-list-header label {
+    display: none !important;
+}
+
+.user-list-header form {
+    width: auto;
+}
+
+.user-list-header input[name=search-text] {
+    width: 25em;
+}
+
+@media (max-width:1000px) {
+    .user-list-header input[name=search-text] {
+        width: 100%;
+    }
+}
+
+.user-list-header .append {
+    vertical-align: middle;
+    font-size: .95em;
+    color: "$inactive-link-color";
+}
+
+.darktheme .user-list-header .append {
+    color: "$inactive-link-color-darktheme";
+}

@@ -1,0 +1,462 @@
+/* latin */
+@font-face {
+    font-family: 'Open Sans';
+    font-style: normal;
+    font-weight: 400;
+    src: local('Open Sans'), local('OpenSans'), url("../fonts/open_sans.woff2") format('woff2');
+    unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02C6, U+02DA, U+02DC, U+2000-206F, U+2074, U+20AC, U+2212, U+2215, U+E0FF, U+EFFD, U+F000;
+}
+
+html {
+    height: 100%;
+}
+
+body {
+    min-height: 100%;
+}
+
+body {
+    background: var(--window-color);
+    overflow-y: scroll;
+    margin: 0;
+    color: var(--text-color);
+    font-family: 'Open Sans', sans-serif;
+    font-size: 1em;
+    line-height: 1.4;
+}
+
+@media (max-width:800px) {
+    body {
+        font-size: .875em;
+    }
+}
+
+@media (max-width:1200px) {
+    body {
+        font-size: .95em;
+    }
+}
+
+body.darktheme {
+    color: var(--text-color-darktheme);
+    background: var(--window-color-darktheme);
+}
+
+h1,
+h2,
+h3 {
+    font-weight: normal;
+    margin-bottom: 1em;
+}
+
+h1 {
+    font-size: 2em;
+}
+
+h2 {
+    font-size: 1.5em;
+}
+
+p,
+ol,
+ul {
+    margin: 1em 0;
+}
+
+th {
+    font-weight: normal;
+}
+
+a {
+    cursor: pointer;
+    color: var(--main-color);
+    text-decoration: none;
+    transition: color .1s linear;
+}
+
+a.inactive {
+    color: var(--inactive-link-color);
+    cursor: default;
+}
+
+a.icon {
+    color: var(--inactive-link-color);
+    opacity: .5;
+}
+
+a:focus {
+    outline: 2px solid var(--main-color);
+}
+
+a .vim-nav-hint {
+    position: absolute;
+    visibility: hidden;
+}
+
+.darktheme a.inactive {
+    color: var(--inactive-link-color-darktheme);
+}
+
+.darktheme a.icon {
+    color: var(--inactive-link-color-darktheme);
+}
+
+a.append,
+span.append {
+    margin-left: 1em;
+}
+
+form .fa-question-circle-o {
+    font-size: 110%;
+    vertical-align: middle;
+}
+
+#content-holder {
+    padding: 1.5em;
+    text-align: center;
+}
+
+@media (max-width:1000px) {
+    #content-holder {
+        padding: 1em;
+    }
+}
+
+#content-holder>.content-wrapper {
+    /* make max-width: 100% on this element include padding */
+    box-sizing: border-box;
+    text-align: left;
+    display: inline-block;
+    margin: 0 auto;
+}
+
+#content-holder>.content-wrapper>*:first-child,
+#content-holder>.content-wrapper form h1 {
+    margin-top: 0;
+}
+
+#content-holder>.content-wrapper nav.buttons ul {
+    display: block;
+    max-width: 100%;
+    white-space: nowrap;
+    overflow-x: auto;
+}
+
+#content-holder>.content-wrapper nav.buttons ul::-webkit-scrollbar {
+    height: 6px;
+    background-color: var(--scrollbar-bg-color);
+}
+
+#content-holder>.content-wrapper nav.buttons ul::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-color);
+}
+
+#content-holder>.content-wrapper:not(.transparent-container) {
+    background: var(--top-navigation-color);
+    padding: 1.8em;
+}
+
+@media (max-width:1000px) {
+    #content-holder>.content-wrapper:not(.transparent-container) {
+        padding: 1.5em;
+    }
+}
+
+#content-holder>.content-wrapper:not(.transparent-container) .content>*:last-child,
+#content-holder>.content-wrapper:not(.transparent-container) .content .subcontent>*:last-child {
+    margin-bottom: 0;
+}
+
+.darktheme #content-holder>.content-wrapper:not(.transparent-container) {
+    background: var(--top-navigation-color-darktheme);
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid var(--line-color);
+    margin: 1em 0;
+    padding: 0;
+}
+
+.darktheme hr {
+    border-top: 1px solid oklch(from var(--line-color) calc(l - 25%) c h);
+}
+
+nav ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+    display: inline-block;
+}
+
+nav ul li {
+    display: block;
+    padding: 0;
+    margin: 0;
+}
+
+nav ul li a {
+    display: inline-block;
+}
+
+nav ul li img {
+    margin: 0;
+    /* fix ghost margin under the image */
+    vertical-align: top;
+}
+
+nav.buttons {
+    margin: 1em 0;
+    line-height: 2.3em;
+    vertical-align: middle;
+}
+
+nav.buttons ul li {
+    display: inline-block;
+}
+
+nav.buttons ul li a {
+    padding: 0 1.2em;
+}
+
+nav.buttons ul li:not(.active) a {
+    color: var(--inactive-link-color);
+}
+
+nav.buttons ul li:hover:not(.active) a {
+    color: var(--text-color);
+}
+
+nav.buttons ul li.active a {
+    background: var(--active-tab-background-color);
+    color: var(--text-color);
+}
+
+nav.buttons ul :focus {
+    background: var(--focused-tab-background-color);
+    outline: 0;
+}
+
+nav#top-navigation {
+    background: var(--top-navigation-color);
+    margin: 0;
+}
+
+nav#top-navigation ul {
+    display: block;
+    text-align: right;
+}
+
+nav#top-navigation ul li {
+    float: left;
+}
+
+nav#top-navigation ul li a {
+    padding: 0 1.5em;
+}
+
+nav#top-navigation ul #mobile-navigation-toggle {
+    display: none;
+    width: 100%;
+    padding: 0 1em;
+    line-height: 2.3em;
+    font-family: inherit;
+    border: none;
+    background: none;
+    color: var(--text-color);
+}
+
+nav#top-navigation ul #mobile-navigation-toggle .site-name {
+    display: block;
+    float: left;
+    max-width: 50vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+nav#top-navigation ul #mobile-navigation-toggle .toggle-icon {
+    display: block;
+    float: right;
+}
+
+@media (max-width:1000px) {
+    nav#top-navigation ul {
+        text-align: left;
+    }
+
+    nav#top-navigation ul li {
+        display: none;
+        float: none;
+    }
+
+    nav#top-navigation ul li a {
+        display: block;
+        padding: 0 1em;
+    }
+
+    nav#top-navigation ul #mobile-navigation-toggle {
+        display: block;
+    }
+
+    nav#top-navigation ul.opened li {
+        display: block;
+    }
+}
+
+nav#top-navigation ul li[data-name=account],
+nav#top-navigation ul li[data-name=register],
+nav#top-navigation ul li[data-name=login],
+nav#top-navigation ul li[data-name=logout],
+nav#top-navigation ul li[data-name=settings],
+nav#top-navigation ul li[data-name=help] {
+    float: none;
+}
+
+nav#top-navigation .access-key {
+    text-decoration: underline;
+}
+
+nav#top-navigation .thumbnail {
+    width: 1.5em;
+    height: 1.5em;
+    margin: calc((2.3em - 1.5em) / 2);
+    margin-right: .6em;
+    margin-left: calc(0.6em - 1.2em);
+    float: left;
+}
+
+@media (max-width:1000px) {
+    nav#top-navigation .thumbnail {
+        display: none;
+    }
+}
+
+.darktheme nav.buttons ul li:not(.active) a {
+    color: var(--inactive-link-color-darktheme);
+}
+
+.darktheme nav.buttons ul li:hover:not(.active) a {
+    color: var(--text-color-darktheme);
+}
+
+.darktheme nav.buttons ul li.active a {
+    background: var(--active-tab-background-color-darktheme);
+    color: var(--text-color-darktheme);
+}
+
+.darktheme nav.buttons ul :focus {
+    background: var(--focused-tab-background-color-darktheme);
+}
+
+.darktheme nav#top-navigation {
+    background: var(--top-navigation-color-darktheme);
+}
+
+.darktheme nav#top-navigation ul #mobile-navigation-toggle {
+    color: var(--text-color-darktheme);
+}
+
+a .access-key {
+    text-decoration: underline;
+}
+
+.messages {
+    margin: 0 auto;
+    text-align: left;
+}
+
+.messages .message {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 40em;
+    margin: 0 0 1em 0;
+    display: inline-block;
+    text-align: left;
+    padding: .5em 1em;
+}
+
+.messages .message.info {
+    border: 1px solid var(--message-info-border-color);
+    background: var(--message-info-background-color);
+}
+
+.messages .message.error {
+    border: 1px solid var(--message-error-border-color);
+    background: var(--message-error-background-color);
+}
+
+.messages .message.success {
+    border: 1px solid var(--message-success-border-color);
+    background: var(--message-success-background-color);
+}
+
+.darktheme .messages .message.info {
+    border: 1px solid oklch(from var(--message-info-border-color) calc(l - 30%) c h);
+    background: oklch(from var(--message-info-background-color) calc(l - 60%) c h);
+}
+
+.darktheme .messages .message.error {
+    border: 1px solid oklch(from var(--message-error-border-color) calc(l - 30%) c h);
+    background: oklch(from var(--message-error-background-color) calc(l - 60%) c h);
+}
+
+.darktheme .messages .message.success {
+    border: 1px solid oklch(from var(--message-success-border-color) calc(l - 30%) c h);
+    background: oklch(from var(--message-success-background-color) calc(l - 80%) c h);
+}
+
+.thumbnail {
+    /* not available yet */
+    /*background-image: attr(data-src url)*/
+    vertical-align: middle;
+    background-repeat: no-repeat;
+    background-size: cover;
+    background-position: center;
+    display: inline-block;
+    width: 20px;
+    height: 20px;
+}
+
+.thumbnail.empty {
+    background-image: linear-gradient(45deg, var(--transparency-grid-square-color) 25%, transparent 25%), linear-gradient(-45deg, var(--transparency-grid-square-color) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, var(--transparency-grid-square-color) 75%), linear-gradient(-45deg, transparent 75%, var(--transparency-grid-square-color) 75%);
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+    background-repeat: repeat;
+    background-size: 20px 20px;
+}
+
+.thumbnail img {
+    opacity: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.thumbnail video {
+    width: 100%;
+    height: 100%;
+}
+
+.flexbox-dummy {
+    height: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+}
+
+.table-wrap {
+    overflow-x: auto;
+}
+
+.table-wrap::-webkit-scrollbar {
+    height: 6px;
+    background-color: var(--scrollbar-bg-color);
+}
+
+.table-wrap::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb-color);
+}
+
+/* hack to prevent text from being copied */
+[data-pseudo-content]:before {
+    content: attr(data-pseudo-content);
+}
