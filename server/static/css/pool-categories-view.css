@@ -1,0 +1,57 @@
+@import url('colors.css');
+
+.content-wrapper.pool-categories {
+    width: 100%;
+    max-width: 45em;
+}
+
+.content-wrapper.pool-categories table {
+    border-spacing: 0;
+    width: 100%;
+}
+
+.content-wrapper.pool-categories table tr.default td {
+    background: "$default-pool-category-background-color";
+}
+
+.content-wrapper.pool-categories table td,
+.content-wrapper.pool-categories table th {
+    padding: .4em;
+}
+
+.content-wrapper.pool-categories table td.color input[type=text],
+.content-wrapper.pool-categories table th.color input[type=text] {
+    width: 8em;
+}
+
+.content-wrapper.pool-categories table td.usages,
+.content-wrapper.pool-categories table th.usages {
+    text-align: center;
+}
+
+.content-wrapper.pool-categories table td.remove,
+.content-wrapper.pool-categories table th.remove,
+.content-wrapper.pool-categories table td.set-default,
+.content-wrapper.pool-categories table th.set-default {
+    white-space: pre;
+}
+
+.content-wrapper.pool-categories table th {
+    white-space: nowrap;
+}
+
+.content-wrapper.pool-categories table th:first-child {
+    padding-left: 0;
+}
+
+.content-wrapper.pool-categories table th:last-child {
+    padding-right: 0;
+}
+
+.content-wrapper.pool-categories table tfoot {
+    display: none;
+}
+
+.content-wrapper.pool-categories form {
+    width: auto;
+}

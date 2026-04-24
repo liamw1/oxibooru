@@ -1,0 +1,99 @@
+@import url('colors.css');
+
+div.pool-input {
+    position: relative;
+}
+
+div.pool-input .main-control {
+    display: flex;
+}
+
+div.pool-input .main-control input {
+    flex: 5;
+}
+
+div.pool-input .main-control button {
+    flex: 1;
+    margin: 0 0 0 .5em;
+}
+
+ul.compact-pools {
+    width: 100%;
+    margin: .5em 0 0 0;
+    padding: 0;
+}
+
+ul.compact-pools li {
+    margin: 0;
+    width: 100%;
+    line-height: 140%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color .5s linear;
+}
+
+ul.compact-pools li a {
+    display: inline;
+}
+
+ul.compact-pools li a:focus {
+    outline: 0;
+    box-shadow: inset 0 0 0 2px "$main-color";
+}
+
+ul.compact-pools li.implication {
+    background: "$implied-pool-background-color";
+    color: "$implied-pool-text-color";
+}
+
+ul.compact-pools li.new {
+    background: "$new-pool-background-color";
+    color: "$new-pool-text-color";
+}
+
+ul.compact-pools li.duplicate {
+    background: "$duplicate-pool-background-color";
+    color: "$duplicate-pool-text-color";
+}
+
+ul.compact-pools i {
+    padding-right: .4em;
+}
+
+div.pool-input .pool-usages,
+ul.compact-pools .pool-usages,
+div.pool-input .pool-weight,
+ul.compact-pools .pool-weight,
+div.pool-input .remove-pool,
+ul.compact-pools .remove-pool {
+    color: "$inactive-link-color";
+}
+
+div.pool-input .pool-usages,
+ul.compact-pools .pool-usages,
+div.pool-input .pool-weight,
+ul.compact-pools .pool-weight {
+    font-size: 90%;
+}
+
+div.pool-input .pool-usages,
+ul.compact-pools .pool-usages,
+div.pool-input .pool-weight,
+ul.compact-pools .pool-weight {
+    margin-left: .7em;
+}
+
+div.pool-input .remove-pool,
+ul.compact-pools .remove-pool {
+    margin-right: .5em;
+}
+
+.darktheme div.pool-input .pool-usages,
+.darktheme ul.compact-pools .pool-usages,
+.darktheme div.pool-input .pool-weight,
+.darktheme ul.compact-pools .pool-weight,
+.darktheme div.pool-input .remove-pool,
+.darktheme ul.compact-pools .remove-pool {
+    color: "$inactive-link-color-darktheme";
+}

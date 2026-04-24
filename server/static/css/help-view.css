@@ -1,0 +1,73 @@
+#help {
+    width: 100%;
+    max-width: 45em;
+}
+
+#help nav {
+    margin-bottom: 1.5em;
+}
+
+#help td,
+#help th {
+    padding: 0 .5em;
+}
+
+#help td:first-child,
+#help th:first-child {
+    white-space: pre;
+}
+
+#help .section {
+    margin-top: 2em;
+}
+
+#help h1 {
+    margin-top: 2.5em;
+    font-size: 1.6em;
+}
+
+#help h1:first-child {
+    margin-top: 0;
+}
+
+@media (max-width:1000px) {
+    #help h1 {
+        margin-top: 1.5em;
+    }
+
+    #help h1:first-child {
+        margin-top: 0;
+    }
+}
+
+#help nav ul {
+    margin: 0 auto;
+    text-align: left;
+}
+
+#help nav.secondary {
+    font-size: .95em;
+}
+
+@media (max-width:600px) {
+
+    #help th,
+    #help thead {
+        display: none;
+    }
+
+    #help table,
+    #help tr,
+    #help td,
+    #help tbody {
+        display: block;
+    }
+
+    #help tr {
+        margin-bottom: .8em;
+    }
+
+    #help pre {
+        white-space: pre-wrap;
+    }
+}

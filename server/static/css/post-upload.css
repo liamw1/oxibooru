@@ -1,0 +1,240 @@
+@import url('colors.css');
+
+#post-upload form {
+    width: 100%;
+    max-width: 40em;
+    margin: 0 auto;
+    text-align: left;
+}
+
+#post-upload form.inactive input[type=submit],
+#post-upload form.inactive .skip-duplicates,
+#post-upload form.inactive .always-upload-similar,
+#post-upload form.inactive .pause-remain-on-error,
+#post-upload form.uploading input[type=submit],
+#post-upload form.uploading .skip-duplicates,
+#post-upload form.uploading .always-upload-similar,
+#post-upload form.uploading .pause-remain-on-error,
+#post-upload form:not(.uploading) .cancel {
+    display: none;
+}
+
+#post-upload .dropper-container {
+    margin: 0 auto;
+}
+
+#post-upload .dropper-container .file-dropper {
+    font-size: 150%;
+    padding: 2em;
+}
+
+#post-upload .dropper-container .file-dropper small {
+    font-size: 60%;
+}
+
+#post-upload input[type=submit] {
+    margin-top: 1em;
+}
+
+#post-upload .cancel {
+    margin-top: 1em;
+    background: "$cancel-button-color";
+    border-color: "$cancel-button-color";
+}
+
+#post-upload .cancel:focus {
+    border: 2px solid "$text-color";
+}
+
+#post-upload .skip-duplicates {
+    margin-left: 1em;
+}
+
+#post-upload .always-upload-similar {
+    margin-left: 1em;
+}
+
+#post-upload .pause-remain-on-error {
+    margin-left: 1em;
+}
+
+#post-upload form>.messages {
+    margin-top: 1em;
+}
+
+#post-upload .uploadables-container {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+#post-upload .uploadables-container .uploadable-container {
+    clear: both;
+    margin: 0 0 1.2em 0;
+    padding-left: 13em;
+}
+
+#post-upload .uploadables-container .uploadable-container img {
+    width: 100%;
+    height: 100%;
+}
+
+#post-upload .uploadables-container .uploadable-container video {
+    width: 100%;
+    height: 100%;
+}
+
+#post-upload .uploadables-container .uploadable-container>.thumbnail-wrapper {
+    float: left;
+    width: 12em;
+    height: 8em;
+    margin: 0 0 0 -13em;
+}
+
+#post-upload .uploadables-container .uploadable-container>.thumbnail-wrapper .thumbnail {
+    width: 100%;
+    height: 100%;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable {
+    border: 1px solid "$upload-border-color";
+    min-height: 8em;
+    box-sizing: border-box;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable header {
+    line-height: 1.5em;
+    padding: .25em 1em;
+    text-align: left;
+    background: "$top-navigation-color";
+    border-bottom: 1px solid "$upload-border-color";
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable header nav:first-of-type {
+    float: left;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable header nav:first-of-type a {
+    margin: 0 .5em 0 0;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable header nav:last-of-type {
+    float: right;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable header nav:last-of-type a {
+    margin: 0 0 0 .5em;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable header nav ul {
+    list-style-type: none;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable header nav ul,
+#post-upload .uploadables-container .uploadable-container .uploadable header nav li {
+    display: inline-block;
+    margin: 0;
+    padding: 0;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable header span.filename {
+    padding: 0 .5em;
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body {
+    margin: 1em;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .anonymous {
+    margin: .3em 0;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .safety {
+    margin: .3em 0;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .safety label {
+    display: inline-block;
+    margin-right: 1em;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .options div {
+    display: inline-block;
+    margin: 0 1em 0 0;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .messages {
+    margin-top: 1em;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .messages .message:last-child {
+    margin-bottom: 0;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes {
+    list-style-type: none;
+    margin: 0;
+    padding: 0;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes li {
+    clear: both;
+    margin: 1em 0 0 0;
+    padding-left: 7em;
+    padding-bottom: 1em;
+    font-size: 90%;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes li .thumbnail-wrapper {
+    float: left;
+    width: 6em;
+    height: 4em;
+    margin: 0 0 0 -7em;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes li .thumbnail-wrapper .thumbnail {
+    width: 100%;
+    height: 100%;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes .description {
+    margin-right: .5em;
+    display: inline-block;
+}
+
+#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes .controls {
+    float: right;
+    display: inline-block;
+}
+
+#post-upload .uploadables-container .uploadable-container:first-child .move-up {
+    color: "$inactive-link-color";
+}
+
+#post-upload .uploadables-container .uploadable-container:last-child .move-down {
+    color: "$inactive-link-color";
+}
+
+.darktheme #post-upload .uploadables-container .uploadable-container:first-child .move-up {
+    color: "$inactive-link-color-darktheme";
+}
+
+.darktheme #post-upload .uploadables-container .uploadable-container:last-child .move-down {
+    color: "$inactive-link-color-darktheme";
+}
+
+.darktheme #post-upload .uploadables-container .uploadable-container .uploadable header {
+    background: "$top-navigation-color-darktheme";
+}
+
+.darktheme #post-upload .uploadables-container .uploadable-container:first-child .move-up {
+    color: "$inactive-link-color-darktheme";
+}
+
+.darktheme #post-upload .uploadables-container .uploadable-container:last-child .move-down {
+    color: "$inactive-link-color-darktheme";
+}

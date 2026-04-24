@@ -1,0 +1,276 @@
+@import url('colors.css');
+
+div.tag-input {
+    position: relative;
+}
+
+div.tag-input .main-control {
+    display: flex;
+}
+
+div.tag-input .main-control input {
+    flex: 5;
+}
+
+div.tag-input .main-control button {
+    flex: 1;
+    margin: 0 0 0 .5em;
+}
+
+div.tag-input .tag-suggestions {
+    position: absolute;
+    z-index: 5;
+    top: 0;
+    left: 100%;
+}
+
+div.tag-input .tag-suggestions:not(.shown) {
+    display: none;
+}
+
+div.tag-input .tag-suggestions.translucent {
+    opacity: .5;
+}
+
+div.tag-input .tag-suggestions:before {
+    margin-left: .5em;
+    margin-top: .5em;
+    position: absolute;
+    display: block;
+    background: "$tag-suggestions-header-color";
+    border-left: 1px solid "$tag-suggestions-border-color";
+    border-bottom: 1px solid "$tag-suggestions-border-color";
+    width: .707107em;
+    height: .707107em;
+    content: ' ';
+    transform: rotate(45deg);
+    transform-origin: 0 0%;
+}
+
+div.tag-input .tag-suggestions .buttons {
+    float: right;
+}
+
+div.tag-input .tag-suggestions .buttons a {
+    margin-left: 1em;
+    color: "$inactive-link-color";
+}
+
+div.tag-input .tag-suggestions .wrapper {
+    margin-left: .5em;
+    background: "$window-color";
+    border: 1px solid "$tag-suggestions-border-color";
+    width: 15em;
+    word-break: break-all;
+}
+
+div.tag-input .tag-suggestions .wrapper p {
+    background: "$tag-suggestions-header-color";
+    padding: .2em 1em;
+    margin: 0;
+}
+
+div.tag-input .tag-suggestions .wrapper ul {
+    list-style-type: none;
+    margin: 0;
+    overflow-y: auto;
+    overflow-x: none;
+    max-height: 20em;
+    padding: .5em 1em 0 1em;
+}
+
+div.tag-input .tag-suggestions .wrapper ul li:last-child {
+    border-bottom: .5em solid 'alpha("$window-color", 0)';
+}
+
+div.tag-input .tag-suggestions .wrapper ul li {
+    margin: 0;
+    font-size: 90%;
+    line-height: 1.3;
+}
+
+div.tag-input .tag-suggestions .wrapper ul li a,
+div.tag-input .tag-suggestions .wrapper ul li span {
+    display: inline-block;
+    vertical-align: bottom;
+}
+
+div.tag-input .tag-suggestions .wrapper ul li .add-tag {
+    white-space: nowrap;
+    overflow: hidden;
+    max-width: 10em;
+    text-overflow: ellipsis;
+}
+
+div.tag-input .tag-suggestions .wrapper ul li .tag-weight {
+    margin: 0 1em 0 0;
+}
+
+div.tag-input .tag-suggestions .wrapper p {
+    margin: 0;
+}
+
+div.tag-input .tag-suggestions .append {
+    color: "$inactive-link-color";
+    margin-left: .7em;
+    font-size: 90%;
+}
+
+ul.compact-tags {
+    width: 100%;
+    margin: .5em 0 0 0;
+    padding: 0;
+}
+
+ul.compact-tags li {
+    margin: 0;
+    width: 100%;
+    line-height: 140%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: background-color .5s linear;
+}
+
+ul.compact-tags li a {
+    display: inline;
+}
+
+ul.compact-tags li a:focus {
+    outline: 0;
+    box-shadow: inset 0 0 0 2px "$main-color";
+}
+
+ul.compact-tags li.added,
+ul.compact-tags li.new,
+ul.compact-tags li.implication {
+    animation: tag-added-to-post 1s ease forwards;
+}
+
+ul.compact-tags li.implication {
+    color: "$implied-tag-text-color";
+    background-color: "$implied-tag-background-color";
+}
+
+ul.compact-tags li.new {
+    color: "$new-tag-text-color";
+    background-color: "$new-tag-background-color";
+}
+
+ul.compact-tags li.duplicate {
+    color: "$duplicate-tag-text-color";
+    background-color: "$duplicate-tag-background-color";
+}
+
+ul.compact-tags i {
+    padding-right: .4em;
+}
+
+.darktheme ul.compact-tags li.new {
+    background-color: 'darken("$new-tag-background-color", 80%)';
+}
+
+.darktheme ul.compact-tags li.implication {
+    background-color: 'darken("$implied-tag-background-color", 85%)';
+}
+
+.darktheme ul.compact-tags li.duplicate {
+    background-color: 'darken("$duplicate-tag-background-color", 80%)';
+}
+
+div.tag-input .tag-usages,
+ul.compact-tags .tag-usages,
+div.tag-input .tag-weight,
+ul.compact-tags .tag-weight,
+div.tag-input .remove-tag,
+ul.compact-tags .remove-tag {
+    color: "$inactive-link-color";
+}
+
+div.tag-input .tag-usages,
+ul.compact-tags .tag-usages,
+div.tag-input .tag-weight,
+ul.compact-tags .tag-weight {
+    font-size: 90%;
+}
+
+div.tag-input .tag-usages,
+ul.compact-tags .tag-usages,
+div.tag-input .tag-weight,
+ul.compact-tags .tag-weight {
+    margin-left: .7em;
+}
+
+div.tag-input .remove-tag,
+ul.compact-tags .remove-tag {
+    margin-right: .5em;
+}
+
+.darktheme div.tag-input .tag-suggestions .buttons a {
+    color: "$inactive-link-color-darktheme";
+}
+
+.darktheme div.tag-input .tag-suggestions .wrapper {
+    background: "$window-color-darktheme";
+}
+
+.darktheme div.tag-input .tag-suggestions .wrapper ul li:last-child {
+    border-bottom: .5em solid 'alpha("$window-color-darktheme", 0)';
+}
+
+.darktheme div.tag-input .tag-suggestions .wrapper p {
+    background: 'darken("$tag-suggestions-header-color", 80%)';
+}
+
+.darktheme div.tag-input .tag-suggestions .append {
+    color: "$inactive-link-color-darktheme";
+}
+
+.darktheme div.tag-input .tag-usages,
+.darktheme ul.compact-tags .tag-usages,
+.darktheme div.tag-input .tag-weight,
+.darktheme ul.compact-tags .tag-weight,
+.darktheme div.tag-input .remove-tag,
+.darktheme ul.compact-tags .remove-tag {
+    color: "$inactive-link-color-darktheme";
+}
+
+@-moz-keyframes tag-added-to-post {
+    from {
+        max-height: 0;
+    }
+
+    to {
+        max-height: 5em;
+    }
+}
+
+@-webkit-keyframes tag-added-to-post {
+    from {
+        max-height: 0;
+    }
+
+    to {
+        max-height: 5em;
+    }
+}
+
+@-o-keyframes tag-added-to-post {
+    from {
+        max-height: 0;
+    }
+
+    to {
+        max-height: 5em;
+    }
+}
+
+@keyframes tag-added-to-post {
+    from {
+        max-height: 0;
+    }
+
+    to {
+        max-height: 5em;
+    }
+}

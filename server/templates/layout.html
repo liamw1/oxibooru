@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#24aadd">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <link rel="stylesheet" type="text/css" href="/static/css/colors.css">
+    <link rel="stylesheet" type="text/css" href="/static/css/core-general.css">
+    <link rel="stylesheet" type="text/css" href="/static/css/core-forms.css">
+    <link rel="stylesheet" type="text/css" href="/static/css/home-view.css">
+    {# Temporary. TODO: Remove #}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+
+    <link rel="icon" href="/static/img/favicon.png">
+
+    <script src="/static/js/htmx-2.0.10.min.js"></script>
+
+    <title>{% block title %}{{ config.public_info.name }}{% endblock %}</title>
+</head>
+
+<body>
+    {% include "partials/top_navigation.html" %}
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+</body>
+
+</html>
