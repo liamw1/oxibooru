@@ -2,8 +2,8 @@ use crate::string::SmallString;
 use diesel::Identifiable;
 use std::collections::HashMap;
 use std::ops::IndexMut;
-use std::rc::Rc;
 use std::str::FromStr;
+use std::sync::Arc;
 
 pub mod comment;
 pub mod pool;
@@ -125,16 +125,14 @@ where
 /// Organizes `ordered_names` into a map between each tag's id and its names while
 /// minimizing allocations and clones. Assumes `ordered_names` is sorted by tag id
 /// and tag name order.
-fn collect_names(ordered_names: Vec<(i64, SmallString)>) -> HashMap<i64, Rc<[SmallString]>> {
+fn collect_names(ordered_names: Vec<(i64, SmallString)>) -> HashMap<i64, Arc<[SmallString]>> {
     if ordered_names.is_empty() {
         return HashMap::new();
     }
 
     // Mark boundaries where names belong to single resource
     let mut name_boundaries = vec![0];
-    for (i, window) in ordered_names.windows(2).enumerate() {
-        let curr_id = window[0].0;
-        let next_id = window[1].0;
+    for (i, &[(curr_id, _), (next_id, _)]) in ordered_names.array_windows().enumerate() {
         if next_id != curr_id {
             name_boundaries.push(i + 1);
         }
@@ -143,14 +141,13 @@ fn collect_names(ordered_names: Vec<(i64, SmallString)>) -> HashMap<i64, Rc<[Sma
 
     // Collect resource names into names map
     let mut name_iter = ordered_names.into_iter();
-    let mut names_map: HashMap<i64, Rc<[SmallString]>> = HashMap::new();
+    let mut names_map: HashMap<i64, Arc<[SmallString]>> = HashMap::new();
     names_map.reserve(name_boundaries.len() - 1);
-    for window in name_boundaries.windows(2) {
-        let [start, end] = window.try_into().expect("Window has two elements");
+    for &[start, end] in name_boundaries.array_windows() {
         let name_count = end - start;
 
         // Create buffer with exact capactiy so that it doesn't need to be reallocated to
-        // the correct size when moving to the Rc
+        // the correct size when moving to the Arc
         let (id, first_name) = name_iter
             .next()
             .expect("There must be at least one name in a name boundary");
@@ -163,7 +160,7 @@ fn collect_names(ordered_names: Vec<(i64, SmallString)>) -> HashMap<i64, Rc<[Sma
             names.push(name);
         }
 
-        names_map.insert(id, Rc::from(names));
+        names_map.insert(id, Arc::from(names));
     }
     names_map
 }

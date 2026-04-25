@@ -16,6 +16,8 @@ Next, you'll want to install the build and runtime dependencies. On Debian-based
 sudo apt update && sudo apt install -y clang pkg-config libssl-dev libpq-dev libdav1d-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
 ```
 
+Note: Although development could technically be done without this setup by using `docker compose build`, I don't recommend this as the main development loop as the Docker build is much slower than building locally.
+
 ## Rust Basics
 
 ### Compiling
@@ -73,6 +75,8 @@ After a series of changes to the code, it's good practice to run Rust's static a
 ```sh
 cargo clippy --all-targets
 ```
+
+If a warning is particularly oppressive or unhelpful, it can be disabled locally with `#[allow(clippy::warning_name)]` above the offending line or globally with `#![allow(clippy::warning_name)]`.
 
 ## Adding a Migration
 

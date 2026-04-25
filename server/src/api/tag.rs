@@ -18,7 +18,7 @@ use crate::{api, resource, snapshot, update};
 use axum::extract::{Extension, State};
 use diesel::dsl::count_star;
 use diesel::{
-    Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
+    ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
     SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
@@ -97,19 +97,22 @@ async fn list(
     let limit = std::cmp::min(page.limit.get(), MAX_TAGS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
-    state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
-        query_builder.set_offset_and_limit(offset, limit);
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
+            query_builder.set_offset_and_limit(offset, limit);
 
-        let (total, selected_tags) = query_builder.list(conn)?;
-        Ok(Json(PagedResponse {
-            query: resource.query,
-            offset,
-            limit,
-            total,
-            results: TagInfo::new_batch_from_ids(conn, &selected_tags, &fields)?,
-        }))
-    })
+            let (total, selected_tags) = query_builder.list(conn)?;
+            Ok::<_, ApiError>(Json(PagedResponse {
+                query: resource.query,
+                offset,
+                limit,
+                total,
+                results: TagInfo::new_batch_from_ids(conn, &selected_tags, &fields)?,
+            }))
+        })
+        .await
 }
 
 /// Retrieves information about an existing tag.
@@ -137,12 +140,15 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
-        let tag_id = verify_visibility(conn, &state.config, client, &name)?;
-        TagInfo::new_from_id(conn, tag_id, &fields)
-            .map(Json)
-            .map_err(ApiError::from)
-    })
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let tag_id = verify_visibility(conn, &state.config, client, &name)?;
+            TagInfo::new_from_id(conn, tag_id, &fields)
+                .map(Json)
+                .map_err(ApiError::from)
+        })
+        .await
 }
 
 /// A sibling tag with its co-occurrence count.
@@ -191,47 +197,49 @@ async fn get_siblings(
     api::verify_privilege(client, state.config.privileges().tag_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
-        let tag_id = verify_visibility(conn, &state.config, client, &name)?;
-        let posts_tagged_on = post_tag::table
-            .select(post_tag::post_id)
-            .filter(post_tag::tag_id.eq(tag_id))
-            .into_boxed();
-        let mut sibling_query = post_tag::table
-            .group_by(post_tag::tag_id)
-            .select((post_tag::tag_id, count_star()))
-            .filter(post_tag::post_id.eq_any(posts_tagged_on))
-            .filter(post_tag::tag_id.ne(tag_id))
-            .order_by((count_star().desc(), post_tag::tag_id))
-            .limit(MAX_TAG_SIBLINGS)
-            .into_boxed();
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let tag_id = verify_visibility(conn, &state.config, client, &name)?;
+            let posts_tagged_on = post_tag::table
+                .select(post_tag::post_id)
+                .filter(post_tag::tag_id.eq(tag_id))
+                .into_boxed();
+            let mut sibling_query = post_tag::table
+                .group_by(post_tag::tag_id)
+                .select((post_tag::tag_id, count_star()))
+                .filter(post_tag::post_id.eq_any(posts_tagged_on))
+                .filter(post_tag::tag_id.ne(tag_id))
+                .order((count_star().desc(), post_tag::tag_id))
+                .limit(MAX_TAG_SIBLINGS)
+                .into_boxed();
 
-        if client.rank == UserRank::Anonymous {
-            let preferences = &state.config.anonymous_preferences;
-            let hidden_tags = tag::table
-                .select(tag::id)
-                .inner_join(tag_category::table)
-                .inner_join(tag_name::table)
-                .filter(tag_name::name.eq_any(&preferences.tag_blacklist))
-                .or_filter(tag_category::name.eq_any(&preferences.tag_category_blacklist));
-            sibling_query = sibling_query.filter(post_tag::tag_id.ne_all(hidden_tags));
-        }
+            if client.rank == UserRank::Anonymous {
+                let preferences = &state.config.anonymous_preferences;
+                let hidden_tags = tag::table
+                    .select(tag::id)
+                    .inner_join(tag_category::table)
+                    .inner_join(tag_name::table)
+                    .filter(tag_name::name.eq_any(&preferences.tag_blacklist))
+                    .or_filter(tag_category::name.eq_any(&preferences.tag_category_blacklist));
+                sibling_query = sibling_query.filter(post_tag::tag_id.ne_all(hidden_tags));
+            }
 
-        let (sibling_ids, common_post_counts): (Vec<i64>, Vec<i64>) =
-            sibling_query.load::<(i64, i64)>(conn)?.into_iter().unzip();
+            let (sibling_ids, common_post_counts): (Vec<i64>, Vec<i64>) =
+                sibling_query.load::<(i64, i64)>(conn)?.into_iter().unzip();
 
-        let results = TagInfo::new_batch_from_ids(conn, &sibling_ids, &fields)?
-            .into_iter()
-            .zip(common_post_counts)
-            .map(|(tag, occurrences)| TagSibling { tag, occurrences })
-            .collect();
-        Ok(Json(TagSiblings { results }))
-    })
+            let results = TagInfo::new_batch_from_ids(conn, &sibling_ids, &fields)?
+                .into_iter()
+                .zip(common_post_counts)
+                .map(|(tag, occurrences)| TagSibling { tag, occurrences })
+                .collect();
+            Ok::<_, ApiError>(Json(TagSiblings { results }))
+        })
+        .await
 }
 
 /// Request body for creating a tag.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct TagCreateBody {
     /// Category name. Must match an existing tag category.
     category: SmallString,
@@ -283,53 +291,57 @@ async fn create(
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = state.get_connection()?;
-    let tag = conn.transaction(|conn| {
-        let (category_id, category): (i64, SmallString) = tag_category::table
-            .select((tag_category::id, tag_category::name))
-            .filter(tag_category::name.eq(body.category))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
-        let tag: Tag = NewTag {
-            category_id,
-            description: body.description.as_deref().unwrap_or(""),
-        }
-        .insert_into(tag::table)
-        .get_result(conn)?;
+    let tag = state
+        .connection_pool
+        .transaction(move |conn| {
+            let (category_id, category): (i64, SmallString) = tag_category::table
+                .select((tag_category::id, tag_category::name))
+                .filter(tag_category::name.eq(body.category))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+            let tag: Tag = NewTag {
+                category_id,
+                description: body.description.as_deref().unwrap_or(""),
+            }
+            .insert_into(tag::table)
+            .get_result(conn)?;
 
-        // Add names, implications, and suggestions
-        update::tag::set_names(conn, &state.config, tag.id, &body.names)?;
-        let (implied_ids, implications) = update::tag::get_or_create_tag_ids(
-            conn,
-            &state.config,
-            client,
-            body.implications.unwrap_or_default(),
-            true,
-        )?;
-        let (suggested_ids, suggestions) = update::tag::get_or_create_tag_ids(
-            conn,
-            &state.config,
-            client,
-            body.suggestions.unwrap_or_default(),
-            true,
-        )?;
-        update::tag::set_implications(conn, tag.id, &implied_ids)?;
-        update::tag::set_suggestions(conn, tag.id, &suggested_ids)?;
+            // Add names, implications, and suggestions
+            update::tag::set_names(conn, &state.config, tag.id, &body.names)?;
+            let (implied_ids, implications) = update::tag::get_or_create_tag_ids(
+                conn,
+                &state.config,
+                client,
+                body.implications.unwrap_or_default(),
+                true,
+            )?;
+            let (suggested_ids, suggestions) = update::tag::get_or_create_tag_ids(
+                conn,
+                &state.config,
+                client,
+                body.suggestions.unwrap_or_default(),
+                true,
+            )?;
+            update::tag::set_implications(conn, tag.id, &implied_ids)?;
+            update::tag::set_suggestions(conn, tag.id, &suggested_ids)?;
 
-        let tag_data = SnapshotData {
-            description: body.description.unwrap_or_default(),
-            category,
-            names: body.names,
-            implications,
-            suggestions,
-        };
-        snapshot::tag::creation_snapshot(conn, client, tag_data)?;
-        Ok::<_, ApiError>(tag)
-    })?;
-    conn.transaction(|conn| TagInfo::new(conn, tag, &fields))
+            let tag_data = SnapshotData {
+                description: body.description.unwrap_or_default(),
+                category,
+                names: body.names,
+                implications,
+                suggestions,
+            };
+            snapshot::tag::creation_snapshot(conn, client, tag_data)?;
+            Ok::<_, ApiError>(tag)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| TagInfo::new(conn, tag, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Removes source tag and merges all of its data to the target tag.
@@ -370,28 +382,31 @@ async fn merge(
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = state.get_connection()?;
-    let merged_tag_id = conn.transaction(|conn| {
-        let (absorbed_id, absorbed_version) = get_tag_info(conn, &body.remove)?;
-        let (merge_to_id, merge_to_version) = get_tag_info(conn, &body.merge_to)?;
-        if absorbed_id == merge_to_id {
-            return Err(ApiError::SelfMerge(ResourceType::Tag));
-        }
-        api::verify_version(absorbed_version, body.remove_version)?;
-        api::verify_version(merge_to_version, body.merge_to_version)?;
+    let merged_tag_id = state
+        .connection_pool
+        .transaction(move |conn| {
+            let (absorbed_id, absorbed_version) = get_tag_info(conn, &body.remove)?;
+            let (merge_to_id, merge_to_version) = get_tag_info(conn, &body.merge_to)?;
+            if absorbed_id == merge_to_id {
+                return Err(ApiError::SelfMerge(ResourceType::Tag));
+            }
+            api::verify_version(absorbed_version, body.remove_version)?;
+            api::verify_version(merge_to_version, body.merge_to_version)?;
 
-        update::tag::merge(conn, absorbed_id, merge_to_id)?;
-        snapshot::tag::merge_snapshot(conn, client, body.remove, &body.merge_to)?;
-        Ok::<_, ApiError>(merge_to_id)
-    })?;
-    conn.transaction(|conn| TagInfo::new_from_id(conn, merged_tag_id, &fields))
+            update::tag::merge(conn, absorbed_id, merge_to_id)?;
+            snapshot::tag::merge_snapshot(conn, client, body.remove, &body.merge_to)?;
+            Ok::<_, ApiError>(merge_to_id)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| TagInfo::new_from_id(conn, merged_tag_id, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Request body for updating a tag.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct TagUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,
@@ -445,73 +460,77 @@ async fn update(
 ) -> ApiResult<Json<TagInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
-    let tag_id = conn.transaction(|conn| {
-        let old_tag: Tag = tag::table
-            .inner_join(tag_name::table)
-            .select(Tag::as_select())
-            .filter(tag_name::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
-        let tag_id = old_tag.id;
-        api::verify_version(old_tag.last_edit_time, body.version)?;
-
-        let mut new_tag = old_tag.clone();
-        let old_snapshot_data = SnapshotData::retrieve(conn, old_tag)?;
-        let mut new_snapshot_data = old_snapshot_data.clone();
-
-        if let Some(category) = body.category {
-            api::verify_privilege(client, state.config.privileges().tag_edit_category)?;
-
-            let category_id: i64 = tag_category::table
-                .select(tag_category::id)
-                .filter(tag_category::name.eq(&category))
+    let tag_id = state
+        .connection_pool
+        .transaction(move |conn| {
+            let old_tag: Tag = tag::table
+                .inner_join(tag_name::table)
+                .select(Tag::as_select())
+                .filter(tag_name::name.eq(name))
                 .first(conn)
                 .optional()?
-                .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
-            new_tag.category_id = category_id;
-            new_snapshot_data.category = category;
-        }
-        if let Some(description) = body.description {
-            api::verify_privilege(client, state.config.privileges().tag_edit_description)?;
-            new_tag.description = description.clone();
-            new_snapshot_data.description = description;
-        }
-        if let Some(names) = body.names {
-            api::verify_privilege(client, state.config.privileges().tag_edit_name)?;
-            if names.is_empty() {
-                return Err(ApiError::NoNamesGiven(ResourceType::Tag));
+                .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+            let tag_id = old_tag.id;
+            api::verify_version(old_tag.last_edit_time, body.version)?;
+
+            let mut new_tag = old_tag.clone();
+            let old_snapshot_data = SnapshotData::retrieve(conn, old_tag)?;
+            let mut new_snapshot_data = old_snapshot_data.clone();
+
+            if let Some(category) = body.category {
+                api::verify_privilege(client, state.config.privileges().tag_edit_category)?;
+
+                let category_id: i64 = tag_category::table
+                    .select(tag_category::id)
+                    .filter(tag_category::name.eq(&category))
+                    .first(conn)
+                    .optional()?
+                    .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+                new_tag.category_id = category_id;
+                new_snapshot_data.category = category;
+            }
+            if let Some(description) = body.description {
+                api::verify_privilege(client, state.config.privileges().tag_edit_description)?;
+                new_tag.description = description.clone();
+                new_snapshot_data.description = description;
+            }
+            if let Some(names) = body.names {
+                api::verify_privilege(client, state.config.privileges().tag_edit_name)?;
+                if names.is_empty() {
+                    return Err(ApiError::NoNamesGiven(ResourceType::Tag));
+                }
+
+                update::tag::set_names(conn, &state.config, tag_id, &names)?;
+                new_snapshot_data.names = names;
+            }
+            if let Some(implications) = body.implications {
+                api::verify_privilege(client, state.config.privileges().tag_edit_implication)?;
+
+                let (implied_ids, implications) =
+                    update::tag::get_or_create_tag_ids(conn, &state.config, client, implications, true)?;
+                update::tag::set_implications(conn, tag_id, &implied_ids)?;
+                new_snapshot_data.implications = implications;
+            }
+            if let Some(suggestions) = body.suggestions {
+                api::verify_privilege(client, state.config.privileges().tag_edit_suggestion)?;
+
+                let (suggested_ids, suggestions) =
+                    update::tag::get_or_create_tag_ids(conn, &state.config, client, suggestions, true)?;
+                update::tag::set_suggestions(conn, tag_id, &suggested_ids)?;
+                new_snapshot_data.suggestions = suggestions;
             }
 
-            update::tag::set_names(conn, &state.config, tag_id, &names)?;
-            new_snapshot_data.names = names;
-        }
-        if let Some(implications) = body.implications {
-            api::verify_privilege(client, state.config.privileges().tag_edit_implication)?;
-
-            let (implied_ids, implications) =
-                update::tag::get_or_create_tag_ids(conn, &state.config, client, implications, true)?;
-            update::tag::set_implications(conn, tag_id, &implied_ids)?;
-            new_snapshot_data.implications = implications;
-        }
-        if let Some(suggestions) = body.suggestions {
-            api::verify_privilege(client, state.config.privileges().tag_edit_suggestion)?;
-
-            let (suggested_ids, suggestions) =
-                update::tag::get_or_create_tag_ids(conn, &state.config, client, suggestions, true)?;
-            update::tag::set_suggestions(conn, tag_id, &suggested_ids)?;
-            new_snapshot_data.suggestions = suggestions;
-        }
-
-        new_tag.last_edit_time = DateTime::now();
-        let _: Tag = new_tag.save_changes(conn)?;
-        snapshot::tag::modification_snapshot(conn, client, old_snapshot_data, new_snapshot_data)?;
-        Ok::<_, ApiError>(tag_id)
-    })?;
-    conn.transaction(|conn| TagInfo::new_from_id(conn, tag_id, &fields))
+            new_tag.last_edit_time = DateTime::now();
+            let _: Tag = new_tag.save_changes(conn)?;
+            snapshot::tag::modification_snapshot(conn, client, old_snapshot_data, new_snapshot_data)?;
+            Ok::<_, ApiError>(tag_id)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| TagInfo::new_from_id(conn, tag_id, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Deletes existing tag.
@@ -540,23 +559,26 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().tag_delete)?;
 
-    state.get_connection()?.transaction(|conn| {
-        let tag: Tag = tag::table
-            .select(Tag::as_select())
-            .inner_join(tag_name::table)
-            .filter(tag_name::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
-        api::verify_version(tag.last_edit_time, *client_version)?;
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let tag: Tag = tag::table
+                .select(Tag::as_select())
+                .inner_join(tag_name::table)
+                .filter(tag_name::name.eq(name))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+            api::verify_version(tag.last_edit_time, *client_version)?;
 
-        let tag_id = tag.id;
-        let tag_data = SnapshotData::retrieve(conn, tag)?;
-        snapshot::tag::deletion_snapshot(conn, client, tag_data)?;
+            let tag_id = tag.id;
+            let tag_data = SnapshotData::retrieve(conn, tag)?;
+            snapshot::tag::deletion_snapshot(conn, client, tag_data)?;
 
-        diesel::delete(tag::table.find(tag_id)).execute(conn)?;
-        Ok(Json(()))
-    })
+            diesel::delete(tag::table.find(tag_id)).execute(conn)?;
+            Ok::<_, ApiError>(Json(()))
+        })
+        .await
 }
 
 fn verify_visibility(
@@ -687,7 +709,7 @@ mod test {
 
         let (tag_id, name): (i64, SmallString) = tag_name::table
             .select((tag_name::tag_id, tag_name::name))
-            .order_by(tag_name::tag_id.desc())
+            .order(tag_name::tag_id.desc())
             .first(&mut conn)?;
 
         let new_tag_count = get_tag_count(&mut conn)?;
@@ -787,7 +809,7 @@ mod test {
 
         verify_response(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/edit_restore").await?;
 
-        let new_tag_id: i64 = tag::table.select(tag::id).order_by(tag::id.desc()).first(&mut conn)?;
+        let new_tag_id: i64 = tag::table.select(tag::id).order(tag::id.desc()).first(&mut conn)?;
         diesel::delete(tag::table.find(new_tag_id)).execute(&mut conn)?;
 
         let (new_tag, new_usage_count, new_implication_count, new_suggestion_count) = get_tag_info(&mut conn, NAME)?;

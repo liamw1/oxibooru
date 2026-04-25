@@ -4,7 +4,7 @@ use crate::app::AppState;
 use crate::content::hash::{Checksum, PostHash};
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::{FileContents, decode, hash, signature, thumbnail};
+use crate::content::{decode, hash, signature, thumbnail};
 use crate::model::enums::MimeType;
 use crate::model::post::{CompressedSignature, NewPostSignature};
 use crate::schema::{database_statistics, post, post_signature};
@@ -63,7 +63,7 @@ pub fn recompute_signatures(state: &AppState, editor: &mut PostEditor) {
         // can continue running during computation.
         diesel::update(database_statistics::table)
             .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))
-            .execute(&mut state.get_connection()?)?;
+            .execute(&mut state.get_connection_blocking()?)?;
 
         let _timer = Timer::new("recompute_signatures");
         let progress = ProgressReporter::new("Signatures computed", PRINT_INTERVAL);
@@ -111,7 +111,7 @@ fn check_integrity_in_parallel(
 ) -> AdminResult<()> {
     admin::is_cancelled()?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     let (mime_type, checksum): (MimeType, Checksum) = match post::table
         .find(post_id)
         .select((post::mime_type, post::checksum))
@@ -127,15 +127,14 @@ fn check_integrity_in_parallel(
     };
 
     let content_path = PostHash::new(&state.config, post_id).content_path(mime_type);
-    let file_contents = match std::fs::read(&content_path) {
-        Ok(contents) => contents,
+    let file_checksum = match hash::compute_checksums(&content_path) {
+        Ok((checksum, _)) => checksum,
         Err(err) => {
             error!("Unable to read file for post {post_id} for reason: {err}");
             return Ok(());
         }
     };
 
-    let file_checksum = hash::compute_checksum(&file_contents);
     if checksum != file_checksum {
         warn!("Post {post_id} failed integrity check. The file may have been corrupted or silently modified.");
         failures.increment();
@@ -148,7 +147,7 @@ fn check_integrity_in_parallel(
 fn recompute_index_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> AdminResult<()> {
     admin::is_cancelled()?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     let signature: CompressedSignature = post_signature::table
         .find(post_id)
         .select(post_signature::signature)
@@ -176,7 +175,7 @@ fn recompute_checksum_in_parallel(
 ) -> AdminResult<()> {
     admin::is_cancelled()?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     let mime_type = match post::table
         .find(post_id)
         .select(post::mime_type)
@@ -192,16 +191,14 @@ fn recompute_checksum_in_parallel(
     };
 
     let image_path = PostHash::new(&state.config, post_id).content_path(mime_type);
-    let file_contents = match std::fs::read(&image_path) {
-        Ok(contents) => contents,
+    let (checksum, md5_checksum) = match hash::compute_checksums(&image_path) {
+        Ok(checksums) => checksums,
         Err(err) => {
             error!("Unable to compute checksum for post {post_id} for reason: {err}");
             return Ok(());
         }
     };
 
-    let checksum = hash::compute_checksum(&file_contents);
-    let md5_checksum = hash::compute_md5_checksum(&file_contents);
     let duplicate: Option<i64> = match post::table
         .select(post::id)
         .filter(post::checksum.eq(&checksum))
@@ -239,7 +236,7 @@ fn recompute_checksum_in_parallel(
 fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> AdminResult<()> {
     admin::is_cancelled()?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     let mime_type = match post::table
         .find(post_id)
         .select(post::mime_type)
@@ -255,16 +252,7 @@ fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &Pr
     };
 
     let content_path = PostHash::new(&state.config, post_id).content_path(mime_type);
-    let data = match std::fs::read(&content_path) {
-        Ok(contents) => contents,
-        Err(err) => {
-            error!("Unable to read file for post {post_id} for reason: {err}");
-            return Ok(());
-        }
-    };
-
-    let file_contents = FileContents { data, mime_type };
-    let image = match decode::representative_image(&state.config, &file_contents, &content_path) {
+    let image = match decode::representative_image(&state.config, &content_path, mime_type) {
         Ok(image) => image,
         Err(err) => {
             error!("Unable to get representative image for post {post_id} for reason: {err}");
@@ -311,7 +299,7 @@ fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &Pr
 fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> AdminResult<()> {
     admin::is_cancelled()?;
 
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     let mime_type = match post::table
         .find(post_id)
         .select(post::mime_type)
@@ -328,16 +316,7 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
 
     let post_hash = PostHash::new(&state.config, post_id);
     let content_path = post_hash.content_path(mime_type);
-    let data = match std::fs::read(&content_path) {
-        Ok(data) => data,
-        Err(err) => {
-            error!("Cannot read content for post {post_id} for reason: {err}");
-            return Ok(());
-        }
-    };
-
-    let file_contents = FileContents { data, mime_type };
-    let thumbnail = match decode::representative_image(&state.config, &file_contents, &content_path) {
+    let thumbnail = match decode::representative_image(&state.config, &content_path, mime_type) {
         Ok(image) => thumbnail::create(&state.config, &image, ThumbnailType::Post),
         Err(err) => {
             error!("Cannot decode content for post {post_id} for reason: {err}");
@@ -354,11 +333,12 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
 
 fn user_query(state: &AppState, editor: &mut PostEditor) -> AdminResult<Vec<i64>> {
     loop {
-        let user_input = input::read("Select posts (leave blank to select all): ", editor)?;
+        let user_input =
+            input::read("Select posts (leave blank to select all, enter \"done\" when finished): ", editor)?;
         match QueryBuilder::new_with_anonymous_token(&state.config, admin::client(), &user_input, Token::Id) {
             Err(err) => error!("Could not parse query for reason: {err}"),
             Ok(mut builder) => {
-                let mut conn = state.get_connection()?;
+                let mut conn = state.get_connection_blocking()?;
                 let post_ids = conn.transaction(|conn| builder.load(conn))?;
                 info!("Found {} posts", post_ids.len());
                 return Ok(post_ids);

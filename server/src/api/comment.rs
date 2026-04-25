@@ -15,7 +15,7 @@ use crate::time::DateTime;
 use crate::{api, resource};
 use axum::extract::{Extension, State};
 use diesel::dsl::exists;
-use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
+use diesel::{ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
@@ -81,19 +81,22 @@ async fn list(
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_COMMENTS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
-        query_builder.set_offset_and_limit(offset, limit);
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
+            query_builder.set_offset_and_limit(offset, limit);
 
-        let (total, selected_comments) = query_builder.list(conn)?;
-        Ok(Json(PagedResponse {
-            query: resource.query,
-            offset,
-            limit,
-            total,
-            results: CommentInfo::new_batch_from_ids(conn, &state.config, client, &selected_comments, &fields)?,
-        }))
-    })
+            let (total, selected_comments) = query_builder.list(conn)?;
+            Ok::<_, ApiError>(Json(PagedResponse {
+                query: resource.query,
+                offset,
+                limit,
+                total,
+                results: CommentInfo::new_batch_from_ids(conn, &state.config, client, &selected_comments, &fields)?,
+            }))
+        })
+        .await
 }
 
 /// Retrieves information about an existing comment.
@@ -121,17 +124,20 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().comment_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
-        verify_visibility(conn, &state.config, client, comment_id)?;
-        CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields)
-            .map(Json)
-            .map_err(ApiError::from)
-    })
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            verify_visibility(conn, &state.config, client, comment_id)?;
+            CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields)
+                .map(Json)
+                .map_err(ApiError::from)
+        })
+        .await
 }
 
 /// Request body for creating a comment.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct CommentCreateBody {
     /// ID of the post to comment on.
     post_id: i64,
@@ -161,26 +167,29 @@ async fn create(
     api::verify_privilege(client, state.config.privileges().comment_create)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let new_comment = NewComment {
-        user_id: client.id,
-        post_id: body.post_id,
-        text: &body.text,
-        creation_time: DateTime::now(),
-    };
-
-    let mut conn = state.get_connection()?;
-    let comment = state.get_connection()?.transaction(|conn| {
-        let insert_result = new_comment.insert_into(comment::table).get_result(conn);
-        error::map_foreign_key_violation(insert_result, ResourceType::Post)
-    })?;
-    conn.transaction(|conn| CommentInfo::new(conn, &state.config, client, comment, &fields))
+    let comment = state
+        .connection_pool
+        .transaction(move |conn| {
+            let insert_result = NewComment {
+                user_id: client.id,
+                post_id: body.post_id,
+                text: &body.text,
+                creation_time: DateTime::now(),
+            }
+            .insert_into(comment::table)
+            .get_result(conn);
+            error::map_foreign_key_violation(insert_result, ResourceType::Post)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| CommentInfo::new(conn, &state.config, client, comment, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Request body for updating a comment.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct CommentUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,
@@ -214,31 +223,34 @@ async fn update(
 ) -> ApiResult<Json<CommentInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
-    conn.transaction(|conn| {
-        let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
-            .find(comment_id)
-            .select((comment::user_id, comment::last_edit_time))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Comment))?;
-        api::verify_version(comment_version, body.version)?;
+    let edit_own = state.config.privileges().comment_edit_own;
+    let edit_any = state.config.privileges().comment_edit_any;
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
+                .find(comment_id)
+                .select((comment::user_id, comment::last_edit_time))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::Comment))?;
+            api::verify_version(comment_version, body.version)?;
 
-        let required_rank = if client.id == comment_owner && comment_owner.is_some() {
-            state.config.privileges().comment_edit_own
-        } else {
-            state.config.privileges().comment_edit_any
-        };
-        api::verify_privilege(client, required_rank)?;
+            let client_owns_comment = client.id == comment_owner && comment_owner.is_some();
+            let required_rank = if client_owns_comment { edit_own } else { edit_any };
+            api::verify_privilege(client, required_rank)?;
 
-        diesel::update(comment::table.find(comment_id))
-            .set((comment::text.eq(body.text), comment::last_edit_time.eq(DateTime::now())))
-            .execute(conn)
-            .map_err(ApiError::from)
-    })?;
-    conn.transaction(|conn| CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields))
+            diesel::update(comment::table.find(comment_id))
+                .set((comment::text.eq(body.text), comment::last_edit_time.eq(DateTime::now())))
+                .execute(conn)
+                .map_err(ApiError::from)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Updates score of authenticated user for given comment.
@@ -272,25 +284,29 @@ async fn rate(
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
-    conn.transaction(|conn| {
-        diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
 
-        if let Ok(score) = Score::try_from(*body) {
-            let insert_result = NewCommentScore {
-                comment_id,
-                user_id,
-                score,
+            if let Ok(score) = Score::try_from(*body) {
+                let insert_result = NewCommentScore {
+                    comment_id,
+                    user_id,
+                    score,
+                }
+                .insert_into(comment_score::table)
+                .execute(conn);
+                error::map_foreign_key_violation(insert_result, ResourceType::Comment)?;
             }
-            .insert_into(comment_score::table)
-            .execute(conn);
-            error::map_foreign_key_violation(insert_result, ResourceType::Comment)?;
-        }
-        Ok::<_, ApiError>(())
-    })?;
-    conn.transaction(|conn| CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields))
+            Ok::<_, ApiError>(())
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| CommentInfo::new_from_id(conn, &state.config, client, comment_id, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Deletes existing comment.
@@ -315,25 +331,28 @@ async fn delete(
     Path(comment_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    state.get_connection()?.transaction(|conn| {
-        let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
-            .find(comment_id)
-            .select((comment::user_id, comment::last_edit_time))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Comment))?;
-        api::verify_version(comment_version, *client_version)?;
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
+                .find(comment_id)
+                .select((comment::user_id, comment::last_edit_time))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::Comment))?;
+            api::verify_version(comment_version, *client_version)?;
 
-        let required_rank = if client.id == comment_owner && comment_owner.is_some() {
-            state.config.privileges().comment_delete_own
-        } else {
-            state.config.privileges().comment_delete_any
-        };
-        api::verify_privilege(client, required_rank)?;
+            let required_rank = if client.id == comment_owner && comment_owner.is_some() {
+                state.config.privileges().comment_delete_own
+            } else {
+                state.config.privileges().comment_delete_any
+            };
+            api::verify_privilege(client, required_rank)?;
 
-        diesel::delete(comment::table.find(comment_id)).execute(conn)?;
-        Ok(Json(()))
-    })
+            diesel::delete(comment::table.find(comment_id)).execute(conn)?;
+            Ok::<_, ApiError>(Json(()))
+        })
+        .await
 }
 
 fn verify_visibility(conn: &mut PgConnection, config: &Config, client: Client, comment_id: i64) -> ApiResult<()> {
@@ -438,7 +457,7 @@ mod test {
 
         let comment_id: i64 = comment::table
             .select(comment::id)
-            .order_by(comment::id.desc())
+            .order(comment::id.desc())
             .first(&mut conn)?;
 
         let (new_comment_count, new_admin_comment_count) = get_comment_counts(&mut conn)?;

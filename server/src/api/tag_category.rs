@@ -13,9 +13,7 @@ use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, resource, snapshot};
 use axum::extract::{Extension, State};
-use diesel::{
-    Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
-};
+use diesel::{ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
@@ -50,11 +48,11 @@ async fn list(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state
-        .get_connection()?
-        .transaction(|conn| TagCategoryInfo::all(conn, &state.config, client, &fields))
+        .connection_pool
+        .transaction(move |conn| TagCategoryInfo::all(conn, &state.config, client, &fields))
+        .await
         .map(|results| UnpagedResponse { results })
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Retrieves information about an existing tag category.
@@ -82,17 +80,19 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().tag_category_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
-        let category = verify_visibility(conn, &state.config, client, &name)?;
-        TagCategoryInfo::new(conn, category, &fields)
-            .map(Json)
-            .map_err(ApiError::from)
-    })
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let category = verify_visibility(conn, &state.config, client, &name)?;
+            TagCategoryInfo::new(conn, category, &fields)
+                .map(Json)
+                .map_err(ApiError::from)
+        })
+        .await
 }
 
 /// Request body for creating a tag category.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct TagCategoryCreateBody {
     /// Display order for the category.
     order: i32,
@@ -129,32 +129,33 @@ async fn create(
     api::verify_matches_regex(&state.config, &body.name, RegexType::TagCategory)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let new_category = NewTagCategory {
-        order: body.order,
-        name: &body.name,
-        color: &body.color,
-    };
-
-    let mut conn = state.get_connection()?;
-    let category = conn.transaction(|conn| {
-        let category = new_category
+    let category = state
+        .connection_pool
+        .transaction(move |conn| {
+            let category = NewTagCategory {
+                order: body.order,
+                name: &body.name,
+                color: &body.color,
+            }
             .insert_into(tag_category::table)
             .on_conflict(tag_category::name)
             .do_nothing()
             .get_result(conn)
             .optional()?
             .ok_or(ApiError::AlreadyExists(ResourceProperty::TagCategoryName))?;
-        snapshot::tag_category::creation_snapshot(conn, client, &category)?;
-        Ok::<_, ApiError>(category)
-    })?;
-    conn.transaction(|conn| TagCategoryInfo::new(conn, category, &fields))
+            snapshot::tag_category::creation_snapshot(conn, client, &category)?;
+            Ok::<_, ApiError>(category)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| TagCategoryInfo::new(conn, category, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Request body for updating a tag category.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct TagCategoryUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,
@@ -199,39 +200,43 @@ async fn update(
 ) -> ApiResult<Json<TagCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
-    let updated_category = conn.transaction(|conn| {
-        let old_category: TagCategory = tag_category::table
-            .filter(tag_category::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
-        api::verify_version(old_category.last_edit_time, body.version)?;
+    let updated_category = state
+        .connection_pool
+        .transaction(move |conn| {
+            let old_category: TagCategory = tag_category::table
+                .filter(tag_category::name.eq(name))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+            api::verify_version(old_category.last_edit_time, body.version)?;
 
-        let mut new_category = old_category.clone();
-        if let Some(order) = body.order {
-            api::verify_privilege(client, state.config.privileges().tag_category_edit_order)?;
-            new_category.order = order;
-        }
-        if let Some(name) = body.name {
-            api::verify_privilege(client, state.config.privileges().tag_category_edit_name)?;
-            api::verify_matches_regex(&state.config, &name, RegexType::TagCategory)?;
-            new_category.name = name;
-        }
-        if let Some(color) = body.color {
-            api::verify_privilege(client, state.config.privileges().tag_category_edit_color)?;
-            new_category.color = color;
-        }
+            let mut new_category = old_category.clone();
+            if let Some(order) = body.order {
+                api::verify_privilege(client, state.config.privileges().tag_category_edit_order)?;
+                new_category.order = order;
+            }
+            if let Some(name) = body.name {
+                api::verify_privilege(client, state.config.privileges().tag_category_edit_name)?;
+                api::verify_matches_regex(&state.config, &name, RegexType::TagCategory)?;
+                new_category.name = name;
+            }
+            if let Some(color) = body.color {
+                api::verify_privilege(client, state.config.privileges().tag_category_edit_color)?;
+                new_category.color = color;
+            }
 
-        new_category.last_edit_time = DateTime::now();
-        let _: TagCategory =
-            error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::TagCategoryName)?;
-        snapshot::tag_category::modification_snapshot(conn, client, &old_category, &new_category)?;
-        Ok::<_, ApiError>(new_category)
-    })?;
-    conn.transaction(|conn| TagCategoryInfo::new(conn, updated_category, &fields))
+            new_category.last_edit_time = DateTime::now();
+            let _: TagCategory =
+                error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::TagCategoryName)?;
+            snapshot::tag_category::modification_snapshot(conn, client, &old_category, &new_category)?;
+            Ok::<_, ApiError>(new_category)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| TagCategoryInfo::new(conn, updated_category, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Sets given tag category as default.
@@ -261,52 +266,57 @@ async fn set_default(
     api::verify_privilege(client, state.config.privileges().tag_category_set_default)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = state.get_connection()?;
-    let new_default_category: TagCategory = conn.transaction(|conn| {
-        let mut category: TagCategory = tag_category::table
-            .filter(tag_category::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
-        let mut old_default_category: TagCategory = tag_category::table.filter(TagCategory::default()).first(conn)?;
+    let new_default_category: TagCategory = state
+        .connection_pool
+        .transaction(move |conn| {
+            let mut category: TagCategory = tag_category::table
+                .filter(tag_category::name.eq(name))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+            let mut old_default_category: TagCategory =
+                tag_category::table.filter(TagCategory::default()).first(conn)?;
 
-        let defaulted_tags: Vec<i64> = diesel::update(tag::table)
-            .filter(tag::category_id.eq(category.id))
-            .set(tag::category_id.eq(0))
-            .returning(tag::id)
-            .get_results(conn)?;
-        diesel::update(tag::table)
-            .filter(tag::category_id.eq(0))
-            .filter(tag::id.ne_all(defaulted_tags))
-            .set(tag::category_id.eq(category.id))
-            .execute(conn)?;
+            let defaulted_tags: Vec<i64> = diesel::update(tag::table)
+                .filter(tag::category_id.eq(category.id))
+                .set(tag::category_id.eq(0))
+                .returning(tag::id)
+                .get_results(conn)?;
+            diesel::update(tag::table)
+                .filter(tag::category_id.eq(0))
+                .filter(tag::id.ne_all(defaulted_tags))
+                .set(tag::category_id.eq(category.id))
+                .execute(conn)?;
 
-        // Update last_edit_time
-        let current_time = DateTime::now();
-        category.last_edit_time = current_time;
-        old_default_category.last_edit_time = current_time;
+            // Update last_edit_time
+            let current_time = DateTime::now();
+            category.last_edit_time = current_time;
+            old_default_category.last_edit_time = current_time;
 
-        // Make category default
-        std::mem::swap(&mut category.id, &mut old_default_category.id);
+            // Make category default
+            std::mem::swap(&mut category.id, &mut old_default_category.id);
 
-        // Give new default category an empty name so it doesn't violate uniqueness
-        let mut temporary_category_name = SmallString::new("");
-        std::mem::swap(&mut category.name, &mut temporary_category_name);
-        let mut new_default_category: TagCategory = category.save_changes(conn)?;
+            // Give new default category an empty name so it doesn't violate uniqueness
+            let mut temporary_category_name = SmallString::new("");
+            std::mem::swap(&mut category.name, &mut temporary_category_name);
+            let mut new_default_category: TagCategory = category.save_changes(conn)?;
 
-        // Update what used to be default category
-        let _: TagCategory = old_default_category.save_changes(conn)?;
+            // Update what used to be default category
+            let _: TagCategory = old_default_category.save_changes(conn)?;
 
-        // Give new default category back it's name
-        new_default_category.name = temporary_category_name;
-        let _: TagCategory = new_default_category.save_changes(conn)?;
+            // Give new default category back it's name
+            new_default_category.name = temporary_category_name;
+            let _: TagCategory = new_default_category.save_changes(conn)?;
 
-        snapshot::tag_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
-        Ok::<_, ApiError>(new_default_category)
-    })?;
-    conn.transaction(|conn| TagCategoryInfo::new(conn, new_default_category, &fields))
+            snapshot::tag_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
+            Ok::<_, ApiError>(new_default_category)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| TagCategoryInfo::new(conn, new_default_category, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Deletes an existing non-default tag category.
@@ -336,21 +346,24 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().tag_category_delete)?;
 
-    state.get_connection()?.transaction(|conn| {
-        let category: TagCategory = tag_category::table
-            .filter(tag_category::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
-        api::verify_version(category.last_edit_time, *client_version)?;
-        if category.id == 0 {
-            return Err(ApiError::DeleteDefault(ResourceType::TagCategory));
-        }
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let category: TagCategory = tag_category::table
+                .filter(tag_category::name.eq(name))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+            api::verify_version(category.last_edit_time, *client_version)?;
+            if category.id == 0 {
+                return Err(ApiError::DeleteDefault(ResourceType::TagCategory));
+            }
 
-        diesel::delete(tag_category::table.find(category.id)).execute(conn)?;
-        snapshot::tag_category::deletion_snapshot(conn, client, &category)?;
-        Ok(Json(()))
-    })
+            diesel::delete(tag_category::table.find(category.id)).execute(conn)?;
+            snapshot::tag_category::deletion_snapshot(conn, client, &category)?;
+            Ok(Json(()))
+        })
+        .await
 }
 
 fn verify_visibility(
@@ -426,7 +439,7 @@ mod test {
 
         let category_name: String = tag_category::table
             .select(tag_category::name)
-            .order_by(tag_category::id.desc())
+            .order(tag_category::id.desc())
             .first(&mut conn)?;
 
         let new_category_count: i64 = tag_category::table.count().first(&mut conn)?;

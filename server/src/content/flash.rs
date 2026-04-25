@@ -244,7 +244,7 @@ pub fn decode_define_bits_lossless(swf_tag: &swf::DefineBitsLossless) -> Result<
                     let compressed = u16::from_be_bytes([decoded_data[i], decoded_data[i + 1]]);
                     let rgb5_component = |shift: u16| {
                         let component = (compressed >> shift) & 0x1F;
-                        ((component * 255 + 15) / 31) as u8
+                        u8::try_from((component * 255 + 15) / 31).expect("The maximum value of this expression is 255")
                     };
                     out_data.extend([rgb5_component(10), rgb5_component(5), rgb5_component(0), u8::MAX]);
                     i += 2;

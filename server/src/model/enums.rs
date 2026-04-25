@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::ops::{BitOr, BitOrAssign};
 use std::path::Path;
+use std::str::FromStr;
 use strum::{Display, EnumCount, EnumIter, EnumString, FromRepr, IntoEnumIterator, IntoStaticStr};
 use thiserror::Error;
 use utoipa::openapi::schema::{Schema, SchemaType};
@@ -22,10 +23,12 @@ use utoipa::{PartialSchema, ToSchema};
 /// New enum variants should therefore always be appended at the end.
 
 #[derive(Debug, Error, PartialEq, Eq)]
-#[error("{extenstion} is not a supported file extension")]
-pub struct ParseExtensionError {
-    extenstion: String,
-}
+#[error("{0} is not a supported file extension")]
+pub struct ParseExtensionError(String);
+
+#[derive(Debug, Error, PartialEq, Eq)]
+#[error("{0} is not a supported file extension")]
+pub struct ParseMimeTypeError(String);
 
 #[derive(Debug, Error)]
 #[error("Cannot convert None to Score")]
@@ -96,53 +99,29 @@ impl FromSql<SmallInt, Pg> for PostType {
     }
 }
 
-#[derive(
-    Debug,
-    Display,
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    EnumString,
-    FromRepr,
-    AsExpression,
-    FromSqlRow,
-    Serialize,
-    Deserialize,
-    ToSchema,
-)]
+#[derive(Debug, Display, Copy, Clone, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, ToSchema)]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
 pub enum MimeType {
     #[serde(rename = "image/bmp")]
-    #[strum(serialize = "image/bmp")]
     Bmp,
     #[serde(rename = "image/gif")]
-    #[strum(serialize = "image/gif")]
     Gif,
     #[serde(rename = "image/jpeg")]
-    #[strum(serialize = "image/jpeg")]
     Jpeg,
     #[serde(rename = "image/png")]
-    #[strum(serialize = "image/png")]
     Png,
     #[serde(rename = "image/webp")]
-    #[strum(serialize = "image/webp")]
     Webp,
     #[serde(rename = "video/mp4")]
-    #[strum(serialize = "video/mp4")]
     Mp4,
     #[serde(rename = "video/quicktime")]
-    #[strum(serialize = "video/quicktime")]
     Mov,
     #[serde(rename = "video/webm")]
-    #[strum(serialize = "video/webm")]
     Webm,
     #[serde(rename = "application/x-shockwave-flash")]
-    #[strum(serialize = "application/x-shockwave-flash")]
     Swf,
     #[serde(rename = "image/avif")]
-    #[strum(serialize = "image/avif")]
     Avif,
 }
 
@@ -150,20 +129,18 @@ impl MimeType {
     /// Attempts to construct a [`MimeType`] from `extension`.
     /// Returns [`ParseExtensionError`] if `extension` is not supported.
     pub fn from_extension(extension: &str) -> Result<Self, ParseExtensionError> {
-        match extension {
-            "avif" | "AVIF" => Ok(Self::Avif),
-            "bmp" | "BMP" => Ok(Self::Bmp),
-            "gif" | "GIF" => Ok(Self::Gif),
-            "jpg" | "jpeg" | "JPG" | "JPEG" => Ok(Self::Jpeg),
-            "png" | "PNG" => Ok(Self::Png),
-            "webp" | "WEBP" => Ok(Self::Webp),
-            "mp4" | "MP4" => Ok(Self::Mp4),
-            "mov" | "MOV" => Ok(Self::Mov),
-            "webm" | "WEBM" => Ok(Self::Webm),
-            "swf" | "SWF" => Ok(Self::Swf),
-            _ => Err(ParseExtensionError {
-                extenstion: extension.into(),
-            }),
+        match extension.to_ascii_lowercase().as_str() {
+            "avif" => Ok(Self::Avif),
+            "bmp" | "dib" => Ok(Self::Bmp),
+            "gif" => Ok(Self::Gif),
+            "jpg" | "jpeg" | "jpe" | "jif" | "jfif" | "jfi" => Ok(Self::Jpeg),
+            "png" => Ok(Self::Png),
+            "mp4" | "m4a" | "m4b" | "m4p" | "m4r" | "m4v" => Ok(Self::Mp4),
+            "mov" | "movie" | "qt" => Ok(Self::Mov),
+            "webm" => Ok(Self::Webm),
+            "webp" => Ok(Self::Webp),
+            "swf" => Ok(Self::Swf),
+            _ => Err(ParseExtensionError(extension.into())),
         }
     }
 
@@ -190,17 +167,38 @@ impl MimeType {
         }
     }
 
-    /// Returns corresponding [`ImageFormat`] if [`MimeType`] is an image format.
+    /// Returns corresponding [`ImageFormat`] if [`MimeType`] is an image format
+    /// supported for decoding by the `image` crate.
+    ///
     /// Returns [`None`] otherwise.
     pub fn to_image_format(self) -> Option<ImageFormat> {
         match self {
-            MimeType::Avif => Some(ImageFormat::Avif),
             MimeType::Bmp => Some(ImageFormat::Bmp),
             MimeType::Gif => Some(ImageFormat::Gif),
             MimeType::Jpeg => Some(ImageFormat::Jpeg),
             MimeType::Png => Some(ImageFormat::Png),
             MimeType::Webp => Some(ImageFormat::WebP),
-            MimeType::Mov | MimeType::Mp4 | MimeType::Webm | MimeType::Swf => None,
+            MimeType::Avif | MimeType::Mov | MimeType::Mp4 | MimeType::Webm | MimeType::Swf => None,
+        }
+    }
+}
+
+impl FromStr for MimeType {
+    type Err = ParseMimeTypeError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "application/x-shockwave-flash" | "application/vnd.adobe.flash.movie" => Ok(MimeType::Swf),
+            "image/avif" => Ok(MimeType::Avif),
+            "image/bmp" => Ok(MimeType::Bmp),
+            "image/gif" => Ok(MimeType::Gif),
+            "image/jpeg" => Ok(MimeType::Jpeg),
+            "image/png" => Ok(MimeType::Png),
+            "image/webp" => Ok(MimeType::Webp),
+            "video/mp4" => Ok(MimeType::Mp4),
+            "video/quicktime" => Ok(MimeType::Mov),
+            "video/webm" => Ok(MimeType::Webm),
+            s => Err(ParseMimeTypeError(s.into())),
         }
     }
 }
@@ -316,7 +314,7 @@ impl<T: Into<u16>> BitOrAssign<T> for PostFlags {
 
 impl ToSql<SmallInt, Pg> for PostFlags {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(self.0 as i16)?;
+        out.write_i16::<NetworkEndian>(self.0.cast_signed())?;
         Ok(IsNull::No)
     }
 }
@@ -520,6 +518,7 @@ pub enum ResourceProperty {
     PoolName,
     PoolPost,
     PoolCategoryName,
+    PostContent,
     PostFeature,
     PostRelation,
     TagName,

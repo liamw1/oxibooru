@@ -2,7 +2,7 @@ use num_traits::PrimInt;
 
 /// Represents an integer interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Interval<T: PrimInt> {
+pub struct Interval<T> {
     start: T,
     end: T,
 }

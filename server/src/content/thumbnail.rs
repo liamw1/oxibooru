@@ -1,6 +1,6 @@
 use crate::config::Config;
 use image::imageops::FilterType;
-use image::{DynamicImage, GenericImageView};
+use image::{DynamicImage, GenericImageView, Pixel, Rgba, RgbaImage};
 
 #[derive(Clone, Copy)]
 pub enum ThumbnailType {
@@ -35,5 +35,17 @@ pub fn create(config: &Config, image: &DynamicImage, thumbnail_type: ThumbnailTy
         let height = image_height * config_width / image_width;
         (width, height)
     };
-    image.resize(thumbnail_width, thumbnail_height, FilterType::Gaussian)
+    let resized_image = image.resize(thumbnail_width, thumbnail_height, FilterType::Gaussian);
+
+    // JPEG doesn't support transparency, so composite any transparent pixels
+    // onto a solid background to avoid corruption in the final thumbnail.
+    if resized_image.color().has_alpha() {
+        let mut canvas = RgbaImage::from_pixel(thumbnail_width, thumbnail_height, Rgba([255, 255, 255, 255]));
+        for (canvas_pixel, image_pixel) in canvas.pixels_mut().zip(resized_image.to_rgba8().pixels()) {
+            canvas_pixel.blend(image_pixel);
+        }
+        DynamicImage::ImageRgba8(canvas)
+    } else {
+        resized_image
+    }
 }

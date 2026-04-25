@@ -85,7 +85,7 @@ pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> Api
         .select(pool_post::post_id)
         .filter(pool_post::pool_id.eq(absorbed_id))
         .filter(pool_post::post_id.ne_all(merge_to_pool_posts))
-        .order_by(pool_post::order)
+        .order(pool_post::order)
         .load(conn)?;
     let post_count: i64 = pool_post::table
         .filter(pool_post::pool_id.eq(merge_to_id))

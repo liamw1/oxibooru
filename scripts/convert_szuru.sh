@@ -104,6 +104,7 @@ MOVE_DATA="${MOVE_DATA:-false}"
 
 # These will be read from .env files
 SZURU_POSTGRES_USER=""
+SZURU_POSTGRES_DB=""
 SZURU_MOUNT_DATA=""
 OXI_POSTGRES_USER=""
 OXI_POSTGRES_DB=""
@@ -246,6 +247,12 @@ if [[ -z "$SZURU_POSTGRES_USER" ]]; then
     exit 1
 fi
 
+SZURU_POSTGRES_DB=$(read_env_var "$SZURU_ENV_FILE" "POSTGRES_DB")
+if [[ -z "$SZURU_POSTGRES_DB" ]]; then
+    # Szurubooru database is `szuru` by default
+    SZURU_POSTGRES_DB="szuru"
+fi
+
 SZURU_MOUNT_DATA=$(read_env_var "$SZURU_ENV_FILE" "MOUNT_DATA")
 if [[ -z "$SZURU_MOUNT_DATA" ]]; then
     print_error "MOUNT_DATA not found in $SZURU_ENV_FILE"
@@ -285,6 +292,7 @@ print_info "Configuration:"
 echo "  Szurubooru directory:       $SZURU_DIR"
 echo "  Oxibooru directory:         $OXI_DIR"
 echo "  Szurubooru POSTGRES_USER:   $SZURU_POSTGRES_USER"
+echo "  Szurubooru POSTGRES_DB      $SZURU_DB"
 echo "  Szurubooru MOUNT_DATA:      $SZURU_MOUNT_DATA"
 echo "  Oxibooru POSTGRES_USER:     $OXI_POSTGRES_USER"
 echo "  Oxibooru POSTGRES_DB:       $OXI_POSTGRES_DB"
@@ -360,9 +368,10 @@ cd "$SZURU_DIR"
 print_step 2 "Starting Szurubooru SQL container..."
 docker compose down
 docker compose up -d --wait sql
+sleep 5s # Ensure that database has started by the time we attempt backup
 
 print_step 2 "Creating database dump..."
-docker exec "$SZURU_SQL_CONTAINER" pg_dump -U "$SZURU_POSTGRES_USER" --no-owner --no-privileges szuru > backup.sql
+docker exec "$SZURU_SQL_CONTAINER" pg_dump -U "$SZURU_POSTGRES_USER" --no-owner --no-privileges "$SZURU_POSTGRES_DB" > backup.sql
 
 if [[ ! -f "backup.sql" ]] || [[ ! -s "backup.sql" ]]; then
     print_error "Failed to create database dump or dump is empty"
@@ -387,11 +396,12 @@ print_step 3 "Starting Oxibooru server to apply migrations..."
 docker compose up -d --wait server
 
 print_step 3 "Applying schema migrations..."
+sleep 5s # If the server is stopped too early, it may not have started applying migrations
 docker compose stop server
 
 print_step 3 "Renaming existing schema..."
 docker exec "$OXI_SQL_CONTAINER" psql -U "$OXI_POSTGRES_USER" -d "$OXI_POSTGRES_DB" \
-    -c "ALTER SCHEMA public RENAME TO $OXI_POSTGRES_DB;"
+    -c "ALTER SCHEMA public RENAME TO oxi;"
 
 print_step 3 "Creating new public schema..."
 docker exec "$OXI_SQL_CONTAINER" psql -U "$OXI_POSTGRES_USER" -d "$OXI_POSTGRES_DB" \

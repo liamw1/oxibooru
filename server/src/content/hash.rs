@@ -12,7 +12,9 @@ use diesel::sql_types::Bytea;
 use diesel::{FromSqlRow, deserialize, serialize};
 use hex::{FromHex, FromHexError};
 use std::fmt::Display;
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 /// Stores a `post_id` and cached post `hash`.
@@ -24,12 +26,8 @@ pub struct PostHash<'a> {
 
 impl<'a> PostHash<'a> {
     pub fn new(config: &'a Config, post_id: i64) -> Self {
-        let mut key = [0; KEY_LEN];
-        for (key_byte, &value) in key.iter_mut().zip(config.content_secret.as_bytes()) {
-            *key_byte = value;
-        }
+        let key: [u8; KEY_LEN] = std::array::from_fn(|i| config.content_secret.as_bytes().get(i).copied().unwrap_or(0));
         let hash = blake3::keyed_hash(&key, &post_id.to_le_bytes());
-
         Self {
             hash: URL_SAFE_NO_PAD.encode(hash.as_bytes()),
             post_id,
@@ -43,7 +41,8 @@ impl<'a> PostHash<'a> {
 
     /// Returns URL to post content.
     pub fn content_url(&self, content_type: MimeType) -> String {
-        format!("{}/posts/{self}.{}", self.config.data_url, content_type.extension())
+        const POSTS_DIRECTORY: Directory = Directory::Posts;
+        format!("{}/{POSTS_DIRECTORY}/{self}.{}", self.config.data_url, content_type.extension())
     }
 
     /// Returns URL to post thumbnail. Will be a generated thumbnail by default or
@@ -51,11 +50,11 @@ impl<'a> PostHash<'a> {
     pub fn thumbnail_url(&self) -> String {
         // Note: this requires interacting with the filesystem and might be slow
         let thumbnail_folder = if self.custom_thumbnail_path().exists() {
-            "custom-thumbnails"
+            Directory::CustomThumbnails
         } else {
-            "generated-thumbnails"
+            Directory::GeneratedThumbnails
         };
-        format!("{}/{thumbnail_folder}/{self}.jpg", self.config.data_url)
+        format!("{}/{thumbnail_folder}/{self}.{THUMBNAIL_EXTENSION}", self.config.data_url)
     }
 
     /// Returns path to post content on disk.
@@ -66,13 +65,13 @@ impl<'a> PostHash<'a> {
 
     /// Returns path to generated post thumbnail on disk.
     pub fn generated_thumbnail_path(&self) -> PathBuf {
-        let filename = format!("{self}.jpg");
+        let filename = format!("{self}.{THUMBNAIL_EXTENSION}");
         self.config.path(Directory::GeneratedThumbnails).join(filename)
     }
 
     /// Returns path to custom post thumbnail on disk.
     pub fn custom_thumbnail_path(&self) -> PathBuf {
-        let filename = format!("{self}.jpg");
+        let filename = format!("{self}.{THUMBNAIL_EXTENSION}");
         self.config.path(Directory::CustomThumbnails).join(filename)
     }
 }
@@ -148,19 +147,32 @@ pub fn gravatar_url(config: &Config, username: &str) -> String {
     format!("https://gravatar.com/avatar/{hex_encoded_hash}?d=retro&s={}", config.thumbnails.avatar_width)
 }
 
-/// Computes a checksum for duplicate detection. Uses raw file data instead of decoded
-/// pixel data because different compression schemes can compress identical pixel data
-/// in different ways.
-pub fn compute_checksum(content: &[u8]) -> Checksum {
-    let hash = blake3::hash(content);
-    GenericChecksum(hash.into())
-}
+/// Computes the BLAKE3 and MD5 checksums of the file at `path` in a single pass.
+///
+/// BLAKE3 is strongly preferred for duplicate detection. MD5 is vulnerable to collisions
+/// and is only computed for convience for search on other sites.
+pub fn compute_checksums(path: &Path) -> std::io::Result<(Checksum, Md5Checksum)> {
+    const KB: usize = 1024;
+    const BUFFER_CAPACITY: usize = 64 * KB;
 
-/// Computes MD5 checksum. Not used for duplicate detection due to its vulnerability
-/// to collisions.
-pub fn compute_md5_checksum(content: &[u8]) -> Md5Checksum {
-    let digest = md5::compute(content);
-    GenericChecksum(digest.0)
+    let mut file = File::open(path)?;
+    let mut md5_ctx = md5::Context::new();
+    let mut blake3_hasher = blake3::Hasher::new();
+
+    let mut buffer = [0; BUFFER_CAPACITY];
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+
+        blake3_hasher.update(&buffer[..n]);
+        md5_ctx.consume(&buffer[..n]);
+    }
+
+    let checksum = GenericChecksum(blake3_hasher.finalize().into());
+    let md5_checksum = GenericChecksum(md5_ctx.compute().0);
+    Ok((checksum, md5_checksum))
 }
 
 /// Similar to [`compute_checksum`], except checksum is base64 encoded.
@@ -168,3 +180,5 @@ pub fn compute_url_safe_hash(content: &[u8]) -> String {
     let hash = blake3::hash(content);
     URL_SAFE_NO_PAD.encode(hash.as_bytes())
 }
+
+const THUMBNAIL_EXTENSION: &str = "jpg";

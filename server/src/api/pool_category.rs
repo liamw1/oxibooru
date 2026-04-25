@@ -13,7 +13,7 @@ use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, resource, snapshot};
 use axum::extract::{Extension, State};
-use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
+use diesel::{ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
@@ -48,11 +48,11 @@ async fn list(
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     state
-        .get_connection()?
-        .transaction(|conn| PoolCategoryInfo::all(conn, &fields))
+        .connection_pool
+        .transaction(move |conn| PoolCategoryInfo::all(conn, &fields))
+        .await
         .map(|results| UnpagedResponse { results })
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Retrieves information about an existing pool category.
@@ -79,21 +79,23 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().pool_category_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
-        let category = pool_category::table
-            .filter(pool_category::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
-        PoolCategoryInfo::new(conn, category, &fields)
-            .map(Json)
-            .map_err(ApiError::from)
-    })
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let category = pool_category::table
+                .filter(pool_category::name.eq(name))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
+            PoolCategoryInfo::new(conn, category, &fields)
+                .map(Json)
+                .map_err(ApiError::from)
+        })
+        .await
 }
 
 /// Request body for creating a pool category.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct PoolCategoryCreateBody {
     /// Category name. Must match `pool_category_name_regex` from server's configuration.
     name: SmallString,
@@ -129,31 +131,32 @@ async fn create(
     api::verify_matches_regex(&state.config, &body.name, RegexType::PoolCategory)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let new_category = NewPoolCategory {
-        name: &body.name,
-        color: &body.color,
-    };
-
-    let mut conn = state.get_connection()?;
-    let category = conn.transaction(|conn| {
-        let category = new_category
+    let category = state
+        .connection_pool
+        .transaction(move |conn| {
+            let category = NewPoolCategory {
+                name: &body.name,
+                color: &body.color,
+            }
             .insert_into(pool_category::table)
             .on_conflict(pool_category::name)
             .do_nothing()
             .get_result(conn)
             .optional()?
             .ok_or(ApiError::AlreadyExists(ResourceProperty::PoolCategoryName))?;
-        snapshot::pool_category::creation_snapshot(conn, client, &category)?;
-        Ok::<_, ApiError>(category)
-    })?;
-    conn.transaction(|conn| PoolCategoryInfo::new(conn, category, &fields))
+            snapshot::pool_category::creation_snapshot(conn, client, &category)?;
+            Ok::<_, ApiError>(category)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| PoolCategoryInfo::new(conn, category, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Request body for updating a pool category.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct PoolCategoryUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,
@@ -196,35 +199,39 @@ async fn update(
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
-    let updated_category = conn.transaction(|conn| {
-        let old_category: PoolCategory = pool_category::table
-            .filter(pool_category::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
-        api::verify_version(old_category.last_edit_time, body.version)?;
+    let updated_category = state
+        .connection_pool
+        .transaction(move |conn| {
+            let old_category: PoolCategory = pool_category::table
+                .filter(pool_category::name.eq(name))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
+            api::verify_version(old_category.last_edit_time, body.version)?;
 
-        let mut new_category = old_category.clone();
-        if let Some(name) = body.name {
-            api::verify_privilege(client, state.config.privileges().pool_category_edit_name)?;
-            api::verify_matches_regex(&state.config, &name, RegexType::PoolCategory)?;
-            new_category.name = name;
-        }
-        if let Some(color) = body.color {
-            api::verify_privilege(client, state.config.privileges().pool_category_edit_color)?;
-            new_category.color = color;
-        }
+            let mut new_category = old_category.clone();
+            if let Some(name) = body.name {
+                api::verify_privilege(client, state.config.privileges().pool_category_edit_name)?;
+                api::verify_matches_regex(&state.config, &name, RegexType::PoolCategory)?;
+                new_category.name = name;
+            }
+            if let Some(color) = body.color {
+                api::verify_privilege(client, state.config.privileges().pool_category_edit_color)?;
+                new_category.color = color;
+            }
 
-        new_category.last_edit_time = DateTime::now();
-        let _: PoolCategory =
-            error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::PoolCategoryName)?;
-        snapshot::pool_category::modification_snapshot(conn, client, &old_category, &new_category)?;
-        Ok::<_, ApiError>(new_category)
-    })?;
-    conn.transaction(|conn| PoolCategoryInfo::new(conn, updated_category, &fields))
+            new_category.last_edit_time = DateTime::now();
+            let _: PoolCategory =
+                error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::PoolCategoryName)?;
+            snapshot::pool_category::modification_snapshot(conn, client, &old_category, &new_category)?;
+            Ok::<_, ApiError>(new_category)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| PoolCategoryInfo::new(conn, updated_category, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Sets given pool category as default.
@@ -253,53 +260,57 @@ async fn set_default(
     api::verify_privilege(client, state.config.privileges().pool_category_set_default)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut conn = state.get_connection()?;
-    let new_default_category: PoolCategory = conn.transaction(|conn| {
-        let mut category: PoolCategory = pool_category::table
-            .filter(pool_category::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
-        let mut old_default_category: PoolCategory =
-            pool_category::table.filter(PoolCategory::default()).first(conn)?;
+    let new_default_category: PoolCategory = state
+        .connection_pool
+        .transaction(move |conn| {
+            let mut category: PoolCategory = pool_category::table
+                .filter(pool_category::name.eq(name))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
+            let mut old_default_category: PoolCategory =
+                pool_category::table.filter(PoolCategory::default()).first(conn)?;
 
-        let defaulted_pools: Vec<i64> = diesel::update(pool::table)
-            .filter(pool::category_id.eq(category.id))
-            .set(pool::category_id.eq(0))
-            .returning(pool::id)
-            .get_results(conn)?;
-        diesel::update(pool::table)
-            .filter(pool::category_id.eq(0))
-            .filter(pool::id.ne_all(defaulted_pools))
-            .set(pool::category_id.eq(category.id))
-            .execute(conn)?;
+            let defaulted_pools: Vec<i64> = diesel::update(pool::table)
+                .filter(pool::category_id.eq(category.id))
+                .set(pool::category_id.eq(0))
+                .returning(pool::id)
+                .get_results(conn)?;
+            diesel::update(pool::table)
+                .filter(pool::category_id.eq(0))
+                .filter(pool::id.ne_all(defaulted_pools))
+                .set(pool::category_id.eq(category.id))
+                .execute(conn)?;
 
-        // Update last_edit_time
-        let current_time = DateTime::now();
-        category.last_edit_time = current_time;
-        old_default_category.last_edit_time = current_time;
+            // Update last_edit_time
+            let current_time = DateTime::now();
+            category.last_edit_time = current_time;
+            old_default_category.last_edit_time = current_time;
 
-        // Make category default
-        std::mem::swap(&mut category.id, &mut old_default_category.id);
+            // Make category default
+            std::mem::swap(&mut category.id, &mut old_default_category.id);
 
-        // Give new default category an empty name so it doesn't violate uniqueness
-        let mut temporary_category_name = SmallString::new("");
-        std::mem::swap(&mut category.name, &mut temporary_category_name);
-        let mut new_default_category: PoolCategory = category.save_changes(conn)?;
+            // Give new default category an empty name so it doesn't violate uniqueness
+            let mut temporary_category_name = SmallString::new("");
+            std::mem::swap(&mut category.name, &mut temporary_category_name);
+            let mut new_default_category: PoolCategory = category.save_changes(conn)?;
 
-        // Update what used to be default category
-        let _: PoolCategory = old_default_category.save_changes(conn)?;
+            // Update what used to be default category
+            let _: PoolCategory = old_default_category.save_changes(conn)?;
 
-        // Give new default category back it's name
-        new_default_category.name = temporary_category_name;
-        let _: PoolCategory = new_default_category.save_changes(conn)?;
+            // Give new default category back it's name
+            new_default_category.name = temporary_category_name;
+            let _: PoolCategory = new_default_category.save_changes(conn)?;
 
-        snapshot::pool_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
-        Ok::<_, ApiError>(new_default_category)
-    })?;
-    conn.transaction(|conn| PoolCategoryInfo::new(conn, new_default_category, &fields))
+            snapshot::pool_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
+            Ok::<_, ApiError>(new_default_category)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| PoolCategoryInfo::new(conn, new_default_category, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Deletes an existing non-default pool category.
@@ -329,21 +340,24 @@ async fn delete(
 ) -> ApiResult<Json<()>> {
     api::verify_privilege(client, state.config.privileges().pool_category_delete)?;
 
-    state.get_connection()?.transaction(|conn| {
-        let category: PoolCategory = pool_category::table
-            .filter(pool_category::name.eq(name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
-        api::verify_version(category.last_edit_time, *client_version)?;
-        if category.id == 0 {
-            return Err(ApiError::DeleteDefault(ResourceType::PoolCategory));
-        }
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let category: PoolCategory = pool_category::table
+                .filter(pool_category::name.eq(name))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
+            api::verify_version(category.last_edit_time, *client_version)?;
+            if category.id == 0 {
+                return Err(ApiError::DeleteDefault(ResourceType::PoolCategory));
+            }
 
-        diesel::delete(pool_category::table.find(category.id)).execute(conn)?;
-        snapshot::pool_category::deletion_snapshot(conn, client, &category)?;
-        Ok(Json(()))
-    })
+            diesel::delete(pool_category::table.find(category.id)).execute(conn)?;
+            snapshot::pool_category::deletion_snapshot(conn, client, &category)?;
+            Ok(Json(()))
+        })
+        .await
 }
 
 #[cfg(test)]
@@ -398,7 +412,7 @@ mod test {
 
         let category_name: SmallString = pool_category::table
             .select(pool_category::name)
-            .order_by(pool_category::id.desc())
+            .order(pool_category::id.desc())
             .first(&mut conn)?;
 
         let new_category_count: i64 = pool_category::table.count().first(&mut conn)?;

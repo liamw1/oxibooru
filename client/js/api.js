@@ -12,6 +12,9 @@ let remoteConfigPromise = null;
 let postCount = 0;
 let diskUsage = 0;
 let serverTime = "";
+let featuredPost = null;
+let featuringTime = null;
+let featuringUser = null;
 
 class Api extends events.EventTarget {
     constructor() {
@@ -80,6 +83,9 @@ class Api extends events.EventTarget {
                 postCount = response.postCount;
                 diskUsage = response.diskUsage;
                 serverTime = response.serverTime;
+                featuredPost = response.featuredPost;
+                featuringTime = response.featuringTime;
+                featuringUser = response.featuringUser;
             });
             return remoteConfigPromise;
         } else {
@@ -97,6 +103,18 @@ class Api extends events.EventTarget {
 
     getServerTime() {
         return serverTime;
+    }
+
+    getFeaturedPost() {
+        return featuredPost;
+    }
+
+    getFeaturingTime() {
+        return featuringTime;
+    }
+
+    getFeaturingUser() {
+        return featuringUser;
     }
 
     getName() {

@@ -23,7 +23,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 /// Request body for uploading a temporary file.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct UploadBody {
     /// URL to fetch content from.
     content_url: Url,
@@ -83,9 +83,8 @@ async fn upload(
     match body {
         JsonOrMultipart::Json(payload) => upload_from_url(&state.config, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(payload, [PartName::Content]).await?;
-            if let [Some(upload)] = decoded_body.files {
-                let token = upload.save(&state.config)?;
+            let decoded_body = upload::extract(&state.config, payload, [PartName::Content]).await?;
+            if let [Some(token)] = decoded_body.files {
                 Ok(Json(UploadResponse { token }))
             } else if let Some(metadata) = decoded_body.metadata {
                 let url_upload: UploadBody = serde_json::from_slice(&metadata)?;

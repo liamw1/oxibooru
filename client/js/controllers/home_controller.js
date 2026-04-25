@@ -2,6 +2,7 @@
 
 const api = require("../api.js");
 const config = require("../config.js");
+const Post = require("../models/post.js");
 const topNavigation = require("../models/top_navigation.js");
 const HomeView = require("../views/home_view.js");
 
@@ -23,6 +24,12 @@ class HomeController {
             this._homeView.setStats({
                 postCount: api.getPostCount(),
                 diskUsage: api.getDiskUsage(),
+            });
+            this._homeView.setFeaturedPost({
+                featuredPost: api.getFeaturedPost()
+                    ? Post.fromResponse(api.getFeaturedPost())
+                    : null,
+                featuringUser: api.getFeaturingUser(),
             });
         });
     }

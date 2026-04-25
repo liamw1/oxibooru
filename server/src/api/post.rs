@@ -9,8 +9,8 @@ use crate::content::hash::PostHash;
 use crate::content::signature::SignatureCache;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
-use crate::content::{Content, FileContents, signature, upload};
-use crate::db::ConnectionPool;
+use crate::content::{Content, signature, upload};
+use crate::db::AsyncConnectionPool;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceProperty, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
 use crate::resource::post::{Note, PostInfo};
@@ -25,11 +25,11 @@ use axum::extract::{DefaultBodyLimit, Extension, State};
 use diesel::dsl::{exists, not, sql};
 use diesel::sql_types::Integer;
 use diesel::{
-    Connection, ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
+    ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
     SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock};
 use tokio::sync::Mutex as AsyncMutex;
 use tracing::info;
 use url::Url;
@@ -80,9 +80,10 @@ struct Multipart<T> {
 /// more pessimistic than necessary, as parallel updates are safe if the sets of tags are
 /// disjoint. However, allowing disjoint tagging introduces additional complexity so it
 /// isn't being done as of now.
-async fn tagging_update<T, F>(connection_pool: &ConnectionPool, tags_updated: bool, update: F) -> ApiResult<T>
+async fn tagging_update<T, F>(connection_pool: &AsyncConnectionPool, tags_updated: bool, update: F) -> ApiResult<T>
 where
-    F: FnOnce(&mut db::Connection) -> ApiResult<T>,
+    T: Send + 'static,
+    F: FnOnce(&mut db::Connection) -> ApiResult<T> + Send + 'static,
 {
     let _lock;
     if tags_updated {
@@ -90,7 +91,7 @@ where
     }
 
     // Get a fresh connection here so that connection isn't being held while waiting on lock
-    connection_pool.get()?.transaction(update)
+    connection_pool.transaction(update).await
 }
 
 /// Searches for posts.
@@ -195,19 +196,22 @@ async fn list(
     let limit = std::cmp::min(page.limit.get(), MAX_POSTS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
-    state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
-        query_builder.set_offset_and_limit(offset, limit);
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
+            query_builder.set_offset_and_limit(offset, limit);
 
-        let (total, selected_posts) = query_builder.list(conn)?;
-        Ok(Json(PagedResponse {
-            query: resource.query,
-            offset,
-            limit,
-            total,
-            results: PostInfo::new_batch_from_ids(conn, &state.config, client, &selected_posts, &fields)?,
-        }))
-    })
+            let (total, selected_posts) = query_builder.list(conn)?;
+            Ok::<_, ApiError>(Json(PagedResponse {
+                query: resource.query,
+                offset,
+                limit,
+                total,
+                results: PostInfo::new_batch_from_ids(conn, &state.config, client, &selected_posts, &fields)?,
+            }))
+        })
+        .await
 }
 
 /// Retrieves information about an existing post.
@@ -235,12 +239,15 @@ async fn get(
     api::verify_privilege(client, state.config.privileges().post_view)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
-        verify_visibility(conn, &state.config, client, post_id)?;
-        PostInfo::new_from_id(conn, &state.config, client, post_id, &fields)
-            .map(Json)
-            .map_err(ApiError::from)
-    })
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            verify_visibility(conn, &state.config, client, post_id)?;
+            PostInfo::new_from_id(conn, &state.config, client, post_id, &fields)
+                .map(Json)
+                .map_err(ApiError::from)
+        })
+        .await
 }
 
 /// Response containing neighboring posts.
@@ -288,68 +295,72 @@ async fn get_neighbors(
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
-    state.get_connection()?.transaction(|conn| {
-        const INITIAL_LIMIT: i64 = 1000;
-        const LIMIT_GROWTH: i64 = 10;
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            const INITIAL_LIMIT: i64 = 1000;
+            const LIMIT_GROWTH: i64 = 10;
 
-        verify_visibility(conn, &state.config, client, post_id)?;
+            verify_visibility(conn, &state.config, client, post_id)?;
 
-        if !query_builder.criteria().has_sort() {
-            // Optimized neighbor retrieval if no sort is specified
-            let previous_post = query_builder
-                .build_filtered(conn)?
-                .select(Post::as_select())
-                .filter(post::id.gt(post_id))
-                .order_by(post::id.asc())
-                .first(conn)
-                .optional()?;
-            let next_post = query_builder
-                .build_filtered(conn)?
-                .select(Post::as_select())
-                .filter(post::id.lt(post_id))
-                .order_by(post::id.desc())
-                .first(conn)
-                .optional()?;
+            let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
 
-            let has_previous_post = previous_post.is_some();
-            let posts = previous_post.into_iter().chain(next_post).collect();
-            let post_infos = PostInfo::new_batch(conn, &state.config, client, posts, &fields)?;
-            return Ok(create_post_neighbors(post_infos, has_previous_post));
-        }
+            if !query_builder.criteria().has_sort() {
+                // Optimized neighbor retrieval if no sort is specified
+                let previous_post = query_builder
+                    .build_filtered(conn)?
+                    .select(Post::as_select())
+                    .filter(post::id.gt(post_id))
+                    .order(post::id.asc())
+                    .first(conn)
+                    .optional()?;
+                let next_post = query_builder
+                    .build_filtered(conn)?
+                    .select(Post::as_select())
+                    .filter(post::id.lt(post_id))
+                    .order(post::id.desc())
+                    .first(conn)
+                    .optional()?;
 
-        // Search for neighbors using exponentially increasing limit
-        let mut offset = 0;
-        let mut limit = INITIAL_LIMIT;
-        let (prev_post_id, next_post_id) = loop {
-            query_builder.set_offset_and_limit(offset, limit);
-            let post_id_batch = query_builder.load(conn)?;
-
-            let post_position = post_id_batch.iter().position(|&id| id == post_id);
-            if post_id_batch.len() < usize::try_from(limit).unwrap_or(usize::MAX)
-                || limit == i64::MAX
-                || post_id_batch.len() == usize::MAX
-                || (post_position.is_some() && post_position != Some(post_id_batch.len().saturating_sub(1)))
-            {
-                let prev_post_id = post_position
-                    .and_then(|index| index.checked_sub(1))
-                    .and_then(|prev_index| post_id_batch.get(prev_index))
-                    .copied();
-                let next_post_id = post_position
-                    .and_then(|index| index.checked_add(1))
-                    .and_then(|next_index| post_id_batch.get(next_index))
-                    .copied();
-                break (prev_post_id, next_post_id);
+                let has_previous_post = previous_post.is_some();
+                let posts = previous_post.into_iter().chain(next_post).collect();
+                let post_infos = PostInfo::new_batch(conn, &state.config, client, posts, &fields)?;
+                return Ok::<_, ApiError>(create_post_neighbors(post_infos, has_previous_post));
             }
 
-            offset += limit - 2;
-            limit = limit.saturating_mul(LIMIT_GROWTH);
-        };
+            // Search for neighbors using exponentially increasing limit
+            let mut offset = 0;
+            let mut limit = INITIAL_LIMIT;
+            let (prev_post_id, next_post_id) = loop {
+                query_builder.set_offset_and_limit(offset, limit);
+                let post_id_batch = query_builder.load(conn)?;
 
-        let post_ids: Vec<_> = prev_post_id.into_iter().chain(next_post_id).collect();
-        let post_infos = PostInfo::new_batch_from_ids(conn, &state.config, client, &post_ids, &fields)?;
-        Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
-    })
+                let post_position = post_id_batch.iter().position(|&id| id == post_id);
+                if post_id_batch.len() < usize::try_from(limit).unwrap_or(usize::MAX)
+                    || limit == i64::MAX
+                    || post_id_batch.len() == usize::MAX
+                    || (post_position.is_some() && post_position != Some(post_id_batch.len().saturating_sub(1)))
+                {
+                    let prev_post_id = post_position
+                        .and_then(|index| index.checked_sub(1))
+                        .and_then(|prev_index| post_id_batch.get(prev_index))
+                        .copied();
+                    let next_post_id = post_position
+                        .and_then(|index| index.checked_add(1))
+                        .and_then(|next_index| post_id_batch.get(next_index))
+                        .copied();
+                    break (prev_post_id, next_post_id);
+                }
+
+                offset += limit - 2;
+                limit = limit.saturating_mul(LIMIT_GROWTH);
+            };
+
+            let post_ids: Vec<_> = prev_post_id.into_iter().chain(next_post_id).collect();
+            let post_infos = PostInfo::new_batch_from_ids(conn, &state.config, client, &post_ids, &fields)?;
+            Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
+        })
+        .await
 }
 
 /// Retrieves the post that is currently featured on the main page in web client.
@@ -375,29 +386,31 @@ async fn get_featured(
     api::verify_privilege(client, state.config.privileges().post_view_featured)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
-        let mut featured = post_feature::table
-            .select(post_feature::post_id)
-            .order_by(post_feature::time.desc())
-            .into_boxed();
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let mut featured = post_feature::table
+                .select(post_feature::post_id)
+                .order(post_feature::time.desc())
+                .into_boxed();
 
-        // Apply preferences to post features
-        if let Some(hidden_posts) = preferences::hidden_posts(&state.config, client, post_feature::post_id) {
-            featured = featured.filter(not(exists(hidden_posts)));
-        }
+            // Apply preferences to post features
+            if let Some(hidden_posts) = preferences::hidden_posts(&state.config, client, post_feature::post_id) {
+                featured = featured.filter(not(exists(hidden_posts)));
+            }
 
-        let featured_post_id: Option<i64> = featured.first(conn).optional()?;
-        featured_post_id
-            .map(|post_id| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
-            .transpose()
-            .map(Json)
-            .map_err(ApiError::from)
-    })
+            let featured_post_id: Option<i64> = featured.first(conn).optional()?;
+            featured_post_id
+                .map(|post_id| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+                .transpose()
+                .map(Json)
+                .map_err(ApiError::from)
+        })
+        .await
 }
 
 /// Request body for featuring a post.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct FeatureBody {
     /// ID of the post to feature.
     id: i64,
@@ -432,25 +445,29 @@ async fn feature(
         time: DateTime::now(),
     };
 
-    let mut conn = state.get_connection()?;
-    conn.transaction(|conn| {
-        let previous_feature_id = post_feature::table
-            .select(post_feature::post_id)
-            .order_by(post_feature::time.desc())
-            .first(conn)
-            .optional()?;
-        if previous_feature_id == Some(new_post_feature.post_id) {
-            return Err(ApiError::AlreadyExists(ResourceProperty::PostFeature));
-        }
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let previous_feature_id = post_feature::table
+                .select(post_feature::post_id)
+                .order(post_feature::time.desc())
+                .first(conn)
+                .optional()?;
+            if previous_feature_id == Some(new_post_feature.post_id) {
+                return Err(ApiError::AlreadyExists(ResourceProperty::PostFeature));
+            }
 
-        let insert_result = new_post_feature.insert_into(post_feature::table).execute(conn);
-        error::map_foreign_key_violation(insert_result, ResourceType::Post)?;
-        snapshot::post::feature_snapshot(conn, client, previous_feature_id, body.id)?;
-        Ok::<_, ApiError>(())
-    })?;
-    conn.transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, body.id, &fields))
+            let insert_result = new_post_feature.insert_into(post_feature::table).execute(conn);
+            error::map_foreign_key_violation(insert_result, ResourceType::Post)?;
+            snapshot::post::feature_snapshot(conn, client, previous_feature_id, body.id)?;
+            Ok::<_, ApiError>(())
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, body.id, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 async fn reverse_search_impl(
@@ -462,12 +479,12 @@ async fn reverse_search_impl(
     api::verify_privilege(client, state.config.privileges().post_reverse_search)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let content = Content::new(body.content, body.content_token, body.content_url)
-        .ok_or(ApiError::MissingContent(ResourceType::Post))?;
+    let content =
+        Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.compute_properties(&state).await?;
     state
-        .get_connection()?
-        .transaction(|conn| {
+        .connection_pool
+        .transaction(move |conn| {
             let _timer = crate::time::Timer::new("reverse search");
 
             // Check for exact match
@@ -497,7 +514,7 @@ async fn reverse_search_impl(
             similar_signatures.sort_unstable_by(|(_, dist_a), (_, dist_b)| dist_a.total_cmp(dist_b));
 
             let (post_ids, distances): (Vec<_>, Vec<_>) = similar_signatures.into_iter().unzip();
-            Ok(ReverseSearchResponse {
+            Ok::<_, ApiError>(ReverseSearchResponse {
                 exact_post: exact_post
                     .map(|post| PostInfo::new(conn, &state.config, client, post, &fields))
                     .transpose()?,
@@ -508,15 +525,14 @@ async fn reverse_search_impl(
                     .collect(),
             })
         })
+        .await
         .map(Json)
 }
 
 /// Request body for reverse image search.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct ReverseSearchBody {
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
     /// Token referencing previously uploaded content.
     #[schema(value_type = Option<String>)]
     content_token: Option<UploadToken>,
@@ -573,11 +589,10 @@ async fn reverse_search(
     match body {
         JsonOrMultipart::Json(payload) => reverse_search_impl(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(payload, [PartName::Content]).await?;
-            let reverse_search_body = if let [Some(content)] = decoded_body.files {
+            let decoded_body = upload::extract(&state.config, payload, [PartName::Content]).await?;
+            let reverse_search_body = if let [Some(content_token)] = decoded_body.files {
                 ReverseSearchBody {
-                    content: Some(content),
-                    content_token: None,
+                    content_token: Some(content_token),
                     content_url: None,
                 }
             } else if let Some(metadata) = decoded_body.metadata {
@@ -604,102 +619,105 @@ async fn create_impl(
     api::verify_privilege(client, required_rank)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let content = Content::new(body.content, body.content_token, body.content_url)
-        .ok_or(ApiError::MissingContent(ResourceType::Post))?;
+    let content =
+        Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.get_or_compute_properties(&state).await?;
 
-    let custom_thumbnail = match Content::new(body.thumbnail, body.thumbnail_token, body.thumbnail_url) {
+    let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
         Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Post).await?),
         None => None,
     };
     let flags = content_properties.flags | PostFlags::from_slice(&body.flags.unwrap_or_default());
 
-    let new_post = NewPost {
-        user_id: client.id,
-        file_size: content_properties.file_size,
-        width: content_properties.width,
-        height: content_properties.height,
-        safety: body.safety,
-        type_: PostType::from(content_properties.mime_type),
-        mime_type: content_properties.mime_type,
-        checksum: content_properties.checksum,
-        checksum_md5: content_properties.md5_checksum,
-        flags,
-        source: body.source.as_deref().unwrap_or(""),
-        description: body.description.as_deref().unwrap_or(""),
-    };
+    let post_id = tagging_update(&state.connection_pool, body.tags.is_some(), {
+        let config = Arc::clone(&state.config);
+        move |conn| {
+            // We do this before post insertion so that the post sequence isn't incremented if it fails
+            let (tag_ids, tags) =
+                update::tag::get_or_create_tag_ids(conn, &config, client, body.tags.unwrap_or_default(), false)?;
+            let relations = body.relations.unwrap_or_default();
+            let notes = body.notes.unwrap_or_default();
 
-    let post_id = tagging_update(&state.connection_pool, body.tags.is_some(), |conn| {
-        // We do this before post insertion so that the post sequence isn't incremented if it fails
-        let (tag_ids, tags) =
-            update::tag::get_or_create_tag_ids(conn, &state.config, client, body.tags.unwrap_or_default(), false)?;
-        let relations = body.relations.unwrap_or_default();
-        let notes = body.notes.unwrap_or_default();
+            let post: Post = NewPost {
+                user_id: client.id,
+                file_size: content_properties.file_size,
+                width: content_properties.width,
+                height: content_properties.height,
+                safety: body.safety,
+                type_: PostType::from(content_properties.mime_type),
+                mime_type: content_properties.mime_type,
+                checksum: content_properties.checksum,
+                checksum_md5: content_properties.md5_checksum,
+                flags,
+                source: body.source.as_deref().unwrap_or(""),
+                description: body.description.as_deref().unwrap_or(""),
+            }
+            .insert_into(post::table)
+            .on_conflict(post::checksum)
+            .do_nothing()
+            .get_result(conn)
+            .optional()?
+            .ok_or(ApiError::AlreadyExists(ResourceProperty::PostContent))?;
+            let post_hash = PostHash::new(&config, post.id);
 
-        let post: Post = new_post.insert_into(post::table).get_result(conn)?;
-        let post_hash = PostHash::new(&state.config, post.id);
+            // Add tags, relations, and notes
+            update::post::set_tags(conn, post.id, &tag_ids)?;
+            update::post::add_relations(conn, post.id, &relations)?;
+            update::post::set_notes(conn, post.id, &notes)?;
 
-        // Add tags, relations, and notes
-        update::post::set_tags(conn, post.id, &tag_ids)?;
-        update::post::add_relations(conn, post.id, &relations)?;
-        update::post::set_notes(conn, post.id, &notes)?;
+            NewPostSignature {
+                post_id: post.id,
+                signature: content_properties.signature.into(),
+                words: signature::generate_indexes(&content_properties.signature).into(),
+            }
+            .insert_into(post_signature::table)
+            .execute(conn)?;
 
-        NewPostSignature {
-            post_id: post.id,
-            signature: content_properties.signature.into(),
-            words: signature::generate_indexes(&content_properties.signature).into(),
+            // Move content to permanent location
+            let temp_path = content_properties.token.path(&config);
+            filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
+
+            // Create thumbnails
+            if let Some(thumbnail) = custom_thumbnail {
+                api::verify_privilege(client, config.privileges().post_edit_thumbnail)?;
+                update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
+            }
+            update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
+
+            let post_data = SnapshotData {
+                safety: post.safety,
+                checksum: hex::encode(&post.checksum),
+                flags: post.flags,
+                source: post.source,
+                description: post.description,
+                tags,
+                relations,
+                notes,
+                featured: false,
+            };
+            snapshot::post::creation_snapshot(conn, client, post.id, post_data)?;
+            Ok::<_, ApiError>(post.id)
         }
-        .insert_into(post_signature::table)
-        .execute(conn)?;
-
-        // Move content to permanent location
-        let temp_path = content_properties.token.path(&state.config);
-        filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
-
-        // Create thumbnails
-        if let Some(thumbnail) = custom_thumbnail {
-            api::verify_privilege(client, state.config.privileges().post_edit_thumbnail)?;
-            update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
-        }
-        update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
-
-        let post_data = SnapshotData {
-            safety: post.safety,
-            checksum: hex::encode(&post.checksum),
-            flags: post.flags,
-            source: post.source,
-            description: post.description,
-            tags,
-            relations,
-            notes,
-            featured: false,
-        };
-        snapshot::post::creation_snapshot(conn, client, post.id, post_data)?;
-        Ok::<_, ApiError>(post.id)
     })
     .await?;
     state
-        .get_connection()?
-        .transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+        .connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Request body for creating a post.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct PostCreateBody {
     /// Post safety rating.
     safety: PostSafety,
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
     /// Token referencing previously uploaded content.
     #[schema(value_type = Option<String>)]
     content_token: Option<UploadToken>,
     /// URL to fetch content from.
     content_url: Option<Url>,
-    #[serde(skip_deserializing)]
-    thumbnail: Option<FileContents>,
     /// Token referencing previously uploaded thumbnail.
     #[schema(value_type = Option<String>)]
     thumbnail_token: Option<UploadToken>,
@@ -750,6 +768,7 @@ struct PostCreateBody {
         (status = 400, description = "Post content is missing"),
         (status = 403, description = "Privileges are too low"),
         (status = 404, description = "Relations refer to non-existing posts"),
+        (status = 409, description = "Post content already exists"),
         (status = 422, description = "A Tag has an invalid name"),
         (status = 422, description = "Safety is invalid"),
         (status = 422, description = "Notes are invalid"),
@@ -765,13 +784,14 @@ async fn create(
     match body {
         JsonOrMultipart::Json(payload) => create_impl(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
+            let decoded_body =
+                upload::extract(&state.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut new_post: PostCreateBody = serde_json::from_slice(&metadata)?;
-            let [content, thumbnail] = decoded_body.files;
+            let [content_token, thumbnail_token] = decoded_body.files;
 
-            new_post.content = content;
-            new_post.thumbnail = thumbnail;
+            new_post.content_token = content_token;
+            new_post.thumbnail_token = thumbnail_token;
             create_impl(state, client, params, new_post).await
         }
     }
@@ -779,7 +799,7 @@ async fn create(
 
 /// Request body for merging posts.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct PostMergeBody {
     #[schema(inline)]
     #[serde(flatten)]
@@ -825,30 +845,33 @@ async fn merge(
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    tagging_update(&state.connection_pool, true, |conn| {
-        let absorbed_post: Post = post::table
-            .find(absorbed_id)
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Post))?;
-        let merge_to_post: Post = post::table
-            .find(merge_to_id)
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Post))?;
-        api::verify_version(absorbed_post.last_edit_time, body.post_info.remove_version)?;
-        api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
+    tagging_update(&state.connection_pool, true, {
+        let config = Arc::clone(&state.config);
+        move |conn| {
+            let absorbed_post: Post = post::table
+                .find(absorbed_id)
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::Post))?;
+            let merge_to_post: Post = post::table
+                .find(merge_to_id)
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::Post))?;
+            api::verify_version(absorbed_post.last_edit_time, body.post_info.remove_version)?;
+            api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
 
-        update::post::merge(conn, &state.config, &absorbed_post, &merge_to_post, body.replace_content)?;
-        snapshot::post::merge_snapshot(conn, client, absorbed_id, merge_to_id)?;
-        Ok(())
+            update::post::merge(conn, &config, &absorbed_post, &merge_to_post, body.replace_content)?;
+            snapshot::post::merge_snapshot(conn, client, absorbed_id, merge_to_id)?;
+            Ok(())
+        }
     })
     .await?;
     state
-        .get_connection()?
-        .transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, body.post_info.merge_to, &fields))
+        .connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, body.post_info.merge_to, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Marks the post as favorite for authenticated user.
@@ -882,15 +905,19 @@ async fn favorite(
         time: DateTime::now(),
     };
 
-    let mut conn = state.get_connection()?;
-    conn.transaction(|conn| {
-        diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
-        let insert_result = new_post_favorite.insert_into(post_favorite::table).execute(conn);
-        error::map_foreign_key_violation(insert_result, ResourceType::Post)
-    })?;
-    conn.transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
+            let insert_result = new_post_favorite.insert_into(post_favorite::table).execute(conn);
+            error::map_foreign_key_violation(insert_result, ResourceType::Post)
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Updates score of authenticated user for given post.
@@ -922,26 +949,30 @@ async fn rate(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
 
-    let mut conn = state.get_connection()?;
-    conn.transaction(|conn| {
-        diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
-        if let Ok(score) = Score::try_from(*body) {
-            let insert_result = PostScore {
-                post_id,
-                user_id,
-                score,
-                time: DateTime::now(),
+            if let Ok(score) = Score::try_from(*body) {
+                let insert_result = PostScore {
+                    post_id,
+                    user_id,
+                    score,
+                    time: DateTime::now(),
+                }
+                .insert_into(post_score::table)
+                .execute(conn);
+                error::map_foreign_key_violation(insert_result, ResourceType::Post)?;
             }
-            .insert_into(post_score::table)
-            .execute(conn);
-            error::map_foreign_key_violation(insert_result, ResourceType::Post)?;
-        }
-        Ok::<_, ApiError>(())
-    })?;
-    conn.transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+            Ok::<_, ApiError>(())
+        })
+        .await?;
+    state
+        .connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 async fn update_impl(
@@ -952,127 +983,131 @@ async fn update_impl(
     body: PostUpdateBody,
 ) -> ApiResult<Json<PostInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let post_hash = PostHash::new(&state.config, post_id);
 
-    let new_content = match Content::new(body.content, body.content_token, body.content_url) {
+    let new_content = match Content::new(body.content_token, body.content_url) {
         Some(content) => Some(content.get_or_compute_properties(&state).await?),
         None => None,
     };
-    let custom_thumbnail = match Content::new(body.thumbnail, body.thumbnail_token, body.thumbnail_url) {
+    let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
         Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Post).await?),
         None => None,
     };
 
-    tagging_update(&state.connection_pool, body.tags.is_some(), |conn| {
-        let old_post: Post = post::table
-            .find(post_id)
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Post))?;
-        let old_mime_type = old_post.mime_type;
-        api::verify_version(old_post.last_edit_time, body.version)?;
+    tagging_update(&state.connection_pool, body.tags.is_some(), {
+        let config = Arc::clone(&state.config);
+        move |conn| {
+            let old_post: Post = post::table
+                .find(post_id)
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::Post))?;
+            let old_mime_type = old_post.mime_type;
+            api::verify_version(old_post.last_edit_time, body.version)?;
 
-        let mut new_post = old_post.clone();
-        let old_snapshot_data = SnapshotData::retrieve(conn, old_post)?;
-        let mut new_snapshot_data = old_snapshot_data.clone();
+            let post_hash = PostHash::new(&config, post_id);
 
-        if let Some(safety) = body.safety {
-            api::verify_privilege(client, state.config.privileges().post_edit_safety)?;
+            let mut new_post = old_post.clone();
+            let old_snapshot_data = SnapshotData::retrieve(conn, old_post)?;
+            let mut new_snapshot_data = old_snapshot_data.clone();
 
-            new_post.safety = safety;
-            new_snapshot_data.safety = safety;
+            if let Some(safety) = body.safety {
+                api::verify_privilege(client, config.privileges().post_edit_safety)?;
+
+                new_post.safety = safety;
+                new_snapshot_data.safety = safety;
+            }
+            if let Some(flags) = body.flags {
+                api::verify_privilege(client, config.privileges().post_edit_flag)?;
+
+                let updated_flags = PostFlags::from_slice(&flags);
+                new_post.flags = updated_flags;
+                new_snapshot_data.flags = updated_flags;
+            }
+            if let Some(source) = body.source {
+                api::verify_privilege(client, config.privileges().post_edit_source)?;
+
+                new_post.source = source.clone();
+                new_snapshot_data.source = source;
+            }
+            if let Some(description) = body.description {
+                api::verify_privilege(client, config.privileges().post_edit_description)?;
+
+                new_post.description = description.clone();
+                new_snapshot_data.description = description;
+            }
+            if let Some(mut relations) = body.relations {
+                api::verify_privilege(client, config.privileges().post_edit_relation)?;
+
+                update::post::set_relations(conn, &config, client, post_id, &mut relations)?;
+                new_snapshot_data.relations = relations;
+            }
+            if let Some(tags) = body.tags {
+                api::verify_privilege(client, config.privileges().post_edit_tag)?;
+
+                let (updated_tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, &config, client, tags, false)?;
+                update::post::set_tags(conn, post_id, &updated_tag_ids)?;
+                new_snapshot_data.tags = tags;
+            }
+            if let Some(notes) = body.notes {
+                api::verify_privilege(client, config.privileges().post_edit_note)?;
+
+                update::post::set_notes(conn, post_id, &notes)?;
+                new_snapshot_data.notes = notes;
+            }
+            if let Some(content_properties) = new_content {
+                api::verify_privilege(client, config.privileges().post_edit_content)?;
+
+                new_snapshot_data.checksum = hex::encode(&content_properties.checksum);
+
+                // Update content metadata
+                new_post.file_size = content_properties.file_size;
+                new_post.width = content_properties.width;
+                new_post.height = content_properties.height;
+                new_post.type_ = PostType::from(content_properties.mime_type);
+                new_post.mime_type = content_properties.mime_type;
+                new_post.checksum = content_properties.checksum;
+                new_post.checksum_md5 = content_properties.md5_checksum;
+                new_post.flags |= content_properties.flags;
+
+                // Update post signature
+                let new_post_signature = NewPostSignature {
+                    post_id,
+                    signature: content_properties.signature.into(),
+                    words: signature::generate_indexes(&content_properties.signature).into(),
+                };
+                diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
+                new_post_signature.insert_into(post_signature::table).execute(conn)?;
+
+                // Replace content
+                let temp_path = content_properties.token.path(&config);
+                filesystem::delete_content(&post_hash, old_mime_type)?;
+                filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
+
+                // Replace generated thumbnail
+                update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
+            }
+            if let Some(thumbnail) = custom_thumbnail {
+                api::verify_privilege(client, config.privileges().post_edit_thumbnail)?;
+                update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
+            }
+
+            new_post.last_edit_time = DateTime::now();
+            let _: Post = error::map_unique_violation(new_post.save_changes(conn), ResourceProperty::PostContent)?;
+            snapshot::post::modification_snapshot(conn, client, post_id, old_snapshot_data, new_snapshot_data)?;
+            Ok(())
         }
-        if let Some(flags) = body.flags {
-            api::verify_privilege(client, state.config.privileges().post_edit_flag)?;
-
-            let updated_flags = PostFlags::from_slice(&flags);
-            new_post.flags = updated_flags;
-            new_snapshot_data.flags = updated_flags;
-        }
-        if let Some(source) = body.source {
-            api::verify_privilege(client, state.config.privileges().post_edit_source)?;
-
-            new_post.source = source.clone();
-            new_snapshot_data.source = source;
-        }
-        if let Some(description) = body.description {
-            api::verify_privilege(client, state.config.privileges().post_edit_description)?;
-
-            new_post.description = description.clone();
-            new_snapshot_data.description = description;
-        }
-        if let Some(mut relations) = body.relations {
-            api::verify_privilege(client, state.config.privileges().post_edit_relation)?;
-
-            update::post::set_relations(conn, &state.config, client, post_id, &mut relations)?;
-            new_snapshot_data.relations = relations;
-        }
-        if let Some(tags) = body.tags {
-            api::verify_privilege(client, state.config.privileges().post_edit_tag)?;
-
-            let (updated_tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, &state.config, client, tags, false)?;
-            update::post::set_tags(conn, post_id, &updated_tag_ids)?;
-            new_snapshot_data.tags = tags;
-        }
-        if let Some(notes) = body.notes {
-            api::verify_privilege(client, state.config.privileges().post_edit_note)?;
-
-            update::post::set_notes(conn, post_id, &notes)?;
-            new_snapshot_data.notes = notes;
-        }
-        if let Some(content_properties) = new_content {
-            api::verify_privilege(client, state.config.privileges().post_edit_content)?;
-
-            new_snapshot_data.checksum = hex::encode(&content_properties.checksum);
-
-            // Update content metadata
-            new_post.file_size = content_properties.file_size;
-            new_post.width = content_properties.width;
-            new_post.height = content_properties.height;
-            new_post.type_ = PostType::from(content_properties.mime_type);
-            new_post.mime_type = content_properties.mime_type;
-            new_post.checksum = content_properties.checksum;
-            new_post.checksum_md5 = content_properties.md5_checksum;
-            new_post.flags |= content_properties.flags;
-
-            // Update post signature
-            let new_post_signature = NewPostSignature {
-                post_id,
-                signature: content_properties.signature.into(),
-                words: signature::generate_indexes(&content_properties.signature).into(),
-            };
-            diesel::delete(post_signature::table.find(post_id)).execute(conn)?;
-            new_post_signature.insert_into(post_signature::table).execute(conn)?;
-
-            // Replace content
-            let temp_path = content_properties.token.path(&state.config);
-            filesystem::delete_content(&post_hash, old_mime_type)?;
-            filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
-
-            // Replace generated thumbnail
-            update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
-        }
-        if let Some(thumbnail) = custom_thumbnail {
-            api::verify_privilege(client, state.config.privileges().post_edit_thumbnail)?;
-            update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
-        }
-
-        new_post.last_edit_time = DateTime::now();
-        let _: Post = new_post.save_changes(conn)?;
-        snapshot::post::modification_snapshot(conn, client, post_id, old_snapshot_data, new_snapshot_data)?;
-        Ok(())
     })
     .await?;
     state
-        .get_connection()?
-        .transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+        .connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 /// Request body for updating a post.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct PostUpdateBody {
     // Resource version. See [versioning](#Versioning).
     version: DateTime,
@@ -1090,15 +1125,11 @@ struct PostUpdateBody {
     notes: Option<Vec<Note>>,
     /// Post flags: `loop` or `sound`.
     flags: Option<Vec<PostFlag>>,
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
     /// Token referencing previously uploaded content.
     #[schema(value_type = Option<String>)]
     content_token: Option<UploadToken>,
     /// URL to fetch content from.
     content_url: Option<Url>,
-    #[serde(skip_deserializing)]
-    thumbnail: Option<FileContents>,
     /// Token referencing previously uploaded thumbnail.
     #[schema(value_type = Option<String>)]
     thumbnail_token: Option<UploadToken>,
@@ -1137,6 +1168,7 @@ struct PostUpdateBody {
         (status = 404, description = "Post does not exist"),
         (status = 404, description = "Relations refer to non-existing posts"),
         (status = 409, description = "Version is outdated"),
+        (status = 409, description = "Post content already exists"),
         (status = 422, description = "A tag has an invalid name"),
         (status = 422, description = "Safety is invalid"),
         (status = 422, description = "Notes are invalid"),
@@ -1153,13 +1185,14 @@ async fn update(
     match body {
         JsonOrMultipart::Json(payload) => update_impl(state, client, post_id, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
+            let decoded_body =
+                upload::extract(&state.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut post_update: PostUpdateBody = serde_json::from_slice(&metadata)?;
-            let [content, thumbnail] = decoded_body.files;
+            let [content_token, thumbnail_token] = decoded_body.files;
 
-            post_update.content = content;
-            post_update.thumbnail = thumbnail;
+            post_update.content_token = content_token;
+            post_update.thumbnail_token = thumbnail_token;
             update_impl(state, client, post_id, params, post_update).await
         }
     }
@@ -1198,7 +1231,7 @@ async fn delete(
     let relation_count: i64 = post_statistics::table
         .find(post_id)
         .select(post_statistics::relation_count)
-        .first(&mut state.get_connection()?)
+        .first(state.get_connection().await?.as_mut())
         .optional()?
         .ok_or(ApiError::NotFound(ResourceType::Post))?;
 
@@ -1207,22 +1240,24 @@ async fn delete(
         _lock = ANTI_DEADLOCK_MUTEX.lock().await;
     }
 
-    let mut conn = state.get_connection()?;
-    let mime_type = conn.transaction(|conn| {
-        let post: Post = post::table
-            .find(post_id)
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Post))?;
-        api::verify_version(post.last_edit_time, *client_version)?;
+    let mime_type = state
+        .connection_pool
+        .transaction(move |conn| {
+            let post: Post = post::table
+                .find(post_id)
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::Post))?;
+            api::verify_version(post.last_edit_time, *client_version)?;
 
-        let mime_type = post.mime_type;
-        let post_data = SnapshotData::retrieve(conn, post)?;
-        snapshot::post::deletion_snapshot(conn, client, post_id, post_data)?;
+            let mime_type = post.mime_type;
+            let post_data = SnapshotData::retrieve(conn, post)?;
+            snapshot::post::deletion_snapshot(conn, client, post_id, post_data)?;
 
-        diesel::delete(post::table.find(post_id)).execute(conn)?;
-        Ok::<_, ApiError>(mime_type)
-    })?;
+            diesel::delete(post::table.find(post_id)).execute(conn)?;
+            Ok::<_, ApiError>(mime_type)
+        })
+        .await?;
     if state.config.delete_source_files {
         filesystem::delete_post(&PostHash::new(&state.config, post_id), mime_type)?;
     }
@@ -1255,15 +1290,16 @@ async fn unfavorite(
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
 
-    let mut conn = state.get_connection()?;
     let _: i32 = diesel::delete(post_favorite::table.find((post_id, user_id)))
         .returning(sql::<Integer>("0"))
-        .get_result(&mut conn)
+        .get_result(state.get_connection().await?.as_mut())
         .optional()?
         .ok_or(ApiError::NotFound(ResourceType::Post))?;
-    conn.transaction(|conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+    state
+        .connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+        .await
         .map(Json)
-        .map_err(ApiError::from)
 }
 
 fn verify_visibility(conn: &mut PgConnection, config: &Config, client: Client, post_id: i64) -> ApiResult<()> {
@@ -1389,7 +1425,7 @@ mod test {
 
         let last_feature_time: DateTime = post_feature::table
             .select(post_feature::time)
-            .order_by(post_feature::time.desc())
+            .order(post_feature::time.desc())
             .first(&mut conn)?;
         diesel::delete(post_feature::table)
             .filter(post_feature::post_id.eq(POST_ID))
@@ -1398,14 +1434,14 @@ mod test {
         Ok(())
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[parallel]
     async fn reverse_search() -> ApiResult<()> {
         simulate_upload("1_pixel.png", "upload_for_reverse_search.png")?;
         verify_response(&format!("POST /posts/reverse-search/?{FIELDS}"), "post/reverse_search").await
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[serial]
     async fn create() -> ApiResult<()> {
         simulate_upload("1_pixel.png", "cool_post.png")?;
@@ -1417,6 +1453,10 @@ mod test {
 
         assert!(post_path.exists());
         assert!(thumbnail_path.exists());
+
+        simulate_upload("1_pixel.png", "duplicate.png")?;
+        verify_response("POST /posts", "post/create_duplicate").await?;
+        verify_response("PUT /post/1", "post/edit_duplicate").await?;
 
         reset_database();
         Ok(())
@@ -1597,7 +1637,7 @@ mod test {
         Ok(())
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[serial]
     async fn preferences() -> ApiResult<()> {
         verify_response_with_user(
@@ -1640,7 +1680,7 @@ mod test {
         Ok(())
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[parallel]
     async fn error() -> ApiResult<()> {
         verify_response("GET /post/99", "post/get_nonexistent").await?;

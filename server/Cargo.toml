@@ -1,6 +1,6 @@
 [package]
 name = "oxibooru_server"
-version = "0.7.4"
+version = "0.7.5"
 license = "GPL-3.0"
 edition = "2024"
 
@@ -8,7 +8,7 @@ edition = "2024"
 argon2 = { version = "0.5.3", features = ["std"] }
 axum = { version = "0.8.4", features = ["multipart"] }
 base64 = "0.22.1"
-blake3 = "1.5.5"
+blake3 = { version = "1.5.5", features = ["traits-preview"] }
 byteorder = "1.5.0"
 compact_str = { version = "0.9.0", features = ["serde"] }
 config = { version = "0.15.18", default-features = false, features = ["toml"] }
@@ -16,16 +16,21 @@ diesel = { version = "2.3.2", features = ["postgres", "r2d2", "time", "uuid", "s
                                           "i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
 diesel_migrations = { version = "2.3.0", features = ["postgres"] }
 dotenvy = "0.15.7"
+ffmpeg-sidecar = { version = "2.5.0", default-features = false }
 flate2 = "1.0.35"
+futures = "0.3.32"
 hex = "0.4.3"
-image = { version = "0.25.5", features = ["avif-native"] }
+hmac = "0.12.1"
+image = "0.25.5"
 lettre = { version = "0.11.12", features = ["serde"] }
 md5 = "0.7.0"
 num-traits = "0.2.19"
+openssl-sys = { version = "0.9.114", features = ["vendored"] }
 percent-encoding = "2.3.1"
+pq-sys = { version = "0.7.5", features = ["bundled"] }
 rayon = "1.10.0"
 regex = "1.11.1"
-reqwest = { version ="0.12.12", features = ["json"] }
+reqwest = { version ="0.12.12", features = ["json", "stream"] }
 rustyline = {version = "17.0.2", default-features = false, features = ["signal-hook"]}
 serde = { version = "1.0.217", features = ["derive", "rc"] }
 serde_json = "1.0.138"
@@ -37,8 +42,8 @@ signal-hook = "0.3.18"
 strum = { version = "0.27.0", features = ["derive"] }
 swf = "0.2.2"
 thiserror = "2.0.11"
-time = { version = "0.3.37", features = ["serde-human-readable"] }
-tokio = { version = "1.43.0", features = ["rt-multi-thread", "signal"] }
+time = { version = "0.3.47", features = ["serde-human-readable"] }
+tokio = { version = "1.43.0", features = ["fs", "rt-multi-thread", "signal"] }
 tower = "0.5.2"
 tower-http = { version = "0.6.6", features = ["trace", "timeout", "normalize-path"] }
 tracing = "0.1.41"
@@ -49,7 +54,6 @@ utoipa-axum = "0.2.0"
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum", "vendored"] }
 utoipa-swagger-ui-vendored = "0.1.2"
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
-video-rs = "0.10.3"
 walkdir = "2.5.0"
 
 [target.'cfg(target_env = "musl")'.dependencies]
@@ -58,3 +62,6 @@ mimalloc = "0.1.48"
 [dev-dependencies]
 axum-test = "17.3.0"
 serial_test = "3.2.0"
+
+[profile.release] 
+strip = true

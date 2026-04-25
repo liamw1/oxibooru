@@ -94,12 +94,13 @@ pub fn generate_indexes(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) 
             .iter()
             .map(|&letter| letter.cast_signed() - LUMINANCE_LEVELS as i8)
             .map(|letter| letter.clamp(-CLAMP_VALUE, CLAMP_VALUE))
-            .enumerate()
-            .map(|(letter_index, letter)| {
-                u32::from((letter + CLAMP_VALUE).cast_unsigned()) * NUM_REDUCED_SYMBOLS.pow(letter_index as u32)
+            .zip(0..)
+            .map(|(letter, letter_index)| {
+                u32::from((letter + CLAMP_VALUE).cast_unsigned()) * NUM_REDUCED_SYMBOLS.pow(letter_index)
             })
             .sum();
-        (word_index as u32 + NUM_REDUCED_SYMBOLS.pow(NUM_WORD_DIGITS) * encoded_letters).cast_signed()
+        let word_index = u32::try_from(word_index).expect("word_index < NUM_WORDS < u32::MAX");
+        (word_index + NUM_REDUCED_SYMBOLS.pow(NUM_WORD_DIGITS) * encoded_letters).cast_signed()
     })
 }
 
@@ -150,7 +151,10 @@ fn crop(deltas: &[u64]) -> Interval<u32> {
     let total_delta = deltas.iter().sum();
     let lower = crop_position(deltas.iter().copied(), total_delta);
     let upper = deltas.len().saturating_sub(1) - crop_position(deltas.iter().rev().copied(), total_delta);
-    Interval::new(lower as u32, upper as u32)
+
+    let lower = u32::try_from(lower).expect("Crop lower bound is less than image width/height");
+    let upper = u32::try_from(upper).expect("Crop upper bound is less than image width/height");
+    Interval::new(lower, upper)
 }
 
 /// Computes sum of absolute differences of pixel intensities for neighboring rows.
@@ -183,8 +187,7 @@ fn compute_column_deltas(image: &GrayImage) -> Vec<u64> {
         let row_start = j * image_width;
         let row = &flat_samples.as_slice()[row_start..row_start + image_width];
 
-        for (delta, pixels) in deltas.iter_mut().zip(row.windows(2)) {
-            let [pixel, next_pixel] = pixels.try_into().expect("Window has two elements");
+        for (delta, &[pixel, next_pixel]) in deltas.iter_mut().zip(row.array_windows()) {
             *delta += u64::from(pixel.abs_diff(next_pixel));
         }
     }
@@ -300,8 +303,9 @@ fn normalize(differences: &[i16; SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
     let signature_iter = differences.iter().map(|&diff| {
         cutoffs
             .iter()
-            .position(|opt_cutoff| opt_cutoff.map(|cutoff| diff <= cutoff).unwrap_or(false))
-            .expect("Diff must be under at least one cutoff") as u8
+            .position(|opt_cutoff| opt_cutoff.is_some_and(|cutoff| diff <= cutoff))
+            .and_then(|cutoff| u8::try_from(cutoff).ok())
+            .expect("Diff must be under at least one cutoff")
     });
     array_from_iter(signature_iter)
 }
@@ -309,10 +313,9 @@ fn normalize(differences: &[i16; SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
 /// Compresses an `uncompressed_signature` for efficient database serialization.
 fn compress(uncompressed_signature: &[u8; SIGNATURE_LEN]) -> [i64; COMPRESSED_SIGNATURE_LEN] {
     let compression_iter = uncompressed_signature.chunks(SIGNATURE_DIGITS).map(|chunk| {
-        chunk
-            .iter()
-            .enumerate()
-            .map(|(letter_index, &letter)| u64::from(letter) * NUM_SYMBOLS.pow(letter_index as u32) as u64)
+        (0..)
+            .zip(chunk)
+            .map(|(letter_index, &letter)| u64::from(letter) * NUM_SYMBOLS.pow(letter_index) as u64)
             .sum::<u64>()
             .cast_signed()
     });
@@ -331,7 +334,7 @@ fn uncompress(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> [u8; SI
             (0..SIGNATURE_DIGITS).map(move |_| {
                 let letter = sum % DIVISOR;
                 sum /= DIVISOR;
-                letter as u8
+                u8::try_from(letter).expect("letter < NUM_SYMBOLS < u8::MAX")
             })
         });
     array_from_iter(decompression_iter)

@@ -16,8 +16,7 @@ use axum::extract::{Extension, State};
 use diesel::dsl::sql;
 use diesel::sql_types::Integer;
 use diesel::{
-    BoolExpressionMethods, Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl,
-    SaveChangesDsl,
+    BoolExpressionMethods, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl,
 };
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -53,28 +52,35 @@ async fn list(
     Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UnpagedResponse<UserTokenInfo>>> {
+    let list_any = state.config.privileges().user_token_list_any;
+    let list_self = state.config.privileges().user_token_list_self;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let (avatar_style, user_tokens) = state.get_connection()?.transaction(|conn| {
-        let (user_id, avatar_style): (i64, AvatarStyle) = user::table
-            .select((user::id, user::avatar_style))
-            .filter(user::name.eq(&username))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::User))?;
 
-        let required_rank = if client.id == Some(user_id) {
-            state.config.privileges().user_token_list_self
-        } else {
-            state.config.privileges().user_token_list_any
-        };
-        api::verify_privilege(client, required_rank)?;
+    let (avatar_style, user_tokens) = state
+        .connection_pool
+        .transaction({
+            let username = username.clone();
+            move |conn| {
+                let (user_id, avatar_style): (i64, AvatarStyle) = user::table
+                    .select((user::id, user::avatar_style))
+                    .filter(user::name.eq(&username))
+                    .first(conn)
+                    .optional()?
+                    .ok_or(ApiError::NotFound(ResourceType::User))?;
 
-        user_token::table
-            .filter(user_token::user_id.eq(user_id))
-            .load(conn)
-            .map(|tokens| (avatar_style, tokens))
-            .map_err(ApiError::from)
-    })?;
+                let is_self = client.id == Some(user_id);
+                let required_rank = if is_self { list_self } else { list_any };
+                api::verify_privilege(client, required_rank)?;
+
+                user_token::table
+                    .filter(user_token::user_id.eq(user_id))
+                    .order(user_token::creation_time.desc())
+                    .load(conn)
+                    .map(|tokens| (avatar_style, tokens))
+                    .map_err(ApiError::from)
+            }
+        })
+        .await?;
 
     let results = user_tokens
         .into_iter()
@@ -87,7 +93,7 @@ async fn list(
 
 /// Request body for creating a user token.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct UserTokenCreateBody {
     /// Whether the token is enabled. Defaults to `true` if not present.
     enabled: Option<bool>,
@@ -122,52 +128,56 @@ async fn create(
     Query(params): Query<ResourceParams>,
     Json(body): Json<UserTokenCreateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
+    let create_any = state.config.privileges().user_token_create_any;
+    let create_self = state.config.privileges().user_token_create_self;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
-    let (user_token, avatar_style) = conn.transaction(|conn| {
-        let (user_id, avatar_style): (i64, AvatarStyle) = user::table
-            .select((user::id, user::avatar_style))
-            .filter(user::name.eq(&username))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::User))?;
+    let (user_token, avatar_style) = state
+        .connection_pool
+        .transaction({
+            let username = username.clone();
+            move |conn| {
+                let (user_id, avatar_style): (i64, AvatarStyle) = user::table
+                    .select((user::id, user::avatar_style))
+                    .filter(user::name.eq(&username))
+                    .first(conn)
+                    .optional()?
+                    .ok_or(ApiError::NotFound(ResourceType::User))?;
 
-        let required_rank = if client.id == Some(user_id) {
-            state.config.privileges().user_token_create_self
-        } else {
-            state.config.privileges().user_token_create_any
-        };
-        api::verify_privilege(client, required_rank)?;
+                let is_self = client.id == Some(user_id);
+                let required_rank = if is_self { create_self } else { create_any };
+                api::verify_privilege(client, required_rank)?;
 
-        // Delete any expired or disabled tokens owned by user
-        let current_time = DateTime::now();
-        diesel::delete(user_token::table)
-            .filter(user_token::user_id.eq(user_id))
-            .filter(
-                user_token::enabled
-                    .eq(false)
-                    .or(user_token::expiration_time.lt(current_time)),
-            )
-            .execute(conn)?;
+                // Delete any expired or disabled tokens owned by user
+                let current_time = DateTime::now();
+                diesel::delete(user_token::table)
+                    .filter(user_token::user_id.eq(user_id))
+                    .filter(
+                        user_token::enabled
+                            .eq(false)
+                            .or(user_token::expiration_time.lt(current_time)),
+                    )
+                    .execute(conn)?;
 
-        let user_token = NewUserToken {
-            id: Uuid::new_v4(),
-            user_id,
-            note: body.note.as_deref(),
-            enabled: body.enabled.unwrap_or(true),
-            expiration_time: body.expiration_time,
-        }
-        .insert_into(user_token::table)
-        .get_result(conn)?;
-        Ok::<_, ApiError>((user_token, avatar_style))
-    })?;
+                let user_token = NewUserToken {
+                    id: Uuid::new_v4(),
+                    user_id,
+                    note: body.note.as_deref(),
+                    enabled: body.enabled.unwrap_or(true),
+                    expiration_time: body.expiration_time,
+                }
+                .insert_into(user_token::table)
+                .get_result(conn)?;
+                Ok::<_, ApiError>((user_token, avatar_style))
+            }
+        })
+        .await?;
     Ok(Json(UserTokenInfo::new(MicroUser::new(&state.config, username, avatar_style), user_token, &fields)))
 }
 
 /// Request body for updating a user token.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[serde(rename_all = "camelCase")]
 struct UserTokenUpdateBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,
@@ -204,52 +214,56 @@ struct UserTokenUpdateBody {
 async fn update(
     State(state): State<AppState>,
     Extension(client): Extension<Client>,
-    Path((username, token)): Path<(String, Uuid)>,
+    Path((username, token)): Path<(SmallString, Uuid)>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<UserTokenUpdateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
+    let edit_any = state.config.privileges().user_token_edit_any;
+    let edit_self = state.config.privileges().user_token_edit_self;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let mut conn = state.get_connection()?;
-    let (updated_user_token, avatar_style) = conn.transaction(|conn| {
-        let (user_id, avatar_style): (i64, AvatarStyle) = user::table
-            .select((user::id, user::avatar_style))
-            .filter(user::name.eq(&username))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::User))?;
+    let (updated_user_token, avatar_style) = state
+        .connection_pool
+        .transaction({
+            let username = username.clone();
+            move |conn| {
+                let (user_id, avatar_style): (i64, AvatarStyle) = user::table
+                    .select((user::id, user::avatar_style))
+                    .filter(user::name.eq(&username))
+                    .first(conn)
+                    .optional()?
+                    .ok_or(ApiError::NotFound(ResourceType::User))?;
 
-        let required_rank = if client.id == Some(user_id) {
-            state.config.privileges().user_token_edit_self
-        } else {
-            state.config.privileges().user_token_edit_any
-        };
-        api::verify_privilege(client, required_rank)?;
+                let is_self = client.id == Some(user_id);
+                let required_rank = if is_self { edit_self } else { edit_any };
+                api::verify_privilege(client, required_rank)?;
 
-        let mut user_token: UserToken = user_token::table
-            .find(token)
-            .filter(user_token::user_id.eq(user_id))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::UserToken))?;
-        api::verify_version(user_token.last_edit_time, body.version)?;
+                let mut user_token: UserToken = user_token::table
+                    .find(token)
+                    .filter(user_token::user_id.eq(user_id))
+                    .first(conn)
+                    .optional()?
+                    .ok_or(ApiError::NotFound(ResourceType::UserToken))?;
+                api::verify_version(user_token.last_edit_time, body.version)?;
 
-        if let Some(enabled) = body.enabled {
-            user_token.enabled = enabled;
-        }
-        if let Some(note) = body.note {
-            user_token.note = note;
-        }
-        if let Some(expiration_time) = body.expiration_time {
-            user_token.expiration_time = expiration_time;
-        }
-        user_token.last_edit_time = DateTime::now();
+                if let Some(enabled) = body.enabled {
+                    user_token.enabled = enabled;
+                }
+                if let Some(note) = body.note {
+                    user_token.note = note;
+                }
+                if let Some(expiration_time) = body.expiration_time {
+                    user_token.expiration_time = expiration_time;
+                }
+                user_token.last_edit_time = DateTime::now();
 
-        let updated_user_token: UserToken = user_token.save_changes(conn)?;
-        Ok::<_, ApiError>((updated_user_token, avatar_style))
-    })?;
+                let updated_user_token: UserToken = user_token.save_changes(conn)?;
+                Ok::<_, ApiError>((updated_user_token, avatar_style))
+            }
+        })
+        .await?;
     Ok(Json(UserTokenInfo::new(
-        MicroUser::new(&state.config, username.into(), avatar_style),
+        MicroUser::new(&state.config, username, avatar_style),
         updated_user_token,
         &fields,
     )))
@@ -277,32 +291,35 @@ async fn delete(
     Extension(client): Extension<Client>,
     Path((username, token)): Path<(String, Uuid)>,
 ) -> ApiResult<Json<()>> {
-    state.get_connection()?.transaction(|conn| {
-        let user_token_owner: i64 = user::table
-            .select(user::id)
-            .filter(user::name.eq(username))
-            .first(conn)
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let user_token_owner: i64 = user::table
+                .select(user::id)
+                .filter(user::name.eq(username))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::User))?;
+
+            let required_rank = if client.id == Some(user_token_owner) {
+                state.config.privileges().user_token_delete_self
+            } else {
+                state.config.privileges().user_token_delete_any
+            };
+            api::verify_privilege(client, required_rank)?;
+
+            let _: i32 = diesel::delete(
+                user_token::table
+                    .find(token)
+                    .filter(user_token::user_id.eq(user_token_owner)),
+            )
+            .returning(sql::<Integer>("0"))
+            .get_result(conn)
             .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::User))?;
-
-        let required_rank = if client.id == Some(user_token_owner) {
-            state.config.privileges().user_token_delete_self
-        } else {
-            state.config.privileges().user_token_delete_any
-        };
-        api::verify_privilege(client, required_rank)?;
-
-        let _: i32 = diesel::delete(
-            user_token::table
-                .find(token)
-                .filter(user_token::user_id.eq(user_token_owner)),
-        )
-        .returning(sql::<Integer>("0"))
-        .get_result(conn)
-        .optional()?
-        .ok_or(ApiError::NotFound(ResourceType::UserToken))?;
-        Ok(Json(()))
-    })
+            .ok_or(ApiError::NotFound(ResourceType::UserToken))?;
+            Ok::<_, ApiError>(Json(()))
+        })
+        .await
 }
 
 #[cfg(test)]
@@ -336,7 +353,7 @@ mod test {
         let mut conn = get_connection()?;
         let token: Uuid = user_token::table
             .select(user_token::id)
-            .order_by(user_token::creation_time.desc())
+            .order(user_token::creation_time.desc())
             .first(&mut conn)?;
 
         verify_response(&format!("DELETE /user-token/{USER}/{token}"), "user_token/delete").await?;

@@ -208,8 +208,7 @@ fn run_task(state: &AppState, task: AdminTask, post_editor: &mut PostEditor, use
 /// Extrats the post ID from a `path` to post content.
 fn get_post_id(path: &Path) -> Option<i64> {
     let path_str = path.file_name()?.to_string_lossy();
-    let (post_id, _tail) = path_str.split_once('_')?;
-    post_id.parse().ok()
+    path_str.split('_').next().and_then(|id| id.parse().ok())
 }
 
 fn install_signal_handlers() {

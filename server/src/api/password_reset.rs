@@ -10,9 +10,7 @@ use crate::string::SmallString;
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::extract::State;
-use diesel::{
-    BoolExpressionMethods, Connection, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl,
-};
+use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use lettre::Address;
 use lettre::message::Mailbox;
 use lettre::message::header::ContentType;
@@ -63,8 +61,8 @@ fn get_user_info(
 async fn request_reset(State(state): State<AppState>, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
     let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
-    let mut conn = state.get_connection()?;
-    let (_id, username, user_email, password_salt) = get_user_info(&mut conn, &identifier)?;
+    let mut conn = state.get_connection().await?;
+    let (_id, username, user_email, password_salt) = get_user_info(conn.as_mut(), &identifier)?;
     let user_email = user_email.ok_or(ApiError::NoEmail)?;
     let user_mailbox = Mailbox::new(None, Address::from_str(&user_email)?);
 
@@ -119,7 +117,6 @@ async fn request_reset(State(state): State<AppState>, Path(identifier): Path<Sma
 
 /// Token from password reset email.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct ResetToken {
     token: String,
 }
@@ -165,24 +162,27 @@ async fn reset_password(
 ) -> ApiResult<Json<NewPassword>> {
     const TEMPORARY_PASSWORD_LENGTH: u8 = 16;
 
-    state.get_connection()?.transaction(|conn| {
-        let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
-        if confirmation.token != hash::compute_url_safe_hash(password_salt.as_bytes()) {
-            return Err(ApiError::UnauthorizedPasswordReset);
-        }
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
+            if confirmation.token != hash::compute_url_safe_hash(password_salt.as_bytes()) {
+                return Err(ApiError::UnauthorizedPasswordReset);
+            }
 
-        let temporary_password = generate_temporary_password(TEMPORARY_PASSWORD_LENGTH);
+            let temporary_password = generate_temporary_password(TEMPORARY_PASSWORD_LENGTH);
 
-        let salt = SaltString::generate(&mut OsRng);
-        let hash = password::hash_password(&state.config, &temporary_password, &salt)?;
-        diesel::update(user::table.find(user_id))
-            .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
-            .execute(conn)?;
+            let salt = SaltString::generate(&mut OsRng);
+            let hash = password::hash_password(&state.config, &temporary_password, &salt)?;
+            diesel::update(user::table.find(user_id))
+                .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
+                .execute(conn)?;
 
-        Ok(Json(NewPassword {
-            password: temporary_password,
-        }))
-    })
+            Ok(Json(NewPassword {
+                password: temporary_password,
+            }))
+        })
+        .await
 }
 
 #[cfg(test)]

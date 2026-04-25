@@ -127,7 +127,7 @@ pub fn reset_thumbnail_sizes(state: &AppState) {
 
 pub fn reset_thumbnail_sizes_impl(state: &AppState) -> AdminResult<()> {
     let _timer = Timer::new("reset_thumbnail_sizes");
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     if state.config.path(Directory::Avatars).try_exists()? {
         let progress = ProgressReporter::new("Avatar sizes cached", PRINT_INTERVAL);
         for entry in WalkDir::new(state.config.path(Directory::Avatars)) {
@@ -210,7 +210,7 @@ pub fn reset_thumbnail_sizes_impl(state: &AppState) -> AdminResult<()> {
 /// A much faster version of this is done in `scripts/convert_szuru_database.sql`,
 /// but it would be very tricky to implement in Diesel.
 pub fn reset_relation_stats(state: &AppState) -> AdminResult<()> {
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
 
     let comment_count: i64 = comment::table.count().first(&mut conn)?;
     let pool_count: i64 = pool::table.count().first(&mut conn)?;
@@ -414,7 +414,7 @@ pub fn reset_statistics_impl(state: &AppState) -> AdminResult<()> {
 
     // Disk usage will automatically be incremented via triggers as we calculate
     // content, thumbnail, and avatar sizes
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection_blocking()?;
     diesel::update(database_statistics::table)
         .set(database_statistics::disk_usage.eq(0))
         .execute(&mut conn)?;

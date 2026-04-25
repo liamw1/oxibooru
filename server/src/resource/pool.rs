@@ -15,7 +15,7 @@ use diesel::{
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
-use std::rc::Rc;
+use std::sync::Arc;
 use strum::{EnumString, EnumTable};
 use utoipa::ToSchema;
 
@@ -27,7 +27,7 @@ pub struct MicroPool {
     pub id: i64,
     /// List of pool names (aliases).
     #[schema(value_type = Vec<SmallString>)]
-    pub names: Rc<[SmallString]>,
+    pub names: Arc<[SmallString]>,
     /// The name of the category the given pool belongs to.
     pub category: SmallString,
     /// The pool description (instructions how to use, history etc.). The client should render it as Markdown.
@@ -121,7 +121,7 @@ impl PoolInfo {
         resource::check_batch_results(batch_size, posts.len());
         resource::check_batch_results(batch_size, post_counts.len());
 
-        let results = pools
+        let mut results = pools
             .into_iter()
             .rev()
             .map(|pool| Self {
@@ -136,7 +136,8 @@ impl PoolInfo {
                 post_count: post_counts.pop(),
             })
             .collect::<Vec<_>>();
-        Ok(results.into_iter().rev().collect())
+        results.reverse();
+        Ok(results)
     }
 
     pub fn new_batch_from_ids(
@@ -169,7 +170,7 @@ fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Sm
 
 fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<SmallString>>> {
     Ok(PoolName::belonging_to(pools)
-        .order_by(pool_name::order)
+        .order(pool_name::order)
         .load::<PoolName>(conn)?
         .grouped_by(pools)
         .into_iter()
@@ -183,7 +184,7 @@ fn get_posts(
     client: Client,
     pools: &[Pool],
 ) -> QueryResult<Vec<Vec<MicroPost>>> {
-    let mut pool_posts = PoolPost::belonging_to(pools).order_by(pool_post::order).into_boxed();
+    let mut pool_posts = PoolPost::belonging_to(pools).order(pool_post::order).into_boxed();
 
     // Apply preference filters to pool posts
     if let Some(hidden_posts) = preferences::hidden_posts(config, client, pool_post::post_id) {

@@ -1,5 +1,5 @@
 use crate::api::doc::SNAPSHOT_TAG;
-use crate::api::error::ApiResult;
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::extract::{Json, Query};
 use crate::api::{PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
@@ -9,7 +9,6 @@ use crate::search::Builder;
 use crate::search::snapshot::QueryBuilder;
 use crate::{api, resource};
 use axum::extract::{Extension, State};
-use diesel::Connection;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -63,17 +62,20 @@ async fn list(
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_SNAPSHOTS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-    state.get_connection()?.transaction(|conn| {
-        let mut query_builder = QueryBuilder::new(client, resource.criteria())?;
-        query_builder.set_offset_and_limit(offset, limit);
+    state
+        .connection_pool
+        .transaction(move |conn| {
+            let mut query_builder = QueryBuilder::new(client, resource.criteria())?;
+            query_builder.set_offset_and_limit(offset, limit);
 
-        let (total, selected_snapshots) = query_builder.list(conn)?;
-        Ok(Json(PagedResponse {
-            query: resource.query,
-            offset,
-            limit,
-            total,
-            results: SnapshotInfo::new_batch_from_ids(conn, &state.config, &selected_snapshots, &fields)?,
-        }))
-    })
+            let (total, selected_snapshots) = query_builder.list(conn)?;
+            Ok::<_, ApiError>(Json(PagedResponse {
+                query: resource.query,
+                offset,
+                limit,
+                total,
+                results: SnapshotInfo::new_batch_from_ids(conn, &state.config, &selected_snapshots, &fields)?,
+            }))
+        })
+        .await
 }

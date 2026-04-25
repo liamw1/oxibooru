@@ -29,11 +29,11 @@ use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
+use std::sync::Arc;
 use strum::{EnumString, EnumTable};
 use utoipa::ToSchema;
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 pub struct Note {
     #[serde(skip)]
     id: i64,
@@ -298,7 +298,7 @@ impl PostInfo {
         resource::check_batch_results(batch_size, last_feature_times.len());
         resource::check_batch_results(batch_size, users_who_favorited.len());
 
-        let results = posts
+        let mut results = posts
             .into_iter()
             .rev()
             .map(|post| Self {
@@ -340,7 +340,8 @@ impl PostInfo {
                     .then(|| PostHash::new(config, post.id).custom_thumbnail_path().exists()),
             })
             .collect::<Vec<_>>();
-        Ok(results.into_iter().rev().collect())
+        results.reverse();
+        Ok(results)
     }
 
     pub fn new_batch_from_ids(
@@ -403,7 +404,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
     let tag_names: Vec<(i64, SmallString)> = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(tag_ids))
-        .order_by((tag_name::tag_id, tag_name::order))
+        .order((tag_name::tag_id, tag_name::order))
         .load(conn)?;
     let names_map = resource::collect_names(tag_names);
 
@@ -420,7 +421,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
             tags_on_post
                 .into_iter()
                 .map(|(post_tag, category_id, usages)| MicroTag {
-                    names: names_map[&post_tag.tag_id].clone(),
+                    names: Arc::clone(&names_map[&post_tag.tag_id]),
                     category: category_names[&category_id].clone(),
                     usages,
                 })
@@ -551,7 +552,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
                 .into_iter()
                 .map(|(pool_post, category_id, post_count)| MicroPool {
                     id: pool_post.pool_id,
-                    names: names_map[&pool_post.pool_id].clone(),
+                    names: Arc::clone(&names_map[&pool_post.pool_id]),
                     category: category_names[&category_id].clone(),
                     description: pool_descriptions[&pool_post.pool_id].clone(),
                     post_count,
@@ -563,7 +564,7 @@ fn get_pools(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Mic
 
 fn get_notes(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Note>>> {
     Ok(PostNote::belonging_to(posts)
-        .order_by(post_note::id)
+        .order(post_note::id)
         .load(conn)?
         .grouped_by(posts)
         .into_iter()
@@ -611,7 +612,7 @@ fn get_users_who_favorited(
     let users_who_favorited: Vec<(PostFavorite, SmallString, AvatarStyle)> = PostFavorite::belonging_to(posts)
         .inner_join(user::table)
         .select((PostFavorite::as_select(), user::name, user::avatar_style))
-        .order_by(user::name)
+        .order(user::name)
         .load(conn)?;
     Ok(users_who_favorited
         .grouped_by(posts)

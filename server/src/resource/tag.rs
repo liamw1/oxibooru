@@ -11,7 +11,7 @@ use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
 use std::collections::{HashMap, HashSet};
-use std::rc::Rc;
+use std::sync::Arc;
 use strum::{EnumString, EnumTable};
 use utoipa::ToSchema;
 
@@ -21,7 +21,7 @@ use utoipa::ToSchema;
 pub struct MicroTag {
     /// A list of tag names (aliases). Tagging a post with any name will automatically assign the first name from this list.
     #[schema(value_type = Vec<SmallString>)]
-    pub names: Rc<[SmallString]>,
+    pub names: Arc<[SmallString]>,
     /// The name of the category the given tag belongs to.
     pub category: SmallString,
     /// The number of posts the tag was used in.
@@ -97,7 +97,7 @@ impl TagInfo {
         resource::check_batch_results(batch_size, suggestions.len());
         resource::check_batch_results(batch_size, usages.len());
 
-        let results = tags
+        let mut results = tags
             .into_iter()
             .rev()
             .map(|tag| Self {
@@ -112,7 +112,8 @@ impl TagInfo {
                 usages: usages.pop(),
             })
             .collect::<Vec<_>>();
-        Ok(results.into_iter().rev().collect())
+        results.reverse();
+        Ok(results)
     }
 
     pub fn new_batch_from_ids(
@@ -157,7 +158,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
         .inner_join(implication_info.on(tag::id.eq(tag_implication::child_id)))
         .select((TagImplication::as_select(), tag::category_id, tag_statistics::usage_count))
         .filter(TagName::primary())
-        .order_by(tag_name::name)
+        .order(tag_name::name)
         .load(conn)?;
     let implication_ids: HashSet<i64> = implications
         .iter()
@@ -167,7 +168,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
     let implication_names: Vec<(i64, SmallString)> = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(implication_ids))
-        .order_by((tag_name::tag_id, tag_name::order))
+        .order((tag_name::tag_id, tag_name::order))
         .load(conn)?;
     let names_map = resource::collect_names(implication_names);
 
@@ -184,7 +185,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
             implications_on_tag
                 .into_iter()
                 .map(|(implication, category_id, usages)| MicroTag {
-                    names: names_map[&implication.child_id].clone(),
+                    names: Arc::clone(&names_map[&implication.child_id]),
                     category: category_names[&category_id].clone(),
                     usages,
                 })
@@ -199,14 +200,14 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
         .inner_join(suggestion_info.on(tag::id.eq(tag_suggestion::child_id)))
         .select((TagSuggestion::as_select(), tag::category_id, tag_statistics::usage_count))
         .filter(TagName::primary())
-        .order_by(tag_name::name)
+        .order(tag_name::name)
         .load(conn)?;
     let suggestion_ids: HashSet<i64> = suggestions.iter().map(|(suggestion, ..)| suggestion.child_id).collect();
 
     let suggestion_names: Vec<(i64, SmallString)> = tag_name::table
         .select((tag_name::tag_id, tag_name::name))
         .filter(tag_name::tag_id.eq_any(suggestion_ids))
-        .order_by((tag_name::tag_id, tag_name::order))
+        .order((tag_name::tag_id, tag_name::order))
         .load(conn)?;
     let names_map = resource::collect_names(suggestion_names);
 
@@ -223,7 +224,7 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
             suggestions_on_tag
                 .into_iter()
                 .map(|(suggestion, category_id, usages)| MicroTag {
-                    names: names_map[&suggestion.child_id].clone(),
+                    names: Arc::clone(&names_map[&suggestion.child_id]),
                     category: category_names[&category_id].clone(),
                     usages,
                 })

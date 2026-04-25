@@ -25,7 +25,7 @@ pub async fn auth(State(state): State<AppState>, mut request: Request, next: Nex
     let auth_header = request.headers().get(AUTHORIZATION);
     let client = if let Some(auth_value) = auth_header {
         let auth_str = auth_value.to_str()?;
-        header::authenticate_user(&state, auth_str)
+        header::authenticate_user(&state, auth_str).await
     } else {
         Ok(AuthClient::new(None, UserRank::Anonymous))
     }?;
@@ -35,8 +35,8 @@ pub async fn auth(State(state): State<AppState>, mut request: Request, next: Nex
         && let Some(query) = request.uri().query()
         && query.contains("bump-login")
     {
-        let mut conn = state.get_connection()?;
-        update::user::last_login_time(&mut conn, user_id)?;
+        let mut conn = state.get_connection().await?;
+        update::user::last_login_time(conn.as_mut(), user_id)?;
     }
 
     request.extensions_mut().insert(client);
@@ -49,13 +49,13 @@ pub async fn post_to_webhooks(State(state): State<AppState>, request: Request, n
     let response = next.run(request).await;
 
     if can_modify_database {
-        let mut conn = state.get_connection()?;
+        let mut conn = state.get_connection().await?;
         let last_posted_snapshot = LAST_POSTED_SNAPSHOT.load(Ordering::SeqCst);
         let new_snapshots = snapshot::table
             .select(Snapshot::as_select())
             .filter(snapshot::id.gt(last_posted_snapshot))
-            .order_by(snapshot::id)
-            .load(&mut conn)?;
+            .order(snapshot::id)
+            .load(conn.as_mut())?;
 
         for snapshot in new_snapshots {
             post_snapshot(&state, snapshot);
@@ -69,7 +69,7 @@ pub async fn post_to_webhooks(State(state): State<AppState>, request: Request, n
 pub fn initialize_snapshot_counter(conn: &mut PgConnection) -> QueryResult<()> {
     let latest_snapshot_id = snapshot::table
         .select(snapshot::id)
-        .order_by(snapshot::id.desc())
+        .order(snapshot::id.desc())
         .first(conn)
         .optional()
         .map(Option::unwrap_or_default)?;
@@ -97,7 +97,7 @@ fn post_snapshot(state: &AppState, snapshot: Snapshot) {
 
     let snapshot = Arc::new(snapshot);
     for url in &state.config.webhooks {
-        tokio::spawn(post_to_webhook(url.clone(), snapshot.clone()));
+        tokio::spawn(post_to_webhook(url.clone(), Arc::clone(&snapshot)));
     }
 }
 

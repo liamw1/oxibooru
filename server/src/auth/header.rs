@@ -32,11 +32,11 @@ pub enum AuthenticationError {
 
 /// Authentication can either be done by token-based authentication (recommended)
 /// or by sending password as plaintext.
-pub fn authenticate_user(state: &AppState, auth: &str) -> Result<Client, AuthenticationError> {
+pub async fn authenticate_user(state: &AppState, auth: &str) -> Result<Client, AuthenticationError> {
     let (auth_type, credentials) = auth.split_once(' ').ok_or(AuthenticationError::MalformedCredentials)?;
     match auth_type {
-        "Basic" => basic_access_authentication(state, credentials),
-        "Token" => token_authentication(state, credentials),
+        "Basic" => basic_access_authentication(state, credentials).await,
+        "Token" => token_authentication(state, credentials).await,
         _ => Err(AuthenticationError::InvalidAuthType),
     }
 }
@@ -65,16 +65,16 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
 
 /// Checks that the given `credentials` are of the form "username:password"
 /// and that the username/password combination is valid.
-fn basic_access_authentication(state: &AppState, credentials: &str) -> Result<Client, AuthenticationError> {
+async fn basic_access_authentication(state: &AppState, credentials: &str) -> Result<Client, AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
 
     // For security reasons, don't give any indication to the user if it was the password
     // or the username that was incorrect.
     let (user_id, rank, password_hash): (i64, UserRank, String) = user::table
         .select((user::id, user::rank, user::password_hash))
         .filter(user::name.eq(username))
-        .first(&mut conn)
+        .first(conn.as_mut())
         .optional()?
         .ok_or(AuthenticationError::UsernamePasswordMismatch)?;
     auth::password::is_valid_password(&state.config, &password_hash, &password)
@@ -85,17 +85,17 @@ fn basic_access_authentication(state: &AppState, credentials: &str) -> Result<Cl
 
 /// Checks that the given `credentials` are of the form "username:token"
 /// and that the username/token combination is valid and non-expired.
-fn token_authentication(state: &AppState, credentials: &str) -> Result<Client, AuthenticationError> {
+async fn token_authentication(state: &AppState, credentials: &str) -> Result<Client, AuthenticationError> {
     let (username, unparsed_token) = decode_credentials(credentials)?;
     let token = Uuid::parse_str(&unparsed_token)?;
-    let mut conn = state.get_connection()?;
+    let mut conn = state.get_connection().await?;
 
     let (user_id, rank, enabled, expiration_time): (i64, UserRank, bool, Option<DateTime>) = user_token::table
         .inner_join(user::table)
         .select((user::id, user::rank, user_token::enabled, user_token::expiration_time))
         .filter(user::name.eq(username))
         .filter(user_token::id.eq(token))
-        .first(&mut conn)
+        .first(conn.as_mut())
         .optional()?
         .ok_or(AuthenticationError::UsernameTokenMismatch)?;
 

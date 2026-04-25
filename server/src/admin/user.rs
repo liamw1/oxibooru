@@ -19,7 +19,7 @@ pub fn reset_password(state: &AppState, editor: &mut UserEditor) {
 
         // Check if user exists
         let mut conn = state
-            .get_connection()
+            .get_connection_blocking()
             .map_err(|err| format!("Could not establish a connection to the database for reason: {err}"))?;
         match diesel::select(exists(user::table.filter(user::name.eq(&user)))).first(&mut conn) {
             Ok(true) => (),

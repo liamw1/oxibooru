@@ -21,6 +21,7 @@ mod doc;
 pub mod error;
 mod extract;
 mod info;
+mod legacy;
 pub mod middleware;
 mod password_reset;
 mod pool;
@@ -37,6 +38,7 @@ pub fn routes(state: AppState) -> OpenApiRouter {
     OpenApiRouter::with_openapi(ApiDoc::openapi())
         .merge(comment::routes())
         .merge(info::routes())
+        .merge(legacy::routes())
         .merge(password_reset::routes())
         .merge(pool::routes())
         .merge(pool_category::routes())
@@ -51,7 +53,7 @@ pub fn routes(state: AppState) -> OpenApiRouter {
             TraceLayer::new_for_http(),
             // Graceful shutdown will wait for outstanding requests to complete.
             // Add a timeout so requests don't hang forever.
-            TimeoutLayer::new(Duration::from_secs(60)),
+            TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_mins(1)),
         ))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::post_to_webhooks))
@@ -88,7 +90,6 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
 
 /// Request body to apply/change a score.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct RatingBody {
     score: Rating,
 }
@@ -102,7 +103,6 @@ impl Deref for RatingBody {
 
 /// Request body for deleting a resource.
 #[derive(Deserialize, ToSchema)]
-#[serde(deny_unknown_fields)]
 struct DeleteBody {
     /// Resource version. See [versioning](#Versioning).
     version: DateTime,

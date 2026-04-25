@@ -259,7 +259,7 @@ impl SnapshotInfo {
         let mut users = resource::retrieve(fields[Field::User], || get_users(conn, config, &snapshots))?;
         resource::check_batch_results(batch_size, users.len());
 
-        let results = snapshots
+        let mut results = snapshots
             .into_iter()
             .rev()
             .map(|snapshot| Self {
@@ -271,7 +271,8 @@ impl SnapshotInfo {
                 time: fields[Field::Time].then_some(snapshot.creation_time),
             })
             .collect::<Vec<_>>();
-        Ok(results.into_iter().rev().collect())
+        results.reverse();
+        Ok(results)
     }
 
     pub fn new_batch_from_ids(

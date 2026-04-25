@@ -4,7 +4,7 @@ use crate::content::hash::{Checksum, Md5Checksum};
 use crate::content::signature::COMPRESSED_SIGNATURE_LEN;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::UploadToken;
-use crate::content::{FileContents, decode, hash, signature, thumbnail};
+use crate::content::{decode, hash, signature, thumbnail};
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
 use crate::{content, filesystem};
 use image::DynamicImage;
@@ -84,9 +84,7 @@ pub fn get_or_compute_properties(state: &AppState, content_token: UploadToken) -
 fn compute_properties_no_cache(state: &AppState, token: UploadToken) -> ApiResult<CachedProperties> {
     let temp_path = token.path(&state.config);
     let file_size = content::map_read_result(filesystem::file_size(&temp_path))?;
-    let data = content::map_read_result(std::fs::read(&temp_path))?;
-    let checksum = hash::compute_checksum(&data);
-    let md5_checksum = hash::compute_md5_checksum(&data);
+    let (checksum, md5_checksum) = content::map_read_result(hash::compute_checksums(&temp_path))?;
 
     let mime_type = token.mime_type();
     let post_type = PostType::from(mime_type);
@@ -101,8 +99,7 @@ fn compute_properties_no_cache(state: &AppState, token: UploadToken) -> ApiResul
         PostFlags::new()
     };
 
-    let file_contents = FileContents { data, mime_type };
-    let image = decode::representative_image(&state.config, &file_contents, &temp_path)?;
+    let image = decode::representative_image(&state.config, &temp_path, mime_type)?;
 
     Ok(CachedProperties {
         token,
