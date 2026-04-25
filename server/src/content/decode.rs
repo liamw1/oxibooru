@@ -82,7 +82,7 @@ pub fn image(file_path: &Path, mime_type: MimeType) -> ApiResult<DynamicImage> {
         reader.decode().map_err(ApiError::from)
     } else {
         ffmpeg_frame(file_path, PostType::Image)?
-            .ok_or(ApiError::FfmpegError(format!("Unable to decode {} image with FFmpeg", mime_type).into()))
+            .ok_or(ApiError::FfmpegError(format!("Unable to decode {mime_type} image with FFmpeg").into()))
     }
 }
 
@@ -115,7 +115,7 @@ fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicIma
                     RgbImage::from_raw(f.width, f.height, f.data).map(DynamicImage::ImageRgb8)
                 }
                 .ok_or(ApiError::FrameBufferMismatch(f.width, f.height, buffer_len))?;
-                frame = Some(extracted_frame)
+                frame = Some(extracted_frame);
             }
             FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => errors.push(err),
             _ => {}

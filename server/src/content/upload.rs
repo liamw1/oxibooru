@@ -100,7 +100,7 @@ pub async fn extract<const N: usize>(
             Some((index, mime_type)) => {
                 files[index] = filesystem::save_uploaded_file(config, field, mime_type)
                     .await
-                    .map(Some)?
+                    .map(Some)?;
             }
             None => metadata = field.bytes().await.map(|bytes| bytes.to_vec()).map(Some)?,
         }

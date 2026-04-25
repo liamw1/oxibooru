@@ -70,9 +70,8 @@ pub fn create_connection_pool() -> AsyncConnectionPool {
     if cfg!(test) {
         panic!("Connection to production database disallowed in test build!")
     } else {
-        let num_tokio_threads = tokio::runtime::Handle::try_current()
-            .map(|handle| handle.metrics().num_workers())
-            .unwrap_or(1);
+        let num_tokio_threads =
+            tokio::runtime::Handle::try_current().map_or(1, |handle| handle.metrics().num_workers());
         let max_conns = std::cmp::max(num_tokio_threads, app::num_rayon_threads()) + 1;
 
         let pool = Pool::builder()

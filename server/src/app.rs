@@ -61,9 +61,7 @@ impl AppState {
 /// be constructed with. The rayon thread pool is currently only used when
 /// executing admin commands.
 pub fn num_rayon_threads() -> usize {
-    std::thread::available_parallelism()
-        .map(|threads| std::cmp::max(threads.get() / 2, 1))
-        .unwrap_or(1)
+    std::thread::available_parallelism().map_or(1, |threads| std::cmp::max(threads.get() / 2, 1))
 }
 
 /// Initializes logging using [`tracing_subscriber`].

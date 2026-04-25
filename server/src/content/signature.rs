@@ -303,7 +303,7 @@ fn normalize(differences: &[i16; SIGNATURE_LEN]) -> [u8; SIGNATURE_LEN] {
     let signature_iter = differences.iter().map(|&diff| {
         cutoffs
             .iter()
-            .position(|opt_cutoff| opt_cutoff.map(|cutoff| diff <= cutoff).unwrap_or(false))
+            .position(|opt_cutoff| opt_cutoff.is_some_and(|cutoff| diff <= cutoff))
             .and_then(|cutoff| u8::try_from(cutoff).ok())
             .expect("Diff must be under at least one cutoff")
     });
