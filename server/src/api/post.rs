@@ -9,7 +9,7 @@ use crate::content::hash::PostHash;
 use crate::content::signature::SignatureCache;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
-use crate::content::{Content, FileContents, signature, upload};
+use crate::content::{Content, signature, upload};
 use crate::db::AsyncConnectionPool;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceProperty, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
@@ -479,8 +479,8 @@ async fn reverse_search_impl(
     api::verify_privilege(client, state.config.privileges().post_reverse_search)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let content = Content::new(body.content, body.content_token, body.content_url)
-        .ok_or(ApiError::MissingContent(ResourceType::Post))?;
+    let content =
+        Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.compute_properties(&state).await?;
     state
         .connection_pool
@@ -533,8 +533,6 @@ async fn reverse_search_impl(
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 struct ReverseSearchBody {
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
     /// Token referencing previously uploaded content.
     #[schema(value_type = Option<String>)]
     content_token: Option<UploadToken>,
@@ -591,11 +589,10 @@ async fn reverse_search(
     match body {
         JsonOrMultipart::Json(payload) => reverse_search_impl(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(payload, [PartName::Content]).await?;
-            let reverse_search_body = if let [Some(content)] = decoded_body.files {
+            let decoded_body = upload::extract(&state.config, payload, [PartName::Content]).await?;
+            let reverse_search_body = if let [Some(content_token)] = decoded_body.files {
                 ReverseSearchBody {
-                    content: Some(content),
-                    content_token: None,
+                    content_token: Some(content_token),
                     content_url: None,
                 }
             } else if let Some(metadata) = decoded_body.metadata {
@@ -622,11 +619,11 @@ async fn create_impl(
     api::verify_privilege(client, required_rank)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let content = Content::new(body.content, body.content_token, body.content_url)
-        .ok_or(ApiError::MissingContent(ResourceType::Post))?;
+    let content =
+        Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.get_or_compute_properties(&state).await?;
 
-    let custom_thumbnail = match Content::new(body.thumbnail, body.thumbnail_token, body.thumbnail_url) {
+    let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
         Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Post).await?),
         None => None,
     };
@@ -716,15 +713,11 @@ async fn create_impl(
 struct PostCreateBody {
     /// Post safety rating.
     safety: PostSafety,
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
     /// Token referencing previously uploaded content.
     #[schema(value_type = Option<String>)]
     content_token: Option<UploadToken>,
     /// URL to fetch content from.
     content_url: Option<Url>,
-    #[serde(skip_deserializing)]
-    thumbnail: Option<FileContents>,
     /// Token referencing previously uploaded thumbnail.
     #[schema(value_type = Option<String>)]
     thumbnail_token: Option<UploadToken>,
@@ -791,13 +784,14 @@ async fn create(
     match body {
         JsonOrMultipart::Json(payload) => create_impl(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
+            let decoded_body =
+                upload::extract(&state.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut new_post: PostCreateBody = serde_json::from_slice(&metadata)?;
-            let [content, thumbnail] = decoded_body.files;
+            let [content_token, thumbnail_token] = decoded_body.files;
 
-            new_post.content = content;
-            new_post.thumbnail = thumbnail;
+            new_post.content_token = content_token;
+            new_post.thumbnail_token = thumbnail_token;
             create_impl(state, client, params, new_post).await
         }
     }
@@ -990,11 +984,11 @@ async fn update_impl(
 ) -> ApiResult<Json<PostInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let new_content = match Content::new(body.content, body.content_token, body.content_url) {
+    let new_content = match Content::new(body.content_token, body.content_url) {
         Some(content) => Some(content.get_or_compute_properties(&state).await?),
         None => None,
     };
-    let custom_thumbnail = match Content::new(body.thumbnail, body.thumbnail_token, body.thumbnail_url) {
+    let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
         Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Post).await?),
         None => None,
     };
@@ -1131,15 +1125,11 @@ struct PostUpdateBody {
     notes: Option<Vec<Note>>,
     /// Post flags: `loop` or `sound`.
     flags: Option<Vec<PostFlag>>,
-    #[serde(skip_deserializing)]
-    content: Option<FileContents>,
     /// Token referencing previously uploaded content.
     #[schema(value_type = Option<String>)]
     content_token: Option<UploadToken>,
     /// URL to fetch content from.
     content_url: Option<Url>,
-    #[serde(skip_deserializing)]
-    thumbnail: Option<FileContents>,
     /// Token referencing previously uploaded thumbnail.
     #[schema(value_type = Option<String>)]
     thumbnail_token: Option<UploadToken>,
@@ -1195,13 +1185,14 @@ async fn update(
     match body {
         JsonOrMultipart::Json(payload) => update_impl(state, client, post_id, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(payload, [PartName::Content, PartName::Thumbnail]).await?;
+            let decoded_body =
+                upload::extract(&state.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut post_update: PostUpdateBody = serde_json::from_slice(&metadata)?;
-            let [content, thumbnail] = decoded_body.files;
+            let [content_token, thumbnail_token] = decoded_body.files;
 
-            post_update.content = content;
-            post_update.thumbnail = thumbnail;
+            post_update.content_token = content_token;
+            post_update.thumbnail_token = thumbnail_token;
             update_impl(state, client, post_id, params, post_update).await
         }
     }

@@ -1,8 +1,11 @@
+use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::ThumbnailCategory;
 use crate::content::upload::UploadToken;
 use crate::model::enums::MimeType;
+use axum::body::Bytes;
+use futures::StreamExt;
 use image::error::ImageError;
 use image::{DynamicImage, ImageResult};
 use std::collections::HashSet;
@@ -13,6 +16,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use strum::{Display, IntoStaticStr};
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 use tracing::warn;
 
 /// Represents important data directories.
@@ -32,14 +37,26 @@ pub fn file_size(path: &Path) -> std::io::Result<i64> {
         .map(|metadata| i64::try_from(metadata.len()).expect("File size must be less than i64::MAX"))
 }
 
-/// Saves raw bytes to temporary upload folder as a `mime_type`-file to disk.
-/// Returns name of the file written.
-pub async fn save_uploaded_file(config: &Config, data: &[u8], mime_type: MimeType) -> std::io::Result<UploadToken> {
+/// Saves streamed file contents to the temporary uploads folder as a `mime_type` file.
+/// Returns the name of the file written.
+///
+/// Does not perform cleanup on error. It instead relies on the cleanup task spawned from
+/// `spawn_temporary_uploads_cleanup_task` to clean out failed uploads.
+pub async fn save_uploaded_file<S, E>(config: &Config, mut stream: S, mime_type: MimeType) -> ApiResult<UploadToken>
+where
+    S: StreamExt<Item = Result<Bytes, E>> + Unpin,
+    ApiError: From<E>,
+{
     let upload_token = UploadToken::new(mime_type);
     let upload_path = upload_token.path(config);
     create_parent_directories(&upload_path)?;
 
-    tokio::fs::write(upload_path, data).await?;
+    let mut file = File::create(upload_path).await?;
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk?;
+        file.write_all(&chunk).await?;
+    }
+
     Ok(upload_token)
 }
 

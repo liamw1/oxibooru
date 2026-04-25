@@ -83,9 +83,8 @@ async fn upload(
     match body {
         JsonOrMultipart::Json(payload) => upload_from_url(&state.config, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(payload, [PartName::Content]).await?;
-            if let [Some(upload)] = decoded_body.files {
-                let token = upload.save(&state.config).await?;
+            let decoded_body = upload::extract(&state.config, payload, [PartName::Content]).await?;
+            if let [Some(token)] = decoded_body.files {
                 Ok(Json(UploadResponse { token }))
             } else if let Some(metadata) = decoded_body.metadata {
                 let url_upload: UploadBody = serde_json::from_slice(&metadata)?;

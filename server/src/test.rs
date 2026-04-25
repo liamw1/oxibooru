@@ -4,7 +4,7 @@ use crate::app::AppState;
 use crate::auth::header;
 use crate::config::Config;
 use crate::content::hash::{Checksum, Md5Checksum, PostHash};
-use crate::content::{FileContents, decode, signature};
+use crate::content::{decode, signature};
 use crate::db::ConnectionResult;
 use crate::filesystem::Directory;
 use crate::model::comment::{NewComment, NewCommentScore};
@@ -599,13 +599,7 @@ fn create_posts(conn: &mut PgConnection, config: &Config) -> AdminResult<()> {
 
         // Simulate uploads
         let image_path = media_path("1_pixel.png");
-        let data = std::fs::read(&image_path)?;
-
-        let file_contents = FileContents {
-            data,
-            mime_type: MimeType::Png,
-        };
-        let image = decode::representative_image(config, &file_contents, &image_path).unwrap();
+        let image = decode::representative_image(config, &image_path, MimeType::Png).unwrap();
         let signature = signature::compute(&image);
         let words = signature::generate_indexes(&signature);
 

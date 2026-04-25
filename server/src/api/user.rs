@@ -8,7 +8,7 @@ use crate::auth::password;
 use crate::config::RegexType;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
-use crate::content::{Content, FileContents, upload};
+use crate::content::{Content, upload};
 use crate::model::enums::{AvatarStyle, ResourceProperty, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{UserInfo, Visibility};
@@ -205,7 +205,7 @@ async fn create_impl(
     let hash = password::hash_password(&state.config, &body.password, &salt)?;
 
     let avatar_style = body.avatar_style.unwrap_or_default();
-    let custom_avatar = match Content::new(body.avatar, body.avatar_token, body.avatar_url) {
+    let custom_avatar = match Content::new(body.avatar_token, body.avatar_url) {
         Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Avatar).await?),
         None if avatar_style == AvatarStyle::Manual => {
             return Err(ApiError::MissingContent(ResourceType::User));
@@ -276,8 +276,6 @@ struct UserCreateBody {
     rank: Option<UserRank>,
     /// Avatar style.
     avatar_style: Option<AvatarStyle>,
-    #[serde(skip_deserializing)]
-    avatar: Option<FileContents>,
     /// Token referencing previously uploaded avatar.
     #[schema(value_type = Option<String>)]
     avatar_token: Option<UploadToken>,
@@ -327,11 +325,11 @@ async fn create(
     match body {
         JsonOrMultipart::Json(payload) => create_impl(state, client, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
+            let decoded_body = upload::extract(&state.config, payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut new_user: UserCreateBody = serde_json::from_slice(&metadata)?;
-            if let [Some(avatar)] = decoded_body.files {
-                new_user.avatar = Some(avatar);
+            if let [Some(avatar_token)] = decoded_body.files {
+                new_user.avatar_token = Some(avatar_token);
                 create_impl(state, client, params, new_user).await
             } else {
                 Err(ApiError::MissingFormData)
@@ -349,7 +347,7 @@ async fn update_impl(
 ) -> ApiResult<Json<UserInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let custom_avatar = match Content::new(body.avatar, body.avatar_token, body.avatar_url) {
+    let custom_avatar = match Content::new(body.avatar_token, body.avatar_url) {
         Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Avatar).await?),
         None if body.avatar_style == Some(AvatarStyle::Manual) => {
             return Err(ApiError::MissingContent(ResourceType::User));
@@ -498,8 +496,6 @@ struct UserUpdateBody {
     rank: Option<UserRank>,
     /// Avatar style.
     avatar_style: Option<AvatarStyle>,
-    #[serde(skip_deserializing)]
-    avatar: Option<FileContents>,
     /// Token referencing previously uploaded avatar.
     #[schema(value_type = Option<String>)]
     avatar_token: Option<UploadToken>,
@@ -553,11 +549,11 @@ async fn update(
     match body {
         JsonOrMultipart::Json(payload) => update_impl(state, client, username, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(payload, [PartName::Avatar]).await?;
+            let decoded_body = upload::extract(&state.config, payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut user_update: UserUpdateBody = serde_json::from_slice(&metadata)?;
-            if let [Some(avatar)] = decoded_body.files {
-                user_update.avatar = Some(avatar);
+            if let [Some(avatar_token)] = decoded_body.files {
+                user_update.avatar_token = Some(avatar_token);
                 update_impl(state, client, username, params, user_update).await
             } else {
                 Err(ApiError::MissingFormData)
@@ -772,7 +768,7 @@ mod test {
         Ok(())
     }
 
-    #[tokio::test]
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[parallel]
     async fn error() -> ApiResult<()> {
         verify_response("GET /user/fake_user", "user/get_nonexistent").await?;

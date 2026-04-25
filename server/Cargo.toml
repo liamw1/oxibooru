@@ -18,6 +18,7 @@ diesel_migrations = { version = "2.3.0", features = ["postgres"] }
 dotenvy = "0.15.7"
 ffmpeg-sidecar = { version = "2.5.0", default-features = false }
 flate2 = "1.0.35"
+futures = "0.3.32"
 hex = "0.4.3"
 hmac = "0.12.1"
 image = "0.25.5"
@@ -29,7 +30,7 @@ percent-encoding = "2.3.1"
 pq-sys = { version = "0.7.5", features = ["bundled"] }
 rayon = "1.10.0"
 regex = "1.11.1"
-reqwest = { version ="0.12.12", features = ["json"] }
+reqwest = { version ="0.12.12", features = ["json", "stream"] }
 rustyline = {version = "17.0.2", default-features = false, features = ["signal-hook"]}
 serde = { version = "1.0.217", features = ["derive", "rc"] }
 serde_json = "1.0.138"

@@ -1,12 +1,12 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
-use crate::content::{FileContents, flash};
-use crate::model::enums::PostType;
+use crate::content::{self, flash};
+use crate::model::enums::{MimeType, PostType};
 use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
 use image::{DynamicImage, ImageFormat, ImageReader, Limits, RgbImage, RgbaImage};
 use std::fs::File;
-use std::io::{BufReader, Cursor};
+use std::io::BufReader;
 use std::path::Path;
 use swf::Tag;
 use tracing::error;
@@ -15,13 +15,9 @@ use tracing::error;
 /// For images, this is simply the decoded image.
 /// For videos, it is the first frame of the video.
 /// For Flash media, it is the largest image that can be decoded from the Flash tags.
-pub fn representative_image(
-    config: &Config,
-    file_contents: &FileContents,
-    file_path: &Path,
-) -> ApiResult<DynamicImage> {
-    match PostType::from(file_contents.mime_type) {
-        PostType::Image | PostType::Animation => image(file_contents, file_path),
+pub fn representative_image(config: &Config, file_path: &Path, mime_type: MimeType) -> ApiResult<DynamicImage> {
+    match PostType::from(mime_type) {
+        PostType::Image | PostType::Animation => image(file_path, mime_type),
         PostType::Video => ffmpeg_frame(file_path, PostType::Video).and_then(|frame| frame.ok_or(ApiError::EmptyVideo)),
         PostType::Flash => flash_image(config, file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
     }
@@ -76,16 +72,17 @@ pub fn swf_has_audio(path: &Path) -> ApiResult<bool> {
 }
 
 /// Decodes a raw array of bytes into pixel data.
-pub fn image(file_contents: &FileContents, file_path: &Path) -> ApiResult<DynamicImage> {
-    if let Some(format) = file_contents.mime_type.to_image_format() {
-        let mut reader = ImageReader::new(Cursor::new(&file_contents.data));
+pub fn image(file_path: &Path, mime_type: MimeType) -> ApiResult<DynamicImage> {
+    if let Some(format) = mime_type.to_image_format() {
+        let file = content::map_read_result(File::open(file_path))?;
+
+        let mut reader = ImageReader::new(BufReader::new(file));
         reader.set_format(format);
         reader.limits(image_reader_limits());
         reader.decode().map_err(ApiError::from)
     } else {
-        ffmpeg_frame(file_path, PostType::Image)?.ok_or(ApiError::FfmpegError(
-            format!("Unable to decode {} image with FFmpeg", file_contents.mime_type).into(),
-        ))
+        ffmpeg_frame(file_path, PostType::Image)?
+            .ok_or(ApiError::FfmpegError(format!("Unable to decode {} image with FFmpeg", mime_type).into()))
     }
 }
 

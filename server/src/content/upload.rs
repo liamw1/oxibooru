@@ -1,7 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
-use crate::content::FileContents;
-use crate::filesystem::Directory;
+use crate::filesystem::{self, Directory};
 use crate::model::enums::MimeType;
 use crate::string::SmallString;
 use axum::extract::multipart::{Field, Multipart};
@@ -15,6 +14,7 @@ use uuid::Uuid;
 
 pub const MAX_UPLOAD_SIZE: usize = 4 * 1024_usize.pow(3);
 
+/// A token that represents a file that's been streamed to disk during upload.
 #[derive(Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
 pub struct UploadToken {
@@ -63,12 +63,16 @@ pub enum PartName {
 }
 
 pub struct Body<const N: usize> {
-    pub files: [Option<FileContents>; N],
+    pub files: [Option<UploadToken>; N],
     pub metadata: Option<Vec<u8>>,
 }
 
 /// Attempts to extract given `fields` and optional JSON "metadata" field from given `form_data`.
-pub async fn extract<const N: usize>(mut form_data: Multipart, fields: [PartName; N]) -> ApiResult<Body<N>> {
+pub async fn extract<const N: usize>(
+    config: &Config,
+    mut form_data: Multipart,
+    fields: [PartName; N],
+) -> ApiResult<Body<N>> {
     let mut files = std::array::from_fn(|_| None);
     let mut metadata = None;
     while let Some(field) = form_data.next_field().await? {
@@ -92,10 +96,13 @@ pub async fn extract<const N: usize>(mut form_data: Multipart, fields: [PartName
             )));
         }
 
-        let data = field.bytes().await.map_err(ApiError::from)?.to_vec();
         match file_info {
-            Some((index, mime_type)) => files[index] = Some(FileContents { data, mime_type }),
-            None => metadata = Some(data),
+            Some((index, mime_type)) => {
+                files[index] = filesystem::save_uploaded_file(config, field, mime_type)
+                    .await
+                    .map(Some)?
+            }
+            None => metadata = field.bytes().await.map(|bytes| bytes.to_vec()).map(Some)?,
         }
     }
     Ok(Body { files, metadata })

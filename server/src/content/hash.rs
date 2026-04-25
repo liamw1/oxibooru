@@ -12,7 +12,9 @@ use diesel::sql_types::Bytea;
 use diesel::{FromSqlRow, deserialize, serialize};
 use hex::{FromHex, FromHexError};
 use std::fmt::Display;
-use std::path::PathBuf;
+use std::fs::File;
+use std::io::Read;
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
 /// Stores a `post_id` and cached post `hash`.
@@ -145,19 +147,32 @@ pub fn gravatar_url(config: &Config, username: &str) -> String {
     format!("https://gravatar.com/avatar/{hex_encoded_hash}?d=retro&s={}", config.thumbnails.avatar_width)
 }
 
-/// Computes a checksum for duplicate detection. Uses raw file data instead of decoded
-/// pixel data because different compression schemes can compress identical pixel data
-/// in different ways.
-pub fn compute_checksum(content: &[u8]) -> Checksum {
-    let hash = blake3::hash(content);
-    GenericChecksum(hash.into())
-}
+/// Computes the BLAKE3 and MD5 checksums of the file at `path` in a single pass.
+///
+/// BLAKE3 is strongly preferred for duplicate detection. MD5 is vulnerable to collisions
+/// and is only computed for convience for search on other sites.
+pub fn compute_checksums(path: &Path) -> std::io::Result<(Checksum, Md5Checksum)> {
+    const KB: usize = 1024;
+    const BUFFER_CAPACITY: usize = 64 * KB;
 
-/// Computes MD5 checksum. Not used for duplicate detection due to its vulnerability
-/// to collisions.
-pub fn compute_md5_checksum(content: &[u8]) -> Md5Checksum {
-    let digest = md5::compute(content);
-    GenericChecksum(digest.0)
+    let mut file = File::open(path)?;
+    let mut md5_ctx = md5::Context::new();
+    let mut blake3_hasher = blake3::Hasher::new();
+
+    let mut buffer = [0; BUFFER_CAPACITY];
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+
+        blake3_hasher.update(&buffer[..n]);
+        md5_ctx.consume(&buffer[..n]);
+    }
+
+    let checksum = GenericChecksum(blake3_hasher.finalize().into());
+    let md5_checksum = GenericChecksum(md5_ctx.compute().0);
+    Ok((checksum, md5_checksum))
 }
 
 /// Similar to [`compute_checksum`], except checksum is base64 encoded.

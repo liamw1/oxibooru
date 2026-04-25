@@ -4,8 +4,6 @@ use crate::config::Config;
 use crate::content::cache::CachedProperties;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::UploadToken;
-use crate::filesystem;
-use crate::model::enums::MimeType;
 use image::DynamicImage;
 use url::Url;
 
@@ -18,29 +16,14 @@ pub mod signature;
 pub mod thumbnail;
 pub mod upload;
 
-/// Stores file contents and mime type of an uploaded file.
-pub struct FileContents {
-    pub data: Vec<u8>,
-    pub mime_type: MimeType,
-}
-
-impl FileContents {
-    /// Saves file data to temporary upload directory and returns the name of the file written.
-    pub async fn save(&self, config: &Config) -> std::io::Result<UploadToken> {
-        filesystem::save_uploaded_file(config, &self.data, self.mime_type).await
-    }
-}
-
 /// Contains either the name of a file uploaded to the temporary uploads
-/// directory, a url pointing to a file on the web, or the contents of the
-/// file sent via a multipart request.
+/// directory or a url pointing to a file on the web.
 ///
 /// Methods on this object consume it and will save the content to the
 /// temporary uploads directory (if not already present) before operating on it.
 /// This is because some operations such as video decoding require a path to the
 /// content on disk.
 pub enum Content {
-    DirectUpload(FileContents),
     Token(UploadToken),
     Url(Url),
 }
@@ -51,19 +34,17 @@ impl Content {
     ///
     /// If multiple ways of retrieving content are given, the method of retrieving the content will
     /// be the first argument that is not [`None`].
-    pub fn new(direct_upload: Option<FileContents>, token: Option<UploadToken>, url: Option<Url>) -> Option<Self> {
-        match (direct_upload, token, url) {
-            (Some(file), _, _) => Some(Self::DirectUpload(file)),
-            (None, Some(token), _) => Some(Self::Token(token)),
-            (None, None, Some(url)) => Some(Self::Url(url)),
-            (None, None, None) => None,
+    pub fn new(token: Option<UploadToken>, url: Option<Url>) -> Option<Self> {
+        match (token, url) {
+            (Some(token), _) => Some(Self::Token(token)),
+            (None, Some(url)) => Some(Self::Url(url)),
+            (None, None) => None,
         }
     }
 
     /// Saves content to temporary uploads directory and returns the name of the file written.
     pub async fn save(self, config: &Config) -> ApiResult<UploadToken> {
         match self {
-            Self::DirectUpload(file_contents) => file_contents.save(config).await.map_err(ApiError::from),
             Self::Token(token) => Ok(token),
             Self::Url(url) => download::from_url(config, url).await,
         }
@@ -73,12 +54,9 @@ impl Content {
     pub async fn thumbnail(self, config: &Config, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
         let token = self.save(config).await?;
         let temp_path = token.path(config);
-        let data = map_read_result(tokio::fs::read(&temp_path).await)?;
-        let mime_type = token.mime_type();
-        let file_contents = FileContents { data, mime_type };
         tokio::task::block_in_place({
             || {
-                decode::representative_image(config, &file_contents, &temp_path)
+                decode::representative_image(config, &temp_path, token.mime_type())
                     .map(|image| thumbnail::create(config, &image, thumbnail_type))
             }
         })
