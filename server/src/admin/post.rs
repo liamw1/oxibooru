@@ -333,7 +333,8 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
 
 fn user_query(state: &AppState, editor: &mut PostEditor) -> AdminResult<Vec<i64>> {
     loop {
-        let user_input = input::read("Select posts (leave blank to select all): ", editor)?;
+        let user_input =
+            input::read("Select posts (leave blank to select all, enter \"done\" when finished): ", editor)?;
         match QueryBuilder::new_with_anonymous_token(&state.config, admin::client(), &user_input, Token::Id) {
             Err(err) => error!("Could not parse query for reason: {err}"),
             Ok(mut builder) => {
