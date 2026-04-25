@@ -2,17 +2,33 @@ ARG ALPINE_VERSION=3.23
 ARG RUST_VERSION=1.94.0
 ARG CHEF_VERSION=0.1.77
 ARG FFMPEG_VERSION=8.1
+ARG DAV1D_VERSION=1.5.3
 
 ############################### FFmpeg Phase ###############################
 FROM alpine:${ALPINE_VERSION} AS ffmpeg_builder
 ARG FFMPEG_VERSION
+ARG DAV1D_VERSION
 WORKDIR /build
 
-RUN apk add --no-cache build-base curl tar xz nasm
+RUN apk add --no-cache build-base curl git meson nasm ninja pkgconfig tar xz
 
+RUN git clone --depth 1 --branch ${DAV1D_VERSION} https://code.videolan.org/videolan/dav1d.git
+
+# Build dav1d as a static musl archive
+WORKDIR /build/dav1d
+RUN meson setup build \
+    --prefix=/usr/local \
+    --default-library=static \
+    --buildtype=release \
+    -Denable_tools=false \
+    -Denable_tests=false \
+  && ninja -C build install
+
+WORKDIR /build
 RUN curl -L https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz | tar -xJ
 
 WORKDIR /build/ffmpeg-${FFMPEG_VERSION}
+ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 RUN ./configure \
     --disable-everything \
     --disable-network \
@@ -29,13 +45,14 @@ RUN ./configure \
     \
     --enable-small \
     --enable-static \
+    --enable-libdav1d \
     --enable-protocol=file,pipe \
-    --enable-demuxer=mov,matroska \
-    --enable-parser=h264,hevc,vp8,vp9,av1 \
-    --enable-decoder=h264,hevc,vp8,vp9,av1 \
-    --enable-filter=scale,format,null,copy,thumbnail \
+    --enable-demuxer=avif,matroska,mov,swf \
+    --enable-parser=h264,hevc \
+    --enable-decoder=flv1,h264,hevc,libdav1d,vp6,vp6a,vp6f,vp8,vp9 \
+    --enable-filter=copy,format,null,scale,thumbnail \
     --enable-encoder=rawvideo \
-    --enable-muxer=rawvideo \
+    --enable-muxer=null,rawvideo \
     --enable-swscale \
     \
     --extra-ldflags="-static" \

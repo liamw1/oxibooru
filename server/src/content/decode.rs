@@ -4,7 +4,7 @@ use crate::content::{FileContents, flash};
 use crate::model::enums::PostType;
 use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
-use image::{DynamicImage, ImageFormat, ImageReader, ImageResult, Limits, RgbImage};
+use image::{DynamicImage, ImageFormat, ImageReader, Limits, RgbImage, RgbaImage};
 use std::fs::File;
 use std::io::{BufReader, Cursor};
 use std::path::Path;
@@ -21,14 +21,8 @@ pub fn representative_image(
     file_path: &Path,
 ) -> ApiResult<DynamicImage> {
     match PostType::from(file_contents.mime_type) {
-        PostType::Image | PostType::Animation => {
-            let image_format = file_contents
-                .mime_type
-                .to_image_format()
-                .expect("Mime type should be convertable to image format");
-            image(&file_contents.data, image_format).map_err(ApiError::from)
-        }
-        PostType::Video => video_frame(file_path).and_then(|frame| frame.ok_or(ApiError::EmptyVideo)),
+        PostType::Image | PostType::Animation => image(file_contents, file_path),
+        PostType::Video => ffmpeg_frame(file_path, PostType::Video).and_then(|frame| frame.ok_or(ApiError::EmptyVideo)),
         PostType::Flash => flash_image(config, file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
     }
 }
@@ -36,24 +30,28 @@ pub fn representative_image(
 /// Returns if the video at `path` has an audio channel.
 pub fn video_has_audio(path: &Path) -> ApiResult<bool> {
     let path_str = path.to_string_lossy();
-    let iter = FfmpegCommand::new_with_path("/opt/app/ffmpeg")
-        .input(&path_str)
-        .args(["-vf", "thumbnail,format=rgb24", "-frames:v", "1", "-f", "rawvideo", "-"])
+    let iter = FfmpegCommand::new_with_path(FFMPEG_PATH)
+        .input(path_str)
+        .args(["-c", "copy", "-t", "0", "-f", "null", "-"])
         .spawn()?
         .iter()
         .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
 
-    let mut has_audio = false;
+    let mut has_audio = None;
+    let mut errors = Vec::new();
     for event in iter {
         match event {
             FfmpegEvent::ParsedInputStream(stream) if stream.is_audio() => {
-                has_audio = true;
+                has_audio = Some(true);
             }
-            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => return Err(ApiError::FfmpegError(err.into())),
+            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => errors.push(err),
             _ => {}
         }
     }
-    Ok(has_audio)
+    if has_audio.is_none() && !errors.is_empty() {
+        return Err(ApiError::FfmpegError(errors.join("; ").into()));
+    }
+    Ok(has_audio.unwrap_or(false))
 }
 
 /// Returns if the swf at `path` has audio.
@@ -78,35 +76,56 @@ pub fn swf_has_audio(path: &Path) -> ApiResult<bool> {
 }
 
 /// Decodes a raw array of bytes into pixel data.
-pub fn image(bytes: &[u8], format: ImageFormat) -> ImageResult<DynamicImage> {
-    let mut reader = ImageReader::new(Cursor::new(bytes));
-    reader.set_format(format);
-    reader.limits(image_reader_limits());
-    reader.decode()
+pub fn image(file_contents: &FileContents, file_path: &Path) -> ApiResult<DynamicImage> {
+    if let Some(format) = file_contents.mime_type.to_image_format() {
+        let mut reader = ImageReader::new(Cursor::new(&file_contents.data));
+        reader.set_format(format);
+        reader.limits(image_reader_limits());
+        reader.decode().map_err(ApiError::from)
+    } else {
+        ffmpeg_frame(file_path, PostType::Image)?.ok_or(ApiError::FfmpegError(
+            format!("Unable to decode {} image with FFmpeg", file_contents.mime_type).into(),
+        ))
+    }
 }
 
-/// Decodes a representative frame of the video at the given `path`.
-fn video_frame(path: &Path) -> ApiResult<Option<DynamicImage>> {
+const FFMPEG_PATH: &str = "/opt/app/ffmpeg";
+
+/// Decodes a representative frame of the image or video at the given `path`.
+fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicImage>> {
+    let filter = match post_type {
+        PostType::Image | PostType::Animation => "format=rgba",
+        PostType::Video | PostType::Flash => "thumbnail,format=rgb24",
+    };
+
     let path_str = path.to_string_lossy();
-    let iter = FfmpegCommand::new_with_path("/opt/app/ffmpeg")
+    let iter = FfmpegCommand::new_with_path(FFMPEG_PATH)
         .input(&path_str)
-        .args(["-vf", "thumbnail,format=rgb24", "-frames:v", "1", "-f", "rawvideo", "-"])
+        .args(["-vf", filter, "-frames:v", "1", "-f", "rawvideo", "-"])
         .spawn()?
         .iter()
         .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
 
     let mut frame = None;
+    let mut errors = Vec::new();
     for event in iter {
         match event {
             FfmpegEvent::OutputFrame(f) => {
                 let buffer_len = f.data.len();
-                let image = RgbImage::from_raw(f.width, f.height, f.data)
-                    .ok_or(ApiError::FrameBufferMismatch(f.width, f.height, buffer_len))?;
-                frame = Some(DynamicImage::ImageRgb8(image));
+                let extracted_frame = if filter.contains("rgba") {
+                    RgbaImage::from_raw(f.width, f.height, f.data).map(DynamicImage::ImageRgba8)
+                } else {
+                    RgbImage::from_raw(f.width, f.height, f.data).map(DynamicImage::ImageRgb8)
+                }
+                .ok_or(ApiError::FrameBufferMismatch(f.width, f.height, buffer_len))?;
+                frame = Some(extracted_frame)
             }
-            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => return Err(ApiError::FfmpegError(err.into())),
+            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => errors.push(err),
             _ => {}
         }
+    }
+    if frame.is_none() && !errors.is_empty() {
+        return Err(ApiError::FfmpegError(errors.join("; ").into()));
     }
     Ok(frame)
 }
@@ -153,7 +172,7 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
 
     // Some Flash files only have video frames, which are hard to decode.
     // So, we feed to ffmpeg and see if it can decode a representaive frame.
-    if let Ok(Some(frame)) = video_frame(path) {
+    if let Ok(Some(frame)) = ffmpeg_frame(path, PostType::Flash) {
         images.push(frame);
     }
 

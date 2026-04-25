@@ -20,7 +20,7 @@ ffmpeg-sidecar = { version = "2.5.0", default-features = false }
 flate2 = "1.0.35"
 hex = "0.4.3"
 hmac = "0.12.1"
-image = { version = "0.25.5" }
+image = "0.25.5"
 lettre = { version = "0.11.12", features = ["serde"] }
 md5 = "0.7.0"
 num-traits = "0.2.19"
