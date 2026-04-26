@@ -160,7 +160,7 @@ pub fn compute_checksums(path: &Path) -> std::io::Result<(Checksum, Md5Checksum)
     let mut md5_ctx = md5::Context::new();
     let mut blake3_hasher = blake3::Hasher::new();
 
-    let mut buffer: Box<[u8; BUFFER_CAPACITY]> = Box::new([0; BUFFER_CAPACITY]);
+    let mut buffer = vec![0; BUFFER_CAPACITY];
     loop {
         let n = file.read(buffer.as_mut_slice())?;
         if n == 0 {
