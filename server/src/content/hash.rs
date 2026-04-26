@@ -153,15 +153,16 @@ pub fn gravatar_url(config: &Config, username: &str) -> String {
 /// and is only computed for convience for search on other sites.
 pub fn compute_checksums(path: &Path) -> std::io::Result<(Checksum, Md5Checksum)> {
     const KB: usize = 1024;
-    const BUFFER_CAPACITY: usize = 64 * KB;
+    const MB: usize = 1024 * KB;
+    const BUFFER_CAPACITY: usize = 4 * MB;
 
     let mut file = File::open(path)?;
     let mut md5_ctx = md5::Context::new();
     let mut blake3_hasher = blake3::Hasher::new();
 
-    let mut buffer = [0; BUFFER_CAPACITY];
+    let mut buffer: Box<[u8; BUFFER_CAPACITY]> = Box::new([0; BUFFER_CAPACITY]);
     loop {
-        let n = file.read(&mut buffer)?;
+        let n = file.read(buffer.as_mut_slice())?;
         if n == 0 {
             break;
         }
