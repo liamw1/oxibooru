@@ -7,7 +7,7 @@ use axum::http::StatusCode;
 use axum::response::Redirect;
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
-use hmac::{Mac, SimpleHmac};
+use hmac::{KeyInit, Mac, SimpleHmac};
 use utoipa_axum::router::OpenApiRouter;
 
 pub fn routes() -> OpenApiRouter<AppState> {
