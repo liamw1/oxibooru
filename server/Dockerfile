@@ -112,7 +112,6 @@ ARG FFMPEG_VERSION
 WORKDIR /opt/app
 ENV RUST_BACKTRACE=full
 
-
 COPY --from=builder --chown=${PUID}:${PGID} /data /data
 
 # Copy SSL certs for outbound requests
