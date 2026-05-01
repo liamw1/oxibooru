@@ -3,8 +3,7 @@ use crate::config::Config;
 use crate::content::cache::RingCache;
 use crate::db::{AsyncConnectionPool, AsyncConnectionResult, ConnectionResult};
 use crate::{admin, api, config, db, filesystem};
-use axum::extract::Request;
-use axum::{Router, ServiceExt};
+use axum::Router;
 use std::error::Error;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::net::TcpListener;
@@ -112,7 +111,7 @@ pub async fn run(state: AppState) -> std::io::Result<()> {
     let listener = TcpListener::bind(address).await?;
     info!("Oxibooru server running on {} threads", Handle::current().metrics().num_workers());
     debug!("listening on {}", listener.local_addr()?);
-    axum::serve(listener, ServiceExt::<Request>::into_make_service(app))
+    axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
 }
@@ -131,7 +130,6 @@ async fn shutdown_signal() {
             .recv()
             .await;
     };
-
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
 

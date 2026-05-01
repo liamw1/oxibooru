@@ -51,12 +51,11 @@ pub fn routes(state: AppState) -> OpenApiRouter {
         .merge(user_token::routes())
         .layer((
             TraceLayer::new_for_http(),
-            // Graceful shutdown will wait for outstanding requests to complete.
-            // Add a timeout so requests don't hang forever.
             TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_mins(1)),
         ))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::post_to_webhooks))
+        .route_layer(axum::middleware::from_fn(middleware::log_error))
         .with_state(state)
         .fallback(|| async { (StatusCode::NOT_FOUND, "Route not found") })
 }

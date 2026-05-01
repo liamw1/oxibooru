@@ -9,12 +9,14 @@ use axum::response::{IntoResponse, Response};
 use diesel::QueryResult;
 use image::error::{ImageError, LimitError, LimitErrorKind};
 use serde::Serialize;
+use std::sync::Arc;
+use thiserror::Error;
 use utoipa::ToSchema;
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
 /// Giant error enum of doom
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 #[error(transparent)]
 pub enum ApiError {
     #[error("{0} already exists")]
@@ -95,7 +97,7 @@ pub enum ApiError {
 }
 
 impl ApiError {
-    fn status_code(&self) -> StatusCode {
+    pub fn status_code(&self) -> StatusCode {
         use serde_json::error::Category;
 
         match self {
@@ -227,7 +229,9 @@ impl From<LimitErrorKind> for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status_code(), Json(self.response())).into_response()
+        let mut response = (self.status_code(), Json(self.response())).into_response();
+        response.extensions_mut().insert(Arc::new(self));
+        response
     }
 }
 

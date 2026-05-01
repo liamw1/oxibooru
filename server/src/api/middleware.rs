@@ -17,8 +17,22 @@ use reqwest::Client;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, REFERER};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
-use tracing::warn;
+use tracing::{error, warn};
 use url::Url;
+
+/// Logs errors from handlers.
+pub async fn log_error(req: Request, next: Next) -> Response {
+    let response = next.run(req).await;
+
+    if let Some(err) = response.extensions().get::<Arc<ApiError>>() {
+        error!(
+            status = err.status_code().as_u16(),
+            error = %err.to_string(),
+            "request failed with"
+        );
+    }
+    response
+}
 
 /// Attempts to authorizes user by either username/password or user token.
 pub async fn auth(State(state): State<AppState>, mut request: Request, next: Next) -> ApiResult<Response> {
