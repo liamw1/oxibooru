@@ -15,7 +15,7 @@ use std::collections::hash_map::{Entry, IntoKeys};
 use std::collections::{HashMap, HashSet};
 
 /// Specifies how tag ids should be retrieved from database given a list of names.
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum FetchMode {
     Shallow, // Only fetch IDs corresponding to each name
     Deep,    // Fetch IDs of names and their implications, recursively
