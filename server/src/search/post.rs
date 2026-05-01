@@ -4,8 +4,8 @@ use crate::config::Config;
 use crate::content::hash::Checksum;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
 use crate::schema::{
-    comment, database_statistics, pool, pool_category, pool_post, post, post_favorite, post_feature, post_note,
-    post_score, post_statistics, post_tag, tag, tag_category, tag_name, user,
+    comment, database_statistics, pool, pool_category, pool_name, pool_post, post, post_favorite, post_feature,
+    post_note, post_score, post_statistics, post_tag, tag, tag_category, tag_name, user,
 };
 use crate::search::{
     self, Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
@@ -361,10 +361,21 @@ fn apply_pool_filter(
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
 ) -> ApiResult<BoxedQuery> {
-    let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
-    let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
-    let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
-    update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
+    if filter.condition.parse::<i64>().is_ok() {
+        let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
+        let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
+        let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
+        update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
+    } else {
+        let pool_posts = pool::table
+            .inner_join(pool_post::table)
+            .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool::id)))
+            .select(pool_post::post_id)
+            .distinct()
+            .into_boxed();
+        let filtered_posts = apply_str_filter!(pool_posts, pool_name::name, filter.unnegated());
+        update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
+    }
     Ok(query)
 }
 
