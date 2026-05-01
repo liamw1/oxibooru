@@ -14,6 +14,7 @@ use crate::search::tag::QueryBuilder;
 use crate::snapshot::tag::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
+use crate::update::tag::FetchMode;
 use crate::{api, resource, snapshot, update};
 use axum::extract::{Extension, State};
 use diesel::dsl::count_star;
@@ -314,14 +315,14 @@ async fn create(
                 &state.config,
                 client,
                 body.implications.unwrap_or_default(),
-                true,
+                FetchMode::Acyclic,
             )?;
             let (suggested_ids, suggestions) = update::tag::get_or_create_tag_ids(
                 conn,
                 &state.config,
                 client,
                 body.suggestions.unwrap_or_default(),
-                true,
+                FetchMode::Acyclic,
             )?;
             update::tag::set_implications(conn, tag.id, &implied_ids)?;
             update::tag::set_suggestions(conn, tag.id, &suggested_ids)?;
@@ -507,7 +508,7 @@ async fn update(
                 api::verify_privilege(client, state.config.privileges().tag_edit_implication)?;
 
                 let (implied_ids, implications) =
-                    update::tag::get_or_create_tag_ids(conn, &state.config, client, implications, true)?;
+                    update::tag::get_or_create_tag_ids(conn, &state.config, client, implications, FetchMode::Acyclic)?;
                 update::tag::set_implications(conn, tag_id, &implied_ids)?;
                 new_snapshot_data.implications = implications;
             }
@@ -515,7 +516,7 @@ async fn update(
                 api::verify_privilege(client, state.config.privileges().tag_edit_suggestion)?;
 
                 let (suggested_ids, suggestions) =
-                    update::tag::get_or_create_tag_ids(conn, &state.config, client, suggestions, true)?;
+                    update::tag::get_or_create_tag_ids(conn, &state.config, client, suggestions, FetchMode::Acyclic)?;
                 update::tag::set_suggestions(conn, tag_id, &suggested_ids)?;
                 new_snapshot_data.suggestions = suggestions;
             }

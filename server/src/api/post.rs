@@ -20,6 +20,7 @@ use crate::search::{Builder, preferences};
 use crate::snapshot::post::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
+use crate::update::tag::FetchMode;
 use crate::{api, db, filesystem, resource, snapshot, update};
 use axum::extract::{DefaultBodyLimit, Extension, State};
 use diesel::dsl::{exists, not, sql};
@@ -633,8 +634,13 @@ async fn create_impl(
         let config = Arc::clone(&state.config);
         move |conn| {
             // We do this before post insertion so that the post sequence isn't incremented if it fails
-            let (tag_ids, tags) =
-                update::tag::get_or_create_tag_ids(conn, &config, client, body.tags.unwrap_or_default(), false)?;
+            let (tag_ids, tags) = update::tag::get_or_create_tag_ids(
+                conn,
+                &config,
+                client,
+                body.tags.unwrap_or_default(),
+                FetchMode::Deep,
+            )?;
             let relations = body.relations.unwrap_or_default();
             let notes = body.notes.unwrap_or_default();
 
@@ -1044,7 +1050,8 @@ async fn update_impl(
             if let Some(tags) = body.tags {
                 api::verify_privilege(client, config.privileges().post_edit_tag)?;
 
-                let (updated_tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, &config, client, tags, false)?;
+                let (updated_tag_ids, tags) =
+                    update::tag::get_or_create_tag_ids(conn, &config, client, tags, FetchMode::Shallow)?;
                 update::post::set_tags(conn, post_id, &updated_tag_ids)?;
                 new_snapshot_data.tags = tags;
             }
