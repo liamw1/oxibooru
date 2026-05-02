@@ -112,7 +112,7 @@ where
 /// | `uploader`, `upload`, `submit`                               | uploaded by given user (accepts wildcards)                              |
 /// | `comment`                                                    | commented by given user (accepts wildcards)                             |
 /// | `fav`                                                        | favorited by given user (accepts wildcards)                             |
-/// | `pool`                                                       | belonging to the pool with the given ID                                 |
+/// | `pool`                                                       | belonging to the pool with the given name (accepts wildcards) or ID     |
 /// | `pool-category`                                              | belonging to pools in the given pool category (accepts wildcards)       |
 /// | `tag-count`                                                  | having given number of tags                                             |
 /// | `comment-count`                                              | having given number of comments                                         |
