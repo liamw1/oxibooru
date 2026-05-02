@@ -1368,6 +1368,8 @@ mod test {
             let path = format!("post/list_{token}_sorted");
             verify_response(&query, &path).await?;
         }
+        verify_response(&format!("{QUERY}=-pool:Fantasy {PARAMS}"), "post/list_pool_name_filtered").await?;
+        verify_response(&format!("{QUERY}=pool:*a*t* {PARAMS}"), "post/list_pool_name_wildcards_filtered").await?;
         verify_response(&format!("{QUERY}=special:liked {PARAMS}"), "post/list_liked_filtered").await?;
         verify_response(&format!("{QUERY}=special:disliked {PARAMS}"), "post/list_disliked_filtered").await?;
         verify_response(&format!("{QUERY}=special:tumbleweed {PARAMS}"), "post/list_tumbleweed_filtered").await
