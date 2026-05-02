@@ -36,7 +36,7 @@
         </tr>
         <tr>
             <td><code>pool</code></td>
-            <td>belonging to the pool with the given ID</td>
+            <td>belonging to the pool with the given name (accepts wildcards) or ID</td>
         </tr>
         <tr>
             <td><code>pool-category</code></td>
