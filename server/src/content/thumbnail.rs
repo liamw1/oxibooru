@@ -38,7 +38,8 @@ pub fn create(config: &Config, image: &DynamicImage, thumbnail_type: ThumbnailTy
     // JPEG doesn't support transparency, so composite any transparent pixels
     // onto a solid background to avoid corruption in the final thumbnail.
     if resized_image.color().has_alpha() {
-        let mut canvas = RgbaImage::from_pixel(resized_image.width(), resized_image.height(), Rgba([255, 255, 255, 255]));
+        let mut canvas =
+            RgbaImage::from_pixel(resized_image.width(), resized_image.height(), Rgba([255, 255, 255, 255]));
         for (canvas_pixel, image_pixel) in canvas.pixels_mut().zip(resized_image.to_rgba8().pixels()) {
             canvas_pixel.blend(image_pixel);
         }
