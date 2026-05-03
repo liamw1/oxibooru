@@ -35,7 +35,7 @@
                             </ul>
                         </td>
                         <td class='post-count'>
-                            <a href='<%- ctx.formatClientLink('posts', {query: 'pool:' + pool.names[0]}) %>'><%- pool.postCount %></a>
+                            <a href='<%- ctx.formatClientLink('posts', {query: 'pool:' + pool.searchableName}) %>'><%- pool.postCount %></a>
                         </td>
                         <td class='creation-time'>
                             <%= ctx.makeRelativeTime(pool.creationTime) %>
