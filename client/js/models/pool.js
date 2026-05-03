@@ -27,6 +27,14 @@ class Pool extends events.EventTarget {
         return this._names;
     }
 
+    get searchableName() {
+        if (this._names.length > 0 && !/^\d+$/.test(this._names[0])) {
+            return this._names[0];
+        } else {
+            return this._id;
+        }
+    }
+
     get category() {
         return this._category;
     }
