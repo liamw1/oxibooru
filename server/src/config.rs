@@ -210,6 +210,7 @@ pub struct Config {
     pub content_secret: SmallString,
     pub domain: Option<SmallString>,
     pub delete_source_files: bool,
+    pub append_tag_implications_on_post_edit: bool,
     pub post_similarity_threshold: f64,
     #[serde(with = "serde_regex")]
     pub pool_name_regex: Regex,

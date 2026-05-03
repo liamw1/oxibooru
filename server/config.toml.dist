@@ -18,6 +18,11 @@ webhooks = []
 # Original functionality is false, to mitigate the impacts of admins going on unchecked post purges
 delete_source_files = false
 
+# Adds tag implications to post tags on edit.
+# Disabled by default because it causes uninuitive behaviors,
+# like tags not able to be removed due to being implied by another tag.
+append_tag_implications_on_post_edit = false
+
 # Threshold used for reverse search
 # Must be a number between 0 and 1
 post_similarity_threshold = 0.55

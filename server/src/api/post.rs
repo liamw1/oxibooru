@@ -1050,8 +1050,13 @@ async fn update_impl(
             if let Some(tags) = body.tags {
                 api::verify_privilege(client, config.privileges().post_edit_tag)?;
 
+                let fetch_mode = if config.append_tag_implications_on_post_edit {
+                    FetchMode::Deep
+                } else {
+                    FetchMode::Shallow
+                };
                 let (updated_tag_ids, tags) =
-                    update::tag::get_or_create_tag_ids(conn, &config, client, tags, FetchMode::Shallow)?;
+                    update::tag::get_or_create_tag_ids(conn, &config, client, tags, fetch_mode)?;
                 update::post::set_tags(conn, post_id, &updated_tag_ids)?;
                 new_snapshot_data.tags = tags;
             }
