@@ -361,18 +361,17 @@ fn apply_pool_filter(
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
 ) -> ApiResult<BoxedQuery> {
-    if filter.condition.parse::<i64>().is_ok() {
+    if parse::condition::<i64>(filter.condition).is_ok() {
         let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
         let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
         let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
         update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
     } else {
-        let pool_posts = pool::table
-            .inner_join(pool_post::table)
-            .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool::id)))
+        let pool_posts = pool_post::table
+            .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool_post::pool_id)))
             .select(pool_post::post_id)
-            .distinct()
             .into_boxed();
+        let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
         let filtered_posts = apply_str_filter!(pool_posts, pool_name::name, filter.unnegated());
         update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
     }
