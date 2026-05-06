@@ -8,12 +8,12 @@ To get started it's recommended to install the Rust toolchain using [`rustup`](h
 rustup update
 ```
 
-To aid in the editing and navigating of Rust code, install `rust-analyzer` in your development environment of choice. I highly recommend turning on your editors format-on-save feature to keep the code properly formatted.
+To aid in the editing and navigating of Rust code, install `rust-analyzer` in your development environment of choice. I highly recommend turning on your editor's format-on-save feature to keep the code properly formatted.
 
 Next, you'll want to install the build and runtime dependencies. On Debian-based systems, this looks something like
 
 ```sh
-sudo apt update && sudo apt install -y clang pkg-config libssl-dev libpq-dev libdav1d-dev libavcodec-dev libavformat-dev libavutil-dev libavfilter-dev libavdevice-dev
+sudo apt update && sudo apt install -y build-essential perl
 ```
 
 Note: Although development could technically be done without this setup by using `docker compose build`, I don't recommend this as the main development loop as the Docker build is much slower than building locally.
