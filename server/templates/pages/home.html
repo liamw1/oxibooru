@@ -9,11 +9,11 @@
         <h1>{{ config.public_info.name }}</h1>
     </header>
     {% if client.rank >= config.privileges().post_list %}
-    <form class='horizontal'>
-        <%= ctx.makeTextInput({name: 'search-text' , placeholder: 'enter some tags' }) %>
-            <input type='submit' value='Search' />
-            <span class=sep>or</span>
-            <a href='<%- ctx.formatClientLink(' posts') %>'>browse all posts</a>
+    <form class="horizontal" action="/posts" method="get">
+        <input type="text" name="query" placeholder="enter some tags">
+        <button type="submit">Search</button>
+        <span class=sep>or</span>
+        <a href="/posts">browse all posts</a>
     </form>
     {% endif %}
     <div class='post-info-container'></div>
