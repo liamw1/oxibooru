@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 .content-wrapper.tag-categories {
     width: 100%;
     max-width: 45em;
@@ -11,7 +9,7 @@
 }
 
 .content-wrapper.tag-categories table tr.default td {
-    background: "$default-tag-category-background-color";
+    background: var(--default-tag-category-background-color);
 }
 
 .content-wrapper.tag-categories table td,

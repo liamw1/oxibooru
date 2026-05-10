@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 .expander.collapsed {
     margin-bottom: 1em;
 }
@@ -13,20 +11,20 @@
 }
 
 .expander header {
-    background: "$active-tab-background-color";
+    background: var(--active-tab-background-color);
     line-height: 2em;
 }
 
 .expander header a {
     padding: 0 .5em;
     display: block;
-    color: 'mix("$text-color", "$inactive-link-color")';
+    color: color-mix(in oklab var(--text-color), var(--inactive-link-color));
     font-size: 120%;
 }
 
 .expander header a i {
     font-size: 1em;
-    color: "$inactive-link-color";
+    color: var(--inactive-link-color);
     float: right;
     line-height: 2em;
 }
@@ -36,13 +34,13 @@
 }
 
 .darktheme .expander header {
-    background: "$active-tab-background-color-darktheme";
+    background: var(--active-tab-background-color-darktheme);
 }
 
 .darktheme .expander header a {
-    color: 'mix("$text-color-darktheme", "$inactive-link-color-darktheme")';
+    color: color-mix(in oklab var(--text-color-darktheme), var(--inactive-link-color-darktheme));
 }
 
 .darktheme .expander header a i {
-    color: "$inactive-link-color-darktheme";
+    color: var(--inactive-link-color-darktheme);
 }

@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 #user {
     width: 100%;
     max-width: 35em;
@@ -91,7 +89,7 @@
 }
 
 #user #user-tokens .token-flex-container hr {
-    border-top: 3px solid "$active-tab-background-color";
+    border-top: 3px solid var(--active-tab-background-color);
 }
 
 #user #user-tokens form {

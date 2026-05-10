@@ -1,11 +1,9 @@
-@import url('colors.css');
-
 .post-overlay[data-state=ready-to-draw]:after,
 .post-overlay[data-state=drawing-rectangle]:after,
 .post-overlay[data-state=drawing-polygon]:after {
     box-sizing: border-box;
-    border: .3em dashed "$active-note-overlay-border-color";
-    background: "$active-note-overlay-background-color";
+    border: .3em dashed var(--active-note-overlay-border-color);
+    background: var(--active-note-overlay-background-color);
     display: block;
     content: ' ';
     pointer-events: none;
@@ -27,8 +25,8 @@
 }
 
 .notes-overlay g polygon {
-    fill: "$note-background-color";
-    stroke: "$note-border-color";
+    fill: var(--note-background-color);
+    stroke: var(--note-border-color);
     pointer-events: auto;
 }
 
@@ -43,27 +41,27 @@
 
 .notes-overlay g[data-state=editing] polygon,
 .notes-overlay g[data-state=drawing] polygon {
-    fill: "$edited-note-background-color";
-    stroke: "$edited-note-border-color";
+    fill: var(--edited-note-background-color);
+    stroke: var(--edited-note-border-color);
 }
 
 .notes-overlay g[data-state=editing] ellipse,
 .notes-overlay g[data-state=drawing] ellipse {
-    fill: "$edited-note-border-color";
+    fill: var(--edited-note-border-color);
     display: block;
 }
 
 .notes-overlay g[data-state=editing] ellipse.nearby,
 .notes-overlay g[data-state=drawing] ellipse.nearby {
-    fill: "$hovered-note-point-color";
+    fill: var(--hovered-note-point-color);
 }
 
 .notes-overlay g[data-state=drawing] ellipse:first-of-type {
-    fill: "$first-note-point-color";
+    fill: var(--first-note-point-color);
 }
 
 .notes-overlay g[data-state=drawing] ellipse:first-of-type.nearby {
-    fill: "$hovered-first-note-point-color";
+    fill: var(--hovered-first-note-point-color);
 }
 
 .note-text {
@@ -77,10 +75,10 @@
 }
 
 .note-text>.wrapper {
-    background: "$note-text-background-color";
+    background: var(--note-text-background-color);
     padding: .3em .6em;
-    border: 1px solid "$note-text-border-color";
-    color: "$note-text-text-color";
+    border: 1px solid var(--note-text-border-color);
+    color: var(--note-text-text-color);
     box-sizing: border-box;
 }
 
