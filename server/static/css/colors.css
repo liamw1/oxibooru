@@ -63,4 +63,8 @@
     --scrollbar-thumb-color: var(--main-color);
     --scrollbar-bg-color: var(--input-enabled-background-color);
     --transparency-grid-square-color: #F0F0F0;
+    --snapshot-created-background-color: #E0F5E0;
+    --snapshot-modified-background-color: #E0F5FF;
+    --snapshot-deleted-background-color: #FDE5E5;
+    --snapshot-merged-background-color: #FEC;
 }

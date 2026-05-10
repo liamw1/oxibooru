@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 .snapshot-list {
     text-align: left;
 }
@@ -37,65 +35,65 @@
 }
 
 .snapshot-list ul li div.operation-created {
-    background: "$snapshot-created-background-color";
+    background: var(--snapshot-created-background-color);
 }
 
 .snapshot-list ul li div.operation-created+.details {
-    background: 'alpha(@background, 50%)';
+    background: rgb(from var(--snapshot-created-background-color) r g b / 50%);
 }
 
 .snapshot-list ul li div.operation-modified {
-    background: "$snapshot-modified-background-color";
+    background: var(--snapshot-modified-background-color);
 }
 
 .snapshot-list ul li div.operation-modified+.details {
-    background: 'alpha(@background, 50%)';
+    background: rgb(from var(--snapshot-modified-background-color) r g b / 50%);
 }
 
 .snapshot-list ul li div.operation-deleted {
-    background: "$snapshot-deleted-background-color";
+    background: var(--snapshot-deleted-background-color);
 }
 
 .snapshot-list ul li div.operation-deleted+.details {
-    background: 'alpha(@background, 50%)';
+    background: rgb(from var(--snapshot-deleted-background-color) r g b / 50%);
 }
 
 .snapshot-list ul li div.operation-merged {
-    background: "$snapshot-merged-background-color";
+    background: var(--snapshot-merged-background-color);
 }
 
 .snapshot-list ul li div.operation-merged+.details {
-    background: 'alpha(@background, 50%)';
+    background: rgb(from var(--snapshot-merged-background-color) r g b / 50%);
 }
 
 .darktheme .snapshot-list ul li div.operation-created {
-    background: 'darken("$snapshot-created-background-color", 80%)';
+    background: oklch(from var(--snapshot-created-background-color) calc(l - 80%) c h);
 }
 
 .darktheme .snapshot-list ul li div.operation-created+.details {
-    background: 'alpha(@background, 50%)';
+    background: oklch(from var(--snapshot-created-background-color) calc(l - 80%) c h / 50%);
 }
 
 .darktheme .snapshot-list ul li div.operation-modified {
-    background: 'darken("$snapshot-modified-background-color", 80%)';
+    background: oklch(from var(--snapshot-modified-background-color) calc(l - 80%) c h);
 }
 
 .darktheme .snapshot-list ul li div.operation-modified+.details {
-    background: 'alpha(@background, 50%)';
+    background: oklch(from var(--snapshot-modified-background-color) calc(l - 80%) c h / 50%);
 }
 
 .darktheme .snapshot-list ul li div.operation-deleted {
-    background: 'darken("$snapshot-deleted-background-color", 80%)';
+    background: oklch(from var(--snapshot-deleted-background-color) calc(l - 80%) c h);
 }
 
 .darktheme .snapshot-list ul li div.operation-deleted+.details {
-    background: 'alpha(@background, 50%)';
+    background: oklch(from var(--snapshot-deleted-background-color) calc(l - 80%) c h / 50%);
 }
 
 .darktheme .snapshot-list ul li div.operation-merged {
-    background: 'darken("$snapshot-merged-background-color", 80%)';
+    background: oklch(from var(--snapshot-merged-background-color) calc(l - 80%) c h);
 }
 
 .darktheme .snapshot-list ul li div.operation-merged+.details {
-    background: 'alpha(@background, 50%)';
+    background: oklch(from var(--snapshot-merged-background-color) calc(l - 80%) c h / 50%);
 }

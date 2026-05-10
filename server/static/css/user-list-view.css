@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 .user-list ul {
     list-style-type: none;
     padding: 0;
@@ -15,7 +13,7 @@
     margin: 0 .5em 1em .5em;
     padding: .75em;
     vertical-align: top;
-    background: "$top-navigation-color";
+    background: var(--top-navigation-color);
     text-align: left;
 }
 
@@ -38,7 +36,7 @@
 }
 
 .darktheme .user-list ul li {
-    background: "$top-navigation-color-darktheme";
+    background: var(--top-navigation-color-darktheme);
 }
 
 .user-list-header {
@@ -66,9 +64,9 @@
 .user-list-header .append {
     vertical-align: middle;
     font-size: .95em;
-    color: "$inactive-link-color";
+    color: var(--inactive-link-color);
 }
 
 .darktheme .user-list-header .append {
-    color: "$inactive-link-color-darktheme";
+    color: var(--inactive-link-color-darktheme);
 }
