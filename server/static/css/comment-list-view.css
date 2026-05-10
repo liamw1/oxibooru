@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 .global-comment-list {
     text-align: left;
 }
@@ -13,7 +11,7 @@
 .global-comment-list>ul>li {
     margin-top: 2em;
     padding-top: 2em;
-    border-top: 3px solid "$comment-border-color";
+    border-top: 3px solid var(--comment-border-color);
 }
 
 .global-comment-list>ul>li:first-child {
@@ -67,5 +65,5 @@
 }
 
 .darktheme .global-comment-list>ul>li {
-    border-top: 3px solid "$comment-border-color-darktheme";
+    border-top: 3px solid var(--comment-border-color-darktheme);
 }

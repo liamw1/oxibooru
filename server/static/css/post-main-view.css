@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 .post-view {
     width: 100%;
     display: flex !important;
@@ -43,7 +41,7 @@
 
 .post-view>.sidebar>nav.buttons article a:not(.inactive):hover,
 .post-view>.content nav.buttons article a:not(.inactive):hover {
-    background: 'lighten("$main-color", 90%)';
+    background: oklch(from var(--main-color) calc(l + 90%) c h);
 }
 
 .post-view>.sidebar>nav.buttons article i,
@@ -75,7 +73,7 @@
 }
 
 .post-view .description-container {
-    background: "$top-navigation-color";
+    background: var(--top-navigation-color);
     padding: .6em;
 }
 
@@ -91,11 +89,11 @@
 .darktheme .post-view>.sidebar nav.buttons article a:not(.inactive):hover,
 .darktheme .post-view>.content nav.buttons article a:not(.inactive):hover {
     background: unset;
-    box-shadow: inset 0 0 0 .3em "$main-color";
+    box-shadow: inset 0 0 0 .3em var(--main-color);
 }
 
 .darktheme .post-view .description-container {
-    background: "$top-navigation-color-darktheme";
+    background: var(--top-navigation-color-darktheme);
 }
 
 @media (max-width:800px) {
@@ -127,15 +125,15 @@
 }
 
 .post-view .readonly-sidebar .details .safety-safe {
-    color: "$safety-safe";
+    color: var(--safety-safe);
 }
 
 .post-view .readonly-sidebar .details .safety-sketchy {
-    color: "$safety-sketchy";
+    color: var(--safety-sketchy);
 }
 
 .post-view .readonly-sidebar .details .safety-unsafe {
-    color: "$safety-unsafe";
+    color: var(--safety-unsafe);
 }
 
 .post-view .readonly-sidebar .details .upload-info .thumbnail {
@@ -260,7 +258,7 @@
 .post-view .edit-sidebar input[type=submit]:focus,
 .post-view .edit-sidebar input[type=button]:focus,
 .post-view .edit-sidebar button:focus {
-    border: 2px solid "$text-color" !important;
+    border: 2px solid var(--text-color) !important;
 }
 
 .post-view .edit-sidebar .messages {

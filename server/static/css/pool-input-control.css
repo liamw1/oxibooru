@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 div.pool-input {
     position: relative;
 }
@@ -39,22 +37,22 @@ ul.compact-pools li a {
 
 ul.compact-pools li a:focus {
     outline: 0;
-    box-shadow: inset 0 0 0 2px "$main-color";
+    box-shadow: inset 0 0 0 2px var(--main-color);
 }
 
 ul.compact-pools li.implication {
-    background: "$implied-pool-background-color";
-    color: "$implied-pool-text-color";
+    background: var(--implied-pool-background-color);
+    color: var(--implied-pool-text-color);
 }
 
 ul.compact-pools li.new {
-    background: "$new-pool-background-color";
-    color: "$new-pool-text-color";
+    background: var(--new-pool-background-color);
+    color: var(--new-pool-text-color);
 }
 
 ul.compact-pools li.duplicate {
-    background: "$duplicate-pool-background-color";
-    color: "$duplicate-pool-text-color";
+    background: var(--duplicate-pool-background-color);
+    color: var(--duplicate-pool-text-color);
 }
 
 ul.compact-pools i {
@@ -67,7 +65,7 @@ div.pool-input .pool-weight,
 ul.compact-pools .pool-weight,
 div.pool-input .remove-pool,
 ul.compact-pools .remove-pool {
-    color: "$inactive-link-color";
+    color: var(--inactive-link-color);
 }
 
 div.pool-input .pool-usages,
@@ -95,5 +93,5 @@ ul.compact-pools .remove-pool {
 .darktheme ul.compact-pools .pool-weight,
 .darktheme div.pool-input .remove-pool,
 .darktheme ul.compact-pools .remove-pool {
-    color: "$inactive-link-color-darktheme";
+    color: var(--inactive-link-color-darktheme);
 }

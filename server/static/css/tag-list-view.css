@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 .tag-list table {
     width: 100%;
     border-spacing: 0;
@@ -8,7 +6,7 @@
 }
 
 .tag-list table tr:hover td {
-    background: "$top-navigation-color";
+    background: var(--top-navigation-color);
 }
 
 .tag-list table th,
@@ -18,7 +16,7 @@
 
 .tag-list table th {
     white-space: nowrap;
-    background: "$top-navigation-color";
+    background: var(--top-navigation-color);
 }
 
 .tag-list table .names {
@@ -69,11 +67,11 @@
 }
 
 .darktheme .tag-list table tr:hover td {
-    background: "$top-navigation-color-darktheme";
+    background: var(--top-navigation-color-darktheme);
 }
 
 .darktheme .tag-list table th {
-    background: "$top-navigation-color-darktheme";
+    background: var(--top-navigation-color-darktheme);
 }
 
 .tag-list-header {
@@ -101,9 +99,9 @@
 .tag-list-header .append {
     vertical-align: middle;
     font-size: .95em;
-    color: "$inactive-link-color";
+    color: var(--inactive-link-color);
 }
 
 .darktheme .tag-list-header .append {
-    color: "$inactive-link-color-darktheme";
+    color: var(--inactive-link-color-darktheme);
 }
