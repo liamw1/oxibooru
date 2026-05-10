@@ -19,7 +19,6 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 use tracing::{error, info};
 
 pub type Connection = PooledConnection<ConnectionManager<PgConnection>>;
-pub type ConnectionResult = Result<Connection, PoolError>;
 pub type AsyncConnectionResult<'a> = Result<AsyncConnection<'a>, PoolError>;
 
 pub struct AsyncConnection<'a> {
@@ -129,7 +128,7 @@ pub fn run_server_migrations(
     migration_range: RangeInclusive<i32>,
 ) -> Result<(), Box<dyn Error + Send + Sync>> {
     // If creating the database for the first time, set post signature version
-    let mut conn = state.get_connection_blocking()?;
+    let mut conn = state.connection_pool.get_blocking()?;
     if migration_range.contains(&1) {
         diesel::update(database_statistics::table)
             .set(database_statistics::signature_version.eq(SIGNATURE_VERSION))

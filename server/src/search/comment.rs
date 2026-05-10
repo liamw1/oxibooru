@@ -1,6 +1,5 @@
 use crate::api::error::{ApiError, ApiResult};
-use crate::auth::Client;
-use crate::config::Config;
+use crate::app::Context;
 use crate::schema::{comment, comment_statistics, database_statistics, user};
 use crate::search::{Builder, Order, ParsedSort, SearchCriteria, preferences};
 use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
@@ -31,7 +30,6 @@ pub enum Token {
 
 pub struct QueryBuilder<'a> {
     search: SearchCriteria<'a, Token>,
-    config: &'a Config,
 }
 
 impl<'a> Builder<'a> for QueryBuilder<'a> {
@@ -43,7 +41,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() || preferences::has_preferences(self.config, self.search.client) {
+        if self.search.has_filter() || preferences::has_preferences(self.search.ctx) {
             let unsorted_query = self.build_filtered(conn)?;
             unsorted_query.count().first(conn)
         } else {
@@ -75,7 +73,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             })?;
 
         // Apply preference filters to comments
-        if let Some(hidden_posts) = preferences::hidden_posts(self.config, self.search.client, comment::post_id) {
+        if let Some(hidden_posts) = preferences::hidden_posts(self.search.ctx, comment::post_id) {
             query = query.filter(not(exists(hidden_posts)));
         }
         Ok(query)
@@ -84,7 +82,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
-            return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
+            return apply_random_sort!(conn, self.search.ctx.client, unsorted_query, self.search).load(conn);
         }
 
         let default_sort = std::iter::once(ParsedSort {
@@ -110,9 +108,9 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 }
 
 impl<'a> QueryBuilder<'a> {
-    pub fn new(config: &'a Config, client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::Text).map_err(Box::from)?;
-        Ok(Self { search, config })
+    pub fn new(ctx: &'a Context, search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(ctx, search_criteria, Token::Text).map_err(Box::from)?;
+        Ok(Self { search })
     }
 }
 

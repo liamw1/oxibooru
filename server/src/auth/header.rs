@@ -67,7 +67,7 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
 /// and that the username/password combination is valid.
 async fn basic_access_authentication(state: &AppState, credentials: &str) -> Result<Client, AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
-    let mut conn = state.get_connection().await?;
+    let mut conn = state.connection_pool.get().await?;
 
     // For security reasons, don't give any indication to the user if it was the password
     // or the username that was incorrect.
@@ -88,7 +88,7 @@ async fn basic_access_authentication(state: &AppState, credentials: &str) -> Res
 async fn token_authentication(state: &AppState, credentials: &str) -> Result<Client, AuthenticationError> {
     let (username, unparsed_token) = decode_credentials(credentials)?;
     let token = Uuid::parse_str(&unparsed_token)?;
-    let mut conn = state.get_connection().await?;
+    let mut conn = state.connection_pool.get().await?;
 
     let (user_id, rank, enabled, expiration_time): (i64, UserRank, bool, Option<DateTime>) = user_token::table
         .inner_join(user::table)

@@ -1,3 +1,4 @@
+use crate::app::Context;
 use crate::auth::Client;
 use crate::config::Config;
 use crate::model::comment::{Comment, CommentScore};
@@ -64,35 +65,32 @@ pub struct CommentInfo {
 impl CommentInfo {
     pub fn new(
         conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
+        ctx: &Context,
         comment: Comment,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
-        Self::new_batch(conn, config, client, vec![comment], fields).map(resource::single)
+        Self::new_batch(conn, ctx, vec![comment], fields).map(resource::single)
     }
 
     pub fn new_from_id(
         conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
+        ctx: &Context,
         comment_id: i64,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
-        Self::new_batch_from_ids(conn, config, client, &[comment_id], fields).map(resource::single)
+        Self::new_batch_from_ids(conn, ctx, &[comment_id], fields).map(resource::single)
     }
 
     pub fn new_batch(
         conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
+        ctx: &Context,
         comments: Vec<Comment>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
-        let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, config, &comments))?;
+        let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, &ctx.config, &comments))?;
         let mut scores = resource::retrieve(fields[Field::Score], || get_scores(conn, &comments))?;
         let mut client_scores =
-            resource::retrieve(fields[Field::OwnScore], || get_client_scores(conn, client, &comments))?;
+            resource::retrieve(fields[Field::OwnScore], || get_client_scores(conn, ctx.client, &comments))?;
 
         let batch_size = comments.len();
         resource::check_batch_results(batch_size, owners.len());
@@ -120,14 +118,13 @@ impl CommentInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
+        ctx: &Context,
         comment_ids: &[i64],
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_comments = comment::table.filter(comment::id.eq_any(comment_ids)).load(conn)?;
         let comments = resource::order_as(unordered_comments, comment_ids);
-        Self::new_batch(conn, config, client, comments, fields)
+        Self::new_batch(conn, ctx, comments, fields)
     }
 }
 

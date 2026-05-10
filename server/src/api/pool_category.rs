@@ -1,10 +1,9 @@
 use crate::api::doc::POOL_CATEGORY_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
 use crate::app::AppState;
-use crate::auth::Client;
-use crate::config::RegexType;
+use crate::config::{Action, RegexType};
+use crate::extract::{Ctx, Json, Path, Query};
 use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::pool_category::{NewPoolCategory, PoolCategory};
 use crate::resource::pool_category::PoolCategoryInfo;
@@ -12,7 +11,6 @@ use crate::schema::{pool, pool_category};
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, resource, snapshot};
-use axum::extract::{Extension, State};
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -40,15 +38,13 @@ pub fn routes() -> OpenApiRouter<AppState> {
     ),
 )]
 async fn list(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<UnpagedResponse<PoolCategoryInfo>>> {
-    api::verify_privilege(client, state.config.privileges().pool_category_list)?;
+    ctx.verify_privilege(Action::PoolCategoryList)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| PoolCategoryInfo::all(conn, &fields))
         .await
         .map(|results| UnpagedResponse { results })
@@ -71,16 +67,15 @@ async fn list(
     ),
 )]
 async fn get(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
-    api::verify_privilege(client, state.config.privileges().pool_category_view)?;
+    ctx.verify_privilege(Action::PoolCategoryView)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
+
+    connection_pool
         .transaction(move |conn| {
             let category = pool_category::table
                 .filter(pool_category::name.eq(name))
@@ -122,17 +117,15 @@ struct PoolCategoryCreateBody {
     ),
 )]
 async fn create(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams>,
     Json(body): Json<PoolCategoryCreateBody>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
-    api::verify_privilege(client, state.config.privileges().pool_category_create)?;
-    api::verify_matches_regex(&state.config, &body.name, RegexType::PoolCategory)?;
+    ctx.verify_privilege(Action::PoolCategoryCreate)?;
+    api::verify_matches_regex(&ctx.config, &body.name, RegexType::PoolCategory)?;
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let category = state
-        .connection_pool
+    let category = connection_pool
         .transaction(move |conn| {
             let category = NewPoolCategory {
                 name: &body.name,
@@ -144,12 +137,11 @@ async fn create(
             .get_result(conn)
             .optional()?
             .ok_or(ApiError::AlreadyExists(ResourceProperty::PoolCategoryName))?;
-            snapshot::pool_category::creation_snapshot(conn, client, &category)?;
+            snapshot::pool_category::creation_snapshot(conn, ctx.client, &category)?;
             Ok::<_, ApiError>(category)
         })
         .await?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| PoolCategoryInfo::new(conn, category, &fields))
         .await
         .map(Json)
@@ -191,16 +183,14 @@ struct PoolCategoryUpdateBody {
     ),
 )]
 async fn update(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<PoolCategoryUpdateBody>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    let updated_category = state
-        .connection_pool
+    let updated_category = connection_pool
         .transaction(move |conn| {
             let old_category: PoolCategory = pool_category::table
                 .filter(pool_category::name.eq(name))
@@ -211,24 +201,23 @@ async fn update(
 
             let mut new_category = old_category.clone();
             if let Some(name) = body.name {
-                api::verify_privilege(client, state.config.privileges().pool_category_edit_name)?;
-                api::verify_matches_regex(&state.config, &name, RegexType::PoolCategory)?;
+                ctx.verify_privilege(Action::PoolCategoryEditName)?;
+                api::verify_matches_regex(&ctx.config, &name, RegexType::PoolCategory)?;
                 new_category.name = name;
             }
             if let Some(color) = body.color {
-                api::verify_privilege(client, state.config.privileges().pool_category_edit_color)?;
+                ctx.verify_privilege(Action::PoolCategoryEditColor)?;
                 new_category.color = color;
             }
 
             new_category.last_edit_time = DateTime::now();
             let _: PoolCategory =
                 error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::PoolCategoryName)?;
-            snapshot::pool_category::modification_snapshot(conn, client, &old_category, &new_category)?;
+            snapshot::pool_category::modification_snapshot(conn, ctx.client, &old_category, &new_category)?;
             Ok::<_, ApiError>(new_category)
         })
         .await?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| PoolCategoryInfo::new(conn, updated_category, &fields))
         .await
         .map(Json)
@@ -252,16 +241,14 @@ async fn update(
     ),
 )]
 async fn set_default(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
-    api::verify_privilege(client, state.config.privileges().pool_category_set_default)?;
+    ctx.verify_privilege(Action::PoolCategorySetDefault)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let new_default_category: PoolCategory = state
-        .connection_pool
+    let new_default_category: PoolCategory = connection_pool
         .transaction(move |conn| {
             let mut category: PoolCategory = pool_category::table
                 .filter(pool_category::name.eq(name))
@@ -302,12 +289,16 @@ async fn set_default(
             new_default_category.name = temporary_category_name;
             let _: PoolCategory = new_default_category.save_changes(conn)?;
 
-            snapshot::pool_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
+            snapshot::pool_category::set_default_snapshot(
+                conn,
+                ctx.client,
+                &old_default_category,
+                &new_default_category,
+            )?;
             Ok::<_, ApiError>(new_default_category)
         })
         .await?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| PoolCategoryInfo::new(conn, new_default_category, &fields))
         .await
         .map(Json)
@@ -333,15 +324,13 @@ async fn set_default(
     ),
 )]
 async fn delete(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    api::verify_privilege(client, state.config.privileges().pool_category_delete)?;
+    ctx.verify_privilege(Action::PoolCategoryDelete)?;
 
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             let category: PoolCategory = pool_category::table
                 .filter(pool_category::name.eq(name))
@@ -354,7 +343,7 @@ async fn delete(
             }
 
             diesel::delete(pool_category::table.find(category.id)).execute(conn)?;
-            snapshot::pool_category::deletion_snapshot(conn, client, &category)?;
+            snapshot::pool_category::deletion_snapshot(conn, ctx.client, &category)?;
             Ok(Json(()))
         })
         .await

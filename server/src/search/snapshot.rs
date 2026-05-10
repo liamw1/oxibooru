@@ -1,5 +1,5 @@
 use crate::api::error::{ApiError, ApiResult};
-use crate::auth::Client;
+use crate::app::Context;
 use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::schema::{snapshot, user};
 use crate::search::{Builder, Order, ParsedSort, SearchCriteria};
@@ -55,7 +55,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
-            return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
+            return apply_random_sort!(conn, self.search.ctx.client, unsorted_query, self.search).load(conn);
         }
 
         let default_sort = std::iter::once(ParsedSort {
@@ -79,8 +79,8 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 }
 
 impl<'a> QueryBuilder<'a> {
-    pub fn new(client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, Token::ResourceType).map_err(Box::from)?;
+    pub fn new(ctx: &'a Context, search_criteria: &'a str) -> ApiResult<Self> {
+        let search = SearchCriteria::new(ctx, search_criteria, Token::ResourceType).map_err(Box::from)?;
         Ok(Self { search })
     }
 }

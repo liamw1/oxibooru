@@ -1,9 +1,9 @@
 use crate::api::doc::POOL_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
-use crate::auth::Client;
+use crate::config::Action;
+use crate::extract::{Ctx, Json, Path, Query};
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
 use crate::resource::pool::PoolInfo;
@@ -14,7 +14,6 @@ use crate::snapshot::pool::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::{api, resource, snapshot, update};
-use axum::extract::{Extension, State};
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
@@ -74,21 +73,19 @@ const MAX_POOLS_PER_PAGE: i64 = 1000;
     ),
 )]
 async fn list(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Query(resource): Query<ResourceParams>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PoolInfo>>> {
-    api::verify_privilege(client, state.config.privileges().pool_list)?;
+    ctx.verify_privilege(Action::PoolList)?;
 
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_POOLS_PER_PAGE);
     let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
 
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
-            let mut query_builder = QueryBuilder::new(client, resource.criteria())?;
+            let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
             query_builder.set_offset_and_limit(offset, limit);
 
             let (total, selected_pools) = query_builder.list(conn)?;
@@ -97,7 +94,7 @@ async fn list(
                 offset,
                 limit,
                 total,
-                results: PoolInfo::new_batch_from_ids(conn, &state.config, client, &selected_pools, &fields)?,
+                results: PoolInfo::new_batch_from_ids(conn, &ctx, &selected_pools, &fields)?,
             }))
         })
         .await
@@ -119,22 +116,20 @@ async fn list(
     ),
 )]
 async fn get(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(pool_id): Path<i64>,
     Query(params): Query<ResourceParams>,
 ) -> ApiResult<Json<PoolInfo>> {
-    api::verify_privilege(client, state.config.privileges().pool_view)?;
+    ctx.verify_privilege(Action::PoolView)?;
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).first(conn)?;
             if !pool_exists {
                 return Err(ApiError::NotFound(ResourceType::Pool));
             }
-            PoolInfo::new_from_id(conn, &state.config, client, pool_id, &fields)
+            PoolInfo::new_from_id(conn, &ctx, pool_id, &fields)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -178,22 +173,20 @@ struct PoolCreateBody {
     ),
 )]
 async fn create(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams>,
     Json(body): Json<PoolCreateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
-    api::verify_privilege(client, state.config.privileges().pool_create)?;
+    ctx.verify_privilege(Action::PoolCreate)?;
 
     if body.names.is_empty() {
         return Err(ApiError::NoNamesGiven(ResourceType::Pool));
     }
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let pool = state
-        .connection_pool
+    let pool = connection_pool
         .transaction({
-            let config = Arc::clone(&state.config);
+            let config = Arc::clone(&ctx.config);
             move |conn| {
                 let (category_id, category): (i64, SmallString) = pool_category::table
                     .select((pool_category::id, pool_category::name))
@@ -220,14 +213,13 @@ async fn create(
                     names: body.names,
                     posts,
                 };
-                snapshot::pool::creation_snapshot(conn, client, pool.id, pool_data)?;
+                snapshot::pool::creation_snapshot(conn, ctx.client, pool.id, pool_data)?;
                 Ok::<_, ApiError>(pool)
             }
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| PoolInfo::new(conn, &state.config, client, pool, &fields))
+    connection_pool
+        .transaction(move |conn| PoolInfo::new(conn, &ctx, pool, &fields))
         .await
         .map(Json)
 }
@@ -250,12 +242,11 @@ async fn create(
     ),
 )]
 async fn merge(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams>,
     Json(body): Json<MergeBody<i64>>,
 ) -> ApiResult<Json<PoolInfo>> {
-    api::verify_privilege(client, state.config.privileges().pool_merge)?;
+    ctx.verify_privilege(Action::PoolMerge)?;
 
     let absorbed_id = body.remove;
     let merge_to_id = body.merge_to;
@@ -273,8 +264,7 @@ async fn merge(
     };
 
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             let remove_version = get_pool_info(conn, absorbed_id)?;
             let merge_to_version = get_pool_info(conn, merge_to_id)?;
@@ -282,12 +272,11 @@ async fn merge(
             api::verify_version(merge_to_version, body.merge_to_version)?;
 
             update::pool::merge(conn, absorbed_id, merge_to_id)?;
-            snapshot::pool::merge_snapshot(conn, client, absorbed_id, merge_to_id).map_err(ApiError::from)
+            snapshot::pool::merge_snapshot(conn, ctx.client, absorbed_id, merge_to_id).map_err(ApiError::from)
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| PoolInfo::new_from_id(conn, &state.config, client, merge_to_id, &fields))
+    connection_pool
+        .transaction(move |conn| PoolInfo::new_from_id(conn, &ctx, merge_to_id, &fields))
         .await
         .map(Json)
 }
@@ -339,18 +328,16 @@ struct PoolUpdateBody {
     ),
 )]
 async fn update(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(pool_id): Path<i64>,
     Query(params): Query<ResourceParams>,
     Json(body): Json<PoolUpdateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
     let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
-    state
-        .connection_pool
+    connection_pool
         .transaction({
-            let config = Arc::clone(&state.config);
+            let ctx = ctx.clone();
             move |conn| {
                 let old_pool: Pool = pool::table
                     .find(pool_id)
@@ -364,7 +351,7 @@ async fn update(
                 let mut new_snapshot_data = old_snapshot_data.clone();
 
                 if let Some(category) = body.category {
-                    api::verify_privilege(client, config.privileges().pool_edit_category)?;
+                    ctx.verify_privilege(Action::PoolEditCategory)?;
 
                     let category_id: i64 = pool_category::table
                         .select(pool_category::id)
@@ -376,36 +363,35 @@ async fn update(
                     new_snapshot_data.category = category;
                 }
                 if let Some(description) = body.description {
-                    api::verify_privilege(client, config.privileges().pool_edit_description)?;
+                    ctx.verify_privilege(Action::PoolEditDescription)?;
                     new_pool.description = description.clone();
                     new_snapshot_data.description = description;
                 }
                 if let Some(names) = body.names {
-                    api::verify_privilege(client, config.privileges().pool_edit_name)?;
+                    ctx.verify_privilege(Action::PoolEditName)?;
                     if names.is_empty() {
                         return Err(ApiError::NoNamesGiven(ResourceType::Pool));
                     }
 
-                    update::pool::set_names(conn, &config, pool_id, &names)?;
+                    update::pool::set_names(conn, &ctx.config, pool_id, &names)?;
                     new_snapshot_data.names = names;
                 }
                 if let Some(mut posts) = body.posts {
-                    api::verify_privilege(client, config.privileges().pool_edit_post)?;
+                    ctx.verify_privilege(Action::PoolEditPost)?;
 
-                    update::pool::set_posts(conn, &config, client, pool_id, &mut posts)?;
+                    update::pool::set_posts(conn, &ctx, pool_id, &mut posts)?;
                     new_snapshot_data.posts = posts;
                 }
 
                 new_pool.last_edit_time = DateTime::now();
                 let _: Pool = new_pool.save_changes(conn)?;
-                snapshot::pool::modification_snapshot(conn, client, pool_id, old_snapshot_data, new_snapshot_data)?;
+                snapshot::pool::modification_snapshot(conn, ctx.client, pool_id, old_snapshot_data, new_snapshot_data)?;
                 Ok(())
             }
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| PoolInfo::new_from_id(conn, &state.config, client, pool_id, &fields))
+    connection_pool
+        .transaction(move |conn| PoolInfo::new_from_id(conn, &ctx, pool_id, &fields))
         .await
         .map(Json)
 }
@@ -429,15 +415,13 @@ async fn update(
     ),
 )]
 async fn delete(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(pool_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    api::verify_privilege(client, state.config.privileges().pool_delete)?;
+    ctx.verify_privilege(Action::PoolDelete)?;
 
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             let pool: Pool = pool::table
                 .find(pool_id)
@@ -448,7 +432,7 @@ async fn delete(
 
             let pool_id = pool.id;
             let pool_data = SnapshotData::retrieve(conn, pool)?;
-            snapshot::pool::deletion_snapshot(conn, client, pool_id, pool_data)?;
+            snapshot::pool::deletion_snapshot(conn, ctx.client, pool_id, pool_data)?;
 
             diesel::delete(pool::table.find(pool_id)).execute(conn)?;
             Ok::<_, ApiError>(Json(()))

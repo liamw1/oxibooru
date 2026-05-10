@@ -1,6 +1,5 @@
 use crate::api::error::{ApiError, ApiResult};
-use crate::auth::Client;
-use crate::config::Config;
+use crate::app::Context;
 use crate::model::enums::UserRank;
 use crate::model::tag::TagName;
 use crate::schema::{
@@ -92,7 +91,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
-            return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
+            return apply_random_sort!(conn, self.search.ctx.client, unsorted_query, self.search).load(conn);
         }
 
         let default_sort = std::iter::once(ParsedSort {
@@ -122,10 +121,10 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 }
 
 impl<'a> QueryBuilder<'a> {
-    pub fn new(config: &'a Config, client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        let mut search = SearchCriteria::new(client, search_criteria, Token::Name).map_err(Box::from)?;
-        if client.rank == UserRank::Anonymous {
-            let preferences = &config.anonymous_preferences;
+    pub fn new(ctx: &'a Context, search_criteria: &'a str) -> ApiResult<Self> {
+        let mut search = SearchCriteria::new(ctx, search_criteria, Token::Name).map_err(Box::from)?;
+        if ctx.client.rank == UserRank::Anonymous {
+            let preferences = &ctx.config.anonymous_preferences;
 
             let tag_blacklist_filters = preferences.tag_blacklist.iter().map(|condition| UnparsedFilter {
                 kind: Token::Name,

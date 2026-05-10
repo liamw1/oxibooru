@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::{self, error};
-use crate::auth::Client;
+use crate::app::Context;
 use crate::config::{Config, RegexType};
 use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::pool::{NewPoolName, PoolPost};
@@ -32,15 +32,9 @@ pub fn set_names(conn: &mut PgConnection, config: &Config, pool_id: i64, names: 
 }
 
 /// Replaces the current ordered list of posts with `posts` for pool associated with `pool_id`.
-pub fn set_posts(
-    conn: &mut PgConnection,
-    config: &Config,
-    client: Client,
-    pool_id: i64,
-    posts: &mut Vec<i64>,
-) -> ApiResult<()> {
+pub fn set_posts(conn: &mut PgConnection, ctx: &Context, pool_id: i64, posts: &mut Vec<i64>) -> ApiResult<()> {
     // Add posts client doesn't know about
-    if let Some(hidden_posts) = preferences::hidden_posts(config, client, pool_post::post_id) {
+    if let Some(hidden_posts) = preferences::hidden_posts(ctx, pool_post::post_id) {
         let hidden_posts: Vec<i64> = pool_post::table
             .select(pool_post::post_id)
             .filter(pool_post::pool_id.eq(pool_id))

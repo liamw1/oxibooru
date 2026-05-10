@@ -1,6 +1,6 @@
 use crate::api::error::{self, ApiError, ApiResult};
-use crate::auth::Client;
-use crate::config::{Config, RegexType};
+use crate::app::Context;
+use crate::config::{Action, Config, RegexType};
 use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagName, TagSuggestion};
@@ -91,8 +91,7 @@ pub fn set_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i6
 /// Checks that each new name matches on the Tag regex.
 pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
-    config: &Config,
-    client: Client,
+    ctx: &Context,
     names: Vec<SmallString>,
     mode: FetchMode,
 ) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
@@ -143,11 +142,11 @@ pub fn get_or_create_tag_ids(
         .collect();
     new_names
         .iter()
-        .try_for_each(|name| api::verify_matches_regex(config, name, RegexType::Tag))?;
+        .try_for_each(|name| api::verify_matches_regex(&ctx.config, name, RegexType::Tag))?;
 
     // Create new tags if given unique names
     if !new_names.is_empty() {
-        api::verify_privilege(client, config.privileges().tag_create)?;
+        ctx.verify_privilege(Action::TagCreate)?;
 
         let new_tag_ids: Vec<i64> = vec![NewTag::default(); new_names.len()]
             .insert_into(tag::table)
@@ -160,7 +159,7 @@ pub fn get_or_create_tag_ids(
             .collect();
         new_tag_names.insert_into(tag_name::table).execute(conn)?;
 
-        snapshot::tag::new_name_snapshots(conn, client, new_names)?;
+        snapshot::tag::new_name_snapshots(conn, ctx.client, new_names)?;
         tag_ids.extend(new_tag_ids);
     }
 

@@ -18,6 +18,7 @@ mod config;
 mod content;
 mod db;
 mod error;
+mod extract;
 mod filesystem;
 mod math;
 mod model;

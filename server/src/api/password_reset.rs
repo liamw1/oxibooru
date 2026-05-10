@@ -1,9 +1,9 @@
 use crate::api::doc::PASSWORD_RESET_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::extract::{Json, Path};
 use crate::app::AppState;
 use crate::auth::password;
 use crate::content::hash;
+use crate::extract::{Json, Path};
 use crate::model::enums::ResourceType;
 use crate::schema::user;
 use crate::string::SmallString;
@@ -61,7 +61,7 @@ fn get_user_info(
 async fn request_reset(State(state): State<AppState>, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
     let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
-    let mut conn = state.get_connection().await?;
+    let mut conn = state.connection_pool.get().await?;
     let (_id, username, user_email, password_salt) = get_user_info(conn.as_mut(), &identifier)?;
     let user_email = user_email.ok_or(ApiError::NoEmail)?;
     let user_mailbox = Mailbox::new(None, Address::from_str(&user_email)?);

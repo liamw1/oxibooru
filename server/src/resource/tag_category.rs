@@ -1,5 +1,4 @@
-use crate::auth::Client;
-use crate::config::Config;
+use crate::app::Context;
 use crate::model::enums::UserRank;
 use crate::model::tag_category::TagCategory;
 use crate::resource::BoolFill;
@@ -67,20 +66,15 @@ impl TagCategoryInfo {
         })
     }
 
-    pub fn all(
-        conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
-        fields: &FieldTable<bool>,
-    ) -> QueryResult<Vec<Self>> {
+    pub fn all(conn: &mut PgConnection, ctx: &Context, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
         let mut tag_categories = tag_category::table
             .inner_join(tag_category_statistics::table)
             .select((TagCategory::as_select(), tag_category_statistics::usage_count))
             .order(tag_category::order)
             .into_boxed();
-        if client.rank == UserRank::Anonymous {
-            tag_categories =
-                tag_categories.filter(tag_category::name.ne_all(&config.anonymous_preferences.tag_category_blacklist));
+        if ctx.client.rank == UserRank::Anonymous {
+            tag_categories = tag_categories
+                .filter(tag_category::name.ne_all(&ctx.config.anonymous_preferences.tag_category_blacklist));
         }
 
         let tag_categories: Vec<(TagCategory, i64)> = tag_categories.load(conn)?;

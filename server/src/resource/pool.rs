@@ -1,5 +1,4 @@
-use crate::auth::Client;
-use crate::config::Config;
+use crate::app::Context;
 use crate::content::hash::PostHash;
 use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource::post::MicroPost;
@@ -83,36 +82,28 @@ pub struct PoolInfo {
 }
 
 impl PoolInfo {
-    pub fn new(
-        conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
-        pool: Pool,
-        fields: &FieldTable<bool>,
-    ) -> QueryResult<Self> {
-        Self::new_batch(conn, config, client, vec![pool], fields).map(resource::single)
+    pub fn new(conn: &mut PgConnection, ctx: &Context, pool: Pool, fields: &FieldTable<bool>) -> QueryResult<Self> {
+        Self::new_batch(conn, ctx, vec![pool], fields).map(resource::single)
     }
 
     pub fn new_from_id(
         conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
+        ctx: &Context,
         pool_id: i64,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Self> {
-        Self::new_batch_from_ids(conn, config, client, &[pool_id], fields).map(resource::single)
+        Self::new_batch_from_ids(conn, ctx, &[pool_id], fields).map(resource::single)
     }
 
     pub fn new_batch(
         conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
+        ctx: &Context,
         pools: Vec<Pool>,
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         let mut categories = resource::retrieve(fields[Field::Category], || get_categories(conn, &pools))?;
         let mut names = resource::retrieve(fields[Field::Names], || get_names(conn, &pools))?;
-        let mut posts = resource::retrieve(fields[Field::Posts], || get_posts(conn, config, client, &pools))?;
+        let mut posts = resource::retrieve(fields[Field::Posts], || get_posts(conn, ctx, &pools))?;
         let mut post_counts = resource::retrieve(fields[Field::PostCount], || get_post_counts(conn, &pools))?;
 
         let batch_size = pools.len();
@@ -142,14 +133,13 @@ impl PoolInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
+        ctx: &Context,
         pool_ids: &[i64],
         fields: &FieldTable<bool>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_pools = pool::table.filter(pool::id.eq_any(pool_ids)).load(conn)?;
         let pools = resource::order_as(unordered_pools, pool_ids);
-        Self::new_batch(conn, config, client, pools, fields)
+        Self::new_batch(conn, ctx, pools, fields)
     }
 }
 
@@ -178,16 +168,11 @@ fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<Sma
         .collect())
 }
 
-fn get_posts(
-    conn: &mut PgConnection,
-    config: &Config,
-    client: Client,
-    pools: &[Pool],
-) -> QueryResult<Vec<Vec<MicroPost>>> {
+fn get_posts(conn: &mut PgConnection, ctx: &Context, pools: &[Pool]) -> QueryResult<Vec<Vec<MicroPost>>> {
     let mut pool_posts = PoolPost::belonging_to(pools).order(pool_post::order).into_boxed();
 
     // Apply preference filters to pool posts
-    if let Some(hidden_posts) = preferences::hidden_posts(config, client, pool_post::post_id) {
+    if let Some(hidden_posts) = preferences::hidden_posts(ctx, pool_post::post_id) {
         pool_posts = pool_posts.filter(not(exists(hidden_posts)));
     }
 
@@ -200,7 +185,7 @@ fn get_posts(
                 .into_iter()
                 .map(|pool_post| MicroPost {
                     id: pool_post.post_id,
-                    thumbnail_url: PostHash::new(config, pool_post.post_id).thumbnail_url(),
+                    thumbnail_url: PostHash::new(&ctx.config, pool_post.post_id).thumbnail_url(),
                 })
                 .collect()
         })

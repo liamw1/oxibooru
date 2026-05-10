@@ -33,6 +33,7 @@ pub enum ApiError {
     EmptyVideo,
     #[error("'{0}' does not match on {1} regex")]
     ExpressionFailsRegex(SmallString, RegexType),
+    ExtensionRejection(#[from] axum::extract::rejection::ExtensionRejection),
     FailedAuthentication(#[from] AuthenticationError),
     FailedConnection(#[from] diesel::r2d2::PoolError),
     FailedEmailTransport(#[from] lettre::transport::smtp::Error),
@@ -101,6 +102,7 @@ impl ApiError {
         use serde_json::error::Category;
 
         match self {
+            Self::ExtensionRejection(err) => err.status(),
             Self::JsonRejection(err) => err.status(),
             Self::Multipart(err) => err.status(),
             Self::MultipartRejection(err) => err.status(),
@@ -166,6 +168,7 @@ impl ApiError {
             Self::EmptySwf => "Empty SWF",
             Self::EmptyVideo => "Empty Video",
             Self::ExpressionFailsRegex(..) => "Expression Fails Regex",
+            Self::ExtensionRejection(_) => "Extension Rejection",
             Self::FailedAuthentication(_) => "Failed Authentication",
             Self::FailedConnection(_) => "Failed Connection",
             Self::FailedEmailTransport(_) => "Failed Email Transport",

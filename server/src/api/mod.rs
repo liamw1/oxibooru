@@ -19,7 +19,6 @@ use utoipa_axum::router::OpenApiRouter;
 mod comment;
 mod doc;
 pub mod error;
-mod extract;
 mod info;
 mod legacy;
 pub mod middleware;
@@ -58,14 +57,6 @@ pub fn routes(state: AppState) -> OpenApiRouter {
         .route_layer(axum::middleware::from_fn(middleware::log_error))
         .with_state(state)
         .fallback(|| async { (StatusCode::NOT_FOUND, "Route not found") })
-}
-
-/// Checks if the `client` is at least `required_rank`.
-/// Returns error if client is lower rank than `required_rank`.
-pub fn verify_privilege(client: Client, required_rank: UserRank) -> ApiResult<()> {
-    (client.rank >= required_rank)
-        .then_some(())
-        .ok_or(ApiError::InsufficientPrivileges)
 }
 
 /// Checks if `haystack` matches regex `regex_type`.
@@ -182,6 +173,14 @@ struct PagedResponse<T> {
     #[schema(examples(1729))]
     total: i64,
     results: Vec<T>,
+}
+
+/// Checks if the `client` is at least `required_rank`.
+/// Returns error if client is lower rank than `required_rank`.
+fn verify_privilege(client: Client, required_rank: UserRank) -> ApiResult<()> {
+    (client.rank >= required_rank)
+        .then_some(())
+        .ok_or(ApiError::InsufficientPrivileges)
 }
 
 /// Checks if `current_version` matches `client_version`.
