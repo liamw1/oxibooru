@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 .comments-container {
     margin-top: 2em;
 }
@@ -28,7 +26,7 @@
 }
 
 .comment-container .avatar a:focus {
-    border: 2px solid "$main-color";
+    border: 2px solid var(--main-color);
 }
 
 .comment-container nav:not(.active),
@@ -37,7 +35,7 @@
 }
 
 .comment-container .comment {
-    border: 1px solid "$comment-border-color";
+    border: 1px solid var(--comment-border-color);
 }
 
 .comment-container .comment header {
@@ -45,8 +43,8 @@
     font-size: 95%;
     vertical-align: middle;
     position: relative;
-    background: "$comment-header-background-color";
-    border-bottom: 1px solid "$comment-border-color";
+    background: var(--comment-header-background-color);
+    border-bottom: 1px solid var(--comment-border-color);
 }
 
 .comment-container .comment header nav.edit {
@@ -70,9 +68,9 @@
 }
 
 .comment-container .comment header nav.edit ul li.active {
-    background: "$window-color";
-    border: 1px solid "$comment-border-color";
-    border-bottom: 1px solid "$window-color";
+    background: var(--window-color);
+    border: 1px solid var(--comment-border-color);
+    border-bottom: 1px solid var(--window-color);
 }
 
 .comment-container .comment header nav.readonly {
@@ -100,7 +98,7 @@
     left: -1.5em;
     top: calc(50% - 0.75em);
     border: .75em solid transparent;
-    border-right: .75em solid 'darken("$comment-border-color", 10%)';
+    border-right: .75em solid oklch(from var(--comment-border-color) calc(l - 10%) c h);
 }
 
 .comment-container .comment header:after {
@@ -112,14 +110,14 @@
     left: calc(-1.5em + 1px);
     top: calc(50% - 0.75em);
     border: .75em solid transparent;
-    border-right: .75em solid "$comment-header-background-color";
+    border-right: .75em solid var(--comment-header-background-color);
 }
 
 .comment-container .comment header .edit:not(.inactive),
 .comment-container .comment header .delete:not(.inactive),
 .comment-container .comment header .score-container a:not(.inactive),
 .comment-container .comment header .nickname a:not(.inactive) {
-    color: 'mix("$main-color", "$inactive-link-color")';
+    color: color-mix(in oklab var(--main-color), var(--inactive-link-color));
 }
 
 .comment-container .comment header i {
@@ -166,24 +164,24 @@
 }
 
 .darktheme .comment-container .comment {
-    border: 1px solid "$comment-header-background-color-darktheme";
+    border: 1px solid var(--comment-header-background-color-darktheme);
 }
 
 .darktheme .comment-container .comment header {
-    background: "$comment-header-background-color-darktheme";
-    border-bottom: 1px solid "$comment-header-background-color-darktheme";
+    background: var(--comment-header-background-color-darktheme);
+    border-bottom: 1px solid var(--comment-header-background-color-darktheme);
 }
 
 .darktheme .comment-container .comment header nav.edit ul li.active {
-    background: "$window-color-darktheme";
-    border: 1px solid "$window-color-darktheme";
+    background: var(--window-color-darktheme);
+    border: 1px solid var(--window-color-darktheme);
 }
 
 .darktheme .comment-container .comment header .edit:not(.inactive),
 .darktheme .comment-container .comment header .delete:not(.inactive),
 .darktheme .comment-container .comment header .score-container a:not(.inactive),
 .darktheme .comment-container .comment header .nickname a:not(.inactive) {
-    color: 'mix("$main-color", "$inactive-link-color-darktheme")';
+    color: color-mix(in oklab var(--main-color), var(--inactive-link-color-darktheme));
 }
 
 .darktheme .comment-container .comment header:before {
@@ -191,7 +189,7 @@
 }
 
 .darktheme .comment-container .comment header:after {
-    border-right: .75em solid "$comment-header-background-color-darktheme";
+    border-right: .75em solid var(--comment-header-background-color-darktheme);
 }
 
 .comment-content p {

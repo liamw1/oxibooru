@@ -32,7 +32,7 @@
 }
 
 #user-registration .info i.fa {
-    color: "$main-color";
+    color: var(--main-color);
 }
 
 #user-registration .info p:first-child {

@@ -1,11 +1,14 @@
-@import url('colors.css');
-
 .post-container {
     text-align: center;
 }
 
 .post-container .post-content.transparency-grid img {
-    background-image: linear-gradient(45deg, "$transparency-grid-square-color" 25%, transparent 25%), linear-gradient(-45deg, "$transparency-grid-square-color" 25%, transparent 25%), linear-gradient(45deg, transparent 75%, "$transparency-grid-square-color" 75%), linear-gradient(-45deg, transparent 75%, "$transparency-grid-square-color" 75%);
+    background-image:
+        /* TODO: Can maybe be replaced with conic-gradient */
+        linear-gradient(45deg, var(--transparency-grid-square-color) 25%, transparent 25%),
+        linear-gradient(-45deg, var(--transparency-grid-square-color) 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, var(--transparency-grid-square-color) 75%),
+        linear-gradient(-45deg, transparent 75%, var(--transparency-grid-square-color) 75%);
     background-size: 20px 20px;
     background-position: 0 0, 0 10px, 10px -10px, -10px 0;
 }
