@@ -1,11 +1,9 @@
-@import url('colors.css');
-
 #nprogress {
     pointer-events: none;
 }
 
 #nprogress .bar {
-    background: "$main-color";
+    background: var(--main-color);
     position: fixed;
     z-index: 1031;
     top: 0;

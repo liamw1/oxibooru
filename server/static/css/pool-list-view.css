@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 .pool-list table {
     width: 100%;
     border-spacing: 0;
@@ -8,7 +6,7 @@
 }
 
 .pool-list table tr:hover td {
-    background: "$top-navigation-color";
+    background: var(--top-navigation-color);
 }
 
 .pool-list table th,
@@ -18,7 +16,7 @@
 
 .pool-list table th {
     white-space: nowrap;
-    background: "$top-navigation-color";
+    background: var(--top-navigation-color);
 }
 
 .pool-list table .names {
@@ -59,11 +57,11 @@
 }
 
 .darktheme .pool-list table tr:hover td {
-    background: "$top-navigation-color-darktheme";
+    background: var(--top-navigation-color-darktheme);
 }
 
 .darktheme .pool-list table th {
-    background: "$top-navigation-color-darktheme";
+    background: var(--top-navigation-color-darktheme);
 }
 
 .pool-list-header {
@@ -91,9 +89,9 @@
 .pool-list-header .append {
     vertical-align: middle;
     font-size: .95em;
-    color: "$inactive-link-color";
+    color: var(--inactive-link-color);
 }
 
 .darktheme .pool-list-header .append {
-    color: "$inactive-link-color-darktheme";
+    color: var(--inactive-link-color-darktheme);
 }

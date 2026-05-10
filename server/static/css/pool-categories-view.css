@@ -1,5 +1,3 @@
-@import url('colors.css');
-
 .content-wrapper.pool-categories {
     width: 100%;
     max-width: 45em;
@@ -11,7 +9,7 @@
 }
 
 .content-wrapper.pool-categories table tr.default td {
-    background: "$default-pool-category-background-color";
+    background: var(--default-pool-category-background-color);
 }
 
 .content-wrapper.pool-categories table td,
