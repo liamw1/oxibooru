@@ -8,9 +8,8 @@ use regex::Regex;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
 use std::collections::HashMap;
-use std::ops::{Index, IndexMut};
 use std::path::PathBuf;
-use strum::{Display, EnumCount, EnumIter, IntoEnumIterator, IntoStaticStr};
+use strum::{Display, EnumCount, EnumIter, EnumTable, IntoEnumIterator, IntoStaticStr};
 use url::Url;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema};
 use utoipa::{PartialSchema, ToSchema};
@@ -74,7 +73,7 @@ impl AnonymousPreferences {
     }
 }
 
-#[derive(Clone, Copy, EnumCount, EnumIter, IntoStaticStr)]
+#[derive(Clone, Copy, EnumCount, EnumIter, EnumTable, IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum Action {
     UserCreateSelf,
@@ -180,21 +179,7 @@ pub enum Action {
     UploadUseDownloader,
 }
 
-#[derive(Clone)]
-pub struct PrivilegeConfig([UserRank; Action::COUNT]);
-
-impl Index<Action> for PrivilegeConfig {
-    type Output = UserRank;
-    fn index(&self, index: Action) -> &Self::Output {
-        &self.0[index as usize]
-    }
-}
-
-impl IndexMut<Action> for PrivilegeConfig {
-    fn index_mut(&mut self, index: Action) -> &mut Self::Output {
-        &mut self.0[index as usize]
-    }
-}
+pub type PrivilegeConfig = ActionTable<UserRank>;
 
 impl Serialize for PrivilegeConfig {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
@@ -211,7 +196,7 @@ impl<'de> Deserialize<'de> for PrivilegeConfig {
     where
         D: serde::Deserializer<'de>,
     {
-        let mut required_ranks = Self([UserRank::Administrator; Action::COUNT]);
+        let mut required_ranks = PrivilegeConfig::filled(UserRank::Administrator);
         let mut privilege_map = HashMap::<String, UserRank>::deserialize(deserializer)?;
 
         for action in Action::iter() {
