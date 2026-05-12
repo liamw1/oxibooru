@@ -1,14 +1,14 @@
 {% extends "layout.html" %}
 
-{% block title %}{{ config.public_info.name }} - Home{% endblock %}
+{% block title %}{{ ctx.site_name() }} - Home{% endblock %}
 
 {% block content %}
 <div class='content-wrapper transparent-container' id='home'>
     <div class='messages'></div>
     <header>
-        <h1>{{ config.public_info.name }}</h1>
+        <h1>{{ ctx.site_name() }}</h1>
     </header>
-    {% if client.rank >= config.privileges().post_list %}
+    {% if ctx.has_privilege(Action::PostList) %}
     <form class="horizontal" action="/posts" method="get">
         <input type="text" name="query" placeholder="enter some tags">
         <button type="submit">Search</button>
