@@ -74,6 +74,10 @@ pub struct Context {
 }
 
 impl Context {
+    pub fn site_name(&self) -> &str {
+        &self.config.public_info.name
+    }
+
     /// Checks if the client can perform given `action`.
     pub fn has_privilege(&self, action: Action) -> bool {
         self.client.rank >= self.config.privileges()[action]

@@ -20,7 +20,7 @@
 
     <script src="/static/js/htmx-2.0.10.min.js"></script>
 
-    <title>{% block title %}{{ config.public_info.name }}{% endblock %}</title>
+    <title>{% block title %}{{ ctx.site_name() }}{% endblock %}</title>
 </head>
 
 <body>
