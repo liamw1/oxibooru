@@ -154,7 +154,7 @@
             <td>uploader name alphabetically</td>
         </tr>
         <tr>
-            <td><code>pool</code></td>
+            <td><code>pool-count</code>, <code>pool</code></td>
             <td>in most pools</td>
         </tr>
         <tr>

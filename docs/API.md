@@ -433,46 +433,32 @@ data.
 
     **Named tokens**
 
-    | `<key>`             | Description                                                   |
-    | ------------------- | ------------------------------------------------------------- |
-    | `name`              | having given name (accepts wildcards)                         |
-    | `category`          | having given category (accepts wildcards)                     |
-    | `description`       | having given description (accepts wildcards)                  |
-    | `creation-date`     | created at given date                                         |
-    | `creation-time`     | alias of `creation-date`                                      |
-    | `last-edit-date`    | edited at given date                                          |
-    | `last-edit-time`    | alias of `last-edit-date`                                     |
-    | `edit-date`         | alias of `last-edit-date`                                     |
-    | `edit-time`         | alias of `last-edit-date`                                     |
-    | `usages`            | used in given number of posts                                 |
-    | `usage-count`       | alias of `usages`                                             |
-    | `post-count`        | alias of `usages`                                             |
-    | `suggestion-count`  | with given number of suggestions                              |
-    | `implication-count` | with given number of implications                             |
-    | `implies`           | having an implication with the given name (accepts wildcards) |
-    | `suggests`          | having a suggestion with the given name (accepts wildcards)   |
+    | Key                                                          | Description                                                   |
+    | -------------------                                          | ------------------------------------------------------------- |
+    | `name`                                                       | having given name (accepts wildcards)                         |
+    | `category`                                                   | having given category (accepts wildcards)                     |
+    | `description`                                                | having given description (accepts wildcards)                  |
+    | `creation-date`, `creation-time`                             | created at given date                                         |
+    | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | edited at given date                                          |
+    | `usages`, `usage-count`, `post-count`                        | used in given number of posts                                 |
+    | `suggestion-count`                                           | with given number of suggestions                              |
+    | `implication-count`                                          | with given number of implications                             |
+    | `implies`                                                    | having an implication with the given name (accepts wildcards) |
+    | `suggests`                                                   | having a suggestion with the given name (accepts wildcards)   |
 
     **Sort style tokens**
 
-    | `<value>`           | Description                  |
-    | ------------------- | ---------------------------- |
-    | `random`            | as random as it can get      |
-    | `name`              | A to Z                       |
-    | `category`          | category (A to Z)            |
-    | `description`       | description (A to Z)         |
-    | `creation-date`     | recently created first       |
-    | `creation-time`     | alias of `creation-date`     |
-    | `last-edit-date`    | recently edited first        |
-    | `last-edit-time`    | alias of `creation-time`     |
-    | `edit-date`         | alias of `creation-time`     |
-    | `edit-time`         | alias of `creation-time`     |
-    | `usages`            | used in most posts first     |
-    | `usage-count`       | alias of `usages`            |
-    | `post-count`        | alias of `usages`            |
-    | `suggestion-count`  | with most suggestions first  |
-    | `implication-count` | with most implications first |
-    | `implies`           | alias of `implication-count` |
-    | `suggests`          | alias of `suggestion-count`  |
+    | Value                                                        | Description                  |
+    | -------------------                                          | ---------------------------- |
+    | `random`                                                     | as random as it can get      |
+    | `name`                                                       | A to Z                       |
+    | `category`                                                   | category (A to Z)            |
+    | `description`                                                | description (A to Z)         |
+    | `creation-date`, `creation-time`                             | recently created first       |
+    | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first        |
+    | `usages`, `usage-count`, `post-count`                        | used in most posts first     |
+    | `implication-count`, `implies`                               | with most implications first |
+    | `suggestion-count`, `suggests`                               | with most suggestions first  |
 
     **Special tokens**
 
@@ -702,108 +688,69 @@ data.
 
     **Named tokens**
 
-    | `<key>`              | Description                                                                             |
-    | -------------------- | ----------------------------------------------------------                              |
-    | `id`                 | having given post number                                                                |
-    | `tag`                | having given tag (accepts wildcards)                                                    |
-    | `tag-category`       | having tags from given tag category (accepts wildcards)                                 |
-    | `score`              | having given score                                                                      |
-    | `uploader`           | uploaded by given user (accepts wildcards)                                              |
-    | `upload`             | alias of upload                                                                         |
-    | `submit`             | alias of upload                                                                         |
-    | `comment`            | commented by given user (accepts wildcards)                                             |
-    | `fav`                | favorited by given user (accepts wildcards)                                             |
-    | `pool`               | belonging to the pool with the given name (accepts wildcards) or ID                     |
-    | `pool-category`      | belonging to pools in the given pool category (accepts wildcards)                       |
-    | `tag-count`          | having given number of tags                                                             |
-    | `comment-count`      | having given number of comments                                                         |
-    | `fav-count`          | favorited by given number of users                                                      |
-    | `note-count`         | having given number of annotations                                                      |
-    | `note-text`          | having given note text (accepts wildcards)                                              |
-    | `relation-count`     | having given number of relations                                                        |
-    | `feature-count`      | having been featured given number of times                                              |
-    | `type`               | given type of posts. `<value>` can be either `image`, `animation`, `flash`, or `video`. |
-    | `content-checksum`   | having given BLAKE3 checksum                                                            |
-    | `flag`               | having given flag. `<value>` can be either `loop` or `sound`.                           |
-    | `source`             | having given source.                                                                    |
-    | `file-size`          | having given file size (in bytes)                                                       |
-    | `image-width`        | having given image width (where applicable)                                             |
-    | `image-height`       | having given image height (where applicable)                                            |
-    | `image-area`         | having given number of pixels (image width * image height)                              |
-    | `image-aspect-ratio` | having given aspect ratio (image width / image height)                                  |
-    | `image-ar`           | alias of `image-aspect-ratio`                                                           |
-    | `width`              | alias of `image-width`                                                                  |
-    | `height`             | alias of `image-height`                                                                 |
-    | `area`               | alias of `image-area`                                                                   |
-    | `ar`                 | alias of `image-aspect-ratio`                                                           |
-    | `aspect-ratio`       | alias of `image-aspect-ratio`                                                           |
-    | `creation-date`      | posted at given date                                                                    |
-    | `creation-time`      | alias of `creation-date`                                                                |
-    | `date`               | alias of `creation-date`                                                                |
-    | `time`               | alias of `creation-date`                                                                |
-    | `last-edit-date`     | edited at given date                                                                    |
-    | `last-edit-time`     | alias of `last-edit-date`                                                               |
-    | `edit-date`          | alias of `last-edit-date`                                                               |
-    | `edit-time`          | alias of `last-edit-date`                                                               |
-    | `comment-date`       | commented at given date                                                                 |
-    | `comment-time`       | alias of `comment-date`                                                                 |
-    | `fav-date`           | last favorited at given date                                                            |
-    | `fav-time`           | alias of `fav-date`                                                                     |
-    | `feature-date`       | featured at given date                                                                  |
-    | `feature-time`       | alias of `feature-time`                                                                 |
-    | `safety`             | having given safety. `<value>` can be either `safe`, `sketchy`, or `unsafe`.            |
-    | `rating`             | alias of `safety`                                                                       |
+    | Key                                                          | Description                                                             |
+    | ------------------------------------------------------------ | ----------------------------------------------------------------------- |
+    | `id`                                                         | having given post number                                                |
+    | `tag`                                                        | having given tag (accepts wildcards)                                    |
+    | `tag-category`                                               | having tags from given tag category (accepts wildcards)                 |
+    | `score`                                                      | having given score                                                      |
+    | `uploader`, `upload`, `submit`                               | uploaded by given user (accepts wildcards)                              |
+    | `comment`                                                    | commented by given user (accepts wildcards)                             |
+    | `fav`                                                        | favorited by given user (accepts wildcards)                             |
+    | `pool`                                                       | belonging to the pool with the given name (accepts wildcards) or ID     |
+    | `pool-category`                                              | belonging to pools in the given pool category (accepts wildcards)       |
+    | `tag-count`                                                  | having given number of tags                                             |
+    | `comment-count`                                              | having given number of comments                                         |
+    | `fav-count`                                                  | favorited by given number of users                                      |
+    | `note-count`                                                 | having given number of annotations                                      |
+    | `note-text`                                                  | having given note text (accepts wildcards)                              |
+    | `relation-count`                                             | having given number of relations                                        |
+    | `feature-count`                                              | having been featured given number of times                              |
+    | `type`                                                       | type of posts (can be either `image`, `animation`, `flash`, or `video`) |
+    | `content-checksum`                                           | having given BLAKE3 checksum                                            |
+    | `flag`                                                       | having given flag (can be either `loop` or `sound`)                     |
+    | `source`                                                     | having given source                                                     |
+    | `file-size`                                                  | having given file size (in bytes)                                       |
+    | `image-width`, `width`                                       | having given image width (where applicable)                             |
+    | `image-height`, `height`                                     | having given image height (where applicable)                            |
+    | `image-area`, `area`                                         | having given number of pixels (image width * image height)              |
+    | `image-aspect-ratio`, `image-ar`, `ar`, `aspect-ratio`       | having given aspect ratio (image width / image height)                  |
+    | `creation-date`, `creation-time`, `date`, `time`             | posted at given date                                                    |
+    | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | edited at given date                                                    |
+    | `comment-date`, `comment-time`                               | commented at given date                                                 |
+    | `fav-date`, `fav-time`                                       | last favorited at given date                                            |
+    | `feature-date`, `feature-time`                               | featured at given date                                                  |
+    | `safety`, `rating`                                           | having given safety (can be either `safe`, `sketchy`, or `unsafe`)      |
 
     **Sort style tokens**
 
-    | `<value>`            | Description                                      |
-    | -------------------- | ------------------------------------------------ |
-    | `random`             | as random as it can get                          |
-    | `id`                 | highest to lowest post number                    |
-    | `score`              | highest scored                                   |
-    | `uploader`           | uploader name alphabetically                     |
-    | `upload`             | alias of upload                                  |
-    | `submit`             | alias of upload                                  |
-    | `pool`               | in most pools                                    |
-    | `comment`            | alias of `comment-count`                         |
-    | `fav`                | alias of `fav-count`                             |
-    | `tag-count`          | with most tags                                   |
-    | `tag`                | alias of `tag-count`                             |
-    | `comment-count`      | most commented first                             |
-    | `fav-count`          | loved by most                                    |
-    | `note-count`         | with most annotations                            |
-    | `relation-count`     | with most relations                              |
-    | `feature-count`      | most often featured                              |
-    | `type`               | grouped by content type                          |
-    | `flag`               | grouped by flags                                 |
-    | `source`             | sorted by source                                 |
-    | `file-size`          | largest files first                              |
-    | `image-width`        | widest images first                              |
-    | `image-height`       | tallest images first                             |
-    | `image-area`         | largest images first                             |
-    | `image-aspect-ratio` | highest aspect ratio first                       |
-    | `image-ar`           | alias of `image-aspect-ratio`                    |
-    | `width`              | alias of `image-width`                           |
-    | `height`             | alias of `image-height`                          |
-    | `area`               | alias of `image-area`                            |
-    | `ar`                 | alias of `image-aspect-ratio`                    |
-    | `aspect-ratio`       | alias of `image-aspect-ratio`                    |
-    | `creation-date`      | newest to oldest (pretty much same as id)        |
-    | `creation-time`      | alias of `creation-date`                         |
-    | `date`               | alias of `creation-date`                         |
-    | `time`               | alias of `creation-date`                         |
-    | `last-edit-date`     | like creation-date, only looks at last edit time |
-    | `last-edit-time`     | alias of `last-edit-date`                        |
-    | `edit-date`          | alias of `last-edit-date`                        |
-    | `edit-time`          | alias of `last-edit-date`                        |
-    | `comment-date`       | recently commented by anyone                     |
-    | `comment-time`       | alias of `comment-date`                          |
-    | `fav-date`           | recently added to favorites by anyone            |
-    | `fav-time`           | alias of `fav-date`                              |
-    | `feature-date`       | recently featured                                |
-    | `feature-time`       | alias of `feature-time`                          |
-    | `safety`             | most unsafe first                                |
-    | `rating`             | alias of `safety`                                |
+    | Value                                                        | Description                                      |
+    | ------------------------------------------------------------ | ------------------------------------------------ |
+    | `random`                                                     | as random as it can get                          |
+    | `id`                                                         | highest to lowest post number                    |
+    | `score`                                                      | highest scored                                   |
+    | `uploader`, `upload`, `submit`                               | uploader name alphabetically                     |
+    | `pool-count`, `pool`                                         | in most pools                                    |
+    | `tag-count`, `tag`                                           | with most tags                                   |
+    | `comment-count`, `comment`                                   | most commented first                             |
+    | `fav-count`, `fav`                                           | loved by most                                    |
+    | `note-count`                                                 | with most annotations                            |
+    | `relation-count`                                             | with most relations                              |
+    | `feature-count`                                              | most often featured                              |
+    | `type`                                                       | grouped by content type                          |
+    | `flag`                                                       | grouped by flags                                 |
+    | `source`                                                     | sorted by source                                 |
+    | `file-size`                                                  | largest files first                              |
+    | `image-width`, `width`                                       | widest images first                              |
+    | `image-height`, `height`                                     | tallest images first                             |
+    | `image-area`, `area`                                         | largest images first                             |
+    | `image-aspect-ratio`, `image-ar`, `ar`, `aspect-ratio`       | highest aspect ratio first                       |
+    | `creation-date`, `creation-time`, `date`, `time`             | newest to oldest (pretty much same as id)        |
+    | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | like creation-date, only looks at last edit time |
+    | `comment-date`, `comment-time`                               | recently commented by anyone                     |
+    | `fav-date`, `fav-time`                                       | recently added to favorites by anyone            |
+    | `feature-date`, `feature-time`                               | recently featured                                |
+    | `safety`, `rating`                                           | most unsafe first                                |
 
     **Special tokens**
 
@@ -1332,32 +1279,24 @@ data.
 
     **Named tokens**
 
-    | `<key>`             | Description                               |
-    | ------------------- | ----------------------------------------- |
-    | `name`              | having given name (accepts wildcards)     |
-    | `category`          | having given category (accepts wildcards) |
-    | `creation-date`     | created at given date                     |
-    | `creation-time`     | alias of `creation-date`                  |
-    | `last-edit-date`    | edited at given date                      |
-    | `last-edit-time`    | alias of `last-edit-date`                 |
-    | `edit-date`         | alias of `last-edit-date`                 |
-    | `edit-time`         | alias of `last-edit-date`                 |
-    | `post-count`        | used in given number of posts             |
+    | Key                                                          | Description                               |
+    | ------------------------------------------------------------ | ----------------------------------------- |
+    | `name`                                                       | having given name (accepts wildcards)     |
+    | `category`                                                   | having given category (accepts wildcards) |
+    | `creation-date`, `creation-time`                             | created at given date                     |
+    | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | edited at given date                      |
+    | `post-count`                                                 | used in given number of posts             |
 
     **Sort style tokens**
 
-    | `<value>`           | Description                  |
-    | ------------------- | ---------------------------- |
-    | `random`            | as random as it can get      |
-    | `name`              | A to Z                       |
-    | `category`          | category (A to Z)            |
-    | `creation-date`     | recently created first       |
-    | `creation-time`     | alias of `creation-date`     |
-    | `last-edit-date`    | recently edited first        |
-    | `last-edit-time`    | alias of `creation-time`     |
-    | `edit-date`         | alias of `creation-time`     |
-    | `edit-time`         | alias of `creation-time`     |
-    | `post-count`        | used in most posts first     |
+    | Value                                                        | Description              |
+    | ------------------------------------------------------------ | ------------------------ |
+    | `random`                                                     | as random as it can get  |
+    | `name`                                                       | A to Z                   |
+    | `category`                                                   | category (A to Z)        |
+    | `creation-date`, `creation-time`                             | recently created first   |
+    | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first    |
+    | `post-count`                                                 | used in most posts first |
 
     **Special tokens**
 
@@ -1550,34 +1489,24 @@ data.
 
     **Named tokens**
 
-    | `<key>`          | Description                                    |
-    | ---------------- | ---------------------------------------------- |
-    | `id`             | specific comment ID                            |
-    | `post`           | specific post ID                               |
-    | `user`           | created by given user (accepts wildcards)      |
-    | `author`         | alias of `user`                                |
-    | `text`           | containing given text (accepts wildcards)      |
-    | `creation-date`  | created at given date                          |
-    | `creation-time`  | alias of `creation-date`                       |
-    | `last-edit-date` | whose most recent edit date matches given date |
-    | `last-edit-time` | alias of `last-edit-date`                      |
-    | `edit-date`      | alias of `last-edit-date`                      |
-    | `edit-time`      | alias of `last-edit-date`                      |
+    | Key                                                          | Description                                    |
+    | ------------------------------------------------------------ | ---------------------------------------------- |
+    | `id`                                                         | specific comment ID                            |
+    | `post`                                                       | specific post ID                               |
+    | `user`, `author`                                             | created by given user (accepts wildcards)      |
+    | `text`                                                       | containing given text (accepts wildcards)      |
+    | `creation-date`, `creation-time`                             | created at given date                          |
+    | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | whose most recent edit date matches given date |
 
     **Sort style tokens**
 
-    | `<value>`        | Description               |
-    | ---------------- | ------------------------- |
-    | `random`         | as random as it can get   |
-    | `user`           | author name, A to Z       |
-    | `author`         | alias of `user`           |
-    | `post`           | post ID, newest to oldest |
-    | `creation-date`  | newest to oldest          |
-    | `creation-time`  | alias of `creation-date`  |
-    | `last-edit-date` | recently edited first     |
-    | `last-edit-time` | alias of `last-edit-date` |
-    | `edit-date`      | alias of `last-edit-date` |
-    | `edit-time`      | alias of `last-edit-date` |
+    | Value                                                        | Description               |
+    | ------------------------------------------------------------ | ------------------------- |
+    | `random`                                                     | as random as it can get   |
+    | `user`, `author`                                             | author name, A to Z       |
+    | `post`                                                       | post ID, newest to oldest |
+    | `creation-date`, `creation-time`                             | newest to oldest          |
+    | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first     |
 
     **Special tokens**
 
@@ -1737,28 +1666,20 @@ data.
 
     **Named tokens**
 
-    | `<key>`           | Description                                     |
-    | ----------------- | ----------------------------------------------- |
-    | `name`            | having given name (accepts wildcards)           |
-    | `creation-date`   | registered at given date                        |
-    | `creation-time`   | alias of `creation-date`                        |
-    | `last-login-date` | whose most recent login date matches given date |
-    | `last-login-time` | alias of `last-login-date`                      |
-    | `login-date`      | alias of `last-login-date`                      |
-    | `login-time`      | alias of `last-login-date`                      |
+    | Key                                                              | Description                                     |
+    | ---------------------------------------------------------------- | ----------------------------------------------- |
+    | `name`                                                           | having given name (accepts wildcards)           |
+    | `creation-date`, `creation-time`                                 | registered at given date                        |
+    | `last-login-date`, `last-login-time`, `login-date`, `login-time` | whose most recent login date matches given date |
 
     **Sort style tokens**
 
-    | `<value>`         | Description                |
-    | ----------------- | -------------------------- |
-    | `random`          | as random as it can get    |
-    | `name`            | A to Z                     |
-    | `creation-date`   | newest to oldest           |
-    | `creation-time`   | alias of `creation-date`   |
-    | `last-login-date` | recently active first      |
-    | `last-login-time` | alias of `last-login-date` |
-    | `login-date`      | alias of `last-login-date` |
-    | `login-time`      | alias of `last-login-date` |
+    | Value                                                            | Description             |
+    | ---------------------------------------------------------------- | ----------------------- |
+    | `random`                                                         | as random as it can get |
+    | `name`                                                           | A to Z                  |
+    | `creation-date`, `creation-time`                                 | newest to oldest        |
+    | `last-login-date`, `last-login-time`, `login-date`, `login-time` | recently active first   |
 
     **Special tokens**
 

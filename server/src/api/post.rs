@@ -144,7 +144,7 @@ where
 /// | `id`                                                         | highest to lowest post number                    |
 /// | `score`                                                      | highest scored                                   |
 /// | `uploader`, `upload`, `submit`                               | uploader name alphabetically                     |
-/// | `pool`                                                       | in most pools                                    |
+/// | `pool-count`, `pool`                                         | in most pools                                    |
 /// | `tag-count`, `tag`                                           | with most tags                                   |
 /// | `comment-count`, `comment`                                   | most commented first                             |
 /// | `fav-count`, `fav`                                           | loved by most                                    |
