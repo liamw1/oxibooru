@@ -62,6 +62,10 @@ impl Context {
         &self.config.public_info.name
     }
 
+    pub fn safety_enabled(&self) -> bool {
+        self.config.public_info.enable_safety
+    }
+
     /// Checks if the `client` is at least `required_rank`.
     pub fn has_privilege(&self, action: Action) -> bool {
         self.client.rank >= self.config.privileges()[action]

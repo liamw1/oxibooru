@@ -1,9 +1,8 @@
 use crate::api::doc::TAG_CATEGORY_TAG;
-use crate::api::error::{ApiError, ApiResult};
-use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
+use crate::api::error::{self, ApiError, ApiResult};
 use crate::app::{AppState, Context};
 use crate::config::{Action, RegexType};
-use crate::extract::{Ctx, Json, Path, Query};
+use crate::extract::{Ctx, DeleteBody, Json, Path, Query, ResourceParams, UnpagedResponse};
 use crate::model::enums::{ResourceProperty, ResourceType, UserRank};
 use crate::model::tag_category::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::{Field, TagCategoryInfo};

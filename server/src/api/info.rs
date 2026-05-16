@@ -1,9 +1,8 @@
-use crate::api::ResourceParams;
 use crate::api::doc::INFO_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::config::PublicConfig;
-use crate::extract::{Ctx, Json, Query};
+use crate::extract::{Ctx, Json, Query, ResourceParams};
 use crate::model::post::PostFeature;
 use crate::resource::post::{Field, PostInfo};
 use crate::schema::{database_statistics, post_feature, user};
@@ -22,21 +21,21 @@ pub fn routes() -> OpenApiRouter<AppState> {
 /// Server information response.
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct InfoResponse {
+pub struct InfoResponse {
     /// Total number of posts on the server.
-    post_count: i64,
+    pub post_count: i64,
     /// Total disk usage in bytes.
-    disk_usage: i64,
+    pub disk_usage: i64,
     /// The currently featured post, or null if none.
-    featured_post: Option<PostInfo>,
+    pub featured_post: Option<PostInfo>,
     /// Time when the currently featured post was featured.
-    featuring_time: Option<DateTime>,
+    pub featuring_time: Option<DateTime>,
     /// Username of the user who featured the currently featured post.
-    featuring_user: Option<SmallString>,
+    pub featuring_user: Option<SmallString>,
     /// Current server time.
-    server_time: DateTime,
+    pub server_time: DateTime,
     /// Public server configuration.
-    config: PublicConfig,
+    pub config: PublicConfig,
 }
 
 /// Retrieves simple statistics.
@@ -54,7 +53,7 @@ struct InfoResponse {
         (status = 200, body = InfoResponse),
     ),
 )]
-async fn get(
+pub async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<InfoResponse>> {

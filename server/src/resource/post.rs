@@ -42,9 +42,9 @@ pub struct Note {
     /// Where to draw the annotation. Each point must have coordinates within 0 to 1.
     /// For example, `[[0,0],[0,1],[1,1],[1,0]]` will draw the annotation on the whole post,
     /// whereas `[[0,0],[0,0.5],[0.5,0.5],[0.5,0]]` will draw it inside the post's upper left quarter.
-    polygon: Vec<[f32; 2]>,
+    pub polygon: Vec<[f32; 2]>,
     /// The annotation text. The client should render is as Markdown.
-    text: LargeString,
+    pub text: LargeString,
 }
 
 impl Note {
@@ -138,78 +138,78 @@ impl From<Field> for u64 {
 #[serde(rename_all = "camelCase")]
 pub struct PostInfo {
     /// Resource version. See [versioning](#Versioning).
-    version: Option<DateTime>,
+    pub version: Option<DateTime>,
     /// The post identifier.
-    id: Option<i64>,
+    pub id: Option<i64>,
     /// Who created the post.
     #[schema(nullable)]
-    user: Option<Option<MicroUser>>,
+    pub user: Option<Option<MicroUser>>,
     /// The size of the file in bytes.
-    file_size: Option<i64>,
+    pub file_size: Option<i64>,
     /// The original width of the post content.
-    canvas_width: Option<i32>,
+    pub canvas_width: Option<i32>,
     /// The original height of the post content.
-    canvas_height: Option<i32>,
+    pub canvas_height: Option<i32>,
     /// Whether the post is safe for work.
-    safety: Option<PostSafety>,
+    pub safety: Option<PostSafety>,
     /// The type of the post.
-    type_: Option<PostType>,
+    pub type_: Option<PostType>,
     /// Subsidiary to `<type>`, used to tell exact content format. Useful for `<video>` tags for instance.
-    mime_type: Option<MimeType>,
+    pub mime_type: Option<MimeType>,
     /// The BLAKE3 file checksum.
-    checksum: Option<String>,
+    pub checksum: Option<String>,
     /// The MD5 file checksum.
     #[serde(rename = "checksumMD5")]
-    checksum_md5: Option<String>,
+    pub checksum_md5: Option<String>,
     /// Various flags such as whether the post is looped.
-    flags: Option<PostFlags>,
+    pub flags: Option<PostFlags>,
     /// Where the post was grabbed form, supplied by the user.
-    source: Option<LargeString>,
+    pub source: Option<LargeString>,
     /// Text description for the post. The client should render is as Markdown.
-    description: Option<LargeString>,
+    pub description: Option<LargeString>,
     /// Time the tag was created.
-    creation_time: Option<DateTime>,
+    pub creation_time: Option<DateTime>,
     /// Time the tag was last edited.
-    last_edit_time: Option<DateTime>,
+    pub last_edit_time: Option<DateTime>,
     /// Where the post content is located.
-    content_url: Option<String>,
+    pub content_url: Option<String>,
     /// Where the post thumbnail is located.
-    thumbnail_url: Option<String>,
+    pub thumbnail_url: Option<String>,
     /// List of tags the post is tagged with.
-    tags: Option<Vec<MicroTag>>,
+    pub tags: Option<Vec<MicroTag>>,
     /// List of comments under the post.
-    comments: Option<Vec<CommentInfo>>,
+    pub comments: Option<Vec<CommentInfo>>,
     /// List of related posts. Links to related posts are shown to the user by the web client.
-    relations: Option<Vec<MicroPost>>,
+    pub relations: Option<Vec<MicroPost>>,
     /// List of pools the post is a member of.
-    pools: Option<Vec<MicroPool>>,
+    pub pools: Option<Vec<MicroPool>>,
     /// List of post annotations.
-    notes: Option<Vec<Note>>,
+    pub notes: Option<Vec<Note>>,
     /// The collective score (+1/-1 rating) of the given post.
-    score: Option<i64>,
+    pub score: Option<i64>,
     /// The score (+1/-1 rating) of the given post by the authenticated user.
-    own_score: Option<Rating>,
+    pub own_score: Option<Rating>,
     /// Whether the authenticated user has given post in their favorites.
-    own_favorite: Option<bool>,
+    pub own_favorite: Option<bool>,
     /// How many tags the post is tagged with.
-    tag_count: Option<i64>,
+    pub tag_count: Option<i64>,
     /// How many comments are filed under the post.
-    comment_count: Option<i64>,
+    pub comment_count: Option<i64>,
     /// How many posts are related to this post.
-    relation_count: Option<i64>,
+    pub relation_count: Option<i64>,
     /// How many notes the post has.
-    note_count: Option<i64>,
+    pub note_count: Option<i64>,
     /// How many users have the post in their favorites.
-    favorite_count: Option<i64>,
+    pub favorite_count: Option<i64>,
     /// How many times has the post been featured.
-    feature_count: Option<i64>,
+    pub feature_count: Option<i64>,
     /// The last time the post was featured.
     #[schema(nullable)]
-    last_feature_time: Option<Option<DateTime>>,
+    pub last_feature_time: Option<Option<DateTime>>,
     /// List of users that favorited the post.
-    favorited_by: Option<Vec<MicroUser>>,
+    pub favorited_by: Option<Vec<MicroUser>>,
     /// Whether the post uses custom thumbnail.
-    has_custom_thumbnail: Option<bool>,
+    pub has_custom_thumbnail: Option<bool>,
 }
 
 impl PostInfo {

@@ -1,9 +1,8 @@
 use crate::api::doc::POOL_CATEGORY_TAG;
-use crate::api::error::{ApiError, ApiResult};
-use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
+use crate::api::error::{self, ApiError, ApiResult};
 use crate::app::AppState;
 use crate::config::{Action, RegexType};
-use crate::extract::{Ctx, Json, Path, Query};
+use crate::extract::{Ctx, DeleteBody, Json, Path, Query, ResourceParams, UnpagedResponse};
 use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::pool_category::{NewPoolCategory, PoolCategory};
 use crate::resource::pool_category::{Field, PoolCategoryInfo};

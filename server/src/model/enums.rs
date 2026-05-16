@@ -7,7 +7,7 @@ use diesel::{AsExpression, FromSqlRow};
 use image::ImageFormat;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::ops::{BitOr, BitOrAssign};
+use std::ops::{BitAnd, BitOr, BitOrAssign};
 use std::path::Path;
 use std::str::FromStr;
 use strum::{Display, EnumCount, EnumIter, EnumString, FromRepr, IntoEnumIterator, IntoStaticStr};
@@ -61,7 +61,19 @@ impl FromSql<SmallInt, Pg> for AvatarStyle {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize, ToSchema,
+    Debug,
+    Display,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumString,
+    FromRepr,
+    AsExpression,
+    FromSqlRow,
+    Serialize,
+    Deserialize,
+    ToSchema,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -219,12 +231,14 @@ impl FromSql<SmallInt, Pg> for MimeType {
 
 #[derive(
     Debug,
+    Display,
     Copy,
     Clone,
     PartialEq,
     Eq,
     PartialOrd,
     Ord,
+    EnumIter,
     EnumString,
     FromRepr,
     AsExpression,
@@ -291,11 +305,22 @@ impl PostFlags {
     pub fn from_slice(flags: &[PostFlag]) -> Self {
         flags.iter().fold(Self::new(), |flags, &flag| flags | flag)
     }
+
+    pub fn contains(self, flag: PostFlag) -> bool {
+        (self & flag).0 != 0
+    }
 }
 
 impl From<PostFlags> for u16 {
     fn from(value: PostFlags) -> Self {
         value.0
+    }
+}
+
+impl<T: Into<u16>> BitAnd<T> for PostFlags {
+    type Output = Self;
+    fn bitand(self, rhs: T) -> Self::Output {
+        Self(self.0 & rhs.into())
     }
 }
 

@@ -30,6 +30,7 @@ mod string;
 #[cfg(test)]
 mod test;
 mod time;
+mod unit;
 mod update;
 mod web;
 
