@@ -63,23 +63,23 @@ impl From<Field> for u64 {
 #[serde(rename_all = "camelCase")]
 pub struct PoolInfo {
     /// Resource version. See [versioning](#Versioning).
-    version: Option<DateTime>,
+    pub version: Option<DateTime>,
     /// The pool identifier.
-    id: Option<i64>,
+    pub id: Option<i64>,
     /// The pool description (instructions how to use, history etc.). The client should render it as Markdown.
-    description: Option<LargeString>,
+    pub description: Option<LargeString>,
     /// Time the pool was created.
-    creation_time: Option<DateTime>,
+    pub creation_time: Option<DateTime>,
     /// Time the pool was last edited.
-    last_edit_time: Option<DateTime>,
+    pub last_edit_time: Option<DateTime>,
     /// The name of the category the given pool belongs to.
-    category: Option<SmallString>,
+    pub category: Option<SmallString>,
     /// A list of pool names (aliases).
-    names: Option<Vec<SmallString>>,
+    pub names: Option<Vec<SmallString>>,
     /// An ordered list of posts. Posts are ordered by insertion by default.
-    posts: Option<Vec<MicroPost>>,
+    pub posts: Option<Vec<MicroPost>>,
     /// The number of posts the pool has.
-    post_count: Option<i64>,
+    pub post_count: Option<i64>,
 }
 
 impl PoolInfo {

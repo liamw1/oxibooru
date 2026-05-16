@@ -3,11 +3,13 @@
 {% block title %}{{ ctx.site_name() }} - Home{% endblock %}
 
 {% block content %}
-<div class='content-wrapper transparent-container' id='home'>
-    <div class='messages'></div>
+<div class="content-wrapper transparent-container" id="home">
+    <div class="messages"></div>
+
     <header>
         <h1>{{ ctx.site_name() }}</h1>
     </header>
+
     {% if ctx.has_privilege(Action::PostList) %}
     <form class="horizontal" action="/posts" method="get">
         <input type="text" name="query" placeholder="enter some tags">
@@ -16,7 +18,13 @@
         <a href="/posts">browse all posts</a>
     </form>
     {% endif %}
-    <div class='post-info-container'></div>
-    <footer class='footer-container'></footer>
+
+    <div class="post-info-container">
+        {% include "partials/home_featured_post.html" %}
+    </div>
+
+    <footer>
+        {% include "partials/home_footer.html" %}
+    </footer>
 </div>
 {% endblock %}

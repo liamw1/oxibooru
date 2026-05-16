@@ -23,10 +23,10 @@ use utoipa::ToSchema;
 pub struct MicroUser {
     /// The user name.
     #[schema(examples("username"))]
-    name: SmallString,
+    pub name: SmallString,
     /// The URL to the avatar.
     #[schema(examples("https://gravatar.com/avatar/60602eb3c4f?d=retro&s=300"))]
-    avatar_url: String,
+    pub avatar_url: String,
 }
 
 impl MicroUser {

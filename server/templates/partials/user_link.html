@@ -1,0 +1,24 @@
+{% if let Some(user) = user.as_ref() %}
+<span class="user">
+    {% if ctx.has_privilege(Action::UserView) %}
+    <a href="/user/{{ user.name }}">
+        <span class="thumbnail" style="background-image: url('{{ user.avatar_url }}')">
+            <img alt="thumbnail" src="{{ user.avatar_url }}">
+        </span>
+        {{- user.name }}
+    </a>
+    {% else %}
+    <span class="thumbnail" style="background-image: url('{{ user.avatar_url }}')">
+        <img alt="thumbnail" src="{{ user.avatar_url }}">
+    </span>
+    {{- user.name }}
+    {% endif %}
+</span>
+{% else %}
+<span class="user">
+    <span class="thumbnail" style="background-image: url('/static/img/favicon.png')">
+        <img alt="thumbnail" src="/static/img/favicon.png">
+    </span>
+    Anonymous
+</span>
+{% endif %}
