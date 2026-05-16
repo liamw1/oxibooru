@@ -56,23 +56,23 @@ impl From<Field> for u64 {
 #[serde(rename_all = "camelCase")]
 pub struct TagInfo {
     /// Resource version. See [versioning](#Versioning).
-    version: Option<DateTime>,
+    pub version: Option<DateTime>,
     /// The tag description (instructions how to use, history etc.). The client should render is as Markdown.
-    description: Option<LargeString>,
+    pub description: Option<LargeString>,
     /// Time the tag was created.
-    creation_time: Option<DateTime>,
+    pub creation_time: Option<DateTime>,
     /// Time the tag was last edited.
-    last_edit_time: Option<DateTime>,
+    pub last_edit_time: Option<DateTime>,
     /// The name of the category the given tag belongs to.
-    category: Option<SmallString>,
+    pub category: Option<SmallString>,
     /// A list of tag names (aliases). Tagging a post with any name will automatically assign the first name from this list.
-    names: Option<Vec<SmallString>>,
+    pub names: Option<Vec<SmallString>>,
     /// A list of implied tags. Implied tags are automatically appended by the web client on usage.
-    implications: Option<Vec<MicroTag>>,
+    pub implications: Option<Vec<MicroTag>>,
     /// A list of suggested tags. Suggested tags are shown to the user by the web client on usage.
-    suggestions: Option<Vec<MicroTag>>,
+    pub suggestions: Option<Vec<MicroTag>>,
     /// The number of posts the tag was used in.
-    usages: Option<i64>,
+    pub usages: Option<i64>,
 }
 
 impl TagInfo {

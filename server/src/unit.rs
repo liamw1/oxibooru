@@ -28,9 +28,16 @@ pub enum ParseByteCountError {
     UnknownPrefix(char),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, AsExpression)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, AsExpression)]
 #[diesel(sql_type = BigInt)]
 pub struct ByteCount(u128);
+
+impl TryFrom<i64> for ByteCount {
+    type Error = TryFromIntError;
+    fn try_from(value: i64) -> Result<Self, Self::Error> {
+        u128::try_from(value).map(Self)
+    }
+}
 
 impl TryFrom<ByteCount> for u64 {
     type Error = TryFromIntError;

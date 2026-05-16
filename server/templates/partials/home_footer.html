@@ -1,0 +1,16 @@
+<ul>
+    <li>{{ info.post_count }} posts</li>
+    <li class="sep">&nbsp;</li>
+    <li>{{ info.disk_usage }}</li>
+    <li class="sep">&nbsp;</li>
+    <li>
+        Version <a class="version" href="https://github.com/liamw1/oxibooru/commits/master">{{ VERSION }}</a>
+        from <time datetime="{{ BUILD_DATE }}">{{ info.time_since_build }}</time>
+    </li>
+    {% if ctx.has_privilege(Action::SnapshotList) %}
+    <li class="sep">&nbsp;</li>
+    <li>
+        <a href="/history">History</a>
+    </li>
+    {% endif %}
+</ul>
