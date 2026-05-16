@@ -1,34 +1,29 @@
 use crate::api::middleware;
 use crate::app::AppState;
-use axum::http::Uri;
-use axum::http::header::CONTENT_TYPE;
-use axum::response::{IntoResponse, Response};
-use axum::{Router, routing};
+use axum::Router;
+use serde::Deserialize;
+use tower_http::services::ServeDir;
 
 mod home;
-mod nav;
+mod post;
 
 pub fn routes(state: AppState) -> Router {
+    // TODO: Remove
+    dotenvy::from_filename("../.env").unwrap();
+    let data_dir = std::env::var("MOUNT_DATA").unwrap();
+    let static_dir = format!("{PROJECT_ROOT}/static");
+
     home::routes()
+        .merge(post::routes())
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
-        .route("/static/{*file}", routing::get(static_handler))
+        .nest_service("/data", ServeDir::new(&data_dir))
+        .nest_service("/static", ServeDir::new(&static_dir))
         .with_state(state)
 }
 
-/// Temporary: Replace with a better function eventually
-async fn static_handler(uri: Uri) -> Response {
-    let mime_type = match uri.path().rsplit_once('.').map(|(_, ext)| ext) {
-        Some("css") => "text/css",
-        Some("js") => "application/javascript",
-        Some("png") => "image/png",
-        Some("woff2") => "font/ttf",
-        Some(ext) => panic!("Unknown MIME type {ext}!"),
-        None => panic!("No extension!"),
-    };
-
-    let path = format!("{PROJECT_ROOT}/static/{}", uri.path().trim_start_matches("/static/"));
-    let data = std::fs::read(path).unwrap();
-    ([(CONTENT_TYPE, mime_type)], data).into_response()
+#[derive(Deserialize)]
+struct SearchQuery {
+    query: Option<String>,
 }
 
 const PROJECT_ROOT: &str = env!("CARGO_MANIFEST_DIR");

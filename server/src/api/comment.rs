@@ -1,9 +1,9 @@
+use crate::api;
 use crate::api::doc::COMMENT_TAG;
-use crate::api::error::{ApiError, ApiResult};
-use crate::api::{self, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
+use crate::api::error::{self, ApiError, ApiResult};
 use crate::app::{AppState, Context};
 use crate::config::Action;
-use crate::extract::{Ctx, Json, Path, Query};
+use crate::extract::{Ctx, DeleteBody, Json, PageParams, PagedResponse, Path, Query, RatingBody, ResourceParams};
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::{CommentInfo, Field};
@@ -24,8 +24,6 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(get, update, delete))
         .routes(routes!(rate))
 }
-
-const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 
 /// Lists comments.
 ///
@@ -75,7 +73,7 @@ async fn list(
     ctx.verify_privilege(Action::CommentList)?;
 
     let offset = page.offset.unwrap_or(0);
-    let limit = std::cmp::min(page.limit.get(), MAX_COMMENTS_PER_PAGE);
+    let limit = page.limit();
     connection_pool
         .transaction(move |conn| {
             let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;

@@ -37,17 +37,17 @@ impl From<Field> for u64 {
 #[derive(Serialize, ToSchema)]
 pub struct TagCategoryInfo {
     /// Resource version. See [versioning](#Versioning).
-    version: Option<DateTime>,
+    pub version: Option<DateTime>,
     /// The category name.
-    name: Option<SmallString>,
+    pub name: Option<SmallString>,
     /// The category color.
-    color: Option<SmallString>,
+    pub color: Option<SmallString>,
     /// How many tags is the given category used with.
-    usages: Option<i64>,
+    pub usages: Option<i64>,
     /// The order in which tags with this category are displayed, ascending.
-    order: Option<i32>,
+    pub order: Option<i32>,
     /// Whether the tag category is the default one.
-    default: Option<bool>,
+    pub default: Option<bool>,
 }
 
 impl TagCategoryInfo {

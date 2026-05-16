@@ -238,14 +238,14 @@ impl From<Field> for u64 {
 #[derive(Serialize, ToSchema)]
 pub struct SnapshotInfo {
     #[schema(nullable)]
-    user: Option<Option<MicroUser>>,
-    operation: Option<ResourceOperation>,
+    pub user: Option<Option<MicroUser>>,
+    pub operation: Option<ResourceOperation>,
     #[serde(rename = "type")]
-    resource_type: Option<ResourceType>,
+    pub resource_type: Option<ResourceType>,
     #[serde(rename = "id")]
-    resource_id: Option<SmallString>,
-    data: Option<Value>,
-    time: Option<DateTime>,
+    pub resource_id: Option<SmallString>,
+    pub data: Option<Value>,
+    pub time: Option<DateTime>,
 }
 
 impl SnapshotInfo {

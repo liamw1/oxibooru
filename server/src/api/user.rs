@@ -1,13 +1,12 @@
 use crate::api::doc::USER_TAG;
-use crate::api::error::{ApiError, ApiResult};
-use crate::api::{DeleteBody, PageParams, PagedResponse, ResourceParams, error};
+use crate::api::error::{self, ApiError, ApiResult};
 use crate::app::AppState;
 use crate::auth::password;
 use crate::config::{Action, RegexType};
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
 use crate::content::{Content, upload};
-use crate::extract::{Ctx, Json, JsonOrMultipart, Path, Query};
+use crate::extract::{Ctx, DeleteBody, Json, JsonOrMultipart, PageParams, PagedResponse, Path, Query, ResourceParams};
 use crate::model::enums::{AvatarStyle, ResourceProperty, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{Field, UserInfo, Visibility};
@@ -38,8 +37,6 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(get, delete))
         .merge(upload_capable_routes)
 }
-
-const MAX_USERS_PER_PAGE: i64 = 1000;
 
 #[allow(dead_code)]
 #[derive(ToSchema)]
@@ -95,7 +92,7 @@ async fn list(
     ctx.verify_privilege(Action::UserList)?;
 
     let offset = page.offset.unwrap_or(0);
-    let limit = std::cmp::min(page.limit.get(), MAX_USERS_PER_PAGE);
+    let limit = page.limit();
     connection_pool
         .transaction(move |conn| {
             let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;

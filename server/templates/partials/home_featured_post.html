@@ -1,0 +1,12 @@
+{% if let Some(post) = info.featured_post %}
+<div class="post-container">
+    {% include "partials/post_content.html"%}
+</div>
+<aside>
+    Featured&nbsp;post:&nbsp;<a href="post/{{ post.id }}">@{{ post.id }}</a>,<wbr>
+    posted&nbsp;<time datetime="{{ post.creation_time }}"
+        title="{{ post.creation_time }}">{{post.time_since_post}}</time>&nbsp;by<wbr>
+    {% let user = post.user %}
+    {% include "partials/user_link.html"%}
+</aside>
+{% endif %}
