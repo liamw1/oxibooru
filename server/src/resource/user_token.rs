@@ -37,24 +37,24 @@ impl From<Field> for u64 {
 #[serde(rename_all = "camelCase")]
 pub struct UserTokenInfo {
     /// Resource version. See [versioning](#Versioning).
-    version: Option<DateTime>,
+    pub version: Option<DateTime>,
     /// The user that owns the token.
-    user: Option<MicroUser>,
+    pub user: Option<MicroUser>,
     /// The token that can be used to authenticate the user.
-    token: Option<Uuid>,
+    pub token: Option<Uuid>,
     /// A note that describes the token.
-    note: Option<LargeString>,
+    pub note: Option<LargeString>,
     /// Whether the token is still valid for authentication.
-    enabled: Option<bool>,
+    pub enabled: Option<bool>,
     /// Time when the token expires.
     #[schema(nullable)]
-    expiration_time: Option<Option<DateTime>>,
+    pub expiration_time: Option<Option<DateTime>>,
     /// Time the user token was created.
-    creation_time: Option<DateTime>,
+    pub creation_time: Option<DateTime>,
     /// Time the user token was last edited.
-    last_edit_time: Option<DateTime>,
+    pub last_edit_time: Option<DateTime>,
     /// The last time this token was used during a login involving `?bump-login`.
-    last_usage_time: Option<DateTime>,
+    pub last_usage_time: Option<DateTime>,
 }
 
 impl UserTokenInfo {

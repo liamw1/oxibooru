@@ -5,13 +5,89 @@
             <span class="toggle-icon"><i class="fa fa-bars"></i></span>
         </button>
 
-        {% for item in nav.items %}
-        <li data-name="{{ item.key }}">
-            <a href="{{ item.url }}">
-                <span class="text">{{ item.title }}</span>
+        <li data-name="home">
+            <a href="/">
+                <span class="text">Home</span>
             </a>
         </li>
-        {% endfor %}
+
+        {% if ctx.has_privilege(Action::PostList) %}
+        <li data-name="posts">
+            <a href="/posts">
+                <span class=" text">Posts</span>
+            </a>
+        </li>
+        {% endif %}
+
+        {% if ctx.has_privilege(Action::UploadCreate) %}
+        <li data-name="upload">
+            <a href="/upload">
+                <span class="text">Upload</span>
+            </a>
+        </li>
+        {% endif %}
+
+        {% if ctx.has_privilege(Action::CommentList) %}
+        <li data-name="comments">
+            <a href="/comments">
+                <span class="text">Comments</span>
+            </a>
+        </li>
+        {% endif %}
+
+        {% if ctx.has_privilege(Action::TagList) %}
+        <li data-name="tags">
+            <a href="/tags">
+                <span class="text">Tags</span>
+            </a>
+        </li>
+        {% endif %}
+
+        {% if ctx.has_privilege(Action::PoolList) %}
+        <li data-name="pools">
+            <a href="/pools">
+                <span class="text">Pools</span>
+            </a>
+        </li>
+        {% endif %}
+
+        {% if ctx.has_privilege(Action::UserList) %}
+        <li data-name="users">
+            <a href="/users">
+                <span class="text">Users</span>
+            </a>
+        </li>
+        {% endif %}
+
+        {% if ctx.client.id.is_some() %}
+        <li data-name="account">
+            <a href="/user/test_user"> {# TODO: Generalize #}
+                <span class="text">Account</span>
+            </a>
+        </li>
+        <li data-name="logout">
+            <a href="/logout">
+                <span class="text">Logout</span>
+            </a>
+        </li>
+        {% else %}
+        <li data-name="register">
+            <a href="/register">
+                <span class="text">Register</span>
+            </a>
+        </li>
+        <li data-name="login">
+            <a href="/login">
+                <span class="text">Log in</span>
+            </a>
+        </li>
+        {% endif %}
+
+        <li data-name="help">
+            <a href="/help">
+                <span class="text">Help</span>
+            </a>
+        </li>
 
         <li data-name="settings">
             <a href="/settings">

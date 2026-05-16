@@ -54,7 +54,19 @@ impl FromSql<SmallInt, Pg> for AvatarStyle {
 }
 
 #[derive(
-    Debug, Clone, Copy, PartialEq, Eq, EnumString, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize, ToSchema,
+    Debug,
+    Display,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    EnumString,
+    FromRepr,
+    AsExpression,
+    FromSqlRow,
+    Serialize,
+    Deserialize,
+    ToSchema,
 )]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
@@ -201,12 +213,14 @@ impl FromSql<SmallInt, Pg> for MimeType {
 
 #[derive(
     Debug,
+    Display,
     Copy,
     Clone,
     PartialEq,
     Eq,
     PartialOrd,
     Ord,
+    EnumIter,
     EnumString,
     FromRepr,
     AsExpression,
@@ -272,6 +286,10 @@ impl PostFlags {
     /// Constructs a new [`PostFlags`] with a set of `flags` set.
     pub fn from_slice(flags: &[PostFlag]) -> Self {
         flags.iter().fold(Self::none(), |flags, &flag| flags | flag)
+    }
+
+    pub fn contains(self, flag: PostFlag) -> bool {
+        (self & flag).0 != 0
     }
 }
 
