@@ -288,8 +288,8 @@ async fn get_neighbors(
 
     connection_pool
         .transaction(move |conn| {
-            const INITIAL_LIMIT: i64 = 1000;
-            const LIMIT_GROWTH: i64 = 10;
+            const INITIAL_LIMIT: u64 = 1000;
+            const LIMIT_GROWTH: u64 = 10;
 
             verify_visibility(conn, &ctx, post_id)?;
 
@@ -327,7 +327,7 @@ async fn get_neighbors(
 
                 let post_position = post_id_batch.iter().position(|&id| id == post_id);
                 if post_id_batch.len() < usize::try_from(limit).unwrap_or(usize::MAX)
-                    || limit == i64::MAX
+                    || limit == u64::MAX
                     || post_id_batch.len() == usize::MAX
                     || (post_position.is_some() && post_position != Some(post_id_batch.len().saturating_sub(1)))
                 {

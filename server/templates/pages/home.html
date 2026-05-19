@@ -19,12 +19,36 @@
     </form>
     {% endif %}
 
-    <div class="post-info-container">
-        {% include "partials/home_featured_post.html" %}
+    {% if let Some(post) = info.featured_post %}
+    <div class="post-container">
+        {% include "partials/post_content.html"%}
     </div>
+    <aside>
+        Featured&nbsp;post:&nbsp;<a href="post/{{ post.id }}">@{{ post.id }}</a>,<wbr>
+        posted&nbsp;<time datetime="{{ post.creation_time }}"
+            title="{{ post.creation_time }}">{{post.time_since_post}}</time>&nbsp;by<wbr>
+        {% let user = post.user %}
+        {% include "partials/user_link.html"%}
+    </aside>
+    {% endif %}
 
     <footer>
-        {% include "partials/home_footer.html" %}
+        <ul>
+            <li>{{ info.post_count }} posts</li>
+            <li class="sep">&nbsp;</li>
+            <li>{{ info.disk_usage }}</li>
+            <li class="sep">&nbsp;</li>
+            <li>
+                Version <a class="version" href="https://github.com/liamw1/oxibooru/commits/master">{{ VERSION }}</a>
+                from <time datetime="{{ BUILD_DATE }}">{{ info.time_since_build }}</time>
+            </li>
+            {% if ctx.has_privilege(Action::SnapshotList) %}
+            <li class="sep">&nbsp;</li>
+            <li>
+                <a href="/history">History</a>
+            </li>
+            {% endif %}
+        </ul>
     </footer>
 </div>
 {% endblock %}

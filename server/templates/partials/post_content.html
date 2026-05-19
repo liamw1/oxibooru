@@ -1,8 +1,8 @@
+{# TODO: Automatic viewport resizing #}
 <div class="post-content post-type-{{ post.type_ }}{% if matches!(post.type_, PostType::Image | PostType::Animation) %} transparency-grid{% endif %}"
     style="width: {{ post.canvas_width }}px; height: {{ post.canvas_height }}px;{% if post.type_ == PostType::Flash %} background-image: url({{ post.thumbnail_url }});{% endif %}">
 
     {% match post.type_ %}
-
     {% when PostType::Image | PostType::Animation %}
     <img class="resize-listener" alt="" src="{{ post.content_url }}" draggable="false"
         style="width: {{ post.canvas_width }}px; height: {{ post.canvas_height }}px;">
@@ -26,7 +26,6 @@
         <source type="{{ post.mime_type }}" src="{{ post.content_url }}">
         Your browser doesn't support HTML5 videos.
     </video>
-
     {% endmatch %}
 
     {# TODO: post-overlay and notes #}
