@@ -312,10 +312,6 @@ nav#top-navigation ul li[data-name=help] {
     float: none;
 }
 
-nav#top-navigation .access-key {
-    text-decoration: underline;
-}
-
 nav#top-navigation .thumbnail {
     width: 1.5em;
     height: 1.5em;
@@ -354,10 +350,6 @@ nav#top-navigation .thumbnail {
 
 .darktheme nav#top-navigation ul #mobile-navigation-toggle {
     color: var(--text-color-darktheme);
-}
-
-a .access-key {
-    text-decoration: underline;
 }
 
 .messages {

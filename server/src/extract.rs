@@ -122,6 +122,7 @@ where
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Query<T>(pub T);
 
 impl<S, T> FromRequestParts<S> for Query<T>
@@ -221,6 +222,10 @@ impl PageParams {
         const DEFAULT_LIMIT: u64 = 42;
         const MAX_LIMIT: u64 = 1000;
         std::cmp::min(self.limit.map_or(DEFAULT_LIMIT, NonZeroU64::get), MAX_LIMIT)
+    }
+
+    pub fn current_page(&self) -> u64 {
+        self.offset.unwrap_or(0) / self.limit() + 1
     }
 }
 

@@ -5,6 +5,7 @@ use serde::Deserialize;
 use tower_http::services::ServeDir;
 
 mod home;
+mod pager;
 mod post;
 
 pub fn routes(state: AppState) -> Router {
@@ -19,6 +20,21 @@ pub fn routes(state: AppState) -> Router {
         .nest_service("/data", ServeDir::new(&data_dir))
         .nest_service("/static", ServeDir::new(&static_dir))
         .with_state(state)
+}
+
+#[derive(PartialEq, Eq)]
+enum Tab {
+    Home,
+    Post,
+    Upload,
+    Comment,
+    Tag,
+    Pool,
+    User,
+    Account,
+    Login,
+    Help,
+    Settings,
 }
 
 #[derive(Deserialize)]
