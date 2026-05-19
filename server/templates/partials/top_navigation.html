@@ -5,14 +5,14 @@
             <span class="toggle-icon"><i class="fa fa-bars"></i></span>
         </button>
 
-        <li data-name="home">
+        <li data-name="home" {% if active_tab==Tab::Home %} class="active" {% endif %}>
             <a href="/">
                 <span class="text">Home</span>
             </a>
         </li>
 
         {% if ctx.has_privilege(Action::PostList) %}
-        <li data-name="posts">
+        <li data-name="posts" {% if active_tab==Tab::Post %} class="active" {% endif %}>
             <a href="/posts">
                 <span class=" text">Posts</span>
             </a>
@@ -20,7 +20,7 @@
         {% endif %}
 
         {% if ctx.has_privilege(Action::UploadCreate) %}
-        <li data-name="upload">
+        <li data-name="upload" {% if active_tab==Tab::Upload %} class="active" {% endif %}>
             <a href="/upload">
                 <span class="text">Upload</span>
             </a>
@@ -28,7 +28,7 @@
         {% endif %}
 
         {% if ctx.has_privilege(Action::CommentList) %}
-        <li data-name="comments">
+        <li data-name="comments" {% if active_tab==Tab::Comment %} class="active" {% endif %}>
             <a href="/comments">
                 <span class="text">Comments</span>
             </a>
@@ -36,7 +36,7 @@
         {% endif %}
 
         {% if ctx.has_privilege(Action::TagList) %}
-        <li data-name="tags">
+        <li data-name="tags" {% if active_tab==Tab::Tag %} class="active" {% endif %}>
             <a href="/tags">
                 <span class="text">Tags</span>
             </a>
@@ -44,7 +44,7 @@
         {% endif %}
 
         {% if ctx.has_privilege(Action::PoolList) %}
-        <li data-name="pools">
+        <li data-name="pools" {% if active_tab==Tab::Pool %} class="active" {% endif %}>
             <a href="/pools">
                 <span class="text">Pools</span>
             </a>
@@ -52,7 +52,7 @@
         {% endif %}
 
         {% if ctx.has_privilege(Action::UserList) %}
-        <li data-name="users">
+        <li data-name="users" {% if active_tab==Tab::User %} class="active" {% endif %}>
             <a href="/users">
                 <span class="text">Users</span>
             </a>
@@ -60,7 +60,7 @@
         {% endif %}
 
         {% if ctx.client.id.is_some() %}
-        <li data-name="account">
+        <li data-name="account" {% if active_tab==Tab::Account %} class="active" {% endif %}>
             <a href="/user/test_user"> {# TODO: Generalize #}
                 <span class="text">Account</span>
             </a>
@@ -71,25 +71,25 @@
             </a>
         </li>
         {% else %}
-        <li data-name="register">
+        <li data-name="register" {% if active_tab==Tab::Account %} class="active" {% endif %}>
             <a href="/register">
                 <span class="text">Register</span>
             </a>
         </li>
-        <li data-name="login">
+        <li data-name="login" {% if active_tab==Tab::Login %} class="active" {% endif %}>
             <a href="/login">
                 <span class="text">Log in</span>
             </a>
         </li>
         {% endif %}
 
-        <li data-name="help">
+        <li data-name="help" {% if active_tab==Tab::Help %} class="active" {% endif %}>
             <a href="/help">
                 <span class="text">Help</span>
             </a>
         </li>
 
-        <li data-name="settings">
+        <li data-name="settings" {% if active_tab==Tab::Settings %} class="active" {% endif %}>
             <a href="/settings">
                 <i class="fa fa-cog"></i>
             </a>
