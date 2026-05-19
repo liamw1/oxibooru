@@ -87,15 +87,14 @@ async fn gallery(
         .collect();
 
     let Ctx(ctx, _) = ctx;
-    Html(
-        GalleryTemplate {
-            ctx,
-            active_tab: Tab::Post,
-            edit_mode: None,
-            posts,
-            pager,
-        }
-        .render()
-        .unwrap(),
-    )
+    GalleryTemplate {
+        ctx,
+        active_tab: Tab::Post,
+        edit_mode: None,
+        posts,
+        pager,
+    }
+    .render()
+    .map(Html)
+    .unwrap()
 }

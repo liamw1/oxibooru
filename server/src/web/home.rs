@@ -86,5 +86,5 @@ async fn home(ctx: Ctx) -> Html<String> {
 
     let Ctx(ctx, _) = ctx;
     let active_tab = Tab::Home;
-    Html(HomeTemplate { ctx, info, active_tab }.render().unwrap())
+    HomeTemplate { ctx, info, active_tab }.render().map(Html).unwrap()
 }
