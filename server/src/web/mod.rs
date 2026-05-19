@@ -4,6 +4,7 @@ use axum::Router;
 use serde::Deserialize;
 use tower_http::services::ServeDir;
 
+mod help;
 mod home;
 mod pager;
 mod post;
@@ -14,7 +15,8 @@ pub fn routes(state: AppState) -> Router {
     let data_dir = std::env::var("MOUNT_DATA").unwrap();
     let static_dir = format!("{PROJECT_ROOT}/static");
 
-    home::routes()
+    help::routes()
+        .merge(home::routes())
         .merge(post::routes())
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
         .nest_service("/data", ServeDir::new(&data_dir))
