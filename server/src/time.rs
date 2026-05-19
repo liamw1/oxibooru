@@ -165,7 +165,7 @@ pub fn since(time: DateTime) -> String {
     } else if seconds > 1 {
         format!("{seconds} seconds ago")
     } else {
-        format!("just now")
+        String::from("just now")
     }
 }
 
@@ -173,9 +173,8 @@ pub fn since(time: DateTime) -> String {
 include!(concat!(env!("OUT_DIR"), "/build_timestamp.rs"));
 
 const fn build_date() -> DateTime {
-    let time = match OffsetDateTime::from_unix_timestamp(BUILD_TIMESTAMP) {
-        Ok(time) => time,
-        Err(_) => panic!("Invalid build timestamp"),
+    let Ok(time) = OffsetDateTime::from_unix_timestamp(BUILD_TIMESTAMP) else {
+        panic!("Invalid build timestamp")
     };
     DateTime(time)
 }

@@ -6,6 +6,7 @@ use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
 use crate::resource::post::Field;
 use crate::resource::user::MicroUser;
 use crate::time::{BUILD_DATE, DateTime};
+use crate::web::Tab;
 use crate::{time, unit};
 use askama::Template;
 use axum::response::Html;
@@ -43,6 +44,7 @@ struct ServerInfo {
 struct HomeTemplate {
     ctx: Context,
     info: ServerInfo,
+    active_tab: Tab,
 }
 
 async fn home(ctx: Ctx) -> Html<String> {
@@ -83,5 +85,6 @@ async fn home(ctx: Ctx) -> Html<String> {
     };
 
     let Ctx(ctx, _) = ctx;
-    Html(HomeTemplate { ctx, info }.render().unwrap())
+    let active_tab = Tab::Home;
+    Html(HomeTemplate { ctx, info, active_tab }.render().unwrap())
 }

@@ -15,7 +15,7 @@ use axum::http::header::CONTENT_TYPE;
 use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use serde::{Deserialize, Serialize};
-use std::num::NonZeroI64;
+use std::num::NonZeroU64;
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -123,6 +123,7 @@ where
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Query<T>(pub T);
 
 impl<S, T> FromRequestParts<S> for Query<T>
@@ -199,21 +200,25 @@ impl<F: Into<u64> + FromStr> ResourceParams<F> {
     }
 }
 /// Represents parameters of a request to retrieve multiple resources, paged.
-#[derive(Deserialize, IntoParams)]
+#[derive(Clone, Copy, Deserialize, IntoParams)]
 pub struct PageParams {
     /// Starting position in the result set
     #[param(example = 0)]
-    pub offset: Option<i64>,
+    pub offset: Option<u64>,
     /// Maximum number of results to return
-    #[param(value_type = i64, minimum = 1, example = 40)]
-    limit: Option<NonZeroI64>,
+    #[param(value_type = u64, minimum = 1, example = 40)]
+    limit: Option<NonZeroU64>,
 }
 
 impl PageParams {
-    pub fn limit(&self) -> i64 {
-        const DEFAULT_LIMIT: i64 = 40;
-        const MAX_LIMIT: i64 = 1000;
-        std::cmp::min(self.limit.map(NonZeroI64::get).unwrap_or(DEFAULT_LIMIT), MAX_LIMIT)
+    pub fn limit(&self) -> u64 {
+        const DEFAULT_LIMIT: u64 = 42;
+        const MAX_LIMIT: u64 = 1000;
+        std::cmp::min(self.limit.map_or(DEFAULT_LIMIT, NonZeroU64::get), MAX_LIMIT)
+    }
+
+    pub fn current_page(&self) -> u64 {
+        self.offset.unwrap_or(0) / self.limit() + 1
     }
 }
 
@@ -231,12 +236,12 @@ pub struct PagedResponse<T> {
     pub query: Option<String>,
     /// The record starting offset, passed in the original request.
     #[schema(examples(0))]
-    pub offset: i64,
+    pub offset: u64,
     /// Number of records on one page.
     #[schema(examples(40))]
-    pub limit: i64,
+    pub limit: u64,
     /// How many resources were found. To get the page count, divide this number by `limit`.
     #[schema(examples(1729))]
-    pub total: i64,
+    pub total: u64,
     pub results: Vec<T>,
 }

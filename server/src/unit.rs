@@ -32,7 +32,7 @@ fn format<const N: usize>(num: u128, base: NonZeroU128, prefixes: [&str; N], uni
         let whole = scaled / scale;
         let fract = scaled % scale;
         let padding = usize::try_from(PRECISION).unwrap_or(0);
-        format!("{whole}.{:0padding$}{prefix}{unit}", fract)
+        format!("{whole}.{fract:0padding$}{prefix}{unit}")
     }
 }
 

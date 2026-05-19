@@ -1,4 +1,5 @@
 use num_traits::PrimInt;
+use std::ops::Range;
 
 /// Represents an integer interval.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +15,13 @@ impl<T: PrimInt> Interval<T> {
             start: min,
             end: max + T::one(),
         }
+    }
+
+    /// Computes the intersection of two intervals `a` and `b`.
+    pub fn intersection(a: Self, b: Self) -> Self {
+        let start = std::cmp::max(a.start, b.start);
+        let end = std::cmp::min(a.end, b.end);
+        Self { start, end }
     }
 
     /// Returns the lowest point contained within the interval.
@@ -50,13 +58,6 @@ impl<T: PrimInt> Interval<T> {
         self.start >= self.end
     }
 
-    /// Computes the intersection of two intervals `a` and `b`.
-    pub fn intersection(a: Self, b: Self) -> Self {
-        let start = std::cmp::max(a.start, b.start);
-        let end = std::cmp::min(a.end, b.end);
-        Self { start, end }
-    }
-
     /// Computes an evenly spaced array of `N` points within the interval.
     pub fn linspace<const N: usize>(self) -> [T; N] {
         match N {
@@ -89,6 +90,14 @@ impl<T: PrimInt> Interval<T> {
             self.start = midpoint;
             self.end = midpoint + T::one();
         }
+    }
+
+    pub fn intersect(self, rhs: Self) -> Self {
+        Self::intersection(self, rhs)
+    }
+
+    pub fn as_range(self) -> Range<T> {
+        self.start..self.end
     }
 }
 
