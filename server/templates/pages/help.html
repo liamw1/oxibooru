@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} - Help{% endblock %}
+
+{% block content %}
+<div class="content-wrapper" id="help">
+    <nav class="buttons primary">
+        <ul>
+            <li data-name="about" {% if active_help_tab==HelpTab::About %} class="active" {% endif %}>
+                <a href="/help/about">About</a>
+            </li>
+            <li data-name="keyboard" {% if active_help_tab==HelpTab::Keyboard %} class="active" {% endif %}>
+                <a href="/help/keyboard">Keyboard</a>
+            </li>
+            <li data-name="search" {% if active_help_tab==HelpTab::Search %} class="active" {% endif %}>
+                <a href="/help/search">Search syntax</a>
+            </li>
+            <li data-name="comments" {% if active_help_tab==HelpTab::Comments %} class="active" {% endif %}>
+                <a href="/help/comments">Comments</a>
+            </li>
+            <li data-name="tos" {% if active_help_tab==HelpTab::Tos %} class="active" {% endif %}>
+                <a href="/help/tos">Terms of service</a>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="content">
+        {% match active_help_tab %}
+        {% when HelpTab::About %}{% include "partials/help_about.html" %}
+        {% when HelpTab::Keyboard %}{% include "partials/help_keyboard.html" %}
+        {% when HelpTab::Search %}{% include "partials/help_search.html" %}
+        {% when HelpTab::Comments %}{% include "partials/help_comments.html" %}
+        {% when HelpTab::Tos %}{% include "partials/help_tos.html" %}
+        {% endmatch %}
+    </div>
+</div>
+{% endblock %}
