@@ -211,10 +211,10 @@ async fn update(
             }
 
             new_category.last_edit_time = DateTime::now();
-            let _: PoolCategory =
+            let saved_category: PoolCategory =
                 error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::PoolCategoryName)?;
             snapshot::pool_category::modification_snapshot(conn, ctx.client, &old_category, &new_category)?;
-            Ok::<_, ApiError>(new_category)
+            Ok::<_, ApiError>(saved_category)
         })
         .await?;
     connection_pool
