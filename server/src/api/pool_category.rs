@@ -269,11 +269,6 @@ async fn set_default(
                 .set(pool::category_id.eq(category.id))
                 .execute(conn)?;
 
-            // Update last_edit_time
-            let current_time = DateTime::now();
-            category.last_edit_time = current_time;
-            old_default_category.last_edit_time = current_time;
-
             // Make category default
             std::mem::swap(&mut category.id, &mut old_default_category.id);
 
