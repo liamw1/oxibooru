@@ -210,11 +210,23 @@ pub struct PostInfo {
 
 impl PostInfo {
     pub fn title(&self) -> Result<String, NotRequested> {
-        Ok(String::from("title"))
+        let id = self.id()?;
+        let post_type = self.type_()?;
+        let tags = self.tags()?;
+
+        let tag_list: String = tags
+            .iter()
+            .map(MicroTag::primary_name)
+            .map(|tag| format!(" #{tag}"))
+            .collect();
+        Ok(format!("@{id} ({post_type})\n\nTags:{tag_list}"))
     }
 
-    pub fn url(&self) -> Result<String, NotRequested> {
-        self.id().map(|id| format!("post/{id}"))
+    pub fn url(&self, query: Option<&str>) -> Result<String, NotRequested> {
+        self.id().map(|id| match query {
+            Some(query) => format!("post/{id}?{query}"),
+            None => format!("post/{id}"),
+        })
     }
 
     pub fn new(conn: &mut PgConnection, ctx: &Context, post: Post, fields: Mask<Field>) -> QueryResult<Self> {
