@@ -17,7 +17,7 @@
             <li data-post-id="{{ post.id()? }}">
                 <a class="thumbnail-wrapper {% if post.tags()?.is_empty() %}no-tags{% else %}tags{% endif %}"
                     title="{{ post.title()? }}"
-                    href="{% if ctx.has_privilege(Action::PostView) %}{{ post.url()? }}{% endif %}">
+                    href="{% if ctx.has_privilege(Action::PostView) %}{{ post.url(query.as_deref())? }}{% endif %}">
                     <span class="thumbnail" style="background-image: url({{ post.thumbnail_url()? }})">
                         <img alt="thumbnail" src="{{ post.thumbnail_url()? }}">
                     </span>
