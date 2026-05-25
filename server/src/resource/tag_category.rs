@@ -7,8 +7,7 @@ use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
 use serde::Serialize;
-use serde_with::skip_serializing_none;
-use server_macros::non_nullable_options;
+use server_macros::resource;
 use strum::EnumString;
 use utoipa::ToSchema;
 
@@ -32,22 +31,21 @@ impl From<Field> for u64 {
 /// A single tag category. The primary purpose of tag categories is to distinguish
 /// certain tag types (such as characters, media type etc.), which improves user
 /// experience.
-#[non_nullable_options]
-#[skip_serializing_none]
+#[resource]
 #[derive(Serialize, ToSchema)]
 pub struct TagCategoryInfo {
     /// Resource version. See [versioning](#Versioning).
-    pub version: Option<DateTime>,
+    version: DateTime,
     /// The category name.
-    pub name: Option<SmallString>,
+    name: SmallString,
     /// The category color.
-    pub color: Option<SmallString>,
+    color: SmallString,
     /// How many tags is the given category used with.
-    pub usages: Option<i64>,
+    usages: i64,
     /// The order in which tags with this category are displayed, ascending.
-    pub order: Option<i32>,
+    order: i32,
     /// Whether the tag category is the default one.
-    pub default: Option<bool>,
+    default: bool,
 }
 
 impl TagCategoryInfo {

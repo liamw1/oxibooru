@@ -12,8 +12,7 @@ use crate::time::DateTime;
 use diesel::dsl::count_star;
 use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
-use serde_with::skip_serializing_none;
-use server_macros::non_nullable_options;
+use server_macros::resource;
 use strum::EnumString;
 use utoipa::ToSchema;
 
@@ -70,41 +69,40 @@ impl From<Field> for u64 {
 }
 
 /// A single user.
-#[non_nullable_options]
-#[skip_serializing_none]
+#[resource]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     /// Resource version. See [versioning](#Versioning).
-    version: Option<DateTime>,
+    version: DateTime,
     /// The user name.
-    name: Option<SmallString>,
+    name: SmallString,
     /// The user email. It is available only if the request is authenticated by the same user,
     /// or the authenticated user can change the email. If it's unavailable, the server returns `false`.
     /// If the user hasn't specified an email, the server returns `null`.
-    email: Option<PrivateData<Option<SmallString>>>,
+    email: PrivateData<Option<SmallString>>,
     /// The user rank, which effectively affects their privileges.
-    rank: Option<UserRank>,
+    rank: UserRank,
     /// The last login time.
-    last_login_time: Option<DateTime>,
+    last_login_time: DateTime,
     /// The user registration time.
-    creation_time: Option<DateTime>,
+    creation_time: DateTime,
     /// How to render the user avatar.
-    avatar_style: Option<AvatarStyle>,
+    avatar_style: AvatarStyle,
     /// The URL to the avatar.
-    avatar_url: Option<String>,
+    avatar_url: String,
     /// Number of comments.
-    comment_count: Option<i64>,
+    comment_count: i64,
     /// Number of uploaded posts.
-    uploaded_post_count: Option<i64>,
+    uploaded_post_count: i64,
     /// Nubmer of liked posts. It is available only if the request is authenticated by the same user.
     /// If it's unavailable, the server returns `false`.
-    liked_post_count: Option<PrivateData<i64>>,
+    liked_post_count: PrivateData<i64>,
     /// Number of disliked posts. It is available only if the request is authenticated by the same user.
     /// If it's unavailable, the server returns `false`.
-    disliked_post_count: Option<PrivateData<i64>>,
+    disliked_post_count: PrivateData<i64>,
     /// Number of favorited posts.
-    favorite_post_count: Option<i64>,
+    favorite_post_count: i64,
 }
 
 impl UserInfo {

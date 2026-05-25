@@ -8,12 +8,12 @@ use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType
 use crate::model::pool::PoolPost;
 use crate::model::post::{NewPostNote, Post, PostFavorite, PostNote, PostRelation, PostScore, PostTag};
 use crate::model::tag::TagName;
-use crate::resource;
 use crate::resource::comment::CommentInfo;
 use crate::resource::field::Mask;
 use crate::resource::pool::MicroPool;
 use crate::resource::tag::MicroTag;
 use crate::resource::user::MicroUser;
+use crate::resource::{self, NotRequested};
 use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_note, post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
@@ -27,8 +27,7 @@ use diesel::{
     QueryResult, RunQueryDsl, SelectableHelper,
 };
 use serde::{Deserialize, Serialize};
-use serde_with::skip_serializing_none;
-use server_macros::non_nullable_options;
+use server_macros::resource;
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -132,87 +131,92 @@ impl From<Field> for u64 {
 }
 
 /// One file together with its metadata posted to the site.
-#[non_nullable_options]
-#[skip_serializing_none]
+#[resource]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PostInfo {
     /// Resource version. See [versioning](#Versioning).
-    pub version: Option<DateTime>,
+    version: DateTime,
     /// The post identifier.
-    pub id: Option<i64>,
+    id: i64,
     /// Who created the post.
-    #[schema(nullable)]
-    pub user: Option<Option<MicroUser>>,
+    user: Option<MicroUser>,
     /// The size of the file in bytes.
-    pub file_size: Option<i64>,
+    file_size: i64,
     /// The original width of the post content.
-    pub canvas_width: Option<i32>,
+    canvas_width: i32,
     /// The original height of the post content.
-    pub canvas_height: Option<i32>,
+    canvas_height: i32,
     /// Whether the post is safe for work.
-    pub safety: Option<PostSafety>,
+    safety: PostSafety,
     /// The type of the post.
-    pub type_: Option<PostType>,
+    type_: PostType,
     /// Subsidiary to `<type>`, used to tell exact content format. Useful for `<video>` tags for instance.
-    pub mime_type: Option<MimeType>,
+    mime_type: MimeType,
     /// The BLAKE3 file checksum.
-    pub checksum: Option<String>,
+    checksum: String,
     /// The MD5 file checksum.
     #[serde(rename = "checksumMD5")]
-    pub checksum_md5: Option<String>,
+    checksum_md5: String,
     /// Various flags such as whether the post is looped.
-    pub flags: Option<PostFlags>,
+    flags: PostFlags,
     /// Where the post was grabbed form, supplied by the user.
-    pub source: Option<LargeString>,
+    source: LargeString,
     /// Text description for the post. The client should render is as Markdown.
-    pub description: Option<LargeString>,
+    description: LargeString,
     /// Time the tag was created.
-    pub creation_time: Option<DateTime>,
+    creation_time: DateTime,
     /// Time the tag was last edited.
-    pub last_edit_time: Option<DateTime>,
+    last_edit_time: DateTime,
     /// Where the post content is located.
-    pub content_url: Option<String>,
+    content_url: String,
     /// Where the post thumbnail is located.
-    pub thumbnail_url: Option<String>,
+    thumbnail_url: String,
     /// List of tags the post is tagged with.
-    pub tags: Option<Vec<MicroTag>>,
+    tags: Vec<MicroTag>,
     /// List of comments under the post.
-    pub comments: Option<Vec<CommentInfo>>,
+    comments: Vec<CommentInfo>,
     /// List of related posts. Links to related posts are shown to the user by the web client.
-    pub relations: Option<Vec<MicroPost>>,
+    relations: Vec<MicroPost>,
     /// List of pools the post is a member of.
-    pub pools: Option<Vec<MicroPool>>,
+    pools: Vec<MicroPool>,
     /// List of post annotations.
-    pub notes: Option<Vec<Note>>,
+    notes: Vec<Note>,
     /// The collective score (+1/-1 rating) of the given post.
-    pub score: Option<i64>,
+    score: i64,
     /// The score (+1/-1 rating) of the given post by the authenticated user.
-    pub own_score: Option<Rating>,
+    own_score: Rating,
     /// Whether the authenticated user has given post in their favorites.
-    pub own_favorite: Option<bool>,
+    own_favorite: bool,
     /// How many tags the post is tagged with.
-    pub tag_count: Option<i64>,
+    tag_count: i64,
     /// How many comments are filed under the post.
-    pub comment_count: Option<i64>,
+    comment_count: i64,
     /// How many posts are related to this post.
-    pub relation_count: Option<i64>,
+    relation_count: i64,
     /// How many notes the post has.
-    pub note_count: Option<i64>,
+    note_count: i64,
     /// How many users have the post in their favorites.
-    pub favorite_count: Option<i64>,
+    favorite_count: i64,
     /// How many times has the post been featured.
-    pub feature_count: Option<i64>,
+    feature_count: i64,
     /// The last time the post was featured.
-    #[schema(nullable)]
-    pub last_feature_time: Option<Option<DateTime>>,
+    last_feature_time: Option<DateTime>,
     /// List of users that favorited the post.
-    pub favorited_by: Option<Vec<MicroUser>>,
+    favorited_by: Vec<MicroUser>,
     /// Whether the post uses custom thumbnail.
-    pub has_custom_thumbnail: Option<bool>,
+    has_custom_thumbnail: bool,
 }
 
 impl PostInfo {
+    pub fn title(&self) -> Result<String, NotRequested> {
+        Ok(String::from("title"))
+    }
+
+    pub fn url(&self) -> Result<String, NotRequested> {
+        self.id().map(|id| format!("post/{id}"))
+    }
+
     pub fn new(conn: &mut PgConnection, ctx: &Context, post: Post, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch(conn, ctx, vec![post], fields).map(resource::single)
     }
