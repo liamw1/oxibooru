@@ -5,8 +5,7 @@ use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::{PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
 use serde::Serialize;
-use serde_with::skip_serializing_none;
-use server_macros::non_nullable_options;
+use server_macros::resource;
 use strum::EnumString;
 use utoipa::ToSchema;
 
@@ -29,20 +28,19 @@ impl From<Field> for u64 {
 /// A single pool category. The primary purpose of pool categories is to distinguish
 /// certain pool types (such as series, relations etc.), which improves user
 /// experience.
-#[non_nullable_options]
-#[skip_serializing_none]
+#[resource]
 #[derive(Serialize, ToSchema)]
 pub struct PoolCategoryInfo {
     /// Resource version. See [versioning](#Versioning).
-    pub version: Option<DateTime>,
+    version: DateTime,
     /// The category name.
-    pub name: Option<SmallString>,
+    name: SmallString,
     /// The category color.
-    pub color: Option<SmallString>,
+    color: SmallString,
     /// How many pools is the given category used with.
-    pub usages: Option<i64>,
+    usages: i64,
     /// Whether the pool category is the default one.
-    pub default: Option<bool>,
+    default: bool,
 }
 
 impl PoolCategoryInfo {

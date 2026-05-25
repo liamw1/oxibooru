@@ -4,8 +4,7 @@ use crate::resource::user::MicroUser;
 use crate::string::LargeString;
 use crate::time::DateTime;
 use serde::Serialize;
-use serde_with::skip_serializing_none;
-use server_macros::non_nullable_options;
+use server_macros::resource;
 use strum::EnumString;
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -31,30 +30,28 @@ impl From<Field> for u64 {
 }
 
 /// A single user token.
-#[non_nullable_options]
-#[skip_serializing_none]
+#[resource]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct UserTokenInfo {
     /// Resource version. See [versioning](#Versioning).
-    pub version: Option<DateTime>,
+    version: DateTime,
     /// The user that owns the token.
-    pub user: Option<MicroUser>,
+    user: MicroUser,
     /// The token that can be used to authenticate the user.
-    pub token: Option<Uuid>,
+    token: Uuid,
     /// A note that describes the token.
-    pub note: Option<LargeString>,
+    note: LargeString,
     /// Whether the token is still valid for authentication.
-    pub enabled: Option<bool>,
+    enabled: bool,
     /// Time when the token expires.
-    #[schema(nullable)]
-    pub expiration_time: Option<Option<DateTime>>,
+    expiration_time: Option<DateTime>,
     /// Time the user token was created.
-    pub creation_time: Option<DateTime>,
+    creation_time: DateTime,
     /// Time the user token was last edited.
-    pub last_edit_time: Option<DateTime>,
+    last_edit_time: DateTime,
     /// The last time this token was used during a login involving `?bump-login`.
-    pub last_usage_time: Option<DateTime>,
+    last_usage_time: DateTime,
 }
 
 impl UserTokenInfo {
