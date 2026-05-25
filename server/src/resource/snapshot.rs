@@ -10,8 +10,7 @@ use crate::time::DateTime;
 use diesel::{ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_json::Value;
-use serde_with::skip_serializing_none;
-use server_macros::non_nullable_options;
+use server_macros::resource;
 use strum::EnumString;
 use utoipa::ToSchema;
 
@@ -233,19 +232,17 @@ impl From<Field> for u64 {
 ///
 /// - resource type equivalent to `<resource-type>` of the target entity.
 /// - resource ID equivalent to `<resource-id>` of the target entity.
-#[non_nullable_options]
-#[skip_serializing_none]
+#[resource]
 #[derive(Serialize, ToSchema)]
 pub struct SnapshotInfo {
-    #[schema(nullable)]
-    pub user: Option<Option<MicroUser>>,
-    pub operation: Option<ResourceOperation>,
+    user: Option<MicroUser>,
+    operation: ResourceOperation,
     #[serde(rename = "type")]
-    pub resource_type: Option<ResourceType>,
+    resource_type: ResourceType,
     #[serde(rename = "id")]
-    pub resource_id: Option<SmallString>,
-    pub data: Option<Value>,
-    pub time: Option<DateTime>,
+    resource_id: SmallString,
+    data: Value,
+    time: DateTime,
 }
 
 impl SnapshotInfo {

@@ -11,8 +11,7 @@ use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
-use serde_with::skip_serializing_none;
-use server_macros::non_nullable_options;
+use server_macros::resource;
 use strum::EnumString;
 use utoipa::ToSchema;
 
@@ -37,30 +36,28 @@ impl From<Field> for u64 {
 }
 
 /// A comment under a post.
-#[non_nullable_options]
-#[skip_serializing_none]
+#[resource]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CommentInfo {
     /// Resource version. See [versioning](#Versioning) for details.
-    pub version: Option<DateTime>, // TODO: Remove last_edit_time as it fills the same role as version here
+    pub version: DateTime, // TODO: Remove last_edit_time as it fills the same role as version here
     /// The comment identifier.
-    pub id: Option<i64>,
+    pub id: i64,
     /// ID of the post the comment is for.
-    pub post_id: Option<i64>,
+    pub post_id: i64,
     /// The comment content. The client should render this as Markdown.
-    pub text: Option<LargeString>,
+    pub text: LargeString,
     /// Time the comment was created.
-    pub creation_time: Option<DateTime>,
+    pub creation_time: DateTime,
     /// Time the comment was last edited.
-    pub last_edit_time: Option<DateTime>,
+    pub last_edit_time: DateTime,
     /// A micro user resource for the comment author, or null if anonymous.
-    #[schema(nullable)]
-    pub user: Option<Option<MicroUser>>,
+    pub user: Option<MicroUser>,
     /// The collective score (+1/-1 rating) of the comment.
-    pub score: Option<i64>,
+    pub score: i64,
     /// The score (+1/-1 rating) of the comment by the authenticated user.
-    pub own_score: Option<Rating>,
+    pub own_score: Rating,
 }
 
 impl CommentInfo {

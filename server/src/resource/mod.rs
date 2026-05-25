@@ -2,6 +2,7 @@ use crate::string::SmallString;
 use diesel::Identifiable;
 use std::collections::HashMap;
 use std::sync::Arc;
+use thiserror::Error;
 
 pub mod comment;
 pub mod field;
@@ -19,6 +20,16 @@ pub mod user_token;
 // case, and the most straightforward way of implementing the function would have this behavior,
 // but I don't see this as a guarantee anywhere in the documentation. If this changes, I'll need
 // to reimplement a similar function with this behavior.
+
+#[derive(Debug, Error)]
+#[error("{0} field not requested")]
+pub struct NotRequested(&'static str);
+
+impl From<NotRequested> for askama::Error {
+    fn from(value: NotRequested) -> Self {
+        askama::Error::Custom(Box::new(value))
+    }
+}
 
 /// Validates that a batch retrieval is the expected size.
 fn check_batch_results(batch_size: usize, retrieved_size: usize) {
