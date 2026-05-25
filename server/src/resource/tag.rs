@@ -28,6 +28,12 @@ pub struct MicroTag {
     pub usages: i64,
 }
 
+impl MicroTag {
+    pub fn primary_name(&self) -> &str {
+        &self.names[0]
+    }
+}
+
 #[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
