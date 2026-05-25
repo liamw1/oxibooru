@@ -30,6 +30,7 @@ struct GalleryTemplate {
     edit_mode: Option<EditMode>,
     posts: Vec<PostInfo>,
     pager: Pager,
+    query: Option<String>,
 }
 
 async fn gallery(
@@ -60,6 +61,7 @@ async fn gallery(
         edit_mode: None,
         posts: response.results,
         pager,
+        query: response.query,
     }
     .render()
     .map(Html)
