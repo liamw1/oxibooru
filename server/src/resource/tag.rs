@@ -9,8 +9,7 @@ use diesel::{
     RunQueryDsl, SelectableHelper,
 };
 use serde::Serialize;
-use serde_with::skip_serializing_none;
-use server_macros::non_nullable_options;
+use server_macros::resource;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use strum::EnumString;
@@ -50,29 +49,28 @@ impl From<Field> for u64 {
 }
 
 /// A single tag. Tags are used to let users search for posts.
-#[non_nullable_options]
-#[skip_serializing_none]
+#[resource]
 #[derive(Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagInfo {
     /// Resource version. See [versioning](#Versioning).
-    pub version: Option<DateTime>,
+    version: DateTime,
     /// The tag description (instructions how to use, history etc.). The client should render is as Markdown.
-    pub description: Option<LargeString>,
+    description: LargeString,
     /// Time the tag was created.
-    pub creation_time: Option<DateTime>,
+    creation_time: DateTime,
     /// Time the tag was last edited.
-    pub last_edit_time: Option<DateTime>,
+    last_edit_time: DateTime,
     /// The name of the category the given tag belongs to.
-    pub category: Option<SmallString>,
+    category: SmallString,
     /// A list of tag names (aliases). Tagging a post with any name will automatically assign the first name from this list.
-    pub names: Option<Vec<SmallString>>,
+    names: Vec<SmallString>,
     /// A list of implied tags. Implied tags are automatically appended by the web client on usage.
-    pub implications: Option<Vec<MicroTag>>,
+    implications: Vec<MicroTag>,
     /// A list of suggested tags. Suggested tags are shown to the user by the web client on usage.
-    pub suggestions: Option<Vec<MicroTag>>,
+    suggestions: Vec<MicroTag>,
     /// The number of posts the tag was used in.
-    pub usages: Option<i64>,
+    usages: i64,
 }
 
 impl TagInfo {
