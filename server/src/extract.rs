@@ -105,6 +105,7 @@ where
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Path<T>(pub T);
 
 impl<S, T> FromRequestParts<S> for Path<T>

@@ -122,6 +122,15 @@ pub fn format_duration(duration: Duration) -> String {
     format(duration.as_nanos(), SI_BASE, TIME_PREFIXES, "s")
 }
 
+pub fn format_bytes<T>(num_bytes: &T) -> String
+where
+    T: Copy,
+    u128: TryFrom<T>,
+{
+    const BASE: NonZeroU128 = NonZeroU128::new(1024).unwrap();
+    format(u128::try_from(*num_bytes).unwrap_or(0), BASE, SI_PREFIXES, "B")
+}
+
 const TIME_PREFIXES: [&str; 4] = ["n", "μ", "m", ""];
 const SI_PREFIXES: [&str; 11] = ["", "k", "M", "G", "T", "P", "E", "Z", "Y", "R", "Q"];
 

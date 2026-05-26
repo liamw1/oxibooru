@@ -7,44 +7,47 @@
     <meta name="theme-color" content="#24aadd">
     <meta name="mobile-web-app-capable" content="yes">
 
+    {# TODO: Generalize #}
+    <base href="/">
+
     {# TODO: Combine into one stylesheet #}
-    <link rel="stylesheet" type="text/css" href="/static/css/colors.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/comment-control.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/comment-list-control.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/comment-list-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/core-forms.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/core-general.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/expander-control.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/help-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/home-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/nprogress.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/pager.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/password-reset.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/pool-categories-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/pool-input-control.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/pool-list-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/pool-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/post-content-control.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/post-detail-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/post-list-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/post-main-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/post-notes-overlay-control.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/post-upload.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/snapshot-list-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/tag-categories-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/tag-input-control.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/tag-list-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/tag-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/user-list-view.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/user-registration.css">
-    <link rel="stylesheet" type="text/css" href="/static/css/user-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/colors.css">
+    <link rel="stylesheet" type="text/css" href="static/css/comment-control.css">
+    <link rel="stylesheet" type="text/css" href="static/css/comment-list-control.css">
+    <link rel="stylesheet" type="text/css" href="static/css/comment-list-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/core-forms.css">
+    <link rel="stylesheet" type="text/css" href="static/css/core-general.css">
+    <link rel="stylesheet" type="text/css" href="static/css/expander-control.css">
+    <link rel="stylesheet" type="text/css" href="static/css/help-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/home-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/nprogress.css">
+    <link rel="stylesheet" type="text/css" href="static/css/pager.css">
+    <link rel="stylesheet" type="text/css" href="static/css/password-reset.css">
+    <link rel="stylesheet" type="text/css" href="static/css/pool-categories-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/pool-input-control.css">
+    <link rel="stylesheet" type="text/css" href="static/css/pool-list-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/pool-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/post-content-control.css">
+    <link rel="stylesheet" type="text/css" href="static/css/post-detail-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/post-list-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/post-main-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/post-notes-overlay-control.css">
+    <link rel="stylesheet" type="text/css" href="static/css/post-upload.css">
+    <link rel="stylesheet" type="text/css" href="static/css/snapshot-list-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/tag-categories-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/tag-input-control.css">
+    <link rel="stylesheet" type="text/css" href="static/css/tag-list-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/tag-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/user-list-view.css">
+    <link rel="stylesheet" type="text/css" href="static/css/user-registration.css">
+    <link rel="stylesheet" type="text/css" href="static/css/user-view.css">
 
     {# Temporary. TODO: Remove #}
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
 
-    <link rel="icon" href="/static/img/favicon.png">
+    <link rel="icon" href="static/img/favicon.png">
 
-    <script src="/static/js/htmx-2.0.10.min.js"></script>
+    <script src="static/js/htmx-2.0.10.min.js"></script>
 
     <title>{% block title %}{{ ctx.site_name() }}{% endblock %}</title>
 </head>
