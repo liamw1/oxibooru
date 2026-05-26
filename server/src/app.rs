@@ -62,6 +62,24 @@ impl Context {
         &self.config.public_info.name
     }
 
+    pub fn full_url(&self, relative_url: &str) -> String {
+        let domain = if let Some(domain) = self.config.domain.as_ref() {
+            domain.to_string()
+        } else if let Ok(domain) = std::env::var("HTTP_ORIGIN") {
+            domain
+        } else if let Ok(domain) = std::env::var("HTTP_REFERER") {
+            domain
+        } else if let Ok(port) = std::env::var("PORT") {
+            format!("http://localhost:{port}")
+        } else {
+            String::new()
+        };
+
+        let domain = domain.trim_end_matches('/');
+        let relative_url = relative_url.trim_start_matches('/');
+        format!("{domain}/{relative_url}")
+    }
+
     pub fn safety_enabled(&self) -> bool {
         self.config.public_info.enable_safety
     }
@@ -69,6 +87,18 @@ impl Context {
     /// Checks if the `client` is at least `required_rank`.
     pub fn has_privilege(&self, action: Action) -> bool {
         self.client.rank >= self.config.privileges()[action]
+    }
+
+    pub fn can_edit_posts(&self) -> bool {
+        self.has_privilege(Action::PostEditContent)
+            || self.has_privilege(Action::PostEditDescription)
+            || self.has_privilege(Action::PostEditFlag)
+            || self.has_privilege(Action::PostEditNote)
+            || self.has_privilege(Action::PostEditRelation)
+            || self.has_privilege(Action::PostEditSafety)
+            || self.has_privilege(Action::PostEditSource)
+            || self.has_privilege(Action::PostEditTag)
+            || self.has_privilege(Action::PostEditThumbnail)
     }
 
     /// Returns error if client is lower rank than `required_rank`.

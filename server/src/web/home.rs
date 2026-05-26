@@ -1,4 +1,5 @@
-use crate::api::info;
+use crate::api;
+use crate::api::info::InfoResponse;
 use crate::app::{AppState, Context};
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Query, ResourceParams};
@@ -17,19 +18,12 @@ pub fn routes() -> Router<AppState> {
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-struct ServerInfo {
-    post_count: i64,
-    disk_usage: String,
-    featured_post: Option<PostInfo>,
-    time_since_build: String,
-}
-
 #[derive(Template)]
 #[template(path = "pages/home.html")]
 struct HomeTemplate {
     ctx: Context,
-    info: ServerInfo,
     active_tab: Tab,
+    info: InfoResponse,
 }
 
 async fn home(ctx: Ctx) -> Html<String> {
@@ -47,16 +41,9 @@ async fn home(ctx: Ctx) -> Html<String> {
     ]
     .into();
     let resource_params = Query(ResourceParams { query: None, fields });
-    let Json(response) = info::get(ctx.clone(), resource_params).await.unwrap();
-
-    let info = ServerInfo {
-        post_count: response.post_count,
-        disk_usage: unit::format_bytes(u64::try_from(response.disk_usage).unwrap_or(0)),
-        featured_post: response.featured_post,
-        time_since_build: time::since(BUILD_DATE),
-    };
+    let Json(info) = api::info::get(ctx.clone(), resource_params).await.unwrap();
 
     let Ctx(ctx, _) = ctx;
     let active_tab = Tab::Home;
-    HomeTemplate { ctx, info, active_tab }.render().map(Html).unwrap()
+    HomeTemplate { ctx, active_tab, info }.render().map(Html).unwrap()
 }

@@ -5,6 +5,7 @@ use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Timestamptz;
 use serde::{Deserialize, Serialize};
+use std::borrow::Borrow;
 use std::fmt::Display;
 use std::ops::{Deref, DerefMut, Sub};
 use time::error::ComponentRange;
@@ -132,8 +133,8 @@ impl FromSql<Timestamptz, Pg> for DateTime {
     }
 }
 
-pub fn since(time: DateTime) -> String {
-    let duration_since_build = DateTime::now() - time;
+pub fn since(time: impl Borrow<DateTime>) -> String {
+    let duration_since_build = DateTime::now() - *time.borrow();
     let seconds = duration_since_build.whole_seconds();
     let minutes = duration_since_build.whole_minutes();
     let hours = duration_since_build.whole_hours();

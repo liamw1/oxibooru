@@ -226,7 +226,7 @@ pub async fn list(
         (status = 404, description = "Post does not exist"),
     ),
 )]
-async fn get(
+pub async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams<Field>>,
@@ -245,11 +245,11 @@ async fn get(
 
 /// Response containing neighboring posts.
 #[derive(Serialize, ToSchema)]
-struct PostNeighbors {
+pub struct PostNeighbors {
     /// The previous post, or null if none.
-    prev: Option<PostInfo>,
+    pub prev: Option<PostInfo>,
     /// The next post, or null if none.
-    next: Option<PostInfo>,
+    pub next: Option<PostInfo>,
 }
 
 /// Retrieves information about posts that are before or after an existing post.
@@ -268,7 +268,7 @@ struct PostNeighbors {
         (status = 404, description = "Post does not exist"),
     ),
 )]
-async fn get_neighbors(
+pub async fn get_neighbors(
     Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams<Field>>,
