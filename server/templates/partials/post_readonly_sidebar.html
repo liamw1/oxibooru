@@ -1,0 +1,104 @@
+<div class="readonly-sidebar">
+    <article class="details">
+        <section class="download">
+            <a href="{{ post.content_url()? }}" download>
+                <i class="fa fa-download"></i>
+                {{- unit::format_bytes(post.file_size()?) }} {{ post.mime_type()?.extension() | uppercase }}
+            </a>
+            ({{ post.canvas_width()? }}x{{ post.canvas_height()? }})
+            {% if post.flags()?.contains(PostFlag::Loop) %}<i class="fa fa-repeat"></i>{% endif %}
+            {% if post.flags()?.contains(PostFlag::Sound) %}<i class="fa fa-volume-up"></i>{% endif %}
+        </section>
+
+        <section class="upload-info">
+            {% let user = post.user()? %}
+            {% include "partials/user_link.html"%},
+            <time datetime="{{ post.creation_time()? }}">{{ time::since(post.creation_time()?) }}</time>
+        </section>
+
+        {% if ctx.safety_enabled() %}
+        <section class="safety">
+            <i class="fa fa-circle safety-{{ post.safety()? }}"></i>{{ post.safety()? | capitalize }}
+        </section>
+        {% endif %}
+
+        <section class="zoom">
+            {# TODO: Zoom functionality #}
+            <a href class="fit-original">Original zoom</a> &middot;
+            <a href class="fit-width">fit width</a> &middot;
+            <a href class="fit-height">height</a> &middot;
+            <a href class="fit-both">both</a>
+        </section>
+
+        {% if !post.source()?.is_empty() %}
+        <section class="source">
+            Source: {# TODO: Source #}
+        </section>
+        {% endif %}
+
+        <section class="search">
+            Search on
+            <a href="https://iqdb.org/?url={{ full_content_url()? }}">IQDB</a> &middot;
+            <a href="https://danbooru.donmai.us/posts?tags=md5:{{ post.checksum_md5()? }}">Danbooru</a> &middot;
+            <a href="https://lens.google.com/uploadbyurl?url={{ full_content_url()? }}">Google Images</a>
+        </section>
+
+        <section class="social">
+            <div class="score-container">
+                {# TODO: score #}
+            </div>
+
+            {# TODO: fav-container #}
+        </section>
+    </article>
+
+    {% if !post.relations()?.is_empty() %}
+    <nav class="relations">
+        <h1>Relations ({{ post.relations()?.len() }})</h1>
+        <ul>
+            {% for related_post in post.relations()? %}
+            <li>
+                <a href="{{ related_post.url(None) }}">
+                    <span class="thumbnail" style="background-image: url({{ related_post.thumbnail_url }})">
+                        <img alt="thumbnail" src="{{ related_post.thumbnail_url }}">
+                    </span>
+                </a>
+            </li>
+            {% endfor %}
+        </ul>
+    </nav>
+    {% endif %}
+
+    <nav class="tags">
+        <h1>Tags ({{ post.tags()?.len() }})</h1>
+        {% if !post.tags()?.is_empty() %}
+        <ul class="compact-tags">
+            {% for tag in post.tags()? %}
+            <li>
+                {% if ctx.has_privilege(Action::TagView) %}
+                <a href="tag/{{ tag.primary_name() }}" {# TODO: makeCssName(tag.category, tag) #}>
+                    <i class="fa fa-tag"></i>
+                </a>
+                {% endif %}
+                {% if ctx.has_privilege(Action::PostList) %}
+                {# TODO: posts link #}
+                {{ tag.primary_name() }}
+                {% else %}
+                {{ tag.primary_name() }}
+                {% endif %}
+                &#32;
+                <span class="tag-usages" data-pseudo-content="{{ tag.usages }}"></span>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p>
+            No tags yet!
+            {% if ctx.can_edit_posts() %}
+            {# TODO: Edit mode #}
+            <a href="{{ post.url(query.as_deref())? }}">Add some.</a>
+            {% endif %}
+        </p>
+        {% endif %}
+    </nav>
+</div>

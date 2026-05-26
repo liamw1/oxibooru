@@ -11,22 +11,20 @@
     </header>
 
     {% if ctx.has_privilege(Action::PostList) %}
-    <form class="horizontal" action="/posts" method="get">
+    <form class="horizontal" action="posts" method="get">
         <input type="text" name="query" placeholder="enter some tags">
         <button type="submit">Search</button>
         <span class=sep>or</span>
-        <a href="/posts">browse all posts</a>
+        <a href="posts">browse all posts</a>
     </form>
     {% endif %}
 
     {% if let Some(post) = info.featured_post %}
-    <div class="post-container">
-        {% include "partials/post_content.html" %}
-    </div>
+    {% include "partials/post_content.html" %}
     <aside>
         Featured&nbsp;post:&nbsp;<a href="post/{{ post.id()? }}">@{{ post.id()? }}</a>,<wbr>
         posted&nbsp;<time datetime="{{ post.creation_time()? }}" title="{{ post.creation_time()? }}">{{
-            time::since(*post.creation_time()?) }}</time>&nbsp;by<wbr>
+            time::since(post.creation_time()?) }}</time>&nbsp;by<wbr>
         {% let user = post.user()? %}
         {% include "partials/user_link.html"%}
     </aside>
@@ -36,16 +34,16 @@
         <ul>
             <li>{{ info.post_count }} posts</li>
             <li class="sep">&nbsp;</li>
-            <li>{{ info.disk_usage }}</li>
+            <li>{{ unit::format_bytes(info.disk_usage) }}</li>
             <li class="sep">&nbsp;</li>
             <li>
                 Version <a class="version" href="https://github.com/liamw1/oxibooru/commits/master">{{ VERSION }}</a>
-                from <time datetime="{{ BUILD_DATE }}">{{ info.time_since_build }}</time>
+                from <time datetime="{{ BUILD_DATE }}">{{ time::since(BUILD_DATE) }}</time>
             </li>
             {% if ctx.has_privilege(Action::SnapshotList) %}
             <li class="sep">&nbsp;</li>
             <li>
-                <a href="/history">History</a>
+                <a href="history">History</a>
             </li>
             {% endif %}
         </ul>

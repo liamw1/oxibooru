@@ -3,12 +3,11 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::auth::password;
 use crate::content::hash;
-use crate::extract::{Json, Path};
+use crate::extract::{Ctx, Json, Path};
 use crate::model::enums::ResourceType;
 use crate::schema::user;
 use crate::string::{SecretString, SmallString};
 use argon2::password_hash::rand_core::{OsRng, RngCore};
-use axum::extract::State;
 use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use lettre::Address;
 use lettre::message::Mailbox;
@@ -58,32 +57,20 @@ fn get_user_info(
         (status = 422, description = "User hasn't provided an email address"),
     ),
 )]
-async fn request_reset(State(state): State<AppState>, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
-    let smtp_info = state.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
+async fn request_reset(Ctx(ctx, connection_pool): Ctx, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
+    let smtp_info = ctx.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
-    let mut conn = state.connection_pool.get().await?;
+    let mut conn = connection_pool.get().await?;
     let (_id, username, user_email, password_salt) = get_user_info(conn.as_mut(), &identifier)?;
     let user_email = user_email.ok_or(ApiError::NoEmail)?;
     let user_mailbox = Mailbox::new(None, Address::from_str(&user_email)?);
 
-    let domain = if let Some(domain) = state.config.domain.as_deref() {
-        domain
-    } else if let Some(domain) = state.env.http_origin.as_deref() {
-        domain
-    } else if let Some(domain) = state.env.http_referer.as_deref() {
-        domain
-    } else if let Some(port) = state.env.domain_port {
-        &format!("http://localhost:{port}")
-    } else {
-        ""
-    };
-    let domain = domain.trim_end_matches('/');
-
-    let site_name = &state.config.public_info.name;
+    let site_name = &ctx.config.public_info.name;
     let username = percent_encoding::utf8_percent_encode(&username, NON_ALPHANUMERIC);
     let separator = percent_encoding::percent_encode_byte(b':');
     let reset_token = hash::compute_url_safe_hash(password_salt.as_bytes());
-    let url = format!("{domain}/password-reset/{username}{separator}{reset_token}");
+    let reset_url = format!("/password-reset/{username}{separator}{reset_token}");
+    let url = ctx.full_url(&reset_url);
 
     let email = Message::builder()
         .from(smtp_info.from.clone())
@@ -164,14 +151,13 @@ fn generate_temporary_password(length: u8) -> SecretString {
     ),
 )]
 async fn reset_password(
-    State(state): State<AppState>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(username): Path<SmallString>,
     Json(confirmation): Json<ResetToken>,
 ) -> ApiResult<Json<NewPassword>> {
     const TEMPORARY_PASSWORD_LENGTH: u8 = 16;
 
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             let (user_id, _name, _email, password_salt) = get_user_info(conn, &username)?;
             if confirmation.token != hash::compute_url_safe_hash(password_salt.as_bytes()) {
@@ -180,7 +166,7 @@ async fn reset_password(
 
             let temporary_password = generate_temporary_password(TEMPORARY_PASSWORD_LENGTH);
 
-            let (hash, salt) = password::hash_password(&state.config, &temporary_password)?;
+            let (hash, salt) = password::hash_password(&ctx.config, &temporary_password)?;
             diesel::update(user::table.find(user_id))
                 .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
                 .execute(conn)?;
