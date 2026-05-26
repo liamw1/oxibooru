@@ -1,0 +1,80 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} - Post #{{ post.id()? }}{% endblock %}
+
+{% block content %}
+<div class="content-wrapper transparent-container post-view">
+    <aside class="sidebar">
+        <nav class="buttons">
+            <article class="previous-post">
+                <a rel="prev" {% if let Some(post)=prev_post %} href="{{ post.url(query.as_deref())? }}" {% else %}
+                    class="inactive" {% endif %}>
+                    <i class="fa fa-chevron-left"></i>
+                    <span class="vim-nav-hint">&lt; Previous post</span>
+                </a>
+            </article>
+            <article class="next-post">
+                <a rel="next" {% if let Some(post)=next_post %} href="{{ post.url(query.as_deref())? }}" {% else %}
+                    class="inactive" {% endif %}>
+                    <i class="fa fa-chevron-right"></i>
+                    <span class="vim-nav-hint">Next post &gt;</span>
+                </a>
+            </article>
+
+            {% if ctx.can_edit_posts() || ctx.has_privilege(Action::PostDelete) ||
+            ctx.has_privilege(Action::PostFeature) %}
+            <article class="edit-post">
+                {% if is_editing %}
+                <a href="{# TODO: URL #}">
+                    <i class="fa fa-reply"></i>
+                    <span class="vim-nav-hint">Back to view mode</span>
+                </a>
+                {% else %}
+                <a href="{# TODO: URL #}">
+                    <i class="fa fa-pencil"></i>
+                    <span class="vim-nav-hint">Edit posts</span>
+                </a>
+                {% endif %}
+            </article>
+            {% endif %}
+        </nav>
+
+        {% if is_editing %}
+        {# TODO: Include edit sidebar #}
+        {% else %}
+        {% include "partials/post_readonly_sidebar.html" %}
+        {% endif %}
+
+    </aside>
+
+    <div class="content">
+        {% let post = &post %}
+        {% include "partials/post_content.html" %}
+
+        {% if is_editing && ctx.has_privilege(Action::PostEditDescription) %}
+        <h2>Description</h2>
+        {# TODO: makeTextarea #}
+        {% else if !post.description()?.is_empty() %}
+        <div class="description-container">
+            <details open>
+                <summary>Description</summary>
+                {# TODO: makeMarkdown #}
+            </details>
+        </div>
+        {% endif %}
+
+        <div class="after-mobile-controls">
+            {% if ctx.has_privilege(Action::CommentCreate) %}
+            <h2>Add comment</h2>
+            {# TODO: comment-form-container #}
+            {% endif %}
+
+            {% if ctx.has_privilege(Action::CommentList) %}
+            <div class="comments-container">
+                {# TODO: Make comment box #}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

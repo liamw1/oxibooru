@@ -1,33 +1,35 @@
 {# TODO: Automatic viewport resizing #}
-<div class="post-content post-type-{{ post.type_()? }}{% if matches!(post.type_()?, PostType::Image | PostType::Animation) %} transparency-grid{% endif %}"
-    style="width: {{ post.canvas_width()? }}px; height: {{ post.canvas_height()? }}px;{% if post.type_()? == PostType::Flash %} background-image: url({{ post.thumbnail_url()? }});{% endif %}">
+<div class="post-container">
+    <div class="post-content post-type-{{ post.type_()? }}{% if matches!(post.type_()?, PostType::Image | PostType::Animation) %} transparency-grid{% endif %}"
+        style="width: {{ post.canvas_width()? }}px; height: {{ post.canvas_height()? }}px;{% if post.type_()? == PostType::Flash %} background-image: url({{ post.thumbnail_url()? }});{% endif %}">
 
-    {% match post.type_()? %}
-    {% when PostType::Image | PostType::Animation %}
-    <img class="resize-listener" alt="" src="{{ post.content_url()? }}" draggable="false"
-        style="width: {{ post.canvas_width()? }}px; height: {{ post.canvas_height()? }}px;">
+        {% match post.type_()? %}
+        {% when PostType::Image | PostType::Animation %}
+        <img class="resize-listener" alt="" src="{{ post.content_url()? }}" draggable="false"
+            style="width: {{ post.canvas_width()? }}px; height: {{ post.canvas_height()? }}px;">
 
-    {% when PostType::Flash %}
-    <object class="resize-listener" width="{{ post.canvas_width()? }}" height="{{ post.canvas_height()? }}"
-        data="{{ post.content_url()? }}"
-        style="width: {{ post.canvas_width()? }}px; height: {{ post.canvas_height()? }}px;">
-        <param name="wmode" value="transparent">
-        <param name="movie" value="{{ post.content_url()? }}">
-        <div class="messages">
-            <div class="message-wrapper">
-                <div class="message error">Your browser does not support Flash.</div>
+        {% when PostType::Flash %}
+        <object class="resize-listener" width="{{ post.canvas_width()? }}" height="{{ post.canvas_height()? }}"
+            data="{{ post.content_url()? }}"
+            style="width: {{ post.canvas_width()? }}px; height: {{ post.canvas_height()? }}px;">
+            <param name="wmode" value="transparent">
+            <param name="movie" value="{{ post.content_url()? }}">
+            <div class="messages">
+                <div class="message-wrapper">
+                    <div class="message error">Your browser does not support Flash.</div>
+                </div>
             </div>
-        </div>
-    </object>
+        </object>
 
-    {% when PostType::Video %}
-    {# TODO: autoplay #}
-    <video class="resize-listener" controls {% if post.flags()?.contains(PostFlag::Loop) %}loop{% endif %} playsinline
-        style="width: {{ post.canvas_width()? }}px; height: {{ post.canvas_height()? }}px;">
-        <source type="{{ post.mime_type()? }}" src="{{ post.content_url()? }}">
-        Your browser doesn't support HTML5 videos.
-    </video>
-    {% endmatch %}
+        {% when PostType::Video %}
+        {# TODO: autoplay #}
+        <video class="resize-listener" controls {% if post.flags()?.contains(PostFlag::Loop) %}loop{% endif %}
+            playsinline style="width: {{ post.canvas_width()? }}px; height: {{ post.canvas_height()? }}px;">
+            <source type="{{ post.mime_type()? }}" src="{{ post.content_url()? }}">
+            Your browser doesn't support HTML5 videos.
+        </video>
+        {% endmatch %}
 
-    {# TODO: post-overlay and notes #}
+        {# TODO: post-overlay and notes #}
+    </div>
 </div>

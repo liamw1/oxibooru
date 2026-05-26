@@ -84,6 +84,12 @@ pub struct MicroPost {
     pub thumbnail_url: String,
 }
 
+impl MicroPost {
+    pub fn url(&self, query: Option<&str>) -> String {
+        post_url(self.id, query)
+    }
+}
+
 #[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
@@ -223,10 +229,7 @@ impl PostInfo {
     }
 
     pub fn url(&self, query: Option<&str>) -> Result<String, NotRequested> {
-        self.id().map(|id| match query {
-            Some(query) => format!("post/{id}?{query}"),
-            None => format!("post/{id}"),
-        })
+        self.id().map(|id| post_url(id, query))
     }
 
     pub fn new(conn: &mut PgConnection, ctx: &Context, post: Post, fields: Mask<Field>) -> QueryResult<Self> {
@@ -357,6 +360,13 @@ impl PostInfo {
         let unordered_posts = post::table.filter(post::id.eq_any(post_ids)).load(conn)?;
         let posts = resource::order_as(unordered_posts, post_ids);
         Self::new_batch(conn, ctx, posts, fields)
+    }
+}
+
+fn post_url(post_id: i64, query: Option<&str>) -> String {
+    match query {
+        Some(query) => format!("post/{post_id}?query={query}"),
+        None => format!("post/{post_id}"),
     }
 }
 

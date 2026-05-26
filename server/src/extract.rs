@@ -106,6 +106,7 @@ where
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Path<T>(pub T);
 
 impl<S, T> FromRequestParts<S> for Path<T>
@@ -183,7 +184,7 @@ pub struct MergeBody<T> {
 }
 
 /// Represents parameters of a request to retrieve one or more resources.
-#[derive(Deserialize, IntoParams)]
+#[derive(Clone, Deserialize, IntoParams)]
 #[serde(bound(deserialize = "F: Into<u64> + FromStr"))]
 pub struct ResourceParams<F: Into<u64> + FromStr> {
     /// Query search string
