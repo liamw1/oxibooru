@@ -12,7 +12,7 @@ use crate::db::AsyncConnectionPool;
 use crate::extract::{Ctx, Json, JsonOrMultipart, Path, Query};
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceProperty, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
-use crate::resource::post::{Note, PostInfo};
+use crate::resource::post::{Field, Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
 use crate::search::post::QueryBuilder;
 use crate::search::{Builder, preferences};
@@ -20,7 +20,7 @@ use crate::snapshot::post::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::update::tag::FetchMode;
-use crate::{api, db, filesystem, resource, snapshot, update};
+use crate::{api, db, filesystem, snapshot, update};
 use axum::extract::DefaultBodyLimit;
 use diesel::dsl::{exists, not, sql};
 use diesel::sql_types::Integer;
@@ -186,15 +186,13 @@ where
 )]
 async fn list(
     Ctx(ctx, connection_pool): Ctx,
-    Query(resource): Query<ResourceParams>,
+    Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PostInfo>>> {
     ctx.verify_privilege(Action::PostList)?;
 
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_POSTS_PER_PAGE);
-    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-
     connection_pool
         .transaction(move |conn| {
             let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
@@ -206,7 +204,7 @@ async fn list(
                 offset,
                 limit,
                 total,
-                results: PostInfo::new_batch_from_ids(conn, &ctx, &selected_posts, &fields)?,
+                results: PostInfo::new_batch_from_ids(conn, &ctx, &selected_posts, resource.fields)?,
             }))
         })
         .await
@@ -231,15 +229,14 @@ async fn list(
 async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostInfo>> {
     ctx.verify_privilege(Action::PostView)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             verify_visibility(conn, &ctx, post_id)?;
-            PostInfo::new_from_id(conn, &ctx, post_id, &fields)
+            PostInfo::new_from_id(conn, &ctx, post_id, params.fields)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -274,7 +271,7 @@ struct PostNeighbors {
 async fn get_neighbors(
     Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostNeighbors>> {
     ctx.verify_privilege(Action::PostList)?;
 
@@ -289,7 +286,6 @@ async fn get_neighbors(
         Json(PostNeighbors { prev, next })
     };
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             const INITIAL_LIMIT: i64 = 1000;
@@ -318,7 +314,7 @@ async fn get_neighbors(
 
                 let has_previous_post = previous_post.is_some();
                 let posts = previous_post.into_iter().chain(next_post).collect();
-                let post_infos = PostInfo::new_batch(conn, &ctx, posts, &fields)?;
+                let post_infos = PostInfo::new_batch(conn, &ctx, posts, params.fields)?;
                 return Ok::<_, ApiError>(create_post_neighbors(post_infos, has_previous_post));
             }
 
@@ -351,7 +347,7 @@ async fn get_neighbors(
             };
 
             let post_ids: Vec<_> = prev_post_id.into_iter().chain(next_post_id).collect();
-            let post_infos = PostInfo::new_batch_from_ids(conn, &ctx, &post_ids, &fields)?;
+            let post_infos = PostInfo::new_batch_from_ids(conn, &ctx, &post_ids, params.fields)?;
             Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
         })
         .await
@@ -374,11 +370,10 @@ async fn get_neighbors(
 )]
 async fn get_featured(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<Option<PostInfo>>> {
     ctx.verify_privilege(Action::PostViewFeatured)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             let mut featured = post_feature::table
@@ -393,7 +388,7 @@ async fn get_featured(
 
             let featured_post_id: Option<i64> = featured.first(conn).optional()?;
             featured_post_id
-                .map(|post_id| PostInfo::new_from_id(conn, &ctx, post_id, &fields))
+                .map(|post_id| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
                 .transpose()
                 .map(Json)
                 .map_err(ApiError::from)
@@ -423,12 +418,11 @@ struct FeatureBody {
 )]
 async fn feature(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<FeatureBody>,
 ) -> ApiResult<Json<PostInfo>> {
     ctx.verify_privilege(Action::PostFeature)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
     let new_post_feature = NewPostFeature {
         post_id: body.id,
@@ -454,19 +448,18 @@ async fn feature(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, body.id, &fields))
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, body.id, params.fields))
         .await
         .map(Json)
 }
 
 async fn reverse_search_impl(
     ctx: Ctx,
-    params: ResourceParams,
+    params: ResourceParams<Field>,
     body: ReverseSearchBody,
 ) -> ApiResult<Json<ReverseSearchResponse>> {
     ctx.verify_privilege(Action::PostReverseSearch)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let content =
         Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.compute_properties(&ctx).await?;
@@ -505,9 +498,9 @@ async fn reverse_search_impl(
             let (post_ids, distances): (Vec<_>, Vec<_>) = similar_signatures.into_iter().unzip();
             Ok::<_, ApiError>(ReverseSearchResponse {
                 exact_post: exact_post
-                    .map(|post| PostInfo::new(conn, &ctx, post, &fields))
+                    .map(|post| PostInfo::new(conn, &ctx, post, params.fields))
                     .transpose()?,
-                similar_posts: PostInfo::new_batch_from_ids(conn, &ctx, &post_ids, &fields)?
+                similar_posts: PostInfo::new_batch_from_ids(conn, &ctx, &post_ids, params.fields)?
                     .into_iter()
                     .zip(distances)
                     .map(|(post, distance)| SimilarPost { distance, post })
@@ -569,7 +562,7 @@ struct ReverseSearchResponse {
 )]
 async fn reverse_search(
     ctx: Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<ReverseSearchBody>,
 ) -> ApiResult<Json<ReverseSearchResponse>> {
     ctx.verify_privilege(Action::PostReverseSearch)?;
@@ -593,7 +586,7 @@ async fn reverse_search(
     }
 }
 
-async fn create_impl(ctx: Ctx, params: ResourceParams, body: PostCreateBody) -> ApiResult<Json<PostInfo>> {
+async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBody) -> ApiResult<Json<PostInfo>> {
     let action = if body.anonymous.unwrap_or(false) {
         Action::PostCreateAnonymous
     } else {
@@ -601,7 +594,6 @@ async fn create_impl(ctx: Ctx, params: ResourceParams, body: PostCreateBody) -> 
     };
     ctx.verify_privilege(action)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let content =
         Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.get_or_compute_properties(&ctx).await?;
@@ -685,7 +677,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams, body: PostCreateBody) -> 
     })
     .await?;
     connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, &fields))
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
 }
@@ -760,7 +752,7 @@ struct PostCreateBody {
 )]
 async fn create(
     ctx: Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<PostCreateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
@@ -813,7 +805,7 @@ struct PostMergeBody {
 )]
 async fn merge(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<PostMergeBody>,
 ) -> ApiResult<Json<PostInfo>> {
     ctx.verify_privilege(Action::PostMerge)?;
@@ -824,7 +816,6 @@ async fn merge(
         return Err(ApiError::SelfMerge(ResourceType::Post));
     }
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     tagging_update(&connection_pool, true, {
         let config = Arc::clone(&ctx.config);
         move |conn| {
@@ -848,7 +839,7 @@ async fn merge(
     })
     .await?;
     connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, body.post_info.merge_to, &fields))
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, body.post_info.merge_to, params.fields))
         .await
         .map(Json)
 }
@@ -871,11 +862,10 @@ async fn merge(
 async fn favorite(
     Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostInfo>> {
     ctx.verify_privilege(Action::PostFavorite)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
     let new_post_favorite = PostFavorite {
         post_id,
@@ -891,7 +881,7 @@ async fn favorite(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, &fields))
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
 }
@@ -916,14 +906,12 @@ async fn favorite(
 async fn rate(
     Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<RatingBody>,
 ) -> ApiResult<Json<PostInfo>> {
     ctx.verify_privilege(Action::PostScore)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
-
     connection_pool
         .transaction(move |conn| {
             diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
@@ -943,7 +931,7 @@ async fn rate(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, &fields))
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
 }
@@ -951,11 +939,9 @@ async fn rate(
 async fn update_impl(
     ctx: Ctx,
     post_id: i64,
-    params: ResourceParams,
+    params: ResourceParams<Field>,
     body: PostUpdateBody,
 ) -> ApiResult<Json<PostInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
     let new_content = match Content::new(body.content_token, body.content_url) {
         Some(content) => Some(content.get_or_compute_properties(&ctx).await?),
         None => None,
@@ -1078,7 +1064,7 @@ async fn update_impl(
     })
     .await?;
     connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, &fields))
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
 }
@@ -1156,7 +1142,7 @@ struct PostUpdateBody {
 async fn update(
     ctx: Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<PostUpdateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
@@ -1256,20 +1242,18 @@ async fn delete(
 async fn unfavorite(
     Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostInfo>> {
     ctx.verify_privilege(Action::PostFavorite)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
-
     let _: i32 = diesel::delete(post_favorite::table.find((post_id, user_id)))
         .returning(sql::<Integer>("0"))
         .get_result(connection_pool.get().await?.as_mut())
         .optional()?
         .ok_or(ApiError::NotFound(ResourceType::Post))?;
     connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, &fields))
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
 }

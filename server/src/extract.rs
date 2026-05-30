@@ -32,9 +32,7 @@ where
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        let State(state) = State::<AppState>::from_request_parts(parts, state)
-            .await
-            .expect("State extraction is infallible");
+        let Ok(State(state)) = State::<AppState>::from_request_parts(parts, state).await;
         let Extension(client) = parts.extract().await.map_err(ApiError::from)?;
         Ok(state.make_context(client))
     }

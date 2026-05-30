@@ -6,7 +6,7 @@ use crate::config::Action;
 use crate::extract::{Ctx, Json, Path, Query};
 use crate::model::enums::{ResourceType, UserRank};
 use crate::model::tag::{NewTag, Tag};
-use crate::resource::tag::TagInfo;
+use crate::resource::tag::{Field, TagInfo};
 use crate::schema::{post_tag, tag, tag_category, tag_name};
 use crate::search::Builder;
 use crate::search::tag::QueryBuilder;
@@ -14,7 +14,7 @@ use crate::snapshot::tag::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::update::tag::FetchMode;
-use crate::{api, resource, snapshot, update};
+use crate::{api, snapshot, update};
 use diesel::dsl::count_star;
 use diesel::{
     ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
@@ -86,15 +86,13 @@ const MAX_TAG_SIBLINGS: i64 = 50;
 )]
 async fn list(
     Ctx(ctx, connection_pool): Ctx,
-    Query(resource): Query<ResourceParams>,
+    Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<TagInfo>>> {
     ctx.verify_privilege(Action::TagList)?;
 
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_TAGS_PER_PAGE);
-    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-
     connection_pool
         .transaction(move |conn| {
             let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
@@ -106,7 +104,7 @@ async fn list(
                 offset,
                 limit,
                 total,
-                results: TagInfo::new_batch_from_ids(conn, &selected_tags, &fields)?,
+                results: TagInfo::new_batch_from_ids(conn, &selected_tags, resource.fields)?,
             }))
         })
         .await
@@ -131,15 +129,14 @@ async fn list(
 async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<TagInfo>> {
     ctx.verify_privilege(Action::TagView)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             let tag_id = verify_visibility(conn, &ctx, &name)?;
-            TagInfo::new_from_id(conn, tag_id, &fields)
+            TagInfo::new_from_id(conn, tag_id, params.fields)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -186,11 +183,10 @@ struct TagSiblings {
 async fn get_siblings(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<TagSiblings>> {
     ctx.verify_privilege(Action::TagView)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             let tag_id = verify_visibility(conn, &ctx, &name)?;
@@ -221,7 +217,7 @@ async fn get_siblings(
             let (sibling_ids, common_post_counts): (Vec<i64>, Vec<i64>) =
                 sibling_query.load::<(i64, i64)>(conn)?.into_iter().unzip();
 
-            let results = TagInfo::new_batch_from_ids(conn, &sibling_ids, &fields)?
+            let results = TagInfo::new_batch_from_ids(conn, &sibling_ids, params.fields)?
                 .into_iter()
                 .zip(common_post_counts)
                 .map(|(tag, occurrences)| TagSibling { tag, occurrences })
@@ -273,7 +269,7 @@ struct TagCreateBody {
 )]
 async fn create(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<TagCreateBody>,
 ) -> ApiResult<Json<TagInfo>> {
     ctx.verify_privilege(Action::TagCreate)?;
@@ -282,7 +278,6 @@ async fn create(
         return Err(ApiError::NoNamesGiven(ResourceType::Tag));
     }
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let tag = connection_pool
         .transaction(move |conn| {
             let (category_id, category): (i64, SmallString) = tag_category::table
@@ -327,7 +322,7 @@ async fn create(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| TagInfo::new(conn, tag, &fields))
+        .transaction(move |conn| TagInfo::new(conn, tag, params.fields))
         .await
         .map(Json)
 }
@@ -353,7 +348,7 @@ async fn create(
 )]
 async fn merge(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<MergeBody<SmallString>>,
 ) -> ApiResult<Json<TagInfo>> {
     ctx.verify_privilege(Action::TagMerge)?;
@@ -368,7 +363,6 @@ async fn merge(
             .ok_or(ApiError::NotFound(ResourceType::Tag))
     };
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let merged_tag_id = connection_pool
         .transaction(move |conn| {
             let (absorbed_id, absorbed_version) = get_tag_info(conn, &body.remove)?;
@@ -385,7 +379,7 @@ async fn merge(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| TagInfo::new_from_id(conn, merged_tag_id, &fields))
+        .transaction(move |conn| TagInfo::new_from_id(conn, merged_tag_id, params.fields))
         .await
         .map(Json)
 }
@@ -439,11 +433,9 @@ struct TagUpdateBody {
 async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<TagUpdateBody>,
 ) -> ApiResult<Json<TagInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
     let tag_id = connection_pool
         .transaction(move |conn| {
             let old_tag: Tag = tag::table
@@ -510,7 +502,7 @@ async fn update(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| TagInfo::new_from_id(conn, tag_id, &fields))
+        .transaction(move |conn| TagInfo::new_from_id(conn, tag_id, params.fields))
         .await
         .map(Json)
 }

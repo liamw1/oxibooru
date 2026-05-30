@@ -6,11 +6,11 @@ use crate::config::{Action, RegexType};
 use crate::extract::{Ctx, Json, Path, Query};
 use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::pool_category::{NewPoolCategory, PoolCategory};
-use crate::resource::pool_category::PoolCategoryInfo;
+use crate::resource::pool_category::{Field, PoolCategoryInfo};
 use crate::schema::{pool, pool_category};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, resource, snapshot};
+use crate::{api, snapshot};
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -39,13 +39,12 @@ pub fn routes() -> OpenApiRouter<AppState> {
 )]
 async fn list(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<UnpagedResponse<PoolCategoryInfo>>> {
     ctx.verify_privilege(Action::PoolCategoryList)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
-        .transaction(move |conn| PoolCategoryInfo::all(conn, &fields))
+        .transaction(move |conn| PoolCategoryInfo::all(conn, params.fields))
         .await
         .map(|results| UnpagedResponse { results })
         .map(Json)
@@ -69,11 +68,9 @@ async fn list(
 async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     ctx.verify_privilege(Action::PoolCategoryView)?;
-
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     connection_pool
         .transaction(move |conn| {
@@ -82,7 +79,7 @@ async fn get(
                 .first(conn)
                 .optional()?
                 .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
-            PoolCategoryInfo::new(conn, category, &fields)
+            PoolCategoryInfo::new(conn, category, params.fields)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -118,12 +115,11 @@ struct PoolCategoryCreateBody {
 )]
 async fn create(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<PoolCategoryCreateBody>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     ctx.verify_privilege(Action::PoolCategoryCreate)?;
     api::verify_matches_regex(&ctx.config, &body.name, RegexType::PoolCategory)?;
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let category = connection_pool
         .transaction(move |conn| {
@@ -142,7 +138,7 @@ async fn create(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| PoolCategoryInfo::new(conn, category, &fields))
+        .transaction(move |conn| PoolCategoryInfo::new(conn, category, params.fields))
         .await
         .map(Json)
 }
@@ -185,11 +181,9 @@ struct PoolCategoryUpdateBody {
 async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<PoolCategoryUpdateBody>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
     let updated_category = connection_pool
         .transaction(move |conn| {
             let old_category: PoolCategory = pool_category::table
@@ -218,7 +212,7 @@ async fn update(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| PoolCategoryInfo::new(conn, updated_category, &fields))
+        .transaction(move |conn| PoolCategoryInfo::new(conn, updated_category, params.fields))
         .await
         .map(Json)
 }
@@ -243,11 +237,10 @@ async fn update(
 async fn set_default(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
     ctx.verify_privilege(Action::PoolCategorySetDefault)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let new_default_category: PoolCategory = connection_pool
         .transaction(move |conn| {
             let mut category: PoolCategory = pool_category::table
@@ -294,7 +287,7 @@ async fn set_default(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| PoolCategoryInfo::new(conn, new_default_category, &fields))
+        .transaction(move |conn| PoolCategoryInfo::new(conn, new_default_category, params.fields))
         .await
         .map(Json)
 }

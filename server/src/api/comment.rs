@@ -1,17 +1,16 @@
 use crate::api::doc::COMMENT_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::{DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
+use crate::api::{self, DeleteBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
 use crate::app::{AppState, Context};
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Path, Query};
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
-use crate::resource::comment::CommentInfo;
+use crate::resource::comment::{CommentInfo, Field};
 use crate::schema::{comment, comment_score};
 use crate::search::comment::QueryBuilder;
 use crate::search::{Builder, preferences};
 use crate::time::DateTime;
-use crate::{api, resource};
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
@@ -70,14 +69,13 @@ const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 )]
 async fn list(
     Ctx(ctx, connection_pool): Ctx,
-    Query(resource): Query<ResourceParams>,
+    Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<CommentInfo>>> {
     ctx.verify_privilege(Action::CommentList)?;
 
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_COMMENTS_PER_PAGE);
-    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
@@ -89,7 +87,7 @@ async fn list(
                 offset,
                 limit,
                 total,
-                results: CommentInfo::new_batch_from_ids(conn, &ctx, &selected_comments, &fields)?,
+                results: CommentInfo::new_batch_from_ids(conn, &ctx, &selected_comments, resource.fields)?,
             }))
         })
         .await
@@ -114,15 +112,14 @@ async fn list(
 async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(comment_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<CommentInfo>> {
     ctx.verify_privilege(Action::CommentView)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             verify_visibility(conn, &ctx, comment_id)?;
-            CommentInfo::new_from_id(conn, &ctx, comment_id, &fields)
+            CommentInfo::new_from_id(conn, &ctx, comment_id, params.fields)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -154,12 +151,11 @@ struct CommentCreateBody {
 )]
 async fn create(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<CommentCreateBody>,
 ) -> ApiResult<Json<CommentInfo>> {
     ctx.verify_privilege(Action::CommentCreate)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let comment = connection_pool
         .transaction(move |conn| {
             let insert_result = NewComment {
@@ -174,7 +170,7 @@ async fn create(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| CommentInfo::new(conn, &ctx, comment, &fields))
+        .transaction(move |conn| CommentInfo::new(conn, &ctx, comment, params.fields))
         .await
         .map(Json)
 }
@@ -208,11 +204,9 @@ struct CommentUpdateBody {
 async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path(comment_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<CommentUpdateBody>,
 ) -> ApiResult<Json<CommentInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
     let client = ctx.client;
     let edit_own = ctx.config.privileges()[Action::CommentEditOwn];
     let edit_any = ctx.config.privileges()[Action::CommentEditAny];
@@ -237,7 +231,7 @@ async fn update(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| CommentInfo::new_from_id(conn, &ctx, comment_id, &fields))
+        .transaction(move |conn| CommentInfo::new_from_id(conn, &ctx, comment_id, params.fields))
         .await
         .map(Json)
 }
@@ -264,14 +258,12 @@ async fn update(
 async fn rate(
     Ctx(ctx, connection_pool): Ctx,
     Path(comment_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<RatingBody>,
 ) -> ApiResult<Json<CommentInfo>> {
     ctx.verify_privilege(Action::CommentScore)?;
 
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
     connection_pool
         .transaction(move |conn| {
             diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
@@ -290,7 +282,7 @@ async fn rate(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| CommentInfo::new_from_id(conn, &ctx, comment_id, &fields))
+        .transaction(move |conn| CommentInfo::new_from_id(conn, &ctx, comment_id, params.fields))
         .await
         .map(Json)
 }

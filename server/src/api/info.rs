@@ -5,8 +5,7 @@ use crate::app::AppState;
 use crate::config::PublicConfig;
 use crate::extract::{Ctx, Json, Query};
 use crate::model::post::PostFeature;
-use crate::resource;
-use crate::resource::post::PostInfo;
+use crate::resource::post::{Field, PostInfo};
 use crate::schema::{database_statistics, post_feature, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
@@ -55,8 +54,10 @@ struct InfoResponse {
         (status = 200, body = InfoResponse),
     ),
 )]
-async fn get(Ctx(ctx, connection_pool): Ctx, Query(params): Query<ResourceParams>) -> ApiResult<Json<InfoResponse>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+async fn get(
+    Ctx(ctx, connection_pool): Ctx,
+    Query(params): Query<ResourceParams<Field>>,
+) -> ApiResult<Json<InfoResponse>> {
     connection_pool
         .transaction(move |conn| {
             let (post_count, disk_usage) = database_statistics::table
@@ -68,7 +69,7 @@ async fn get(Ctx(ctx, connection_pool): Ctx, Query(params): Query<ResourceParams
                 .optional()?;
             let featured_post: Option<PostInfo> = latest_feature
                 .as_ref()
-                .map(|feature| PostInfo::new_from_id(conn, &ctx, feature.post_id, &fields))
+                .map(|feature| PostInfo::new_from_id(conn, &ctx, feature.post_id, params.fields))
                 .transpose()?;
             let featuring_user: Option<SmallString> = latest_feature
                 .as_ref()

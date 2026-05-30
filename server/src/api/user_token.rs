@@ -1,17 +1,16 @@
 use crate::api::doc::USER_TOKEN_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::{ResourceParams, UnpagedResponse};
+use crate::api::{self, ResourceParams, UnpagedResponse};
 use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Path, Query};
 use crate::model::enums::{AvatarStyle, ResourceType};
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
-use crate::resource::user_token::UserTokenInfo;
+use crate::resource::user_token::{Field, UserTokenInfo};
 use crate::schema::{user, user_token};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::{api, resource};
 use diesel::dsl::sql;
 use diesel::sql_types::Integer;
 use diesel::{
@@ -48,11 +47,10 @@ pub fn routes() -> OpenApiRouter<AppState> {
 async fn list(
     Ctx(ctx, connection_pool): Ctx,
     Path(username): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<UnpagedResponse<UserTokenInfo>>> {
     let list_any = ctx.config.privileges()[Action::UserTokenListAny];
     let list_self = ctx.config.privileges()[Action::UserTokenListSelf];
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let (avatar_style, user_tokens) = connection_pool
         .transaction({
@@ -82,7 +80,7 @@ async fn list(
     let results = user_tokens
         .into_iter()
         .map(|user_token| {
-            UserTokenInfo::new(MicroUser::new(&ctx.config, username.clone(), avatar_style), user_token, &fields)
+            UserTokenInfo::new(MicroUser::new(&ctx.config, username.clone(), avatar_style), user_token, params.fields)
         })
         .collect();
     Ok(Json(UnpagedResponse { results }))
@@ -121,12 +119,11 @@ struct UserTokenCreateBody {
 async fn create(
     Ctx(ctx, connection_pool): Ctx,
     Path(username): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<UserTokenCreateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
     let create_any = ctx.config.privileges()[Action::UserTokenCreateAny];
     let create_self = ctx.config.privileges()[Action::UserTokenCreateSelf];
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let (user_token, avatar_style) = connection_pool
         .transaction({
@@ -167,7 +164,11 @@ async fn create(
             }
         })
         .await?;
-    Ok(Json(UserTokenInfo::new(MicroUser::new(&ctx.config, username, avatar_style), user_token, &fields)))
+    Ok(Json(UserTokenInfo::new(
+        MicroUser::new(&ctx.config, username, avatar_style),
+        user_token,
+        params.fields,
+    )))
 }
 
 /// Request body for updating a user token.
@@ -209,12 +210,11 @@ struct UserTokenUpdateBody {
 async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path((username, token)): Path<(SmallString, Uuid)>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<UserTokenUpdateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
     let edit_any = ctx.config.privileges()[Action::UserTokenEditAny];
     let edit_self = ctx.config.privileges()[Action::UserTokenEditSelf];
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let (updated_user_token, avatar_style) = connection_pool
         .transaction({
@@ -258,7 +258,7 @@ async fn update(
     Ok(Json(UserTokenInfo::new(
         MicroUser::new(&ctx.config, username, avatar_style),
         updated_user_token,
-        &fields,
+        params.fields,
     )))
 }
 

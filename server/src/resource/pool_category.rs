@@ -1,5 +1,5 @@
 use crate::model::pool_category::PoolCategory;
-use crate::resource::BoolFill;
+use crate::resource::field::Mask;
 use crate::schema::{pool_category, pool_category_statistics};
 use crate::string::SmallString;
 use crate::time::DateTime;
@@ -7,10 +7,10 @@ use diesel::{PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper}
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
-use strum::{EnumString, EnumTable};
+use strum::EnumString;
 use utoipa::ToSchema;
 
-#[derive(Clone, Copy, EnumString, EnumTable)]
+#[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,
@@ -20,9 +20,9 @@ pub enum Field {
     Default,
 }
 
-impl BoolFill for FieldTable<bool> {
-    fn filled(val: bool) -> Self {
-        Self::filled(val)
+impl From<Field> for u64 {
+    fn from(value: Field) -> Self {
+        value as u64
     }
 }
 
@@ -46,7 +46,7 @@ pub struct PoolCategoryInfo {
 }
 
 impl PoolCategoryInfo {
-    pub fn new(conn: &mut PgConnection, category: PoolCategory, fields: &FieldTable<bool>) -> QueryResult<Self> {
+    pub fn new(conn: &mut PgConnection, category: PoolCategory, fields: Mask<Field>) -> QueryResult<Self> {
         let usages = pool_category_statistics::table
             .find(category.id)
             .select(pool_category_statistics::usage_count)
@@ -60,7 +60,7 @@ impl PoolCategoryInfo {
         })
     }
 
-    pub fn all(conn: &mut PgConnection, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
+    pub fn all(conn: &mut PgConnection, fields: Mask<Field>) -> QueryResult<Vec<Self>> {
         let pool_categories: Vec<(PoolCategory, i64)> = pool_category::table
             .inner_join(pool_category_statistics::table)
             .select((PoolCategory::as_select(), pool_category_statistics::usage_count))

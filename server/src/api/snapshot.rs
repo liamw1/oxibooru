@@ -4,8 +4,7 @@ use crate::api::{PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Query};
-use crate::resource;
-use crate::resource::snapshot::SnapshotInfo;
+use crate::resource::snapshot::{Field, SnapshotInfo};
 use crate::search::Builder;
 use crate::search::snapshot::QueryBuilder;
 use utoipa_axum::router::OpenApiRouter;
@@ -52,14 +51,13 @@ const MAX_SNAPSHOTS_PER_PAGE: i64 = 1000;
 )]
 async fn list(
     Ctx(ctx, connection_pool): Ctx,
-    Query(resource): Query<ResourceParams>,
+    Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<SnapshotInfo>>> {
     ctx.verify_privilege(Action::SnapshotList)?;
 
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_SNAPSHOTS_PER_PAGE);
-    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
@@ -71,7 +69,7 @@ async fn list(
                 offset,
                 limit,
                 total,
-                results: SnapshotInfo::new_batch_from_ids(conn, &ctx.config, &selected_snapshots, &fields)?,
+                results: SnapshotInfo::new_batch_from_ids(conn, &ctx.config, &selected_snapshots, resource.fields)?,
             }))
         })
         .await

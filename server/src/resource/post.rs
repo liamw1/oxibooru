@@ -8,11 +8,12 @@ use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType
 use crate::model::pool::PoolPost;
 use crate::model::post::{NewPostNote, Post, PostFavorite, PostNote, PostRelation, PostScore, PostTag};
 use crate::model::tag::TagName;
+use crate::resource;
 use crate::resource::comment::CommentInfo;
+use crate::resource::field::Mask;
 use crate::resource::pool::MicroPool;
 use crate::resource::tag::MicroTag;
 use crate::resource::user::MicroUser;
-use crate::resource::{self, BoolFill};
 use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_note, post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
@@ -31,7 +32,7 @@ use server_macros::non_nullable_options;
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
 use std::sync::Arc;
-use strum::{EnumString, EnumTable};
+use strum::EnumString;
 use utoipa::ToSchema;
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
@@ -84,7 +85,7 @@ pub struct MicroPost {
     pub thumbnail_url: String,
 }
 
-#[derive(Clone, Copy, EnumString, EnumTable)]
+#[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,
@@ -124,9 +125,9 @@ pub enum Field {
     HasCustomThumbnail,
 }
 
-impl BoolFill for FieldTable<bool> {
-    fn filled(val: bool) -> Self {
-        Self::filled(val)
+impl From<Field> for u64 {
+    fn from(value: Field) -> Self {
+        value as u64
     }
 }
 
@@ -212,16 +213,11 @@ pub struct PostInfo {
 }
 
 impl PostInfo {
-    pub fn new(conn: &mut PgConnection, ctx: &Context, post: Post, fields: &FieldTable<bool>) -> QueryResult<Self> {
+    pub fn new(conn: &mut PgConnection, ctx: &Context, post: Post, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch(conn, ctx, vec![post], fields).map(resource::single)
     }
 
-    pub fn new_from_id(
-        conn: &mut PgConnection,
-        ctx: &Context,
-        post_id: i64,
-        fields: &FieldTable<bool>,
-    ) -> QueryResult<Self> {
+    pub fn new_from_id(conn: &mut PgConnection, ctx: &Context, post_id: i64, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch_from_ids(conn, ctx, &[post_id], fields).map(resource::single)
     }
 
@@ -229,20 +225,18 @@ impl PostInfo {
         conn: &mut PgConnection,
         ctx: &Context,
         posts: Vec<Post>,
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
         #[allow(clippy::wildcard_imports)]
         use crate::schema::post_statistics::dsl::*;
 
         let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, &ctx.config, &posts))?;
-        let mut content_urls = resource::retrieve(fields[Field::ContentUrl], || {
+        let Ok(mut content_urls) = resource::retrieve(fields[Field::ContentUrl], || {
             Ok::<_, Infallible>(get_content_urls(&ctx.config, &posts))
-        })
-        .expect("get_content_urls is infallible");
-        let mut thumbnail_urls = resource::retrieve(fields[Field::ThumbnailUrl], || {
+        });
+        let Ok(mut thumbnail_urls) = resource::retrieve(fields[Field::ThumbnailUrl], || {
             Ok::<_, Infallible>(get_thumbnail_urls(&ctx.config, &posts))
-        })
-        .expect("get_thumbnail_urls is infallible");
+        });
         let mut tags = resource::retrieve(fields[Field::Tags], || get_tags(conn, &posts))?;
         let mut comments = resource::retrieve(fields[Field::Comments], || get_comments(conn, ctx, &posts))?;
         let mut relations = resource::retrieve(fields[Field::Relations], || get_relations(conn, ctx, &posts))?;
@@ -342,7 +336,7 @@ impl PostInfo {
         conn: &mut PgConnection,
         ctx: &Context,
         post_ids: &[i64],
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_posts = post::table.filter(post::id.eq_any(post_ids)).load(conn)?;
         let posts = resource::order_as(unordered_posts, post_ids);

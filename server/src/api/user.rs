@@ -10,13 +10,13 @@ use crate::content::{Content, upload};
 use crate::extract::{Ctx, Json, JsonOrMultipart, Path, Query};
 use crate::model::enums::{AvatarStyle, ResourceProperty, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
-use crate::resource::user::{UserInfo, Visibility};
+use crate::resource::user::{Field, UserInfo, Visibility};
 use crate::schema::user;
 use crate::search::Builder;
 use crate::search::user::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, filesystem, resource, update};
+use crate::{api, filesystem, update};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
 use axum::extract::DefaultBodyLimit;
@@ -89,15 +89,13 @@ struct Multipart<T> {
 )]
 async fn list(
     Ctx(ctx, connection_pool): Ctx,
-    Query(resource): Query<ResourceParams>,
+    Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<UserInfo>>> {
     ctx.verify_privilege(Action::UserList)?;
 
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_USERS_PER_PAGE);
-    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-
     connection_pool
         .transaction(move |conn| {
             let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
@@ -113,7 +111,7 @@ async fn list(
                     conn,
                     &ctx.config,
                     &selected_users,
-                    &fields,
+                    resource.fields,
                     Visibility::PublicOnly,
                 )?,
             }))
@@ -139,9 +137,8 @@ async fn list(
 async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(username): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<UserInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             let user_id = user::table
@@ -161,7 +158,7 @@ async fn get(
             } else {
                 Visibility::PublicOnly
             };
-            UserInfo::new_from_id(conn, &ctx.config, user_id, &fields, visibility)
+            UserInfo::new_from_id(conn, &ctx.config, user_id, params.fields, visibility)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -170,7 +167,7 @@ async fn get(
 
 async fn create_impl(
     Ctx(ctx, connection_pool): Ctx,
-    params: ResourceParams,
+    params: ResourceParams<Field>,
     body: UserCreateBody,
 ) -> ApiResult<Json<UserInfo>> {
     let creation_rank = body.rank.unwrap_or(ctx.config.default_rank());
@@ -190,7 +187,6 @@ async fn create_impl(
         api::verify_privilege(ctx.client, creation_rank)?;
     }
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     api::verify_matches_regex(&ctx.config, &body.name, RegexType::Username)?;
     api::verify_matches_regex(&ctx.config, &body.password, RegexType::Password)?;
     api::verify_valid_email(body.email.as_deref())?;
@@ -249,7 +245,7 @@ async fn create_impl(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| UserInfo::new(conn, &ctx.config, user, &fields, Visibility::Full))
+        .transaction(move |conn| UserInfo::new(conn, &ctx.config, user, params.fields, Visibility::Full))
         .await
         .map(Json)
 }
@@ -310,7 +306,7 @@ struct UserCreateBody {
 )]
 async fn create(
     ctx: Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<UserCreateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
@@ -332,11 +328,9 @@ async fn create(
 async fn update_impl(
     Ctx(ctx, connection_pool): Ctx,
     username: SmallString,
-    params: ResourceParams,
+    params: ResourceParams<Field>,
     body: UserUpdateBody,
 ) -> ApiResult<Json<UserInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
     let custom_avatar = match Content::new(body.avatar_token, body.avatar_url) {
         Some(content) => Some(content.thumbnail(&ctx.config, ThumbnailType::Avatar).await?),
         None if body.avatar_style == Some(AvatarStyle::Manual) => {
@@ -462,7 +456,7 @@ async fn update_impl(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| UserInfo::new_from_id(conn, &ctx.config, user_id, &fields, visibility))
+        .transaction(move |conn| UserInfo::new_from_id(conn, &ctx.config, user_id, params.fields, visibility))
         .await
         .map(Json)
 }
@@ -530,7 +524,7 @@ struct UserUpdateBody {
 async fn update(
     ctx: Ctx,
     Path(username): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<UserUpdateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {

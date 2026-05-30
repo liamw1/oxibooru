@@ -6,11 +6,11 @@ use crate::config::{Action, RegexType};
 use crate::extract::{Ctx, Json, Path, Query};
 use crate::model::enums::{ResourceProperty, ResourceType, UserRank};
 use crate::model::tag_category::{NewTagCategory, TagCategory};
-use crate::resource::tag_category::TagCategoryInfo;
+use crate::resource::tag_category::{Field, TagCategoryInfo};
 use crate::schema::{tag, tag_category};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, resource, snapshot};
+use crate::{api, snapshot};
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -39,13 +39,12 @@ pub fn routes() -> OpenApiRouter<AppState> {
 )]
 async fn list(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<UnpagedResponse<TagCategoryInfo>>> {
     ctx.verify_privilege(Action::TagCategoryList)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
-        .transaction(move |conn| TagCategoryInfo::all(conn, &ctx, &fields))
+        .transaction(move |conn| TagCategoryInfo::all(conn, &ctx, params.fields))
         .await
         .map(|results| UnpagedResponse { results })
         .map(Json)
@@ -70,15 +69,14 @@ async fn list(
 async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
     ctx.verify_privilege(Action::TagCategoryView)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             let category = verify_visibility(conn, &ctx, &name)?;
-            TagCategoryInfo::new(conn, category, &fields)
+            TagCategoryInfo::new(conn, category, params.fields)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -115,12 +113,11 @@ struct TagCategoryCreateBody {
 )]
 async fn create(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<TagCategoryCreateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
     ctx.verify_privilege(Action::TagCategoryCreate)?;
     api::verify_matches_regex(&ctx.config, &body.name, RegexType::TagCategory)?;
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
 
     let category = connection_pool
         .transaction(move |conn| {
@@ -140,7 +137,7 @@ async fn create(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| TagCategoryInfo::new(conn, category, &fields))
+        .transaction(move |conn| TagCategoryInfo::new(conn, category, params.fields))
         .await
         .map(Json)
 }
@@ -185,11 +182,9 @@ struct TagCategoryUpdateBody {
 async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<TagCategoryUpdateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
     let updated_category = connection_pool
         .transaction(move |conn| {
             let old_category: TagCategory = tag_category::table
@@ -222,7 +217,7 @@ async fn update(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| TagCategoryInfo::new(conn, updated_category, &fields))
+        .transaction(move |conn| TagCategoryInfo::new(conn, updated_category, params.fields))
         .await
         .map(Json)
 }
@@ -248,11 +243,10 @@ async fn update(
 async fn set_default(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
     ctx.verify_privilege(Action::TagCategorySetDefault)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let new_default_category: TagCategory = connection_pool
         .transaction(move |conn| {
             let mut category: TagCategory = tag_category::table
@@ -299,7 +293,7 @@ async fn set_default(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| TagCategoryInfo::new(conn, new_default_category, &fields))
+        .transaction(move |conn| TagCategoryInfo::new(conn, new_default_category, params.fields))
         .await
         .map(Json)
 }

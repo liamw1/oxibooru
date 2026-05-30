@@ -1,8 +1,9 @@
 use crate::app::Context;
 use crate::content::hash::PostHash;
 use crate::model::pool::{Pool, PoolName, PoolPost};
+use crate::resource;
+use crate::resource::field::Mask;
 use crate::resource::post::MicroPost;
-use crate::resource::{self, BoolFill};
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
 use crate::search::preferences;
 use crate::string::{LargeString, SmallString};
@@ -15,7 +16,7 @@ use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
 use std::sync::Arc;
-use strum::{EnumString, EnumTable};
+use strum::EnumString;
 use utoipa::ToSchema;
 
 /// A pool resource stripped down to `id`, `names`, `category`, `description` and `postCount` fields.
@@ -35,7 +36,7 @@ pub struct MicroPool {
     pub post_count: i64,
 }
 
-#[derive(Clone, Copy, EnumString, EnumTable)]
+#[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,
@@ -49,9 +50,9 @@ pub enum Field {
     PostCount,
 }
 
-impl BoolFill for FieldTable<bool> {
-    fn filled(val: bool) -> Self {
-        Self::filled(val)
+impl From<Field> for u64 {
+    fn from(value: Field) -> Self {
+        value as u64
     }
 }
 
@@ -82,16 +83,11 @@ pub struct PoolInfo {
 }
 
 impl PoolInfo {
-    pub fn new(conn: &mut PgConnection, ctx: &Context, pool: Pool, fields: &FieldTable<bool>) -> QueryResult<Self> {
+    pub fn new(conn: &mut PgConnection, ctx: &Context, pool: Pool, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch(conn, ctx, vec![pool], fields).map(resource::single)
     }
 
-    pub fn new_from_id(
-        conn: &mut PgConnection,
-        ctx: &Context,
-        pool_id: i64,
-        fields: &FieldTable<bool>,
-    ) -> QueryResult<Self> {
+    pub fn new_from_id(conn: &mut PgConnection, ctx: &Context, pool_id: i64, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch_from_ids(conn, ctx, &[pool_id], fields).map(resource::single)
     }
 
@@ -99,7 +95,7 @@ impl PoolInfo {
         conn: &mut PgConnection,
         ctx: &Context,
         pools: Vec<Pool>,
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
         let mut categories = resource::retrieve(fields[Field::Category], || get_categories(conn, &pools))?;
         let mut names = resource::retrieve(fields[Field::Names], || get_names(conn, &pools))?;
@@ -135,7 +131,7 @@ impl PoolInfo {
         conn: &mut PgConnection,
         ctx: &Context,
         pool_ids: &[i64],
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_pools = pool::table.filter(pool::id.eq_any(pool_ids)).load(conn)?;
         let pools = resource::order_as(unordered_pools, pool_ids);

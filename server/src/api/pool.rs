@@ -6,14 +6,14 @@ use crate::config::Action;
 use crate::extract::{Ctx, Json, Path, Query};
 use crate::model::enums::ResourceType;
 use crate::model::pool::{NewPool, Pool};
-use crate::resource::pool::PoolInfo;
+use crate::resource::pool::{Field, PoolInfo};
 use crate::schema::{pool, pool_category};
 use crate::search::Builder;
 use crate::search::pool::QueryBuilder;
 use crate::snapshot::pool::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::{api, resource, snapshot, update};
+use crate::{api, snapshot, update};
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
@@ -74,15 +74,13 @@ const MAX_POOLS_PER_PAGE: i64 = 1000;
 )]
 async fn list(
     Ctx(ctx, connection_pool): Ctx,
-    Query(resource): Query<ResourceParams>,
+    Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PoolInfo>>> {
     ctx.verify_privilege(Action::PoolList)?;
 
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_POOLS_PER_PAGE);
-    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-
     connection_pool
         .transaction(move |conn| {
             let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
@@ -94,7 +92,7 @@ async fn list(
                 offset,
                 limit,
                 total,
-                results: PoolInfo::new_batch_from_ids(conn, &ctx, &selected_pools, &fields)?,
+                results: PoolInfo::new_batch_from_ids(conn, &ctx, &selected_pools, resource.fields)?,
             }))
         })
         .await
@@ -118,18 +116,17 @@ async fn list(
 async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(pool_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PoolInfo>> {
     ctx.verify_privilege(Action::PoolView)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             let pool_exists: bool = diesel::select(exists(pool::table.find(pool_id))).first(conn)?;
             if !pool_exists {
                 return Err(ApiError::NotFound(ResourceType::Pool));
             }
-            PoolInfo::new_from_id(conn, &ctx, pool_id, &fields)
+            PoolInfo::new_from_id(conn, &ctx, pool_id, params.fields)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -174,7 +171,7 @@ struct PoolCreateBody {
 )]
 async fn create(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<PoolCreateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
     ctx.verify_privilege(Action::PoolCreate)?;
@@ -183,7 +180,6 @@ async fn create(
         return Err(ApiError::NoNamesGiven(ResourceType::Pool));
     }
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let pool = connection_pool
         .transaction({
             let config = Arc::clone(&ctx.config);
@@ -219,7 +215,7 @@ async fn create(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| PoolInfo::new(conn, &ctx, pool, &fields))
+        .transaction(move |conn| PoolInfo::new(conn, &ctx, pool, params.fields))
         .await
         .map(Json)
 }
@@ -243,7 +239,7 @@ async fn create(
 )]
 async fn merge(
     Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<MergeBody<i64>>,
 ) -> ApiResult<Json<PoolInfo>> {
     ctx.verify_privilege(Action::PoolMerge)?;
@@ -263,7 +259,6 @@ async fn merge(
             .ok_or(ApiError::NotFound(ResourceType::Pool))
     };
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     connection_pool
         .transaction(move |conn| {
             let remove_version = get_pool_info(conn, absorbed_id)?;
@@ -276,7 +271,7 @@ async fn merge(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| PoolInfo::new_from_id(conn, &ctx, merge_to_id, &fields))
+        .transaction(move |conn| PoolInfo::new_from_id(conn, &ctx, merge_to_id, params.fields))
         .await
         .map(Json)
 }
@@ -330,11 +325,9 @@ struct PoolUpdateBody {
 async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path(pool_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<PoolUpdateBody>,
 ) -> ApiResult<Json<PoolInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
     connection_pool
         .transaction({
             let ctx = ctx.clone();
@@ -391,7 +384,7 @@ async fn update(
         })
         .await?;
     connection_pool
-        .transaction(move |conn| PoolInfo::new_from_id(conn, &ctx, pool_id, &fields))
+        .transaction(move |conn| PoolInfo::new_from_id(conn, &ctx, pool_id, params.fields))
         .await
         .map(Json)
 }
