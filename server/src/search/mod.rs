@@ -98,10 +98,14 @@ where
     /// Constructs a new [`SearchCriteria`] by parsing `search_criteria` [`str`] into a set terms
     /// (filters or sorts) separated by unescaped whitespace. If a term does not contain an unescaped `:`,
     /// then it will be interpreted as an `anonymous_token`.
-    fn new(ctx: &'a Context, search_criteria: &'a str, anonymous_token: T) -> Result<Self, <T as FromStr>::Err> {
+    fn new(ctx: &'a Context, search_criteria: &'a str, anonymous_token: T) -> ApiResult<Self> {
         let mut filters: Vec<UnparsedFilter<T>> = Vec::new();
         let mut sorts: Vec<ParsedSort<T>> = Vec::new();
         let mut random_sort = false;
+
+        let parse_token = |token_str: &str| {
+            T::from_str(token_str).map_err(|_| ApiError::FromStr(format!("invalid token `{token_str}`").into()))
+        };
 
         // Terms are separated by whitespace
         for term in parse::split_unescaped_whitespace(search_criteria) {
@@ -119,13 +123,13 @@ where
                         _ => (value, Order::default()),
                     };
 
-                    let kind = T::from_str(token)?;
+                    let kind = parse_token(token)?;
                     let order = if negated { !direction } else { direction };
                     sorts.push(ParsedSort { kind, order });
                 }
                 Some((key, condition)) => {
                     filters.push(UnparsedFilter {
-                        kind: T::from_str(key)?,
+                        kind: parse_token(key)?,
                         condition,
                         negated,
                     });
