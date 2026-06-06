@@ -1,41 +1,88 @@
+{% macro carry(params, except) %}
+{% if except != "search-text" && params.search_text.is_some() %}
+<input type="hidden" name="search-text" value="{{ params.search_text() }}">
+{% endif %}
+{% if except != "safe" && let Some(safe_enabled) = params.safe %}
+<input type="hidden" name="safe" value="{{ safe_enabled }}">
+{% endif %}
+{% if except != "sketchy" && let Some(sketchy_enabled) = params.sketchy %}
+<input type="hidden" name="sketchy" value="{{ sketchy_enabled }}">
+{% endif %}
+{% if except != "unsafe" && let Some(unsafe_enabled) = params.unsafe_ %}
+<input type="hidden" name="unsafe" value="{{ unsafe_enabled }}">
+{% endif %}
+{% if except != "edit" && let Some(edit_mode) = params.edit %}
+<input type="hidden" name="edit" value="{{ edit_mode }}">
+{% endif %}
+{% endmacro %}
+
 <div class="post-list-header">
-    <form class="horizontal search" action="{{ pager.search_url() }}" method="get">
-        <input type="text" id="search-text" name="query" value="{{ pager.query() }}">
+    <form class="horizontal search" action="posts" method="get">
+        {% call carry(params, "search-text") %}{% endcall %}
+        <input type="text" id="search-text" name="search-text" value="{{ params.search_text() }}">
         <wbr>
         <button type="submit">Search</button>
-        {% if ctx.safety_enabled() %}
-        {# TODO: Add disabling of safety buttons #}
-        <input type="button" class="safety safety-safe">
-        <input type="button" class="safety safety-sketchy">
-        <input type="button" class="safety safety-unsafe">
-        {% endif %}
-        <wbr>
-        <a class="button append" href="help/search/posts">Syntax help</a>
     </form>
 
-    {% if ctx.has_privilege(Action::PostBulkEditTag) && edit_mode == Some(EditMode::Tag) %}
-    <form class="horizontal bulk-edit bulk-edit-tags">
+    {% if ctx.safety_enabled() %}
+    <form class="horizontal" action="posts" method="get">
+        {% call carry(params, "safe") %}{% endcall %}
+        <button class="safety safety-safe {% if !params.safe_enabled() %}disabled{% endif %}" name="safe"
+            value="{{ !params.safe_enabled() }}"></button>
+    </form>
+    <form class="horizontal" action="posts" method="get">
+        {% call carry(params, "sketchy") %}{% endcall %}
+        <button class="safety safety-sketchy {% if !params.sketchy_enabled() %}disabled{% endif %}" name="sketchy"
+            value="{{ !params.sketchy_enabled() }}"></button>
+    </form>
+    <form class="horizontal" action="posts" method="get">
+        {% call carry(params, "unsafe") %}{% endcall %}
+        <button class="safety safety-unsafe {% if !params.unsafe_enabled() %}disabled{% endif %}" name="unsafe"
+            value="{{ !params.unsafe_enabled() }}"></button>
+    </form>
+    {% endif %}
+    <wbr>
+    <a class="button append" href="help/search/posts">Syntax help</a>
+
+    {% if ctx.has_privilege(Action::PostBulkEditTag) && (params.edit.is_none() || params.edit == Some(EditMode::Tag)) %}
+    <form class="horizontal bulk-edit bulk-edit-tags {% if params.edit == Some(EditMode::Tag) %}opened{% endif %}"
+        action="posts" method="get">
+        {% call carry(params, "edit") %}{% endcall %}
+        {% if params.edit == Some(EditMode::Tag) %}
         <span class="append hint">Tagging with:</span>
-        <a href class="button append open">Mass tag</a>
         <input type="text" name="tag">
-        <input class="start" type="submit" value="Start tagging">
-        <a href class="button append close">Stop tagging</a>
+        <button type="button" class="start">Start tagging</button>
+        <button class="button append close discourage">Stop tagging</button>
+        {% else %}
+        <button class="button append open discourage" name="edit" value="tag">Mass tag</button>
+        {% endif %}
     </form>
     {% endif %}
 
-    {% if ctx.safety_enabled() && ctx.has_privilege(Action::PostBulkEditSafety) && edit_mode == Some(EditMode::Safety)
-    %}
-    <form class="horizontal bulk-edit bulk-edit-safety">
-        <a href class="button append open">Mass edit safety</a>
-        <a href class="button append close">Stop editing safety</a>
+    {% if ctx.safety_enabled() && ctx.has_privilege(Action::PostBulkEditSafety) && (params.edit.is_none() || params.edit
+    == Some(EditMode::Safety)) %}
+    <form class="horizontal bulk-edit bulk-edit-safety {% if params.edit == Some(EditMode::Safety) %}opened{% endif %}"
+        action="posts" method="get">
+        {% call carry(params, "edit") %}{% endcall %}
+        {% if params.edit == Some(EditMode::Safety) %}
+        <button class="button append close discourage">Stop editing safety</button>
+        {% else %}
+        <button class="button append open discourage" name="edit" value="safety">Mass edit safety</button>
+        {% endif %}
     </form>
     {% endif %}
 
-    {% if ctx.has_privilege(Action::PostBulkEditDelete) && edit_mode == Some(EditMode::Delete) %}
-    <form class="horizontal bulk-edit bulk-edit-delete">
-        <a href class="button append open">Mass delete</a>
-        <input class="start" type="submit" value="Delete selected posts">
-        <a href class="button append close">Stop deleting</a>
+    {% if ctx.has_privilege(Action::PostBulkEditDelete) && (params.edit.is_none() || params.edit ==
+    Some(EditMode::Delete)) %}
+    <form class="horizontal bulk-edit bulk-edit-delete {% if params.edit == Some(EditMode::Delete) %}opened{% endif %}"
+        action="posts" method="get">
+        {% call carry(params, "edit") %}{% endcall %}
+        {% if params.edit == Some(EditMode::Delete) %}
+        <button type="button" class="start">Delete selected posts</button>
+        <button class="button append close discourage">Stop deleting</button>
+        {% else %}
+        <button class="button append open discourage" name="edit" value="delete">Mass delete</button>
+        {% endif %}
     </form>
     {% endif %}
 </div>

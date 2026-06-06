@@ -4,7 +4,7 @@
         {% match page %}
         {% when Page::Prev { offset, disabled } %}
         <li>
-            <a rel="prev" {% if disabled %} class="prev disabled" {% else %} class="prev" href="{{ pager.url(page) }}"
+            <a rel="prev" {% if disabled %} class="prev disabled" {% else %} class="prev" href="{{ pager.url(page)? }}"
                 {% endif %}>
                 <i class="fa fa-chevron-left"></i>
                 <span class="vim-nav-hint">&lt; Previous page</span>
@@ -13,7 +13,7 @@
 
         {% when Page::Next { offset, disabled } %}
         <li>
-            <a rel="next" {% if disabled %} class="next disabled" {% else %} class="next" href="{{ pager.url(page) }}"
+            <a rel="next" {% if disabled %} class="next disabled" {% else %} class="next" href="{{ pager.url(page)? }}"
                 {% endif %}>
                 <i class="fa fa-chevron-right"></i>
                 <span class="vim-nav-hint">Next page &gt;</span>
@@ -22,7 +22,7 @@
 
         {% when Page::Number { offset, number, active } %}
         <li {% if active %} class="active" {% endif %}>
-            <a href="{{ pager.url(page) }}">{{ number }}</a>
+            <a href="{{ pager.url(page)? }}">{{ number }}</a>
         </li>
 
         {% when Page::Ellipsis %}

@@ -7,14 +7,14 @@
     <aside class="sidebar">
         <nav class="buttons">
             <article class="previous-post">
-                <a rel="prev" {% if let Some(post)=prev_post %} href="{{ post.url(query.as_deref())? }}" {% else %}
+                <a rel="prev" {% if let Some(post)=prev_post %} href="{{ post.url(params)? }}" {% else %}
                     class="inactive" {% endif %}>
                     <i class="fa fa-chevron-left"></i>
                     <span class="vim-nav-hint">&lt; Previous post</span>
                 </a>
             </article>
             <article class="next-post">
-                <a rel="next" {% if let Some(post)=next_post %} href="{{ post.url(query.as_deref())? }}" {% else %}
+                <a rel="next" {% if let Some(post)=next_post %} href="{{ post.url(params)? }}" {% else %}
                     class="inactive" {% endif %}>
                     <i class="fa fa-chevron-right"></i>
                     <span class="vim-nav-hint">Next post &gt;</span>
