@@ -8,12 +8,12 @@ use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType
 use crate::model::pool::PoolPost;
 use crate::model::post::{NewPostNote, Post, PostFavorite, PostNote, PostRelation, PostScore, PostTag};
 use crate::model::tag::TagName;
+use crate::resource::NotRequested;
 use crate::resource::comment::CommentInfo;
 use crate::resource::field::Mask;
 use crate::resource::pool::MicroPool;
 use crate::resource::tag::MicroTag;
 use crate::resource::user::MicroUser;
-use crate::resource::{self, NotRequested};
 use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_note, post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
@@ -21,6 +21,7 @@ use crate::schema::{
 use crate::search::preferences;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
+use crate::{resource, web};
 use diesel::dsl::{exists, not};
 use diesel::{
     BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, NullableExpressionMethods, PgConnection, QueryDsl,
@@ -85,8 +86,8 @@ pub struct MicroPost {
 }
 
 impl MicroPost {
-    pub fn url(&self, query: Option<&str>) -> String {
-        post_url(self.id, query)
+    pub fn url<T: Serialize>(&self, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
+        web::post_url(self.id, params)
     }
 }
 
@@ -228,8 +229,10 @@ impl PostInfo {
         Ok(format!("@{id} ({post_type})\n\nTags:{tag_list}"))
     }
 
-    pub fn url(&self, query: Option<&str>) -> Result<String, NotRequested> {
-        self.id().map(|id| post_url(id, query))
+    pub fn url<T: Serialize>(&self, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
+        self.id()
+            .map_err(|err| serde_urlencoded::ser::Error::Custom(err.to_string().into()))
+            .and_then(|id| web::post_url(id, params))
     }
 
     pub fn new(conn: &mut PgConnection, ctx: &Context, post: Post, fields: Mask<Field>) -> QueryResult<Self> {
@@ -360,13 +363,6 @@ impl PostInfo {
         let unordered_posts = post::table.filter(post::id.eq_any(post_ids)).load(conn)?;
         let posts = resource::order_as(unordered_posts, post_ids);
         Self::new_batch(conn, ctx, posts, fields)
-    }
-}
-
-fn post_url(post_id: i64, query: Option<&str>) -> String {
-    match query {
-        Some(query) => format!("post/{post_id}?query={query}"),
-        None => format!("post/{post_id}"),
     }
 }
 

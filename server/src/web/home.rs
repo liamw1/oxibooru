@@ -4,7 +4,7 @@ use crate::app::{AppState, Context};
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostType};
-use crate::resource::post::{Field, PostInfo};
+use crate::resource::post::Field;
 use crate::time::BUILD_DATE;
 use crate::web::Tab;
 use crate::{time, unit};
