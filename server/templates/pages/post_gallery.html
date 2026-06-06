@@ -17,7 +17,7 @@
             <li data-post-id="{{ post.id()? }}">
                 <a class="thumbnail-wrapper {% if post.tags()?.is_empty() %}no-tags{% else %}tags{% endif %}"
                     title="{{ post.title()? }}"
-                    href="{% if ctx.has_privilege(Action::PostView) %}{{ post.url(query.as_deref())? }}{% endif %}">
+                    href="{% if ctx.has_privilege(Action::PostView) %}{{ post.url(params)? }}{% endif %}">
                     <span class="thumbnail" style="background-image: url({{ post.thumbnail_url()? }})">
                         <img alt="thumbnail" src="{{ post.thumbnail_url()? }}">
                     </span>
@@ -61,11 +61,11 @@
 
                 {# TODO: Post edit modes #}
                 <span class="edit-overlay">
-                    {% if ctx.has_privilege(Action::PostBulkEditTag) %}
+                    {% if ctx.has_privilege(Action::PostBulkEditTag) && params.edit == Some(EditMode::Tag) %}
                     <a href class="tag-flipper"></a>
                     {% endif %}
 
-                    {% if ctx.has_privilege(Action::PostBulkEditSafety) %}
+                    {% if ctx.has_privilege(Action::PostBulkEditSafety) && params.edit == Some(EditMode::Safety) %}
                     <span class="safety-flipper">
                         {% for safety in PostSafety::iter() %}
                         <a href data-safety="{{ safety }}"
@@ -74,7 +74,7 @@
                     </span>
                     {% endif %}
 
-                    {% if ctx.has_privilege(Action::PostBulkEditDelete) %}
+                    {% if ctx.has_privilege(Action::PostBulkEditDelete) && params.edit == Some(EditMode::Delete) %}
                     <a href class="delete-flipper"></a>
                     {% endif %}
                 </span>
