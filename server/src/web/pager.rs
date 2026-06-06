@@ -1,5 +1,7 @@
-use crate::extract::{PageParams, PagedResponse, Query};
+use crate::extract::{PageParams, Query};
 use crate::math::interval::Interval;
+use crate::web;
+use serde::Serialize;
 
 pub enum Page {
     Prev { offset: u64, disabled: bool },
@@ -36,50 +38,44 @@ impl Page {
     }
 }
 
-pub struct Pager {
+pub struct Pager<'a, T> {
     pub pages: Vec<Page>,
+    params: &'a T,
     route: &'static str,
-    query: Option<String>,
 }
 
-impl Pager {
-    pub fn build<T>(route: &'static str, Query(page_params): Query<PageParams>, response: &PagedResponse<T>) -> Self {
+impl<'a, T: Serialize> Pager<'a, T> {
+    pub fn build(route: &'static str, params: &'a T, Query(page_params): Query<PageParams>, total: u64) -> Self {
         let page_size = page_params.limit();
         let current_page = page_params.current_page();
-        let total_pages = response.total / page_size + 1;
+        let total_pages = total / page_size + 1;
         let pages = build_pages(page_size, current_page, total_pages);
 
-        Self {
-            pages,
-            route,
-            query: response.query.clone(),
-        }
+        Self { pages, route, params }
     }
 
-    pub fn url(&self, page: &Page) -> String {
+    pub fn url(&self, page: &Page) -> Result<String, serde_urlencoded::ser::Error> {
         let offset = match page {
-            Page::Next { offset, .. } => offset,
-            Page::Prev { offset, .. } => offset,
-            Page::Number { offset, .. } => offset,
-            Page::Ellipsis => &0,
+            Page::Next { offset, .. } => *offset,
+            Page::Prev { offset, .. } => *offset,
+            Page::Number { offset, .. } => *offset,
+            Page::Ellipsis => 0,
+        };
+        let params = PagerParams {
+            params: self.params,
+            offset,
         };
 
-        let route = self.route;
-        match (offset, self.query.as_deref()) {
-            (0, None) => self.route.to_owned(),
-            (0, Some(query)) => format!("{route}?query={query}"),
-            (offset, None) => format!("{route}?offset={offset}"),
-            (offset, Some(query)) => format!("{route}?query={query}&offset={offset}"),
-        }
+        web::url(self.route, &params)
     }
+}
 
-    pub fn search_url(&self) -> String {
-        self.url(&Page::Ellipsis)
-    }
-
-    pub fn query(&self) -> &str {
-        self.query.as_deref().unwrap_or("")
-    }
+#[derive(Serialize)]
+#[serde(rename_all = "kebab-case")]
+struct PagerParams<'a, T> {
+    #[serde(flatten)]
+    params: &'a T,
+    offset: u64,
 }
 
 fn build_pages(page_size: u64, current_page: u64, total_pages: u64) -> Vec<Page> {

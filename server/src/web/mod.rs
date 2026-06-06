@@ -1,13 +1,18 @@
 use crate::api::middleware;
 use crate::app::AppState;
 use axum::Router;
-use serde::Deserialize;
+use serde::Serialize;
 use tower_http::services::ServeDir;
 
 mod help;
 mod home;
 mod pager;
 mod post;
+
+pub fn post_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
+    let base = format!("/post/{post_id}");
+    url(&base, params)
+}
 
 pub fn routes(state: AppState) -> Router {
     // TODO: Remove
@@ -39,9 +44,14 @@ enum Tab {
     Settings,
 }
 
-#[derive(Deserialize)]
-struct SearchQuery {
-    query: Option<String>,
-}
-
 const PROJECT_ROOT: &str = env!("CARGO_MANIFEST_DIR");
+
+fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
+    serde_urlencoded::to_string(params).map(|query_string| {
+        if query_string.is_empty() {
+            base.to_owned()
+        } else {
+            format!("{base}?{query_string}")
+        }
+    })
+}

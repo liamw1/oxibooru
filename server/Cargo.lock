@@ -2055,6 +2055,7 @@ dependencies = [
  "serde_json",
  "serde_regex",
  "serde_repr",
+ "serde_urlencoded",
  "serial_test",
  "server-macros",
  "signal-hook",
