@@ -58,7 +58,7 @@
         <ul>
             {% for related_post in post.relations()? %}
             <li>
-                <a href="{{ related_post.url(None) }}">
+                <a href="{{ related_post.url(params)? }}">
                     <span class="thumbnail" style="background-image: url({{ related_post.thumbnail_url }})">
                         <img alt="thumbnail" src="{{ related_post.thumbnail_url }}">
                     </span>
@@ -96,7 +96,7 @@
             No tags yet!
             {% if ctx.can_edit_posts() %}
             {# TODO: Edit mode #}
-            <a href="{{ post.url(query.as_deref())? }}">Add some.</a>
+            <a href="{{ post.url(params)? }}">Add some.</a>
             {% endif %}
         </p>
         {% endif %}
