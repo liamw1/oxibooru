@@ -1,10 +1,10 @@
 use crate::api::error::ApiResult;
-use crate::app::AppState;
 use crate::content::hash::{Checksum, Md5Checksum};
 use crate::content::signature::COMPRESSED_SIGNATURE_LEN;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::UploadToken;
 use crate::content::{decode, hash, signature, thumbnail};
+use crate::extract::Ctx;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostType};
 use crate::{content, filesystem};
 use image::DynamicImage;
@@ -61,28 +61,28 @@ impl RingCache {
 }
 
 /// Computes content properties and caches them in memory.
-pub fn compute_properties(state: &AppState, content_token: UploadToken) -> ApiResult<CachedProperties> {
-    let properties = compute_properties_no_cache(state, content_token.clone())?;
+pub fn compute_properties(ctx: &Ctx, content_token: UploadToken) -> ApiResult<CachedProperties> {
+    let properties = compute_properties_no_cache(ctx, content_token.clone())?;
 
     // Clone this here to make sure we aren't holding onto lock for longer than necessary
     let properties_copy = properties.clone();
-    state.get_content_cache().insert(content_token, properties_copy);
+    ctx.get_content_cache().insert(content_token, properties_copy);
 
     Ok(properties)
 }
 
 /// Returns cached properties of content or computes them if not in cache.
-pub fn get_or_compute_properties(state: &AppState, content_token: UploadToken) -> ApiResult<CachedProperties> {
-    let maybe_properties = state.get_content_cache().remove(&content_token);
+pub fn get_or_compute_properties(ctx: &Ctx, content_token: UploadToken) -> ApiResult<CachedProperties> {
+    let maybe_properties = ctx.get_content_cache().remove(&content_token);
     match maybe_properties {
         Some(properties) => Ok(properties),
-        None => compute_properties_no_cache(state, content_token),
+        None => compute_properties_no_cache(ctx, content_token),
     }
 }
 
 /// Computes content properties without storing them in cache.
-fn compute_properties_no_cache(state: &AppState, token: UploadToken) -> ApiResult<CachedProperties> {
-    let temp_path = token.path(&state.config);
+fn compute_properties_no_cache(ctx: &Ctx, token: UploadToken) -> ApiResult<CachedProperties> {
+    let temp_path = token.path(&ctx.config);
     let file_size = content::map_read_result(filesystem::file_size(&temp_path))?;
     let (checksum, md5_checksum) = content::map_read_result(hash::compute_checksums(&temp_path))?;
 
@@ -99,14 +99,14 @@ fn compute_properties_no_cache(state: &AppState, token: UploadToken) -> ApiResul
         PostFlags::new()
     };
 
-    let image = decode::representative_image(&state.config, &temp_path, mime_type)?;
+    let image = decode::representative_image(&ctx.config, &temp_path, mime_type)?;
 
     Ok(CachedProperties {
         token,
         checksum,
         md5_checksum,
         signature: signature::compute(&image),
-        thumbnail: thumbnail::create(&state.config, &image, ThumbnailType::Post),
+        thumbnail: thumbnail::create(&ctx.config, &image, ThumbnailType::Post),
         width: i32::try_from(image.width()).map_err(|_| LimitErrorKind::DimensionError)?,
         height: i32::try_from(image.height()).map_err(|_| LimitErrorKind::DimensionError)?,
         mime_type,

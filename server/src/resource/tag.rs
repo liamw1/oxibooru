@@ -1,5 +1,6 @@
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
-use crate::resource::{self, BoolFill};
+use crate::resource;
+use crate::resource::field::Mask;
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
@@ -12,7 +13,7 @@ use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use strum::{EnumString, EnumTable};
+use strum::EnumString;
 use utoipa::ToSchema;
 
 /// A tag resource stripped down to `names`, `category` and `usages` fields.
@@ -28,7 +29,7 @@ pub struct MicroTag {
     pub usages: i64,
 }
 
-#[derive(Clone, Copy, EnumString, EnumTable)]
+#[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,
@@ -42,9 +43,9 @@ pub enum Field {
     Usages,
 }
 
-impl BoolFill for FieldTable<bool> {
-    fn filled(val: bool) -> Self {
-        Self::filled(val)
+impl From<Field> for u64 {
+    fn from(value: Field) -> Self {
+        value as u64
     }
 }
 
@@ -75,15 +76,15 @@ pub struct TagInfo {
 }
 
 impl TagInfo {
-    pub fn new(conn: &mut PgConnection, tag: Tag, fields: &FieldTable<bool>) -> QueryResult<Self> {
+    pub fn new(conn: &mut PgConnection, tag: Tag, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch(conn, vec![tag], fields).map(resource::single)
     }
 
-    pub fn new_from_id(conn: &mut PgConnection, tag_id: i64, fields: &FieldTable<bool>) -> QueryResult<Self> {
+    pub fn new_from_id(conn: &mut PgConnection, tag_id: i64, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch_from_ids(conn, &[tag_id], fields).map(resource::single)
     }
 
-    pub fn new_batch(conn: &mut PgConnection, tags: Vec<Tag>, fields: &FieldTable<bool>) -> QueryResult<Vec<Self>> {
+    pub fn new_batch(conn: &mut PgConnection, tags: Vec<Tag>, fields: Mask<Field>) -> QueryResult<Vec<Self>> {
         let mut categories = resource::retrieve(fields[Field::Category], || get_categories(conn, &tags))?;
         let mut names = resource::retrieve(fields[Field::Names], || get_names(conn, &tags))?;
         let mut implications = resource::retrieve(fields[Field::Implications], || get_implications(conn, &tags))?;
@@ -116,11 +117,7 @@ impl TagInfo {
         Ok(results)
     }
 
-    pub fn new_batch_from_ids(
-        conn: &mut PgConnection,
-        tag_ids: &[i64],
-        fields: &FieldTable<bool>,
-    ) -> QueryResult<Vec<Self>> {
+    pub fn new_batch_from_ids(conn: &mut PgConnection, tag_ids: &[i64], fields: Mask<Field>) -> QueryResult<Vec<Self>> {
         let unordered_tags = tag::table.filter(tag::id.eq_any(tag_ids)).load(conn)?;
         let tags = resource::order_as(unordered_tags, tag_ids);
         Self::new_batch(conn, tags, fields)

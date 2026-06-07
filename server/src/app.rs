@@ -1,10 +1,12 @@
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::middleware;
-use crate::config::Config;
+use crate::auth::Client;
+use crate::config::{Action, Config};
 use crate::content::cache::RingCache;
-use crate::db::{AsyncConnectionPool, AsyncConnectionResult, ConnectionResult};
+use crate::db::AsyncConnectionPool;
+use crate::extract::Ctx;
 use crate::{admin, api, config, db, filesystem};
-use axum::extract::Request;
-use axum::{Router, ServiceExt};
+use axum::Router;
 use std::error::Error;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::net::TcpListener;
@@ -36,12 +38,36 @@ impl AppState {
         }
     }
 
-    pub async fn get_connection(&self) -> AsyncConnectionResult<'_> {
-        self.connection_pool.get().await
+    pub fn make_context(self, client: Client) -> Ctx {
+        Ctx(
+            Context {
+                client,
+                config: self.config,
+                content_cache: self.content_cache,
+            },
+            self.connection_pool,
+        )
+    }
+}
+
+#[derive(Clone)]
+pub struct Context {
+    pub client: Client,
+    pub config: Arc<Config>,
+    pub content_cache: Arc<Mutex<RingCache>>,
+}
+
+impl Context {
+    /// Checks if the `client` is at least `required_rank`.
+    pub fn has_privilege(&self, action: Action) -> bool {
+        self.client.rank >= self.config.privileges()[action]
     }
 
-    pub fn get_connection_blocking(&self) -> ConnectionResult {
-        self.connection_pool.get_blocking()
+    /// Returns error if client is lower rank than `required_rank`.
+    pub fn verify_privilege(&self, action: Action) -> ApiResult<()> {
+        self.has_privilege(action)
+            .then_some(())
+            .ok_or(ApiError::InsufficientPrivileges)
     }
 
     pub fn get_content_cache(&self) -> MutexGuard<'_, RingCache> {
@@ -88,7 +114,7 @@ pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
         std::process::exit(0);
     }
 
-    let mut conn = state.get_connection_blocking()?;
+    let mut conn = state.connection_pool.get_blocking()?;
     db::check_signature_version(&mut conn)?; // We do this after admin mode check so that users can update signatures
     middleware::initialize_snapshot_counter(&mut conn)?;
 
@@ -112,7 +138,7 @@ pub async fn run(state: AppState) -> std::io::Result<()> {
     let listener = TcpListener::bind(address).await?;
     info!("Oxibooru server running on {} threads", Handle::current().metrics().num_workers());
     debug!("listening on {}", listener.local_addr()?);
-    axum::serve(listener, ServiceExt::<Request>::into_make_service(app))
+    axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
 }
@@ -131,7 +157,6 @@ async fn shutdown_signal() {
             .recv()
             .await;
     };
-
     #[cfg(not(unix))]
     let terminate = std::future::pending::<()>();
 

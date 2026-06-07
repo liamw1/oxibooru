@@ -1,6 +1,6 @@
 use crate::api::error::{self, ApiError, ApiResult};
-use crate::auth::Client;
-use crate::config::{Config, RegexType};
+use crate::app::Context;
+use crate::config::{Action, Config, RegexType};
 use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::post::PostTag;
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagName, TagSuggestion};
@@ -13,6 +13,14 @@ use diesel::dsl::max;
 use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, RunQueryDsl};
 use std::collections::hash_map::{Entry, IntoKeys};
 use std::collections::{HashMap, HashSet};
+
+/// Specifies how tag ids should be retrieved from database given a list of names.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum FetchMode {
+    Shallow, // Only fetch IDs corresponding to each name
+    Deep,    // Fetch IDs of names and their implications, recursively
+    Acyclic, // Same as `Deep` but also checks for cycles
+}
 
 /// Updates `last_edit_time` of tag associated with `tag_id`.
 pub fn last_edit_time(conn: &mut PgConnection, tag_id: i64) -> ApiResult<()> {
@@ -83,10 +91,9 @@ pub fn set_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i6
 /// Checks that each new name matches on the Tag regex.
 pub fn get_or_create_tag_ids(
     conn: &mut PgConnection,
-    config: &Config,
-    client: Client,
+    ctx: &Context,
     names: Vec<SmallString>,
-    detect_cycles: bool,
+    mode: FetchMode,
 ) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
     let mut implied_ids: Vec<i64> = tag_name::table
         .select(tag_name::tag_id)
@@ -96,26 +103,28 @@ pub fn get_or_create_tag_ids(
 
     // Collect implied tag ids and build dependency graph
     let mut dependency_graph = DependencyGraph::new(&implied_ids);
-    loop {
-        let implications: Vec<TagImplication> = tag_implication::table
-            .filter(tag_implication::parent_id.eq_any(&implied_ids))
-            .distinct()
-            .load(conn)?;
+    if mode != FetchMode::Shallow {
+        loop {
+            let implications: Vec<TagImplication> = tag_implication::table
+                .filter(tag_implication::parent_id.eq_any(&implied_ids))
+                .distinct()
+                .load(conn)?;
 
-        // Remove ids we've already seen
-        let previous_len = dependency_graph.len();
-        implied_ids = implications
-            .into_iter()
-            .filter(|&implication| dependency_graph.insert(implication))
-            .map(|implication| implication.child_id)
-            .collect();
+            // Remove ids we've already seen
+            let previous_len = dependency_graph.len();
+            implied_ids = implications
+                .into_iter()
+                .filter(|&implication| dependency_graph.insert(implication))
+                .map(|implication| implication.child_id)
+                .collect();
 
-        if dependency_graph.len() == previous_len {
-            break;
+            if dependency_graph.len() == previous_len {
+                break;
+            }
         }
-    }
-    if detect_cycles && dependency_graph.has_cycle() {
-        return Err(ApiError::CyclicDependency(ResourceType::TagImplication));
+        if mode == FetchMode::Acyclic && dependency_graph.has_cycle() {
+            return Err(ApiError::CyclicDependency(ResourceType::TagImplication));
+        }
     }
 
     let mut tag_ids: Vec<_> = dependency_graph.into_nodes().collect();
@@ -133,11 +142,11 @@ pub fn get_or_create_tag_ids(
         .collect();
     new_names
         .iter()
-        .try_for_each(|name| api::verify_matches_regex(config, name, RegexType::Tag))?;
+        .try_for_each(|name| api::verify_matches_regex(&ctx.config, name, RegexType::Tag))?;
 
     // Create new tags if given unique names
     if !new_names.is_empty() {
-        api::verify_privilege(client, config.privileges().tag_create)?;
+        ctx.verify_privilege(Action::TagCreate)?;
 
         let new_tag_ids: Vec<i64> = vec![NewTag::default(); new_names.len()]
             .insert_into(tag::table)
@@ -150,7 +159,7 @@ pub fn get_or_create_tag_ids(
             .collect();
         new_tag_names.insert_into(tag_name::table).execute(conn)?;
 
-        snapshot::tag::new_name_snapshots(conn, client, new_names)?;
+        snapshot::tag::new_name_snapshots(conn, ctx.client, new_names)?;
         tag_ids.extend(new_tag_ids);
     }
 

@@ -36,7 +36,7 @@
         </tr>
         <tr>
             <td><code>pool</code></td>
-            <td>belonging to the pool with the given ID</td>
+            <td>belonging to the pool with the given name (accepts wildcards) or ID</td>
         </tr>
         <tr>
             <td><code>pool-category</code></td>
@@ -154,7 +154,7 @@
             <td>uploader name alphabetically</td>
         </tr>
         <tr>
-            <td><code>pool</code></td>
+            <td><code>pool-count</code>, <code>pool</code></td>
             <td>in most pools</td>
         </tr>
         <tr>

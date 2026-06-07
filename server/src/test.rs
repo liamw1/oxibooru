@@ -5,7 +5,7 @@ use crate::auth::header;
 use crate::config::Config;
 use crate::content::hash::{Checksum, Md5Checksum, PostHash};
 use crate::content::{decode, signature};
-use crate::db::ConnectionResult;
+use crate::db::Connection;
 use crate::filesystem::Directory;
 use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{
@@ -34,7 +34,7 @@ use axum::extract::Request;
 use axum::http::Method;
 use axum::http::header::AUTHORIZATION;
 use axum_test::TestServer;
-use diesel::r2d2::{ConnectionManager, Pool};
+use diesel::r2d2::{ConnectionManager, Pool, PoolError};
 use diesel::{ExpressionMethods, Insertable, JoinOnDsl, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde_json::Value;
 use std::ffi::OsStr;
@@ -51,7 +51,7 @@ pub const TEST_TOKEN: Uuid = uuid::uuid!("67e55044-10b1-426f-9247-bb680e5fe0c8")
 pub const EXPIRED_TOKEN: Uuid = uuid::uuid!("b7188ca3-1391-4abf-bfc1-7d7dfad7d161");
 pub const DISABLED_TOKEN: Uuid = uuid::uuid!("86c5b652-7c9c-4846-8ae3-5ec236f57c4e");
 
-pub fn get_connection() -> ConnectionResult {
+pub fn get_connection() -> Result<Connection, PoolError> {
     get_state().connection_pool.get_blocking()
 }
 

@@ -4,12 +4,14 @@ use crate::app::AppState;
 use crate::auth::Client;
 use crate::config::{Config, RegexType};
 use crate::model::enums::{Rating, UserRank};
+use crate::resource::field::Mask;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use axum::http::StatusCode;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::num::NonZeroI64;
 use std::ops::Deref;
+use std::str::FromStr;
 use std::time::Duration;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
@@ -19,7 +21,6 @@ use utoipa_axum::router::OpenApiRouter;
 mod comment;
 mod doc;
 pub mod error;
-mod extract;
 mod info;
 mod legacy;
 pub mod middleware;
@@ -51,22 +52,13 @@ pub fn routes(state: AppState) -> OpenApiRouter {
         .merge(user_token::routes())
         .layer((
             TraceLayer::new_for_http(),
-            // Graceful shutdown will wait for outstanding requests to complete.
-            // Add a timeout so requests don't hang forever.
             TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_mins(1)),
         ))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::post_to_webhooks))
+        .route_layer(axum::middleware::from_fn(middleware::log_error))
         .with_state(state)
         .fallback(|| async { (StatusCode::NOT_FOUND, "Route not found") })
-}
-
-/// Checks if the `client` is at least `required_rank`.
-/// Returns error if client is lower rank than `required_rank`.
-pub fn verify_privilege(client: Client, required_rank: UserRank) -> ApiResult<()> {
-    (client.rank >= required_rank)
-        .then_some(())
-        .ok_or(ApiError::InsufficientPrivileges)
 }
 
 /// Checks if `haystack` matches regex `regex_type`.
@@ -131,22 +123,19 @@ struct MergeBody<T> {
 
 /// Represents parameters of a request to retrieve one or more resources.
 #[derive(Deserialize, IntoParams)]
-struct ResourceParams {
+#[serde(bound(deserialize = "F: Into<u64> + FromStr"))]
+struct ResourceParams<F: Into<u64> + FromStr> {
     /// Query search string
     #[param(example = "anonymous_token")]
     query: Option<String>,
     /// Comma-separated list of fields to include in the response. See [field selection](#Field-Selection) for details.
-    #[param(example = "field1,field2")]
-    fields: Option<String>,
+    #[param(value_type = Option<String>, example = "field1,field2")]
+    fields: Mask<F>,
 }
 
-impl ResourceParams {
+impl<F: Into<u64> + FromStr> ResourceParams<F> {
     fn criteria(&self) -> &str {
         self.query.as_deref().unwrap_or("")
-    }
-
-    fn fields(&self) -> Option<&str> {
-        self.fields.as_deref()
     }
 }
 
@@ -183,6 +172,14 @@ struct PagedResponse<T> {
     #[schema(examples(1729))]
     total: i64,
     results: Vec<T>,
+}
+
+/// Checks if the `client` is at least `required_rank`.
+/// Returns error if client is lower rank than `required_rank`.
+fn verify_privilege(client: Client, required_rank: UserRank) -> ApiResult<()> {
+    (client.rank >= required_rank)
+        .then_some(())
+        .ok_or(ApiError::InsufficientPrivileges)
 }
 
 /// Checks if `current_version` matches `client_version`.

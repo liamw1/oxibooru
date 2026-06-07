@@ -1,27 +1,27 @@
 use crate::api::doc::POST_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
 use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
-use crate::app::AppState;
-use crate::auth::Client;
-use crate::config::Config;
+use crate::app::{AppState, Context};
+use crate::config::Action;
 use crate::content::hash::PostHash;
 use crate::content::signature::SignatureCache;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
 use crate::content::{Content, signature, upload};
 use crate::db::AsyncConnectionPool;
+use crate::extract::{Ctx, Json, JsonOrMultipart, Path, Query};
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceProperty, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
-use crate::resource::post::{Note, PostInfo};
+use crate::resource::post::{Field, Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
 use crate::search::post::QueryBuilder;
 use crate::search::{Builder, preferences};
 use crate::snapshot::post::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::{api, db, filesystem, resource, snapshot, update};
-use axum::extract::{DefaultBodyLimit, Extension, State};
+use crate::update::tag::FetchMode;
+use crate::{api, db, filesystem, snapshot, update};
+use axum::extract::DefaultBodyLimit;
 use diesel::dsl::{exists, not, sql};
 use diesel::sql_types::Integer;
 use diesel::{
@@ -111,7 +111,7 @@ where
 /// | `uploader`, `upload`, `submit`                               | uploaded by given user (accepts wildcards)                              |
 /// | `comment`                                                    | commented by given user (accepts wildcards)                             |
 /// | `fav`                                                        | favorited by given user (accepts wildcards)                             |
-/// | `pool`                                                       | belonging to the pool with the given ID                                 |
+/// | `pool`                                                       | belonging to the pool with the given name (accepts wildcards) or ID     |
 /// | `pool-category`                                              | belonging to pools in the given pool category (accepts wildcards)       |
 /// | `tag-count`                                                  | having given number of tags                                             |
 /// | `comment-count`                                              | having given number of comments                                         |
@@ -144,7 +144,7 @@ where
 /// | `id`                                                         | highest to lowest post number                    |
 /// | `score`                                                      | highest scored                                   |
 /// | `uploader`, `upload`, `submit`                               | uploader name alphabetically                     |
-/// | `pool`                                                       | in most pools                                    |
+/// | `pool-count`, `pool`                                         | in most pools                                    |
 /// | `tag-count`, `tag`                                           | with most tags                                   |
 /// | `comment-count`, `comment`                                   | most commented first                             |
 /// | `fav-count`, `fav`                                           | loved by most                                    |
@@ -185,21 +185,17 @@ where
     ),
 )]
 async fn list(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(resource): Query<ResourceParams>,
+    Ctx(ctx, connection_pool): Ctx,
+    Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PostInfo>>> {
-    api::verify_privilege(client, state.config.privileges().post_list)?;
+    ctx.verify_privilege(Action::PostList)?;
 
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_POSTS_PER_PAGE);
-    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
-            let mut query_builder = QueryBuilder::new(&state.config, client, resource.criteria())?;
+            let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
             query_builder.set_offset_and_limit(offset, limit);
 
             let (total, selected_posts) = query_builder.list(conn)?;
@@ -208,7 +204,7 @@ async fn list(
                 offset,
                 limit,
                 total,
-                results: PostInfo::new_batch_from_ids(conn, &state.config, client, &selected_posts, &fields)?,
+                results: PostInfo::new_batch_from_ids(conn, &ctx, &selected_posts, resource.fields)?,
             }))
         })
         .await
@@ -231,19 +227,16 @@ async fn list(
     ),
 )]
 async fn get(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostInfo>> {
-    api::verify_privilege(client, state.config.privileges().post_view)?;
+    ctx.verify_privilege(Action::PostView)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
-            verify_visibility(conn, &state.config, client, post_id)?;
-            PostInfo::new_from_id(conn, &state.config, client, post_id, &fields)
+            verify_visibility(conn, &ctx, post_id)?;
+            PostInfo::new_from_id(conn, &ctx, post_id, params.fields)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -276,12 +269,11 @@ struct PostNeighbors {
     ),
 )]
 async fn get_neighbors(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostNeighbors>> {
-    api::verify_privilege(client, state.config.privileges().post_list)?;
+    ctx.verify_privilege(Action::PostList)?;
 
     let create_post_neighbors = |mut neighbors: Vec<PostInfo>, has_previous_post: bool| {
         let (prev, next) = match (neighbors.pop(), neighbors.pop()) {
@@ -294,16 +286,14 @@ async fn get_neighbors(
         Json(PostNeighbors { prev, next })
     };
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             const INITIAL_LIMIT: i64 = 1000;
             const LIMIT_GROWTH: i64 = 10;
 
-            verify_visibility(conn, &state.config, client, post_id)?;
+            verify_visibility(conn, &ctx, post_id)?;
 
-            let mut query_builder = QueryBuilder::new(&state.config, client, params.criteria())?;
+            let mut query_builder = QueryBuilder::new(&ctx, params.criteria())?;
 
             if !query_builder.criteria().has_sort() {
                 // Optimized neighbor retrieval if no sort is specified
@@ -324,7 +314,7 @@ async fn get_neighbors(
 
                 let has_previous_post = previous_post.is_some();
                 let posts = previous_post.into_iter().chain(next_post).collect();
-                let post_infos = PostInfo::new_batch(conn, &state.config, client, posts, &fields)?;
+                let post_infos = PostInfo::new_batch(conn, &ctx, posts, params.fields)?;
                 return Ok::<_, ApiError>(create_post_neighbors(post_infos, has_previous_post));
             }
 
@@ -357,7 +347,7 @@ async fn get_neighbors(
             };
 
             let post_ids: Vec<_> = prev_post_id.into_iter().chain(next_post_id).collect();
-            let post_infos = PostInfo::new_batch_from_ids(conn, &state.config, client, &post_ids, &fields)?;
+            let post_infos = PostInfo::new_batch_from_ids(conn, &ctx, &post_ids, params.fields)?;
             Ok(create_post_neighbors(post_infos, prev_post_id.is_some()))
         })
         .await
@@ -379,15 +369,12 @@ async fn get_neighbors(
     ),
 )]
 async fn get_featured(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(params): Query<ResourceParams>,
+    Ctx(ctx, connection_pool): Ctx,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<Option<PostInfo>>> {
-    api::verify_privilege(client, state.config.privileges().post_view_featured)?;
+    ctx.verify_privilege(Action::PostViewFeatured)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             let mut featured = post_feature::table
                 .select(post_feature::post_id)
@@ -395,13 +382,13 @@ async fn get_featured(
                 .into_boxed();
 
             // Apply preferences to post features
-            if let Some(hidden_posts) = preferences::hidden_posts(&state.config, client, post_feature::post_id) {
+            if let Some(hidden_posts) = preferences::hidden_posts(&ctx, post_feature::post_id) {
                 featured = featured.filter(not(exists(hidden_posts)));
             }
 
             let featured_post_id: Option<i64> = featured.first(conn).optional()?;
             featured_post_id
-                .map(|post_id| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+                .map(|post_id| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
                 .transpose()
                 .map(Json)
                 .map_err(ApiError::from)
@@ -430,23 +417,20 @@ struct FeatureBody {
     ),
 )]
 async fn feature(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(params): Query<ResourceParams>,
+    Ctx(ctx, connection_pool): Ctx,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<FeatureBody>,
 ) -> ApiResult<Json<PostInfo>> {
-    api::verify_privilege(client, state.config.privileges().post_feature)?;
+    ctx.verify_privilege(Action::PostFeature)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
+    let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
     let new_post_feature = NewPostFeature {
         post_id: body.id,
         user_id,
         time: DateTime::now(),
     };
 
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             let previous_feature_id = post_feature::table
                 .select(post_feature::post_id)
@@ -459,31 +443,29 @@ async fn feature(
 
             let insert_result = new_post_feature.insert_into(post_feature::table).execute(conn);
             error::map_foreign_key_violation(insert_result, ResourceType::Post)?;
-            snapshot::post::feature_snapshot(conn, client, previous_feature_id, body.id)?;
+            snapshot::post::feature_snapshot(conn, ctx.client, previous_feature_id, body.id)?;
             Ok::<_, ApiError>(())
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, body.id, &fields))
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, body.id, params.fields))
         .await
         .map(Json)
 }
 
 async fn reverse_search_impl(
-    state: AppState,
-    client: Client,
-    params: ResourceParams,
+    ctx: Ctx,
+    params: ResourceParams<Field>,
     body: ReverseSearchBody,
 ) -> ApiResult<Json<ReverseSearchResponse>> {
-    api::verify_privilege(client, state.config.privileges().post_reverse_search)?;
+    ctx.verify_privilege(Action::PostReverseSearch)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let content =
         Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
-    let content_properties = content.compute_properties(&state).await?;
-    state
-        .connection_pool
+    let content_properties = content.compute_properties(&ctx).await?;
+
+    let Ctx(ctx, connection_pool) = ctx;
+    connection_pool
         .transaction(move |conn| {
             let _timer = crate::time::Timer::new("reverse search");
 
@@ -507,7 +489,7 @@ async fn reverse_search_impl(
                 .filter(|post_signature| Some(post_signature.post_id) != exact_post.as_ref().map(|post| post.id))
                 .filter_map(|post_signature| {
                     let distance = signature::distance(&content_signature_cache, &post_signature.signature);
-                    let distance_threshold = 1.0 - state.config.post_similarity_threshold;
+                    let distance_threshold = 1.0 - ctx.config.post_similarity_threshold;
                     (distance < distance_threshold).then_some((post_signature.post_id, distance))
                 })
                 .collect();
@@ -516,9 +498,9 @@ async fn reverse_search_impl(
             let (post_ids, distances): (Vec<_>, Vec<_>) = similar_signatures.into_iter().unzip();
             Ok::<_, ApiError>(ReverseSearchResponse {
                 exact_post: exact_post
-                    .map(|post| PostInfo::new(conn, &state.config, client, post, &fields))
+                    .map(|post| PostInfo::new(conn, &ctx, post, params.fields))
                     .transpose()?,
-                similar_posts: PostInfo::new_batch_from_ids(conn, &state.config, client, &post_ids, &fields)?
+                similar_posts: PostInfo::new_batch_from_ids(conn, &ctx, &post_ids, params.fields)?
                     .into_iter()
                     .zip(distances)
                     .map(|(post, distance)| SimilarPost { distance, post })
@@ -579,17 +561,16 @@ struct ReverseSearchResponse {
     ),
 )]
 async fn reverse_search(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(params): Query<ResourceParams>,
+    ctx: Ctx,
+    Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<ReverseSearchBody>,
 ) -> ApiResult<Json<ReverseSearchResponse>> {
-    api::verify_privilege(client, state.config.privileges().post_reverse_search)?;
+    ctx.verify_privilege(Action::PostReverseSearch)?;
 
     match body {
-        JsonOrMultipart::Json(payload) => reverse_search_impl(state, client, params, payload).await,
+        JsonOrMultipart::Json(payload) => reverse_search_impl(ctx, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(&state.config, payload, [PartName::Content]).await?;
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content]).await?;
             let reverse_search_body = if let [Some(content_token)] = decoded_body.files {
                 ReverseSearchBody {
                     content_token: Some(content_token),
@@ -600,46 +581,41 @@ async fn reverse_search(
             } else {
                 return Err(ApiError::MissingFormData);
             };
-            reverse_search_impl(state, client, params, reverse_search_body).await
+            reverse_search_impl(ctx, params, reverse_search_body).await
         }
     }
 }
 
-async fn create_impl(
-    state: AppState,
-    client: Client,
-    params: ResourceParams,
-    body: PostCreateBody,
-) -> ApiResult<Json<PostInfo>> {
-    let required_rank = if body.anonymous.unwrap_or(false) {
-        state.config.privileges().post_create_anonymous
+async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBody) -> ApiResult<Json<PostInfo>> {
+    let action = if body.anonymous.unwrap_or(false) {
+        Action::PostCreateAnonymous
     } else {
-        state.config.privileges().post_create_identified
+        Action::PostCreateIdentified
     };
-    api::verify_privilege(client, required_rank)?;
+    ctx.verify_privilege(action)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
     let content =
         Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
-    let content_properties = content.get_or_compute_properties(&state).await?;
+    let content_properties = content.get_or_compute_properties(&ctx).await?;
 
+    let Ctx(ctx, connection_pool) = ctx;
     let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
-        Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Post).await?),
+        Some(content) => Some(content.thumbnail(&ctx.config, ThumbnailType::Post).await?),
         None => None,
     };
     let flags = content_properties.flags | PostFlags::from_slice(&body.flags.unwrap_or_default());
 
-    let post_id = tagging_update(&state.connection_pool, body.tags.is_some(), {
-        let config = Arc::clone(&state.config);
+    let post_id = tagging_update(&connection_pool, body.tags.is_some(), {
+        let ctx = ctx.clone();
         move |conn| {
             // We do this before post insertion so that the post sequence isn't incremented if it fails
             let (tag_ids, tags) =
-                update::tag::get_or_create_tag_ids(conn, &config, client, body.tags.unwrap_or_default(), false)?;
+                update::tag::get_or_create_tag_ids(conn, &ctx, body.tags.unwrap_or_default(), FetchMode::Deep)?;
             let relations = body.relations.unwrap_or_default();
             let notes = body.notes.unwrap_or_default();
 
             let post: Post = NewPost {
-                user_id: client.id,
+                user_id: ctx.client.id,
                 file_size: content_properties.file_size,
                 width: content_properties.width,
                 height: content_properties.height,
@@ -658,7 +634,7 @@ async fn create_impl(
             .get_result(conn)
             .optional()?
             .ok_or(ApiError::AlreadyExists(ResourceProperty::PostContent))?;
-            let post_hash = PostHash::new(&config, post.id);
+            let post_hash = PostHash::new(&ctx.config, post.id);
 
             // Add tags, relations, and notes
             update::post::set_tags(conn, post.id, &tag_ids)?;
@@ -674,12 +650,12 @@ async fn create_impl(
             .execute(conn)?;
 
             // Move content to permanent location
-            let temp_path = content_properties.token.path(&config);
+            let temp_path = content_properties.token.path(&ctx.config);
             filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
             // Create thumbnails
             if let Some(thumbnail) = custom_thumbnail {
-                api::verify_privilege(client, config.privileges().post_edit_thumbnail)?;
+                ctx.verify_privilege(Action::PostEditThumbnail)?;
                 update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
             }
             update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
@@ -695,14 +671,13 @@ async fn create_impl(
                 notes,
                 featured: false,
             };
-            snapshot::post::creation_snapshot(conn, client, post.id, post_data)?;
+            snapshot::post::creation_snapshot(conn, ctx.client, post.id, post_data)?;
             Ok::<_, ApiError>(post.id)
         }
     })
     .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
 }
@@ -776,23 +751,21 @@ struct PostCreateBody {
     ),
 )]
 async fn create(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(params): Query<ResourceParams>,
+    ctx: Ctx,
+    Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<PostCreateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => create_impl(state, client, params, payload).await,
+        JsonOrMultipart::Json(payload) => create_impl(ctx, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body =
-                upload::extract(&state.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut new_post: PostCreateBody = serde_json::from_slice(&metadata)?;
             let [content_token, thumbnail_token] = decoded_body.files;
 
             new_post.content_token = content_token;
             new_post.thumbnail_token = thumbnail_token;
-            create_impl(state, client, params, new_post).await
+            create_impl(ctx, params, new_post).await
         }
     }
 }
@@ -831,12 +804,11 @@ struct PostMergeBody {
     ),
 )]
 async fn merge(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(params): Query<ResourceParams>,
+    Ctx(ctx, connection_pool): Ctx,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<PostMergeBody>,
 ) -> ApiResult<Json<PostInfo>> {
-    api::verify_privilege(client, state.config.privileges().post_merge)?;
+    ctx.verify_privilege(Action::PostMerge)?;
 
     let absorbed_id = body.post_info.remove;
     let merge_to_id = body.post_info.merge_to;
@@ -844,9 +816,8 @@ async fn merge(
         return Err(ApiError::SelfMerge(ResourceType::Post));
     }
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    tagging_update(&state.connection_pool, true, {
-        let config = Arc::clone(&state.config);
+    tagging_update(&connection_pool, true, {
+        let config = Arc::clone(&ctx.config);
         move |conn| {
             let absorbed_post: Post = post::table
                 .find(absorbed_id)
@@ -862,14 +833,13 @@ async fn merge(
             api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
 
             update::post::merge(conn, &config, &absorbed_post, &merge_to_post, body.replace_content)?;
-            snapshot::post::merge_snapshot(conn, client, absorbed_id, merge_to_id)?;
+            snapshot::post::merge_snapshot(conn, ctx.client, absorbed_id, merge_to_id)?;
             Ok(())
         }
     })
     .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, body.post_info.merge_to, &fields))
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, body.post_info.merge_to, params.fields))
         .await
         .map(Json)
 }
@@ -890,32 +860,28 @@ async fn merge(
     ),
 )]
 async fn favorite(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostInfo>> {
-    api::verify_privilege(client, state.config.privileges().post_favorite)?;
+    ctx.verify_privilege(Action::PostFavorite)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
+    let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
     let new_post_favorite = PostFavorite {
         post_id,
         user_id,
         time: DateTime::now(),
     };
 
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
             let insert_result = new_post_favorite.insert_into(post_favorite::table).execute(conn);
             error::map_foreign_key_violation(insert_result, ResourceType::Post)
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
 }
@@ -938,19 +904,15 @@ async fn favorite(
     ),
 )]
 async fn rate(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<RatingBody>,
 ) -> ApiResult<Json<PostInfo>> {
-    api::verify_privilege(client, state.config.privileges().post_score)?;
+    ctx.verify_privilege(Action::PostScore)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
-
-    state
-        .connection_pool
+    let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
+    connection_pool
         .transaction(move |conn| {
             diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
@@ -968,33 +930,31 @@ async fn rate(
             Ok::<_, ApiError>(())
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
 }
 
 async fn update_impl(
-    state: AppState,
-    client: Client,
+    ctx: Ctx,
     post_id: i64,
-    params: ResourceParams,
+    params: ResourceParams<Field>,
     body: PostUpdateBody,
 ) -> ApiResult<Json<PostInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
     let new_content = match Content::new(body.content_token, body.content_url) {
-        Some(content) => Some(content.get_or_compute_properties(&state).await?),
-        None => None,
-    };
-    let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
-        Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Post).await?),
+        Some(content) => Some(content.get_or_compute_properties(&ctx).await?),
         None => None,
     };
 
-    tagging_update(&state.connection_pool, body.tags.is_some(), {
-        let config = Arc::clone(&state.config);
+    let Ctx(ctx, connection_pool) = ctx;
+    let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
+        Some(content) => Some(content.thumbnail(&ctx.config, ThumbnailType::Post).await?),
+        None => None,
+    };
+
+    tagging_update(&connection_pool, body.tags.is_some(), {
+        let ctx = ctx.clone();
         move |conn| {
             let old_post: Post = post::table
                 .find(post_id)
@@ -1004,58 +964,63 @@ async fn update_impl(
             let old_mime_type = old_post.mime_type;
             api::verify_version(old_post.last_edit_time, body.version)?;
 
-            let post_hash = PostHash::new(&config, post_id);
+            let post_hash = PostHash::new(&ctx.config, post_id);
 
             let mut new_post = old_post.clone();
             let old_snapshot_data = SnapshotData::retrieve(conn, old_post)?;
             let mut new_snapshot_data = old_snapshot_data.clone();
 
             if let Some(safety) = body.safety {
-                api::verify_privilege(client, config.privileges().post_edit_safety)?;
+                ctx.verify_privilege(Action::PostEditSafety)?;
 
                 new_post.safety = safety;
                 new_snapshot_data.safety = safety;
             }
             if let Some(flags) = body.flags {
-                api::verify_privilege(client, config.privileges().post_edit_flag)?;
+                ctx.verify_privilege(Action::PostEditFlag)?;
 
                 let updated_flags = PostFlags::from_slice(&flags);
                 new_post.flags = updated_flags;
                 new_snapshot_data.flags = updated_flags;
             }
             if let Some(source) = body.source {
-                api::verify_privilege(client, config.privileges().post_edit_source)?;
+                ctx.verify_privilege(Action::PostScore)?;
 
                 new_post.source = source.clone();
                 new_snapshot_data.source = source;
             }
             if let Some(description) = body.description {
-                api::verify_privilege(client, config.privileges().post_edit_description)?;
+                ctx.verify_privilege(Action::PostEditDescription)?;
 
                 new_post.description = description.clone();
                 new_snapshot_data.description = description;
             }
             if let Some(mut relations) = body.relations {
-                api::verify_privilege(client, config.privileges().post_edit_relation)?;
+                ctx.verify_privilege(Action::PostEditRelation)?;
 
-                update::post::set_relations(conn, &config, client, post_id, &mut relations)?;
+                update::post::set_relations(conn, &ctx, post_id, &mut relations)?;
                 new_snapshot_data.relations = relations;
             }
             if let Some(tags) = body.tags {
-                api::verify_privilege(client, config.privileges().post_edit_tag)?;
+                ctx.verify_privilege(Action::PostEditTag)?;
 
-                let (updated_tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, &config, client, tags, false)?;
+                let fetch_mode = if ctx.config.append_tag_implications_on_post_edit {
+                    FetchMode::Deep
+                } else {
+                    FetchMode::Shallow
+                };
+                let (updated_tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, &ctx, tags, fetch_mode)?;
                 update::post::set_tags(conn, post_id, &updated_tag_ids)?;
                 new_snapshot_data.tags = tags;
             }
             if let Some(notes) = body.notes {
-                api::verify_privilege(client, config.privileges().post_edit_note)?;
+                ctx.verify_privilege(Action::PostEditNote)?;
 
                 update::post::set_notes(conn, post_id, &notes)?;
                 new_snapshot_data.notes = notes;
             }
             if let Some(content_properties) = new_content {
-                api::verify_privilege(client, config.privileges().post_edit_content)?;
+                ctx.verify_privilege(Action::PostEditContent)?;
 
                 new_snapshot_data.checksum = hex::encode(&content_properties.checksum);
 
@@ -1079,7 +1044,7 @@ async fn update_impl(
                 new_post_signature.insert_into(post_signature::table).execute(conn)?;
 
                 // Replace content
-                let temp_path = content_properties.token.path(&config);
+                let temp_path = content_properties.token.path(&ctx.config);
                 filesystem::delete_content(&post_hash, old_mime_type)?;
                 filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
@@ -1087,20 +1052,19 @@ async fn update_impl(
                 update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
             }
             if let Some(thumbnail) = custom_thumbnail {
-                api::verify_privilege(client, config.privileges().post_edit_thumbnail)?;
+                ctx.verify_privilege(Action::PostEditThumbnail)?;
                 update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
             }
 
             new_post.last_edit_time = DateTime::now();
             let _: Post = error::map_unique_violation(new_post.save_changes(conn), ResourceProperty::PostContent)?;
-            snapshot::post::modification_snapshot(conn, client, post_id, old_snapshot_data, new_snapshot_data)?;
+            snapshot::post::modification_snapshot(conn, ctx.client, post_id, old_snapshot_data, new_snapshot_data)?;
             Ok(())
         }
     })
     .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
 }
@@ -1176,24 +1140,22 @@ struct PostUpdateBody {
     ),
 )]
 async fn update(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    ctx: Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<PostUpdateBody>,
 ) -> ApiResult<Json<PostInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => update_impl(state, client, post_id, params, payload).await,
+        JsonOrMultipart::Json(payload) => update_impl(ctx, post_id, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body =
-                upload::extract(&state.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut post_update: PostUpdateBody = serde_json::from_slice(&metadata)?;
             let [content_token, thumbnail_token] = decoded_body.files;
 
             post_update.content_token = content_token;
             post_update.thumbnail_token = thumbnail_token;
-            update_impl(state, client, post_id, params, post_update).await
+            update_impl(ctx, post_id, params, post_update).await
         }
     }
 }
@@ -1217,8 +1179,7 @@ async fn update(
     ),
 )]
 async fn delete(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
@@ -1226,12 +1187,12 @@ async fn delete(
     // succession, so we lock an aysnchronous mutex when deleting if the post has any relations.
     static ANTI_DEADLOCK_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
 
-    api::verify_privilege(client, state.config.privileges().post_delete)?;
+    ctx.verify_privilege(Action::PostDelete)?;
 
     let relation_count: i64 = post_statistics::table
         .find(post_id)
         .select(post_statistics::relation_count)
-        .first(state.get_connection().await?.as_mut())
+        .first(connection_pool.get().await?.as_mut())
         .optional()?
         .ok_or(ApiError::NotFound(ResourceType::Post))?;
 
@@ -1240,8 +1201,7 @@ async fn delete(
         _lock = ANTI_DEADLOCK_MUTEX.lock().await;
     }
 
-    let mime_type = state
-        .connection_pool
+    let mime_type = connection_pool
         .transaction(move |conn| {
             let post: Post = post::table
                 .find(post_id)
@@ -1252,14 +1212,14 @@ async fn delete(
 
             let mime_type = post.mime_type;
             let post_data = SnapshotData::retrieve(conn, post)?;
-            snapshot::post::deletion_snapshot(conn, client, post_id, post_data)?;
+            snapshot::post::deletion_snapshot(conn, ctx.client, post_id, post_data)?;
 
             diesel::delete(post::table.find(post_id)).execute(conn)?;
             Ok::<_, ApiError>(mime_type)
         })
         .await?;
-    if state.config.delete_source_files {
-        filesystem::delete_post(&PostHash::new(&state.config, post_id), mime_type)?;
+    if ctx.config.delete_source_files {
+        filesystem::delete_post(&PostHash::new(&ctx.config, post_id), mime_type)?;
     }
     Ok(Json(()))
 }
@@ -1280,35 +1240,31 @@ async fn delete(
     ),
 )]
 async fn unfavorite(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostInfo>> {
-    api::verify_privilege(client, state.config.privileges().post_favorite)?;
+    ctx.verify_privilege(Action::PostFavorite)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let user_id = client.id.ok_or(ApiError::NotLoggedIn)?;
-
+    let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
     let _: i32 = diesel::delete(post_favorite::table.find((post_id, user_id)))
         .returning(sql::<Integer>("0"))
-        .get_result(state.get_connection().await?.as_mut())
+        .get_result(connection_pool.get().await?.as_mut())
         .optional()?
         .ok_or(ApiError::NotFound(ResourceType::Post))?;
-    state
-        .connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &state.config, client, post_id, &fields))
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
 }
 
-fn verify_visibility(conn: &mut PgConnection, config: &Config, client: Client, post_id: i64) -> ApiResult<()> {
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, post_id: i64) -> ApiResult<()> {
     let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
     if !post_exists {
         return Err(ApiError::NotFound(ResourceType::Post));
     }
 
-    if let Some(hidden_posts) = preferences::hidden_posts(config, client, post_statistics::post_id) {
+    if let Some(hidden_posts) = preferences::hidden_posts(ctx, post_statistics::post_id) {
         let post_lookup = hidden_posts.filter(post_statistics::post_id.eq(post_id));
         let post_hidden: bool = diesel::select(exists(post_lookup)).first(conn)?;
         if post_hidden {
@@ -1361,6 +1317,8 @@ mod test {
             let path = format!("post/list_{token}_sorted");
             verify_response(&query, &path).await?;
         }
+        verify_response(&format!("{QUERY}=-pool:Fantasy {PARAMS}"), "post/list_pool_name_filtered").await?;
+        verify_response(&format!("{QUERY}=pool:*a*t* {PARAMS}"), "post/list_pool_name_wildcards_filtered").await?;
         verify_response(&format!("{QUERY}=special:liked {PARAMS}"), "post/list_liked_filtered").await?;
         verify_response(&format!("{QUERY}=special:disliked {PARAMS}"), "post/list_disliked_filtered").await?;
         verify_response(&format!("{QUERY}=special:tumbleweed {PARAMS}"), "post/list_tumbleweed_filtered").await

@@ -1,18 +1,16 @@
 use crate::api::doc::USER_TOKEN_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::extract::{Json, Path, Query};
-use crate::api::{ResourceParams, UnpagedResponse};
+use crate::api::{self, ResourceParams, UnpagedResponse};
 use crate::app::AppState;
-use crate::auth::Client;
+use crate::config::Action;
+use crate::extract::{Ctx, Json, Path, Query};
 use crate::model::enums::{AvatarStyle, ResourceType};
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
-use crate::resource::user_token::UserTokenInfo;
+use crate::resource::user_token::{Field, UserTokenInfo};
 use crate::schema::{user, user_token};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::{api, resource};
-use axum::extract::{Extension, State};
 use diesel::dsl::sql;
 use diesel::sql_types::Integer;
 use diesel::{
@@ -47,17 +45,14 @@ pub fn routes() -> OpenApiRouter<AppState> {
     ),
 )]
 async fn list(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(username): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<UnpagedResponse<UserTokenInfo>>> {
-    let list_any = state.config.privileges().user_token_list_any;
-    let list_self = state.config.privileges().user_token_list_self;
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let list_any = ctx.config.privileges()[Action::UserTokenListAny];
+    let list_self = ctx.config.privileges()[Action::UserTokenListSelf];
 
-    let (avatar_style, user_tokens) = state
-        .connection_pool
+    let (avatar_style, user_tokens) = connection_pool
         .transaction({
             let username = username.clone();
             move |conn| {
@@ -68,9 +63,9 @@ async fn list(
                     .optional()?
                     .ok_or(ApiError::NotFound(ResourceType::User))?;
 
-                let is_self = client.id == Some(user_id);
+                let is_self = ctx.client.id == Some(user_id);
                 let required_rank = if is_self { list_self } else { list_any };
-                api::verify_privilege(client, required_rank)?;
+                api::verify_privilege(ctx.client, required_rank)?;
 
                 user_token::table
                     .filter(user_token::user_id.eq(user_id))
@@ -85,7 +80,7 @@ async fn list(
     let results = user_tokens
         .into_iter()
         .map(|user_token| {
-            UserTokenInfo::new(MicroUser::new(&state.config, username.clone(), avatar_style), user_token, &fields)
+            UserTokenInfo::new(MicroUser::new(&ctx.config, username.clone(), avatar_style), user_token, params.fields)
         })
         .collect();
     Ok(Json(UnpagedResponse { results }))
@@ -122,18 +117,15 @@ struct UserTokenCreateBody {
     ),
 )]
 async fn create(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(username): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<UserTokenCreateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
-    let create_any = state.config.privileges().user_token_create_any;
-    let create_self = state.config.privileges().user_token_create_self;
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let create_any = ctx.config.privileges()[Action::UserTokenCreateAny];
+    let create_self = ctx.config.privileges()[Action::UserTokenCreateSelf];
 
-    let (user_token, avatar_style) = state
-        .connection_pool
+    let (user_token, avatar_style) = connection_pool
         .transaction({
             let username = username.clone();
             move |conn| {
@@ -144,9 +136,9 @@ async fn create(
                     .optional()?
                     .ok_or(ApiError::NotFound(ResourceType::User))?;
 
-                let is_self = client.id == Some(user_id);
+                let is_self = ctx.client.id == Some(user_id);
                 let required_rank = if is_self { create_self } else { create_any };
-                api::verify_privilege(client, required_rank)?;
+                api::verify_privilege(ctx.client, required_rank)?;
 
                 // Delete any expired or disabled tokens owned by user
                 let current_time = DateTime::now();
@@ -172,7 +164,11 @@ async fn create(
             }
         })
         .await?;
-    Ok(Json(UserTokenInfo::new(MicroUser::new(&state.config, username, avatar_style), user_token, &fields)))
+    Ok(Json(UserTokenInfo::new(
+        MicroUser::new(&ctx.config, username, avatar_style),
+        user_token,
+        params.fields,
+    )))
 }
 
 /// Request body for updating a user token.
@@ -212,18 +208,15 @@ struct UserTokenUpdateBody {
     ),
 )]
 async fn update(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path((username, token)): Path<(SmallString, Uuid)>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<UserTokenUpdateBody>,
 ) -> ApiResult<Json<UserTokenInfo>> {
-    let edit_any = state.config.privileges().user_token_edit_any;
-    let edit_self = state.config.privileges().user_token_edit_self;
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    let edit_any = ctx.config.privileges()[Action::UserTokenEditAny];
+    let edit_self = ctx.config.privileges()[Action::UserTokenEditSelf];
 
-    let (updated_user_token, avatar_style) = state
-        .connection_pool
+    let (updated_user_token, avatar_style) = connection_pool
         .transaction({
             let username = username.clone();
             move |conn| {
@@ -234,9 +227,9 @@ async fn update(
                     .optional()?
                     .ok_or(ApiError::NotFound(ResourceType::User))?;
 
-                let is_self = client.id == Some(user_id);
+                let is_self = ctx.client.id == Some(user_id);
                 let required_rank = if is_self { edit_self } else { edit_any };
-                api::verify_privilege(client, required_rank)?;
+                api::verify_privilege(ctx.client, required_rank)?;
 
                 let mut user_token: UserToken = user_token::table
                     .find(token)
@@ -263,9 +256,9 @@ async fn update(
         })
         .await?;
     Ok(Json(UserTokenInfo::new(
-        MicroUser::new(&state.config, username, avatar_style),
+        MicroUser::new(&ctx.config, username, avatar_style),
         updated_user_token,
-        &fields,
+        params.fields,
     )))
 }
 
@@ -286,13 +279,8 @@ async fn update(
         (status = 404, description = "Token does not exist"),
     ),
 )]
-async fn delete(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Path((username, token)): Path<(String, Uuid)>,
-) -> ApiResult<Json<()>> {
-    state
-        .connection_pool
+async fn delete(Ctx(ctx, connection_pool): Ctx, Path((username, token)): Path<(String, Uuid)>) -> ApiResult<Json<()>> {
+    connection_pool
         .transaction(move |conn| {
             let user_token_owner: i64 = user::table
                 .select(user::id)
@@ -301,12 +289,12 @@ async fn delete(
                 .optional()?
                 .ok_or(ApiError::NotFound(ResourceType::User))?;
 
-            let required_rank = if client.id == Some(user_token_owner) {
-                state.config.privileges().user_token_delete_self
+            let action = if ctx.client.id == Some(user_token_owner) {
+                Action::UserTokenDeleteSelf
             } else {
-                state.config.privileges().user_token_delete_any
+                Action::UserTokenDeleteAny
             };
-            api::verify_privilege(client, required_rank)?;
+            ctx.verify_privilege(action)?;
 
             let _: i32 = diesel::delete(
                 user_token::table

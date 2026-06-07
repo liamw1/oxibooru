@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::model::enums::{AvatarStyle, ResourceOperation, ResourceType};
 use crate::model::snapshot::Snapshot;
 use crate::resource;
-use crate::resource::BoolFill;
+use crate::resource::field::Mask;
 use crate::resource::user::MicroUser;
 use crate::schema::{snapshot, user};
 use crate::string::SmallString;
@@ -12,10 +12,10 @@ use serde::Serialize;
 use serde_json::Value;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
-use strum::{EnumString, EnumTable};
+use strum::EnumString;
 use utoipa::ToSchema;
 
-#[derive(Clone, Copy, EnumString, EnumTable)]
+#[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     User,
@@ -26,9 +26,9 @@ pub enum Field {
     Time,
 }
 
-impl BoolFill for FieldTable<bool> {
-    fn filled(val: bool) -> Self {
-        Self::filled(val)
+impl From<Field> for u64 {
+    fn from(value: Field) -> Self {
+        value as u64
     }
 }
 
@@ -253,7 +253,7 @@ impl SnapshotInfo {
         conn: &mut PgConnection,
         config: &Config,
         snapshots: Vec<Snapshot>,
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
         let batch_size = snapshots.len();
         let mut users = resource::retrieve(fields[Field::User], || get_users(conn, config, &snapshots))?;
@@ -279,7 +279,7 @@ impl SnapshotInfo {
         conn: &mut PgConnection,
         config: &Config,
         snapshot_ids: &[i64],
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_snapshots = snapshot::table.filter(snapshot::id.eq_any(snapshot_ids)).load(conn)?;
         let snapshots = resource::order_as(unordered_snapshots, snapshot_ids);

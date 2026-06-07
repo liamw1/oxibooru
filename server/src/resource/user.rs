@@ -4,7 +4,8 @@ use crate::get_user_stats;
 use crate::model::enums::{AvatarStyle, Score, UserRank};
 use crate::model::post::PostScore;
 use crate::model::user::User;
-use crate::resource::{self, BoolFill};
+use crate::resource;
+use crate::resource::field::Mask;
 use crate::schema::{post_score, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
@@ -13,7 +14,7 @@ use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, Quer
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
-use strum::{EnumString, EnumTable};
+use strum::EnumString;
 use utoipa::ToSchema;
 
 /// A user resource stripped down to `name` and `avatarUrl` fields.
@@ -44,7 +45,7 @@ pub enum Visibility {
     PublicOnly,
 }
 
-#[derive(Clone, Copy, EnumString, EnumTable)]
+#[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,
@@ -62,9 +63,9 @@ pub enum Field {
     FavoritePostCount,
 }
 
-impl BoolFill for FieldTable<bool> {
-    fn filled(val: bool) -> Self {
-        Self::filled(val)
+impl From<Field> for u64 {
+    fn from(value: Field) -> Self {
+        value as u64
     }
 }
 
@@ -111,7 +112,7 @@ impl UserInfo {
         conn: &mut PgConnection,
         config: &Config,
         user: User,
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
         visibility: Visibility,
     ) -> QueryResult<Self> {
         Self::new_batch(conn, config, vec![user], fields, visibility).map(resource::single)
@@ -121,7 +122,7 @@ impl UserInfo {
         conn: &mut PgConnection,
         config: &Config,
         user_id: i64,
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
         visibility: Visibility,
     ) -> QueryResult<Self> {
         Self::new_batch_from_ids(conn, config, &[user_id], fields, visibility).map(resource::single)
@@ -131,7 +132,7 @@ impl UserInfo {
         conn: &mut PgConnection,
         config: &Config,
         users: Vec<User>,
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
         visibility: Visibility,
     ) -> QueryResult<Vec<Self>> {
         #[allow(clippy::wildcard_imports)]
@@ -187,7 +188,7 @@ impl UserInfo {
         conn: &mut PgConnection,
         config: &Config,
         user_ids: &[i64],
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
         visibility: Visibility,
     ) -> QueryResult<Vec<Self>> {
         let unordered_users = user::table.filter(user::id.eq_any(user_ids)).load(conn)?;

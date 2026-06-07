@@ -1,4 +1,5 @@
 use crate::api::error::{ApiError, ApiResult};
+use crate::app::Context;
 use crate::auth::Client;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use diesel::sql_types::{Float, SingleValue};
@@ -34,7 +35,7 @@ pub trait Builder<'a>: Sized {
     /// If the search has a random sort, then this will also mutate the user's search seed.
     fn list(&mut self, conn: &mut PgConnection) -> ApiResult<(i64, Vec<i64>)> {
         if self.criteria().random_sort {
-            change_user_seed(conn, self.criteria().client)?;
+            change_user_seed(conn, self.criteria().ctx.client)?;
         }
 
         let total = self.count(conn)?;
@@ -72,7 +73,7 @@ pub enum TimeParsingError {
 /// Stores filters, sorts, offset, and limit of a search query.
 /// Filters will be parsed later.
 pub struct SearchCriteria<'a, T> {
-    client: Client,
+    ctx: &'a Context,
     filters: Vec<UnparsedFilter<'a, T>>,
     sorts: Vec<ParsedSort<T>>,
     random_sort: bool,
@@ -97,10 +98,14 @@ where
     /// Constructs a new [`SearchCriteria`] by parsing `search_criteria` [`str`] into a set terms
     /// (filters or sorts) separated by unescaped whitespace. If a term does not contain an unescaped `:`,
     /// then it will be interpreted as an `anonymous_token`.
-    fn new(client: Client, search_criteria: &'a str, anonymous_token: T) -> Result<Self, <T as FromStr>::Err> {
+    fn new(ctx: &'a Context, search_criteria: &'a str, anonymous_token: T) -> ApiResult<Self> {
         let mut filters: Vec<UnparsedFilter<T>> = Vec::new();
         let mut sorts: Vec<ParsedSort<T>> = Vec::new();
         let mut random_sort = false;
+
+        let parse_token = |token_str: &str| {
+            T::from_str(token_str).map_err(|_| ApiError::FromStr(format!("invalid token `{token_str}`").into()))
+        };
 
         // Terms are separated by whitespace
         for term in parse::split_unescaped_whitespace(search_criteria) {
@@ -118,13 +123,13 @@ where
                         _ => (value, Order::default()),
                     };
 
-                    let kind = T::from_str(token)?;
+                    let kind = parse_token(token)?;
                     let order = if negated { !direction } else { direction };
                     sorts.push(ParsedSort { kind, order });
                 }
                 Some((key, condition)) => {
                     filters.push(UnparsedFilter {
-                        kind: T::from_str(key)?,
+                        kind: parse_token(key)?,
                         condition,
                         negated,
                     });
@@ -137,7 +142,7 @@ where
             }
         }
         Ok(Self {
-            client,
+            ctx,
             filters,
             sorts,
             random_sort,

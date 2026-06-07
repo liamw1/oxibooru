@@ -23,24 +23,23 @@ pub fn create(config: &Config, image: &DynamicImage, thumbnail_type: ThumbnailTy
         ThumbnailType::Avatar => config.thumbnails.avatar_dimensions(),
     };
 
+    // Only the smaller dimension needs to be constrained,
+    // DynamicImage::resize() will handle the other dimension based on the aspect ratio.
+    // Note that thumbnail_width and thumbnail_height are maximum constraining values for resize(),
+    // not the true size of the resulting image.
     let (image_width, image_height) = image.dimensions();
     let (thumbnail_width, thumbnail_height) = if image_width > image_height {
-        // Thumbnail width is config_height * aspect_ratio
-        let width = image_width * config_height / image_height;
-        let height = config_height;
-        (width, height)
+        (u32::MAX, config_height)
     } else {
-        // Thumbnail height is config_width / aspect_ratio
-        let width = config_width;
-        let height = image_height * config_width / image_width;
-        (width, height)
+        (config_width, u32::MAX)
     };
     let resized_image = image.resize(thumbnail_width, thumbnail_height, FilterType::Gaussian);
 
     // JPEG doesn't support transparency, so composite any transparent pixels
     // onto a solid background to avoid corruption in the final thumbnail.
     if resized_image.color().has_alpha() {
-        let mut canvas = RgbaImage::from_pixel(thumbnail_width, thumbnail_height, Rgba([255, 255, 255, 255]));
+        let mut canvas =
+            RgbaImage::from_pixel(resized_image.width(), resized_image.height(), Rgba([255, 255, 255, 255]));
         for (canvas_pixel, image_pixel) in canvas.pixels_mut().zip(resized_image.to_rgba8().pixels()) {
             canvas_pixel.blend(image_pixel);
         }

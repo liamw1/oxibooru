@@ -128,12 +128,12 @@ class PoolInputControl extends events.EventTarget {
         }
         poolLinkNode.setAttribute(
             "href",
-            uri.formatClientLink("pool", pool.names[0])
+            uri.formatClientLink("pool", pool.id)
         );
 
         const poolIconNode = document.createElement("i");
         poolIconNode.classList.add("fa");
-        poolIconNode.classList.add("fa-pool");
+        poolIconNode.classList.add("fa-list-ul");
         poolLinkNode.appendChild(poolIconNode);
 
         const searchLinkNode = document.createElement("a");
@@ -142,7 +142,7 @@ class PoolInputControl extends events.EventTarget {
         }
         searchLinkNode.setAttribute(
             "href",
-            uri.formatClientLink("posts", { query: "pool:" + pool.id })
+            uri.formatClientLink("posts", { query: "pool:" + pool.searchableName})
         );
         searchLinkNode.textContent = pool.names[0] + " ";
 

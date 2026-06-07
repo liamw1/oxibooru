@@ -382,12 +382,12 @@ mod test {
         // Similarly, the conversion to grayscale can also introduce error. Therefore, we only use
         // images stored with an 8-bit grayscale format to make the grayscale conversion lossless.
         let (png, _) = image_properties("png.png")?;
-        let (tiff, _) = image_properties("tiff.tiff")?;
+        let (bmp, _) = image_properties("bmp.bmp")?;
         let (image, _) = image_properties("starry_night.png")?;
         let (image_similar, _) = image_properties("starry_night_similar.png")?;
 
         // Identical images of different formats
-        assert_eq!(distance(&SignatureCache::new(&png), &tiff), 0.0);
+        assert_eq!(distance(&SignatureCache::new(&png), &bmp), 0.0);
         // Similar images of same format
         assert!((distance(&SignatureCache::new(&image), &image_similar) - 0.21172875793283555).abs() < 1e-8);
         // Different images

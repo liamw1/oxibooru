@@ -1,5 +1,5 @@
 use crate::api::error::{self, ApiResult};
-use crate::auth::Client;
+use crate::app::Context;
 use crate::config::Config;
 use crate::content::hash::PostHash;
 use crate::content::thumbnail::ThumbnailCategory;
@@ -53,13 +53,12 @@ pub fn thumbnail(
 /// Replaces the current set of relations with `relations` for post associated with `post_id`.
 pub fn set_relations(
     conn: &mut PgConnection,
-    config: &Config,
-    client: Client,
+    ctx: &Context,
     post_id: i64,
     new_related_posts: &mut Vec<i64>,
 ) -> ApiResult<()> {
     // Add relations client doesn't know about
-    if let Some(hidden_posts) = preferences::hidden_posts(config, client, post_relation::child_id) {
+    if let Some(hidden_posts) = preferences::hidden_posts(ctx, post_relation::child_id) {
         let hidden_relations: Vec<i64> = post_relation::table
             .select(post_relation::child_id)
             .filter(post_relation::parent_id.eq(post_id))

@@ -1,9 +1,11 @@
+use crate::app::Context;
 use crate::auth::Client;
 use crate::config::Config;
 use crate::model::comment::{Comment, CommentScore};
 use crate::model::enums::{AvatarStyle, Rating};
+use crate::resource;
+use crate::resource::field::Mask;
 use crate::resource::user::MicroUser;
-use crate::resource::{self, BoolFill};
 use crate::schema::{comment, comment_score, comment_statistics, user};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
@@ -11,10 +13,10 @@ use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, Quer
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
-use strum::{EnumString, EnumTable};
+use strum::EnumString;
 use utoipa::ToSchema;
 
-#[derive(Clone, Copy, EnumString, EnumTable)]
+#[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,
@@ -28,9 +30,9 @@ pub enum Field {
     OwnScore,
 }
 
-impl BoolFill for FieldTable<bool> {
-    fn filled(val: bool) -> Self {
-        Self::filled(val)
+impl From<Field> for u64 {
+    fn from(value: Field) -> Self {
+        value as u64
     }
 }
 
@@ -62,37 +64,29 @@ pub struct CommentInfo {
 }
 
 impl CommentInfo {
-    pub fn new(
-        conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
-        comment: Comment,
-        fields: &FieldTable<bool>,
-    ) -> QueryResult<Self> {
-        Self::new_batch(conn, config, client, vec![comment], fields).map(resource::single)
+    pub fn new(conn: &mut PgConnection, ctx: &Context, comment: Comment, fields: Mask<Field>) -> QueryResult<Self> {
+        Self::new_batch(conn, ctx, vec![comment], fields).map(resource::single)
     }
 
     pub fn new_from_id(
         conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
+        ctx: &Context,
         comment_id: i64,
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
     ) -> QueryResult<Self> {
-        Self::new_batch_from_ids(conn, config, client, &[comment_id], fields).map(resource::single)
+        Self::new_batch_from_ids(conn, ctx, &[comment_id], fields).map(resource::single)
     }
 
     pub fn new_batch(
         conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
+        ctx: &Context,
         comments: Vec<Comment>,
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
-        let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, config, &comments))?;
+        let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, &ctx.config, &comments))?;
         let mut scores = resource::retrieve(fields[Field::Score], || get_scores(conn, &comments))?;
         let mut client_scores =
-            resource::retrieve(fields[Field::OwnScore], || get_client_scores(conn, client, &comments))?;
+            resource::retrieve(fields[Field::OwnScore], || get_client_scores(conn, ctx.client, &comments))?;
 
         let batch_size = comments.len();
         resource::check_batch_results(batch_size, owners.len());
@@ -120,14 +114,13 @@ impl CommentInfo {
 
     pub fn new_batch_from_ids(
         conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
+        ctx: &Context,
         comment_ids: &[i64],
-        fields: &FieldTable<bool>,
+        fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
         let unordered_comments = comment::table.filter(comment::id.eq_any(comment_ids)).load(conn)?;
         let comments = resource::order_as(unordered_comments, comment_ids);
-        Self::new_batch(conn, config, client, comments, fields)
+        Self::new_batch(conn, ctx, comments, fields)
     }
 }
 

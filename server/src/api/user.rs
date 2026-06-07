@@ -1,30 +1,28 @@
 use crate::api::doc::USER_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::extract::{Json, JsonOrMultipart, Path, Query};
 use crate::api::{DeleteBody, PageParams, PagedResponse, ResourceParams, error};
 use crate::app::AppState;
-use crate::auth::Client;
 use crate::auth::password;
-use crate::config::RegexType;
+use crate::config::{Action, RegexType};
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
 use crate::content::{Content, upload};
+use crate::extract::{Ctx, Json, JsonOrMultipart, Path, Query};
 use crate::model::enums::{AvatarStyle, ResourceProperty, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
-use crate::resource::user::{UserInfo, Visibility};
+use crate::resource::user::{Field, UserInfo, Visibility};
 use crate::schema::user;
 use crate::search::Builder;
 use crate::search::user::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, filesystem, resource, update};
+use crate::{api, filesystem, update};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
-use axum::extract::{DefaultBodyLimit, Extension, State};
+use axum::extract::DefaultBodyLimit;
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::Deserialize;
-use std::sync::Arc;
 use url::Url;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
@@ -90,21 +88,17 @@ struct Multipart<T> {
     ),
 )]
 async fn list(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(resource): Query<ResourceParams>,
+    Ctx(ctx, connection_pool): Ctx,
+    Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<UserInfo>>> {
-    api::verify_privilege(client, state.config.privileges().user_list)?;
+    ctx.verify_privilege(Action::UserList)?;
 
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_USERS_PER_PAGE);
-    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
-            let mut query_builder = QueryBuilder::new(client, resource.criteria())?;
+            let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
             query_builder.set_offset_and_limit(offset, limit);
 
             let (total, selected_users) = query_builder.list(conn)?;
@@ -115,9 +109,9 @@ async fn list(
                 total,
                 results: UserInfo::new_batch_from_ids(
                     conn,
-                    &state.config,
+                    &ctx.config,
                     &selected_users,
-                    &fields,
+                    resource.fields,
                     Visibility::PublicOnly,
                 )?,
             }))
@@ -141,14 +135,11 @@ async fn list(
     ),
 )]
 async fn get(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(username): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<UserInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             let user_id = user::table
                 .select(user::id)
@@ -157,9 +148,9 @@ async fn get(
                 .optional()?
                 .ok_or(ApiError::NotFound(ResourceType::User))?;
 
-            let viewing_self = client.id == Some(user_id);
+            let viewing_self = ctx.client.id == Some(user_id);
             if !viewing_self {
-                api::verify_privilege(client, state.config.privileges().user_view)?;
+                ctx.verify_privilege(Action::UserView)?;
             }
 
             let visibility = if viewing_self {
@@ -167,7 +158,7 @@ async fn get(
             } else {
                 Visibility::PublicOnly
             };
-            UserInfo::new_from_id(conn, &state.config, user_id, &fields, visibility)
+            UserInfo::new_from_id(conn, &ctx.config, user_id, params.fields, visibility)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -175,48 +166,46 @@ async fn get(
 }
 
 async fn create_impl(
-    state: AppState,
-    client: Client,
-    params: ResourceParams,
+    Ctx(ctx, connection_pool): Ctx,
+    params: ResourceParams<Field>,
     body: UserCreateBody,
 ) -> ApiResult<Json<UserInfo>> {
-    let creation_rank = body.rank.unwrap_or(state.config.default_rank());
+    let creation_rank = body.rank.unwrap_or(ctx.config.default_rank());
     if creation_rank == UserRank::Anonymous {
         return Err(ApiError::InvalidUserRank);
     }
 
-    let creating_self = client.id.is_none();
-    let required_rank = if creating_self {
-        state.config.privileges().user_create_self
+    let creating_self = ctx.client.id.is_none();
+    let action = if creating_self {
+        Action::UserCreateSelf
     } else {
-        state.config.privileges().user_create_any
+        Action::UserCreateAny
     };
-    api::verify_privilege(client, required_rank)?;
-    if creation_rank > state.config.default_rank() {
-        api::verify_privilege(client, creation_rank)?;
+
+    ctx.verify_privilege(action)?;
+    if creation_rank > ctx.config.default_rank() {
+        api::verify_privilege(ctx.client, creation_rank)?;
     }
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    api::verify_matches_regex(&state.config, &body.name, RegexType::Username)?;
-    api::verify_matches_regex(&state.config, &body.password, RegexType::Password)?;
+    api::verify_matches_regex(&ctx.config, &body.name, RegexType::Username)?;
+    api::verify_matches_regex(&ctx.config, &body.password, RegexType::Password)?;
     api::verify_valid_email(body.email.as_deref())?;
 
     let salt = SaltString::generate(&mut OsRng);
-    let hash = password::hash_password(&state.config, &body.password, &salt)?;
+    let hash = password::hash_password(&ctx.config, &body.password, &salt)?;
 
     let avatar_style = body.avatar_style.unwrap_or_default();
     let custom_avatar = match Content::new(body.avatar_token, body.avatar_url) {
-        Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Avatar).await?),
+        Some(content) => Some(content.thumbnail(&ctx.config, ThumbnailType::Avatar).await?),
         None if avatar_style == AvatarStyle::Manual => {
             return Err(ApiError::MissingContent(ResourceType::User));
         }
         None => None,
     };
 
-    let user = state
-        .connection_pool
+    let user = connection_pool
         .transaction({
-            let config = Arc::clone(&state.config);
+            let ctx = ctx.clone();
             move |conn| {
                 let name_exists: bool =
                     diesel::select(exists(user::table.select(user::id).filter(user::name.eq(&body.name))))
@@ -241,23 +230,22 @@ async fn create_impl(
                 .ok_or(ApiError::AlreadyExists(ResourceProperty::UserEmail))?;
 
                 if let Some(avatar) = custom_avatar {
-                    let required_rank = if creating_self {
-                        config.privileges().user_edit_self_avatar
+                    let action = if creating_self {
+                        Action::UserEditSelfAvatar
                     } else {
-                        config.privileges().user_edit_any_avatar
+                        Action::UserEditAnyAvatar
                     };
-                    api::verify_privilege(client, required_rank)?;
+                    ctx.verify_privilege(action)?;
 
-                    update::user::avatar(conn, &config, user.id, &body.name, &avatar)?;
+                    update::user::avatar(conn, &ctx.config, user.id, &body.name, &avatar)?;
                 }
 
                 Ok::<_, ApiError>(user)
             }
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| UserInfo::new(conn, &state.config, user, &fields, Visibility::Full))
+    connection_pool
+        .transaction(move |conn| UserInfo::new(conn, &ctx.config, user, params.fields, Visibility::Full))
         .await
         .map(Json)
 }
@@ -317,20 +305,19 @@ struct UserCreateBody {
     ),
 )]
 async fn create(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(params): Query<ResourceParams>,
+    ctx: Ctx,
+    Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<UserCreateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => create_impl(state, client, params, payload).await,
+        JsonOrMultipart::Json(payload) => create_impl(ctx, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(&state.config, payload, [PartName::Avatar]).await?;
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut new_user: UserCreateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar_token)] = decoded_body.files {
                 new_user.avatar_token = Some(avatar_token);
-                create_impl(state, client, params, new_user).await
+                create_impl(ctx, params, new_user).await
             } else {
                 Err(ApiError::MissingFormData)
             }
@@ -339,26 +326,22 @@ async fn create(
 }
 
 async fn update_impl(
-    state: AppState,
-    client: Client,
+    Ctx(ctx, connection_pool): Ctx,
     username: SmallString,
-    params: ResourceParams,
+    params: ResourceParams<Field>,
     body: UserUpdateBody,
 ) -> ApiResult<Json<UserInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
     let custom_avatar = match Content::new(body.avatar_token, body.avatar_url) {
-        Some(content) => Some(content.thumbnail(&state.config, ThumbnailType::Avatar).await?),
+        Some(content) => Some(content.thumbnail(&ctx.config, ThumbnailType::Avatar).await?),
         None if body.avatar_style == Some(AvatarStyle::Manual) => {
             return Err(ApiError::MissingContent(ResourceType::User));
         }
         None => None,
     };
 
-    let (user_id, visibility) = state
-        .connection_pool
+    let (user_id, visibility) = connection_pool
         .transaction({
-            let config = Arc::clone(&state.config);
+            let ctx = ctx.clone();
             move |conn| {
                 let (user_id, user_version): (i64, DateTime) = user::table
                     .select((user::id, user::last_edit_time))
@@ -368,7 +351,7 @@ async fn update_impl(
                     .ok_or(ApiError::NotFound(ResourceType::User))?;
                 api::verify_version(user_version, body.version)?;
 
-                let editing_self = client.id == Some(user_id);
+                let editing_self = ctx.client.id == Some(user_id);
                 let visibility = if editing_self {
                     Visibility::Full
                 } else {
@@ -376,27 +359,27 @@ async fn update_impl(
                 };
 
                 if let Some(password) = body.password {
-                    let required_rank = if editing_self {
-                        config.privileges().user_edit_self_pass
+                    let action = if editing_self {
+                        Action::UserEditSelfPass
                     } else {
-                        config.privileges().user_edit_any_pass
+                        Action::UserEditAnyPass
                     };
-                    api::verify_privilege(client, required_rank)?;
-                    api::verify_matches_regex(&config, &password, RegexType::Password)?;
+                    ctx.verify_privilege(action)?;
+                    api::verify_matches_regex(&ctx.config, &password, RegexType::Password)?;
 
                     let salt = SaltString::generate(&mut OsRng);
-                    let hash = password::hash_password(&config, &password, &salt)?;
+                    let hash = password::hash_password(&ctx.config, &password, &salt)?;
                     diesel::update(user::table.find(user_id))
                         .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
                         .execute(conn)?;
                 }
                 if let Some(email) = body.email {
-                    let required_rank = if editing_self {
-                        config.privileges().user_edit_self_email
+                    let action = if editing_self {
+                        Action::UserEditSelfEmail
                     } else {
-                        config.privileges().user_edit_any_email
+                        Action::UserEditAnyEmail
                     };
-                    api::verify_privilege(client, required_rank)?;
+                    ctx.verify_privilege(action)?;
                     api::verify_valid_email(email.as_deref())?;
 
                     let update_result = diesel::update(user::table.find(user_id))
@@ -409,14 +392,14 @@ async fn update_impl(
                         return Err(ApiError::InvalidUserRank);
                     }
 
-                    let required_rank = if editing_self {
-                        config.privileges().user_edit_self_rank
+                    let action = if editing_self {
+                        Action::UserEditSelfRank
                     } else {
-                        config.privileges().user_edit_any_rank
+                        Action::UserEditAnyRank
                     };
-                    api::verify_privilege(client, required_rank)?;
-                    if rank > config.default_rank() {
-                        api::verify_privilege(client, rank)?;
+                    ctx.verify_privilege(action)?;
+                    if rank > ctx.config.default_rank() {
+                        api::verify_privilege(ctx.client, rank)?;
                     }
 
                     diesel::update(user::table.find(user_id))
@@ -424,35 +407,35 @@ async fn update_impl(
                         .execute(conn)?;
                 }
                 if let Some(avatar_style) = body.avatar_style {
-                    let required_rank = if editing_self {
-                        config.privileges().user_edit_self_avatar
+                    let action = if editing_self {
+                        Action::UserEditSelfAvatar
                     } else {
-                        config.privileges().user_edit_any_avatar
+                        Action::UserEditAnyAvatar
                     };
-                    api::verify_privilege(client, required_rank)?;
+                    ctx.verify_privilege(action)?;
 
                     diesel::update(user::table.find(user_id))
                         .set(user::avatar_style.eq(avatar_style))
                         .execute(conn)?;
                 }
                 if let Some(avatar) = custom_avatar {
-                    let required_rank = if editing_self {
-                        config.privileges().user_edit_self_avatar
+                    let action = if editing_self {
+                        Action::UserEditSelfAvatar
                     } else {
-                        config.privileges().user_edit_any_avatar
+                        Action::UserEditAnyAvatar
                     };
-                    api::verify_privilege(client, required_rank)?;
+                    ctx.verify_privilege(action)?;
 
-                    update::user::avatar(conn, &config, user_id, &username, &avatar)?;
+                    update::user::avatar(conn, &ctx.config, user_id, &username, &avatar)?;
                 }
                 if let Some(new_name) = body.name.as_deref() {
-                    let required_rank = if editing_self {
-                        config.privileges().user_edit_self_name
+                    let action = if editing_self {
+                        Action::UserEditSelfName
                     } else {
-                        config.privileges().user_edit_any_name
+                        Action::UserEditAnyName
                     };
-                    api::verify_privilege(client, required_rank)?;
-                    api::verify_matches_regex(&config, new_name, RegexType::Username)?;
+                    ctx.verify_privilege(action)?;
+                    api::verify_matches_regex(&ctx.config, new_name, RegexType::Username)?;
 
                     // Update first to see if new name clashes with any existing names
                     let update_result = diesel::update(user::table.find(user_id))
@@ -460,9 +443,9 @@ async fn update_impl(
                         .execute(conn);
                     error::map_unique_violation(update_result, ResourceProperty::UserName)?;
 
-                    let old_custom_avatar_path = config.custom_avatar_path(&username);
+                    let old_custom_avatar_path = ctx.config.custom_avatar_path(&username);
                     if old_custom_avatar_path.try_exists()? {
-                        let new_custom_avatar_path = config.custom_avatar_path(new_name);
+                        let new_custom_avatar_path = ctx.config.custom_avatar_path(new_name);
                         filesystem::move_file(&old_custom_avatar_path, &new_custom_avatar_path)?;
                     }
                 }
@@ -472,9 +455,8 @@ async fn update_impl(
             }
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| UserInfo::new_from_id(conn, &state.config, user_id, &fields, visibility))
+    connection_pool
+        .transaction(move |conn| UserInfo::new_from_id(conn, &ctx.config, user_id, params.fields, visibility))
         .await
         .map(Json)
 }
@@ -540,21 +522,20 @@ struct UserUpdateBody {
     ),
 )]
 async fn update(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    ctx: Ctx,
     Path(username): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<UserUpdateBody>,
 ) -> ApiResult<Json<UserInfo>> {
     match body {
-        JsonOrMultipart::Json(payload) => update_impl(state, client, username, params, payload).await,
+        JsonOrMultipart::Json(payload) => update_impl(ctx, username, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(&state.config, payload, [PartName::Avatar]).await?;
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Avatar]).await?;
             let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
             let mut user_update: UserUpdateBody = serde_json::from_slice(&metadata)?;
             if let [Some(avatar_token)] = decoded_body.files {
                 user_update.avatar_token = Some(avatar_token);
-                update_impl(state, client, username, params, user_update).await
+                update_impl(ctx, username, params, user_update).await
             } else {
                 Err(ApiError::MissingFormData)
             }
@@ -579,13 +560,11 @@ async fn update(
     ),
 )]
 async fn delete(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(username): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             let (user_id, user_version): (i64, DateTime) = user::table
                 .select((user::id, user::last_edit_time))
@@ -595,13 +574,12 @@ async fn delete(
                 .ok_or(ApiError::NotFound(ResourceType::User))?;
             api::verify_version(user_version, *client_version)?;
 
-            let deleting_self = client.id == Some(user_id);
-            let required_rank = if deleting_self {
-                state.config.privileges().user_delete_self
+            let action = if ctx.client.id == Some(user_id) {
+                Action::UserDeleteSelf
             } else {
-                state.config.privileges().user_delete_any
+                Action::UserDeleteAny
             };
-            api::verify_privilege(client, required_rank)?;
+            ctx.verify_privilege(action)?;
 
             diesel::delete(user::table.find(user_id)).execute(conn)?;
             Ok::<_, ApiError>(Json(()))

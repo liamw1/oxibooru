@@ -9,12 +9,14 @@ use axum::response::{IntoResponse, Response};
 use diesel::QueryResult;
 use image::error::{ImageError, LimitError, LimitErrorKind};
 use serde::Serialize;
+use std::sync::Arc;
+use thiserror::Error;
 use utoipa::ToSchema;
 
 pub type ApiResult<T> = Result<T, ApiError>;
 
 /// Giant error enum of doom
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, Error)]
 #[error(transparent)]
 pub enum ApiError {
     #[error("{0} already exists")]
@@ -31,6 +33,7 @@ pub enum ApiError {
     EmptyVideo,
     #[error("'{0}' does not match on {1} regex")]
     ExpressionFailsRegex(SmallString, RegexType),
+    ExtensionRejection(#[from] axum::extract::rejection::ExtensionRejection),
     FailedAuthentication(#[from] AuthenticationError),
     FailedConnection(#[from] diesel::r2d2::PoolError),
     FailedEmailTransport(#[from] lettre::transport::smtp::Error),
@@ -95,10 +98,11 @@ pub enum ApiError {
 }
 
 impl ApiError {
-    fn status_code(&self) -> StatusCode {
+    pub fn status_code(&self) -> StatusCode {
         use serde_json::error::Category;
 
         match self {
+            Self::ExtensionRejection(err) => err.status(),
             Self::JsonRejection(err) => err.status(),
             Self::Multipart(err) => err.status(),
             Self::MultipartRejection(err) => err.status(),
@@ -164,6 +168,7 @@ impl ApiError {
             Self::EmptySwf => "Empty SWF",
             Self::EmptyVideo => "Empty Video",
             Self::ExpressionFailsRegex(..) => "Expression Fails Regex",
+            Self::ExtensionRejection(_) => "Extension Rejection",
             Self::FailedAuthentication(_) => "Failed Authentication",
             Self::FailedConnection(_) => "Failed Connection",
             Self::FailedEmailTransport(_) => "Failed Email Transport",
@@ -227,7 +232,9 @@ impl From<LimitErrorKind> for ApiError {
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        (self.status_code(), Json(self.response())).into_response()
+        let mut response = (self.status_code(), Json(self.response())).into_response();
+        response.extensions_mut().insert(Arc::new(self));
+        response
     }
 }
 

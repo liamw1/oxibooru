@@ -1,8 +1,7 @@
-use crate::auth::Client;
-use crate::config::Config;
+use crate::app::Context;
 use crate::model::enums::UserRank;
 use crate::model::tag_category::TagCategory;
-use crate::resource::BoolFill;
+use crate::resource::field::Mask;
 use crate::schema::{tag_category, tag_category_statistics};
 use crate::string::SmallString;
 use crate::time::DateTime;
@@ -10,10 +9,10 @@ use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
-use strum::{EnumString, EnumTable};
+use strum::EnumString;
 use utoipa::ToSchema;
 
-#[derive(Clone, Copy, EnumString, EnumTable)]
+#[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,
@@ -24,9 +23,9 @@ pub enum Field {
     Default,
 }
 
-impl BoolFill for FieldTable<bool> {
-    fn filled(val: bool) -> Self {
-        Self::filled(val)
+impl From<Field> for u64 {
+    fn from(value: Field) -> Self {
+        value as u64
     }
 }
 
@@ -52,7 +51,7 @@ pub struct TagCategoryInfo {
 }
 
 impl TagCategoryInfo {
-    pub fn new(conn: &mut PgConnection, category: TagCategory, fields: &FieldTable<bool>) -> QueryResult<Self> {
+    pub fn new(conn: &mut PgConnection, category: TagCategory, fields: Mask<Field>) -> QueryResult<Self> {
         let usages = tag_category_statistics::table
             .find(category.id)
             .select(tag_category_statistics::usage_count)
@@ -67,20 +66,15 @@ impl TagCategoryInfo {
         })
     }
 
-    pub fn all(
-        conn: &mut PgConnection,
-        config: &Config,
-        client: Client,
-        fields: &FieldTable<bool>,
-    ) -> QueryResult<Vec<Self>> {
+    pub fn all(conn: &mut PgConnection, ctx: &Context, fields: Mask<Field>) -> QueryResult<Vec<Self>> {
         let mut tag_categories = tag_category::table
             .inner_join(tag_category_statistics::table)
             .select((TagCategory::as_select(), tag_category_statistics::usage_count))
             .order(tag_category::order)
             .into_boxed();
-        if client.rank == UserRank::Anonymous {
-            tag_categories =
-                tag_categories.filter(tag_category::name.ne_all(&config.anonymous_preferences.tag_category_blacklist));
+        if ctx.client.rank == UserRank::Anonymous {
+            tag_categories = tag_categories
+                .filter(tag_category::name.ne_all(&ctx.config.anonymous_preferences.tag_category_blacklist));
         }
 
         let tag_categories: Vec<(TagCategory, i64)> = tag_categories.load(conn)?;

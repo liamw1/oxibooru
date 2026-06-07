@@ -1,11 +1,11 @@
 use crate::api::error::{ApiError, ApiResult};
+use crate::app::Context;
 use crate::auth::Client;
-use crate::config::Config;
 use crate::content::hash::Checksum;
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType};
 use crate::schema::{
-    comment, database_statistics, pool, pool_category, pool_post, post, post_favorite, post_feature, post_note,
-    post_score, post_statistics, post_tag, tag, tag_category, tag_name, user,
+    comment, database_statistics, pool, pool_category, pool_name, pool_post, post, post_favorite, post_feature,
+    post_note, post_score, post_statistics, post_tag, tag, tag_category, tag_name, user,
 };
 use crate::search::{
     self, Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
@@ -72,6 +72,7 @@ pub enum Token {
     Comment,
     NoteText,
     TagCount,
+    PoolCount,
     CommentCount,
     RelationCount,
     NoteCount,
@@ -89,7 +90,6 @@ pub enum Token {
 
 pub struct QueryBuilder<'a> {
     search: SearchCriteria<'a, Token>,
-    config: &'a Config,
     cache_state: CacheState,
 }
 
@@ -102,7 +102,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() || preferences::has_preferences(self.config, self.search.client) {
+        if self.search.has_filter() || preferences::has_preferences(self.search.ctx) {
             let unsorted_query = self.build_filtered(conn)?;
             unsorted_query.count().first(conn)
         } else {
@@ -151,6 +151,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
                 Token::Comment => apply_comment_filter(conn, query, filter, state),
                 Token::NoteText => apply_note_text_filter(conn, query, filter, state),
                 Token::TagCount => apply_filter!(query, post_statistics::tag_count, filter, i64),
+                Token::PoolCount => apply_filter!(query, post_statistics::pool_count, filter, i64),
                 Token::CommentCount => apply_filter!(query, post_statistics::comment_count, filter, i64),
                 Token::RelationCount => apply_filter!(query, post_statistics::relation_count, filter, i64),
                 Token::NoteCount => apply_filter!(query, post_statistics::note_count, filter, i64),
@@ -160,12 +161,12 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
                 Token::CommentTime => apply_comment_time_filter(conn, query, filter, state),
                 Token::FavTime => apply_favorite_time_filter(conn, query, filter, state),
                 Token::FeatureTime => apply_feature_time_filter(conn, query, filter, state),
-                Token::Special => apply_special_filter(conn, query, self.search.client, filter, state),
+                Token::Special => apply_special_filter(conn, query, self.search.ctx.client, filter, state),
             })?;
         if let Some(nonmatching) = nonmatching_posts {
             update_nonmatching_filter_cache!(conn, nonmatching, self.cache_state)?;
         }
-        if let Some(hidden_posts) = preferences::hidden_posts(self.config, self.search.client, post::id) {
+        if let Some(hidden_posts) = preferences::hidden_posts(self.search.ctx, post::id) {
             query = query.filter(not(exists(hidden_posts)));
         }
         Ok(apply_cache_filters!(query, post::id, self.cache_state))
@@ -174,7 +175,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     fn get_ordered_ids(&self, conn: &mut PgConnection, unsorted_query: BoxedQuery) -> QueryResult<Vec<i64>> {
         // If random sort specified, no other sorts matter
         if self.search.random_sort {
-            return apply_random_sort!(conn, self.search.client, unsorted_query, self.search).load(conn);
+            return apply_random_sort!(conn, self.search.ctx.client, unsorted_query, self.search).load(conn);
         }
 
         let default_sort = std::iter::once(ParsedSort {
@@ -197,7 +198,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             Token::CreationTime => apply_sort!(query, post::creation_time, sort),
             Token::LastEditTime => apply_sort!(query, post::last_edit_time, sort),
             Token::Tag | Token::TagCount => apply_sort!(query, post_statistics::tag_count, sort),
-            Token::Pool => apply_sort!(query, post_statistics::pool_count, sort),
+            Token::Pool | Token::PoolCount => apply_sort!(query, post_statistics::pool_count, sort),
             Token::Uploader => apply_sort!(query, user::name, sort),
             Token::Fav | Token::FavCount => apply_sort!(query, post_statistics::favorite_count, sort),
             Token::Comment | Token::CommentCount => apply_sort!(query, post_statistics::comment_count, sort),
@@ -221,17 +222,16 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 }
 
 impl<'a> QueryBuilder<'a> {
-    pub fn new(config: &'a Config, client: Client, search_criteria: &'a str) -> ApiResult<Self> {
-        Self::new_with_anonymous_token(config, client, search_criteria, Token::Tag)
+    pub fn new(ctx: &'a Context, search_criteria: &'a str) -> ApiResult<Self> {
+        Self::new_with_anonymous_token(ctx, search_criteria, Token::Tag)
     }
 
     pub fn new_with_anonymous_token(
-        config: &'a Config,
-        client: Client,
+        ctx: &'a Context,
         search_criteria: &'a str,
         anonymous_token: Token,
     ) -> ApiResult<Self> {
-        let search = SearchCriteria::new(client, search_criteria, anonymous_token).map_err(Box::from)?;
+        let search = SearchCriteria::new(ctx, search_criteria, anonymous_token).map_err(Box::from)?;
         for sort in &search.sorts {
             if matches!(
                 sort.kind,
@@ -243,7 +243,6 @@ impl<'a> QueryBuilder<'a> {
 
         Ok(Self {
             search,
-            config,
             cache_state: CacheState::new(),
         })
     }
@@ -361,10 +360,20 @@ fn apply_pool_filter(
     filter: UnparsedFilter<Token>,
     state: &mut CacheState,
 ) -> ApiResult<BoxedQuery> {
-    let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
-    let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
-    let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
-    update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
+    if parse::condition::<i64>(filter.condition).is_ok() {
+        let pool_posts = pool_post::table.select(pool_post::post_id).into_boxed();
+        let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
+        let filtered_posts = apply_filter!(pool_posts, pool_post::pool_id, filter.unnegated(), i64)?;
+        update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
+    } else {
+        let pool_posts = pool_post::table
+            .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool_post::pool_id)))
+            .select(pool_post::post_id)
+            .into_boxed();
+        let pool_posts = apply_distinct_if_multivalued!(pool_posts, filter);
+        let filtered_posts = apply_str_filter!(pool_posts, pool_name::name, filter.unnegated());
+        update_filter_cache!(conn, filtered_posts, pool_post::post_id, filter, state)?;
+    }
     Ok(query)
 }
 
@@ -541,6 +550,7 @@ pub fn filter_table() -> TokenTable<&'static str> {
         _comment: "-*user*",
         _note_text: "*fav*",
         _tag_count: "1..5",
+        _pool_count: "-2",
         _comment_count: "-1..",
         _relation_count: "1,2,3",
         _note_count: "-0",

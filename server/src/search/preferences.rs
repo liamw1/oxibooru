@@ -1,5 +1,4 @@
-use crate::auth::Client;
-use crate::config::Config;
+use crate::app::Context;
 use crate::model::enums::{PostSafety, UserRank};
 use crate::schema::{post, post_statistics, post_tag, tag, tag_category, tag_name};
 use diesel::dsl::{InnerJoin, IntoBoxed, Select, exists, sql};
@@ -14,18 +13,18 @@ alias!(post as inner_post: PostAlias);
 pub type BoxedQuery =
     IntoBoxed<'static, InnerJoin<Select<inner_post, SqlLiteral<Integer>>, post_statistics::table>, Pg>;
 
-pub fn has_preferences(config: &Config, client: Client) -> bool {
-    client.rank == UserRank::Anonymous && !config.anonymous_preferences.is_empty()
+pub fn has_preferences(ctx: &Context) -> bool {
+    ctx.client.rank == UserRank::Anonymous && !ctx.config.anonymous_preferences.is_empty()
 }
 
-pub fn hidden_posts<C>(config: &Config, client: Client, post_id_column: C) -> Option<BoxedQuery>
+pub fn hidden_posts<C>(ctx: &Context, post_id_column: C) -> Option<BoxedQuery>
 where
     C: Expression<SqlType = BigInt> + QueryFragment<Pg> + Send + 'static,
 {
-    if client.rank != UserRank::Anonymous {
+    if ctx.client.rank != UserRank::Anonymous {
         return None;
     }
-    let preferences = &config.anonymous_preferences;
+    let preferences = &ctx.config.anonymous_preferences;
 
     let mut query = inner_post
         .select(sql::<Integer>("0"))

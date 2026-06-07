@@ -1,9 +1,9 @@
 use crate::api::error::{ApiError, ApiResult};
-use crate::app::AppState;
 use crate::config::Config;
 use crate::content::cache::CachedProperties;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::UploadToken;
+use crate::extract::Ctx;
 use image::DynamicImage;
 use url::Url;
 
@@ -63,15 +63,15 @@ impl Content {
     }
 
     /// Computes properties for uploaded content.
-    pub async fn compute_properties(self, state: &AppState) -> ApiResult<CachedProperties> {
-        let token = self.save(&state.config).await?;
-        tokio::task::block_in_place(|| cache::compute_properties(state, token))
+    pub async fn compute_properties(self, ctx: &Ctx) -> ApiResult<CachedProperties> {
+        let token = self.save(&ctx.config).await?;
+        tokio::task::block_in_place(|| cache::compute_properties(ctx, token))
     }
 
     /// Retrieves content properties from cache or computes them if not present in cache.
-    pub async fn get_or_compute_properties(self, state: &AppState) -> ApiResult<CachedProperties> {
-        let token = self.save(&state.config).await?;
-        tokio::task::block_in_place(|| cache::get_or_compute_properties(state, token))
+    pub async fn get_or_compute_properties(self, ctx: &Ctx) -> ApiResult<CachedProperties> {
+        let token = self.save(&ctx.config).await?;
+        tokio::task::block_in_place(|| cache::get_or_compute_properties(ctx, token))
     }
 }
 

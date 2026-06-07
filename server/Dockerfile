@@ -28,6 +28,7 @@ WORKDIR /build
 RUN curl -L https://ffmpeg.org/releases/ffmpeg-${FFMPEG_VERSION}.tar.xz | tar -xJ
 
 WORKDIR /build/ffmpeg-${FFMPEG_VERSION}
+ARG TARGET_CPU
 ENV PKG_CONFIG_PATH=/usr/local/lib/pkgconfig
 RUN ./configure \
     --disable-everything \
@@ -43,7 +44,6 @@ RUN ./configure \
     --disable-shared \
     --disable-pic \
     \
-    --enable-small \
     --enable-static \
     --enable-libdav1d \
     --enable-protocol=file,pipe \
@@ -55,6 +55,7 @@ RUN ./configure \
     --enable-muxer=null,rawvideo \
     --enable-swscale \
     \
+    ${TARGET_CPU:+--cpu=$TARGET_CPU} \
     --extra-ldflags="-static" \
     --extra-ldexeflags="-static -no-pie" \
     --pkg-config-flags="--static" \
@@ -111,7 +112,6 @@ ARG PGID=1000
 ARG FFMPEG_VERSION
 WORKDIR /opt/app
 ENV RUST_BACKTRACE=full
-
 
 COPY --from=builder --chown=${PUID}:${PGID} /data /data
 

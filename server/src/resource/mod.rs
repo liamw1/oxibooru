@@ -1,11 +1,10 @@
 use crate::string::SmallString;
 use diesel::Identifiable;
 use std::collections::HashMap;
-use std::ops::IndexMut;
-use std::str::FromStr;
 use std::sync::Arc;
 
 pub mod comment;
+pub mod field;
 pub mod pool;
 pub mod pool_category;
 pub mod post;
@@ -20,27 +19,6 @@ pub mod user_token;
 // case, and the most straightforward way of implementing the function would have this behavior,
 // but I don't see this as a guarantee anywhere in the documentation. If this changes, I'll need
 // to reimplement a similar function with this behavior.
-
-pub trait BoolFill {
-    fn filled(val: bool) -> Self;
-}
-
-/// Creates a boolean `FieldTable` from an (optional) comma separated `fields` [str].
-pub fn create_table<T, E>(fields: Option<&str>) -> Result<T, <E as FromStr>::Err>
-where
-    T: BoolFill + IndexMut<E, Output = bool>,
-    E: FromStr,
-{
-    if let Some(fields_str) = fields {
-        let mut table = T::filled(false);
-        for field in fields_str.split(',') {
-            table[E::from_str(field)?] = true;
-        }
-        Ok(table)
-    } else {
-        Ok(T::filled(true))
-    }
-}
 
 /// Validates that a batch retrieval is the expected size.
 fn check_batch_results(batch_size: usize, retrieved_size: usize) {

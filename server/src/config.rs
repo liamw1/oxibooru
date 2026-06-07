@@ -5,11 +5,14 @@ use config::builder::DefaultState;
 use config::{ConfigBuilder, File, FileFormat};
 use lettre::message::Mailbox;
 use regex::Regex;
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize, Serializer};
+use std::collections::HashMap;
 use std::path::PathBuf;
-use strum::Display;
+use strum::{Display, EnumCount, EnumIter, EnumTable, IntoEnumIterator, IntoStaticStr};
 use url::Url;
-use utoipa::ToSchema;
+use utoipa::openapi::{ObjectBuilder, RefOr, Schema};
+use utoipa::{PartialSchema, ToSchema};
 
 #[derive(Debug, Display, Clone, Copy)]
 #[strum(serialize_all = "lowercase")]
@@ -70,110 +73,154 @@ impl AnonymousPreferences {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, ToSchema)]
-pub struct PrivilegeConfig {
-    pub user_create_self: UserRank,
-    pub user_create_any: UserRank,
-    pub user_list: UserRank,
-    pub user_view: UserRank,
-    pub user_edit_any_name: UserRank,
-    pub user_edit_any_pass: UserRank,
-    pub user_edit_any_email: UserRank,
-    pub user_edit_any_avatar: UserRank,
-    pub user_edit_any_rank: UserRank,
-    pub user_edit_self_name: UserRank,
-    pub user_edit_self_pass: UserRank,
-    pub user_edit_self_email: UserRank,
-    pub user_edit_self_avatar: UserRank,
-    pub user_edit_self_rank: UserRank,
-    pub user_delete_any: UserRank,
-    pub user_delete_self: UserRank,
+#[derive(Clone, Copy, EnumCount, EnumIter, EnumTable, IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum Action {
+    UserCreateSelf,
+    UserCreateAny,
+    UserList,
+    UserView,
+    UserEditAnyName,
+    UserEditAnyPass,
+    UserEditAnyEmail,
+    UserEditAnyAvatar,
+    UserEditAnyRank,
+    UserEditSelfName,
+    UserEditSelfPass,
+    UserEditSelfEmail,
+    UserEditSelfAvatar,
+    UserEditSelfRank,
+    UserDeleteAny,
+    UserDeleteSelf,
 
-    pub user_token_list_any: UserRank,
-    pub user_token_list_self: UserRank,
-    pub user_token_create_any: UserRank,
-    pub user_token_create_self: UserRank,
-    pub user_token_edit_any: UserRank,
-    pub user_token_edit_self: UserRank,
-    pub user_token_delete_any: UserRank,
-    pub user_token_delete_self: UserRank,
+    UserTokenListAny,
+    UserTokenListSelf,
+    UserTokenCreateAny,
+    UserTokenCreateSelf,
+    UserTokenEditAny,
+    UserTokenEditSelf,
+    UserTokenDeleteAny,
+    UserTokenDeleteSelf,
 
-    pub post_create_anonymous: UserRank,
-    pub post_create_identified: UserRank,
-    pub post_list: UserRank,
-    pub post_reverse_search: UserRank,
-    pub post_view: UserRank,
-    pub post_view_featured: UserRank,
-    pub post_edit_content: UserRank,
-    pub post_edit_description: UserRank,
-    pub post_edit_flag: UserRank,
-    pub post_edit_note: UserRank,
-    pub post_edit_relation: UserRank,
-    pub post_edit_safety: UserRank,
-    pub post_edit_source: UserRank,
-    pub post_edit_tag: UserRank,
-    pub post_edit_thumbnail: UserRank,
-    pub post_feature: UserRank,
-    pub post_delete: UserRank,
-    pub post_score: UserRank,
-    pub post_merge: UserRank,
-    pub post_favorite: UserRank,
-    pub post_bulk_edit_tag: UserRank,
-    pub post_bulk_edit_safety: UserRank,
-    pub post_bulk_edit_delete: UserRank,
+    PostCreateAnonymous,
+    PostCreateIdentified,
+    PostList,
+    PostReverseSearch,
+    PostView,
+    PostViewFeatured,
+    PostEditContent,
+    PostEditDescription,
+    PostEditFlag,
+    PostEditNote,
+    PostEditRelation,
+    PostEditSafety,
+    PostEditSource,
+    PostEditTag,
+    PostEditThumbnail,
+    PostFeature,
+    PostDelete,
+    PostScore,
+    PostMerge,
+    PostFavorite,
+    PostBulkEditTag,
+    PostBulkEditSafety,
+    PostBulkEditDelete,
 
-    pub tag_create: UserRank,
-    pub tag_edit_name: UserRank,
-    pub tag_edit_category: UserRank,
-    pub tag_edit_description: UserRank,
-    pub tag_edit_implication: UserRank,
-    pub tag_edit_suggestion: UserRank,
-    pub tag_list: UserRank,
-    pub tag_view: UserRank,
-    pub tag_merge: UserRank,
-    pub tag_delete: UserRank,
+    TagCreate,
+    TagEditName,
+    TagEditCategory,
+    TagEditDescription,
+    TagEditImplication,
+    TagEditSuggestion,
+    TagList,
+    TagView,
+    TagMerge,
+    TagDelete,
 
-    pub tag_category_create: UserRank,
-    pub tag_category_edit_name: UserRank,
-    pub tag_category_edit_color: UserRank,
-    pub tag_category_edit_order: UserRank,
-    pub tag_category_list: UserRank,
-    pub tag_category_view: UserRank,
-    pub tag_category_delete: UserRank,
-    pub tag_category_set_default: UserRank,
+    TagCategoryCreate,
+    TagCategoryEditName,
+    TagCategoryEditColor,
+    TagCategoryEditOrder,
+    TagCategoryList,
+    TagCategoryView,
+    TagCategoryDelete,
+    TagCategorySetDefault,
 
-    pub pool_create: UserRank,
-    pub pool_edit_name: UserRank,
-    pub pool_edit_category: UserRank,
-    pub pool_edit_description: UserRank,
-    pub pool_edit_post: UserRank,
-    pub pool_list: UserRank,
-    pub pool_view: UserRank,
-    pub pool_merge: UserRank,
-    pub pool_delete: UserRank,
+    PoolCreate,
+    PoolEditName,
+    PoolEditCategory,
+    PoolEditDescription,
+    PoolEditPost,
+    PoolList,
+    PoolView,
+    PoolMerge,
+    PoolDelete,
 
-    pub pool_category_create: UserRank,
-    pub pool_category_edit_name: UserRank,
-    pub pool_category_edit_color: UserRank,
-    pub pool_category_list: UserRank,
-    pub pool_category_view: UserRank,
-    pub pool_category_delete: UserRank,
-    pub pool_category_set_default: UserRank,
+    PoolCategoryCreate,
+    PoolCategoryEditName,
+    PoolCategoryEditColor,
+    PoolCategoryList,
+    PoolCategoryView,
+    PoolCategoryDelete,
+    PoolCategorySetDefault,
 
-    pub comment_create: UserRank,
-    pub comment_delete_any: UserRank,
-    pub comment_delete_own: UserRank,
-    pub comment_edit_any: UserRank,
-    pub comment_edit_own: UserRank,
-    pub comment_list: UserRank,
-    pub comment_view: UserRank,
-    pub comment_score: UserRank,
+    CommentCreate,
+    CommentDeleteAny,
+    CommentDeleteOwn,
+    CommentEditAny,
+    CommentEditOwn,
+    CommentList,
+    CommentView,
+    CommentScore,
 
-    pub snapshot_list: UserRank,
+    SnapshotList,
 
-    pub upload_create: UserRank,
-    pub upload_use_downloader: UserRank,
+    UploadCreate,
+    UploadUseDownloader,
 }
+
+pub type PrivilegeConfig = ActionTable<UserRank>;
+
+impl Serialize for PrivilegeConfig {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut state = serializer.serialize_struct("PrivilegeConfig", Action::COUNT)?;
+        for action in Action::iter() {
+            state.serialize_field(action.into(), &self[action])?;
+        }
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for PrivilegeConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let mut required_ranks = PrivilegeConfig::filled(UserRank::Administrator);
+        let mut privilege_map = HashMap::<String, UserRank>::deserialize(deserializer)?;
+
+        for action in Action::iter() {
+            let action_name: &'static str = action.into();
+            required_ranks[action] = privilege_map
+                .remove(action_name)
+                .ok_or(serde::de::Error::missing_field(action_name))?;
+        }
+        Ok(required_ranks)
+    }
+}
+
+impl PartialSchema for PrivilegeConfig {
+    fn schema() -> RefOr<Schema> {
+        let mut builder = ObjectBuilder::new();
+        for action in Action::iter() {
+            let name: &'static str = action.into();
+            builder = builder.property(name, UserRank::schema()).required(name);
+        }
+        RefOr::T(Schema::Object(builder.build()))
+    }
+}
+
+impl ToSchema for PrivilegeConfig {}
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 #[schema(rename_all = "camelCase")] // ToSchema doesn't detect serde(rename_all(serialize = ...))
@@ -210,6 +257,7 @@ pub struct Config {
     pub content_secret: SmallString,
     pub domain: Option<SmallString>,
     pub delete_source_files: bool,
+    pub append_tag_implications_on_post_edit: bool,
     pub post_similarity_threshold: f64,
     #[serde(with = "serde_regex")]
     pub pool_name_regex: Regex,
@@ -292,6 +340,7 @@ pub fn port() -> u16 {
 /// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DATABASE`
 /// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DATABASE`.
 pub fn database_url(database_override: Option<&str>) -> String {
+    const DEFAULT_POSTGRES_PORT: u16 = 5432;
     if !DOCKER_DEPLOYMENT {
         dotenvy::from_filename("../.env").expect(".env must be in project root directory");
     }
@@ -299,10 +348,14 @@ pub fn database_url(database_override: Option<&str>) -> String {
     let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER must be defined in .env");
     let password = std::env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD must be defined in .env");
     let hostname = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
+    let port = std::env::var("POSTGRES_PORT")
+        .ok()
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(DEFAULT_POSTGRES_PORT);
     let database = std::env::var("POSTGRES_DB").expect("POSTGRES_DB must be defined in .env");
     let database = database_override.unwrap_or(&database);
 
-    format!("postgres://{user}:{password}@{hostname}/{database}")
+    format!("postgres://{user}:{password}@{hostname}:{port}/{database}")
 }
 
 const DOCKER_DEPLOYMENT: bool = option_env!("DOCKER_DEPLOYMENT").is_some();

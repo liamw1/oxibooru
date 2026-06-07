@@ -1,14 +1,12 @@
 use crate::api::doc::SNAPSHOT_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::extract::{Json, Query};
 use crate::api::{PageParams, PagedResponse, ResourceParams};
 use crate::app::AppState;
-use crate::auth::Client;
-use crate::resource::snapshot::SnapshotInfo;
+use crate::config::Action;
+use crate::extract::{Ctx, Json, Query};
+use crate::resource::snapshot::{Field, SnapshotInfo};
 use crate::search::Builder;
 use crate::search::snapshot::QueryBuilder;
-use crate::{api, resource};
-use axum::extract::{Extension, State};
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
@@ -52,20 +50,17 @@ const MAX_SNAPSHOTS_PER_PAGE: i64 = 1000;
     ),
 )]
 async fn list(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(resource): Query<ResourceParams>,
+    Ctx(ctx, connection_pool): Ctx,
+    Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<SnapshotInfo>>> {
-    api::verify_privilege(client, state.config.privileges().snapshot_list)?;
+    ctx.verify_privilege(Action::SnapshotList)?;
 
     let offset = page.offset.unwrap_or(0);
     let limit = std::cmp::min(page.limit.get(), MAX_SNAPSHOTS_PER_PAGE);
-    let fields = resource::create_table(resource.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
-            let mut query_builder = QueryBuilder::new(client, resource.criteria())?;
+            let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
             query_builder.set_offset_and_limit(offset, limit);
 
             let (total, selected_snapshots) = query_builder.list(conn)?;
@@ -74,7 +69,7 @@ async fn list(
                 offset,
                 limit,
                 total,
-                results: SnapshotInfo::new_batch_from_ids(conn, &state.config, &selected_snapshots, &fields)?,
+                results: SnapshotInfo::new_batch_from_ids(conn, &ctx.config, &selected_snapshots, resource.fields)?,
             }))
         })
         .await

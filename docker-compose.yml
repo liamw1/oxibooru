@@ -21,11 +21,11 @@ services:
       POSTGRES_USER:
       POSTGRES_PASSWORD:
       POSTGRES_DB:
-      POSTGRES_PORT:
+      POSTGRES_PORT: 5432
       PORT:
     volumes:
       - "${MOUNT_DATA}:/data"
-      - "./server/config.toml:/opt/app/config.toml"
+      - "./server/config.toml:/opt/app/config.toml:ro"
     stop_signal: SIGINT
 
   client:
@@ -51,4 +51,4 @@ services:
     volumes:
       - "${MOUNT_SQL}:/var/lib/postgresql/data"
     ports:
-      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
+    - "127.0.0.1:${POSTGRES_PORT}:5432"

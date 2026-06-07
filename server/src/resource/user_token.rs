@@ -1,16 +1,16 @@
 use crate::model::user::UserToken;
-use crate::resource::BoolFill;
+use crate::resource::field::Mask;
 use crate::resource::user::MicroUser;
 use crate::string::LargeString;
 use crate::time::DateTime;
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
-use strum::{EnumString, EnumTable};
+use strum::EnumString;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Clone, Copy, EnumString, EnumTable)]
+#[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,
@@ -24,9 +24,9 @@ pub enum Field {
     LastUsageTime,
 }
 
-impl BoolFill for FieldTable<bool> {
-    fn filled(val: bool) -> Self {
-        Self::filled(val)
+impl From<Field> for u64 {
+    fn from(value: Field) -> Self {
+        value as u64
     }
 }
 
@@ -58,7 +58,7 @@ pub struct UserTokenInfo {
 }
 
 impl UserTokenInfo {
-    pub fn new(user: MicroUser, user_token: UserToken, fields: &FieldTable<bool>) -> Self {
+    pub fn new(user: MicroUser, user_token: UserToken, fields: Mask<Field>) -> Self {
         UserTokenInfo {
             version: fields[Field::Version].then_some(user_token.last_edit_time),
             user: fields[Field::User].then_some(user),

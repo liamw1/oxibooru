@@ -1,18 +1,16 @@
 use crate::api::doc::TAG_CATEGORY_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::extract::{Json, Path, Query};
 use crate::api::{DeleteBody, ResourceParams, UnpagedResponse, error};
-use crate::app::AppState;
-use crate::auth::Client;
-use crate::config::{Config, RegexType};
+use crate::app::{AppState, Context};
+use crate::config::{Action, RegexType};
+use crate::extract::{Ctx, Json, Path, Query};
 use crate::model::enums::{ResourceProperty, ResourceType, UserRank};
 use crate::model::tag_category::{NewTagCategory, TagCategory};
-use crate::resource::tag_category::TagCategoryInfo;
+use crate::resource::tag_category::{Field, TagCategoryInfo};
 use crate::schema::{tag, tag_category};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, resource, snapshot};
-use axum::extract::{Extension, State};
+use crate::{api, snapshot};
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -40,16 +38,13 @@ pub fn routes() -> OpenApiRouter<AppState> {
     ),
 )]
 async fn list(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(params): Query<ResourceParams>,
+    Ctx(ctx, connection_pool): Ctx,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<UnpagedResponse<TagCategoryInfo>>> {
-    api::verify_privilege(client, state.config.privileges().tag_category_list)?;
+    ctx.verify_privilege(Action::TagCategoryList)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
-        .transaction(move |conn| TagCategoryInfo::all(conn, &state.config, client, &fields))
+    connection_pool
+        .transaction(move |conn| TagCategoryInfo::all(conn, &ctx, params.fields))
         .await
         .map(|results| UnpagedResponse { results })
         .map(Json)
@@ -72,19 +67,16 @@ async fn list(
     ),
 )]
 async fn get(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
-    api::verify_privilege(client, state.config.privileges().tag_category_view)?;
+    ctx.verify_privilege(Action::TagCategoryView)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
-            let category = verify_visibility(conn, &state.config, client, &name)?;
-            TagCategoryInfo::new(conn, category, &fields)
+            let category = verify_visibility(conn, &ctx, &name)?;
+            TagCategoryInfo::new(conn, category, params.fields)
                 .map(Json)
                 .map_err(ApiError::from)
         })
@@ -120,17 +112,14 @@ struct TagCategoryCreateBody {
     ),
 )]
 async fn create(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    Query(params): Query<ResourceParams>,
+    Ctx(ctx, connection_pool): Ctx,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<TagCategoryCreateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
-    api::verify_privilege(client, state.config.privileges().tag_category_create)?;
-    api::verify_matches_regex(&state.config, &body.name, RegexType::TagCategory)?;
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
+    ctx.verify_privilege(Action::TagCategoryCreate)?;
+    api::verify_matches_regex(&ctx.config, &body.name, RegexType::TagCategory)?;
 
-    let category = state
-        .connection_pool
+    let category = connection_pool
         .transaction(move |conn| {
             let category = NewTagCategory {
                 order: body.order,
@@ -143,13 +132,12 @@ async fn create(
             .get_result(conn)
             .optional()?
             .ok_or(ApiError::AlreadyExists(ResourceProperty::TagCategoryName))?;
-            snapshot::tag_category::creation_snapshot(conn, client, &category)?;
+            snapshot::tag_category::creation_snapshot(conn, ctx.client, &category)?;
             Ok::<_, ApiError>(category)
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| TagCategoryInfo::new(conn, category, &fields))
+    connection_pool
+        .transaction(move |conn| TagCategoryInfo::new(conn, category, params.fields))
         .await
         .map(Json)
 }
@@ -192,16 +180,12 @@ struct TagCategoryUpdateBody {
     ),
 )]
 async fn update(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<TagCategoryUpdateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-
-    let updated_category = state
-        .connection_pool
+    let updated_category = connection_pool
         .transaction(move |conn| {
             let old_category: TagCategory = tag_category::table
                 .filter(tag_category::name.eq(name))
@@ -212,29 +196,28 @@ async fn update(
 
             let mut new_category = old_category.clone();
             if let Some(order) = body.order {
-                api::verify_privilege(client, state.config.privileges().tag_category_edit_order)?;
+                ctx.verify_privilege(Action::TagCategoryEditOrder)?;
                 new_category.order = order;
             }
             if let Some(name) = body.name {
-                api::verify_privilege(client, state.config.privileges().tag_category_edit_name)?;
-                api::verify_matches_regex(&state.config, &name, RegexType::TagCategory)?;
+                ctx.verify_privilege(Action::TagCategoryEditName)?;
+                api::verify_matches_regex(&ctx.config, &name, RegexType::TagCategory)?;
                 new_category.name = name;
             }
             if let Some(color) = body.color {
-                api::verify_privilege(client, state.config.privileges().tag_category_edit_color)?;
+                ctx.verify_privilege(Action::TagCategoryEditColor)?;
                 new_category.color = color;
             }
 
             new_category.last_edit_time = DateTime::now();
-            let _: TagCategory =
+            let saved_category: TagCategory =
                 error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::TagCategoryName)?;
-            snapshot::tag_category::modification_snapshot(conn, client, &old_category, &new_category)?;
-            Ok::<_, ApiError>(new_category)
+            snapshot::tag_category::modification_snapshot(conn, ctx.client, &old_category, &new_category)?;
+            Ok::<_, ApiError>(saved_category)
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| TagCategoryInfo::new(conn, updated_category, &fields))
+    connection_pool
+        .transaction(move |conn| TagCategoryInfo::new(conn, updated_category, params.fields))
         .await
         .map(Json)
 }
@@ -258,16 +241,13 @@ async fn update(
     ),
 )]
 async fn set_default(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
-    Query(params): Query<ResourceParams>,
+    Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
-    api::verify_privilege(client, state.config.privileges().tag_category_set_default)?;
+    ctx.verify_privilege(Action::TagCategorySetDefault)?;
 
-    let fields = resource::create_table(params.fields()).map_err(Box::from)?;
-    let new_default_category: TagCategory = state
-        .connection_pool
+    let new_default_category: TagCategory = connection_pool
         .transaction(move |conn| {
             let mut category: TagCategory = tag_category::table
                 .filter(tag_category::name.eq(name))
@@ -288,11 +268,6 @@ async fn set_default(
                 .set(tag::category_id.eq(category.id))
                 .execute(conn)?;
 
-            // Update last_edit_time
-            let current_time = DateTime::now();
-            category.last_edit_time = current_time;
-            old_default_category.last_edit_time = current_time;
-
             // Make category default
             std::mem::swap(&mut category.id, &mut old_default_category.id);
 
@@ -308,13 +283,17 @@ async fn set_default(
             new_default_category.name = temporary_category_name;
             let _: TagCategory = new_default_category.save_changes(conn)?;
 
-            snapshot::tag_category::set_default_snapshot(conn, client, &old_default_category, &new_default_category)?;
+            snapshot::tag_category::set_default_snapshot(
+                conn,
+                ctx.client,
+                &old_default_category,
+                &new_default_category,
+            )?;
             Ok::<_, ApiError>(new_default_category)
         })
         .await?;
-    state
-        .connection_pool
-        .transaction(move |conn| TagCategoryInfo::new(conn, new_default_category, &fields))
+    connection_pool
+        .transaction(move |conn| TagCategoryInfo::new(conn, new_default_category, params.fields))
         .await
         .map(Json)
 }
@@ -339,15 +318,13 @@ async fn set_default(
     ),
 )]
 async fn delete(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
+    Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
-    api::verify_privilege(client, state.config.privileges().tag_category_delete)?;
+    ctx.verify_privilege(Action::TagCategoryDelete)?;
 
-    state
-        .connection_pool
+    connection_pool
         .transaction(move |conn| {
             let category: TagCategory = tag_category::table
                 .filter(tag_category::name.eq(name))
@@ -360,20 +337,16 @@ async fn delete(
             }
 
             diesel::delete(tag_category::table.find(category.id)).execute(conn)?;
-            snapshot::tag_category::deletion_snapshot(conn, client, &category)?;
+            snapshot::tag_category::deletion_snapshot(conn, ctx.client, &category)?;
             Ok(Json(()))
         })
         .await
 }
 
-fn verify_visibility(
-    conn: &mut PgConnection,
-    config: &Config,
-    client: Client,
-    category_name: &SmallString,
-) -> ApiResult<TagCategory> {
-    if client.rank == UserRank::Anonymous
-        && config
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, category_name: &SmallString) -> ApiResult<TagCategory> {
+    if ctx.client.rank == UserRank::Anonymous
+        && ctx
+            .config
             .anonymous_preferences
             .tag_category_blacklist
             .contains(category_name)

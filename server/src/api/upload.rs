@@ -1,14 +1,11 @@
-use crate::api;
 use crate::api::doc::UPLOAD_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::extract::Json;
-use crate::api::extract::JsonOrMultipart;
 use crate::app::AppState;
-use crate::auth::Client;
-use crate::config::Config;
-use crate::content::download;
-use crate::content::upload::{self, MAX_UPLOAD_SIZE, PartName, UploadToken};
-use axum::extract::{DefaultBodyLimit, Extension, State};
+use crate::config::{Action, Config};
+use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
+use crate::content::{download, upload};
+use crate::extract::{Ctx, Json, JsonOrMultipart};
+use axum::extract::DefaultBodyLimit;
 use serde::{Deserialize, Serialize};
 use url::Url;
 use utoipa::ToSchema;
@@ -73,22 +70,18 @@ async fn upload_from_url(config: &Config, body: UploadBody) -> ApiResult<Json<Up
         (status = 403, description = "Privileges are too low"),
     ),
 )]
-async fn upload(
-    State(state): State<AppState>,
-    Extension(client): Extension<Client>,
-    body: JsonOrMultipart<UploadBody>,
-) -> ApiResult<Json<UploadResponse>> {
-    api::verify_privilege(client, state.config.privileges().upload_create)?;
+async fn upload(Ctx(ctx, _): Ctx, body: JsonOrMultipart<UploadBody>) -> ApiResult<Json<UploadResponse>> {
+    ctx.verify_privilege(Action::UploadCreate)?;
 
     match body {
-        JsonOrMultipart::Json(payload) => upload_from_url(&state.config, payload).await,
+        JsonOrMultipart::Json(payload) => upload_from_url(&ctx.config, payload).await,
         JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(&state.config, payload, [PartName::Content]).await?;
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content]).await?;
             if let [Some(token)] = decoded_body.files {
                 Ok(Json(UploadResponse { token }))
             } else if let Some(metadata) = decoded_body.metadata {
                 let url_upload: UploadBody = serde_json::from_slice(&metadata)?;
-                upload_from_url(&state.config, url_upload).await
+                upload_from_url(&ctx.config, url_upload).await
             } else {
                 Err(ApiError::MissingFormData)
             }

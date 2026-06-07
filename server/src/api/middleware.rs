@@ -17,8 +17,22 @@ use reqwest::Client;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, REFERER};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicI64, Ordering};
-use tracing::warn;
+use tracing::{error, warn};
 use url::Url;
+
+/// Logs errors from handlers.
+pub async fn log_error(req: Request, next: Next) -> Response {
+    let response = next.run(req).await;
+
+    if let Some(err) = response.extensions().get::<Arc<ApiError>>() {
+        error!(
+            status = err.status_code().as_u16(),
+            error = %err.to_string(),
+            "request failed with"
+        );
+    }
+    response
+}
 
 /// Attempts to authorizes user by either username/password or user token.
 pub async fn auth(State(state): State<AppState>, mut request: Request, next: Next) -> ApiResult<Response> {
@@ -35,7 +49,7 @@ pub async fn auth(State(state): State<AppState>, mut request: Request, next: Nex
         && let Some(query) = request.uri().query()
         && query.contains("bump-login")
     {
-        let mut conn = state.get_connection().await?;
+        let mut conn = state.connection_pool.get().await?;
         update::user::last_login_time(conn.as_mut(), user_id)?;
     }
 
@@ -49,7 +63,7 @@ pub async fn post_to_webhooks(State(state): State<AppState>, request: Request, n
     let response = next.run(request).await;
 
     if can_modify_database {
-        let mut conn = state.get_connection().await?;
+        let mut conn = state.connection_pool.get().await?;
         let last_posted_snapshot = LAST_POSTED_SNAPSHOT.load(Ordering::SeqCst);
         let new_snapshots = snapshot::table
             .select(Snapshot::as_select())
