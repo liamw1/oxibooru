@@ -220,11 +220,13 @@ impl PostInfo {
         let post_type = self.type_()?;
         let tags = self.tags()?;
 
-        let tag_list: String = tags
+        let tag_list = tags
             .iter()
             .map(MicroTag::primary_name)
-            .map(|tag| format!(" #{tag}"))
-            .collect();
+            .fold(String::new(), |mut list, tag| {
+                let _ = write!(list, " #{tag}");
+                list
+            });
         Ok(format!("@{id} ({post_type})\n\nTags:{tag_list}"))
     }
 

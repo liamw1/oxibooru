@@ -1,0 +1,108 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} - Tags{% endblock %}
+
+{% block content %}
+{% if ctx.has_privilege(Action::TagList) %}
+<div class="pager">
+    {% include "partials/tags_header.html" %}
+
+    <div class="messages"></div>
+
+    <div class="tag-list table-wrap">
+        {% if !tags.is_empty() %}
+        <table>
+            <thead>
+                {# TODO: Maybe just have these element replace sort(s) in query instead of replacing whole query #}
+                <th class="names">
+                    {% if params.search_text() == "sort:name" || params.search_text().is_empty() %}
+                    <a href="tags?search-text=-sort:name">Tag name(s)</a>
+                    {% else %}
+                    <a href="tags?search-text=sort:name">Tag name(s)</a>
+                    {% endif %}
+                </th>
+                <th class="implications">
+                    {% if params.search_text() == "sort:implication-count" %}
+                    <a href="tags?search-text=-sort:implication-count">Implications</a>
+                    {% else %}
+                    <a href="tags?search-text=sort:implication-count">Implications</a>
+                    {% endif %}
+                </th>
+                <th class="suggestions">
+                    {% if params.search_text() == "sort:suggestion-count" %}
+                    <a href="tags?search-text=-sort:suggestion-count">Suggestions</a>
+                    {% else %}
+                    <a href="tags?search-text=sort:suggestion-count">Suggestions</a>
+                    {% endif %}
+                </th>
+                <th class="usages">
+                    {% if params.search_text() == "sort:usages" %}
+                    <a href="tags?search-text=-sort:usages">Usages</a>
+                    {% else %}
+                    <a href="tags?search-text=sort:usages">Usages</a>
+                    {% endif %}
+                </th>
+                <th class="creation-time">
+                    {% if params.search_text() == "sort:creation-time" %}
+                    <a href="tags?search-text=-sort:creation-time">Created on</a>
+                    {% else %}
+                    <a href="tags?search-text=sort:creation-time">Created on</a>
+                    {% endif %}
+                </th>
+            </thead>
+            <tbody>
+                {% for tag in tags %}
+                <tr>
+                    <td class="names">
+                        <ul>
+                            {% for name in tag.names()? %}
+                            <li><a href="tag/{{ name }}">{{ name }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                    <td class="implications">
+                        {% if tag.implications()?.is_empty() %}
+                        -
+                        {% else %}
+                        <ul>
+                            {% for implication in tag.implications()? %}
+                            <li>
+                                {% let name = implication.primary_name() %}
+                                <a href="tag/{{ name }}">{{ name }}</a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </td>
+                    <td class="suggestions">
+                        {% if tag.suggestions()?.is_empty() %}
+                        -
+                        {% else %}
+                        <ul>
+                            {% for suggestion in tag.suggestions()? %}
+                            <li>
+                                {% let name = suggestion.primary_name() %}
+                                <a href="tag/{{ name }}">{{ name }}</a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </td>
+                    <td class="usages">
+                        <a href="posts?search-text={{ tag.primary_name()? }}">{{ tag.usages()? }}</a>
+                    </td>
+                    <td class="creation-time">
+                        {% let creation_time = tag.creation_time()? %}
+                        <time datetime="{{ creation_time }}">{{ time::since(creation_time) }}</time>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    {% include "partials/manual_pager.html" %}
+</div>
+{% endif %}
+{% endblock %}
