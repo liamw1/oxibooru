@@ -146,23 +146,23 @@ pub fn since(time: impl Borrow<DateTime>) -> String {
     if years > 1 {
         format!("{years} years ago")
     } else if years == 1 {
-        String::from("one year ago")
+        String::from("a year ago")
     } else if months > 1 {
         format!("{months} months ago")
     } else if months == 1 {
-        String::from("one month ago")
+        String::from("a month ago")
     } else if days > 1 {
         format!("{days} days ago")
     } else if days == 1 {
-        String::from("one day ago")
+        String::from("a day ago")
     } else if hours > 1 {
         format!("{hours} hours ago")
     } else if hours == 1 {
-        String::from("one hour ago")
+        String::from("an hour ago")
     } else if minutes > 1 {
         format!("{minutes} minutes ago")
     } else if minutes == 1 {
-        String::from("one minute ago")
+        String::from("a minute ago")
     } else if seconds > 1 {
         format!("{seconds} seconds ago")
     } else {

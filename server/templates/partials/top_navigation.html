@@ -14,7 +14,7 @@
         {% if ctx.has_privilege(Action::PostList) %}
         <li data-name="posts" {% if active_tab==Tab::Post %} class="active" {% endif %}>
             <a href="posts">
-                <span class=" text">Posts</span>
+                <span class="text">Posts</span>
             </a>
         </li>
         {% endif %}
@@ -91,7 +91,7 @@
 
         <li data-name="settings" {% if active_tab==Tab::Settings %} class="active" {% endif %}>
             <a href="settings">
-                <i class="fa fa-cog"></i>
+                <span class="text"><i class="fa fa-cog"></i></span>
             </a>
         </li>
     </ul>

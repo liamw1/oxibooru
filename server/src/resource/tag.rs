@@ -1,6 +1,6 @@
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
-use crate::resource;
 use crate::resource::field::Mask;
+use crate::resource::{self, NotRequested};
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
@@ -80,6 +80,10 @@ pub struct TagInfo {
 }
 
 impl TagInfo {
+    pub fn primary_name(&self) -> Result<&str, NotRequested> {
+        self.names().map(|names| names[0].as_ref())
+    }
+
     pub fn new(conn: &mut PgConnection, tag: Tag, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch(conn, vec![tag], fields).map(resource::single)
     }
