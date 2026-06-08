@@ -105,7 +105,7 @@ fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &str) -> 
         (status = 403, description = "Privileges are too low"),
     ),
 )]
-async fn list(
+pub async fn list(
     Ctx(ctx, connection_pool): Ctx,
     Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,

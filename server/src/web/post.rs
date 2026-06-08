@@ -35,12 +35,12 @@ const UNSAFE_DEFAULT: bool = false;
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct Params {
-    search_text: Option<String>,
     safe: Option<bool>,
     sketchy: Option<bool>,
     #[serde(rename = "unsafe")]
     unsafe_: Option<bool>,
     edit: Option<EditMode>,
+    search_text: Option<String>,
 }
 
 impl Params {
@@ -87,6 +87,9 @@ impl Params {
         }
         if self.unsafe_ == Some(UNSAFE_DEFAULT) {
             self.unsafe_ = None;
+        }
+        if self.search_text.as_ref().is_some_and(String::is_empty) {
+            self.search_text = None;
         }
         self
     }
@@ -139,7 +142,7 @@ async fn gallery(ctx: Ctx, Query(params): Query<Params>, page_params: Query<Page
 
 #[derive(Template)]
 #[template(path = "pages/post_main.html")]
-struct PostMain {
+struct MainTemplate {
     ctx: Context,
     active_tab: Tab,
     is_editing: bool,
@@ -149,7 +152,7 @@ struct PostMain {
     params: Params,
 }
 
-impl PostMain {
+impl MainTemplate {
     fn full_content_url(&self) -> Result<String, NotRequested> {
         self.post.content_url().map(|url| self.ctx.full_url(url))
     }
@@ -187,7 +190,7 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> Htm
         .unwrap();
 
     let Ctx(ctx, _) = ctx;
-    PostMain {
+    MainTemplate {
         ctx,
         active_tab: Tab::Post,
         is_editing: false,
