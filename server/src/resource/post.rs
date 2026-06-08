@@ -30,6 +30,7 @@ use serde::{Deserialize, Serialize};
 use server_macros::resource;
 use std::collections::{HashMap, HashSet};
 use std::convert::Infallible;
+use std::fmt::Write;
 use std::sync::Arc;
 use strum::EnumString;
 use utoipa::ToSchema;
@@ -222,11 +223,13 @@ impl PostInfo {
         let post_type = self.type_()?;
         let tags = self.tags()?;
 
-        let tag_list: String = tags
+        let tag_list = tags
             .iter()
             .map(MicroTag::primary_name)
-            .map(|tag| format!(" #{tag}"))
-            .collect();
+            .fold(String::new(), |mut list, tag| {
+                let _ = write!(list, " #{tag}");
+                list
+            });
         Ok(format!("@{id} ({post_type})\n\nTags:{tag_list}"))
     }
 

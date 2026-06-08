@@ -1,0 +1,14 @@
+<div class="tag-list-header">
+    <form class="horizontal search" action="tags" method="get">
+        <input type="text" id="search-text" name="search-text" value="{{ params.search_text() }}">
+        <wbr>
+        <button type="submit">Search</button>
+
+        <div class="buttons">
+            <a class="button append" href="help/search/tags">Syntax help</a>
+            {% if ctx.can_edit_tag_categories() %}
+            <a class="append" href="tag-categories">Tag categories</a>
+            {% endif %}
+        </div>
+    </form>
+</div>
