@@ -99,6 +99,18 @@ impl Context {
             || self.has_privilege(Action::PostEditSource)
             || self.has_privilege(Action::PostEditTag)
             || self.has_privilege(Action::PostEditThumbnail)
+            || self.has_privilege(Action::PostFeature)
+            || self.has_privilege(Action::PostDelete)
+            || self.has_privilege(Action::PostMerge)
+    }
+
+    pub fn can_edit_tag_categories(&self) -> bool {
+        self.has_privilege(Action::TagCategoryCreate)
+            || self.has_privilege(Action::TagCategoryEditColor)
+            || self.has_privilege(Action::TagCategoryEditName)
+            || self.has_privilege(Action::TagCategoryEditOrder)
+            || self.has_privilege(Action::TagCategorySetDefault)
+            || self.has_privilege(Action::TagCategoryDelete)
     }
 
     /// Returns error if client is lower rank than `required_rank`.

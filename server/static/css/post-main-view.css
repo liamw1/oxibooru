@@ -64,6 +64,7 @@
 
 .post-view .post-container {
     margin-bottom: .6em;
+    overflow-x: auto;
 }
 
 .post-view .post-container .post-content {

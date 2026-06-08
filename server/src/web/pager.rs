@@ -51,14 +51,12 @@ impl<'a, T: Serialize> Pager<'a, T> {
         let total_pages = total / page_size + 1;
         let pages = build_pages(page_size, current_page, total_pages);
 
-        Self { pages, route, params }
+        Self { pages, params, route }
     }
 
     pub fn url(&self, page: &Page) -> Result<String, serde_urlencoded::ser::Error> {
         let offset = match page {
-            Page::Next { offset, .. } => *offset,
-            Page::Prev { offset, .. } => *offset,
-            Page::Number { offset, .. } => *offset,
+            Page::Next { offset, .. } | Page::Prev { offset, .. } | Page::Number { offset, .. } => *offset,
             Page::Ellipsis => 0,
         };
         let params = PagerParams {

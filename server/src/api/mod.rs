@@ -25,7 +25,7 @@ mod pool;
 mod pool_category;
 pub mod post;
 mod snapshot;
-mod tag;
+pub mod tag;
 mod tag_category;
 mod upload;
 mod user;
