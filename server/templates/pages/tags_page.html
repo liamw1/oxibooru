@@ -5,6 +5,12 @@
 {% block content %}
 {% if ctx.has_privilege(Action::TagList) %}
 <div class="pager">
+    <style>
+        {% for category in categories %}
+        .tag-{{ category.name()? }} { color: {{ category.color()? }}; }
+        {% endfor %}
+    </style>
+
     {% include "partials/tags_header.html" %}
 
     <div class="messages"></div>
@@ -56,7 +62,7 @@
                     <td class="names">
                         <ul>
                             {% for name in tag.names()? %}
-                            <li><a href="tag/{{ name }}">{{ name }}</a></li>
+                            <li><a class="tag-{{ tag.category()? }}" href="tag/{{ name }}">{{ name }}</a></li>
                             {% endfor %}
                         </ul>
                     </td>
@@ -68,7 +74,7 @@
                             {% for implication in tag.implications()? %}
                             <li>
                                 {% let name = implication.primary_name() %}
-                                <a href="tag/{{ name }}">{{ name }}</a>
+                                <a class="tag-{{ implication.category }}" href="tag/{{ name }}">{{ name }}</a>
                             </li>
                             {% endfor %}
                         </ul>
@@ -82,7 +88,7 @@
                             {% for suggestion in tag.suggestions()? %}
                             <li>
                                 {% let name = suggestion.primary_name() %}
-                                <a href="tag/{{ name }}">{{ name }}</a>
+                                <a class="tag-{{ suggestion.category }}" href="tag/{{ name }}">{{ name }}</a>
                             </li>
                             {% endfor %}
                         </ul>

@@ -9,6 +9,7 @@ mod home;
 mod pager;
 mod post;
 mod tag;
+mod tag_category;
 
 pub fn post_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
     let base = format!("/post/{post_id}");
