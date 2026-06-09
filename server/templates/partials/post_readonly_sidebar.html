@@ -76,15 +76,13 @@
             {% for tag in post.tags()? %}
             <li>
                 {% if ctx.has_privilege(Action::TagView) %}
-                <a href="tag/{{ tag.primary_name() }}" {# TODO: makeCssName(tag.category, tag) #}>
-                    <i class="fa fa-tag"></i>
-                </a>
+                <a class="tag-{{ tag.category }}" href="tag/{{ tag.primary_name() }}"><i class="fa fa-tag"></i></a>
                 {% endif %}
                 {% if ctx.has_privilege(Action::PostList) %}
-                {# TODO: posts link #}
-                {{ tag.primary_name() }}
+                <a class="tag-{{ tag.category }}" href="posts?search-text={{ tag.primary_name() }}">{{
+                    tag.primary_name() }}</a>
                 {% else %}
-                {{ tag.primary_name() }}
+                <span class="tag-{{ tag.category }}">{{ tag.primary_name() }}</span>
                 {% endif %}
                 &#32;
                 <span class="tag-usages" data-pseudo-content="{{ tag.usages }}"></span>

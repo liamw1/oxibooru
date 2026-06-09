@@ -5,6 +5,12 @@
 {% block content %}
 {% if ctx.has_privilege(Action::TagView) %}
 <div class="content-wrapper" id="tag">
+    <style>
+        {% for category in categories %}
+        .tag-{{ category.name()? }} { color: {{ category.color()? }}; }
+        {% endfor %}
+    </style>
+
     <h1>{{ tag.primary_name()? }}</h1>
     <nav class="buttons">
         <ul>
@@ -23,6 +29,7 @@
         </ul>
     </nav>
 
+    {# TODO: Make it so that client can navigate without a page reload #}
     <div class="content">
         {% match active_tag_tab %}
         {% when TagTab::Summary %}{% include "partials/tag_summary.html" %}

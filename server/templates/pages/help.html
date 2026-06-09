@@ -24,6 +24,7 @@
         </ul>
     </nav>
 
+    {# TODO: Make it so that client can navigate without a page reload #}
     <div class="content">
         {% match active_help_tab %}
         {% when HelpTab::About %}{% include "partials/help_about.html" %}
