@@ -1,7 +1,8 @@
 use crate::app::{AppState, Context};
 use crate::config::Action;
-use crate::extract::{Ctx, Json, PageParams, Query, ResourceParams};
+use crate::extract::{Ctx, Json, PageParams, Path, Query, ResourceParams};
 use crate::resource::tag::{Field, TagInfo};
+use crate::string::SmallString;
 use crate::web::Tab;
 use crate::web::pager::{Page, Pager};
 use crate::{api, time};
@@ -11,7 +12,12 @@ use axum::{Router, routing};
 use serde::{Deserialize, Serialize};
 
 pub fn routes() -> Router<AppState> {
-    Router::new().route("/tags", routing::get(list))
+    Router::new()
+        .route("/tags", routing::get(list))
+        .route("/tag/{name}", routing::get(summary))
+        .route("/tag/{name}/edit", routing::get(edit))
+        .route("/tag/{name}/merge", routing::get(merge))
+        .route("/tag/{name}/delete", routing::get(delete))
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -71,4 +77,63 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, page_params: Query<PagePar
     .render()
     .map(Html)
     .unwrap()
+}
+
+#[derive(PartialEq, Eq)]
+enum TagTab {
+    Summary,
+    Edit,
+    Merge,
+    Delete,
+}
+
+#[derive(Template)]
+#[template(path = "pages/tag.html")]
+struct TagTemplate {
+    ctx: Context,
+    active_tab: Tab,
+    active_tag_tab: TagTab,
+    tag: TagInfo,
+}
+
+async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> Html<String> {
+    let fields = [
+        Field::Description,
+        Field::Category,
+        Field::Names,
+        Field::Implications,
+        Field::Suggestions,
+        Field::Usages,
+    ]
+    .into();
+
+    let resource_params = Query(ResourceParams { query: None, fields });
+    let Json(tag) = api::tag::get(ctx.clone(), path, resource_params).await.unwrap();
+
+    let Ctx(ctx, _) = ctx;
+    TagTemplate {
+        ctx,
+        active_tab: Tab::Tag,
+        active_tag_tab,
+        tag,
+    }
+    .render()
+    .map(Html)
+    .unwrap()
+}
+
+async fn summary(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+    view(ctx, path, TagTab::Summary).await
+}
+
+async fn edit(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+    view(ctx, path, TagTab::Edit).await
+}
+
+async fn merge(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+    view(ctx, path, TagTab::Merge).await
+}
+
+async fn delete(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+    view(ctx, path, TagTab::Delete).await
 }
