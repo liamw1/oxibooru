@@ -2,10 +2,11 @@ use crate::app::{AppState, Context};
 use crate::config::Action;
 use crate::extract::{Ctx, Json, PageParams, Path, Query, ResourceParams};
 use crate::resource::tag::{Field, TagInfo};
+use crate::resource::tag_category::TagCategoryInfo;
 use crate::string::SmallString;
 use crate::web::Tab;
 use crate::web::pager::{Page, Pager};
-use crate::{api, time};
+use crate::{api, time, web};
 use askama::Template;
 use axum::response::Html;
 use axum::{Router, routing};
@@ -45,6 +46,7 @@ struct ListTemplate<'a> {
     ctx: Context,
     active_tab: Tab,
     tags: Vec<TagInfo>,
+    categories: Vec<TagCategoryInfo>,
     pager: Pager<'a, Params>,
     params: &'a Params,
 }
@@ -52,6 +54,7 @@ struct ListTemplate<'a> {
 async fn list(ctx: Ctx, Query(params): Query<Params>, page_params: Query<PageParams>) -> Html<String> {
     let fields = [
         Field::CreationTime,
+        Field::Category,
         Field::Names,
         Field::Implications,
         Field::Suggestions,
@@ -62,6 +65,7 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, page_params: Query<PagePar
     let query = params.search_text.clone();
     let resource_params = Query(ResourceParams { query, fields });
     let Json(response) = api::tag::list(ctx.clone(), resource_params, page_params).await.unwrap();
+    let categories = web::tag_category::get_categories(ctx.clone()).await.unwrap();
 
     let params = params.simplify();
     let pager = Pager::build("tags", &params, page_params, response.total);
@@ -71,6 +75,7 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, page_params: Query<PagePar
         ctx,
         active_tab: Tab::Tag,
         tags: response.results,
+        categories,
         pager,
         params: &params,
     }
@@ -94,6 +99,7 @@ struct TagTemplate {
     active_tab: Tab,
     active_tag_tab: TagTab,
     tag: TagInfo,
+    categories: Vec<TagCategoryInfo>,
 }
 
 async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> Html<String> {
@@ -109,6 +115,7 @@ async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> Html
 
     let resource_params = Query(ResourceParams { query: None, fields });
     let Json(tag) = api::tag::get(ctx.clone(), path, resource_params).await.unwrap();
+    let categories = web::tag_category::get_categories(ctx.clone()).await.unwrap();
 
     let Ctx(ctx, _) = ctx;
     TagTemplate {
@@ -116,6 +123,7 @@ async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> Html
         active_tab: Tab::Tag,
         active_tag_tab,
         tag,
+        categories,
     }
     .render()
     .map(Html)

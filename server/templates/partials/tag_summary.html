@@ -2,7 +2,7 @@
     <section class="details">
         <section>
             Category:
-            <span {# TODO: makeCssName(tag.category, tag) #}>{{ tag.category()? }}</span>
+            <span class="tag-{{ tag.category()? }}">{{ tag.category()? }}</span>
         </section>
 
         <section>
@@ -13,9 +13,7 @@
                 (none)
                 {% else %}
                 {% for alias in names.iter().skip(1) %}
-                <li>
-                    <a href="tag/{{ alias }}">{{ alias }}</a>
-                </li>
+                <li><a class="tag-{{ tag.category()? }}" href="tag/{{ alias }}">{{ alias }}</a></li>
                 {% endfor %}
                 {% endif %}
             </ul>
@@ -31,7 +29,7 @@
                 {% for implication in tag.implications()? %}
                 <li>
                     {% let name = implication.primary_name() %}
-                    <a href="tag/{{ name }}">{{ name }}</a>
+                    <a class="tag-{{ implication.category }}" href="tag/{{ name }}">{{ name }}</a>
                 </li>
                 {% endfor %}
                 {% endif %}
@@ -47,7 +45,7 @@
                 {% else %}
                 {% for suggestion in tag.suggestions()? %}
                 {% let name = suggestion.primary_name() %}
-                <a href="tag/{{ name }}">{{ name }}</a>
+                <a class="tag-{{ suggestion.category }}" href="tag/{{ name }}">{{ name }}</a>
                 {% endfor %}
                 {% endif %}
             </ul>
