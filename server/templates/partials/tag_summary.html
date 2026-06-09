@@ -1,0 +1,70 @@
+<div class="content-wrapper tag-summary">
+    <section class="details">
+        <section>
+            Category:
+            <span {# TODO: makeCssName(tag.category, tag) #}>{{ tag.category()? }}</span>
+        </section>
+
+        <section>
+            Aliases:<br>
+            <ul>
+                {% let names = tag.names()? %}
+                {% if names.len() == 1 %}
+                (none)
+                {% else %}
+                {% for alias in names.iter().skip(1) %}
+                <li>
+                    <a href="tag/{{ alias }}">{{ alias }}</a>
+                </li>
+                {% endfor %}
+                {% endif %}
+            </ul>
+        </section>
+
+        <section>
+            Implications:<br>
+            <ul>
+                {% let implications = tag.implications()? %}
+                {% if implications.is_empty() %}
+                (none)
+                {% else %}
+                {% for implication in tag.implications()? %}
+                <li>
+                    {% let name = implication.primary_name() %}
+                    <a href="tag/{{ name }}">{{ name }}</a>
+                </li>
+                {% endfor %}
+                {% endif %}
+            </ul>
+        </section>
+
+        <section>
+            Suggestions:<br>
+            <ul>
+                {% let suggestions = tag.suggestions()? %}
+                {% if suggestions.is_empty() %}
+                (none)
+                {% else %}
+                {% for suggestion in tag.suggestions()? %}
+                {% let name = suggestion.primary_name() %}
+                <a href="tag/{{ name }}">{{ name }}</a>
+                {% endfor %}
+                {% endif %}
+            </ul>
+        </section>
+    </section>
+
+    <section class="description">
+        <hr>
+        {% let description = tag.description()? %}
+        {% if description.is_empty() %}
+        This tag has no description yet.
+        {% else %}
+        {# TODO: makeMarkdown #}
+        {{ tag.description()? }}
+        {% endif %}
+        <p>
+            This tag has <a href="posts?search-text={{ tag.primary_name()? }}">{{ tag.usages()? }} usage(s)</a>.
+        </p>
+    </section>
+</div>

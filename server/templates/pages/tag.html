@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} - Tag #{{ tag.primary_name()? }}{% endblock %}
+
+{% block content %}
+{% if ctx.has_privilege(Action::TagView) %}
+<div class="content-wrapper" id="tag">
+    <h1>{{ tag.primary_name()? }}</h1>
+    <nav class="buttons">
+        <ul>
+            <li data-name="summary" {% if active_tag_tab==TagTab::Summary %} class="active" {% endif %}>
+                <a href="tag/{{ tag.primary_name()? }}">Summary</a>
+            </li>
+            <li data-name="edit" {% if active_tag_tab==TagTab::Edit %} class="active" {% endif %}>
+                <a href="tag/{{ tag.primary_name()? }}/edit">Edit</a>
+            </li>
+            <li data-name="merge" {% if active_tag_tab==TagTab::Merge %} class="active" {% endif %}>
+                <a href="tag/{{ tag.primary_name()? }}/merge">Merge with&hellip;</a>
+            </li>
+            <li data-name="delete" {% if active_tag_tab==TagTab::Delete %} class="active" {% endif %}>
+                <a href="tag/{{ tag.primary_name()? }}/delete">Delete</a>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="content">
+        {% match active_tag_tab %}
+        {% when TagTab::Summary %}{% include "partials/tag_summary.html" %}
+        {% when TagTab::Edit %}{% include "partials/tag_edit.html" %}
+        {% when TagTab::Merge %}{% include "partials/tag_merge.html" %}
+        {% when TagTab::Delete %}{% include "partials/tag_delete.html" %}
+        {% endmatch %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
