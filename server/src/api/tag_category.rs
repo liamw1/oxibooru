@@ -50,7 +50,7 @@ fn verify_visibility(conn: &mut PgConnection, ctx: &Context, category_name: &Sma
         (status = 403, description = "Privileges are too low"),
     ),
 )]
-async fn list(
+pub async fn list(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<UnpagedResponse<TagCategoryInfo>>> {

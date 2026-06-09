@@ -4,9 +4,10 @@ use crate::extract::{Ctx, Json, PageParams, Path, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostSafety, PostType};
 use crate::resource::NotRequested;
 use crate::resource::post::{Field, PostInfo};
+use crate::resource::tag_category::TagCategoryInfo;
 use crate::web::Tab;
 use crate::web::pager::{Page, Pager};
-use crate::{api, time, unit};
+use crate::{api, time, unit, web};
 use askama::Template;
 use axum::response::Html;
 use axum::{Router, routing};
@@ -149,6 +150,7 @@ struct MainTemplate {
     post: PostInfo,
     prev_post: Option<PostInfo>,
     next_post: Option<PostInfo>,
+    tag_categories: Vec<TagCategoryInfo>,
     params: Params,
 }
 
@@ -188,6 +190,7 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> Htm
     let Json(neighbors) = api::post::get_neighbors(ctx.clone(), post_id, resource_params)
         .await
         .unwrap();
+    let tag_categories = web::tag_category::get_categories(ctx.clone()).await.unwrap();
 
     let Ctx(ctx, _) = ctx;
     MainTemplate {
@@ -197,6 +200,7 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> Htm
         post,
         prev_post: neighbors.prev,
         next_post: neighbors.next,
+        tag_categories,
         params,
     }
     .render()

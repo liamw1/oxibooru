@@ -1,5 +1,6 @@
 {
   "files.associations": {
     "*.html": "jinja-html"
-  }
+  },
+  "html.format.contentUnformatted": "pre,code,style,script"
 }

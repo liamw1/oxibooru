@@ -4,6 +4,12 @@
 
 {% block content %}
 <div class="content-wrapper transparent-container post-view">
+    <style>
+        {% for category in tag_categories %}
+        .tag-{{ category.name()? }} { color: {{ category.color()? }}; }
+        {% endfor %}
+    </style>
+
     <aside class="sidebar">
         <nav class="buttons">
             <article class="previous-post">
