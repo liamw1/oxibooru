@@ -1,0 +1,72 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} - Pools{% endblock %}
+
+{% block content %}
+{% if ctx.has_privilege(Action::PoolList) %}
+<div class="pager">
+    <style>
+        {% for category in categories %}
+        .pool-{{ category.name()? }} { color: {{ category.color()? }}; }
+        {% endfor %}
+    </style>
+
+    {% include "partials/pools_header.html" %}
+
+    <div class="messages"></div>
+
+    <div class="pool-list table-wrap">
+        {% if !pools.is_empty() %}
+        <table>
+            <thead>
+                {# TODO: Maybe just have these element replace sort(s) in query instead of replacing whole query #}
+                <th class="names">
+                    {% if params.search_text() == "sort:name" || params.search_text().is_empty() %}
+                    <a href="pools?search-text=-sort:name">Pool name(s)</a>
+                    {% else %}
+                    <a href="pools?search-text=sort:name">Pool name(s)</a>
+                    {% endif %}
+                </th>
+                <th class="post-count">
+                    {% if params.search_text() == "sort:post-count" %}
+                    <a href="pools?search-text=-sort:post-count">Post count</a>
+                    {% else %}
+                    <a href="pools?search-text=sort:post-count">Post count</a>
+                    {% endif %}
+                </th>
+                <th class="creation-time">
+                    {% if params.search_text() == "sort:creation-time" %}
+                    <a href="pools?search-text=-sort:creation-time">Created on</a>
+                    {% else %}
+                    <a href="pools?search-text=sort:creation-time">Created on</a>
+                    {% endif %}
+                </th>
+            </thead>
+            <tbody>
+                {% for pool in pools %}
+                <tr>
+                    <td class="names">
+                        <ul>
+                            {% for name in pool.names()? %}
+                            <li><a class="pool-{{ pool.category()? }}" href="pool/{{ pool.id()? }}">{{ name }}</a></li>
+                            {% endfor %}
+                        </ul>
+                    </td>
+                    <td class="post-count">
+                        <a href="posts?search-text={{ pool.primary_name()? }}">{{ pool.post_count()? }}</a>
+                    </td>
+                    <td class="creation-time">
+                        {% let creation_time = pool.creation_time()? %}
+                        <time datetime="{{ creation_time }}">{{ time::since(creation_time) }}</time>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+    {% include "partials/manual_pager.html" %}
+</div>
+{% endif %}
+{% endblock %}

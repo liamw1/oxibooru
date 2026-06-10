@@ -7,6 +7,8 @@ use tower_http::services::ServeDir;
 mod help;
 mod home;
 mod pager;
+mod pool;
+mod pool_category;
 mod post;
 mod tag;
 mod tag_category;
@@ -24,6 +26,7 @@ pub fn routes(state: AppState) -> Router {
 
     help::routes()
         .merge(home::routes())
+        .merge(pool::routes())
         .merge(post::routes())
         .merge(tag::routes())
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
