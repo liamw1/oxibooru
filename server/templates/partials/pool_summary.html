@@ -1,0 +1,37 @@
+<div class="content-wrapper pool-summary">
+    <section class="details">
+        <section>
+            Category:
+            <span class="pool-{{ pool.category()? }}">{{ pool.category()? }}</span>
+        </section>
+
+        <section>
+            Aliases:<br>
+            <ul>
+                {% let names = pool.names()? %}
+                {% if names.len() == 1 %}
+                (none)
+                {% else %}
+                {% for alias in names.iter().skip(1) %}
+                <li><a class="pool-{{ pool.category()? }}" href="pool/{{ pool.id()? }}">{{ alias }}</a></li>
+                {% endfor %}
+                {% endif %}
+            </ul>
+        </section>
+    </section>
+
+    <section class="description">
+        <hr>
+        {% let description = pool.description()? %}
+        {% if description.is_empty() %}
+        This pool has no description yet.
+        {% else %}
+        {# TODO: makeMarkdown #}
+        {{ pool.description()? }}
+        {% endif %}
+        <p>
+            This pool has <a href="posts?search-text=pool:{{ pool.primary_name()? }}">{{ pool.post_count()? }}
+                post(s)</a>.
+        </p>
+    </section>
+</div>
