@@ -69,7 +69,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
         (status = 403, description = "Privileges are too low"),
     ),
 )]
-async fn list(
+pub async fn list(
     Ctx(ctx, connection_pool): Ctx,
     Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
@@ -110,7 +110,7 @@ async fn list(
         (status = 404, description = "Pool does not exist"),
     ),
 )]
-async fn get(
+pub async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(pool_id): Path<i64>,
     Query(params): Query<ResourceParams<Field>>,

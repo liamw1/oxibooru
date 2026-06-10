@@ -1,9 +1,9 @@
 use crate::app::Context;
 use crate::content::hash::PostHash;
 use crate::model::pool::{Pool, PoolName, PoolPost};
-use crate::resource;
 use crate::resource::field::Mask;
 use crate::resource::post::MicroPost;
+use crate::resource::{self, NotRequested};
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
 use crate::search::preferences;
 use crate::string::{LargeString, SmallString};
@@ -81,6 +81,10 @@ pub struct PoolInfo {
 }
 
 impl PoolInfo {
+    pub fn primary_name(&self) -> Result<&str, NotRequested> {
+        self.names().map(|names| names[0].as_ref())
+    }
+
     pub fn new(conn: &mut PgConnection, ctx: &Context, pool: Pool, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch(conn, ctx, vec![pool], fields).map(resource::single)
     }

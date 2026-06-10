@@ -104,13 +104,21 @@ impl Context {
             || self.has_privilege(Action::PostMerge)
     }
 
+    pub fn can_edit_pool_categories(&self) -> bool {
+        self.has_privilege(Action::PoolCategoryCreate)
+            || self.has_privilege(Action::PoolCategoryEditName)
+            || self.has_privilege(Action::PoolCategoryEditColor)
+            || self.has_privilege(Action::PoolCategoryDelete)
+            || self.has_privilege(Action::PoolCategorySetDefault)
+    }
+
     pub fn can_edit_tag_categories(&self) -> bool {
         self.has_privilege(Action::TagCategoryCreate)
-            || self.has_privilege(Action::TagCategoryEditColor)
             || self.has_privilege(Action::TagCategoryEditName)
+            || self.has_privilege(Action::TagCategoryEditColor)
             || self.has_privilege(Action::TagCategoryEditOrder)
-            || self.has_privilege(Action::TagCategorySetDefault)
             || self.has_privilege(Action::TagCategoryDelete)
+            || self.has_privilege(Action::TagCategorySetDefault)
     }
 
     /// Returns error if client is lower rank than `required_rank`.
