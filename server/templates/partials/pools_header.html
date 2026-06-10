@@ -1,0 +1,17 @@
+<div class="pool-list-header">
+    <form class="horizontal search" action="pools" method="get">
+        <input type="text" id="search-text" name="search-text" value="{{ params.search_text() }}">
+        <wbr>
+        <button type="submit">Search</button>
+
+        <div class="buttons">
+            <a class="button append" href="help/search/pools">Syntax help</a>
+            {% if ctx.has_privilege(Action::PoolCreate) %}
+            <a class="append" href="pool/create">Add new pool</a>
+            {% endif %}
+            {% if ctx.can_edit_pool_categories() %}
+            <a class="append" href="pool-categories">Pool categories</a>
+            {% endif %}
+        </div>
+    </form>
+</div>

@@ -31,7 +31,7 @@
 .pool-list table .creation-time {
     text-align: center;
     width: 8%;
-    white-space: pre;
+    white-space: nowrap;
 }
 
 .pool-list table ul {

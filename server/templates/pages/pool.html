@@ -1,0 +1,43 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} - Pool #{{ pool.primary_name()? }}{% endblock %}
+
+{% block content %}
+{% if ctx.has_privilege(Action::PoolView) %}
+<div class="content-wrapper" id="pool">
+    <style>
+        {% for category in categories %}
+        .pool-{{ category.name()? }} { color: {{ category.color()? }}; }
+        {% endfor %}
+    </style>
+
+    <h1>{{ pool.primary_name()? }}</h1>
+    <nav class="buttons">
+        <ul>
+            <li data-name="summary" {% if active_pool_tab==PoolTab::Summary %} class="active" {% endif %}>
+                <a href="pool/{{ pool.id()? }}">Summary</a>
+            </li>
+            <li data-name="edit" {% if active_pool_tab==PoolTab::Edit %} class="active" {% endif %}>
+                <a href="pool/{{ pool.id()? }}/edit">Edit</a>
+            </li>
+            <li data-name="merge" {% if active_pool_tab==PoolTab::Merge %} class="active" {% endif %}>
+                <a href="pool/{{ pool.id()? }}/merge">Merge with&hellip;</a>
+            </li>
+            <li data-name="delete" {% if active_pool_tab==PoolTab::Delete %} class="active" {% endif %}>
+                <a href="pool/{{ pool.id()? }}/delete">Delete</a>
+            </li>
+        </ul>
+    </nav>
+
+    {# TODO: Make it so that client can navigate without a page reload #}
+    <div class="content">
+        {% match active_pool_tab %}
+        {% when PoolTab::Summary %}{% include "partials/pool_summary.html" %}
+        {% when PoolTab::Edit %}{% include "partials/pool_edit.html" %}
+        {% when PoolTab::Merge %}{% include "partials/pool_merge.html" %}
+        {% when PoolTab::Delete %}{% include "partials/pool_delete.html" %}
+        {% endmatch %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
