@@ -27,7 +27,7 @@ use crate::schema::{
 };
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, config, db};
+use crate::{api, app, config, db};
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::ServiceExt;
 use axum::extract::Request;
@@ -459,6 +459,9 @@ fn get_state_guard() -> MutexGuard<'static, Option<AppState>> {
 }
 
 fn recreate_database() -> AdminResult<AppState> {
+    #[cfg(feature = "load_env")]
+    app::load_env().expect("Failed to load .env");
+
     let rng = &mut OsRng;
     let test_data_directory = std::env::temp_dir().join(rng.next_u64().to_string());
 

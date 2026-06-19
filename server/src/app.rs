@@ -105,6 +105,20 @@ pub fn enable_tracing(state: &AppState) {
         .init();
 }
 
+#[cfg(feature = "load_env")]
+pub fn load_env() -> dotenvy::Result<()> {
+    if let Some(env_path) =
+        std::env::args().find_map(|arg| arg.split_once("--env-path=").map(|(_, path)| path.to_owned()))
+    {
+        // If env_path is specified in args, read from that path
+        dotenvy::from_filename(env_path)
+    } else {
+        // Otherwise, try to read a `.env` from the working directory or its parent
+        dotenvy::from_filename(".env").or_else(|_| dotenvy::from_filename("../.env"))
+    }
+    .map(|_| ())
+}
+
 pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> {
     let migration_range = db::run_database_migrations(&state.connection_pool)?;
     db::run_server_migrations(state, migration_range)?;

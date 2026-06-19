@@ -318,7 +318,10 @@ pub fn create() -> Config {
     if cfg!(test) {
         panic!("Production config disallowed in test build!")
     } else {
-        create_config(Some("config"))
+        let config_path =
+            std::env::args().find_map(|arg| arg.split_once("--config-path=").map(|(_, path)| path.to_owned()));
+        let config_path = config_path.as_deref().unwrap_or("config");
+        create_config(Some(config_path))
     }
 }
 
@@ -341,10 +344,6 @@ pub fn port() -> u16 {
 /// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DATABASE`.
 pub fn database_url(database_override: Option<&str>) -> String {
     const DEFAULT_POSTGRES_PORT: u16 = 5432;
-    if !DOCKER_DEPLOYMENT {
-        dotenvy::from_filename("../.env").expect(".env must be in project root directory");
-    }
-
     let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER must be defined in .env");
     let password = std::env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD must be defined in .env");
     let hostname = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
@@ -358,7 +357,6 @@ pub fn database_url(database_override: Option<&str>) -> String {
     format!("postgres://{user}:{password}@{hostname}:{port}/{database}")
 }
 
-const DOCKER_DEPLOYMENT: bool = option_env!("DOCKER_DEPLOYMENT").is_some();
 const DEFAULT_CONFIG: &str = include_str!("../config.toml.dist");
 
 fn create_config(config_path: Option<&str>) -> Config {

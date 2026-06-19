@@ -78,7 +78,6 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 ################################ Build Phase ###############################
 FROM chef AS builder
-ENV DOCKER_DEPLOYMENT=1
 
 RUN mkdir -p /data
 
@@ -94,11 +93,11 @@ COPY macros/src macros/src
 # Build dependencies (this will be cached for future builds)
 ARG TARGET_CPU
 ARG CODEGEN_OPTIONS="-C target-cpu=$TARGET_CPU"
-RUN RUSTFLAGS=${CODEGEN_OPTIONS} cargo chef cook --release --recipe-path recipe.json
+RUN RUSTFLAGS=${CODEGEN_OPTIONS} cargo chef cook --release --no-default-features --recipe-path recipe.json
 
 # Buid application
 COPY . .
-RUN RUSTFLAGS=${CODEGEN_OPTIONS} cargo build --release
+RUN RUSTFLAGS=${CODEGEN_OPTIONS} cargo build --release --no-default-features
 
 # Verify the Rust binary has no dynamic dependencies
 RUN readelf -d /opt/app/target/release/oxibooru_server | grep -q "NEEDED" \

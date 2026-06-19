@@ -40,6 +40,9 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() {
+    #[cfg(feature = "load_env")]
+    app::load_env().expect("Failed to load .env");
+
     let state = app::AppState::new(db::create_connection_pool(), config::create());
 
     app::enable_tracing(&state);
