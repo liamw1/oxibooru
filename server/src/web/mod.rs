@@ -29,6 +29,7 @@ pub fn routes(state: AppState) -> Router {
         .merge(pool::routes())
         .merge(post::routes())
         .merge(tag::routes())
+        .merge(tag_category::routes())
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
         .nest_service("/data", ServeDir::new(&data_dir))
         .nest_service("/static", ServeDir::new(&static_dir))
