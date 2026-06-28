@@ -11,7 +11,7 @@ use crate::extract::{Ctx, Json, JsonOrMultipart, Path, Query};
 use crate::model::enums::{AvatarStyle, ResourceProperty, ResourceType, UserRank};
 use crate::model::user::{NewUser, User};
 use crate::resource::user::{Field, UserInfo, Visibility};
-use crate::schema::user;
+use crate::schema::{database_statistics, user};
 use crate::search::Builder;
 use crate::search::user::QueryBuilder;
 use crate::string::SmallString;
@@ -170,8 +170,7 @@ async fn create_impl(
     params: ResourceParams<Field>,
     body: UserCreateBody,
 ) -> ApiResult<Json<UserInfo>> {
-    let creation_rank = body.rank.unwrap_or(ctx.config.default_rank());
-    if creation_rank == UserRank::Anonymous {
+    if body.rank == Some(UserRank::Anonymous) {
         return Err(ApiError::InvalidUserRank);
     }
 
@@ -183,8 +182,10 @@ async fn create_impl(
     };
 
     ctx.verify_privilege(action)?;
-    if creation_rank > ctx.config.default_rank() {
-        api::verify_privilege(ctx.client, creation_rank)?;
+    if let Some(rank) = body.rank
+        && rank > ctx.config.default_rank()
+    {
+        api::verify_privilege(ctx.client, rank)?;
     }
 
     api::verify_matches_regex(&ctx.config, &body.name, RegexType::Username)?;
@@ -214,12 +215,21 @@ async fn create_impl(
                     return Err(ApiError::AlreadyExists(ResourceProperty::UserName))?;
                 }
 
+                let user_count: i64 = database_statistics::table
+                    .select(database_statistics::user_count)
+                    .first(conn)?;
+                let rank = if user_count > 0 {
+                    body.rank.unwrap_or(ctx.config.default_rank())
+                } else {
+                    UserRank::Administrator
+                };
+
                 let user: User = NewUser {
                     name: &body.name,
                     password_hash: &hash,
                     password_salt: salt.as_str(),
                     email: body.email.as_deref(),
-                    rank: creation_rank,
+                    rank,
                     avatar_style,
                 }
                 .insert_into(user::table)

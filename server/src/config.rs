@@ -277,7 +277,8 @@ impl Config {
     }
 
     pub fn default_rank(&self) -> UserRank {
-        self.public_info.default_user_rank
+        // Default user rank can't be anonymous
+        std::cmp::max(self.public_info.default_user_rank, UserRank::Restricted)
     }
 
     pub fn privileges(&self) -> &PrivilegeConfig {
