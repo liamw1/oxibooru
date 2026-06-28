@@ -27,6 +27,7 @@ pub fn routes(state: AppState) -> Router {
     help::routes()
         .merge(home::routes())
         .merge(pool::routes())
+        .merge(pool_category::routes())
         .merge(post::routes())
         .merge(tag::routes())
         .merge(tag_category::routes())
