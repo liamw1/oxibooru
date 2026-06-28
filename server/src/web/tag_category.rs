@@ -1,7 +1,17 @@
-use crate::api;
 use crate::api::error::ApiResult;
+use crate::app::{AppState, Context};
+use crate::config::Action;
 use crate::extract::{Ctx, Json, Query, ResourceParams};
 use crate::resource::tag_category::{Field, TagCategoryInfo};
+use crate::web::Tab;
+use crate::{api, web};
+use askama::Template;
+use axum::response::Html;
+use axum::{Router, routing};
+
+pub fn routes() -> Router<AppState> {
+    Router::new().route("/tag-categories", routing::get(list))
+}
 
 pub async fn get_categories(ctx: Ctx) -> ApiResult<Vec<TagCategoryInfo>> {
     let fields = [Field::Name, Field::Color].into();
@@ -9,4 +19,29 @@ pub async fn get_categories(ctx: Ctx) -> ApiResult<Vec<TagCategoryInfo>> {
     api::tag_category::list(ctx, resource_params)
         .await
         .map(|Json(response)| response.results)
+}
+
+#[derive(Template)]
+#[template(path = "pages/tag_categories.html")]
+struct ListTemplate {
+    ctx: Context,
+    active_tab: Tab,
+    categories: Vec<TagCategoryInfo>,
+}
+
+async fn list(ctx: Ctx) -> Html<String> {
+    let fields = [Field::Name, Field::Color, Field::Usages, Field::Order, Field::Default].into();
+
+    let resource_params = Query(ResourceParams { query: None, fields });
+    let Json(response) = api::tag_category::list(ctx.clone(), resource_params).await.unwrap();
+
+    let Ctx(ctx, _) = ctx;
+    ListTemplate {
+        ctx,
+        active_tab: Tab::Tag,
+        categories: response.results,
+    }
+    .render()
+    .map(Html)
+    .unwrap()
 }
