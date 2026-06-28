@@ -1,10 +1,10 @@
+use crate::api;
 use crate::api::error::ApiResult;
 use crate::app::{AppState, Context};
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Query, ResourceParams};
 use crate::resource::tag_category::{Field, TagCategoryInfo};
 use crate::web::Tab;
-use crate::{api, web};
 use askama::Template;
 use axum::response::Html;
 use axum::{Router, routing};

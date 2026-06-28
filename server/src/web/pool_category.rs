@@ -1,7 +1,17 @@
 use crate::api;
 use crate::api::error::ApiResult;
+use crate::app::{AppState, Context};
+use crate::config::Action;
 use crate::extract::{Ctx, Json, Query, ResourceParams};
 use crate::resource::pool_category::{Field, PoolCategoryInfo};
+use crate::web::Tab;
+use askama::Template;
+use axum::response::Html;
+use axum::{Router, routing};
+
+pub fn routes() -> Router<AppState> {
+    Router::new().route("/pool-categories", routing::get(list))
+}
 
 pub async fn get_categories(ctx: Ctx) -> ApiResult<Vec<PoolCategoryInfo>> {
     let fields = [Field::Name, Field::Color].into();
@@ -9,4 +19,29 @@ pub async fn get_categories(ctx: Ctx) -> ApiResult<Vec<PoolCategoryInfo>> {
     api::pool_category::list(ctx, resource_params)
         .await
         .map(|Json(response)| response.results)
+}
+
+#[derive(Template)]
+#[template(path = "pages/pool_categories.html")]
+struct ListTemplate {
+    ctx: Context,
+    active_tab: Tab,
+    categories: Vec<PoolCategoryInfo>,
+}
+
+async fn list(ctx: Ctx) -> Html<String> {
+    let fields = [Field::Name, Field::Color, Field::Usages, Field::Default].into();
+
+    let resource_params = Query(ResourceParams { query: None, fields });
+    let Json(response) = api::pool_category::list(ctx.clone(), resource_params).await.unwrap();
+
+    let Ctx(ctx, _) = ctx;
+    ListTemplate {
+        ctx,
+        active_tab: Tab::Pool,
+        categories: response.results,
+    }
+    .render()
+    .map(Html)
+    .unwrap()
 }
