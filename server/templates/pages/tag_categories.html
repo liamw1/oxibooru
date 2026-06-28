@@ -1,0 +1,63 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} - Listing Tags{% endblock %}
+
+{% block content %}
+{% if ctx.has_privilege(Action::TagCategoryList) %}
+<div class="content-wrapper tag-categories">
+    <form>
+        <h1>Tag categories</h1>
+        <div class="table-wrap">
+            <table>
+
+                <head>
+                    <tr>
+                        <th class="name">Category name</th>
+                        <th class="color">CSS color</th>
+                        <th class="order">Order</th>
+                        <th class="usages">Usages</th>
+                    </tr>
+                </head>
+                <tbody>
+                    {% for category in categories %}
+                    <tr data-category="{{ category.name()? }}" {% if category.default()? %}class="default" {% endif %}>
+                        {# TODO: Implement editing for name, color, order, delete, and set default #}
+                        <td class="name">{{ category.name()? }}</td>
+                        <td class="color">{{ category.color()? }}</td>
+                        <td class="order">{{ category.order()? }}</td>
+                        <td class="usages">
+                            {% if ctx.has_privilege(Action::TagList) %}
+                            <a href="tags?search-text=category:{{ category.name()? }}">
+                                {{ category.usages()? }}
+                            </a>
+                            {% else %}
+                            {{ category.usages()? }}
+                            {% endif %}
+                        </td>
+                        {% if ctx.has_privilege(Action::TagCategoryDelete) %}
+                        <td class="remove">Remove</td>
+                        {% endif %}
+                        {% if ctx.has_privilege(Action::TagCategorySetDefault) %}
+                        <td class="set-default">Make default</td>
+                        {% endif %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if ctx.has_privilege(Action::TagCategoryCreate) %}
+        <p><a href class="add">Add new category</a></p>
+        {% endif %}
+
+        <div class="messages"></div>
+
+        {% if ctx.can_edit_tag_categories() %}
+        <div class="buttons">
+            <input type="submit" class="save" value="Save changes">
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endif %}
+{% endblock %}
