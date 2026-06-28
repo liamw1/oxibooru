@@ -20,7 +20,7 @@
                 </head>
                 <tbody>
                     {% for category in categories %}
-                    <tr data-category="{{ category.name()? }}" {% if category.default()? %}class="default" {% endif %}>
+                    <tr data-category="{{ category.name()? }}" {% if category.default()? %} class="default" {% endif %}>
                         {# TODO: Implement editing for name, color, order, delete, and set default #}
                         <td class="name">{{ category.name()? }}</td>
                         <td class="color">{{ category.color()? }}</td>
