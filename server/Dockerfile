@@ -40,7 +40,6 @@ RUN ./configure \
     --disable-podpages \
     --disable-txtpages \
     --disable-debug \
-    --disable-ffprobe \
     --disable-shared \
     --disable-pic \
     \
@@ -60,12 +59,16 @@ RUN ./configure \
     --extra-ldexeflags="-static -no-pie" \
     --pkg-config-flags="--static" \
   && make -j$(nproc) \
-  && strip ffmpeg
+  && strip ffmpeg \
+  && strip ffprobe
 
 # Verify ffmpeg has no dynamic dependencies
 RUN readelf -d ffmpeg | grep -q "NEEDED" \
   && (echo "ffmpeg has dynamic dependencies!" && readelf -d ffmpeg | grep NEEDED && exit 1) \
   || echo "ffmpeg is fully static"
+RUN readelf -d ffprobe | grep -q "NEEDED" \
+  && (echo "ffprobe has dynamic dependencies!" && readelf -d ffmpeg | grep NEEDED && exit 1) \
+  || echo "ffprobe is fully static"
 
 ############################## Planning Phase ##############################
 FROM lukemathwalker/cargo-chef:${CHEF_VERSION}-rust-${RUST_VERSION}-alpine${ALPINE_VERSION} AS chef
@@ -119,6 +122,7 @@ COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifi
 
 # Copy binaries with ownership
 COPY --from=ffmpeg_builder --chown=${PUID}:${PGID} /build/ffmpeg-${FFMPEG_VERSION}/ffmpeg /opt/app/ffmpeg
+COPY --from=ffmpeg_builder --chown=${PUID}:${PGID} /build/ffmpeg-${FFMPEG_VERSION}/ffprobe /opt/app/ffprobe
 COPY --from=builder --chown=${PUID}:${PGID} /opt/app/target/release/oxibooru_server /opt/app/server
 
 # Run it!

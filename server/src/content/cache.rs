@@ -22,6 +22,7 @@ pub struct CachedProperties {
     pub width: i32,
     pub height: i32,
     pub mime_type: MimeType,
+    pub post_type: PostType,
     pub file_size: i64,
     pub flags: PostFlags,
 }
@@ -87,7 +88,7 @@ fn compute_properties_no_cache(ctx: &Ctx, token: UploadToken) -> ApiResult<Cache
     let (checksum, md5_checksum) = content::map_read_result(hash::compute_checksums(&temp_path))?;
 
     let mime_type = token.mime_type();
-    let post_type = PostType::from(mime_type);
+    let post_type = decode::detect_post_type(&temp_path, mime_type)?;
     let has_sound = match post_type {
         PostType::Image | PostType::Animation => false,
         PostType::Video => decode::video_has_audio(&temp_path)?,
@@ -110,6 +111,7 @@ fn compute_properties_no_cache(ctx: &Ctx, token: UploadToken) -> ApiResult<Cache
         width: i32::try_from(image.width()).map_err(|_| LimitErrorKind::DimensionError)?,
         height: i32::try_from(image.height()).map_err(|_| LimitErrorKind::DimensionError)?,
         mime_type,
+        post_type,
         file_size,
         flags,
     })

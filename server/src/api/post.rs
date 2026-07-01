@@ -10,7 +10,7 @@ use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
 use crate::content::{Content, signature, upload};
 use crate::db::AsyncConnectionPool;
 use crate::extract::{Ctx, Json, JsonOrMultipart, Path, Query};
-use crate::model::enums::{PostFlag, PostFlags, PostSafety, PostType, ResourceProperty, ResourceType, Score};
+use crate::model::enums::{PostFlag, PostFlags, PostSafety, ResourceProperty, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
 use crate::resource::post::{Field, Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
@@ -620,7 +620,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
                 width: content_properties.width,
                 height: content_properties.height,
                 safety: body.safety,
-                type_: PostType::from(content_properties.mime_type),
+                type_: content_properties.post_type,
                 mime_type: content_properties.mime_type,
                 checksum: content_properties.checksum,
                 checksum_md5: content_properties.md5_checksum,
@@ -1028,7 +1028,7 @@ async fn update_impl(
                 new_post.file_size = content_properties.file_size;
                 new_post.width = content_properties.width;
                 new_post.height = content_properties.height;
-                new_post.type_ = PostType::from(content_properties.mime_type);
+                new_post.type_ = content_properties.post_type;
                 new_post.mime_type = content_properties.mime_type;
                 new_post.checksum = content_properties.checksum;
                 new_post.checksum_md5 = content_properties.md5_checksum;
