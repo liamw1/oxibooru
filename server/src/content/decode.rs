@@ -4,10 +4,12 @@ use crate::content::{self, flash};
 use crate::model::enums::{MimeType, PostType};
 use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
-use image::{DynamicImage, ImageFormat, ImageReader, Limits, RgbImage, RgbaImage};
+use image::codecs::{gif::GifDecoder, webp::WebPDecoder};
+use image::{AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits, RgbImage, RgbaImage};
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use std::process::Command;
 use swf::Tag;
 use tracing::error;
 
@@ -86,7 +88,28 @@ pub fn image(file_path: &Path, mime_type: MimeType) -> ApiResult<DynamicImage> {
     }
 }
 
+/// Returns the post type based on file content.
+/// For image formats that support animation, it checks the file content for multiple frames.
+/// For everything else, it just checks the mime type.
+pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<PostType> {
+    if let Some(is_animation) = match mime_type {
+        MimeType::Avif => Some(ffprobe_frame_count(file_path)? > 1),
+        MimeType::Gif => Some(gif_is_animated(file_path)?),
+        MimeType::Webp => Some(webp_is_animated(file_path)?),
+        _ => None,
+    } {
+        if is_animation {
+            Ok(PostType::Animation)
+        } else {
+            Ok(PostType::Image)
+        }
+    } else {
+        Ok(PostType::from(mime_type))
+    }
+}
+
 const FFMPEG_PATH: &str = "/opt/app/ffmpeg";
+const FFPROBE_PATH: &str = "/opt/app/ffprobe";
 
 /// Decodes a representative frame of the image or video at the given `path`.
 fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicImage>> {
@@ -186,6 +209,46 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
         u32::MAX - effective_width
     });
     Ok(images.into_iter().next())
+}
+
+fn gif_is_animated(path: &Path) -> ApiResult<bool> {
+    let file = content::map_read_result(File::open(path))?;
+    let mut decoder = GifDecoder::new(BufReader::new(file))?;
+    decoder.set_limits(image_reader_limits())?;
+
+    // GIF doesn't store a frame count, so just check for a second frame.
+    let mut frames = decoder.into_frames();
+    Ok(frames.nth(1).is_some())
+}
+
+fn webp_is_animated(path: &Path) -> ApiResult<bool> {
+    let file = content::map_read_result(File::open(path))?;
+    let mut decoder = WebPDecoder::new(BufReader::new(file))?;
+    decoder.set_limits(image_reader_limits())?;
+    Ok(decoder.has_animation())
+}
+
+/// Count frames in an animated image
+fn ffprobe_frame_count(path: &Path) -> ApiResult<u64> {
+    let output = Command::new(FFPROBE_PATH)
+        .args([
+            "-v",
+            "error",
+            "-count_frames",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=nb_read_frames",
+            "-of",
+            "csv=p=0",
+        ])
+        .arg(path)
+        .output()?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    stdout
+        .parse::<u64>()
+        .map_err(|_| ApiError::FfmpegError("Unable to count frames with FFprobe".into()))
 }
 
 /// Returns maximum decoded image size.
