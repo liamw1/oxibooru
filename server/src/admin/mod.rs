@@ -82,6 +82,8 @@ pub enum AdminTask {
     RecomputeSignatures,
     #[strum(message = "Rebuild reverse search index")]
     RecomputeIndex,
+    #[strum(message = "Recompute post types")]
+    RecomputePostTypes,
     #[strum(message = "Regenerate post thumbnails")]
     RegenerateThumbnails,
     #[strum(message = "Reset user passwords")]
@@ -197,6 +199,7 @@ fn run_task(state: &AppState, task: AdminTask, post_editor: &mut PostEditor, use
         AdminTask::RecomputeChecksums => post::recompute_checksums(state, post_editor),
         AdminTask::RecomputeSignatures => post::recompute_signatures(state, post_editor),
         AdminTask::RecomputeIndex => post::recompute_indexes(state, post_editor),
+        AdminTask::RecomputePostTypes => post::recompute_post_types(state, post_editor),
         AdminTask::RegenerateThumbnails => post::regenerate_thumbnails(state, post_editor),
         AdminTask::ResetPasswords => user::reset_password(state, user_editor),
         AdminTask::ResetFilenames => database::reset_filenames(state),
