@@ -91,6 +91,20 @@ pub fn recompute_indexes(state: &AppState, editor: &mut PostEditor) {
     });
 }
 
+/// Recomputes post types.
+/// Meant to apply changes to existing posts when post type definitions change.
+pub fn recompute_post_types(state: &AppState, editor: &mut PostEditor) {
+    input::user_input_loop(state, editor, |state: &AppState, editor: &mut PostEditor| {
+        let post_ids = user_query(state, editor)?;
+
+        let _timer = Timer::new("recompute_post_types");
+        let progress = ProgressReporter::new("Post types computed", PRINT_INTERVAL);
+        post_ids
+            .into_par_iter()
+            .try_for_each(|post_id| recompute_post_type_in_parallel(state, post_id, &progress))
+    });
+}
+
 pub fn regenerate_thumbnails(state: &AppState, editor: &mut PostEditor) {
     input::user_input_loop(state, editor, |state: &AppState, editor: &mut PostEditor| {
         let post_ids = user_query(state, editor)?;
@@ -292,6 +306,45 @@ fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &Pr
     match transaction_result {
         Ok(_) => progress.increment(),
         Err(err) => error!("Unable to update post signature for post {post_id} for reason: {err}"),
+    }
+    Ok(())
+}
+
+/// Recomputes post type for post with id `post_id`. Designed to operate in a parallel iterator.
+fn recompute_post_type_in_parallel(state: &AppState, post_id: i64, progress: &ProgressReporter) -> AdminResult<()> {
+    admin::is_cancelled()?;
+
+    let mut conn = state.connection_pool.get_blocking()?;
+    let mime_type = match post::table
+        .find(post_id)
+        .select(post::mime_type)
+        .first(&mut conn)
+        .optional()
+    {
+        Ok(Some(mime_type)) => mime_type,
+        Ok(None) => return Ok(()), // Post must have been deleted after starting task, skip
+        Err(err) => {
+            error!("Cannot retrieve MIME type for post {post_id} for reason: {err}");
+            return Ok(());
+        }
+    };
+
+    let post_hash = PostHash::new(&state.config, post_id);
+    let content_path = post_hash.content_path(mime_type);
+    let post_type = match decode::detect_post_type(&content_path, mime_type) {
+        Ok(type_) => type_,
+        Err(err) => {
+            error!("Cannot detect post type for post {post_id} for reason: {err}");
+            return Ok(());
+        }
+    };
+
+    match diesel::update(post::table.find(post_id))
+        .set(post::type_.eq(post_type))
+        .execute(&mut conn)
+    {
+        Ok(_) => progress.increment(),
+        Err(err) => error!("Type update failed for post {post_id} for reason: {err}"),
     }
     Ok(())
 }
