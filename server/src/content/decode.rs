@@ -14,7 +14,7 @@ use tracing::error;
 
 /// Returns a representative image for the given content.
 /// For images, this is simply the decoded image.
-/// For videos, FFmpeg determines the thumbnail.
+/// For videos, `FFmpeg` determines the thumbnail.
 /// For Flash media, it is the largest image that can be decoded from the Flash tags.
 pub fn representative_image(config: &Config, file_path: &Path, mime_type: MimeType) -> ApiResult<DynamicImage> {
     match mime_type {
