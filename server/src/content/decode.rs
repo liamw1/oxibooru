@@ -9,7 +9,6 @@ use image::{AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, ImageRead
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
-use std::process::Command;
 use swf::Tag;
 use tracing::error;
 
@@ -102,7 +101,7 @@ pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<Post
     }
 
     match mime_type {
-        MimeType::Avif => Ok(image_type(ffprobe_frame_count(file_path)? > 1)),
+        MimeType::Avif => Ok(image_type(is_animated(file_path)?)),
         MimeType::Gif => Ok(image_type(gif_is_animated(file_path)?)),
         MimeType::Webp => Ok(image_type(webp_is_animated(file_path)?)),
         MimeType::Bmp | MimeType::Jpeg | MimeType::Png => Ok(PostType::Image),
@@ -112,7 +111,6 @@ pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<Post
 }
 
 const FFMPEG_PATH: &str = "/opt/app/ffmpeg";
-const FFPROBE_PATH: &str = "/opt/app/ffprobe";
 
 /// Decodes a representative frame of the image or video at the given `path`.
 fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicImage>> {
@@ -214,6 +212,52 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
     Ok(images.into_iter().next())
 }
 
+/// Uses `FFmpeg` to determine if a file contains multiple frames
+fn is_animated(path: &Path) -> ApiResult<bool> {
+    let path_str = path.to_string_lossy();
+    let video_stream_count = FfmpegCommand::new_with_path(FFMPEG_PATH)
+        .input(&path_str)
+        .spawn()?
+        .iter()
+        .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?
+        .filter(|event| matches!(event, FfmpegEvent::ParsedInputStream(stream) if stream.is_video()))
+        .count();
+
+    for stream_index in 0..video_stream_count {
+        let iter = FfmpegCommand::new_with_path(FFMPEG_PATH)
+            .input(&path_str)
+            .args([
+                "-map",
+                &format!("0:v:{stream_index}"),
+                "-frames:v",
+                "2",
+                "-vf",
+                "scale=1:1:flags=neighbor",
+            ])
+            .rawvideo()
+            .spawn()?
+            .iter()
+            .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
+
+        let mut frames = 0;
+        let mut errors = Vec::new();
+        for event in iter {
+            match event {
+                FfmpegEvent::OutputFrame(_) => frames += 1,
+                FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => errors.push(err),
+                _ => {}
+            }
+        }
+
+        if frames > 1 {
+            return Ok(true);
+        } else if frames == 0 && !errors.is_empty() {
+            return Err(ApiError::FfmpegError(errors.join("; ").into()));
+        }
+    }
+    Ok(false)
+}
+
 fn gif_is_animated(path: &Path) -> ApiResult<bool> {
     let file = content::map_read_result(File::open(path))?;
     let mut decoder = GifDecoder::new(BufReader::new(file))?;
@@ -229,29 +273,6 @@ fn webp_is_animated(path: &Path) -> ApiResult<bool> {
     let mut decoder = WebPDecoder::new(BufReader::new(file))?;
     decoder.set_limits(image_reader_limits())?;
     Ok(decoder.has_animation())
-}
-
-/// Count frames in an animated image
-fn ffprobe_frame_count(path: &Path) -> ApiResult<u64> {
-    let output = Command::new(FFPROBE_PATH)
-        .args([
-            "-v",
-            "error",
-            "-count_frames",
-            "-select_streams",
-            "v:0",
-            "-show_entries",
-            "stream=nb_read_frames",
-            "-of",
-            "csv=p=0",
-        ])
-        .arg(path)
-        .output()?;
-
-    let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    stdout
-        .parse::<u64>()
-        .map_err(|_| ApiError::FfmpegError("Unable to count frames with FFprobe".into()))
 }
 
 /// Returns maximum decoded image size.
