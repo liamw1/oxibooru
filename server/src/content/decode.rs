@@ -92,19 +92,22 @@ pub fn image(file_path: &Path, mime_type: MimeType) -> ApiResult<DynamicImage> {
 /// For image formats that support animation, it checks the file content for multiple frames.
 /// For everything else, it just checks the mime type.
 pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<PostType> {
-    if let Some(is_animation) = match mime_type {
-        MimeType::Avif => Some(ffprobe_frame_count(file_path)? > 1),
-        MimeType::Gif => Some(gif_is_animated(file_path)?),
-        MimeType::Webp => Some(webp_is_animated(file_path)?),
-        _ => None,
-    } {
-        if is_animation {
-            Ok(PostType::Animation)
+    // Shorthand to return PostType::Animation or PostType::Image based on bool input
+    fn image_type(is_animated: bool) -> PostType {
+        if is_animated {
+            PostType::Animation
         } else {
-            Ok(PostType::Image)
+            PostType::Image
         }
-    } else {
-        Ok(PostType::from(mime_type))
+    }
+
+    match mime_type {
+        MimeType::Avif => Ok(image_type(ffprobe_frame_count(file_path)? > 1)),
+        MimeType::Gif => Ok(image_type(gif_is_animated(file_path)?)),
+        MimeType::Webp => Ok(image_type(webp_is_animated(file_path)?)),
+        MimeType::Bmp | MimeType::Jpeg | MimeType::Png => Ok(PostType::Image),
+        MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Ok(PostType::Video),
+        MimeType::Swf => Ok(PostType::Flash),
     }
 }
 
