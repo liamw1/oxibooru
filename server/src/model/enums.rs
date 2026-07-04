@@ -4,7 +4,6 @@ use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::SmallInt;
 use diesel::{AsExpression, FromSqlRow};
-use image::ImageFormat;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::ops::{BitOr, BitOrAssign};
@@ -72,17 +71,6 @@ pub enum PostType {
     Animation,
     Video,
     Flash,
-}
-
-impl From<MimeType> for PostType {
-    fn from(value: MimeType) -> Self {
-        match value {
-            MimeType::Avif | MimeType::Bmp | MimeType::Jpeg | MimeType::Png | MimeType::Webp => Self::Image,
-            MimeType::Gif => Self::Animation,
-            MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Self::Video,
-            MimeType::Swf => Self::Flash,
-        }
-    }
 }
 
 impl ToSql<SmallInt, Pg> for PostType {
@@ -164,21 +152,6 @@ impl MimeType {
             Self::Mov => "mov",
             Self::Webm => "webm",
             Self::Swf => "swf",
-        }
-    }
-
-    /// Returns corresponding [`ImageFormat`] if [`MimeType`] is an image format
-    /// supported for decoding by the `image` crate.
-    ///
-    /// Returns [`None`] otherwise.
-    pub fn to_image_format(self) -> Option<ImageFormat> {
-        match self {
-            MimeType::Bmp => Some(ImageFormat::Bmp),
-            MimeType::Gif => Some(ImageFormat::Gif),
-            MimeType::Jpeg => Some(ImageFormat::Jpeg),
-            MimeType::Png => Some(ImageFormat::Png),
-            MimeType::Webp => Some(ImageFormat::WebP),
-            MimeType::Avif | MimeType::Mov | MimeType::Mp4 | MimeType::Webm | MimeType::Swf => None,
         }
     }
 }

@@ -14,13 +14,21 @@ use tracing::error;
 
 /// Returns a representative image for the given content.
 /// For images, this is simply the decoded image.
-/// For videos, it is the first frame of the video.
+/// For videos, FFmpeg determines the thumbnail.
 /// For Flash media, it is the largest image that can be decoded from the Flash tags.
 pub fn representative_image(config: &Config, file_path: &Path, mime_type: MimeType) -> ApiResult<DynamicImage> {
-    match PostType::from(mime_type) {
-        PostType::Image | PostType::Animation => image(file_path, mime_type),
-        PostType::Video => ffmpeg_frame(file_path, PostType::Video).and_then(|frame| frame.ok_or(ApiError::EmptyVideo)),
-        PostType::Flash => flash_image(config, file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
+    match mime_type {
+        MimeType::Bmp => image(file_path, ImageFormat::Bmp),
+        MimeType::Gif => image(file_path, ImageFormat::Gif),
+        MimeType::Jpeg => image(file_path, ImageFormat::Jpeg),
+        MimeType::Png => image(file_path, ImageFormat::Png),
+        MimeType::Webp => image(file_path, ImageFormat::WebP),
+        MimeType::Swf => flash_image(config, file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
+        MimeType::Avif => ffmpeg_frame(file_path, PostType::Image)
+            .and_then(|frame| frame.ok_or(ApiError::FfmpegError("Unable to decode AVIF image with FFmpeg".into()))),
+        MimeType::Mov | MimeType::Mp4 | MimeType::Webm => {
+            ffmpeg_frame(file_path, PostType::Video).and_then(|frame| frame.ok_or(ApiError::EmptyVideo))
+        }
     }
 }
 
@@ -72,38 +80,16 @@ pub fn swf_has_audio(path: &Path) -> ApiResult<bool> {
     }))
 }
 
-/// Decodes a raw array of bytes into pixel data.
-pub fn image(file_path: &Path, mime_type: MimeType) -> ApiResult<DynamicImage> {
-    if let Some(format) = mime_type.to_image_format() {
-        let file = content::map_read_result(File::open(file_path))?;
-
-        let mut reader = ImageReader::new(BufReader::new(file));
-        reader.set_format(format);
-        reader.limits(image_reader_limits());
-        reader.decode().map_err(ApiError::from)
-    } else {
-        ffmpeg_frame(file_path, PostType::Image)?
-            .ok_or(ApiError::FfmpegError(format!("Unable to decode {mime_type} image with FFmpeg").into()))
-    }
-}
-
 /// Returns the post type based on file content.
 /// For image formats that support animation, it checks the file content for multiple frames.
 /// For everything else, it just checks the mime type.
 pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<PostType> {
     // Shorthand to return PostType::Animation or PostType::Image based on bool input
-    fn image_type(is_animated: bool) -> PostType {
-        if is_animated {
-            PostType::Animation
-        } else {
-            PostType::Image
-        }
-    }
-
+    let image_type = |animated: bool| -> PostType { if animated { PostType::Animation } else { PostType::Image } };
     match mime_type {
-        MimeType::Avif => Ok(image_type(is_animated(file_path)?)),
-        MimeType::Gif => Ok(image_type(gif_is_animated(file_path)?)),
-        MimeType::Webp => Ok(image_type(webp_is_animated(file_path)?)),
+        MimeType::Avif => avif_is_animated(file_path).map(image_type),
+        MimeType::Gif => gif_is_animated(file_path).map(image_type),
+        MimeType::Webp => webp_is_animated(file_path).map(image_type),
         MimeType::Bmp | MimeType::Jpeg | MimeType::Png => Ok(PostType::Image),
         MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Ok(PostType::Video),
         MimeType::Swf => Ok(PostType::Flash),
@@ -111,6 +97,16 @@ pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<Post
 }
 
 const FFMPEG_PATH: &str = "/opt/app/ffmpeg";
+
+/// Decodes a raw array of bytes into pixel data.
+fn image(file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
+    let file = content::map_read_result(File::open(file_path))?;
+
+    let mut reader = ImageReader::new(BufReader::new(file));
+    reader.set_format(format);
+    reader.limits(image_reader_limits());
+    reader.decode().map_err(ApiError::from)
+}
 
 /// Decodes a representative frame of the image or video at the given `path`.
 fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicImage>> {
@@ -213,7 +209,7 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
 }
 
 /// Uses `FFmpeg` to determine if a file contains multiple frames
-fn is_animated(path: &Path) -> ApiResult<bool> {
+fn avif_is_animated(path: &Path) -> ApiResult<bool> {
     let path_str = path.to_string_lossy();
     let video_stream_count = FfmpegCommand::new_with_path(FFMPEG_PATH)
         .input(&path_str)
