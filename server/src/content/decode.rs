@@ -42,21 +42,18 @@ pub fn video_has_audio(path: &Path) -> ApiResult<bool> {
         .iter()
         .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
 
-    let mut has_audio = None;
-    let mut errors = Vec::new();
     for event in iter {
         match event {
             FfmpegEvent::ParsedInputStream(stream) if stream.is_audio() => {
-                has_audio = Some(true);
+                return Ok(true);
             }
-            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => errors.push(err),
+            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => {
+                return Err(ApiError::FfmpegError(err.into()));
+            }
             _ => {}
         }
     }
-    if has_audio.is_none() && !errors.is_empty() {
-        return Err(ApiError::FfmpegError(errors.join("; ").into()));
-    }
-    Ok(has_audio.unwrap_or(false))
+    Ok(false)
 }
 
 /// Returns if the swf at `path` has audio.
@@ -110,9 +107,11 @@ fn image(file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
 
 /// Decodes a representative frame of the image or video at the given `path`.
 fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicImage>> {
-    let filter = match post_type {
-        PostType::Image | PostType::Animation => "format=rgba",
-        PostType::Video | PostType::Flash => "thumbnail,format=rgb24",
+    let is_video_format = matches!(post_type, PostType::Video | PostType::Flash);
+    let filter = if is_video_format {
+        "thumbnail,format=rgb24"
+    } else {
+        "format=rgba"
     };
 
     let path_str = path.to_string_lossy();
@@ -123,28 +122,25 @@ fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicIma
         .iter()
         .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
 
-    let mut frame = None;
-    let mut errors = Vec::new();
     for event in iter {
         match event {
             FfmpegEvent::OutputFrame(f) => {
                 let buffer_len = f.data.len();
-                let extracted_frame = if filter.contains("rgba") {
-                    RgbaImage::from_raw(f.width, f.height, f.data).map(DynamicImage::ImageRgba8)
-                } else {
+                let extracted_frame = if is_video_format {
                     RgbImage::from_raw(f.width, f.height, f.data).map(DynamicImage::ImageRgb8)
+                } else {
+                    RgbaImage::from_raw(f.width, f.height, f.data).map(DynamicImage::ImageRgba8)
                 }
                 .ok_or(ApiError::FrameBufferMismatch(f.width, f.height, buffer_len))?;
-                frame = Some(extracted_frame);
+                return Ok(Some(extracted_frame));
             }
-            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => errors.push(err),
+            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => {
+                return Err(ApiError::FfmpegError(err.into()));
+            }
             _ => {}
         }
     }
-    if frame.is_none() && !errors.is_empty() {
-        return Err(ApiError::FfmpegError(errors.join("; ").into()));
-    }
-    Ok(frame)
+    Ok(None)
 }
 
 /// Search swf tags for the largest decodable image
@@ -236,19 +232,17 @@ fn avif_is_animated(path: &Path) -> ApiResult<bool> {
             .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
 
         let mut frames = 0;
-        let mut errors = Vec::new();
         for event in iter {
             match event {
                 FfmpegEvent::OutputFrame(_) => frames += 1,
-                FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) => errors.push(err),
+                FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => {
+                    return Err(ApiError::FfmpegError(err.into()));
+                }
                 _ => {}
             }
         }
-
         if frames > 1 {
             return Ok(true);
-        } else if frames == 0 && !errors.is_empty() {
-            return Err(ApiError::FfmpegError(errors.join("; ").into()));
         }
     }
     Ok(false)
@@ -261,7 +255,11 @@ fn gif_is_animated(path: &Path) -> ApiResult<bool> {
 
     // GIF doesn't store a frame count, so just check for a second frame.
     let mut frames = decoder.into_frames();
-    Ok(frames.nth(1).is_some())
+    frames
+        .nth(1)
+        .transpose()
+        .map(|frame| frame.is_some())
+        .map_err(ApiError::from)
 }
 
 fn webp_is_animated(path: &Path) -> ApiResult<bool> {
