@@ -11,6 +11,7 @@ use std::error::Error;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
+#[cfg(unix)]
 use tokio::signal::unix::SignalKind;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
@@ -58,12 +59,12 @@ pub struct Context {
 }
 
 impl Context {
-    /// Checks if the `client` is at least `required_rank`.
+    /// Checks if the client can perform given `action`.
     pub fn has_privilege(&self, action: Action) -> bool {
         self.client.rank >= self.config.privileges()[action]
     }
 
-    /// Returns error if client is lower rank than `required_rank`.
+    /// Returns error if client cannot perform given `action`.
     pub fn verify_privilege(&self, action: Action) -> ApiResult<()> {
         self.has_privilege(action)
             .then_some(())
@@ -92,17 +93,19 @@ pub fn num_rayon_threads() -> usize {
 
 /// Initializes logging using [`tracing_subscriber`].
 pub fn enable_tracing(state: &AppState) {
-    let filter = match EnvFilter::try_new(&state.config.log_filter) {
-        Ok(filter) => filter,
-        Err(err) => {
-            warn!("Log filter is invalid. Some or all directives may be ignored. Details:\n{err}");
-            EnvFilter::new(&state.config.log_filter)
-        }
+    let initialize = |filter: EnvFilter| {
+        tracing_subscriber::registry()
+            .with(filter)
+            .with(tracing_subscriber::fmt::layer().without_time())
+            .init();
     };
-    tracing_subscriber::registry()
-        .with(filter)
-        .with(tracing_subscriber::fmt::layer().without_time())
-        .init();
+    match EnvFilter::try_new(&state.config.log_filter) {
+        Ok(filter) => initialize(filter),
+        Err(err) => {
+            initialize(EnvFilter::new(&state.config.log_filter));
+            warn!("Log filter is invalid. Some or all directives may be ignored. Details:\n{err}");
+        }
+    }
 }
 
 #[cfg(feature = "load_env")]
