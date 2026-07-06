@@ -110,8 +110,7 @@ pub fn enable_tracing(state: &AppState) {
 
 #[cfg(feature = "load_env")]
 pub fn load_env() -> dotenvy::Result<()> {
-    if let Some(env_path) =
-        std::env::args().find_map(|arg| arg.split_once("--env-path=").map(|(_, path)| path.to_owned()))
+    if let Some(env_path) = std::env::args().find_map(|arg| arg.strip_prefix("--env-path=").map(|path| path.to_owned()))
     {
         // If env_path is specified in args, read from that path
         dotenvy::from_filename(env_path)

@@ -320,7 +320,7 @@ pub fn create() -> Config {
         panic!("Production config disallowed in test build!")
     } else {
         let config_path =
-            std::env::args().find_map(|arg| arg.split_once("--config-path=").map(|(_, path)| path.to_owned()));
+            std::env::args().find_map(|arg| arg.strip_prefix("--config-path=").map(|path| path.to_owned()));
         let config_path = config_path.as_deref().unwrap_or("config");
         create_config(Some(config_path))
     }
