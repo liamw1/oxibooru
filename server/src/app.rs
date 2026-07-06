@@ -7,6 +7,7 @@ use crate::db::AsyncConnectionPool;
 use crate::extract::Ctx;
 use crate::{admin, api, config, db, filesystem};
 use axum::Router;
+use std::borrow::ToOwned;
 use std::error::Error;
 use std::sync::{Arc, Mutex, MutexGuard};
 use tokio::net::TcpListener;
@@ -110,8 +111,7 @@ pub fn enable_tracing(state: &AppState) {
 
 #[cfg(feature = "load_env")]
 pub fn load_env() -> dotenvy::Result<()> {
-    if let Some(env_path) = std::env::args().find_map(|arg| arg.strip_prefix("--env-path=").map(|path| path.to_owned()))
-    {
+    if let Some(env_path) = std::env::args().find_map(|arg| arg.strip_prefix("--env-path=").map(ToOwned::to_owned)) {
         // If env_path is specified in args, read from that path
         dotenvy::from_filename(env_path)
     } else {

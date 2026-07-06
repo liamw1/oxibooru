@@ -70,7 +70,7 @@ async fn upload_from_url(config: &Config, body: UploadBody) -> ApiResult<Json<Up
         (status = 403, description = "Privileges are too low"),
     ),
 )]
-async fn upload(Ctx(ctx, _): Ctx, body: JsonOrMultipart<UploadBody>) -> ApiResult<Json<UploadResponse>> {
+async fn upload(ctx: Ctx, body: JsonOrMultipart<UploadBody>) -> ApiResult<Json<UploadResponse>> {
     ctx.verify_privilege(Action::UploadCreate)?;
 
     match body {

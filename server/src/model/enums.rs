@@ -4,7 +4,7 @@ use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::SmallInt;
 use diesel::{AsExpression, FromSqlRow};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::ops::{BitOr, BitOrAssign};
 use std::path::Path;
@@ -301,7 +301,7 @@ impl FromSql<SmallInt, Pg> for PostFlags {
 impl Serialize for PostFlags {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
-        S: serde::Serializer,
+        S: Serializer,
     {
         const _: () = assert!(PostFlag::COUNT <= 16);
 

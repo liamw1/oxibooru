@@ -5,7 +5,7 @@ use crate::model::enums::MimeType;
 use crate::string::SmallString;
 use axum::extract::multipart::{Field, Multipart};
 use axum::extract::rejection::{JsonRejection, MissingJsonContentType};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
@@ -39,10 +39,7 @@ impl UploadToken {
 }
 
 impl<'de> Deserialize<'de> for UploadToken {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let token = String::deserialize(deserializer)?;
         if token.contains('/') || token.contains('\\') {
             return Err(serde::de::Error::custom("invalid upload token"));

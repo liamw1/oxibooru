@@ -616,10 +616,14 @@ fn create_posts(conn: &mut PgConnection, config: &Config) -> AdminResult<()> {
             .execute(conn)?;
 
         let post_hash = PostHash::new(config, post_id);
+
         let content_path = post_hash.content_path(mime_type);
         std::fs::create_dir_all(content_path.parent().unwrap_or(Path::new("")))?;
-
         std::fs::copy(media_path(&source), content_path)?;
+
+        let generated_thumbnail_path = post_hash.generated_thumbnail_path();
+        std::fs::create_dir_all(generated_thumbnail_path.parent().unwrap_or(Path::new("")))?;
+        std::fs::copy(media_path(&source), generated_thumbnail_path)?;
     }
     Ok(())
 }

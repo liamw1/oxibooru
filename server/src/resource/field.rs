@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::marker::PhantomData;
 use std::ops::{BitOr, BitOrAssign, Index};
 use std::str::FromStr;
@@ -59,10 +59,7 @@ impl<F: Copy + Into<u64>, const N: usize> From<[F; N]> for Mask<F> {
 }
 
 impl<'de, F: Into<u64> + FromStr> Deserialize<'de> for Mask<F> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         if let Some(field_list) = Option::<String>::deserialize(deserializer)? {
             field_list.split(',').try_fold(Self::new(), |fields, field_str| {
                 F::from_str(field_str)

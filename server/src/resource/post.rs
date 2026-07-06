@@ -327,6 +327,7 @@ fn get_owners(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> Query
         })
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn get_content_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infallible> {
     Ok(posts
         .iter()
@@ -334,6 +335,7 @@ fn get_content_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infa
         .collect())
 }
 
+#[allow(clippy::unnecessary_wraps)]
 fn get_thumbnail_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infallible> {
     Ok(posts
         .iter()

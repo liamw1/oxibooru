@@ -152,9 +152,13 @@ pub fn swap_posts(
 /// are on different file systems.
 pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
     create_parent_directories(to)?;
-    if let Err(ErrorKind::CrossesDevices) = std::fs::rename(from, to).as_ref().map_err(std::io::Error::kind) {
-        std::fs::copy(from, to)?;
-        std::fs::remove_file(from)?;
+    if let Err(err) = std::fs::rename(from, to) {
+        if err.kind() == ErrorKind::CrossesDevices {
+            std::fs::copy(from, to)?;
+            std::fs::remove_file(from)?;
+        } else {
+            return Err(err);
+        }
     }
 
     // Set appropriate permissions since we usually use this function to move

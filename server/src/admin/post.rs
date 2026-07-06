@@ -5,7 +5,6 @@ use crate::content::hash::{Checksum, PostHash};
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{decode, hash, signature, thumbnail};
-use crate::extract::Ctx;
 use crate::model::enums::MimeType;
 use crate::model::post::{CompressedSignature, NewPostSignature};
 use crate::schema::{database_statistics, post, post_signature};
@@ -387,7 +386,7 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
 
 fn user_query(state: &AppState, editor: &mut PostEditor) -> AdminResult<Vec<i64>> {
     loop {
-        let Ctx(ctx, _) = state.clone().make_context(admin::client());
+        let ctx = state.clone().make_context(admin::client());
         let user_input =
             input::read("Select posts (leave blank to select all, enter \"done\" when finished): ", editor)?;
         match QueryBuilder::new_with_anonymous_token(&ctx, &user_input, Token::Id) {

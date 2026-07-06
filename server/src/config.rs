@@ -6,7 +6,8 @@ use config::{ConfigBuilder, File, FileFormat};
 use lettre::message::Mailbox;
 use regex::Regex;
 use serde::ser::SerializeStruct;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::borrow::ToOwned;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use strum::{Display, EnumCount, EnumIter, EnumTable, IntoEnumIterator, IntoStaticStr};
@@ -192,10 +193,7 @@ impl Serialize for PrivilegeConfig {
 }
 
 impl<'de> Deserialize<'de> for PrivilegeConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let mut required_ranks = PrivilegeConfig::filled(UserRank::Administrator);
         let mut privilege_map = HashMap::<String, UserRank>::deserialize(deserializer)?;
 
@@ -319,8 +317,7 @@ pub fn create() -> Config {
     if cfg!(test) {
         panic!("Production config disallowed in test build!")
     } else {
-        let config_path =
-            std::env::args().find_map(|arg| arg.strip_prefix("--config-path=").map(|path| path.to_owned()));
+        let config_path = std::env::args().find_map(|arg| arg.strip_prefix("--config-path=").map(ToOwned::to_owned));
         let config_path = config_path.as_deref().unwrap_or("config");
         create_config(Some(config_path))
     }
