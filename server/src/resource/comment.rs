@@ -4,7 +4,7 @@ use crate::config::Config;
 use crate::model::comment::{Comment, CommentScore};
 use crate::model::enums::{AvatarStyle, Rating};
 use crate::resource;
-use crate::resource::field::Mask;
+use crate::resource::field::{Batcher, Mask};
 use crate::resource::user::MicroUser;
 use crate::schema::{comment, comment_score, comment_statistics, user};
 use crate::string::{LargeString, SmallString};
@@ -83,15 +83,10 @@ impl CommentInfo {
         comments: Vec<Comment>,
         fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
-        let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, &ctx.config, &comments))?;
-        let mut scores = resource::retrieve(fields[Field::Score], || get_scores(conn, &comments))?;
-        let mut client_scores =
-            resource::retrieve(fields[Field::OwnScore], || get_client_scores(conn, ctx.client, &comments))?;
-
-        let batch_size = comments.len();
-        resource::check_batch_results(batch_size, owners.len());
-        resource::check_batch_results(batch_size, scores.len());
-        resource::check_batch_results(batch_size, client_scores.len());
+        let f = Batcher::new(fields, comments.len());
+        let mut owners = f.exec(Field::User, || get_owners(conn, &ctx.config, &comments))?;
+        let mut scores = f.exec(Field::Score, || get_scores(conn, &comments))?;
+        let mut own_scores = f.exec(Field::OwnScore, || get_own_scores(conn, ctx.client, &comments))?;
 
         let mut results = comments
             .into_iter()
@@ -105,7 +100,7 @@ impl CommentInfo {
                 last_edit_time: fields[Field::LastEditTime].then_some(comment.last_edit_time),
                 user: owners.pop(),
                 score: scores.pop(),
-                own_score: client_scores.pop(),
+                own_score: own_scores.pop(),
             })
             .collect::<Vec<_>>();
         results.reverse();
@@ -155,7 +150,7 @@ fn get_scores(conn: &mut PgConnection, comments: &[Comment]) -> QueryResult<Vec<
         })
 }
 
-fn get_client_scores(conn: &mut PgConnection, client: Client, comments: &[Comment]) -> QueryResult<Vec<Rating>> {
+fn get_own_scores(conn: &mut PgConnection, client: Client, comments: &[Comment]) -> QueryResult<Vec<Rating>> {
     if let Some(client_id) = client.id {
         CommentScore::belonging_to(comments)
             .filter(comment_score::user_id.eq(client_id))

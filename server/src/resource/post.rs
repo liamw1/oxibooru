@@ -2,15 +2,15 @@ use crate::app::Context;
 use crate::auth::Client;
 use crate::config::Config;
 use crate::content::hash::PostHash;
-use crate::get_post_stats;
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType, Rating, Score};
 use crate::model::pool::PoolPost;
 use crate::model::post::{NewPostNote, Post, PostFavorite, PostNote, PostRelation, PostScore, PostTag};
 use crate::model::tag::TagName;
+use crate::post_stats;
 use crate::resource;
 use crate::resource::comment::CommentInfo;
-use crate::resource::field::Mask;
+use crate::resource::field::{Batcher, Mask};
 use crate::resource::pool::MicroPool;
 use crate::resource::tag::MicroTag;
 use crate::resource::user::MicroUser;
@@ -230,61 +230,27 @@ impl PostInfo {
         #[allow(clippy::wildcard_imports)]
         use crate::schema::post_statistics::dsl::*;
 
-        let mut owners = resource::retrieve(fields[Field::User], || get_owners(conn, &ctx.config, &posts))?;
-        let Ok(mut content_urls) = resource::retrieve(fields[Field::ContentUrl], || {
-            Ok::<_, Infallible>(get_content_urls(&ctx.config, &posts))
-        });
-        let Ok(mut thumbnail_urls) = resource::retrieve(fields[Field::ThumbnailUrl], || {
-            Ok::<_, Infallible>(get_thumbnail_urls(&ctx.config, &posts))
-        });
-        let mut tags = resource::retrieve(fields[Field::Tags], || get_tags(conn, &posts))?;
-        let mut comments = resource::retrieve(fields[Field::Comments], || get_comments(conn, ctx, &posts))?;
-        let mut relations = resource::retrieve(fields[Field::Relations], || get_relations(conn, ctx, &posts))?;
-        let mut pools = resource::retrieve(fields[Field::Pools], || get_pools(conn, &posts))?;
-        let mut notes = resource::retrieve(fields[Field::Notes], || get_notes(conn, &posts))?;
-        let mut scores = resource::retrieve(fields[Field::Score], || get_post_stats!(conn, &posts, score, i64))?;
-        let mut client_scores =
-            resource::retrieve(fields[Field::OwnScore], || get_client_scores(conn, ctx.client, &posts))?;
-        let mut client_favorites =
-            resource::retrieve(fields[Field::OwnFavorite], || get_client_favorites(conn, ctx.client, &posts))?;
-        let mut tag_counts =
-            resource::retrieve(fields[Field::TagCount], || get_post_stats!(conn, &posts, tag_count, i64))?;
-        let mut comment_counts =
-            resource::retrieve(fields[Field::CommentCount], || get_post_stats!(conn, &posts, comment_count, i64))?;
-        let mut relation_counts =
-            resource::retrieve(fields[Field::RelationCount], || get_post_stats!(conn, &posts, relation_count, i64))?;
-        let mut note_counts =
-            resource::retrieve(fields[Field::NoteCount], || get_post_stats!(conn, &posts, note_count, i64))?;
-        let mut favorite_counts =
-            resource::retrieve(fields[Field::FavoriteCount], || get_post_stats!(conn, &posts, favorite_count, i64))?;
-        let mut feature_counts =
-            resource::retrieve(fields[Field::FeatureCount], || get_post_stats!(conn, &posts, feature_count, i64))?;
-        let mut last_feature_times = resource::retrieve(fields[Field::LastFeatureTime], || {
-            get_post_stats!(conn, &posts, last_feature_time, Option<DateTime>)
-        })?;
-        let mut users_who_favorited =
-            resource::retrieve(fields[Field::FavoritedBy], || get_users_who_favorited(conn, &ctx.config, &posts))?;
-
-        let batch_size = posts.len();
-        resource::check_batch_results(batch_size, owners.len());
-        resource::check_batch_results(batch_size, content_urls.len());
-        resource::check_batch_results(batch_size, thumbnail_urls.len());
-        resource::check_batch_results(batch_size, tags.len());
-        resource::check_batch_results(batch_size, comments.len());
-        resource::check_batch_results(batch_size, relations.len());
-        resource::check_batch_results(batch_size, pools.len());
-        resource::check_batch_results(batch_size, notes.len());
-        resource::check_batch_results(batch_size, scores.len());
-        resource::check_batch_results(batch_size, client_scores.len());
-        resource::check_batch_results(batch_size, client_favorites.len());
-        resource::check_batch_results(batch_size, tag_counts.len());
-        resource::check_batch_results(batch_size, comment_counts.len());
-        resource::check_batch_results(batch_size, relation_counts.len());
-        resource::check_batch_results(batch_size, note_counts.len());
-        resource::check_batch_results(batch_size, favorite_counts.len());
-        resource::check_batch_results(batch_size, feature_counts.len());
-        resource::check_batch_results(batch_size, last_feature_times.len());
-        resource::check_batch_results(batch_size, users_who_favorited.len());
+        let f = Batcher::new(fields, posts.len());
+        let mut owners = f.exec(Field::User, || get_owners(conn, &ctx.config, &posts))?;
+        let Ok(mut content_urls) = f.exec(Field::ContentUrl, || get_content_urls(&ctx.config, &posts));
+        let Ok(mut thumbnail_urls) = f.exec(Field::ThumbnailUrl, || get_thumbnail_urls(&ctx.config, &posts));
+        let mut tags = f.exec(Field::Tags, || get_tags(conn, &posts))?;
+        let mut comments = f.exec(Field::Comments, || get_comments(conn, ctx, &posts))?;
+        let mut relations = f.exec(Field::Relations, || get_relations(conn, ctx, &posts))?;
+        let mut pools = f.exec(Field::Pools, || get_pools(conn, &posts))?;
+        let mut notes = f.exec(Field::Notes, || get_notes(conn, &posts))?;
+        let mut scores = f.exec(Field::Score, || post_stats!(conn, &posts, score, i64))?;
+        let mut own_scores = f.exec(Field::OwnScore, || get_own_scores(conn, ctx.client, &posts))?;
+        let mut own_favorites = f.exec(Field::OwnFavorite, || get_own_favorites(conn, ctx.client, &posts))?;
+        let mut tag_counts = f.exec(Field::TagCount, || post_stats!(conn, &posts, tag_count, i64))?;
+        let mut comment_counts = f.exec(Field::CommentCount, || post_stats!(conn, &posts, comment_count, i64))?;
+        let mut relation_counts = f.exec(Field::RelationCount, || post_stats!(conn, &posts, relation_count, i64))?;
+        let mut note_counts = f.exec(Field::NoteCount, || post_stats!(conn, &posts, note_count, i64))?;
+        let mut favorite_counts = f.exec(Field::FavoriteCount, || post_stats!(conn, &posts, favorite_count, i64))?;
+        let mut feature_counts = f.exec(Field::FeatureCount, || post_stats!(conn, &posts, feature_count, i64))?;
+        let mut last_feature_times =
+            f.exec(Field::LastFeatureTime, || post_stats!(conn, &posts, last_feature_time, Option<DateTime>))?;
+        let mut favorited_by = f.exec(Field::FavoritedBy, || get_favorited_by(conn, &ctx.config, &posts))?;
 
         let mut results = posts
             .into_iter()
@@ -312,8 +278,8 @@ impl PostInfo {
                 relations: relations.pop(),
                 notes: notes.pop(),
                 score: scores.pop(),
-                own_score: client_scores.pop(),
-                own_favorite: client_favorites.pop(),
+                own_score: own_scores.pop(),
+                own_favorite: own_favorites.pop(),
                 tag_count: tag_counts.pop(),
                 favorite_count: favorite_counts.pop(),
                 comment_count: comment_counts.pop(),
@@ -321,7 +287,7 @@ impl PostInfo {
                 feature_count: feature_counts.pop(),
                 relation_count: relation_counts.pop(),
                 last_feature_time: last_feature_times.pop(),
-                favorited_by: users_who_favorited.pop(),
+                favorited_by: favorited_by.pop(),
                 comments: comments.pop(),
                 pools: pools.pop(),
                 has_custom_thumbnail: fields[Field::HasCustomThumbnail]
@@ -361,18 +327,18 @@ fn get_owners(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> Query
         })
 }
 
-fn get_content_urls(config: &Config, posts: &[Post]) -> Vec<String> {
-    posts
+fn get_content_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infallible> {
+    Ok(posts
         .iter()
         .map(|post| PostHash::new(config, post.id).content_url(post.mime_type))
-        .collect()
+        .collect())
 }
 
-fn get_thumbnail_urls(config: &Config, posts: &[Post]) -> Vec<String> {
-    posts
+fn get_thumbnail_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infallible> {
+    Ok(posts
         .iter()
         .map(|post| PostHash::new(config, post.id).thumbnail_url())
-        .collect()
+        .collect())
 }
 
 fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<MicroTag>>> {
@@ -550,7 +516,7 @@ fn get_notes(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Not
         .collect())
 }
 
-fn get_client_scores(conn: &mut PgConnection, client: Client, posts: &[Post]) -> QueryResult<Vec<Rating>> {
+fn get_own_scores(conn: &mut PgConnection, client: Client, posts: &[Post]) -> QueryResult<Vec<Rating>> {
     if let Some(client_id) = client.id {
         PostScore::belonging_to(posts)
             .filter(post_score::user_id.eq(client_id))
@@ -566,7 +532,7 @@ fn get_client_scores(conn: &mut PgConnection, client: Client, posts: &[Post]) ->
     }
 }
 
-fn get_client_favorites(conn: &mut PgConnection, client: Client, posts: &[Post]) -> QueryResult<Vec<bool>> {
+fn get_own_favorites(conn: &mut PgConnection, client: Client, posts: &[Post]) -> QueryResult<Vec<bool>> {
     if let Some(client_id) = client.id {
         PostFavorite::belonging_to(posts)
             .filter(post_favorite::user_id.eq(client_id))
@@ -582,11 +548,7 @@ fn get_client_favorites(conn: &mut PgConnection, client: Client, posts: &[Post])
     }
 }
 
-fn get_users_who_favorited(
-    conn: &mut PgConnection,
-    config: &Config,
-    posts: &[Post],
-) -> QueryResult<Vec<Vec<MicroUser>>> {
+fn get_favorited_by(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> QueryResult<Vec<Vec<MicroUser>>> {
     let users_who_favorited: Vec<(PostFavorite, SmallString, AvatarStyle)> = PostFavorite::belonging_to(posts)
         .inner_join(user::table)
         .select((PostFavorite::as_select(), user::name, user::avatar_style))
@@ -606,7 +568,7 @@ fn get_users_who_favorited(
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! get_post_stats {
+macro_rules! post_stats {
     ($conn:expr, $posts:expr, $column:expr, $return_type:ty) => {{
         let post_ids: Vec<_> = $posts.iter().map(Identifiable::id).copied().collect();
         $crate::schema::post_statistics::table

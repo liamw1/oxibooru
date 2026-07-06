@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::model::enums::{AvatarStyle, ResourceOperation, ResourceType};
 use crate::model::snapshot::Snapshot;
 use crate::resource;
-use crate::resource::field::Mask;
+use crate::resource::field::{Batcher, Mask};
 use crate::resource::user::MicroUser;
 use crate::schema::{snapshot, user};
 use crate::string::SmallString;
@@ -255,9 +255,8 @@ impl SnapshotInfo {
         snapshots: Vec<Snapshot>,
         fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
-        let batch_size = snapshots.len();
-        let mut users = resource::retrieve(fields[Field::User], || get_users(conn, config, &snapshots))?;
-        resource::check_batch_results(batch_size, users.len());
+        let f = Batcher::new(fields, snapshots.len());
+        let mut users = f.exec(Field::User, || get_users(conn, config, &snapshots))?;
 
         let mut results = snapshots
             .into_iter()

@@ -1,6 +1,6 @@
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
 use crate::resource;
-use crate::resource::field::Mask;
+use crate::resource::field::{Batcher, Mask};
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
@@ -85,18 +85,12 @@ impl TagInfo {
     }
 
     pub fn new_batch(conn: &mut PgConnection, tags: Vec<Tag>, fields: Mask<Field>) -> QueryResult<Vec<Self>> {
-        let mut categories = resource::retrieve(fields[Field::Category], || get_categories(conn, &tags))?;
-        let mut names = resource::retrieve(fields[Field::Names], || get_names(conn, &tags))?;
-        let mut implications = resource::retrieve(fields[Field::Implications], || get_implications(conn, &tags))?;
-        let mut suggestions = resource::retrieve(fields[Field::Suggestions], || get_suggestions(conn, &tags))?;
-        let mut usages = resource::retrieve(fields[Field::Usages], || get_usages(conn, &tags))?;
-
-        let batch_size = tags.len();
-        resource::check_batch_results(batch_size, categories.len());
-        resource::check_batch_results(batch_size, names.len());
-        resource::check_batch_results(batch_size, implications.len());
-        resource::check_batch_results(batch_size, suggestions.len());
-        resource::check_batch_results(batch_size, usages.len());
+        let f = Batcher::new(fields, tags.len());
+        let mut categories = f.exec(Field::Category, || get_categories(conn, &tags))?;
+        let mut names = f.exec(Field::Names, || get_names(conn, &tags))?;
+        let mut implications = f.exec(Field::Implications, || get_implications(conn, &tags))?;
+        let mut suggestions = f.exec(Field::Suggestions, || get_suggestions(conn, &tags))?;
+        let mut usages = f.exec(Field::Usages, || get_usages(conn, &tags))?;
 
         let mut results = tags
             .into_iter()

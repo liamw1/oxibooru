@@ -74,3 +74,30 @@ impl<'de, F: Into<u64> + FromStr> Deserialize<'de> for Mask<F> {
         }
     }
 }
+
+pub struct Batcher<F> {
+    enabled_fields: Mask<F>,
+    batch_size: usize,
+}
+
+impl<F: Into<u64>> Batcher<F> {
+    pub fn new(enabled_fields: Mask<F>, batch_size: usize) -> Self {
+        Self {
+            enabled_fields,
+            batch_size,
+        }
+    }
+
+    pub fn exec<T, E, G>(&self, field: F, mut function: G) -> Result<Vec<T>, E>
+    where
+        G: FnMut() -> Result<Vec<T>, E>,
+    {
+        Ok(if self.enabled_fields[field] {
+            let results = function()?;
+            assert_eq!(results.len(), self.batch_size);
+            results
+        } else {
+            Vec::new()
+        })
+    }
+}

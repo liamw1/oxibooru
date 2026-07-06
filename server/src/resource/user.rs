@@ -1,14 +1,14 @@
 use crate::config::Config;
 use crate::content::hash;
-use crate::get_user_stats;
 use crate::model::enums::{AvatarStyle, Score, UserRank};
 use crate::model::post::PostScore;
 use crate::model::user::User;
 use crate::resource;
-use crate::resource::field::Mask;
+use crate::resource::field::{Batcher, Mask};
 use crate::schema::{post_score, user};
 use crate::string::SmallString;
 use crate::time::DateTime;
+use crate::user_stats;
 use diesel::dsl::count_star;
 use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
@@ -138,25 +138,13 @@ impl UserInfo {
         #[allow(clippy::wildcard_imports)]
         use crate::schema::user_statistics::dsl::*;
 
-        let mut comment_counts =
-            resource::retrieve(fields[Field::CommentCount], || get_user_stats!(conn, &users, comment_count))?;
-        let mut upload_counts =
-            resource::retrieve(fields[Field::UploadedPostCount], || get_user_stats!(conn, &users, upload_count))?;
-        let mut like_counts = resource::retrieve(fields[Field::LikedPostCount], || {
-            get_post_score_counts(conn, &users, Score::Like, visibility)
-        })?;
-        let mut dislike_counts = resource::retrieve(fields[Field::DislikedPostCount], || {
-            get_post_score_counts(conn, &users, Score::Dislike, visibility)
-        })?;
-        let mut favorite_counts =
-            resource::retrieve(fields[Field::FavoritePostCount], || get_user_stats!(conn, &users, favorite_count))?;
-
-        let batch_size = users.len();
-        resource::check_batch_results(batch_size, comment_counts.len());
-        resource::check_batch_results(batch_size, upload_counts.len());
-        resource::check_batch_results(batch_size, like_counts.len());
-        resource::check_batch_results(batch_size, dislike_counts.len());
-        resource::check_batch_results(batch_size, favorite_counts.len());
+        let f = Batcher::new(fields, users.len());
+        let mut comment_counts = f.exec(Field::CommentCount, || user_stats!(conn, &users, comment_count))?;
+        let mut upload_counts = f.exec(Field::UploadedPostCount, || user_stats!(conn, &users, upload_count))?;
+        let mut like_counts = f.exec(Field::LikedPostCount, || get_ratings(conn, &users, Score::Like, visibility))?;
+        let mut dislike_counts =
+            f.exec(Field::DislikedPostCount, || get_ratings(conn, &users, Score::Dislike, visibility))?;
+        let mut favorite_counts = f.exec(Field::FavoritePostCount, || user_stats!(conn, &users, favorite_count))?;
 
         let mut results = users
             .into_iter()
@@ -204,7 +192,7 @@ enum PrivateData<T> {
     Visible(bool), // Set to false to indicate hidden
 }
 
-fn get_post_score_counts(
+fn get_ratings(
     conn: &mut PgConnection,
     users: &[User],
     score: Score,
@@ -230,7 +218,7 @@ fn get_post_score_counts(
 
 #[doc(hidden)]
 #[macro_export]
-macro_rules! get_user_stats {
+macro_rules! user_stats {
     ($conn:expr, $users:expr, $column:expr) => {{
         let user_ids: Vec<_> = $users.iter().map(Identifiable::id).copied().collect();
         $crate::schema::user_statistics::table

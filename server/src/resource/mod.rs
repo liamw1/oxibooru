@@ -20,23 +20,10 @@ pub mod user_token;
 // but I don't see this as a guarantee anywhere in the documentation. If this changes, I'll need
 // to reimplement a similar function with this behavior.
 
-/// Validates that a batch retrieval is the expected size.
-fn check_batch_results(batch_size: usize, retrieved_size: usize) {
-    assert!(retrieved_size == 0 || retrieved_size == batch_size);
-}
-
 /// Validates that a retrieval designed to fetch one element actually does contain only one element.
 fn single<T>(mut batch: Vec<T>) -> T {
     assert_eq!(batch.len(), 1);
     batch.pop().expect("Batch contains exactly one element")
-}
-
-/// Convience function that shortens line counts.
-fn retrieve<T, E, F>(enabled: bool, mut function: F) -> Result<Vec<T>, E>
-where
-    F: FnMut() -> Result<Vec<T>, E>,
-{
-    if enabled { function() } else { Ok(Vec::new()) }
 }
 
 /// For a given set of resources, orders them so that their primary keys are in the same order

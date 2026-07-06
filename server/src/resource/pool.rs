@@ -2,7 +2,7 @@ use crate::app::Context;
 use crate::content::hash::PostHash;
 use crate::model::pool::{Pool, PoolName, PoolPost};
 use crate::resource;
-use crate::resource::field::Mask;
+use crate::resource::field::{Batcher, Mask};
 use crate::resource::post::MicroPost;
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
 use crate::search::preferences;
@@ -97,16 +97,11 @@ impl PoolInfo {
         pools: Vec<Pool>,
         fields: Mask<Field>,
     ) -> QueryResult<Vec<Self>> {
-        let mut categories = resource::retrieve(fields[Field::Category], || get_categories(conn, &pools))?;
-        let mut names = resource::retrieve(fields[Field::Names], || get_names(conn, &pools))?;
-        let mut posts = resource::retrieve(fields[Field::Posts], || get_posts(conn, ctx, &pools))?;
-        let mut post_counts = resource::retrieve(fields[Field::PostCount], || get_post_counts(conn, &pools))?;
-
-        let batch_size = pools.len();
-        resource::check_batch_results(batch_size, names.len());
-        resource::check_batch_results(batch_size, categories.len());
-        resource::check_batch_results(batch_size, posts.len());
-        resource::check_batch_results(batch_size, post_counts.len());
+        let f = Batcher::new(fields, pools.len());
+        let mut categories = f.exec(Field::Category, || get_categories(conn, &pools))?;
+        let mut names = f.exec(Field::Names, || get_names(conn, &pools))?;
+        let mut posts = f.exec(Field::Posts, || get_posts(conn, ctx, &pools))?;
+        let mut post_counts = f.exec(Field::PostCount, || get_post_counts(conn, &pools))?;
 
         let mut results = pools
             .into_iter()
