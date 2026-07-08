@@ -114,11 +114,11 @@ pub fn create_test_connection_pool(test_url: String) -> AsyncConnectionPool {
 /// Runs embedded migrations on the database. Used to update database for end-users who don't build server themselves.
 pub fn run_database_migrations(
     connection_pool: &AsyncConnectionPool,
-) -> Result<RangeInclusive<i32>, Box<dyn Error + Send + Sync>> {
+) -> Result<Option<RangeInclusive<i32>>, Box<dyn Error + Send + Sync>> {
     let mut conn = connection_pool.get_blocking()?;
     let pending_migrations = conn.pending_migrations(MIGRATIONS)?;
     if pending_migrations.is_empty() {
-        return Ok(RangeInclusive::new(1, 0));
+        return Ok(None);
     }
 
     let migration_number = |migration: &dyn Migration<Pg>| -> Result<i32, ParseIntError> {
@@ -132,7 +132,7 @@ pub fn run_database_migrations(
 
     info!("Running pending migrations...");
     conn.run_pending_migrations(MIGRATIONS)?;
-    Ok(migration_range)
+    Ok(Some(migration_range))
 }
 
 /// Runs other server-related migrations, like restructuring data folder or recomputing signatures

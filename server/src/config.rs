@@ -10,7 +10,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::ToOwned;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 use strum::{Display, EnumCount, EnumIter, EnumTable, IntoEnumIterator, IntoStaticStr};
 use url::Url;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema};
@@ -204,6 +204,11 @@ impl<'de> Deserialize<'de> for PrivilegeConfig {
                 .remove(action_name)
                 .ok_or(serde::de::Error::missing_field(action_name))?;
         }
+        if let Some(unknown_field) = privilege_map.keys().next() {
+            static ACTION_NAMES: LazyLock<Vec<&str>> =
+                LazyLock::new(|| Action::iter().map(<&'static str>::from).collect());
+            return Err(serde::de::Error::unknown_field(unknown_field, &ACTION_NAMES));
+        }
         Ok(required_ranks)
     }
 }
@@ -229,7 +234,7 @@ pub struct PublicConfig {
     pub default_user_rank: UserRank,
     pub enable_safety: bool,
     pub contact_email: Option<SmallString>,
-    #[serde(default)]
+    #[serde(skip)]
     pub can_send_mails: bool,
     #[schema(rename = "userNameRegex", value_type = String, format = Regex)]
     #[serde(rename(serialize = "userNameRegex"), with = "serde_regex")]
@@ -339,8 +344,8 @@ pub fn port() -> u16 {
         .unwrap_or(DEFAULT_PORT)
 }
 
-/// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DATABASE`
-/// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DATABASE`.
+/// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DB`
+/// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DB`.
 pub fn database_url(database_override: Option<&str>) -> String {
     const DEFAULT_POSTGRES_PORT: u16 = 5432;
     let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER must be defined in .env");

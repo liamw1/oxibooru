@@ -114,8 +114,9 @@ pub fn load_env() -> dotenvy::Result<()> {
 }
 
 pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> {
-    let migration_range = db::run_database_migrations(&state.connection_pool)?;
-    db::run_server_migrations(state, migration_range)?;
+    if let Some(migration_range) = db::run_database_migrations(&state.connection_pool)? {
+        db::run_server_migrations(state, migration_range)?;
+    }
 
     if admin::enabled() {
         admin::command_line_mode(state);
