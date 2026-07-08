@@ -17,19 +17,19 @@ use std::num::ParseIntError;
 use std::ops::RangeInclusive;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Semaphore, SemaphorePermit};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 use tracing::{error, info};
 
 pub type Connection = PooledConnection<ConnectionManager<PgConnection>>;
-pub type AsyncConnectionResult<'a> = Result<AsyncConnection<'a>, PoolError>;
+pub type AsyncConnectionResult = Result<AsyncConnection, PoolError>;
 
-pub struct AsyncConnection<'a> {
+pub struct AsyncConnection {
     conn: Connection,
     #[allow(dead_code)]
-    permit: SemaphorePermit<'a>,
+    permit: OwnedSemaphorePermit,
 }
 
-impl AsMut<PgConnection> for AsyncConnection<'_> {
+impl AsMut<PgConnection> for AsyncConnection {
     fn as_mut(&mut self) -> &mut PgConnection {
         &mut self.conn
     }
@@ -37,14 +37,13 @@ impl AsMut<PgConnection> for AsyncConnection<'_> {
 
 pub struct AsyncConnectionPool {
     pool: Pool<ConnectionManager<PgConnection>>,
-    semaphore: Semaphore,
+    semaphore: Arc<Semaphore>,
 }
 
 impl AsyncConnectionPool {
-    pub async fn get(&self) -> AsyncConnectionResult<'_> {
-        let permit = self.semaphore.acquire().await.expect(SEMAPHORE_PANIC_MESSAGE);
-        let conn = self.pool.get()?;
-        Ok(AsyncConnection { conn, permit })
+    pub async fn get(&self) -> AsyncConnectionResult {
+        let permit = self.acquire_permit().await;
+        self.pool.get().map(|conn| AsyncConnection { conn, permit })
     }
 
     pub fn get_blocking(&self) -> Result<Connection, PoolError> {
@@ -58,11 +57,23 @@ impl AsyncConnectionPool {
         F: FnOnce(&mut Connection) -> Result<T, E> + Send + 'static,
         ApiError: From<E>,
     {
-        let _permit = self.semaphore.acquire().await.expect(SEMAPHORE_PANIC_MESSAGE);
+        let permit = self.acquire_permit().await;
         let mut conn = self.pool.get()?;
-        tokio::task::spawn_blocking(move || conn.transaction(f))
-            .await?
-            .map_err(ApiError::from)
+        tokio::task::spawn_blocking(move || {
+            // Permit is moved inside blocking task so it is held even if future is dropped
+            let _permit = permit;
+            conn.transaction(f)
+        })
+        .await?
+        .map_err(ApiError::from)
+    }
+
+    async fn acquire_permit(&self) -> OwnedSemaphorePermit {
+        self.semaphore
+            .clone()
+            .acquire_owned()
+            .await
+            .expect(SEMAPHORE_PANIC_MESSAGE)
     }
 }
 
@@ -83,7 +94,7 @@ pub fn create_connection_pool(config: Arc<Config>) -> AsyncConnectionPool {
             .connection_customizer(Box::new(ConnectionInitialzier { config }))
             .build(ConnectionManager::new(config::database_url(None)))
             .expect("Connection pool must be constructible");
-        let semaphore = Semaphore::new(max_conns);
+        let semaphore = Arc::new(Semaphore::new(max_conns));
         AsyncConnectionPool { pool, semaphore }
     }
 }
@@ -96,7 +107,7 @@ pub fn create_test_connection_pool(test_url: String) -> AsyncConnectionPool {
         .test_on_check_out(true)
         .build(ConnectionManager::new(test_url))
         .expect("Test connection pool must be constructible");
-    let semaphore = Semaphore::new(usize::try_from(pool.max_size()).unwrap());
+    let semaphore = Arc::new(Semaphore::new(usize::try_from(pool.max_size()).unwrap()));
     AsyncConnectionPool { pool, semaphore }
 }
 
