@@ -1,6 +1,7 @@
 use crate::admin::AdminTask;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
+use crate::config::Config;
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::schema::database_statistics;
 use crate::{admin, app, config};
@@ -14,6 +15,7 @@ use std::convert::AsMut;
 use std::error::Error;
 use std::num::ParseIntError;
 use std::ops::RangeInclusive;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tracing::{error, info};
@@ -65,7 +67,7 @@ impl AsyncConnectionPool {
 }
 
 /// Creates a connection pool to the database.
-pub fn create_connection_pool() -> AsyncConnectionPool {
+pub fn create_connection_pool(config: Arc<Config>) -> AsyncConnectionPool {
     if cfg!(test) {
         panic!("Connection to production database disallowed in test build!")
     } else {
@@ -78,7 +80,7 @@ pub fn create_connection_pool() -> AsyncConnectionPool {
             .max_lifetime(None)
             .idle_timeout(None)
             .test_on_check_out(true)
-            .connection_customizer(Box::new(ConnectionInitialzier {}))
+            .connection_customizer(Box::new(ConnectionInitialzier { config }))
             .build(ConnectionManager::new(config::database_url(None)))
             .expect("Connection pool must be constructible");
         let semaphore = Semaphore::new(max_conns);
@@ -194,12 +196,13 @@ const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 const SEMAPHORE_PANIC_MESSAGE: &str = "Semaphore should never close";
 
 #[derive(Debug)]
-struct ConnectionInitialzier {}
+struct ConnectionInitialzier {
+    config: Arc<Config>,
+}
 
 impl CustomizeConnection<PgConnection, diesel::r2d2::Error> for ConnectionInitialzier {
     fn on_acquire(&self, conn: &mut PgConnection) -> Result<(), diesel::r2d2::Error> {
-        let config = config::create();
-        if config.auto_explain {
+        if self.config.auto_explain {
             diesel::sql_query("LOAD 'auto_explain';").execute(conn)?;
             diesel::sql_query("SET SESSION auto_explain.log_min_duration = 500;").execute(conn)?;
             diesel::sql_query("SET SESSION auto_explain.log_parameter_max_length = 0;").execute(conn)?;

@@ -43,9 +43,10 @@ async fn main() {
     #[cfg(feature = "load_env")]
     app::load_env().expect("Failed to load .env");
 
-    let state = app::AppState::new(db::create_connection_pool(), config::create());
-    app::enable_tracing(&state);
+    let config = config::create();
+    app::enable_tracing(&config);
 
+    let state = app::AppState::new(db::create_connection_pool(config.clone()), config);
     if let Err(err) = app::initialize(&state) {
         tracing::error!("An error occurred during initialization. Details:\n{err}");
         std::process::exit(1);

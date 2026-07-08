@@ -41,10 +41,6 @@ impl RingCache {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.data = VecDeque::new();
-    }
-
     fn insert(&mut self, key: UploadToken, value: CachedProperties) {
         self.data.push_back((key, value));
         if self.data.len() > self.max_size {

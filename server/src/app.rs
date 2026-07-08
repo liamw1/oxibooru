@@ -9,14 +9,14 @@ use crate::{admin, api, config, db, filesystem};
 use axum::Router;
 use std::borrow::ToOwned;
 use std::error::Error;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
 #[cfg(unix)]
 use tokio::signal::unix::SignalKind;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -24,18 +24,18 @@ use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub connection_pool: Arc<AsyncConnectionPool>,
     pub config: Arc<Config>,
+    pub connection_pool: Arc<AsyncConnectionPool>,
     pub content_cache: Arc<Mutex<RingCache>>,
 }
 
 impl AppState {
-    pub fn new(connection_pool: AsyncConnectionPool, config: Config) -> Self {
+    pub fn new(connection_pool: AsyncConnectionPool, config: Arc<Config>) -> Self {
         /// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
         const CONTENT_CACHE_SIZE: usize = 10;
         Self {
+            config,
             connection_pool: Arc::new(connection_pool),
-            config: Arc::new(config),
             content_cache: Arc::new(Mutex::new(RingCache::new(CONTENT_CACHE_SIZE))),
         }
     }
@@ -73,15 +73,7 @@ impl Context {
     }
 
     pub fn get_content_cache(&self) -> MutexGuard<'_, RingCache> {
-        match self.content_cache.lock() {
-            Ok(guard) => guard,
-            Err(err) => {
-                error!("Content cache has been poisoned! Resetting...");
-                let mut guard = err.into_inner();
-                guard.clear();
-                guard
-            }
-        }
+        self.content_cache.lock().unwrap_or_else(PoisonError::into_inner)
     }
 }
 
@@ -93,17 +85,17 @@ pub fn num_rayon_threads() -> usize {
 }
 
 /// Initializes logging using [`tracing_subscriber`].
-pub fn enable_tracing(state: &AppState) {
+pub fn enable_tracing(config: &Config) {
     let initialize = |filter: EnvFilter| {
         tracing_subscriber::registry()
             .with(filter)
             .with(tracing_subscriber::fmt::layer().without_time())
             .init();
     };
-    match EnvFilter::try_new(&state.config.log_filter) {
+    match EnvFilter::try_new(&config.log_filter) {
         Ok(filter) => initialize(filter),
         Err(err) => {
-            initialize(EnvFilter::new(&state.config.log_filter));
+            initialize(EnvFilter::new(&config.log_filter));
             warn!("Log filter is invalid. Some or all directives may be ignored. Details:\n{err}");
         }
     }
