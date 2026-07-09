@@ -134,7 +134,10 @@ pub async fn verify_response_with_credentials(
             Some("body.json") => body = Some(serde_json::from_str(&file_contents)?),
             Some("config.toml") => config = Some(config::test_config(Some(relative_path))),
             Some(file_name) => panic!("Unexpected file name {file_name} in {relative_path}"),
-            _ => panic!("Could not parse file name {:?} in {relative_path}", path.file_name()),
+            _ => panic!(
+                "Could not parse file name {} in {relative_path}",
+                path.file_name().unwrap_or(OsStr::new("")).display()
+            ),
         }
     }
 

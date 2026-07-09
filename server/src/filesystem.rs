@@ -8,7 +8,8 @@ use axum::body::Bytes;
 use futures::StreamExt;
 use image::error::ImageError;
 use image::{DynamicImage, ImageResult};
-use std::collections::HashSet;
+use std::collections::hash_map::Entry;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
@@ -18,6 +19,7 @@ use std::time::Duration;
 use strum::{Display, IntoStaticStr};
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tokio::time::MissedTickBehavior;
 use tracing::warn;
 
 /// Represents important data directories.
@@ -166,19 +168,7 @@ pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
     // Set appropriate permissions since we usually use this function to move
     // content to a permanent location
     if let Err(err) = set_permissions(to) {
-        warn!("Failed to set permissions for {to:?} for reason: {err}");
-    }
-    Ok(())
-}
-
-/// Deletes everything in the temporary uploads directory.
-pub fn purge_temporary_uploads(config: &Config) -> std::io::Result<()> {
-    let temporary_uploads_path = config.path(Directory::TemporaryUploads);
-    if temporary_uploads_path.try_exists()? {
-        for entry in std::fs::read_dir(temporary_uploads_path)? {
-            let path = entry?.path();
-            std::fs::remove_file(path)?;
-        }
+        warn!("Failed to set permissions for {} for reason: {err}", to.display());
     }
     Ok(())
 }
@@ -189,17 +179,12 @@ pub fn spawn_temporary_uploads_cleanup_task(config: Arc<Config>) {
     const CLEANUP_INTERVAL: Duration = Duration::from_mins(10);
 
     tokio::spawn(async move {
-        let mut stale_uploads = HashSet::new();
+        let mut uploads = HashMap::new();
         let mut interval = tokio::time::interval(CLEANUP_INTERVAL);
+        interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
         loop {
             interval.tick().await;
-            match remove_stale_uploads(&config, &stale_uploads) {
-                Ok(current_uploads) => stale_uploads = current_uploads,
-                Err(err) => {
-                    tracing::warn!("Failed to cleanup temporary uploads directory: {err}");
-                    stale_uploads = HashSet::new();
-                }
-            }
+            remove_stale_uploads(&config, &mut uploads);
         }
     });
 }
@@ -215,24 +200,64 @@ fn remove_if_exists(file: &Path) -> std::io::Result<()> {
     }
 }
 
-/// Removes any files in the temporary uploads directory that are contained within `stale_uploads`.
-/// Returns a set of files that are currently in the temporary uploads directory.
-fn remove_stale_uploads(config: &Config, stale_uploads: &HashSet<PathBuf>) -> std::io::Result<HashSet<PathBuf>> {
+/// Removes any stale files in the temporary uploads directory that are contained within `uploads`.
+fn remove_stale_uploads(config: &Config, uploads: &mut HashMap<PathBuf, u64>) {
     let temporary_uploads_path = config.path(Directory::TemporaryUploads);
-    if !temporary_uploads_path.try_exists()? {
-        return Ok(HashSet::new());
-    }
+    let directory_iter = match std::fs::read_dir(temporary_uploads_path) {
+        Ok(iter) => iter,
+        Err(err) => {
+            if err.kind() == ErrorKind::NotFound {
+                // Directory must have been deleted after startup. Clear uploads map
+                uploads.clear();
+            } else {
+                warn!("Failed to cleanup temporary uploads directory: {err}");
+            };
+            return;
+        }
+    };
 
-    let mut current_uploads = HashSet::new();
-    for entry in std::fs::read_dir(temporary_uploads_path)? {
-        let path = entry?.path();
-        if stale_uploads.contains(&path) {
-            remove_if_exists(&path)?;
-        } else {
-            current_uploads.insert(path);
+    let mut seen_files = HashSet::new();
+    for file in directory_iter {
+        let path = match file {
+            Ok(entry) => entry.path(),
+            Err(err) => {
+                warn!("Failed to read directory entry: {err}");
+                continue;
+            }
+        };
+        let filesize = match path.metadata() {
+            Ok(metadata) => metadata.len(),
+            Err(err) => {
+                if err.kind() != ErrorKind::NotFound {
+                    warn!("Failed to read metadata for {}: {err}", path.display());
+                    seen_files.insert(path);
+                }
+                continue;
+            }
+        };
+
+        match uploads.entry(path.clone()) {
+            Entry::Occupied(mut entry) => {
+                // If filesize has grown, assume file is still downloading and don't delete
+                if filesize > *entry.get() {
+                    *entry.get_mut() = filesize;
+                    seen_files.insert(path);
+                } else if let Err(err) = remove_if_exists(&path) {
+                    warn!("Failed to remove {}: {err}", path.display());
+                    seen_files.insert(path);
+                } else {
+                    entry.remove();
+                }
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(filesize);
+                seen_files.insert(path);
+            }
         }
     }
-    Ok(current_uploads)
+
+    // Drop entries for files that no longer exist
+    uploads.retain(|path, _| seen_files.contains(path));
 }
 
 /// Swaps the names of two files.

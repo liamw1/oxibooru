@@ -126,10 +126,6 @@ pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
     let mut conn = state.connection_pool.get_blocking()?;
     db::check_signature_version(&mut conn)?; // We do this after admin mode check so that users can update signatures
     middleware::initialize_snapshot_counter(&mut conn)?;
-
-    if let Err(err) = filesystem::purge_temporary_uploads(&state.config) {
-        warn!("Failed to purge temporary files. Details:\n{err}");
-    }
     filesystem::spawn_temporary_uploads_cleanup_task(Arc::clone(&state.config));
     Ok(())
 }
