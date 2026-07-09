@@ -1,5 +1,6 @@
 use crate::api::error::ApiError;
 use crate::app::{AppState, Context};
+use crate::content;
 use crate::db::AsyncConnectionPool;
 use axum::RequestPartsExt;
 use axum::extract::multipart::{Multipart as AxumMultipart, MultipartRejection};
@@ -8,7 +9,6 @@ use axum::extract::{
     Extension, FromRef, FromRequest, FromRequestParts, Json as AxumJson, Path as AxumPath, Query as AxumQuery, Request,
     State,
 };
-use axum::http::header::CONTENT_TYPE;
 use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use serde::Serialize;
@@ -78,17 +78,13 @@ where
     type Rejection = ApiError;
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        let content_type_header = req.headers().get(CONTENT_TYPE);
-        let content_type = content_type_header.map(|value| value.to_str()).transpose()?;
-
-        if let Some(content_type) = content_type {
-            if content_type.starts_with("application/json") {
-                return AxumJson::<T>::from_request(req, state)
+        if let Some(content_type) = content::get_header(req.headers())?.as_deref() {
+            if content_type == "application/json" {
+                return AxumJson::from_request(req, state)
                     .await
-                    .map(|value| Self::Json(value.0))
+                    .map(|AxumJson(value)| Self::Json(value))
                     .map_err(ApiError::from);
-            }
-            if content_type.starts_with("multipart/form-data") {
+            } else if content_type == "multipart/form-data" {
                 return AxumMultipart::from_request(req, state)
                     .await
                     .map(Self::Multipart)
@@ -109,7 +105,7 @@ where
     type Rejection = ApiError;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
-        AxumPath::<T>::from_request_parts(parts, state)
+        AxumPath::from_request_parts(parts, state)
             .await
             .map(|value| Self(value.0))
             .map_err(ApiError::from)

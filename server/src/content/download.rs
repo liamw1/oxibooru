@@ -1,9 +1,9 @@
 use crate::api::error::ApiResult;
 use crate::config::Config;
 use crate::content::upload::UploadToken;
-use crate::filesystem;
 use crate::model::enums::MimeType;
-use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, REFERER};
+use crate::{content, filesystem};
+use reqwest::header::{HeaderMap, HeaderValue, REFERER};
 use reqwest::{Client, StatusCode};
 use std::str::FromStr;
 use url::Url;
@@ -30,12 +30,8 @@ pub async fn from_url(config: &Config, url: Url) -> ApiResult<UploadToken> {
     }
     let response = response.error_for_status()?;
 
-    let content_type = response
-        .headers()
-        .get(CONTENT_TYPE)
-        .map(|header_value| header_value.to_str())
-        .transpose()?;
-    let mime_type = MimeType::from_str(content_type.unwrap_or("")).map_err(Box::from)?;
+    let content_type = content::get_header(response.headers())?;
+    let mime_type = MimeType::from_str(content_type.as_deref().unwrap_or("")).map_err(Box::from)?;
 
     filesystem::save_uploaded_file(config, response.bytes_stream(), mime_type).await
 }

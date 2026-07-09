@@ -5,6 +5,7 @@ use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::UploadToken;
 use crate::extract::Ctx;
 use image::DynamicImage;
+use reqwest::header::{CONTENT_TYPE, HeaderMap, ToStrError};
 use url::Url;
 
 pub mod cache;
@@ -73,6 +74,13 @@ impl Content {
         let token = self.save(&ctx.config).await?;
         tokio::task::block_in_place(|| cache::get_or_compute_properties(ctx, token))
     }
+}
+
+pub fn get_header(headers: &HeaderMap) -> Result<Option<String>, ToStrError> {
+    headers
+        .get(CONTENT_TYPE)
+        .map(|header_value| header_value.to_str().map(str::trim).map(str::to_lowercase))
+        .transpose()
 }
 
 fn map_read_result<T>(result: std::io::Result<T>) -> ApiResult<T> {

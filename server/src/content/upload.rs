@@ -87,7 +87,7 @@ pub async fn extract<const N: usize>(
             .transpose()?;
 
         // Ensure metadata is JSON
-        if file_info.is_none() && field.content_type() != Some("application/json") {
+        if file_info.is_none() && field.content_type().map(str::to_lowercase).as_deref() != Some("application/json") {
             return Err(ApiError::JsonRejection(JsonRejection::MissingJsonContentType(
                 MissingJsonContentType::default(),
             )));
@@ -114,9 +114,9 @@ fn get_mime_type(field: &Field) -> ApiResult<MimeType> {
         .map(Path::new)
         .and_then(Path::extension)
         .and_then(OsStr::to_str);
-    let content_type = field.content_type().map(str::trim);
+    let content_type = field.content_type().map(str::trim).map(str::to_lowercase);
 
-    match (extension, content_type) {
+    match (extension, content_type.as_deref()) {
         (Some(ext), None | Some("application/octet-stream")) => MimeType::from_extension(ext).map_err(ApiError::from),
         (Some(ext), Some(content_type)) => {
             let mime_type = MimeType::from_extension(ext)?;
