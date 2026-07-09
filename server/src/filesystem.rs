@@ -47,15 +47,17 @@ where
     S: StreamExt<Item = Result<Bytes, E>> + Unpin,
     ApiError: From<E>,
 {
+    std::fs::create_dir_all(config.path(Directory::TemporaryUploads))?;
+
     let upload_token = UploadToken::new(mime_type);
     let upload_path = upload_token.path(config);
-    create_parent_directories(&upload_path)?;
 
     let mut file = File::create(upload_path).await?;
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
         file.write_all(&chunk).await?;
     }
+    file.flush().await?;
 
     Ok(upload_token)
 }
@@ -63,9 +65,9 @@ where
 /// Saves custom avatar `thumbnail` for user with name `username` to disk.
 /// Returns size of the thumbnail in bytes.
 pub fn save_custom_avatar(config: &Config, username: &str, thumbnail: &DynamicImage) -> ImageResult<i64> {
-    let avatar_path = config.custom_avatar_path(username);
-    create_parent_directories(&avatar_path)?;
+    std::fs::create_dir_all(config.path(Directory::Avatars))?;
 
+    let avatar_path = config.custom_avatar_path(username);
     thumbnail.to_rgb8().save(&avatar_path)?;
     file_size(&avatar_path).map_err(ImageError::from)
 }
@@ -87,7 +89,7 @@ pub fn save_post_thumbnail(
         ThumbnailCategory::Generated => post.generated_thumbnail_path(),
         ThumbnailCategory::Custom => post.custom_thumbnail_path(),
     };
-    create_parent_directories(&thumbnail_path)?;
+    std::fs::create_dir_all(thumbnail_path.parent().unwrap_or(Path::new("")))?;
 
     thumbnail.to_rgb8().save(&thumbnail_path)?;
     file_size(&thumbnail_path).map_err(ImageError::from)
@@ -151,7 +153,7 @@ pub fn swap_posts(
 /// Tries simply renaming first and falls back to copy/remove if `from` and `to`
 /// are on different file systems.
 pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
-    create_parent_directories(to)?;
+    std::fs::create_dir_all(to.parent().unwrap_or(Path::new("")))?;
     if let Err(err) = std::fs::rename(from, to) {
         if err.kind() == ErrorKind::CrossesDevices {
             std::fs::copy(from, to)?;
@@ -250,15 +252,4 @@ fn set_permissions(path: &Path) -> std::io::Result<()> {
     let mut permissions = std::fs::metadata(path)?.permissions();
     permissions.set_mode(STANDARD_PERMISSIONS);
     std::fs::set_permissions(path, permissions)
-}
-
-/// For a given `path`, recusively creates all parent directories if they don't already exist.
-fn create_parent_directories(path: &Path) -> std::io::Result<()> {
-    if let Err(err) = std::fs::create_dir_all(path.parent().unwrap_or(Path::new("")))
-        && err.kind() != std::io::ErrorKind::AlreadyExists
-    {
-        Err(err)
-    } else {
-        Ok(())
-    }
 }
