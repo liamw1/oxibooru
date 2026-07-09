@@ -247,7 +247,7 @@ async fn create_impl(
                     };
                     ctx.verify_privilege(action)?;
 
-                    update::user::avatar(conn, &ctx.config, user.id, &body.name, &avatar)?;
+                    update::user::avatar(conn, &ctx.config, user.id, &body.name, avatar)?;
                 }
 
                 Ok::<_, ApiError>(user)
@@ -436,7 +436,7 @@ async fn update_impl(
                     };
                     ctx.verify_privilege(action)?;
 
-                    update::user::avatar(conn, &ctx.config, user_id, &username, &avatar)?;
+                    update::user::avatar(conn, &ctx.config, user_id, &username, avatar)?;
                 }
                 if let Some(new_name) = body.name.as_deref() {
                     let action = if editing_self {

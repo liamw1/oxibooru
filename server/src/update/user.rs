@@ -28,7 +28,7 @@ pub fn avatar(
     config: &Config,
     user_id: i64,
     name: &str,
-    avatar: &DynamicImage,
+    avatar: DynamicImage,
 ) -> ApiResult<()> {
     filesystem::delete_custom_avatar(config, name)?;
 

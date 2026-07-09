@@ -66,11 +66,11 @@ where
 
 /// Saves custom avatar `thumbnail` for user with name `username` to disk.
 /// Returns size of the thumbnail in bytes.
-pub fn save_custom_avatar(config: &Config, username: &str, thumbnail: &DynamicImage) -> ImageResult<i64> {
+pub fn save_custom_avatar(config: &Config, username: &str, thumbnail: DynamicImage) -> ImageResult<i64> {
     std::fs::create_dir_all(config.path(Directory::Avatars))?;
 
     let avatar_path = config.custom_avatar_path(username);
-    thumbnail.to_rgb8().save(&avatar_path)?;
+    thumbnail.into_rgb8().save(&avatar_path)?;
     file_size(&avatar_path).map_err(ImageError::from)
 }
 
@@ -270,7 +270,7 @@ fn swap_files(config: &Config, file_a: &Path, file_b: &Path) -> std::io::Result<
     move_file(&temp_path, file_b)
 }
 
-/// Makes `path` writable by the process. Used to avoid permissions issues on some systems.
+/// Makes `path` readable to world. Used to avoid permissions issues on some systems.
 fn set_permissions(path: &Path) -> std::io::Result<()> {
     const STANDARD_PERMISSIONS: u32 = 0o644;
 
