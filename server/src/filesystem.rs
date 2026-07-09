@@ -109,7 +109,7 @@ pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailCategory)
 /// Deletes `post` content from disk.
 pub fn delete_content(post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
     let content_path = post.content_path(mime_type);
-    std::fs::remove_file(content_path)
+    remove_if_exists(&content_path)
 }
 
 /// Deletes `post` thumbnails and content from disk.
