@@ -308,7 +308,7 @@ impl Config {
 
     /// Returns URL to custom user avatar.
     pub fn custom_avatar_url(&self, username: &str) -> String {
-        format!("{}/avatars/{}.png", self.data_url, username.to_lowercase())
+        format!("{}/avatars/{}.png", self.data_url.trim_end_matches('/'), username.to_lowercase())
     }
 
     /// Returns path to custom user avatar on disk.

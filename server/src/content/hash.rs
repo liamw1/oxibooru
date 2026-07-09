@@ -42,7 +42,11 @@ impl<'a> PostHash<'a> {
     /// Returns URL to post content.
     pub fn content_url(&self, content_type: MimeType) -> String {
         const POSTS_DIRECTORY: Directory = Directory::Posts;
-        format!("{}/{POSTS_DIRECTORY}/{self}.{}", self.config.data_url, content_type.extension())
+        format!(
+            "{}/{POSTS_DIRECTORY}/{self}.{}",
+            self.config.data_url.trim_end_matches('/'),
+            content_type.extension()
+        )
     }
 
     /// Returns URL to post thumbnail. Will be a generated thumbnail by default or
@@ -54,7 +58,7 @@ impl<'a> PostHash<'a> {
         } else {
             Directory::GeneratedThumbnails
         };
-        format!("{}/{thumbnail_folder}/{self}.{THUMBNAIL_EXTENSION}", self.config.data_url)
+        format!("{}/{thumbnail_folder}/{self}.{THUMBNAIL_EXTENSION}", self.config.data_url.trim_end_matches('/'))
     }
 
     /// Returns path to post content on disk.
