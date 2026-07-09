@@ -4,7 +4,7 @@ use crate::string::SmallString;
 use config::builder::DefaultState;
 use config::{ConfigBuilder, File, FileFormat};
 use lettre::message::Mailbox;
-use percent_encoding::NON_ALPHANUMERIC;
+use percent_encoding::{AsciiSet, CONTROLS, NON_ALPHANUMERIC};
 use regex::Regex;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -308,12 +308,19 @@ impl Config {
 
     /// Returns URL to custom user avatar.
     pub fn custom_avatar_url(&self, username: &str) -> String {
-        format!("{}/avatars/{}.png", self.data_url.trim_end_matches('/'), username.to_lowercase())
+        // Encode characters that could allow for file traversal, and the encode again for the URL
+        let lowercase_username = username.to_lowercase();
+        let encoded_username = percent_encoding::utf8_percent_encode(&lowercase_username, TRAVERSAL).to_string();
+        let double_encoded_username = percent_encoding::utf8_percent_encode(&encoded_username, NON_ALPHANUMERIC);
+        format!("{}/avatars/{double_encoded_username}.png", self.data_url.trim_end_matches('/'))
     }
 
     /// Returns path to custom user avatar on disk.
     pub fn custom_avatar_path(&self, username: &str) -> PathBuf {
-        let filename = format!("{}.png", username.to_lowercase());
+        // Encode characters that could allow for file traversal
+        let lowercase_username = username.to_lowercase();
+        let encoded_username = percent_encoding::utf8_percent_encode(&lowercase_username, TRAVERSAL);
+        let filename = format!("{encoded_username}.png");
         self.path(Directory::Avatars).join(filename)
     }
 }
@@ -366,6 +373,9 @@ pub fn database_url(database_override: Option<&str>) -> String {
     let database = percent_encoding::utf8_percent_encode(database_override.unwrap_or(&database), NON_ALPHANUMERIC);
     format!("postgres://{user}:{password}@{hostname}:{port}/{database}")
 }
+
+/// Set of characters that allow for file traversal.
+const TRAVERSAL: &AsciiSet = &CONTROLS.add(b'/').add(b'\\').add(b'.').add(b'%');
 
 const DEFAULT_CONFIG: &str = include_str!("../config.toml.dist");
 
