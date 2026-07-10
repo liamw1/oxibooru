@@ -5,6 +5,7 @@ use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::UploadToken;
 use crate::extract::Ctx;
 use image::DynamicImage;
+use mime::Mime;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, ToStrError};
 use url::Url;
 
@@ -76,11 +77,12 @@ impl Content {
     }
 }
 
-pub fn get_header(headers: &HeaderMap) -> Result<Option<String>, ToStrError> {
+pub fn parse_header(headers: &HeaderMap) -> Result<Option<Mime>, ToStrError> {
     headers
         .get(CONTENT_TYPE)
-        .map(|header_value| header_value.to_str().map(str::trim).map(str::to_lowercase))
+        .map(|header_value| header_value.to_str())
         .transpose()
+        .map(|header| header.and_then(|value| value.parse().ok()))
 }
 
 fn map_read_result<T>(result: std::io::Result<T>) -> ApiResult<T> {

@@ -4,13 +4,14 @@ use crate::content;
 use crate::db::AsyncConnectionPool;
 use axum::RequestPartsExt;
 use axum::extract::multipart::{Multipart as AxumMultipart, MultipartRejection};
-use axum::extract::rejection::{JsonRejection, MissingJsonContentType, PathRejection, QueryRejection};
+use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{
     Extension, FromRef, FromRequest, FromRequestParts, Json as AxumJson, Path as AxumPath, Query as AxumQuery, Request,
     State,
 };
 use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
+use mime::{APPLICATION, FORM_DATA, JSON, MULTIPART};
 use serde::Serialize;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -78,20 +79,20 @@ where
     type Rejection = ApiError;
 
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
-        if let Some(content_type) = content::get_header(req.headers())?.as_deref() {
-            if content_type == "application/json" {
+        if let Some(mime) = content::parse_header(req.headers())? {
+            if mime.type_() == APPLICATION && (mime.subtype() == JSON || mime.suffix() == Some(JSON)) {
                 return AxumJson::from_request(req, state)
                     .await
                     .map(|AxumJson(value)| Self::Json(value))
                     .map_err(ApiError::from);
-            } else if content_type == "multipart/form-data" {
+            } else if mime.type_() == MULTIPART && mime.subtype() == FORM_DATA {
                 return AxumMultipart::from_request(req, state)
                     .await
                     .map(Self::Multipart)
                     .map_err(ApiError::from);
             }
         }
-        Err(ApiError::JsonRejection(JsonRejection::MissingJsonContentType(MissingJsonContentType::default())))
+        Err(ApiError::UnsupportedContentType)
     }
 }
 

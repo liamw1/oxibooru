@@ -2,14 +2,15 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
 use crate::filesystem::{self, Directory};
 use crate::model::enums::MimeType;
-use crate::string::SmallString;
 use axum::extract::multipart::{Field, Multipart};
 use axum::extract::rejection::{JsonRejection, MissingJsonContentType};
+use mime::{APPLICATION, FromStrError, JSON, Mime, OCTET_STREAM};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use strum::IntoStaticStr;
+use tracing::warn;
 use uuid::Uuid;
 
 pub const MAX_UPLOAD_SIZE: usize = 4 * 1024_usize.pow(3);
@@ -75,59 +76,86 @@ pub async fn extract<const N: usize>(
     while let Some(field) = form_data.next_field().await? {
         let position = fields
             .iter()
-            .map(Into::<&str>::into)
+            .map(<&str>::from)
             .position(|name| field.name() == Some(name));
+
+        // Skip unexpected fields
         if position.is_none() && field.name() != Some("metadata") {
+            if let Some(name) = field.name() {
+                warn!("Field `{name}` not expected, skipping");
+            } else {
+                warn!("No field name specified, skipping");
+            }
             continue;
         }
 
-        // Get MIME type from field
-        let file_info = position
-            .map(|index| get_mime_type(&field).map(|mime_type| (index, mime_type)))
-            .transpose()?;
-
         // Ensure metadata is JSON
-        if file_info.is_none() && field.content_type().map(str::to_lowercase).as_deref() != Some("application/json") {
+        let field_metadata = FieldMetadata::new(&field)?;
+        if position.is_none() && !field_metadata.is_application_json() {
             return Err(ApiError::JsonRejection(JsonRejection::MissingJsonContentType(
                 MissingJsonContentType::default(),
             )));
         }
 
-        match file_info {
-            Some((index, mime_type)) => {
-                files[index] = filesystem::save_uploaded_file(config, field, mime_type)
-                    .await
-                    .map(Some)?;
-            }
-            None => metadata = field.bytes().await.map(|bytes| bytes.to_vec()).map(Some)?,
+        if let Some(index) = position {
+            let mime_type = field_metadata.mime_type()?;
+            files[index] = filesystem::save_uploaded_file(config, field, mime_type)
+                .await
+                .map(Some)?;
+        } else {
+            metadata = field.bytes().await.map(|bytes| bytes.to_vec()).map(Some)?;
         }
     }
     Ok(Body { files, metadata })
 }
 
-/// Returns the MIME type of the given part.
-/// It either gets this from the filename extension or the content type if no extension exists.
-/// If both exist but their content types are different, an error is returned.
-fn get_mime_type(field: &Field) -> ApiResult<MimeType> {
-    let extension = field
-        .file_name()
-        .map(Path::new)
-        .and_then(Path::extension)
-        .and_then(OsStr::to_str);
-    let content_type = field.content_type().map(str::trim).map(str::to_lowercase);
+struct FieldMetadata<'a> {
+    mime: Option<Mime>,
+    extension: Option<&'a str>,
+}
 
-    match (extension, content_type.as_deref()) {
-        (Some(ext), None | Some("application/octet-stream")) => MimeType::from_extension(ext).map_err(ApiError::from),
-        (Some(ext), Some(content_type)) => {
-            let mime_type = MimeType::from_extension(ext)?;
-            if MimeType::from_str(content_type) != Ok(mime_type) {
-                return Err(ApiError::ContentTypeMismatch(mime_type, SmallString::new(content_type)));
+impl<'a> FieldMetadata<'a> {
+    fn new(field: &'a Field) -> Result<FieldMetadata<'a>, FromStrError> {
+        let extension = field
+            .file_name()
+            .map(Path::new)
+            .and_then(Path::extension)
+            .and_then(OsStr::to_str);
+        field
+            .content_type()
+            .map(Mime::from_str)
+            .transpose()
+            .map(|mime| FieldMetadata { mime, extension })
+    }
+
+    fn is_application_json(&self) -> bool {
+        self.mime
+            .as_ref()
+            .is_some_and(|mime| mime.type_() == APPLICATION && (mime.subtype() == JSON || mime.suffix() == Some(JSON)))
+    }
+
+    /// Returns the MIME type for the field.
+    /// It either gets this from the extension or the content type if no extension exists.
+    ///
+    /// If neither exists or they disagree, an error is returned.
+    /// Fields with `application/octet-stream` are compatible with any accepted extension.
+    fn mime_type(&self) -> ApiResult<MimeType> {
+        match (self.extension, self.mime.as_ref()) {
+            (None, None) => Err(ApiError::MissingContentType),
+            (None, Some(mime)) => MimeType::from_str(mime.essence_str())
+                .map_err(Box::from)
+                .map_err(ApiError::from),
+            (Some(extension), None) => MimeType::from_extension(extension).map_err(ApiError::from),
+            (Some(extension), Some(mime)) => {
+                let mime_type = MimeType::from_extension(extension)?;
+                if mime.type_() == APPLICATION && mime.subtype() == OCTET_STREAM
+                    || MimeType::from_str(mime.essence_str()) == Ok(mime_type)
+                {
+                    Ok(mime_type)
+                } else {
+                    Err(ApiError::ContentTypeMismatch(mime_type, mime.essence_str().into()))
+                }
             }
-            Ok(mime_type)
         }
-        (None, Some(content_type)) => MimeType::from_str(content_type)
-            .map_err(Box::from)
-            .map_err(ApiError::from),
-        (None, None) => Err(ApiError::MissingContentType),
     }
 }

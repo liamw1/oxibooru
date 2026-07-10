@@ -22,7 +22,7 @@ pub enum ApiError {
     #[error("{0} already exists")]
     AlreadyExists(ResourceProperty),
     #[error("File of type {0} did not match request with content-type '{1}'")]
-    ContentTypeMismatch(MimeType, SmallString),
+    ContentTypeMismatch(MimeType, String),
     #[error("Cyclic dependency detected in {0}s")]
     CyclicDependency(ResourceType),
     #[error("Cannot delete default {0}")]
@@ -50,6 +50,7 @@ pub enum ApiError {
     InvalidEmailAddress(#[from] lettre::address::AddressError),
     InvalidEmail(#[from] lettre::error::Error),
     InvalidHeader(#[from] reqwest::header::InvalidHeaderValue),
+    InvalidMime(#[from] mime::FromStrError),
     #[error("Invalid sort token")]
     InvalidSort,
     InvalidTime(#[from] crate::search::TimeParsingError),
@@ -94,6 +95,8 @@ pub enum ApiError {
     TaskJoin(#[from] tokio::task::JoinError),
     #[error("Password reset token is invalid")]
     UnauthorizedPasswordReset,
+    #[error("Content-Type not supported")]
+    UnsupportedContentType,
     UnsupportedExtension(#[from] crate::model::enums::ParseExtensionError),
 }
 
@@ -111,6 +114,7 @@ impl ApiError {
             Self::QueryRejection(err) => err.status(),
             Self::ContentTypeMismatch(..)
             | Self::HeaderDeserialization(_)
+            | Self::InvalidMime(_)
             | Self::MissingContent(_)
             | Self::MissingContentType
             | Self::MissingFormData
@@ -119,7 +123,7 @@ impl ApiError {
             Self::Hidden(_) | Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::AlreadyExists(_) | Self::ResourceModified => StatusCode::CONFLICT,
-            Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::UnsupportedContentType | Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::CyclicDependency(_)
             | Self::DeleteDefault(_)
             | Self::EmptySwf
@@ -182,6 +186,7 @@ impl ApiError {
             Self::InvalidEmailAddress(_) => "Invalid Email Address",
             Self::InvalidEmail(_) => "Invalid Email",
             Self::InvalidHeader(_) => "Invalid Header",
+            Self::InvalidMime(_) => "Invalid MIME",
             Self::InvalidSort => "Invalid Sort",
             Self::InvalidTime(_) => "Invalid Time",
             Self::InvalidUploadToken => "Invalid Upload Token",
@@ -211,6 +216,7 @@ impl ApiError {
             Self::SwfDecoding(_) => "SWF Decoding Error",
             Self::TaskJoin(_) => "Task Join Error",
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
+            Self::UnsupportedContentType => "Unsupported Content Type",
             Self::UnsupportedExtension(_) => "Unsupported extension",
         }
     }

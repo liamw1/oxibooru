@@ -84,6 +84,7 @@ pub enum ErrorName {
     InvalidInput,
     InvalidLastSymbol,
     InvalidLength,
+    InvalidMime,
     InvalidPadding,
     InvalidPassword,
     InvalidPhcStringField,
@@ -197,6 +198,7 @@ pub enum ErrorName {
     UnknownQueryRejectionError,
     Unsupported,
     UnsupportedAlgorithm,
+    UnsupportedContentType,
     UnsupportedColor,
     UnsupportedExtension,
     UnsupportedFeature,
@@ -640,6 +642,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::InvalidEmailAddress(err) => err.kind(),
             Self::InvalidEmail(err) => err.kind(),
             Self::InvalidHeader(_) => ErrorName::InvalidHeader,
+            Self::InvalidMime(_) => ErrorName::InvalidMime,
             Self::InvalidSort => ErrorName::InvalidSort,
             Self::InvalidTime(err) => err.kind(),
             Self::InvalidUploadToken => ErrorName::InvalidUploadToken,
@@ -669,6 +672,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::SwfDecoding(err) => err.kind(),
             Self::TaskJoin(err) => err.kind(),
             Self::UnauthorizedPasswordReset => ErrorName::UnauthorizedPasswordReset,
+            Self::UnsupportedContentType => ErrorName::UnsupportedContentType,
             Self::UnsupportedExtension(_) => ErrorName::UnsupportedExtension,
         }
     }

@@ -4,6 +4,7 @@ use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::SmallInt;
 use diesel::{AsExpression, FromSqlRow};
+use mime::Mime;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::ops::{BitOr, BitOrAssign};
@@ -153,6 +154,10 @@ impl MimeType {
             Self::Webm => "webm",
             Self::Swf => "swf",
         }
+    }
+
+    pub fn to_mime(self) -> Mime {
+        Mime::from_str(&self.to_string()).expect("MimeType must be a valid MIME type")
     }
 }
 

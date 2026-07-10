@@ -211,7 +211,7 @@ fn remove_stale_uploads(config: &Config, uploads: &mut HashMap<PathBuf, u64>) {
                 uploads.clear();
             } else {
                 warn!("Failed to cleanup temporary uploads directory: {err}");
-            };
+            }
             return;
         }
     };

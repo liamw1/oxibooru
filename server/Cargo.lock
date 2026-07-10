@@ -2077,6 +2077,7 @@ dependencies = [
  "lettre",
  "md5",
  "mimalloc",
+ "mime",
  "num-traits",
  "openssl-sys",
  "percent-encoding",

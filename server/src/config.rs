@@ -206,8 +206,7 @@ impl<'de> Deserialize<'de> for PrivilegeConfig {
                 .ok_or(serde::de::Error::missing_field(action_name))?;
         }
         if let Some(unknown_field) = privilege_map.keys().next() {
-            static ACTION_NAMES: LazyLock<Vec<&str>> =
-                LazyLock::new(|| Action::iter().map(<&'static str>::from).collect());
+            static ACTION_NAMES: LazyLock<Vec<&str>> = LazyLock::new(|| Action::iter().map(<&str>::from).collect());
             return Err(serde::de::Error::unknown_field(unknown_field, &ACTION_NAMES));
         }
         Ok(required_ranks)
