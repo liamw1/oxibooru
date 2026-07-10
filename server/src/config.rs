@@ -375,7 +375,7 @@ pub fn database_url(database_override: Option<&str>) -> String {
 }
 
 /// Set of characters that allow for file traversal.
-const TRAVERSAL: &AsciiSet = &CONTROLS.add(b'/').add(b'\\').add(b'.').add(b'%');
+const TRAVERSAL: &AsciiSet = &CONTROLS.add(b'/').add(b'\\').add(b'.').add(b':').add(b'%');
 
 const DEFAULT_CONFIG: &str = include_str!("../config.toml.dist");
 

@@ -804,4 +804,20 @@ mod test {
         verify_response("POST /users", "user/create_malicious_avatar_token").await?;
         verify_response("PUT /user/regular_user", "user/edit_malicious_avatar_token").await
     }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[serial]
+    async fn malicious_username() -> ApiResult<()> {
+        // Place a file outside of the temporary uploads directory
+        simulate_upload("1_pixel.png", "../upload.png")?;
+
+        // Test usernames that attempt to access file outside temporary uploads directory
+        simulate_upload("1_pixel.png", "actual_avatar.png")?;
+        verify_response("POST /users?fields=name,avatarUrl", "user/create_malicious_username").await?;
+        simulate_upload("1_pixel.png", "actual_avatar.png")?;
+        verify_response("PUT /user/regular_user?fields=name,avatarUrl", "user/edit_malicious_username").await?;
+
+        reset_database();
+        Ok(())
+    }
 }
