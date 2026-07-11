@@ -819,6 +819,21 @@ mod test {
         verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_download_avatar_unauthorized").await
     }
 
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[serial]
+    async fn percent_encoding_edge_cases() -> ApiResult<()> {
+        // Create a user that requires percent encoding on avatar path
+        simulate_upload("1_pixel.png", "avatar.png")?;
+        verify_response(&format!("POST /users?{FIELDS}"), "user/create_encoded_name").await?;
+
+        // Create another user whose name is the percent-encoding of the previous user
+        simulate_upload("1_pixel.png", "avatar.png")?;
+        verify_response(&format!("POST /users?{FIELDS}"), "user/create_double_encoded_name").await?;
+
+        reset_database();
+        Ok(())
+    }
+
     #[tokio::test]
     #[parallel]
     async fn malicious_token() -> ApiResult<()> {

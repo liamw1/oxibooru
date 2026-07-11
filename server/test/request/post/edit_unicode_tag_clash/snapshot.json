@@ -1,0 +1,24 @@
+{
+    "type": "object change",
+    "value": {
+        "description": {
+            "new-value": "These two tag suggestions are case-fold equivalent according to PostgreSQL, but not case-fold equivalent according to `str::to_lowercase`",
+            "old-value": "0101100010",
+            "type": "primitive change"
+        },
+        "tags": {
+            "added": [
+                "İSTANBUL"
+            ],
+            "removed": [
+                "classic_literature",
+                "claudius",
+                "laertes",
+                "plant",
+                "rock",
+                "shakespeare"
+            ],
+            "type": "list change"
+        }
+    }
+}

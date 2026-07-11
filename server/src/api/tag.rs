@@ -8,8 +8,8 @@ use crate::model::enums::{ResourceType, UserRank};
 use crate::model::tag::{NewTag, Tag};
 use crate::resource::tag::{Field, TagInfo};
 use crate::schema::{post_tag, tag, tag_category, tag_name};
-use crate::search::Builder;
 use crate::search::tag::QueryBuilder;
+use crate::search::{Builder, preferences};
 use crate::snapshot::tag::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
@@ -37,22 +37,29 @@ const MAX_TAGS_PER_PAGE: i64 = 1000;
 const MAX_TAG_SIBLINGS: i64 = 50;
 
 fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &SmallString) -> ApiResult<i64> {
-    let (tag_id, category_name): (i64, SmallString) = tag::table
-        .inner_join(tag_name::table)
-        .inner_join(tag_category::table)
-        .select((tag::id, tag_category::name))
-        .filter(tag_name::name.eq(tag_name))
-        .first(conn)
-        .optional()?
-        .ok_or(ApiError::NotFound(ResourceType::Tag))?;
-
     if ctx.client.rank == UserRank::Anonymous {
-        let preferences = &ctx.config.anonymous_preferences;
-        if preferences.tag_blacklist.contains(tag_name) || preferences.tag_category_blacklist.contains(&category_name) {
-            return Err(ApiError::Hidden(ResourceType::Tag));
+        let (tag_id, category_name): (i64, SmallString) = tag::table
+            .inner_join(tag_name::table)
+            .inner_join(tag_category::table)
+            .select((tag::id, tag_category::name))
+            .filter(tag_name::name.eq(tag_name))
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+
+        if preferences::tag_hidden(conn, ctx, tag_name, &category_name)? {
+            Err(ApiError::Hidden(ResourceType::Tag))
+        } else {
+            Ok(tag_id)
         }
+    } else {
+        tag_name::table
+            .select(tag_name::tag_id)
+            .filter(tag_name::name.eq(tag_name))
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))
     }
-    Ok(tag_id)
 }
 
 /// Searches for tags.
@@ -316,18 +323,10 @@ async fn create(
 
             // Add names, implications, and suggestions
             update::tag::set_names(conn, &ctx.config, tag.id, &body.names)?;
-            let (implied_ids, implications) = update::tag::get_or_create_tag_ids(
-                conn,
-                &ctx,
-                body.implications.unwrap_or_default(),
-                FetchMode::Acyclic,
-            )?;
-            let (suggested_ids, suggestions) = update::tag::get_or_create_tag_ids(
-                conn,
-                &ctx,
-                body.suggestions.unwrap_or_default(),
-                FetchMode::Acyclic,
-            )?;
+            let (implied_ids, implications) =
+                update::tag::get_or_create_tags(conn, &ctx, body.implications.unwrap_or_default(), FetchMode::Acyclic)?;
+            let (suggested_ids, suggestions) =
+                update::tag::get_or_create_tags(conn, &ctx, body.suggestions.unwrap_or_default(), FetchMode::Acyclic)?;
             update::tag::set_implications(conn, tag.id, &implied_ids)?;
             update::tag::set_suggestions(conn, tag.id, &suggested_ids)?;
 
@@ -506,7 +505,7 @@ async fn update(
                 ctx.verify_privilege(Action::TagEditImplication)?;
 
                 let (implied_ids, implications) =
-                    update::tag::get_or_create_tag_ids(conn, &ctx, implications, FetchMode::Acyclic)?;
+                    update::tag::get_or_create_tags(conn, &ctx, implications, FetchMode::Acyclic)?;
                 update::tag::set_implications(conn, tag_id, &implied_ids)?;
                 new_snapshot_data.implications = implications;
             }
@@ -514,7 +513,7 @@ async fn update(
                 ctx.verify_privilege(Action::TagEditSuggestion)?;
 
                 let (suggested_ids, suggestions) =
-                    update::tag::get_or_create_tag_ids(conn, &ctx, suggestions, FetchMode::Acyclic)?;
+                    update::tag::get_or_create_tags(conn, &ctx, suggestions, FetchMode::Acyclic)?;
                 update::tag::set_suggestions(conn, tag_id, &suggested_ids)?;
                 new_snapshot_data.suggestions = suggestions;
             }
@@ -881,5 +880,32 @@ mod test {
         verify_response_with_user(USER, "GET /tag-siblings/sky", "tag/get_siblings_view_unauthorized").await?;
         verify_response_with_user(USER, "POST /tag-merge", "tag/merge_view_unauthorized").await?;
         verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_view_unauthorized").await
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn unicode_edge_cases() -> ApiResult<()> {
+        verify_response("POST /tags", "tag/create_unicode_name_clash").await?;
+        verify_response("POST /tags?fields=implications", "tag/create_unicode_implication_clash").await?;
+        verify_response("POST /tags?fields=suggestions", "tag/create_unicode_suggestion_clash").await?;
+        verify_response("PUT /tag/sky", "tag/edit_unicode_name_clash").await?;
+        verify_response("PUT /tag/sky?fields=implications", "tag/edit_unicode_implication_clash").await?;
+        verify_response("PUT /tag/sky?fields=suggestions", "tag/edit_unicode_suggestion_clash").await?;
+
+        reset_database();
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn blacklist_edge_case() -> ApiResult<()> {
+        // Create edge-case tag category name
+        verify_response("POST /tags?fields=names", "tag/create_blacklist_edge_case").await?;
+
+        // Try to view tag category using name with different casing
+        verify_response_with_user(UserRank::Anonymous, "GET /tag/κοσμοσ", "tag/get_blacklist_edge_case").await?;
+
+        reset_database();
+        Ok(())
     }
 }

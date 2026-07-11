@@ -70,7 +70,7 @@ pub fn new_name_snapshots(conn: &mut PgConnection, client: Client, new_names: Ve
     let new_snapshots: Vec<NewSnapshot> = new_names
         .into_iter()
         .map(|name| SnapshotData {
-            description: LargeString::new(),
+            description: LargeString::default(),
             category: default_category_name.clone(),
             names: vec![name],
             implications: Vec::new(),

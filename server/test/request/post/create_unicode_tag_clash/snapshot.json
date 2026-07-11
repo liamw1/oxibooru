@@ -1,0 +1,13 @@
+{
+    "checksum": "fb172648054a23d19661f3c4ba6c72853763b675f4171b20fe90b4c51e07968c",
+    "description": "These two tag implications are case-fold equivalent according to PostgreSQL, but not case-fold equivalent according to `str::to_lowercase`",
+    "featured": false,
+    "flags": [],
+    "notes": [],
+    "relations": [],
+    "safety": "safe",
+    "source": "",
+    "tags": [
+        "ΛΟΓΟΣ"
+    ]
+}

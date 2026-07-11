@@ -1,0 +1,5 @@
+[anonymous_preferences]
+tag_category_blacklist = ["ΚΟΣΜΟΣ"]
+
+[public_info.privileges]
+tag_category_view = "anonymous"

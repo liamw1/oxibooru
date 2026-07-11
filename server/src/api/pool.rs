@@ -667,4 +667,13 @@ mod test {
         verify_response_with_user(USER, "POST /pool-merge", "pool/merge_view_unauthorized").await?;
         verify_response_with_user(USER, "PUT /pool/1", "pool/edit_view_unauthorized").await
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn unicode_edge_cases() -> ApiResult<()> {
+        verify_response("POST /pool", "pool/create_unicode_name_clash").await?;
+
+        reset_database();
+        Ok(())
+    }
 }

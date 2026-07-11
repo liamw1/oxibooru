@@ -627,7 +627,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
         move |conn| {
             // We do this before post insertion so that the post sequence isn't incremented if it fails
             let (tag_ids, tags) =
-                update::tag::get_or_create_tag_ids(conn, &ctx, body.tags.unwrap_or_default(), FetchMode::Deep)?;
+                update::tag::get_or_create_tags(conn, &ctx, body.tags.unwrap_or_default(), FetchMode::Deep)?;
             let relations = body.relations.unwrap_or_default();
             let notes = body.notes.unwrap_or_default();
 
@@ -1029,7 +1029,7 @@ async fn update_impl(
                 } else {
                     FetchMode::Shallow
                 };
-                let (updated_tag_ids, tags) = update::tag::get_or_create_tag_ids(conn, &ctx, tags, fetch_mode)?;
+                let (updated_tag_ids, tags) = update::tag::get_or_create_tags(conn, &ctx, tags, fetch_mode)?;
                 update::post::set_tags(conn, post_id, &updated_tag_ids)?;
                 new_snapshot_data.tags = tags;
             }
@@ -1731,6 +1731,17 @@ mod test {
         verify_response_with_user(USER, "POST /posts", "post/create_download_thumbnail_unauthorized").await?;
         verify_response_with_user(USER, "PUT /post/1", "post/edit_download_content_unauthorized").await?;
         verify_response_with_user(USER, "PUT /post/1", "post/edit_download_thumbnail_unauthorized").await
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[serial]
+    async fn unicode_edge_cases() -> ApiResult<()> {
+        simulate_upload("1_pixel.png", "upload.png")?;
+        verify_response("POST /posts?fields=tags", "post/create_unicode_tag_clash").await?;
+        verify_response("PUT /post/1?fields=tags", "post/edit_unicode_tag_clash").await?;
+
+        reset_database();
+        Ok(())
     }
 
     #[tokio::test]

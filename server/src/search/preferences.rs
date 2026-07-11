@@ -1,12 +1,13 @@
 use crate::app::Context;
 use crate::model::enums::{PostSafety, UserRank};
 use crate::schema::{post, post_statistics, post_tag, tag, tag_category, tag_name};
+use crate::string::SmallString;
 use diesel::dsl::{InnerJoin, IntoBoxed, Select, exists, sql};
 use diesel::expression::SqlLiteral;
 use diesel::pg::Pg;
 use diesel::query_builder::QueryFragment;
-use diesel::sql_types::{BigInt, Bool, Integer};
-use diesel::{Expression, ExpressionMethods, QueryDsl, alias};
+use diesel::sql_types::{Array, BigInt, Bool, Integer, Text};
+use diesel::{Expression, ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, alias};
 
 alias!(post as inner_post: PostAlias);
 
@@ -15,6 +16,24 @@ pub type BoxedQuery =
 
 pub fn has_preferences(ctx: &Context) -> bool {
     ctx.client.rank == UserRank::Anonymous && !ctx.config.anonymous_preferences.is_empty()
+}
+
+pub fn category_hidden(conn: &mut PgConnection, ctx: &Context, category_name: &str) -> QueryResult<bool> {
+    if ctx.client.rank == UserRank::Anonymous {
+        name_contained_in(conn, category_name, &ctx.config.anonymous_preferences.tag_category_blacklist)
+    } else {
+        Ok(false)
+    }
+}
+
+pub fn tag_hidden(conn: &mut PgConnection, ctx: &Context, tag_name: &str, category_name: &str) -> QueryResult<bool> {
+    Ok(if ctx.client.rank == UserRank::Anonymous {
+        let preferences = &ctx.config.anonymous_preferences;
+        name_contained_in(conn, tag_name, &preferences.tag_blacklist)?
+            || name_contained_in(conn, category_name, &preferences.tag_category_blacklist)?
+    } else {
+        false
+    })
 }
 
 pub fn hidden_posts<C>(ctx: &Context, post_id_column: C) -> Option<BoxedQuery>
@@ -57,4 +76,21 @@ where
         query = query.or_filter(exists(blacklisted_posts));
     }
     Some(query.filter(sql::<Bool>("").bind(inner_post.field(post::id).eq(post_id_column))))
+}
+
+// Determines if `name` is CITEXT-equivalent to any elements in `haystack`.
+// We use a query here because CITEXT semantics differ from comparing `str::to_lowercased`-ed strings in certain cases.
+fn name_contained_in(conn: &mut PgConnection, name: &str, haystack: &[SmallString]) -> QueryResult<bool> {
+    if haystack.is_empty() {
+        return Ok(false);
+    }
+
+    diesel::select(
+        sql::<Bool>("EXISTS (SELECT 1 FROM unnest(")
+            .bind::<Array<Text>, _>(haystack)
+            .sql("::text[]) WHERE unnest::CITEXT = ")
+            .bind::<Text, _>(name)
+            .sql("::CITEXT)"),
+    )
+    .get_result(conn)
 }

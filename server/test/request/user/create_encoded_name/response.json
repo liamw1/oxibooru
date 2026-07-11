@@ -1,0 +1,12 @@
+{
+    "name": "a/b",
+    "email": null,
+    "rank": "regular",
+    "avatarStyle": "manual",
+    "avatarUrl": "data/avatars/a%252Fb.png",
+    "commentCount": 0,
+    "uploadedPostCount": 0,
+    "likedPostCount": 0,
+    "dislikedPostCount": 0,
+    "favoritePostCount": 0
+}

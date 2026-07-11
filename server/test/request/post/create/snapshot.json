@@ -1,0 +1,49 @@
+{
+    "checksum": "fb172648054a23d19661f3c4ba6c72853763b675f4171b20fe90b4c51e07968c",
+    "description": "cool stuff",
+    "featured": false,
+    "flags": [
+        "loop",
+        "sound"
+    ],
+    "notes": [
+        {
+            "polygon": [
+                [
+                    0.0,
+                    0.0
+                ],
+                [
+                    1.0,
+                    0.0
+                ],
+                [
+                    0.0,
+                    1.0
+                ],
+                [
+                    1.0,
+                    1.0
+                ]
+            ],
+            "text": "The good part"
+        }
+    ],
+    "relations": [
+        1,
+        2,
+        4
+    ],
+    "safety": "safe",
+    "source": "I don't know",
+    "tags": [
+        "16:9_aspect_ratio",
+        "admiral_ackbar",
+        "forest",
+        "plant",
+        "river",
+        "sky",
+        "tree",
+        "water"
+    ]
+}

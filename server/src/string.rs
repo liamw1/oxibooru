@@ -1,11 +1,11 @@
-use compact_str::CompactString;
+use compact_str::{CompactString, ToCompactString};
 use diesel::AsExpression;
 use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::pg::sql_types::Citext;
 use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Text;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
 use std::convert::Infallible;
 use std::fmt::Display;
@@ -62,7 +62,7 @@ impl From<Cow<'_, str>> for SmallString {
 
 impl From<i64> for SmallString {
     fn from(value: i64) -> Self {
-        value.to_string().into()
+        Self(value.to_compact_string())
     }
 }
 
@@ -84,10 +84,13 @@ impl ToSql<Citext, Pg> for SmallString {
     }
 }
 
-impl<T> FromSql<T, Pg> for SmallString
-where
-    String: deserialize::FromSql<T, Pg>,
-{
+impl FromSql<Text, Pg> for SmallString {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        CompactString::from_utf8(value.as_bytes()).map(Self).map_err(Box::from)
+    }
+}
+
+impl FromSql<Citext, Pg> for SmallString {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         CompactString::from_utf8(value.as_bytes()).map(Self).map_err(Box::from)
     }
@@ -96,21 +99,15 @@ where
 /// A wrapper over [`Arc<str>`] that can be serialized to or deserialized from the database.
 /// It's immutable, but can be cheaply cloned and sent across threads.
 /// Meant for potentially large string, like post descriptions.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, AsExpression, FromSqlRow, ToSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, AsExpression, FromSqlRow, ToSchema)]
 #[diesel(sql_type = Text)]
 #[schema(value_type = String, description = "")]
 pub struct LargeString(Arc<str>);
 
-impl LargeString {
-    pub fn new() -> Self {
-        Self(Arc::from(""))
-    }
-}
-
 impl Deref for LargeString {
     type Target = str;
     fn deref(&self) -> &Self::Target {
-        self.0.trim()
+        &self.0
     }
 }
 
@@ -122,8 +119,10 @@ impl Display for LargeString {
 
 impl FromSql<Text, Pg> for LargeString {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
-        let string = str::from_utf8(value.as_bytes())?;
-        Ok(Self(Arc::from(string)))
+        str::from_utf8(value.as_bytes())
+            .map(Arc::from)
+            .map(Self)
+            .map_err(Box::from)
     }
 }
 
@@ -133,9 +132,8 @@ impl ToSql<Text, Pg> for LargeString {
     }
 }
 
-#[cfg(test)]
-impl PartialEq for LargeString {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.trim() == other.0.trim()
+impl<'de> Deserialize<'de> for LargeString {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        String::deserialize(deserializer).map(|s| Arc::from(s.trim())).map(Self)
     }
 }

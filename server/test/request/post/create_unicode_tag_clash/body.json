@@ -1,0 +1,9 @@
+{
+    "safety": "safe",
+    "contentToken": "upload.png",
+    "tags": [
+        "ΛΟΓΟΣ",
+        "λογοσ"
+    ],
+    "description": "These two tag implications are case-fold equivalent according to PostgreSQL, but not case-fold equivalent according to `str::to_lowercase`"
+}

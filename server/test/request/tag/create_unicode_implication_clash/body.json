@@ -1,0 +1,11 @@
+{
+    "names": [
+        "implications_test"
+    ],
+    "category": "default",
+    "implications": [
+        "ΛΟΓΟΣ",
+        "λογοσ"
+    ],
+    "description": "These two tag implications are case-fold equivalent according to PostgreSQL, but not case-fold equivalent according to `str::to_lowercase`"
+}
