@@ -359,7 +359,7 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn list() -> ApiResult<()> {
-        verify_response(&format!("GET /pool-categories/?{FIELDS}"), "pool_category/list").await
+        verify_response(&format!("GET /pool-categories/?{FIELDS}"), "pool_category/list/typical").await
     }
 
     #[tokio::test]
@@ -376,7 +376,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_response(&format!("GET /pool-category/{NAME}/?{FIELDS}"), "pool_category/get").await?;
+        verify_response(&format!("GET /pool-category/{NAME}/?{FIELDS}"), "pool_category/get/typical").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -389,7 +389,7 @@ mod test {
         let mut conn = get_connection()?;
         let category_count: i64 = pool_category::table.count().first(&mut conn)?;
 
-        verify_response(&format!("POST /pool-categories/?{FIELDS}"), "pool_category/create").await?;
+        verify_response(&format!("POST /pool-categories/?{FIELDS}"), "pool_category/create/typical").await?;
 
         let category_name: SmallString = pool_category::table
             .select(pool_category::name)
@@ -405,7 +405,7 @@ mod test {
         assert_eq!(new_category_count, category_count + 1);
         assert_eq!(usage_count, 0);
 
-        verify_response(&format!("DELETE /pool-category/{category_name}"), "pool_category/delete").await?;
+        verify_response(&format!("DELETE /pool-category/{category_name}"), "pool_category/delete/typical").await?;
 
         let new_category_count: i64 = pool_category::table.count().first(&mut conn)?;
         assert_eq!(new_category_count, category_count);
@@ -422,7 +422,7 @@ mod test {
             .filter(pool_category::name.eq(NAME))
             .first(&mut conn)?;
 
-        verify_response(&format!("PUT /pool-category/{NAME}/?{FIELDS}"), "pool_category/edit").await?;
+        verify_response(&format!("PUT /pool-category/{NAME}/?{FIELDS}"), "pool_category/edit/typical").await?;
 
         let updated_category: PoolCategory = pool_category::table
             .filter(pool_category::id.eq(category.id))
@@ -432,7 +432,7 @@ mod test {
         assert!(updated_category.last_edit_time > category.last_edit_time);
 
         let new_name = updated_category.name;
-        verify_response(&format!("PUT /pool-category/{new_name}/?{FIELDS}"), "pool_category/edit_restore").await
+        verify_response(&format!("PUT /pool-category/{new_name}/?{FIELDS}"), "pool_category/edit/restore").await
     }
 
     #[tokio::test]
@@ -447,13 +447,14 @@ mod test {
             Ok(category_id == 0)
         };
 
-        verify_response(&format!("PUT /pool-category/{NAME}/default/?{FIELDS}"), "pool_category/set_default").await?;
+        verify_response(&format!("PUT /pool-category/{NAME}/default/?{FIELDS}"), "pool_category/set_default/typical")
+            .await?;
 
         let mut conn = get_connection()?;
         let default = is_default(&mut conn)?;
         assert!(default);
 
-        verify_response(&format!("PUT /pool-category/default/default/?{FIELDS}"), "pool_category/restore_default")
+        verify_response(&format!("PUT /pool-category/default/default/?{FIELDS}"), "pool_category/set_default/restore")
             .await?;
 
         let default = is_default(&mut conn)?;
@@ -464,16 +465,16 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_response("GET /pool-category/none", "pool_category/get_nonexistent").await?;
-        verify_response("PUT /pool-category/none", "pool_category/edit_nonexistent").await?;
-        verify_response("PUT /pool-category/none/default", "pool_category/default_nonexistent").await?;
-        verify_response("DELETE /pool-category/none", "pool_category/delete_nonexistent").await?;
+        verify_response("GET /pool-category/none", "pool_category/get/nonexistent").await?;
+        verify_response("PUT /pool-category/none", "pool_category/edit/nonexistent").await?;
+        verify_response("PUT /pool-category/none/default", "pool_category/set_default/nonexistent").await?;
+        verify_response("DELETE /pool-category/none", "pool_category/delete/nonexistent").await?;
 
-        verify_response("POST /pool-categories", "pool_category/create_invalid").await?;
-        verify_response("POST /pool-categories", "pool_category/create_name_clash").await?;
-        verify_response("PUT /pool-category/default", "pool_category/edit_invalid").await?;
-        verify_response("PUT /pool-category/default", "pool_category/edit_name_clash").await?;
-        verify_response("DELETE /pool-category/default", "pool_category/delete_default").await?;
+        verify_response("POST /pool-categories", "pool_category/create/invalid").await?;
+        verify_response("POST /pool-categories", "pool_category/create/name_clash").await?;
+        verify_response("PUT /pool-category/default", "pool_category/edit/invalid").await?;
+        verify_response("PUT /pool-category/default", "pool_category/edit/name_clash").await?;
+        verify_response("DELETE /pool-category/default", "pool_category/delete/default").await?;
 
         reset_sequence(ResourceType::PoolCategory)
     }
@@ -483,21 +484,21 @@ mod test {
     async fn unauthorized() -> ApiResult<()> {
         const USER: UserRank = UserRank::Regular;
 
-        verify_response_with_user(USER, "GET /pool-categories?limit=1", "pool_category/list_unauthorized").await?;
-        verify_response_with_user(USER, "GET /pool-category/default", "pool_category/get_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /pool-category/default", "pool_category/edit_name_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /pool-category/default", "pool_category/edit_color_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /pool-category/Setting/default", "pool_category/set_default_unauthorized")
+        verify_response_with_user(USER, "GET /pool-categories?limit=1", "pool_category/list/unauthorized").await?;
+        verify_response_with_user(USER, "GET /pool-category/default", "pool_category/get/unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool-category/default", "pool_category/edit/name_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool-category/default", "pool_category/edit/color_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool-category/Setting/default", "pool_category/set_default/unauthorized")
             .await?;
-        verify_response_with_user(USER, "DELETE /pool-category/Setting", "pool_category/delete_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /pool-category/Setting", "pool_category/delete/unauthorized").await?;
 
         // Ensure users can't get around lack of view privileges via other actions
-        verify_response_with_user(USER, "GET /pool-categories?limit=1", "pool_category/list_view_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /pool-category/default", "pool_category/edit_view_unauthorized").await?;
+        verify_response_with_user(USER, "GET /pool-categories?limit=1", "pool_category/list/view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool-category/default", "pool_category/edit/view_unauthorized").await?;
         verify_response_with_user(
             USER,
             "PUT /pool-category/Setting/default",
-            "pool_category/set_default_view_unauthorized",
+            "pool_category/set_default/view_unauthorized",
         )
         .await
     }

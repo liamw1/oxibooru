@@ -373,7 +373,7 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /comments/?query";
         const PARAMS: &str = "-sort:id&limit=40&fields=id";
-        verify_response(&format!("{QUERY}=-sort:id&limit=40{FIELDS}"), "comment/list").await?;
+        verify_response(&format!("{QUERY}=-sort:id&limit=40{FIELDS}"), "comment/list/typical").await?;
 
         let filter_table = crate::search::comment::filter_table();
         for token in Token::iter() {
@@ -384,11 +384,11 @@ mod test {
                 ("", filter)
             };
             let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
-            let path = format!("comment/list_{token}_filtered");
+            let path = format!("comment/list/{token}_filtered");
             verify_response(&query, &path).await?;
 
             let query = format!("{QUERY}=sort:{token} {PARAMS}");
-            let path = format!("comment/list_{token}_sorted");
+            let path = format!("comment/list/{token}_sorted");
             verify_response(&query, &path).await?;
         }
         Ok(())
@@ -408,7 +408,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_response(&format!("GET /comment/{COMMENT_ID}/?{FIELDS}"), "comment/get").await?;
+        verify_response(&format!("GET /comment/{COMMENT_ID}/?{FIELDS}"), "comment/get/typical").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -433,7 +433,7 @@ mod test {
         let mut conn = get_connection()?;
         let (comment_count, admin_comment_count) = get_comment_counts(&mut conn)?;
 
-        verify_response(&format!("POST /comments/?{FIELDS}"), "comment/create").await?;
+        verify_response(&format!("POST /comments/?{FIELDS}"), "comment/create/typical").await?;
 
         let comment_id: i64 = comment::table
             .select(comment::id)
@@ -449,7 +449,7 @@ mod test {
         assert_eq!(new_admin_comment_count, admin_comment_count + 1);
         assert_eq!(comment_score, 0);
 
-        verify_response(&format!("DELETE /comment/{comment_id}"), "comment/delete").await?;
+        verify_response(&format!("DELETE /comment/{comment_id}"), "comment/delete/typical").await?;
 
         let (new_comment_count, new_admin_comment_count) = get_comment_counts(&mut conn)?;
         let has_comment: bool = diesel::select(exists(comment::table.find(comment_id))).first(&mut conn)?;
@@ -474,7 +474,7 @@ mod test {
         let mut conn = get_connection()?;
         let (comment, score) = get_comment_info(&mut conn)?;
 
-        verify_response(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/edit").await?;
+        verify_response(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/edit/typical").await?;
 
         let (new_comment, new_score) = get_comment_info(&mut conn)?;
         assert_ne!(new_comment.text, comment.text);
@@ -482,7 +482,7 @@ mod test {
         assert!(new_comment.last_edit_time > comment.last_edit_time);
         assert_eq!(new_score, score);
 
-        verify_response(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/edit_restore").await?;
+        verify_response(&format!("PUT /comment/{COMMENT_ID}/?{FIELDS}"), "comment/edit/restore").await?;
 
         let (new_comment, new_score) = get_comment_info(&mut conn)?;
         assert_eq!(new_comment.text, comment.text);
@@ -507,19 +507,19 @@ mod test {
         let mut conn = get_connection()?;
         let (score, last_edit_time) = get_comment_info(&mut conn)?;
 
-        verify_response(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/like").await?;
+        verify_response(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/rate/like").await?;
 
         let (new_score, new_last_edit_time) = get_comment_info(&mut conn)?;
         assert_eq!(new_score, score + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_response(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/dislike").await?;
+        verify_response(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/rate/dislike").await?;
 
         let (new_score, new_last_edit_time) = get_comment_info(&mut conn)?;
         assert_eq!(new_score, score - 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_response(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/remove_score").await?;
+        verify_response(&format!("PUT /comment/{COMMENT_ID}/score/?{FIELDS}"), "comment/rate/remove").await?;
 
         let (new_score, new_last_edit_time) = get_comment_info(&mut conn)?;
         assert_eq!(new_score, score);
@@ -533,23 +533,23 @@ mod test {
         verify_response_with_user(
             UserRank::Anonymous,
             "GET /comments/?query=-sort:id&limit=9&fields=id",
-            "comment/list_with_preferences",
+            "comment/list/with_preferences",
         )
         .await?;
-        verify_response_with_user(UserRank::Anonymous, "GET /comment/1", "comment/get_with_preferences").await
+        verify_response_with_user(UserRank::Anonymous, "GET /comment/1", "comment/get/with_preferences").await
     }
 
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_response("GET /comment/99", "comment/get_nonexistent").await?;
-        verify_response("POST /comments", "comment/create_on_nonexistent_post").await?;
-        verify_response("PUT /comment/99", "comment/edit_nonexistent").await?;
-        verify_response("PUT /comment/99/score", "comment/like_nonexistent").await?;
-        verify_response("DELETE /comment/99", "comment/delete_nonexistent").await?;
+        verify_response("GET /comment/99", "comment/get/nonexistent").await?;
+        verify_response("POST /comments", "comment/create/on_nonexistent_post").await?;
+        verify_response("PUT /comment/99", "comment/edit/nonexistent").await?;
+        verify_response("PUT /comment/99/score", "comment/rate/like_nonexistent").await?;
+        verify_response("DELETE /comment/99", "comment/delete/nonexistent").await?;
 
-        verify_response("PUT /comment/1/score", "comment/invalid_rating").await?;
-        verify_response_with_user(UserRank::Anonymous, "PUT /comment/1/score", "comment/rating_anonymously").await?;
+        verify_response("PUT /comment/1/score", "comment/rate/invalid").await?;
+        verify_response_with_user(UserRank::Anonymous, "PUT /comment/1/score", "comment/rate/anonymously").await?;
 
         reset_sequence(ResourceType::Comment)
     }
@@ -559,17 +559,17 @@ mod test {
     async fn unauthorized() -> ApiResult<()> {
         const USER: UserRank = UserRank::Regular;
 
-        verify_response_with_user(USER, "GET /comments?limit=1", "comment/list_unauthorized").await?;
-        verify_response_with_user(USER, "GET /comment/1", "comment/get_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /comment/1", "comment/edit_own_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /comment/2", "comment/edit_any_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /comment/2/score", "comment/rating_unauthorized").await?;
-        verify_response_with_user(USER, "DELETE /comment/1", "comment/delete_own_unauthorized").await?;
-        verify_response_with_user(USER, "DELETE /comment/2", "comment/delete_any_unauthorized").await?;
+        verify_response_with_user(USER, "GET /comments?limit=1", "comment/list/unauthorized").await?;
+        verify_response_with_user(USER, "GET /comment/1", "comment/get/unauthorized").await?;
+        verify_response_with_user(USER, "PUT /comment/1", "comment/edit/own_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /comment/2", "comment/edit/any_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /comment/2/score", "comment/rate/unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /comment/1", "comment/delete/own_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /comment/2", "comment/delete/any_unauthorized").await?;
 
         // Ensure users can't get around lack of view privileges via other actions
-        verify_response_with_user(USER, "GET /comments?limit=1", "comment/list_view_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /comment/2", "comment/edit_view_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /comment/2/score", "comment/rating_view_unauthorized").await
+        verify_response_with_user(USER, "GET /comments?limit=1", "comment/list/view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /comment/2", "comment/edit/view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /comment/2/score", "comment/rate/view_unauthorized").await
     }
 }

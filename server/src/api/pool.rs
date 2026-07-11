@@ -459,7 +459,7 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /pools/?query";
         const PARAMS: &str = "-sort:creation-time&limit=40&fields=id";
-        verify_response(&format!("{QUERY}=-sort:creation-time&limit=40{FIELDS}"), "pool/list").await?;
+        verify_response(&format!("{QUERY}=-sort:creation-time&limit=40{FIELDS}"), "pool/list/typical").await?;
 
         let filter_table = crate::search::pool::filter_table();
         for token in Token::iter() {
@@ -470,11 +470,11 @@ mod test {
                 ("", filter)
             };
             let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
-            let path = format!("pool/list_{token}_filtered");
+            let path = format!("pool/list/{token}_filtered");
             verify_response(&query, &path).await?;
 
             let query = format!("{QUERY}=sort:{token} {PARAMS}");
-            let path = format!("pool/list_{token}_sorted");
+            let path = format!("pool/list/{token}_sorted");
             verify_response(&query, &path).await?;
         }
         Ok(())
@@ -494,7 +494,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_response(&format!("GET /pool/{POOL_ID}/?{FIELDS}"), "pool/get").await?;
+        verify_response(&format!("GET /pool/{POOL_ID}/?{FIELDS}"), "pool/get/typical").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -513,7 +513,7 @@ mod test {
         let mut conn = get_connection()?;
         let pool_count = get_pool_count(&mut conn)?;
 
-        verify_response(&format!("POST /pool/?{FIELDS}"), "pool/create").await?;
+        verify_response(&format!("POST /pool/?{FIELDS}"), "pool/create/typical").await?;
 
         let pool_id: i64 = pool::table.select(pool::id).order(pool::id.desc()).first(&mut conn)?;
 
@@ -525,7 +525,7 @@ mod test {
         assert_eq!(new_pool_count, pool_count + 1);
         assert_eq!(post_count, 2);
 
-        verify_response(&format!("DELETE /pool/{pool_id}/?{FIELDS}"), "pool/delete").await?;
+        verify_response(&format!("DELETE /pool/{pool_id}/?{FIELDS}"), "pool/delete/typical").await?;
 
         let new_pool_count = get_pool_count(&mut conn)?;
         let has_pool: bool = diesel::select(exists(pool::table.find(pool_id))).first(&mut conn)?;
@@ -550,7 +550,7 @@ mod test {
         let mut conn = get_connection()?;
         let (pool, post_count) = get_pool_info(&mut conn)?;
 
-        verify_response(&format!("POST /pool-merge/?{FIELDS}"), "pool/merge").await?;
+        verify_response(&format!("POST /pool-merge/?{FIELDS}"), "pool/merge/typical").await?;
 
         let has_pool: bool = diesel::select(exists(pool::table.find(REMOVE_ID))).first(&mut conn)?;
         assert!(!has_pool);
@@ -580,7 +580,7 @@ mod test {
         let mut conn = get_connection()?;
         let (pool, post_count) = get_pool_info(&mut conn)?;
 
-        verify_response(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit").await?;
+        verify_response(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit/typical").await?;
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
         assert_ne!(new_pool.category_id, pool.category_id);
@@ -589,7 +589,7 @@ mod test {
         assert!(new_pool.last_edit_time > pool.last_edit_time);
         assert_ne!(new_post_count, post_count);
 
-        verify_response(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit_restore").await?;
+        verify_response(&format!("PUT /pool/{POOL_ID}/?{FIELDS}"), "pool/edit/restore").await?;
 
         let (new_pool, new_post_count) = get_pool_info(&mut conn)?;
         assert_eq!(new_pool.category_id, pool.category_id);
@@ -606,13 +606,13 @@ mod test {
         verify_response_with_user(
             UserRank::Anonymous,
             "GET /pools/?query=-sort:creation-time&limit=40&fields=id,posts,postCount",
-            "pool/list_with_preferences",
+            "pool/list/with_preferences",
         )
         .await?;
         verify_response_with_user(
             UserRank::Anonymous,
             "PUT /pool/2/?fields=id,posts,postCount",
-            "pool/edit_with_preferences",
+            "pool/edit/with_preferences",
         )
         .await?;
 
@@ -623,26 +623,26 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_response("GET /pool/99", "pool/get_nonexistent").await?;
-        verify_response("POST /pool-merge", "pool/merge_to_nonexistent").await?;
-        verify_response("POST /pool-merge", "pool/merge_with_nonexistent").await?;
-        verify_response("PUT /pool/99", "pool/edit_nonexistent").await?;
-        verify_response("DELETE /pool/99", "pool/delete_nonexistent").await?;
+        verify_response("GET /pool/99", "pool/get/nonexistent").await?;
+        verify_response("POST /pool-merge", "pool/merge/to_nonexistent").await?;
+        verify_response("POST /pool-merge", "pool/merge/with_nonexistent").await?;
+        verify_response("PUT /pool/99", "pool/edit/nonexistent").await?;
+        verify_response("DELETE /pool/99", "pool/delete/nonexistent").await?;
 
-        verify_response("POST /pool", "pool/create_nameless").await?;
-        verify_response("POST /pool", "pool/create_name_clash").await?;
-        verify_response("POST /pool", "pool/create_invalid_name").await?;
-        verify_response("POST /pool", "pool/create_invalid_post").await?;
-        verify_response("POST /pool", "pool/create_invalid_category").await?;
-        verify_response("POST /pool", "pool/create_duplicate_post").await?;
-        verify_response("POST /pool-merge", "pool/self-merge").await?;
+        verify_response("POST /pool", "pool/create/nameless").await?;
+        verify_response("POST /pool", "pool/create/name_clash").await?;
+        verify_response("POST /pool", "pool/create/invalid_name").await?;
+        verify_response("POST /pool", "pool/create/invalid_post").await?;
+        verify_response("POST /pool", "pool/create/invalid_category").await?;
+        verify_response("POST /pool", "pool/create/duplicate_post").await?;
+        verify_response("POST /pool-merge", "pool/merge/with_self").await?;
 
-        verify_response("PUT /pool/1", "pool/edit_nameless").await?;
-        verify_response("PUT /pool/1", "pool/edit_name_clash").await?;
-        verify_response("PUT /pool/1", "pool/edit_invalid_name").await?;
-        verify_response("PUT /pool/1", "pool/edit_invalid_post").await?;
-        verify_response("PUT /pool/1", "pool/edit_invalid_category").await?;
-        verify_response("PUT /pool/1", "pool/edit_duplicate_post").await?;
+        verify_response("PUT /pool/1", "pool/edit/nameless").await?;
+        verify_response("PUT /pool/1", "pool/edit/name_clash").await?;
+        verify_response("PUT /pool/1", "pool/edit/invalid_name").await?;
+        verify_response("PUT /pool/1", "pool/edit/invalid_post").await?;
+        verify_response("PUT /pool/1", "pool/edit/invalid_category").await?;
+        verify_response("PUT /pool/1", "pool/edit/duplicate_post").await?;
 
         reset_sequence(ResourceType::Pool)
     }
@@ -652,26 +652,26 @@ mod test {
     async fn unauthorized() -> ApiResult<()> {
         const USER: UserRank = UserRank::Regular;
 
-        verify_response_with_user(USER, "GET /pools?limit=1", "pool/list_unauthorized").await?;
-        verify_response_with_user(USER, "GET /pool/1", "pool/get_unauthorized").await?;
-        verify_response_with_user(USER, "POST /pool", "pool/create_unauthorized").await?;
-        verify_response_with_user(USER, "POST /pool-merge", "pool/merge_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /pool/1", "pool/edit_name_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /pool/1", "pool/edit_category_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /pool/1", "pool/edit_description_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /pool/1", "pool/edit_post_unauthorized").await?;
-        verify_response_with_user(USER, "DELETE /pool/1", "pool/delete_unauthorized").await?;
+        verify_response_with_user(USER, "GET /pools?limit=1", "pool/list/unauthorized").await?;
+        verify_response_with_user(USER, "GET /pool/1", "pool/get/unauthorized").await?;
+        verify_response_with_user(USER, "POST /pool", "pool/create/unauthorized").await?;
+        verify_response_with_user(USER, "POST /pool-merge", "pool/merge/unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool/1", "pool/edit/name_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool/1", "pool/edit/category_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool/1", "pool/edit/description_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool/1", "pool/edit/post_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /pool/1", "pool/delete/unauthorized").await?;
 
         // Ensure users can't get around lack of view privileges via other actions
-        verify_response_with_user(USER, "GET /pools?limit=1", "pool/list_view_unauthorized").await?;
-        verify_response_with_user(USER, "POST /pool-merge", "pool/merge_view_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /pool/1", "pool/edit_view_unauthorized").await
+        verify_response_with_user(USER, "GET /pools?limit=1", "pool/list/view_unauthorized").await?;
+        verify_response_with_user(USER, "POST /pool-merge", "pool/merge/view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool/1", "pool/edit/view_unauthorized").await
     }
 
     #[tokio::test]
     #[serial]
     async fn unicode_edge_cases() -> ApiResult<()> {
-        verify_response("POST /pool", "pool/create_unicode_name_clash").await?;
+        verify_response("POST /pool", "pool/create/unicode_name_clash").await?;
 
         reset_database();
         Ok(())

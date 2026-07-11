@@ -1,3 +1,0 @@
-[public_info.privileges]
-user_token_delete_any      = "administrator"
-user_token_delete_self     = "regular"

@@ -599,7 +599,7 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /tags/?query";
         const PARAMS: &str = "-sort:name&limit=40&fields=names";
-        verify_response(&format!("{QUERY}=-sort:name&limit=40{FIELDS}"), "tag/list").await?;
+        verify_response(&format!("{QUERY}=-sort:name&limit=40{FIELDS}"), "tag/list/typical").await?;
 
         let filter_table = crate::search::tag::filter_table();
         for token in Token::iter() {
@@ -610,11 +610,11 @@ mod test {
                 ("", filter)
             };
             let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
-            let path = format!("tag/list_{token}_filtered");
+            let path = format!("tag/list/{token}_filtered");
             verify_response(&query, &path).await?;
 
             let query = format!("{QUERY}=sort:{token} {PARAMS}");
-            let path = format!("tag/list_{token}_sorted");
+            let path = format!("tag/list/{token}_sorted");
             verify_response(&query, &path).await?;
         }
         Ok(())
@@ -635,7 +635,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_response(&format!("GET /tag/{NAME}/?{FIELDS}"), "tag/get").await?;
+        verify_response(&format!("GET /tag/{NAME}/?{FIELDS}"), "tag/get/typical").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -657,7 +657,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_response(&format!("GET /tag-siblings/{NAME}/?{FIELDS}"), "tag/get_siblings").await?;
+        verify_response(&format!("GET /tag-siblings/{NAME}/?{FIELDS}"), "tag/get_siblings/typical").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -676,7 +676,7 @@ mod test {
         let mut conn = get_connection()?;
         let tag_count = get_tag_count(&mut conn)?;
 
-        verify_response(&format!("POST /tags/?{FIELDS}"), "tag/create").await?;
+        verify_response(&format!("POST /tags/?{FIELDS}"), "tag/create/typical").await?;
 
         let (tag_id, name): (i64, SmallString) = tag_name::table
             .select((tag_name::tag_id, tag_name::name))
@@ -686,7 +686,7 @@ mod test {
         let new_tag_count = get_tag_count(&mut conn)?;
         assert_eq!(new_tag_count, tag_count + 1);
 
-        verify_response(&format!("DELETE /tag/{name}/?{FIELDS}"), "tag/delete").await?;
+        verify_response(&format!("DELETE /tag/{name}/?{FIELDS}"), "tag/delete/typical").await?;
 
         let new_tag_count = get_tag_count(&mut conn)?;
         let has_tag: bool = diesel::select(exists(tag::table.find(tag_id))).first(&mut conn)?;
@@ -721,7 +721,7 @@ mod test {
             .filter(tag_name::name.eq(REMOVE))
             .first(&mut conn)?;
 
-        verify_response(&format!("POST /tag-merge/?{FIELDS}"), "tag/merge").await?;
+        verify_response(&format!("POST /tag-merge/?{FIELDS}"), "tag/merge/typical").await?;
 
         let has_tag: bool = diesel::select(exists(tag::table.find(remove_id))).first(&mut conn)?;
         assert!(!has_tag);
@@ -760,7 +760,7 @@ mod test {
         let mut conn = get_connection()?;
         let (tag, usage_count, implication_count, suggestion_count) = get_tag_info(&mut conn, NAME)?;
 
-        verify_response(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/edit").await?;
+        verify_response(&format!("PUT /tag/{NAME}/?{FIELDS}"), "tag/edit/typical").await?;
 
         let new_name: SmallString = tag_name::table
             .select(tag_name::name)
@@ -778,7 +778,7 @@ mod test {
         assert_ne!(new_implication_count, implication_count);
         assert_ne!(new_suggestion_count, suggestion_count);
 
-        verify_response(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/edit_restore").await?;
+        verify_response(&format!("PUT /tag/{new_name}/?{FIELDS}"), "tag/edit/restore").await?;
 
         let new_tag_id: i64 = tag::table.select(tag::id).order(tag::id.desc()).first(&mut conn)?;
         diesel::delete(tag::table.find(new_tag_id)).execute(&mut conn)?;
@@ -801,26 +801,26 @@ mod test {
         verify_response_with_user(
             UserRank::Anonymous,
             "GET /tags/?query=-sort:name&limit=9&fields=names,implications,suggestions",
-            "tag/list_with_preferences",
+            "tag/list/with_preferences",
         )
         .await?;
-        verify_response_with_user(UserRank::Anonymous, "GET /tag/tagme", "tag/get_with_preferences").await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /tag/tagme", "tag/get/with_preferences").await?;
         verify_response_with_user(
             UserRank::Anonymous,
             "GET /tag-siblings/rock/?fields=names,implications,suggestions",
-            "tag/get_siblings_with_preferences",
+            "tag/get_siblings/with_preferences",
         )
         .await?;
         verify_response_with_user(
             UserRank::Anonymous,
             "GET /tag-siblings/rock/?fields=names,implications,suggestions",
-            "tag/get_siblings_of_blacklisted",
+            "tag/get_siblings/of_blacklisted",
         )
         .await?;
         verify_response_with_user(
             UserRank::Anonymous,
             "PUT /tag/river/?fields=names,implications,suggestions",
-            "tag/edit_with_preferences",
+            "tag/edit/with_preferences",
         )
         .await?;
 
@@ -831,31 +831,30 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_response("GET /tag/none", "tag/get_nonexistent").await?;
-        verify_response("GET /tag-siblings/none", "tag/get_siblings_of_nonexistent").await?;
-        verify_response("POST /tag-merge", "tag/merge_to_nonexistent").await?;
-        verify_response("POST /tag-merge", "tag/merge_with_nonexistent").await?;
-        verify_response("PUT /tag/none", "tag/edit_nonexistent").await?;
-        verify_response("DELETE /tag/none", "tag/delete_nonexistent").await?;
+        verify_response("GET /tag/none", "tag/get/nonexistent").await?;
+        verify_response("GET /tag-siblings/none", "tag/get_siblings/of_nonexistent").await?;
+        verify_response("POST /tag-merge", "tag/merge/to_nonexistent").await?;
+        verify_response("POST /tag-merge", "tag/merge/with_nonexistent").await?;
+        verify_response("PUT /tag/none", "tag/edit/nonexistent").await?;
+        verify_response("DELETE /tag/none", "tag/delete/nonexistent").await?;
 
-        verify_response("POST /tags", "tag/create_nameless").await?;
-        verify_response("POST /tags", "tag/create_name_clash").await?;
-        verify_response("POST /tags", "tag/create_invalid_name").await?;
-        verify_response("POST /tags", "tag/create_invalid_category").await?;
-        verify_response("POST /tags", "tag/create_invalid_suggestion").await?;
-        verify_response("POST /tags", "tag/create_invalid_implication").await?;
-        verify_response("POST /tag-merge", "tag/self-merge").await?;
+        verify_response("POST /tags", "tag/create/nameless").await?;
+        verify_response("POST /tags", "tag/create/name_clash").await?;
+        verify_response("POST /tags", "tag/create/invalid_name").await?;
+        verify_response("POST /tags", "tag/create/invalid_category").await?;
+        verify_response("POST /tags", "tag/create/invalid_suggestion").await?;
+        verify_response("POST /tags", "tag/create/invalid_implication").await?;
+        verify_response("POST /tag-merge", "tag/merge/with_self").await?;
 
-        verify_response("PUT /tag/sky", "tag/edit_nameless").await?;
-        verify_response("PUT /tag/sky", "tag/edit_name_clash").await?;
-        verify_response("PUT /tag/sky", "tag/edit_invalid_name").await?;
-        verify_response("PUT /tag/sky", "tag/edit_invalid_category").await?;
-        verify_response("PUT /tag/sky", "tag/edit_invalid_suggestion").await?;
-        verify_response("PUT /tag/sky", "tag/edit_invalid_implication").await?;
-        verify_response("PUT /tag/plant", "tag/edit_cyclic_implication").await?;
+        verify_response("PUT /tag/sky", "tag/edit/nameless").await?;
+        verify_response("PUT /tag/sky", "tag/edit/name_clash").await?;
+        verify_response("PUT /tag/sky", "tag/edit/invalid_name").await?;
+        verify_response("PUT /tag/sky", "tag/edit/invalid_category").await?;
+        verify_response("PUT /tag/sky", "tag/edit/invalid_suggestion").await?;
+        verify_response("PUT /tag/sky", "tag/edit/invalid_implication").await?;
+        verify_response("PUT /tag/plant", "tag/edit/cyclic_implication").await?;
 
-        reset_sequence(ResourceType::Tag)?;
-        Ok(())
+        reset_sequence(ResourceType::Tag)
     }
 
     #[tokio::test]
@@ -863,34 +862,34 @@ mod test {
     async fn unauthorized() -> ApiResult<()> {
         const USER: UserRank = UserRank::Regular;
 
-        verify_response_with_user(USER, "GET /tags?limit=1", "tag/list_unauthorized").await?;
-        verify_response_with_user(USER, "GET /tag/sky", "tag/get_unauthorized").await?;
-        verify_response_with_user(USER, "GET /tag-siblings/sky", "tag/get_siblings_unauthorized").await?;
-        verify_response_with_user(USER, "POST /tags", "tag/create_unauthorized").await?;
-        verify_response_with_user(USER, "POST /tag-merge", "tag/merge_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_name_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_category_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_description_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_implication_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_suggestion_unauthorized").await?;
-        verify_response_with_user(USER, "DELETE /tag/sky", "tag/delete_unauthorized").await?;
+        verify_response_with_user(USER, "GET /tags?limit=1", "tag/list/unauthorized").await?;
+        verify_response_with_user(USER, "GET /tag/sky", "tag/get/unauthorized").await?;
+        verify_response_with_user(USER, "GET /tag-siblings/sky", "tag/get_siblings/unauthorized").await?;
+        verify_response_with_user(USER, "POST /tags", "tag/create/unauthorized").await?;
+        verify_response_with_user(USER, "POST /tag-merge", "tag/merge/unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit/name_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit/category_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit/description_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit/implication_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit/suggestion_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /tag/sky", "tag/delete/unauthorized").await?;
 
         // Ensure users can't get around lack of view privileges via other actions
-        verify_response_with_user(USER, "GET /tags?limit=1", "tag/list_view_unauthorized").await?;
-        verify_response_with_user(USER, "GET /tag-siblings/sky", "tag/get_siblings_view_unauthorized").await?;
-        verify_response_with_user(USER, "POST /tag-merge", "tag/merge_view_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_view_unauthorized").await
+        verify_response_with_user(USER, "GET /tags?limit=1", "tag/list/view_unauthorized").await?;
+        verify_response_with_user(USER, "GET /tag-siblings/sky", "tag/get_siblings/view_unauthorized").await?;
+        verify_response_with_user(USER, "POST /tag-merge", "tag/merge/view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit/view_unauthorized").await
     }
 
     #[tokio::test]
     #[serial]
     async fn unicode_edge_cases() -> ApiResult<()> {
-        verify_response("POST /tags", "tag/create_unicode_name_clash").await?;
-        verify_response("POST /tags?fields=implications", "tag/create_unicode_implication_clash").await?;
-        verify_response("POST /tags?fields=suggestions", "tag/create_unicode_suggestion_clash").await?;
-        verify_response("PUT /tag/sky", "tag/edit_unicode_name_clash").await?;
-        verify_response("PUT /tag/sky?fields=implications", "tag/edit_unicode_implication_clash").await?;
-        verify_response("PUT /tag/sky?fields=suggestions", "tag/edit_unicode_suggestion_clash").await?;
+        verify_response("POST /tags", "tag/create/unicode_name_clash").await?;
+        verify_response("POST /tags?fields=implications", "tag/create/unicode_implication_clash").await?;
+        verify_response("POST /tags?fields=suggestions", "tag/create/unicode_suggestion_clash").await?;
+        verify_response("PUT /tag/sky", "tag/edit/unicode_name_clash").await?;
+        verify_response("PUT /tag/sky?fields=implications", "tag/edit/unicode_implication_clash").await?;
+        verify_response("PUT /tag/sky?fields=suggestions", "tag/edit/unicode_suggestion_clash").await?;
 
         reset_database();
         Ok(())
@@ -900,10 +899,10 @@ mod test {
     #[serial]
     async fn blacklist_edge_case() -> ApiResult<()> {
         // Create edge-case tag category name
-        verify_response("POST /tags?fields=names", "tag/create_blacklist_edge_case").await?;
+        verify_response("POST /tags?fields=names", "tag/create/blacklist_edge_case").await?;
 
         // Try to view tag category using name with different casing
-        verify_response_with_user(UserRank::Anonymous, "GET /tag/κοσμοσ", "tag/get_blacklist_edge_case").await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /tag/κοσμοσ", "tag/get/blacklist_edge_case").await?;
 
         reset_database();
         Ok(())

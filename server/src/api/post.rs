@@ -1306,7 +1306,7 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /posts/?query";
         const PARAMS: &str = "-sort:id&limit=40&fields=id";
-        verify_response(&format!("{QUERY}=-sort:id&limit=40{FIELDS}"), "post/list").await?;
+        verify_response(&format!("{QUERY}=-sort:id&limit=40{FIELDS}"), "post/list/typical").await?;
 
         let filter_table = crate::search::post::filter_table();
         for token in Token::iter() {
@@ -1317,18 +1317,18 @@ mod test {
                 ("", filter)
             };
             let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
-            let path = format!("post/list_{token}_filtered");
+            let path = format!("post/list/{token}_filtered");
             verify_response(&query, &path).await?;
 
             let query = format!("{QUERY}=sort:{token} {PARAMS}");
-            let path = format!("post/list_{token}_sorted");
+            let path = format!("post/list/{token}_sorted");
             verify_response(&query, &path).await?;
         }
-        verify_response(&format!("{QUERY}=-pool:Fantasy {PARAMS}"), "post/list_pool_name_filtered").await?;
-        verify_response(&format!("{QUERY}=pool:*a*t* {PARAMS}"), "post/list_pool_name_wildcards_filtered").await?;
-        verify_response(&format!("{QUERY}=special:liked {PARAMS}"), "post/list_liked_filtered").await?;
-        verify_response(&format!("{QUERY}=special:disliked {PARAMS}"), "post/list_disliked_filtered").await?;
-        verify_response(&format!("{QUERY}=special:tumbleweed {PARAMS}"), "post/list_tumbleweed_filtered").await
+        verify_response(&format!("{QUERY}=-pool:Fantasy {PARAMS}"), "post/list/pool_name_filtered").await?;
+        verify_response(&format!("{QUERY}=pool:*a*t* {PARAMS}"), "post/list/pool_name_wildcards_filtered").await?;
+        verify_response(&format!("{QUERY}=special:liked {PARAMS}"), "post/list/liked_filtered").await?;
+        verify_response(&format!("{QUERY}=special:disliked {PARAMS}"), "post/list/disliked_filtered").await?;
+        verify_response(&format!("{QUERY}=special:tumbleweed {PARAMS}"), "post/list/tumbleweed_filtered").await
     }
 
     #[tokio::test]
@@ -1345,7 +1345,7 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_response(&format!("GET /post/{POST_ID}/?{FIELDS}"), "post/get").await?;
+        verify_response(&format!("GET /post/{POST_ID}/?{FIELDS}"), "post/get/typical").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -1356,15 +1356,15 @@ mod test {
     #[parallel]
     async fn get_neighbors() -> ApiResult<()> {
         const QUERY: &str = "around/?query=-sort:id";
-        verify_response(&format!("GET /post/1/{QUERY}{FIELDS}"), "post/get_1_neighbors").await?;
-        verify_response(&format!("GET /post/4/{QUERY}{FIELDS}"), "post/get_4_neighbors").await?;
-        verify_response(&format!("GET /post/5/{QUERY}{FIELDS}"), "post/get_5_neighbors").await
+        verify_response(&format!("GET /post/1/{QUERY}{FIELDS}"), "post/get_around/1").await?;
+        verify_response(&format!("GET /post/4/{QUERY}{FIELDS}"), "post/get_around/4").await?;
+        verify_response(&format!("GET /post/5/{QUERY}{FIELDS}"), "post/get_around/5").await
     }
 
     #[tokio::test]
     #[parallel]
     async fn get_featured() -> ApiResult<()> {
-        verify_response(&format!("GET /featured-post/?{FIELDS}"), "post/get_featured").await
+        verify_response(&format!("GET /featured-post/?{FIELDS}"), "post/get_featured/typical").await
     }
 
     #[tokio::test]
@@ -1382,7 +1382,7 @@ mod test {
         let mut conn = get_connection()?;
         let (feature_count, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_response(&format!("POST /featured-post/?{FIELDS}"), "post/feature").await?;
+        verify_response(&format!("POST /featured-post/?{FIELDS}"), "post/feature/typical").await?;
 
         let (new_feature_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_feature_count, feature_count + 1);
@@ -1403,14 +1403,14 @@ mod test {
     #[parallel]
     async fn reverse_search() -> ApiResult<()> {
         simulate_upload("1_pixel.png", "upload_for_reverse_search.png")?;
-        verify_response(&format!("POST /posts/reverse-search/?{FIELDS}"), "post/reverse_search").await
+        verify_response(&format!("POST /posts/reverse-search/?{FIELDS}"), "post/reverse_search/typical").await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[serial]
     async fn create() -> ApiResult<()> {
         simulate_upload("1_pixel.png", "cool_post.png")?;
-        verify_response(&format!("POST /posts/?{FIELDS}"), "post/create").await?;
+        verify_response(&format!("POST /posts/?{FIELDS}"), "post/create/typical").await?;
 
         let state = get_state();
         let post_path = state.config.path(Directory::Posts);
@@ -1420,8 +1420,8 @@ mod test {
         assert!(thumbnail_path.exists());
 
         simulate_upload("1_pixel.png", "duplicate.png")?;
-        verify_response("POST /posts", "post/create_duplicate").await?;
-        verify_response("PUT /post/1", "post/edit_duplicate").await?;
+        verify_response("POST /posts", "post/create/duplicate").await?;
+        verify_response("PUT /post/1", "post/edit/duplicate").await?;
 
         reset_database();
         Ok(())
@@ -1442,7 +1442,7 @@ mod test {
         let mut conn = get_connection()?;
         let post = get_post(&mut conn)?;
 
-        verify_response(&format!("POST /post-merge/?{FIELDS}"), "post/merge").await?;
+        verify_response(&format!("POST /post-merge/?{FIELDS}"), "post/merge/typical").await?;
 
         let has_post: bool = diesel::select(exists(post::table.find(REMOVE_ID))).first(&mut conn)?;
         assert!(!has_post);
@@ -1487,14 +1487,14 @@ mod test {
         let mut conn = get_connection()?;
         let (favorite_count, admin_favorite_count, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_response(&format!("POST /post/{POST_ID}/favorite/?{FIELDS}"), "post/favorite").await?;
+        verify_response(&format!("POST /post/{POST_ID}/favorite/?{FIELDS}"), "post/favorite/typical").await?;
 
         let (new_favorite_count, new_admin_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_favorite_count, favorite_count + 1);
         assert_eq!(new_admin_favorite_count, admin_favorite_count + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_response(&format!("DELETE /post/{POST_ID}/favorite/?{FIELDS}"), "post/unfavorite").await?;
+        verify_response(&format!("DELETE /post/{POST_ID}/favorite/?{FIELDS}"), "post/unfavorite/typical").await?;
 
         let (new_favorite_count, new_admin_favorite_count, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_favorite_count, favorite_count);
@@ -1518,19 +1518,19 @@ mod test {
         let mut conn = get_connection()?;
         let (score, last_edit_time) = get_post_info(&mut conn)?;
 
-        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/like").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/rate/like").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score + 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/dislike").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/rate/dislike").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score - 1);
         assert_eq!(new_last_edit_time, last_edit_time);
 
-        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/remove_score").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/score/?{FIELDS}"), "post/rate/remove").await?;
 
         let (new_score, new_last_edit_time) = get_post_info(&mut conn)?;
         assert_eq!(new_score, score);
@@ -1553,7 +1553,7 @@ mod test {
         let mut conn = get_connection()?;
         let (post, tag_count, relation_count) = get_post_info(&mut conn)?;
 
-        verify_response(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit/typical").await?;
 
         let (new_post, new_tag_count, new_relation_count) = get_post_info(&mut conn)?;
         assert_eq!(new_post.user_id, post.user_id);
@@ -1573,7 +1573,7 @@ mod test {
         assert_ne!(new_tag_count, tag_count);
         assert_ne!(new_relation_count, relation_count);
 
-        verify_response(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit_restore").await?;
+        verify_response(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit/restore").await?;
 
         let new_tag_id: i64 = tag::table
             .select(tag::id)
@@ -1608,21 +1608,21 @@ mod test {
         verify_response_with_user(
             UserRank::Anonymous,
             "GET /posts/?query=-sort:id&limit=9&fields=id,relations,relationCount",
-            "post/list_with_preferences",
+            "post/list/with_preferences",
         )
         .await?;
-        verify_response_with_user(UserRank::Anonymous, "GET /post/5", "post/get_with_preferences").await?;
-        verify_response_with_user(UserRank::Anonymous, "GET /post/4/around", "post/get_around_blacklisted").await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /post/5", "post/get/with_preferences").await?;
+        verify_response_with_user(UserRank::Anonymous, "GET /post/4/around", "post/get_around/blacklisted").await?;
         verify_response_with_user(
             UserRank::Anonymous,
             "GET /post/4/around/?fields=id,relations,relationCount",
-            "post/get_around_with_preferences",
+            "post/get_around/with_preferences",
         )
         .await?;
         verify_response_with_user(
             UserRank::Anonymous,
             "GET /featured-post/?fields=id,relations,relationCount",
-            "post/get_featured_with_preferences",
+            "post/get_featured/with_preferences",
         )
         .await?;
 
@@ -1630,14 +1630,14 @@ mod test {
         verify_response_with_user(
             UserRank::Anonymous,
             "POST /posts/reverse-search/?fields=id,relations,relationCount",
-            "post/reverse_search_with_preferences",
+            "post/reverse_search/with_preferences",
         )
         .await?;
 
         verify_response_with_user(
             UserRank::Anonymous,
             "PUT /post/1/?fields=id,relations,relationCount",
-            "post/edit_with_preferences",
+            "post/edit/with_preferences",
         )
         .await?;
 
@@ -1648,42 +1648,42 @@ mod test {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_response("GET /post/99", "post/get_nonexistent").await?;
-        verify_response("GET /post/99/around", "post/get_around_nonexistent").await?;
-        verify_response("POST /featured-post", "post/feature_nonexistent").await?;
-        verify_response("POST /post-merge", "post/merge_to_nonexistent").await?;
-        verify_response("POST /post-merge", "post/merge_from_nonexistent").await?;
-        verify_response("POST /post/99/favorite", "post/favorite_nonexistent").await?;
-        verify_response("PUT /post/99/score", "post/rate_nonexistent").await?;
-        verify_response("PUT /post/99", "post/edit_nonexistent").await?;
-        verify_response("DELETE /post/99", "post/delete_nonexistent").await?;
-        verify_response("DELETE /post/99/favorite", "post/unfavorite_nonexistent").await?;
+        verify_response("GET /post/99", "post/get/nonexistent").await?;
+        verify_response("GET /post/99/around", "post/get_around/nonexistent").await?;
+        verify_response("POST /featured-post", "post/feature/nonexistent").await?;
+        verify_response("POST /post-merge", "post/merge/to_nonexistent").await?;
+        verify_response("POST /post-merge", "post/merge/from_nonexistent").await?;
+        verify_response("POST /post/99/favorite", "post/favorite/nonexistent").await?;
+        verify_response("PUT /post/99/score", "post/rate/nonexistent").await?;
+        verify_response("PUT /post/99", "post/edit/nonexistent").await?;
+        verify_response("DELETE /post/99", "post/delete/nonexistent").await?;
+        verify_response("DELETE /post/99/favorite", "post/unfavorite/nonexistent").await?;
 
         simulate_upload("1_pixel.png", "upload.png")?;
-        verify_response("POST /posts/reverse-search", "post/reverse_search_invalid_token").await?;
+        verify_response("POST /posts/reverse-search", "post/reverse_search/invalid_token").await?;
 
-        verify_response("POST /posts", "post/create_invalid_tag").await?;
-        verify_response("POST /posts", "post/create_invalid_safety").await?;
-        verify_response("POST /posts", "post/create_invalid_note").await?;
-        verify_response("POST /posts", "post/create_invalid_flag").await?;
-        verify_response("POST /posts", "post/create_invalid_content_token").await?;
-        verify_response("POST /posts", "post/create_invalid_thumbnail_token").await?;
-        verify_response("POST /posts", "post/create_missing_content").await?;
-        verify_response("POST /posts", "post/create_duplicate_relation").await?;
-        verify_response("POST /posts", "post/create_nonexistent_relation").await?;
+        verify_response("POST /posts", "post/create/invalid_tag").await?;
+        verify_response("POST /posts", "post/create/invalid_safety").await?;
+        verify_response("POST /posts", "post/create/invalid_note").await?;
+        verify_response("POST /posts", "post/create/invalid_flag").await?;
+        verify_response("POST /posts", "post/create/invalid_content_token").await?;
+        verify_response("POST /posts", "post/create/invalid_thumbnail_token").await?;
+        verify_response("POST /posts", "post/create/missing_content").await?;
+        verify_response("POST /posts", "post/create/duplicate_relation").await?;
+        verify_response("POST /posts", "post/create/nonexistent_relation").await?;
 
-        verify_response("PUT /post/1", "post/edit_invalid_tag").await?;
-        verify_response("PUT /post/1", "post/edit_invalid_safety").await?;
-        verify_response("PUT /post/1", "post/edit_invalid_note").await?;
-        verify_response("PUT /post/1", "post/edit_invalid_flag").await?;
-        verify_response("PUT /post/1", "post/edit_invalid_content_token").await?;
-        verify_response("PUT /post/1", "post/edit_invalid_thumbnail_token").await?;
-        verify_response("PUT /post/1", "post/edit_duplicate_relation").await?;
-        verify_response("PUT /post/1", "post/edit_nonexistent_relation").await?;
+        verify_response("PUT /post/1", "post/edit/invalid_tag").await?;
+        verify_response("PUT /post/1", "post/edit/invalid_safety").await?;
+        verify_response("PUT /post/1", "post/edit/invalid_note").await?;
+        verify_response("PUT /post/1", "post/edit/invalid_flag").await?;
+        verify_response("PUT /post/1", "post/edit/invalid_content_token").await?;
+        verify_response("PUT /post/1", "post/edit/invalid_thumbnail_token").await?;
+        verify_response("PUT /post/1", "post/edit/duplicate_relation").await?;
+        verify_response("PUT /post/1", "post/edit/nonexistent_relation").await?;
 
-        verify_response("PUT /post/1/score", "post/invalid_rating").await?;
-        verify_response("POST /featured-post", "post/double_feature").await?;
-        verify_response("POST /post-merge", "post/self-merge").await?;
+        verify_response("PUT /post/1/score", "post/rate/invalid").await?;
+        verify_response("POST /featured-post", "post/feature/double_feature").await?;
+        verify_response("POST /post-merge", "post/merge/with_self").await?;
 
         reset_sequence(ResourceType::Post)
     }
@@ -1694,51 +1694,51 @@ mod test {
         const USER: UserRank = UserRank::Regular;
 
         simulate_upload("1_pixel.png", "upload.png")?;
-        verify_response_with_user(USER, "GET /posts?limit=1", "post/list_unauthorized").await?;
-        verify_response_with_user(USER, "GET /post/1", "post/get_unauthorized").await?;
-        verify_response_with_user(USER, "GET /post/1/around", "post/get_around_unauthorized").await?;
-        verify_response_with_user(USER, "GET /featured-post", "post/get_featured_unauthorized").await?;
-        verify_response_with_user(USER, "POST /featured-post", "post/feature_unauthorized").await?;
-        verify_response_with_user(USER, "POST /posts/reverse-search", "post/reverse_search_unauthorized").await?;
-        verify_response_with_user(USER, "POST /posts", "post/create_anonymous_unauthorized").await?;
-        verify_response_with_user(USER, "POST /posts", "post/create_identified_unauthorized").await?;
-        verify_response_with_user(USER, "POST /post-merge", "post/merge_unauthorized").await?;
-        verify_response_with_user(USER, "POST /post/1/favorite", "post/favorite_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1/score", "post/rate_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_content_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_description_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_flag_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_note_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_relation_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_safety_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_source_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_tag_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_thumbnail_unauthorized").await?;
-        verify_response_with_user(USER, "DELETE /post/1", "post/delete_unauthorized").await?;
-        verify_response_with_user(USER, "DELETE /post/1/favorite", "post/unfavorite_unauthorized").await?;
+        verify_response_with_user(USER, "GET /posts?limit=1", "post/list/unauthorized").await?;
+        verify_response_with_user(USER, "GET /post/1", "post/get/unauthorized").await?;
+        verify_response_with_user(USER, "GET /post/1/around", "post/get_around/unauthorized").await?;
+        verify_response_with_user(USER, "GET /featured-post", "post/get_featured/unauthorized").await?;
+        verify_response_with_user(USER, "POST /featured-post", "post/feature/unauthorized").await?;
+        verify_response_with_user(USER, "POST /posts/reverse-search", "post/reverse_search/unauthorized").await?;
+        verify_response_with_user(USER, "POST /posts", "post/create/anonymous_unauthorized").await?;
+        verify_response_with_user(USER, "POST /posts", "post/create/identified_unauthorized").await?;
+        verify_response_with_user(USER, "POST /post-merge", "post/merge/unauthorized").await?;
+        verify_response_with_user(USER, "POST /post/1/favorite", "post/favorite/unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1/score", "post/rate/unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/content_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/description_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/flag_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/note_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/relation_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/safety_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/source_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/tag_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/thumbnail_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /post/1", "post/delete/unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /post/1/favorite", "post/unfavorite/unauthorized").await?;
 
         // Ensure users can't get around lack of view privileges via other actions
-        verify_response_with_user(USER, "GET /posts?limit=1", "post/list_view_unauthorized").await?;
-        verify_response_with_user(USER, "POST /posts/reverse-search", "post/reverse_search_view_unauthorized").await?;
-        verify_response_with_user(USER, "POST /post-merge", "post/merge_view_unauthorized").await?;
-        verify_response_with_user(USER, "POST /post/1/favorite", "post/favorite_view_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1/score", "post/rate_view_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_view_unauthorized").await?;
-        verify_response_with_user(USER, "DELETE /post/1/favorite", "post/unfavorite_view_unauthorized").await?;
+        verify_response_with_user(USER, "GET /posts?limit=1", "post/list/view_unauthorized").await?;
+        verify_response_with_user(USER, "POST /posts/reverse-search", "post/reverse_search/view_unauthorized").await?;
+        verify_response_with_user(USER, "POST /post-merge", "post/merge/view_unauthorized").await?;
+        verify_response_with_user(USER, "POST /post/1/favorite", "post/favorite/view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1/score", "post/rate/view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/view_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /post/1/favorite", "post/unfavorite/view_unauthorized").await?;
 
         // Ensure users can't download files from web without authorization
-        verify_response_with_user(USER, "POST /posts", "post/create_download_content_unauthorized").await?;
-        verify_response_with_user(USER, "POST /posts", "post/create_download_thumbnail_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_download_content_unauthorized").await?;
-        verify_response_with_user(USER, "PUT /post/1", "post/edit_download_thumbnail_unauthorized").await
+        verify_response_with_user(USER, "POST /posts", "post/create/download_content_unauthorized").await?;
+        verify_response_with_user(USER, "POST /posts", "post/create/download_thumbnail_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/download_content_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit/download_thumbnail_unauthorized").await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[serial]
     async fn unicode_edge_cases() -> ApiResult<()> {
         simulate_upload("1_pixel.png", "upload.png")?;
-        verify_response("POST /posts?fields=tags", "post/create_unicode_tag_clash").await?;
-        verify_response("PUT /post/1?fields=tags", "post/edit_unicode_tag_clash").await?;
+        verify_response("POST /posts?fields=tags", "post/create/unicode_tag_clash").await?;
+        verify_response("PUT /post/1?fields=tags", "post/edit/unicode_tag_clash").await?;
 
         reset_database();
         Ok(())
@@ -1752,10 +1752,10 @@ mod test {
 
         // Test responses that attempt to access file outside temporary uploads directory
         simulate_upload("1_pixel.png", "cool_post.png")?;
-        verify_response("POST /posts/reverse-search", "post/reverse_search_malicious_token").await?;
-        verify_response("POST /posts", "post/create_malicious_content_token").await?;
-        verify_response("POST /posts", "post/create_malicious_thumbnail_token").await?;
-        verify_response("PUT /post/1", "post/edit_malicious_content_token").await?;
-        verify_response("PUT /post/1", "post/edit_malicious_thumbnail_token").await
+        verify_response("POST /posts/reverse-search", "post/reverse_search/malicious_token").await?;
+        verify_response("POST /posts", "post/create/malicious_content_token").await?;
+        verify_response("POST /posts", "post/create/malicious_thumbnail_token").await?;
+        verify_response("PUT /post/1", "post/edit/malicious_content_token").await?;
+        verify_response("PUT /post/1", "post/edit/malicious_thumbnail_token").await
     }
 }

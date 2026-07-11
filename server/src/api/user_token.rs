@@ -324,14 +324,14 @@ mod test {
     #[parallel]
     async fn list() -> ApiResult<()> {
         const USER: &str = "administrator";
-        verify_response(&format!("GET /user-tokens/{USER}/?{FIELDS}"), "user_token/list").await
+        verify_response(&format!("GET /user-tokens/{USER}/?{FIELDS}"), "user_token/list/typical").await
     }
 
     #[tokio::test]
     #[serial]
     async fn create() -> ApiResult<()> {
         const USER: &str = "restricted_user";
-        verify_response(&format!("POST /user-token/{USER}/?{FIELDS}"), "user_token/create").await?;
+        verify_response(&format!("POST /user-token/{USER}/?{FIELDS}"), "user_token/create/typical").await?;
 
         let mut conn = get_connection()?;
         let token: Uuid = user_token::table
@@ -339,7 +339,7 @@ mod test {
             .order(user_token::creation_time.desc())
             .first(&mut conn)?;
 
-        verify_response(&format!("DELETE /user-token/{USER}/{token}"), "user_token/delete").await?;
+        verify_response(&format!("DELETE /user-token/{USER}/{token}"), "user_token/delete/typical").await?;
 
         let has_token: bool = diesel::select(exists(user_token::table.find(token))).first(&mut conn)?;
         assert!(!has_token);
@@ -361,7 +361,7 @@ mod test {
         let mut conn = get_connection()?;
         let user_token = get_user_token(&mut conn)?;
 
-        verify_response(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/edit").await?;
+        verify_response(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/edit/typical").await?;
 
         let new_user_token = get_user_token(&mut conn)?;
         assert_eq!(new_user_token.id, user_token.id);
@@ -372,7 +372,7 @@ mod test {
         assert!(new_user_token.last_edit_time > user_token.last_edit_time);
         assert_eq!(new_user_token.last_usage_time, user_token.last_usage_time);
 
-        verify_response(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/edit_restore").await?;
+        verify_response(&format!("PUT /user-token/{USER}/{TEST_TOKEN}/?{FIELDS}"), "user_token/edit/restore").await?;
 
         let new_user_token = get_user_token(&mut conn)?;
         assert_eq!(new_user_token.id, user_token.id);
@@ -388,36 +388,15 @@ mod test {
     #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_response("GET /user-tokens/fake_user", "user_token/list_nonexistent_user").await?;
-        verify_response("POST /user-token/fake_user", "user_token/create_nonexistent_user").await?;
-        verify_response(&format!("PUT /user-token/fake_user/{TEST_TOKEN}"), "user_token/edit_nonexistent_user").await?;
-        verify_response(&format!("PUT /user-token/regular_user/{TEST_TOKEN}"), "user_token/edit_nonexistent_token")
+        verify_response("GET /user-tokens/fake_user", "user_token/list/nonexistent_user").await?;
+        verify_response("POST /user-token/fake_user", "user_token/create/nonexistent_user").await?;
+        verify_response(&format!("PUT /user-token/fake_user/{TEST_TOKEN}"), "user_token/edit/nonexistent_user").await?;
+        verify_response(&format!("PUT /user-token/regular_user/{TEST_TOKEN}"), "user_token/edit/nonexistent_token")
             .await?;
-        verify_response(&format!("DELETE /user-token/fake_user/{TEST_TOKEN}"), "user_token/delete_nonexistent_user")
+        verify_response(&format!("DELETE /user-token/fake_user/{TEST_TOKEN}"), "user_token/delete/nonexistent_user")
             .await?;
-        verify_response(
-            &format!("DELETE /user-token/regular_user/{TEST_TOKEN}"),
-            "user_token/delete_nonexistent_token",
-        )
-        .await?;
-
-        // User has `self` permissions but not `any` permissions for user_token operations
-        verify_response_with_user(UserRank::Regular, "GET /user-tokens/power_user", "user_token/list_another").await?;
-        verify_response_with_user(UserRank::Regular, "POST /user-token/power_user", "user_token/create_another")
-            .await?;
-        verify_response_with_user(
-            UserRank::Regular,
-            &format!("PUT /user-token/power_user/{TEST_TOKEN}"),
-            "user_token/edit_another",
-        )
-        .await?;
-        verify_response_with_user(
-            UserRank::Regular,
-            &format!("DELETE /user-token/power_user/{TEST_TOKEN}"),
-            "user_token/delete_another",
-        )
-        .await?;
-        Ok(())
+        verify_response(&format!("DELETE /user-token/regular_user/{TEST_TOKEN}"), "user_token/delete/nonexistent_token")
+            .await
     }
 
     #[tokio::test]
@@ -427,36 +406,36 @@ mod test {
         const SELF: &str = "regular_user";
         const OTHER: &str = "restricted_user";
 
-        verify_response_with_user(USER, &format!("GET /user-tokens/{SELF}"), "user_token/list_own_unauthorized")
+        verify_response_with_user(USER, &format!("GET /user-tokens/{SELF}"), "user_token/list/own_unauthorized")
             .await?;
-        verify_response_with_user(USER, &format!("GET /user-tokens/{OTHER}"), "user_token/list_any_unauthorized")
+        verify_response_with_user(USER, &format!("GET /user-tokens/{OTHER}"), "user_token/list/any_unauthorized")
             .await?;
-        verify_response_with_user(USER, &format!("POST /user-token/{SELF}"), "user_token/create_own_unauthorized")
+        verify_response_with_user(USER, &format!("POST /user-token/{SELF}"), "user_token/create/own_unauthorized")
             .await?;
-        verify_response_with_user(USER, &format!("POST /user-token/{OTHER}"), "user_token/create_any_unauthorized")
+        verify_response_with_user(USER, &format!("POST /user-token/{OTHER}"), "user_token/create/any_unauthorized")
             .await?;
         verify_response_with_user(
             USER,
             &format!("PUT /user-token/{SELF}/{TEST_TOKEN}"),
-            "user_token/edit_own_unauthorized",
+            "user_token/edit/own_unauthorized",
         )
         .await?;
         verify_response_with_user(
             USER,
             &format!("PUT /user-token/{OTHER}/{TEST_TOKEN}"),
-            "user_token/edit_any_unauthorized",
+            "user_token/edit/any_unauthorized",
         )
         .await?;
         verify_response_with_user(
             USER,
             &format!("DELETE /user-token/{SELF}/{TEST_TOKEN}"),
-            "user_token/delete_own_unauthorized",
+            "user_token/delete/own_unauthorized",
         )
         .await?;
         verify_response_with_user(
             USER,
             &format!("DELETE /user-token/{OTHER}/{TEST_TOKEN}"),
-            "user_token/delete_any_unauthorized",
+            "user_token/delete/any_unauthorized",
         )
         .await
     }

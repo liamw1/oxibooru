@@ -1,3 +1,0 @@
-[public_info.privileges]
-user_token_list_any        = "administrator"
-user_token_list_self       = "regular"

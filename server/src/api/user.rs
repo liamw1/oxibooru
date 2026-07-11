@@ -612,7 +612,7 @@ mod test {
     async fn list() -> ApiResult<()> {
         const QUERY: &str = "GET /users/?query";
         const PARAMS: &str = "-sort:name&limit=40&fields=name";
-        verify_response(&format!("{QUERY}=-sort:name&limit=40{FIELDS}"), "user/list").await?;
+        verify_response(&format!("{QUERY}=-sort:name&limit=40{FIELDS}"), "user/list/typical").await?;
 
         let filter_table = crate::search::user::filter_table();
         for token in Token::iter() {
@@ -623,11 +623,11 @@ mod test {
                 ("", filter)
             };
             let query = format!("{QUERY}={sign}{token}:{filter} {PARAMS}");
-            let path = format!("user/list_{token}_filtered");
+            let path = format!("user/list/{token}_filtered");
             verify_response(&query, &path).await?;
 
             let query = format!("{QUERY}=sort:{token} {PARAMS}");
-            let path = format!("user/list_{token}_sorted");
+            let path = format!("user/list/{token}_sorted");
             verify_response(&query, &path).await?;
         }
         Ok(())
@@ -647,8 +647,8 @@ mod test {
         let mut conn = get_connection()?;
         let last_edit_time = get_last_edit_time(&mut conn)?;
 
-        verify_response(&format!("GET /user/{NAME}/?{FIELDS}"), "user/get").await?;
-        verify_response_with_user(UserRank::Regular, &format!("GET /user/{NAME}/?{FIELDS}"), "user/get_self").await?;
+        verify_response(&format!("GET /user/{NAME}/?{FIELDS}"), "user/get/typical").await?;
+        verify_response_with_user(UserRank::Regular, &format!("GET /user/{NAME}/?{FIELDS}"), "user/get/self").await?;
 
         let new_last_edit_time = get_last_edit_time(&mut conn)?;
         assert_eq!(new_last_edit_time, last_edit_time);
@@ -667,7 +667,7 @@ mod test {
         let mut conn = get_connection()?;
         let user_count = get_user_count(&mut conn)?;
 
-        verify_response(&format!("POST /users/?{FIELDS}"), "user/create").await?;
+        verify_response(&format!("POST /users/?{FIELDS}"), "user/create/typical").await?;
 
         let (user_id, name): (i64, String) = user::table
             .select((user::id, user::name))
@@ -677,7 +677,7 @@ mod test {
         let new_user_count = get_user_count(&mut conn)?;
         assert_eq!(new_user_count, user_count + 1);
 
-        verify_response(&format!("DELETE /user/{name}"), "user/delete").await?;
+        verify_response(&format!("DELETE /user/{name}"), "user/delete/typical").await?;
 
         let new_user_count = get_user_count(&mut conn)?;
         let has_user: bool = diesel::select(exists(user::table.find(user_id))).first(&mut conn)?;
@@ -712,7 +712,7 @@ mod test {
 
         let (user, comment_count, favorite_count, upload_count) = get_user_info(&mut conn)?;
 
-        verify_response(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/edit").await?;
+        verify_response(&format!("PUT /user/{NAME}/?{FIELDS}"), "user/edit/typical").await?;
 
         let (new_user, new_comment_count, new_favorite_count, new_upload_count) = get_user_info(&mut conn)?;
         assert_eq!(new_user.id, user.id);
@@ -730,7 +730,7 @@ mod test {
         assert_eq!(new_upload_count, upload_count);
 
         let new_name = &new_user.name;
-        verify_response(&format!("PUT /user/{new_name}/?{FIELDS}"), "user/edit_restore").await?;
+        verify_response(&format!("PUT /user/{new_name}/?{FIELDS}"), "user/edit/restore").await?;
 
         let (new_user, new_comment_count, new_favorite_count, new_upload_count) = get_user_info(&mut conn)?;
         assert_eq!(new_user.id, user.id);
@@ -752,36 +752,33 @@ mod test {
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
     #[parallel]
     async fn error() -> ApiResult<()> {
-        verify_response("GET /user/fake_user", "user/get_nonexistent").await?;
-        verify_response("PUT /user/fake_user", "user/edit_nonexistent").await?;
-        verify_response("DELETE /user/fake_user", "user/delete_nonexistent").await?;
+        verify_response("GET /user/fake_user", "user/get/nonexistent").await?;
+        verify_response("PUT /user/fake_user", "user/edit/nonexistent").await?;
+        verify_response("DELETE /user/fake_user", "user/delete/nonexistent").await?;
 
-        verify_response("POST /users", "user/create_anonymous").await?;
-        verify_response("POST /users", "user/create_name_clash").await?;
-        verify_response("POST /users", "user/create_email_clash").await?;
-        verify_response("POST /users", "user/create_invalid_name").await?;
-        verify_response("POST /users", "user/create_invalid_rank").await?;
-        verify_response("POST /users", "user/create_invalid_email").await?;
-        verify_response("POST /users", "user/create_invalid_password").await?;
-        verify_response("POST /users", "user/create_invalid_avatar_token").await?;
-        verify_response("POST /users", "user/create_missing_custom_avatar").await?;
+        verify_response("POST /users", "user/create/anonymous").await?;
+        verify_response("POST /users", "user/create/name_clash").await?;
+        verify_response("POST /users", "user/create/email_clash").await?;
+        verify_response("POST /users", "user/create/invalid_name").await?;
+        verify_response("POST /users", "user/create/invalid_rank").await?;
+        verify_response("POST /users", "user/create/invalid_email").await?;
+        verify_response("POST /users", "user/create/invalid_password").await?;
+        verify_response("POST /users", "user/create/invalid_avatar_token").await?;
+        verify_response("POST /users", "user/create/missing_custom_avatar").await?;
 
-        verify_response("PUT /user/regular_user", "user/edit_anonymous").await?;
-        verify_response("PUT /user/regular_user", "user/edit_name_clash").await?;
-        verify_response("PUT /user/regular_user", "user/edit_email_clash").await?;
-        verify_response("PUT /user/regular_user", "user/edit_invalid_name").await?;
-        verify_response("PUT /user/regular_user", "user/edit_invalid_rank").await?;
-        verify_response("PUT /user/regular_user", "user/edit_invalid_email").await?;
-        verify_response("PUT /user/regular_user", "user/edit_invalid_password").await?;
-        verify_response("PUT /user/regular_user", "user/edit_invalid_avatar_token").await?;
-        verify_response("PUT /user/regular_user", "user/edit_missing_custom_avatar").await?;
+        verify_response("PUT /user/regular_user", "user/edit/anonymous").await?;
+        verify_response("PUT /user/regular_user", "user/edit/name_clash").await?;
+        verify_response("PUT /user/regular_user", "user/edit/email_clash").await?;
+        verify_response("PUT /user/regular_user", "user/edit/invalid_name").await?;
+        verify_response("PUT /user/regular_user", "user/edit/invalid_rank").await?;
+        verify_response("PUT /user/regular_user", "user/edit/invalid_email").await?;
+        verify_response("PUT /user/regular_user", "user/edit/invalid_password").await?;
+        verify_response("PUT /user/regular_user", "user/edit/invalid_avatar_token").await?;
+        verify_response("PUT /user/regular_user", "user/edit/missing_custom_avatar").await?;
 
-        // User has permissions to edit/delete self, but not another
-        verify_response_with_user(UserRank::Regular, "PUT /user/power_user", "user/edit_another").await?;
-        verify_response_with_user(UserRank::Regular, "DELETE /user/power_user", "user/delete_another").await?;
-
-        verify_response_with_user(UserRank::Regular, "POST /users", "user/create_higher_rank").await?;
-        verify_response_with_user(UserRank::Regular, "PUT /user/restricted_user", "user/edit_higher_rank").await?;
+        // Check user can't create or promote another user to higher rank
+        verify_response_with_user(UserRank::Regular, "POST /users", "user/create/higher_rank").await?;
+        verify_response_with_user(UserRank::Regular, "PUT /user/restricted_user", "user/edit/higher_rank").await?;
 
         reset_sequence(ResourceType::User)
     }
@@ -793,30 +790,30 @@ mod test {
         const SELF: &str = "regular_user";
         const OTHER: &str = "restricted_user";
 
-        verify_response_with_user(USER, "GET /users?limit=1", "user/list_unauthorized").await?;
-        verify_response_with_user(USER, &format!("GET /user/{OTHER}"), "user/get_unauthorized").await?;
-        verify_response_with_user(UserRank::Anonymous, "POST /users", "user/create_self_unauthorized").await?;
-        verify_response_with_user(USER, "POST /users", "user/create_any_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit_own_name_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit_own_password_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit_own_email_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit_own_avatar_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit_own_rank_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_any_name_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_any_password_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_any_email_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_any_avatar_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_any_rank_unauthorized").await?;
-        verify_response_with_user(USER, &format!("DELETE /user/{SELF}"), "user/delete_self_unauthorized").await?;
-        verify_response_with_user(USER, &format!("DELETE /user/{OTHER}"), "user/delete_any_unauthorized").await?;
+        verify_response_with_user(USER, "GET /users?limit=1", "user/list/unauthorized").await?;
+        verify_response_with_user(USER, &format!("GET /user/{OTHER}"), "user/get/unauthorized").await?;
+        verify_response_with_user(UserRank::Anonymous, "POST /users", "user/create/self_unauthorized").await?;
+        verify_response_with_user(USER, "POST /users", "user/create/any_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit/own_name_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit/own_password_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit/own_email_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit/own_avatar_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit/own_rank_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit/any_name_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit/any_password_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit/any_email_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit/any_avatar_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit/any_rank_unauthorized").await?;
+        verify_response_with_user(USER, &format!("DELETE /user/{SELF}"), "user/delete/self_unauthorized").await?;
+        verify_response_with_user(USER, &format!("DELETE /user/{OTHER}"), "user/delete/any_unauthorized").await?;
 
         // Ensure users can't get around lack of view privileges via other actions
-        verify_response_with_user(USER, "GET /users?limit=1", "user/list_view_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_view_unauthorized").await?;
+        verify_response_with_user(USER, "GET /users?limit=1", "user/list/view_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit/view_unauthorized").await?;
 
         // Ensure users can't download files from web without authorization
-        verify_response_with_user(USER, "POST /users", "user/create_download_avatar_unauthorized").await?;
-        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_download_avatar_unauthorized").await
+        verify_response_with_user(USER, "POST /users", "user/create/download_avatar_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit/download_avatar_unauthorized").await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -824,11 +821,11 @@ mod test {
     async fn percent_encoding_edge_cases() -> ApiResult<()> {
         // Create a user that requires percent encoding on avatar path
         simulate_upload("1_pixel.png", "avatar.png")?;
-        verify_response(&format!("POST /users?{FIELDS}"), "user/create_encoded_name").await?;
+        verify_response(&format!("POST /users?{FIELDS}"), "user/create/encoded_name").await?;
 
         // Create another user whose name is the percent-encoding of the previous user
         simulate_upload("1_pixel.png", "avatar.png")?;
-        verify_response(&format!("POST /users?{FIELDS}"), "user/create_double_encoded_name").await?;
+        verify_response(&format!("POST /users?{FIELDS}"), "user/create/double_encoded_name").await?;
 
         reset_database();
         Ok(())
@@ -841,8 +838,8 @@ mod test {
         simulate_upload("1_pixel.png", "../upload.png")?;
 
         // Test responses that attempt to access file outside temporary uploads directory
-        verify_response("POST /users", "user/create_malicious_avatar_token").await?;
-        verify_response("PUT /user/regular_user", "user/edit_malicious_avatar_token").await
+        verify_response("POST /users", "user/create/malicious_avatar_token").await?;
+        verify_response("PUT /user/regular_user", "user/edit/malicious_avatar_token").await
     }
 
     #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -853,9 +850,9 @@ mod test {
 
         // Test usernames that attempt to access file outside temporary uploads directory
         simulate_upload("1_pixel.png", "actual_avatar.png")?;
-        verify_response("POST /users?fields=name,avatarUrl", "user/create_malicious_username").await?;
+        verify_response("POST /users?fields=name,avatarUrl", "user/create/malicious_username").await?;
         simulate_upload("1_pixel.png", "actual_avatar.png")?;
-        verify_response("PUT /user/regular_user?fields=name,avatarUrl", "user/edit_malicious_username").await?;
+        verify_response("PUT /user/regular_user?fields=name,avatarUrl", "user/edit/malicious_username").await?;
 
         reset_database();
         Ok(())
