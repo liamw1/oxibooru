@@ -1,9 +1,8 @@
 use crate::api::doc::ApiDoc;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
-use crate::auth::Client;
 use crate::config::{Config, RegexType};
-use crate::model::enums::{Rating, UserRank};
+use crate::model::enums::Rating;
 use crate::resource::field::Mask;
 use crate::string::SmallString;
 use crate::time::DateTime;
@@ -172,14 +171,6 @@ struct PagedResponse<T> {
     #[schema(examples(1729))]
     total: i64,
     results: Vec<T>,
-}
-
-/// Checks if the `client` is at least `required_rank`.
-/// Returns error if client is lower rank than `required_rank`.
-fn verify_privilege(client: Client, required_rank: UserRank) -> ApiResult<()> {
-    (client.rank >= required_rank)
-        .then_some(())
-        .ok_or(ApiError::InsufficientPrivileges)
 }
 
 /// Checks if `current_version` matches `client_version`.

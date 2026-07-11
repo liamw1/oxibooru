@@ -41,6 +41,7 @@ async fn list(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<UnpagedResponse<PoolCategoryInfo>>> {
+    ctx.verify_privilege(Action::PoolCategoryView)?;
     ctx.verify_privilege(Action::PoolCategoryList)?;
 
     connection_pool
@@ -184,6 +185,8 @@ async fn update(
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<PoolCategoryUpdateBody>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
+    ctx.verify_privilege(Action::PoolCategoryView)?;
+
     let updated_category = connection_pool
         .transaction(move |conn| {
             let old_category: PoolCategory = pool_category::table
@@ -239,6 +242,7 @@ async fn set_default(
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PoolCategoryInfo>> {
+    ctx.verify_privilege(Action::PoolCategoryView)?;
     ctx.verify_privilege(Action::PoolCategorySetDefault)?;
 
     let new_default_category: PoolCategory = connection_pool
@@ -340,7 +344,7 @@ async fn delete(
 #[cfg(test)]
 mod test {
     use crate::api::error::ApiResult;
-    use crate::model::enums::ResourceType;
+    use crate::model::enums::{ResourceType, UserRank};
     use crate::model::pool_category::PoolCategory;
     use crate::schema::{pool_category, pool_category_statistics};
     use crate::string::SmallString;
@@ -471,7 +475,30 @@ mod test {
         verify_response("PUT /pool-category/default", "pool_category/edit_name_clash").await?;
         verify_response("DELETE /pool-category/default", "pool_category/delete_default").await?;
 
-        reset_sequence(ResourceType::PoolCategory)?;
-        Ok(())
+        reset_sequence(ResourceType::PoolCategory)
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn unauthorized() -> ApiResult<()> {
+        const USER: UserRank = UserRank::Regular;
+
+        verify_response_with_user(USER, "GET /pool-categories?limit=1", "pool_category/list_unauthorized").await?;
+        verify_response_with_user(USER, "GET /pool-category/default", "pool_category/get_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool-category/default", "pool_category/edit_name_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool-category/default", "pool_category/edit_color_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool-category/Setting/default", "pool_category/set_default_unauthorized")
+            .await?;
+        verify_response_with_user(USER, "DELETE /pool-category/Setting", "pool_category/delete_unauthorized").await?;
+
+        // Ensure users can't get around lack of view privileges via other actions
+        verify_response_with_user(USER, "GET /pool-categories?limit=1", "pool_category/list_view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /pool-category/default", "pool_category/edit_view_unauthorized").await?;
+        verify_response_with_user(
+            USER,
+            "PUT /pool-category/Setting/default",
+            "pool_category/set_default_view_unauthorized",
+        )
+        .await
     }
 }

@@ -36,6 +36,25 @@ pub fn routes() -> OpenApiRouter<AppState> {
 const MAX_TAGS_PER_PAGE: i64 = 1000;
 const MAX_TAG_SIBLINGS: i64 = 50;
 
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &SmallString) -> ApiResult<i64> {
+    let (tag_id, category_name): (i64, SmallString) = tag::table
+        .inner_join(tag_name::table)
+        .inner_join(tag_category::table)
+        .select((tag::id, tag_category::name))
+        .filter(tag_name::name.eq(tag_name))
+        .first(conn)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+
+    if ctx.client.rank == UserRank::Anonymous {
+        let preferences = &ctx.config.anonymous_preferences;
+        if preferences.tag_blacklist.contains(tag_name) || preferences.tag_category_blacklist.contains(&category_name) {
+            return Err(ApiError::Hidden(ResourceType::Tag));
+        }
+    }
+    Ok(tag_id)
+}
+
 /// Searches for tags.
 ///
 /// **Anonymous tokens**
@@ -89,6 +108,7 @@ async fn list(
     Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<TagInfo>>> {
+    ctx.verify_privilege(Action::TagView)?;
     ctx.verify_privilege(Action::TagList)?;
 
     let offset = page.offset.unwrap_or(0);
@@ -186,6 +206,7 @@ async fn get_siblings(
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<TagSiblings>> {
     ctx.verify_privilege(Action::TagView)?;
+    ctx.verify_privilege(Action::TagList)?;
 
     connection_pool
         .transaction(move |conn| {
@@ -351,6 +372,7 @@ async fn merge(
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<MergeBody<SmallString>>,
 ) -> ApiResult<Json<TagInfo>> {
+    ctx.verify_privilege(Action::TagView)?;
     ctx.verify_privilege(Action::TagMerge)?;
 
     let get_tag_info = |conn: &mut PgConnection, name: &str| {
@@ -436,6 +458,8 @@ async fn update(
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<TagUpdateBody>,
 ) -> ApiResult<Json<TagInfo>> {
+    ctx.verify_privilege(Action::TagView)?;
+
     let tag_id = connection_pool
         .transaction(move |conn| {
             let old_tag: Tag = tag::table
@@ -551,25 +575,6 @@ async fn delete(
             Ok::<_, ApiError>(Json(()))
         })
         .await
-}
-
-fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &SmallString) -> ApiResult<i64> {
-    let (tag_id, category_name): (i64, SmallString) = tag::table
-        .inner_join(tag_name::table)
-        .inner_join(tag_category::table)
-        .select((tag::id, tag_category::name))
-        .filter(tag_name::name.eq(tag_name))
-        .first(conn)
-        .optional()?
-        .ok_or(ApiError::NotFound(ResourceType::Tag))?;
-
-    if ctx.client.rank == UserRank::Anonymous {
-        let preferences = &ctx.config.anonymous_preferences;
-        if preferences.tag_blacklist.contains(tag_name) || preferences.tag_category_blacklist.contains(&category_name) {
-            return Err(ApiError::Hidden(ResourceType::Tag));
-        }
-    }
-    Ok(tag_id)
 }
 
 #[cfg(test)]
@@ -852,5 +857,29 @@ mod test {
 
         reset_sequence(ResourceType::Tag)?;
         Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn unauthorized() -> ApiResult<()> {
+        const USER: UserRank = UserRank::Regular;
+
+        verify_response_with_user(USER, "GET /tags?limit=1", "tag/list_unauthorized").await?;
+        verify_response_with_user(USER, "GET /tag/sky", "tag/get_unauthorized").await?;
+        verify_response_with_user(USER, "GET /tag-siblings/sky", "tag/get_siblings_unauthorized").await?;
+        verify_response_with_user(USER, "POST /tags", "tag/create_unauthorized").await?;
+        verify_response_with_user(USER, "POST /tag-merge", "tag/merge_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_name_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_category_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_description_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_implication_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_suggestion_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /tag/sky", "tag/delete_unauthorized").await?;
+
+        // Ensure users can't get around lack of view privileges via other actions
+        verify_response_with_user(USER, "GET /tags?limit=1", "tag/list_view_unauthorized").await?;
+        verify_response_with_user(USER, "GET /tag-siblings/sky", "tag/get_siblings_view_unauthorized").await?;
+        verify_response_with_user(USER, "POST /tag-merge", "tag/merge_view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag/sky", "tag/edit_view_unauthorized").await
     }
 }

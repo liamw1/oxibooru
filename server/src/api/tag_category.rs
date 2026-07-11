@@ -24,6 +24,24 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(set_default))
 }
 
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, category_name: &SmallString) -> ApiResult<TagCategory> {
+    if ctx.client.rank == UserRank::Anonymous
+        && ctx
+            .config
+            .anonymous_preferences
+            .tag_category_blacklist
+            .contains(category_name)
+    {
+        return Err(ApiError::Hidden(ResourceType::TagCategory));
+    }
+
+    tag_category::table
+        .filter(tag_category::name.eq(category_name))
+        .first(conn)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::TagCategory))
+}
+
 /// Lists all tag categories.
 ///
 /// Doesn't use paging.
@@ -41,6 +59,7 @@ async fn list(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<UnpagedResponse<TagCategoryInfo>>> {
+    ctx.verify_privilege(Action::TagCategoryView)?;
     ctx.verify_privilege(Action::TagCategoryList)?;
 
     connection_pool
@@ -185,6 +204,8 @@ async fn update(
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<TagCategoryUpdateBody>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
+    ctx.verify_privilege(Action::TagCategoryView)?;
+
     let updated_category = connection_pool
         .transaction(move |conn| {
             let old_category: TagCategory = tag_category::table
@@ -245,6 +266,7 @@ async fn set_default(
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<TagCategoryInfo>> {
+    ctx.verify_privilege(Action::TagCategoryView)?;
     ctx.verify_privilege(Action::TagCategorySetDefault)?;
 
     let new_default_category: TagCategory = connection_pool
@@ -341,24 +363,6 @@ async fn delete(
             Ok(Json(()))
         })
         .await
-}
-
-fn verify_visibility(conn: &mut PgConnection, ctx: &Context, category_name: &SmallString) -> ApiResult<TagCategory> {
-    if ctx.client.rank == UserRank::Anonymous
-        && ctx
-            .config
-            .anonymous_preferences
-            .tag_category_blacklist
-            .contains(category_name)
-    {
-        return Err(ApiError::Hidden(ResourceType::TagCategory));
-    }
-
-    tag_category::table
-        .filter(tag_category::name.eq(category_name))
-        .first(conn)
-        .optional()?
-        .ok_or(ApiError::NotFound(ResourceType::TagCategory))
 }
 
 #[cfg(test)]
@@ -507,7 +511,27 @@ mod test {
         verify_response("PUT /tag-category/default", "tag_category/edit_name_clash").await?;
         verify_response("DELETE /tag-category/default", "tag_category/delete_default").await?;
 
-        reset_sequence(ResourceType::PoolCategory)?;
-        Ok(())
+        reset_sequence(ResourceType::PoolCategory)
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn unauthorized() -> ApiResult<()> {
+        const USER: UserRank = UserRank::Regular;
+
+        verify_response_with_user(USER, "GET /tag-categories?limit=1", "tag_category/list_unauthorized").await?;
+        verify_response_with_user(USER, "GET /tag-category/default", "tag_category/get_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag-category/default", "tag_category/edit_name_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag-category/default", "tag_category/edit_color_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag-category/default", "tag_category/edit_order_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag-category/meta/default", "tag_category/set_default_unauthorized")
+            .await?;
+        verify_response_with_user(USER, "DELETE /tag-category/meta", "tag_category/delete_unauthorized").await?;
+
+        // Ensure users can't get around lack of view privileges via other actions
+        verify_response_with_user(USER, "GET /tag-categories?limit=1", "tag_category/list_view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag-category/default", "tag_category/edit_view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /tag-category/meta/default", "tag_category/set_default_view_unauthorized")
+            .await
     }
 }

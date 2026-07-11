@@ -2,7 +2,7 @@ use crate::api::ResourceParams;
 use crate::api::doc::INFO_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
-use crate::config::PublicConfig;
+use crate::config::{Action, PublicConfig};
 use crate::extract::{Ctx, Json, Query};
 use crate::model::post::PostFeature;
 use crate::resource::post::{Field, PostInfo};
@@ -63,10 +63,14 @@ async fn get(
             let (post_count, disk_usage) = database_statistics::table
                 .select((database_statistics::post_count, database_statistics::disk_usage))
                 .first(conn)?;
-            let latest_feature: Option<PostFeature> = post_feature::table
-                .order(post_feature::time.desc())
-                .first(conn)
-                .optional()?;
+            let latest_feature: Option<PostFeature> = if ctx.has_privilege(Action::PostViewFeatured) {
+                post_feature::table
+                    .order(post_feature::time.desc())
+                    .first(conn)
+                    .optional()?
+            } else {
+                None
+            };
             let featured_post: Option<PostInfo> = latest_feature
                 .as_ref()
                 .map(|feature| PostInfo::new_from_id(conn, &ctx, feature.post_id, params.fields))

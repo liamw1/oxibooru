@@ -4,3 +4,4 @@ tag_category_blacklist = ["artist", "character", "source", "meta"]
 
 [public_info.privileges]
 tag_view = "anonymous"
+tag_list = "anonymous"

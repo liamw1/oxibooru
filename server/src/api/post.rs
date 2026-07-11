@@ -71,6 +71,22 @@ struct Multipart<T> {
     thumbnail: Option<String>,
 }
 
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, post_id: i64) -> ApiResult<()> {
+    let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
+    if !post_exists {
+        return Err(ApiError::NotFound(ResourceType::Post));
+    }
+
+    if let Some(hidden_posts) = preferences::hidden_posts(ctx, post_statistics::post_id) {
+        let post_lookup = hidden_posts.filter(post_statistics::post_id.eq(post_id));
+        let post_hidden: bool = diesel::select(exists(post_lookup)).first(conn)?;
+        if post_hidden {
+            return Err(ApiError::Hidden(ResourceType::Post));
+        }
+    }
+    Ok(())
+}
+
 /// Runs an `update` that may add `tags` to a post as a transaction.
 ///
 /// Tagging multiple posts simultaneously can cause issues if two updates share tags.
@@ -189,6 +205,7 @@ async fn list(
     Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<PostInfo>>> {
+    ctx.verify_privilege(Action::PostView)?;
     ctx.verify_privilege(Action::PostList)?;
 
     let offset = page.offset.unwrap_or(0);
@@ -273,7 +290,7 @@ async fn get_neighbors(
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostNeighbors>> {
-    ctx.verify_privilege(Action::PostList)?;
+    ctx.verify_privilege(Action::PostView)?;
 
     let create_post_neighbors = |mut neighbors: Vec<PostInfo>, has_previous_post: bool| {
         let (prev, next) = match (neighbors.pop(), neighbors.pop()) {
@@ -421,6 +438,7 @@ async fn feature(
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<FeatureBody>,
 ) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
     ctx.verify_privilege(Action::PostFeature)?;
 
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
@@ -458,8 +476,6 @@ async fn reverse_search_impl(
     params: ResourceParams<Field>,
     body: ReverseSearchBody,
 ) -> ApiResult<Json<ReverseSearchResponse>> {
-    ctx.verify_privilege(Action::PostReverseSearch)?;
-
     let content =
         Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.compute_properties(&ctx).await?;
@@ -565,6 +581,7 @@ async fn reverse_search(
     Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<ReverseSearchBody>,
 ) -> ApiResult<Json<ReverseSearchResponse>> {
+    ctx.verify_privilege(Action::PostView)?;
     ctx.verify_privilege(Action::PostReverseSearch)?;
 
     match body {
@@ -598,13 +615,13 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
         Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
     let content_properties = content.get_or_compute_properties(&ctx).await?;
 
-    let Ctx(ctx, connection_pool) = ctx;
     let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
-        Some(content) => Some(content.thumbnail(&ctx.config, ThumbnailType::Post).await?),
+        Some(content) => Some(content.thumbnail(&ctx, ThumbnailType::Post).await?),
         None => None,
     };
     let flags = content_properties.flags | PostFlags::from_slice(&body.flags.unwrap_or_default());
 
+    let Ctx(ctx, connection_pool) = ctx;
     let post_id = tagging_update(&connection_pool, body.tags.is_some(), {
         let ctx = ctx.clone();
         move |conn| {
@@ -808,6 +825,7 @@ async fn merge(
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<PostMergeBody>,
 ) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
     ctx.verify_privilege(Action::PostMerge)?;
 
     let absorbed_id = body.post_info.remove;
@@ -864,6 +882,7 @@ async fn favorite(
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
     ctx.verify_privilege(Action::PostFavorite)?;
 
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
@@ -909,6 +928,7 @@ async fn rate(
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<RatingBody>,
 ) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
     ctx.verify_privilege(Action::PostScore)?;
 
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
@@ -947,12 +967,12 @@ async fn update_impl(
         None => None,
     };
 
-    let Ctx(ctx, connection_pool) = ctx;
     let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
-        Some(content) => Some(content.thumbnail(&ctx.config, ThumbnailType::Post).await?),
+        Some(content) => Some(content.thumbnail(&ctx, ThumbnailType::Post).await?),
         None => None,
     };
 
+    let Ctx(ctx, connection_pool) = ctx;
     tagging_update(&connection_pool, body.tags.is_some(), {
         let ctx = ctx.clone();
         move |conn| {
@@ -984,7 +1004,7 @@ async fn update_impl(
                 new_snapshot_data.flags = updated_flags;
             }
             if let Some(source) = body.source {
-                ctx.verify_privilege(Action::PostScore)?;
+                ctx.verify_privilege(Action::PostEditSource)?;
 
                 new_post.source = source.clone();
                 new_snapshot_data.source = source;
@@ -1145,6 +1165,8 @@ async fn update(
     Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<PostUpdateBody>,
 ) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
+
     match body {
         JsonOrMultipart::Json(payload) => update_impl(ctx, post_id, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
@@ -1244,6 +1266,7 @@ async fn unfavorite(
     Path(post_id): Path<i64>,
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
     ctx.verify_privilege(Action::PostFavorite)?;
 
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
@@ -1256,22 +1279,6 @@ async fn unfavorite(
         .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
         .map(Json)
-}
-
-fn verify_visibility(conn: &mut PgConnection, ctx: &Context, post_id: i64) -> ApiResult<()> {
-    let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
-    if !post_exists {
-        return Err(ApiError::NotFound(ResourceType::Post));
-    }
-
-    if let Some(hidden_posts) = preferences::hidden_posts(ctx, post_statistics::post_id) {
-        let post_lookup = hidden_posts.filter(post_statistics::post_id.eq(post_id));
-        let post_hidden: bool = diesel::select(exists(post_lookup)).first(conn)?;
-        if post_hidden {
-            return Err(ApiError::Hidden(ResourceType::Post));
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -1678,8 +1685,52 @@ mod test {
         verify_response("POST /featured-post", "post/double_feature").await?;
         verify_response("POST /post-merge", "post/self-merge").await?;
 
-        reset_sequence(ResourceType::Post)?;
-        Ok(())
+        reset_sequence(ResourceType::Post)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[parallel]
+    async fn unauthorized() -> ApiResult<()> {
+        const USER: UserRank = UserRank::Regular;
+
+        simulate_upload("1_pixel.png", "upload.png")?;
+        verify_response_with_user(USER, "GET /posts?limit=1", "post/list_unauthorized").await?;
+        verify_response_with_user(USER, "GET /post/1", "post/get_unauthorized").await?;
+        verify_response_with_user(USER, "GET /post/1/around", "post/get_around_unauthorized").await?;
+        verify_response_with_user(USER, "GET /featured-post", "post/get_featured_unauthorized").await?;
+        verify_response_with_user(USER, "POST /featured-post", "post/feature_unauthorized").await?;
+        verify_response_with_user(USER, "POST /posts/reverse-search", "post/reverse_search_unauthorized").await?;
+        verify_response_with_user(USER, "POST /posts", "post/create_anonymous_unauthorized").await?;
+        verify_response_with_user(USER, "POST /posts", "post/create_identified_unauthorized").await?;
+        verify_response_with_user(USER, "POST /post-merge", "post/merge_unauthorized").await?;
+        verify_response_with_user(USER, "POST /post/1/favorite", "post/favorite_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1/score", "post/rate_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_content_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_description_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_flag_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_note_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_relation_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_safety_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_source_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_tag_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_thumbnail_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /post/1", "post/delete_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /post/1/favorite", "post/unfavorite_unauthorized").await?;
+
+        // Ensure users can't get around lack of view privileges via other actions
+        verify_response_with_user(USER, "GET /posts?limit=1", "post/list_view_unauthorized").await?;
+        verify_response_with_user(USER, "POST /posts/reverse-search", "post/reverse_search_view_unauthorized").await?;
+        verify_response_with_user(USER, "POST /post-merge", "post/merge_view_unauthorized").await?;
+        verify_response_with_user(USER, "POST /post/1/favorite", "post/favorite_view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1/score", "post/rate_view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_view_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /post/1/favorite", "post/unfavorite_view_unauthorized").await?;
+
+        // Ensure users can't download files from web without authorization
+        verify_response_with_user(USER, "POST /posts", "post/create_download_content_unauthorized").await?;
+        verify_response_with_user(USER, "POST /posts", "post/create_download_thumbnail_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_download_content_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /post/1", "post/edit_download_thumbnail_unauthorized").await
     }
 
     #[tokio::test]

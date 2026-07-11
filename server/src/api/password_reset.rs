@@ -201,7 +201,6 @@ mod test {
         verify_response("GET /password-reset/restricted_user", "password_reset/invalid_email").await?;
         verify_response("GET /password-reset/regular_user", "password_reset/reset_disabled").await?;
         verify_response("POST /password-reset/regular_user", "password_reset/invalid_token").await?;
-        verify_response("POST /password-reset/regular_user", "password_reset/missing_token").await?;
-        Ok(())
+        verify_response("POST /password-reset/regular_user", "password_reset/missing_token").await
     }
 }

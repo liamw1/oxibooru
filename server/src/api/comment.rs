@@ -27,6 +27,22 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 const MAX_COMMENTS_PER_PAGE: i64 = 1000;
 
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, comment_id: i64) -> ApiResult<()> {
+    let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).first(conn)?;
+    if !comment_exists {
+        return Err(ApiError::NotFound(ResourceType::Comment));
+    }
+
+    if let Some(hidden_posts) = preferences::hidden_posts(ctx, comment::post_id) {
+        let comment_lookup = comment::table.find(comment_id).filter(exists(hidden_posts));
+        let comment_hidden: bool = diesel::select(exists(comment_lookup)).first(conn)?;
+        if comment_hidden {
+            return Err(ApiError::Hidden(ResourceType::Comment));
+        }
+    }
+    Ok(())
+}
+
 /// Lists comments.
 ///
 /// **Anonymous tokens**
@@ -72,6 +88,7 @@ async fn list(
     Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<CommentInfo>>> {
+    ctx.verify_privilege(Action::CommentView)?;
     ctx.verify_privilege(Action::CommentList)?;
 
     let offset = page.offset.unwrap_or(0);
@@ -207,27 +224,30 @@ async fn update(
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<CommentUpdateBody>,
 ) -> ApiResult<Json<CommentInfo>> {
-    let client = ctx.client;
-    let edit_own = ctx.config.privileges()[Action::CommentEditOwn];
-    let edit_any = ctx.config.privileges()[Action::CommentEditAny];
+    ctx.verify_privilege(Action::CommentView)?;
+    ctx.verify_privilege(Action::CommentEditOwn)?;
+
     connection_pool
-        .transaction(move |conn| {
-            let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
-                .find(comment_id)
-                .select((comment::user_id, comment::last_edit_time))
-                .first(conn)
-                .optional()?
-                .ok_or(ApiError::NotFound(ResourceType::Comment))?;
-            api::verify_version(comment_version, body.version)?;
+        .transaction({
+            let ctx = ctx.clone();
+            move |conn| {
+                let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
+                    .find(comment_id)
+                    .select((comment::user_id, comment::last_edit_time))
+                    .first(conn)
+                    .optional()?
+                    .ok_or(ApiError::NotFound(ResourceType::Comment))?;
+                api::verify_version(comment_version, body.version)?;
 
-            let client_owns_comment = client.id == comment_owner && comment_owner.is_some();
-            let required_rank = if client_owns_comment { edit_own } else { edit_any };
-            api::verify_privilege(client, required_rank)?;
+                if ctx.client.id.is_none_or(|client_id| comment_owner != Some(client_id)) {
+                    ctx.verify_privilege(Action::CommentEditAny)?;
+                }
 
-            diesel::update(comment::table.find(comment_id))
-                .set((comment::text.eq(body.text), comment::last_edit_time.eq(DateTime::now())))
-                .execute(conn)
-                .map_err(ApiError::from)
+                diesel::update(comment::table.find(comment_id))
+                    .set((comment::text.eq(body.text), comment::last_edit_time.eq(DateTime::now())))
+                    .execute(conn)
+                    .map_err(ApiError::from)
+            }
         })
         .await?;
     connection_pool
@@ -261,6 +281,7 @@ async fn rate(
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<RatingBody>,
 ) -> ApiResult<Json<CommentInfo>> {
+    ctx.verify_privilege(Action::CommentView)?;
     ctx.verify_privilege(Action::CommentScore)?;
 
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
@@ -308,6 +329,8 @@ async fn delete(
     Path(comment_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
+    ctx.verify_privilege(Action::CommentDeleteOwn)?;
+
     connection_pool
         .transaction(move |conn| {
             let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
@@ -318,33 +341,14 @@ async fn delete(
                 .ok_or(ApiError::NotFound(ResourceType::Comment))?;
             api::verify_version(comment_version, *client_version)?;
 
-            let action = if ctx.client.id == comment_owner && comment_owner.is_some() {
-                Action::CommentDeleteOwn
-            } else {
-                Action::CommentDeleteAny
-            };
-            ctx.verify_privilege(action)?;
+            if ctx.client.id.is_none_or(|client_id| comment_owner != Some(client_id)) {
+                ctx.verify_privilege(Action::CommentDeleteAny)?;
+            }
 
             diesel::delete(comment::table.find(comment_id)).execute(conn)?;
             Ok::<_, ApiError>(Json(()))
         })
         .await
-}
-
-fn verify_visibility(conn: &mut PgConnection, ctx: &Context, comment_id: i64) -> ApiResult<()> {
-    let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).first(conn)?;
-    if !comment_exists {
-        return Err(ApiError::NotFound(ResourceType::Comment));
-    }
-
-    if let Some(hidden_posts) = preferences::hidden_posts(ctx, comment::post_id) {
-        let comment_lookup = comment::table.find(comment_id).filter(exists(hidden_posts));
-        let comment_hidden: bool = diesel::select(exists(comment_lookup)).first(conn)?;
-        if comment_hidden {
-            return Err(ApiError::Hidden(ResourceType::Comment));
-        }
-    }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -547,10 +551,25 @@ mod test {
         verify_response("PUT /comment/1/score", "comment/invalid_rating").await?;
         verify_response_with_user(UserRank::Anonymous, "PUT /comment/1/score", "comment/rating_anonymously").await?;
 
-        // User has permission to delete own comment, but not another's
-        verify_response_with_user(UserRank::Regular, "DELETE /comment/2", "comment/delete_another").await?;
+        reset_sequence(ResourceType::Comment)
+    }
 
-        reset_sequence(ResourceType::Comment)?;
-        Ok(())
+    #[tokio::test]
+    #[parallel]
+    async fn unauthorized() -> ApiResult<()> {
+        const USER: UserRank = UserRank::Regular;
+
+        verify_response_with_user(USER, "GET /comments?limit=1", "comment/list_unauthorized").await?;
+        verify_response_with_user(USER, "GET /comment/1", "comment/get_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /comment/1", "comment/edit_own_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /comment/2", "comment/edit_any_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /comment/2/score", "comment/rating_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /comment/1", "comment/delete_own_unauthorized").await?;
+        verify_response_with_user(USER, "DELETE /comment/2", "comment/delete_any_unauthorized").await?;
+
+        // Ensure users can't get around lack of view privileges via other actions
+        verify_response_with_user(USER, "GET /comments?limit=1", "comment/list_view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /comment/2", "comment/edit_view_unauthorized").await?;
+        verify_response_with_user(USER, "PUT /comment/2/score", "comment/rating_view_unauthorized").await
     }
 }

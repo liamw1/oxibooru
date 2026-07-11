@@ -1,5 +1,4 @@
 use crate::api::error::{ApiError, ApiResult};
-use crate::config::Config;
 use crate::content::cache::CachedProperties;
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::UploadToken;
@@ -45,34 +44,34 @@ impl Content {
     }
 
     /// Saves content to temporary uploads directory and returns the name of the file written.
-    pub async fn save(self, config: &Config) -> ApiResult<UploadToken> {
+    pub async fn save(self, ctx: &Ctx) -> ApiResult<UploadToken> {
         match self {
             Self::Token(token) => Ok(token),
-            Self::Url(url) => download::from_url(config, url).await,
+            Self::Url(url) => download::from_url(ctx, url).await,
         }
     }
 
     /// Computes thumbnail for uploaded content.
-    pub async fn thumbnail(self, config: &Config, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
-        let token = self.save(config).await?;
-        let temp_path = token.path(config);
+    pub async fn thumbnail(self, ctx: &Ctx, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
+        let token = self.save(ctx).await?;
+        let temp_path = token.path(&ctx.config);
         tokio::task::block_in_place({
             || {
-                decode::representative_image(config, &temp_path, token.mime_type())
-                    .map(|image| thumbnail::create(config, &image, thumbnail_type))
+                decode::representative_image(&ctx.config, &temp_path, token.mime_type())
+                    .map(|image| thumbnail::create(&ctx.config, &image, thumbnail_type))
             }
         })
     }
 
     /// Computes properties for uploaded content.
     pub async fn compute_properties(self, ctx: &Ctx) -> ApiResult<CachedProperties> {
-        let token = self.save(&ctx.config).await?;
+        let token = self.save(ctx).await?;
         tokio::task::block_in_place(|| cache::compute_properties(ctx, token))
     }
 
     /// Retrieves content properties from cache or computes them if not present in cache.
     pub async fn get_or_compute_properties(self, ctx: &Ctx) -> ApiResult<CachedProperties> {
-        let token = self.save(&ctx.config).await?;
+        let token = self.save(ctx).await?;
         tokio::task::block_in_place(|| cache::get_or_compute_properties(ctx, token))
     }
 }

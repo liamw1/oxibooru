@@ -174,7 +174,6 @@ mod test {
         verify_response_with_credentials(missing_credentials, QUERY, "middleware/missing_credentials").await?;
 
         let unencoded_credentials = Some(format!("Basic regular_user:{TEST_PASSWORD}"));
-        verify_response_with_credentials(unencoded_credentials, QUERY, "middleware/unencoded_credentials").await?;
-        Ok(())
+        verify_response_with_credentials(unencoded_credentials, QUERY, "middleware/unencoded_credentials").await
     }
 }

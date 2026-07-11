@@ -1,7 +1,7 @@
 use crate::api::doc::UPLOAD_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
-use crate::config::{Action, Config};
+use crate::config::Action;
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
 use crate::content::{download, upload};
 use crate::extract::{Ctx, Json, JsonOrMultipart};
@@ -45,8 +45,8 @@ struct UploadResponse {
     token: UploadToken,
 }
 
-async fn upload_from_url(config: &Config, body: UploadBody) -> ApiResult<Json<UploadResponse>> {
-    let token = download::from_url(config, body.content_url).await?;
+async fn upload_from_url(ctx: &Ctx, body: UploadBody) -> ApiResult<Json<UploadResponse>> {
+    let token = download::from_url(ctx, body.content_url).await?;
     Ok(Json(UploadResponse { token }))
 }
 
@@ -74,17 +74,33 @@ async fn upload(ctx: Ctx, body: JsonOrMultipart<UploadBody>) -> ApiResult<Json<U
     ctx.verify_privilege(Action::UploadCreate)?;
 
     match body {
-        JsonOrMultipart::Json(payload) => upload_from_url(&ctx.config, payload).await,
+        JsonOrMultipart::Json(payload) => upload_from_url(&ctx, payload).await,
         JsonOrMultipart::Multipart(payload) => {
             let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content]).await?;
             if let [Some(token)] = decoded_body.files {
                 Ok(Json(UploadResponse { token }))
             } else if let Some(metadata) = decoded_body.metadata {
                 let url_upload: UploadBody = serde_json::from_slice(&metadata)?;
-                upload_from_url(&ctx.config, url_upload).await
+                upload_from_url(&ctx, url_upload).await
             } else {
                 Err(ApiError::MissingFormData)
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::api::error::ApiResult;
+    use crate::model::enums::UserRank;
+    use crate::test::*;
+    use serial_test::parallel;
+
+    #[tokio::test]
+    #[parallel]
+    async fn unauthorized() -> ApiResult<()> {
+        const USER: UserRank = UserRank::Regular;
+        verify_response_with_user(USER, "POST /uploads", "upload/create_unauthorized").await?;
+        verify_response_with_user(USER, "POST /uploads", "upload/download_unauthorized").await
     }
 }

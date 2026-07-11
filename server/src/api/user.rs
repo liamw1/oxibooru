@@ -2,7 +2,7 @@ use crate::api::doc::USER_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::{DeleteBody, PageParams, PagedResponse, ResourceParams, error};
 use crate::app::AppState;
-use crate::auth::password;
+use crate::auth::{Client, password};
 use crate::config::{Action, RegexType};
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
@@ -51,6 +51,14 @@ struct Multipart<T> {
     avatar: Option<String>,
 }
 
+/// Checks if the `client` is at least `required_rank`.
+/// Returns error if client is lower rank than `required_rank`.
+fn verify_rank(client: Client, required_rank: UserRank) -> ApiResult<()> {
+    (client.rank >= required_rank)
+        .then_some(())
+        .ok_or(ApiError::InsufficientPrivileges)
+}
+
 /// Searches for users.
 ///
 /// **Anonymous tokens**
@@ -92,6 +100,7 @@ async fn list(
     Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
 ) -> ApiResult<Json<PagedResponse<UserInfo>>> {
+    ctx.verify_privilege(Action::UserView)?;
     ctx.verify_privilege(Action::UserList)?;
 
     let offset = page.offset.unwrap_or(0);
@@ -165,27 +174,21 @@ async fn get(
         .await
 }
 
-async fn create_impl(
-    Ctx(ctx, connection_pool): Ctx,
-    params: ResourceParams<Field>,
-    body: UserCreateBody,
-) -> ApiResult<Json<UserInfo>> {
+async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBody) -> ApiResult<Json<UserInfo>> {
     if body.rank == Some(UserRank::Anonymous) {
         return Err(ApiError::InvalidUserRank);
     }
+    ctx.verify_privilege(Action::UserCreateSelf)?;
 
     let creating_self = ctx.client.id.is_none();
-    let action = if creating_self {
-        Action::UserCreateSelf
-    } else {
-        Action::UserCreateAny
-    };
+    if !creating_self {
+        ctx.verify_privilege(Action::UserCreateAny)?;
+    }
 
-    ctx.verify_privilege(action)?;
     if let Some(rank) = body.rank
         && rank > ctx.config.default_rank()
     {
-        api::verify_privilege(ctx.client, rank)?;
+        verify_rank(ctx.client, rank)?;
     }
 
     api::verify_matches_regex(&ctx.config, &body.name, RegexType::Username)?;
@@ -197,13 +200,14 @@ async fn create_impl(
 
     let avatar_style = body.avatar_style.unwrap_or_default();
     let custom_avatar = match Content::new(body.avatar_token, body.avatar_url) {
-        Some(content) => Some(content.thumbnail(&ctx.config, ThumbnailType::Avatar).await?),
+        Some(content) => Some(content.thumbnail(&ctx, ThumbnailType::Avatar).await?),
         None if avatar_style == AvatarStyle::Manual => {
             return Err(ApiError::MissingContent(ResourceType::User));
         }
         None => None,
     };
 
+    let Ctx(ctx, connection_pool) = ctx;
     let user = connection_pool
         .transaction({
             let ctx = ctx.clone();
@@ -336,19 +340,20 @@ async fn create(
 }
 
 async fn update_impl(
-    Ctx(ctx, connection_pool): Ctx,
+    ctx: Ctx,
     username: SmallString,
     params: ResourceParams<Field>,
     body: UserUpdateBody,
 ) -> ApiResult<Json<UserInfo>> {
     let custom_avatar = match Content::new(body.avatar_token, body.avatar_url) {
-        Some(content) => Some(content.thumbnail(&ctx.config, ThumbnailType::Avatar).await?),
+        Some(content) => Some(content.thumbnail(&ctx, ThumbnailType::Avatar).await?),
         None if body.avatar_style == Some(AvatarStyle::Manual) => {
             return Err(ApiError::MissingContent(ResourceType::User));
         }
         None => None,
     };
 
+    let Ctx(ctx, connection_pool) = ctx;
     let (user_id, visibility) = connection_pool
         .transaction({
             let ctx = ctx.clone();
@@ -369,12 +374,10 @@ async fn update_impl(
                 };
 
                 if let Some(password) = body.password {
-                    let action = if editing_self {
-                        Action::UserEditSelfPass
-                    } else {
-                        Action::UserEditAnyPass
-                    };
-                    ctx.verify_privilege(action)?;
+                    ctx.verify_privilege(Action::UserEditSelfPass)?;
+                    if !editing_self {
+                        ctx.verify_privilege(Action::UserEditAnyPass)?;
+                    }
                     api::verify_matches_regex(&ctx.config, &password, RegexType::Password)?;
 
                     let salt = SaltString::generate(&mut OsRng);
@@ -384,12 +387,10 @@ async fn update_impl(
                         .execute(conn)?;
                 }
                 if let Some(email) = body.email {
-                    let action = if editing_self {
-                        Action::UserEditSelfEmail
-                    } else {
-                        Action::UserEditAnyEmail
-                    };
-                    ctx.verify_privilege(action)?;
+                    ctx.verify_privilege(Action::UserEditSelfEmail)?;
+                    if !editing_self {
+                        ctx.verify_privilege(Action::UserEditAnyEmail)?;
+                    }
                     api::verify_valid_email(email.as_deref())?;
 
                     let update_result = diesel::update(user::table.find(user_id))
@@ -402,14 +403,12 @@ async fn update_impl(
                         return Err(ApiError::InvalidUserRank);
                     }
 
-                    let action = if editing_self {
-                        Action::UserEditSelfRank
-                    } else {
-                        Action::UserEditAnyRank
-                    };
-                    ctx.verify_privilege(action)?;
+                    ctx.verify_privilege(Action::UserEditSelfRank)?;
+                    if !editing_self {
+                        ctx.verify_privilege(Action::UserEditAnyRank)?;
+                    }
                     if rank > ctx.config.default_rank() {
-                        api::verify_privilege(ctx.client, rank)?;
+                        verify_rank(ctx.client, rank)?;
                     }
 
                     diesel::update(user::table.find(user_id))
@@ -417,34 +416,28 @@ async fn update_impl(
                         .execute(conn)?;
                 }
                 if let Some(avatar_style) = body.avatar_style {
-                    let action = if editing_self {
-                        Action::UserEditSelfAvatar
-                    } else {
-                        Action::UserEditAnyAvatar
-                    };
-                    ctx.verify_privilege(action)?;
+                    ctx.verify_privilege(Action::UserEditSelfAvatar)?;
+                    if !editing_self {
+                        ctx.verify_privilege(Action::UserEditAnyAvatar)?;
+                    }
 
                     diesel::update(user::table.find(user_id))
                         .set(user::avatar_style.eq(avatar_style))
                         .execute(conn)?;
                 }
                 if let Some(avatar) = custom_avatar {
-                    let action = if editing_self {
-                        Action::UserEditSelfAvatar
-                    } else {
-                        Action::UserEditAnyAvatar
-                    };
-                    ctx.verify_privilege(action)?;
+                    ctx.verify_privilege(Action::UserEditSelfAvatar)?;
+                    if !editing_self {
+                        ctx.verify_privilege(Action::UserEditAnyAvatar)?;
+                    }
 
                     update::user::avatar(conn, &ctx.config, user_id, &username, avatar)?;
                 }
                 if let Some(new_name) = body.name.as_deref() {
-                    let action = if editing_self {
-                        Action::UserEditSelfName
-                    } else {
-                        Action::UserEditAnyName
-                    };
-                    ctx.verify_privilege(action)?;
+                    ctx.verify_privilege(Action::UserEditSelfName)?;
+                    if !editing_self {
+                        ctx.verify_privilege(Action::UserEditAnyName)?;
+                    }
                     api::verify_matches_regex(&ctx.config, new_name, RegexType::Username)?;
 
                     // Update first to see if new name clashes with any existing names
@@ -537,6 +530,8 @@ async fn update(
     Query(params): Query<ResourceParams<Field>>,
     body: JsonOrMultipart<UserUpdateBody>,
 ) -> ApiResult<Json<UserInfo>> {
+    ctx.verify_privilege(Action::UserView)?;
+
     match body {
         JsonOrMultipart::Json(payload) => update_impl(ctx, username, params, payload).await,
         JsonOrMultipart::Multipart(payload) => {
@@ -584,12 +579,10 @@ async fn delete(
                 .ok_or(ApiError::NotFound(ResourceType::User))?;
             api::verify_version(user_version, *client_version)?;
 
-            let action = if ctx.client.id == Some(user_id) {
-                Action::UserDeleteSelf
-            } else {
-                Action::UserDeleteAny
-            };
-            ctx.verify_privilege(action)?;
+            ctx.verify_privilege(Action::UserDeleteSelf)?;
+            if ctx.client.id != Some(user_id) {
+                ctx.verify_privilege(Action::UserDeleteAny)?;
+            }
 
             diesel::delete(user::table.find(user_id)).execute(conn)?;
             Ok::<_, ApiError>(Json(()))
@@ -790,8 +783,40 @@ mod test {
         verify_response_with_user(UserRank::Regular, "POST /users", "user/create_higher_rank").await?;
         verify_response_with_user(UserRank::Regular, "PUT /user/restricted_user", "user/edit_higher_rank").await?;
 
-        reset_sequence(ResourceType::User)?;
-        Ok(())
+        reset_sequence(ResourceType::User)
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[parallel]
+    async fn unauthorized() -> ApiResult<()> {
+        const USER: UserRank = UserRank::Regular;
+        const SELF: &str = "regular_user";
+        const OTHER: &str = "restricted_user";
+
+        verify_response_with_user(USER, "GET /users?limit=1", "user/list_unauthorized").await?;
+        verify_response_with_user(USER, &format!("GET /user/{OTHER}"), "user/get_unauthorized").await?;
+        verify_response_with_user(UserRank::Anonymous, "POST /users", "user/create_self_unauthorized").await?;
+        verify_response_with_user(USER, "POST /users", "user/create_any_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit_own_name_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit_own_password_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit_own_email_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit_own_avatar_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{SELF}"), "user/edit_own_rank_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_any_name_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_any_password_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_any_email_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_any_avatar_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_any_rank_unauthorized").await?;
+        verify_response_with_user(USER, &format!("DELETE /user/{SELF}"), "user/delete_self_unauthorized").await?;
+        verify_response_with_user(USER, &format!("DELETE /user/{OTHER}"), "user/delete_any_unauthorized").await?;
+
+        // Ensure users can't get around lack of view privileges via other actions
+        verify_response_with_user(USER, "GET /users?limit=1", "user/list_view_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_view_unauthorized").await?;
+
+        // Ensure users can't download files from web without authorization
+        verify_response_with_user(USER, "POST /users", "user/create_download_avatar_unauthorized").await?;
+        verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit_download_avatar_unauthorized").await
     }
 
     #[tokio::test]

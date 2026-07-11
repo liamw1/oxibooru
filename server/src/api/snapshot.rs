@@ -74,3 +74,18 @@ async fn list(
         })
         .await
 }
+
+#[cfg(test)]
+mod test {
+    use crate::api::error::ApiResult;
+    use crate::model::enums::UserRank;
+    use crate::test::*;
+    use serial_test::parallel;
+
+    #[tokio::test]
+    #[parallel]
+    async fn unauthorized() -> ApiResult<()> {
+        const USER: UserRank = UserRank::Regular;
+        verify_response_with_user(USER, "GET /snapshots?limit=1", "snapshot/list_unauthorized").await
+    }
+}
