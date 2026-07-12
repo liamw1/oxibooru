@@ -18,6 +18,7 @@ pub struct Timer<'a> {
 }
 
 impl<'a> Timer<'a> {
+    #[must_use]
     pub fn new(name: &'a str) -> Self {
         Self {
             name,
@@ -30,7 +31,7 @@ impl Drop for Timer<'_> {
     fn drop(&mut self) {
         let elapsed_time = self.start.elapsed();
         let time_in_s = elapsed_time.as_secs_f64();
-        match elapsed_time.as_nanos().ilog10() {
+        match elapsed_time.as_nanos().checked_ilog10().unwrap_or(0) {
             0..3 => info!("{} took {:.1}ns", self.name, time_in_s * 1e9),
             3..6 => info!("{} took {:.3}μs", self.name, time_in_s * 1e6),
             6..9 => info!("{} took {:.3}ms", self.name, time_in_s * 1e3),
@@ -54,11 +55,11 @@ impl DateTime {
         OffsetDateTime::now_utc().into()
     }
 
-    pub fn today() -> Self {
+    pub fn today_utc() -> Self {
         Self::now().date().midnight().assume_utc().into()
     }
 
-    pub fn yesterday() -> Self {
+    pub fn yesterday_utc() -> Self {
         Self::now()
             .date()
             .previous_day()
@@ -68,7 +69,7 @@ impl DateTime {
             .into()
     }
 
-    pub fn tomorrow() -> Self {
+    pub fn tomorrow_utc() -> Self {
         Self::now()
             .date()
             .next_day()

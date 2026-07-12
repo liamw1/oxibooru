@@ -202,9 +202,9 @@ fn parse_regular_str(filter: &str) -> Condition<String> {
 fn parse_time(time: &str) -> Result<Range<DateTime>, TimeParsingError> {
     // Handle special cases
     if time == "today" {
-        return Ok(DateTime::today()..DateTime::tomorrow());
+        return Ok(DateTime::today_utc()..DateTime::tomorrow_utc());
     } else if time == "yesterday" {
-        return Ok(DateTime::yesterday()..DateTime::today());
+        return Ok(DateTime::yesterday_utc()..DateTime::today_utc());
     }
 
     let mut date_iterator = time.split('-');

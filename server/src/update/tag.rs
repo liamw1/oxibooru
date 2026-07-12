@@ -133,7 +133,7 @@ pub fn get_or_create_tags(
     // Gather names that are case-fold distinct from existing names in database.
     // We use a query here because CITEXT semantics differ from comparing
     // `str::to_lowercased`-ed strings in certain cases.
-    let new_names: Vec<SmallString> = diesel::sql_query(
+    let new_names: Vec<_> = diesel::sql_query(
         "SELECT DISTINCT ON (unnest::CITEXT) unnest AS name
         FROM unnest($1::text[]) WITH ORDINALITY
         WHERE NOT EXISTS (
@@ -141,7 +141,7 @@ pub fn get_or_create_tags(
         )
         ORDER BY unnest::CITEXT, ordinality",
     )
-    .bind::<Array<Text>, _>(&names)
+    .bind::<Array<Text>, _>(names)
     .load::<NewName>(conn)?
     .into_iter()
     .map(|row| row.name)
