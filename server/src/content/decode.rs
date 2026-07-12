@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use swf::Tag;
-use tracing::error;
+use tracing::{error, warn};
 
 /// Returns a representative image for the given content.
 /// For images, this is simply the decoded image.
@@ -143,13 +143,21 @@ fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicIma
     Ok(None)
 }
 
-/// Search swf tags for the largest decodable image
+/// Decodes a representative frame of the flash file at the given `path`.
 fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> {
+    // First try feeding to FFmpeg for a representative frame
+    match ffmpeg_frame(path, PostType::Flash) {
+        Ok(Some(frame)) => return Ok(Some(frame)),
+        Ok(None) => warn!("FFmpeg gave no image output for flash file, falling back to parsing flash tags..."),
+        Err(err) => error!("Failed to extract thumbnail with FFmpeg: {err}"),
+    };
+
     let file = File::open(path)?;
     let reader = BufReader::new(file);
     let swf_buf = swf::decompress_swf(reader)?;
     let swf = swf::parse_swf(&swf_buf)?;
 
+    // If FFmpeg fails to output an image, manually search flash tags for a decodable image
     let encoding_table = swf
         .tags
         .iter()
@@ -161,7 +169,7 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
             }
         })
         .copied();
-    let mut images: Vec<_> = swf
+    let image_iter = swf
         .tags
         .iter()
         .filter_map(|tag| match tag {
@@ -177,31 +185,26 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
         .filter_map(|image_result| match image_result {
             Ok(image) => Some(image),
             Err(err) => {
-                error!("Failure to decode flash image for reason: {err}");
+                error!("Failure to decode flash image: {err}");
                 None
             }
-        })
-        .collect();
+        });
 
-    // Some Flash files only have video frames, which are hard to decode.
-    // So, we feed to ffmpeg and see if it can decode a representaive frame.
-    if let Ok(Some(frame)) = ffmpeg_frame(path, PostType::Flash) {
-        images.push(frame);
-    }
-
-    // Sort images in order of decreasing effective width after cropping for thumbnails
-    images.sort_by_key(|image| {
-        let (thumbnail_width, thumbnail_height) = config.thumbnails.post_dimensions();
+    // Find image with largest effective width after cropping for thumbnails
+    Ok(image_iter.max_by_key(|image| {
+        // Convert values to `u64` to avoid overflow.
+        let thumbnail_width = u64::from(config.thumbnails.post_width);
+        let thumbnail_height = u64::from(config.thumbnails.post_height);
+        let image_width = u64::from(image.width());
+        let image_height = u64::from(image.height());
 
         // Condition is equivalent to image_aspect_ratio > config_thumbnail_aspect_ratio
-        let effective_width = if image.width() * thumbnail_height > thumbnail_width * image.height() {
-            image.height() * thumbnail_width / thumbnail_height
+        if image_width * thumbnail_height > thumbnail_width * image_height {
+            image_height * thumbnail_width / thumbnail_height
         } else {
-            image.width()
-        };
-        u32::MAX - effective_width
-    });
-    Ok(images.into_iter().next())
+            image_width
+        }
+    }))
 }
 
 /// Uses `FFmpeg` to determine if a file contains multiple frames
