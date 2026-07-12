@@ -30,8 +30,8 @@ pub enum Content {
 }
 
 impl Content {
-    /// Constructs a new [`Content`] from either an in-memory `direct_upload`, a `token` which represents
-    /// a file in the temporary uploads directory, or a URL to download the content from.
+    /// Constructs a new [`Content`] from either a `token` which represents a file in the
+    /// temporary uploads directory or a URL to download the content from.
     ///
     /// If multiple ways of retrieving content are given, the method of retrieving the content will
     /// be the first argument that is not [`None`].
@@ -52,27 +52,26 @@ impl Content {
     }
 
     /// Computes thumbnail for uploaded content.
-    pub async fn thumbnail(self, ctx: &Ctx, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
-        let token = self.save(ctx).await?;
+    pub async fn thumbnail(self, ctx: Ctx, thumbnail_type: ThumbnailType) -> ApiResult<DynamicImage> {
+        let token = self.save(&ctx).await?;
         let temp_path = token.path(&ctx.config);
-        tokio::task::block_in_place({
-            || {
-                decode::representative_image(&ctx.config, &temp_path, token.mime_type())
-                    .map(|image| thumbnail::create(&ctx.config, &image, thumbnail_type))
-            }
+        tokio::task::spawn_blocking(move || {
+            decode::representative_image(&ctx.config, &temp_path, token.mime_type())
+                .map(|image| thumbnail::create(&ctx.config, &image, thumbnail_type))
         })
+        .await?
     }
 
     /// Computes properties for uploaded content.
-    pub async fn compute_properties(self, ctx: &Ctx) -> ApiResult<CachedProperties> {
-        let token = self.save(ctx).await?;
-        tokio::task::block_in_place(|| cache::compute_properties(ctx, token))
+    pub async fn compute_properties(self, ctx: Ctx) -> ApiResult<CachedProperties> {
+        let token = self.save(&ctx).await?;
+        tokio::task::spawn_blocking(move || cache::compute_properties(&ctx, token)).await?
     }
 
     /// Retrieves content properties from cache or computes them if not present in cache.
-    pub async fn remove_or_compute_properties(self, ctx: &Ctx) -> ApiResult<CachedProperties> {
-        let token = self.save(ctx).await?;
-        tokio::task::block_in_place(|| cache::remove_or_compute_properties(ctx, token))
+    pub async fn remove_or_compute_properties(self, ctx: Ctx) -> ApiResult<CachedProperties> {
+        let token = self.save(&ctx).await?;
+        tokio::task::spawn_blocking(move || cache::remove_or_compute_properties(&ctx, token)).await?
     }
 }
 

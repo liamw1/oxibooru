@@ -200,7 +200,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
 
     let avatar_style = body.avatar_style.unwrap_or_default();
     let custom_avatar = match Content::new(body.avatar_token, body.avatar_url) {
-        Some(content) => Some(content.thumbnail(&ctx, ThumbnailType::Avatar).await?),
+        Some(content) => Some(content.thumbnail(ctx.clone(), ThumbnailType::Avatar).await?),
         None if avatar_style == AvatarStyle::Manual => {
             return Err(ApiError::MissingContent(ResourceType::User));
         }
@@ -346,7 +346,7 @@ async fn update_impl(
     body: UserUpdateBody,
 ) -> ApiResult<Json<UserInfo>> {
     let custom_avatar = match Content::new(body.avatar_token, body.avatar_url) {
-        Some(content) => Some(content.thumbnail(&ctx, ThumbnailType::Avatar).await?),
+        Some(content) => Some(content.thumbnail(ctx.clone(), ThumbnailType::Avatar).await?),
         None if body.avatar_style == Some(AvatarStyle::Manual) => {
             return Err(ApiError::MissingContent(ResourceType::User));
         }
@@ -749,7 +749,7 @@ mod test {
         Ok(())
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[tokio::test]
     #[parallel]
     async fn error() -> ApiResult<()> {
         verify_response("GET /user/fake_user", "user/get/nonexistent").await?;
@@ -783,7 +783,7 @@ mod test {
         reset_sequence(ResourceType::User)
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[tokio::test]
     #[parallel]
     async fn unauthorized() -> ApiResult<()> {
         const USER: UserRank = UserRank::Regular;
@@ -816,7 +816,7 @@ mod test {
         verify_response_with_user(USER, &format!("PUT /user/{OTHER}"), "user/edit/download_avatar_unauthorized").await
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[tokio::test]
     #[serial]
     async fn percent_encoding_edge_cases() -> ApiResult<()> {
         // Create a user that requires percent encoding on avatar path
@@ -842,7 +842,7 @@ mod test {
         verify_response("PUT /user/regular_user", "user/edit/malicious_avatar_token").await
     }
 
-    #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+    #[tokio::test]
     #[serial]
     async fn malicious_username() -> ApiResult<()> {
         // Place a file outside of the temporary uploads directory

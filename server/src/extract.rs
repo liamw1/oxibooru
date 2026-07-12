@@ -16,6 +16,7 @@ use serde::Serialize;
 use std::ops::Deref;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub struct Ctx(pub Context, pub Arc<AsyncConnectionPool>);
 
 impl Deref for Ctx {
