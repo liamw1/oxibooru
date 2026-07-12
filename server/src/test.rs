@@ -4,7 +4,7 @@ use crate::app::AppState;
 use crate::auth::header;
 use crate::config::Config;
 use crate::content::hash::{Checksum, Md5Checksum, PostHash};
-use crate::content::{decode, signature};
+use crate::content::{decode, download, signature};
 use crate::db::Connection;
 use crate::filesystem::Directory;
 use crate::model::comment::{NewComment, NewCommentScore};
@@ -491,7 +491,9 @@ fn recreate_database() -> AdminResult<AppState> {
 
     let mut conn = test_connection_pool.get_blocking()?;
     populate_database(&mut conn, &test_config)?;
-    Ok(AppState::new(test_connection_pool, Arc::new(test_config)))
+
+    let downloader = download::create_client().expect("Must be able to create downloader client");
+    Ok(AppState::new(downloader, test_connection_pool, Arc::new(test_config)))
 }
 
 const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRank) -> NewUser<'static> {

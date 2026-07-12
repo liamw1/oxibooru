@@ -35,6 +35,7 @@ impl AsMut<PgConnection> for AsyncConnection {
     }
 }
 
+#[derive(Clone)]
 pub struct AsyncConnectionPool {
     pool: Pool<ConnectionManager<PgConnection>>,
     semaphore: Arc<Semaphore>,
@@ -78,7 +79,7 @@ impl AsyncConnectionPool {
 }
 
 /// Creates a connection pool to the database.
-pub fn create_connection_pool(config: Arc<Config>) -> AsyncConnectionPool {
+pub fn create_connection_pool(config: Arc<Config>) -> Result<AsyncConnectionPool, PoolError> {
     if cfg!(test) {
         panic!("Connection to production database disallowed in test build!")
     } else {
@@ -86,16 +87,15 @@ pub fn create_connection_pool(config: Arc<Config>) -> AsyncConnectionPool {
             tokio::runtime::Handle::try_current().map_or(1, |handle| handle.metrics().num_workers());
         let max_conns = std::cmp::max(num_tokio_threads, app::num_rayon_threads()) + 1;
 
-        let pool = Pool::builder()
+        let semaphore = Arc::new(Semaphore::new(max_conns));
+        Pool::builder()
             .max_size(u32::try_from(max_conns).expect("Number of connections will never be greater than u32::MAX"))
             .max_lifetime(None)
             .idle_timeout(None)
             .test_on_check_out(true)
             .connection_customizer(Box::new(ConnectionInitialzier { config }))
             .build(ConnectionManager::new(config::database_url(None)))
-            .expect("Connection pool must be constructible");
-        let semaphore = Arc::new(Semaphore::new(max_conns));
-        AsyncConnectionPool { pool, semaphore }
+            .map(|pool| AsyncConnectionPool { pool, semaphore })
     }
 }
 

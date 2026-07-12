@@ -7,8 +7,10 @@ use crate::db::AsyncConnectionPool;
 use crate::extract::Ctx;
 use crate::{admin, api, config, db, filesystem};
 use axum::Router;
+use reqwest::Client as HttpClient;
 use std::borrow::ToOwned;
 use std::error::Error;
+use std::fmt::Display;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use tokio::net::TcpListener;
 use tokio::runtime::Handle;
@@ -16,7 +18,7 @@ use tokio::runtime::Handle;
 use tokio::signal::unix::SignalKind;
 use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
@@ -25,17 +27,19 @@ use utoipa_swagger_ui::SwaggerUi;
 #[derive(Clone)]
 pub struct AppState {
     pub config: Arc<Config>,
-    pub connection_pool: Arc<AsyncConnectionPool>,
+    pub downloader: HttpClient,
+    pub connection_pool: AsyncConnectionPool,
     pub content_cache: Arc<Mutex<RingCache>>,
 }
 
 impl AppState {
-    pub fn new(connection_pool: AsyncConnectionPool, config: Arc<Config>) -> Self {
+    pub fn new(downloader: HttpClient, connection_pool: AsyncConnectionPool, config: Arc<Config>) -> Self {
         /// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
         const CONTENT_CACHE_SIZE: usize = 10;
         Self {
             config,
-            connection_pool: Arc::new(connection_pool),
+            downloader,
+            connection_pool,
             content_cache: Arc::new(Mutex::new(RingCache::new(CONTENT_CACHE_SIZE))),
         }
     }
@@ -45,6 +49,7 @@ impl AppState {
             Context {
                 client,
                 config: self.config,
+                downloader: self.downloader,
                 content_cache: self.content_cache,
             },
             self.connection_pool,
@@ -54,8 +59,9 @@ impl AppState {
 
 #[derive(Clone)]
 pub struct Context {
-    pub client: Client,
     pub config: Arc<Config>,
+    pub client: Client,
+    pub downloader: HttpClient,
     pub content_cache: Arc<Mutex<RingCache>>,
 }
 
@@ -146,6 +152,11 @@ pub async fn run(state: AppState) -> std::io::Result<()> {
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
+}
+
+pub fn shutdown<E: Display>(message: &str, error: E) -> ! {
+    error!("{message}. Details:\n{error}");
+    std::process::exit(1)
 }
 
 async fn shutdown_signal() {

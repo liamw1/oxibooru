@@ -14,10 +14,9 @@ use axum::response::{IntoResponse, Response};
 use mime::{APPLICATION, FORM_DATA, JSON, MULTIPART};
 use serde::Serialize;
 use std::ops::Deref;
-use std::sync::Arc;
 
 #[derive(Clone)]
-pub struct Ctx(pub Context, pub Arc<AsyncConnectionPool>);
+pub struct Ctx(pub Context, pub AsyncConnectionPool);
 
 impl Deref for Ctx {
     type Target = Context;

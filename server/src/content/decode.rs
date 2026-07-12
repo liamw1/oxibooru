@@ -39,7 +39,7 @@ pub fn video_has_audio(path: &Path) -> ApiResult<bool> {
     let mut process = FfmpegSubprocess::new(path, ["-c", "copy", "-t", "0", "-f", "null", "-"])?;
 
     let mut errors = Vec::new();
-    for event in process.iter()? {
+    for event in process.events()? {
         match event {
             FfmpegEvent::ParsedInputStream(stream) if stream.is_audio() => return Ok(true),
             FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => errors.push(err),
@@ -93,7 +93,7 @@ pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<Post
 const FFMPEG_PATH: &str = "/opt/app/ffmpeg";
 const ERROR_SEPARATOR: &str = "; ";
 
-/// RAII guard that kills the FFmpeg subprocess when dropped.
+/// RAII guard that kills the `FFmpeg` subprocess when dropped.
 struct FfmpegSubprocess(FfmpegChild);
 
 impl FfmpegSubprocess {
@@ -107,7 +107,7 @@ impl FfmpegSubprocess {
             .map(Self)
     }
 
-    fn iter(&mut self) -> ApiResult<FfmpegIterator> {
+    fn events(&mut self) -> ApiResult<FfmpegIterator> {
         self.0
             .iter()
             .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))
@@ -144,7 +144,7 @@ fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicIma
     let mut process = FfmpegSubprocess::new(path, ["-vf", filter, "-frames:v", "1", "-f", "rawvideo", "-"])?;
 
     let mut errors = Vec::new();
-    for event in process.iter()? {
+    for event in process.events()? {
         match event {
             FfmpegEvent::OutputFrame(f) => {
                 let buffer_len = f.data.len();
@@ -174,7 +174,7 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
         Ok(Some(frame)) => return Ok(Some(frame)),
         Ok(None) => warn!("FFmpeg gave no image output for flash file, falling back to parsing flash tags..."),
         Err(err) => error!("Failed to extract thumbnail with FFmpeg: {err}"),
-    };
+    }
 
     let file = File::open(path)?;
     let reader = BufReader::new(file);
@@ -235,7 +235,7 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
 fn avif_is_animated(path: &Path) -> ApiResult<bool> {
     let mut process = FfmpegSubprocess::new(path, [])?;
     let video_stream_count = process
-        .iter()?
+        .events()?
         .filter(|event| matches!(event, FfmpegEvent::ParsedInputStream(stream) if stream.is_video()))
         .count();
 
@@ -259,7 +259,7 @@ fn avif_is_animated(path: &Path) -> ApiResult<bool> {
         )?;
 
         let mut frames = 0;
-        for event in process.iter()? {
+        for event in process.events()? {
             match event {
                 FfmpegEvent::OutputFrame(_) => frames += 1,
                 FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => errors.push(err),
