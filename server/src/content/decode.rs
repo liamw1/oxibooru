@@ -282,9 +282,11 @@ fn webp_is_animated(path: &Path) -> ApiResult<bool> {
 
 /// Returns maximum decoded image size.
 fn image_reader_limits() -> Limits {
-    const GB: u64 = 1024_u64.pow(3);
+    const MB: u64 = 1024_u64.pow(2);
 
     let mut limits = Limits::no_limits();
-    limits.max_alloc = Some(4 * GB);
+    limits.max_alloc = Some(256 * MB);
+    limits.max_image_width = Some(16384);
+    limits.max_image_height = Some(16384);
     limits
 }
