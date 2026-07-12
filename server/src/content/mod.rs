@@ -70,9 +70,9 @@ impl Content {
     }
 
     /// Retrieves content properties from cache or computes them if not present in cache.
-    pub async fn get_or_compute_properties(self, ctx: &Ctx) -> ApiResult<CachedProperties> {
+    pub async fn remove_or_compute_properties(self, ctx: &Ctx) -> ApiResult<CachedProperties> {
         let token = self.save(ctx).await?;
-        tokio::task::block_in_place(|| cache::get_or_compute_properties(ctx, token))
+        tokio::task::block_in_place(|| cache::remove_or_compute_properties(ctx, token))
     }
 }
 

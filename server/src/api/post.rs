@@ -613,7 +613,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
 
     let content =
         Content::new(body.content_token, body.content_url).ok_or(ApiError::MissingContent(ResourceType::Post))?;
-    let content_properties = content.get_or_compute_properties(&ctx).await?;
+    let content_properties = content.remove_or_compute_properties(&ctx).await?;
 
     let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
         Some(content) => Some(content.thumbnail(&ctx, ThumbnailType::Post).await?),
@@ -963,7 +963,7 @@ async fn update_impl(
     body: PostUpdateBody,
 ) -> ApiResult<Json<PostInfo>> {
     let new_content = match Content::new(body.content_token, body.content_url) {
-        Some(content) => Some(content.get_or_compute_properties(&ctx).await?),
+        Some(content) => Some(content.remove_or_compute_properties(&ctx).await?),
         None => None,
     };
 

@@ -69,7 +69,7 @@ pub fn compute_properties(ctx: &Ctx, content_token: UploadToken) -> ApiResult<Ca
 }
 
 /// Returns cached properties of content or computes them if not in cache.
-pub fn get_or_compute_properties(ctx: &Ctx, content_token: UploadToken) -> ApiResult<CachedProperties> {
+pub fn remove_or_compute_properties(ctx: &Ctx, content_token: UploadToken) -> ApiResult<CachedProperties> {
     let maybe_properties = ctx.get_content_cache().remove(&content_token);
     match maybe_properties {
         Some(properties) => Ok(properties),
