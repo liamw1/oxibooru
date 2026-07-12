@@ -2,8 +2,10 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
 use crate::content::{self, flash};
 use crate::model::enums::{MimeType, PostType};
+use ffmpeg_sidecar::child::FfmpegChild;
 use ffmpeg_sidecar::command::FfmpegCommand;
 use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
+use ffmpeg_sidecar::iter::FfmpegIterator;
 use image::codecs::{gif::GifDecoder, webp::WebPDecoder};
 use image::{AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits, RgbImage, RgbaImage};
 use std::fs::File;
@@ -34,16 +36,10 @@ pub fn representative_image(config: &Config, file_path: &Path, mime_type: MimeTy
 
 /// Returns if the video at `path` has an audio channel.
 pub fn video_has_audio(path: &Path) -> ApiResult<bool> {
-    let path_str = path.to_string_lossy();
-    let iter = FfmpegCommand::new_with_path(FFMPEG_PATH)
-        .input(path_str)
-        .args(["-c", "copy", "-t", "0", "-f", "null", "-"])
-        .spawn()?
-        .iter()
-        .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
+    let mut process = FfmpegSubprocess::new(path, ["-c", "copy", "-t", "0", "-f", "null", "-"])?;
 
     let mut errors = Vec::new();
-    for event in iter {
+    for event in process.iter()? {
         match event {
             FfmpegEvent::ParsedInputStream(stream) if stream.is_audio() => return Ok(true),
             FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => errors.push(err),
@@ -97,6 +93,35 @@ pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<Post
 const FFMPEG_PATH: &str = "/opt/app/ffmpeg";
 const ERROR_SEPARATOR: &str = "; ";
 
+/// RAII guard that kills the FFmpeg subprocess when dropped.
+struct FfmpegSubprocess(FfmpegChild);
+
+impl FfmpegSubprocess {
+    fn new<const N: usize>(input: &Path, args: [&str; N]) -> std::io::Result<Self> {
+        // Lossy conversion is fine here since filenames are ASCII upload tokens
+        let input_str = input.to_string_lossy();
+        FfmpegCommand::new_with_path(FFMPEG_PATH)
+            .input(&input_str)
+            .args(args)
+            .spawn()
+            .map(Self)
+    }
+
+    fn iter(&mut self) -> ApiResult<FfmpegIterator> {
+        self.0
+            .iter()
+            .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))
+    }
+}
+
+impl Drop for FfmpegSubprocess {
+    fn drop(&mut self) {
+        // Ignore errors as the process may have already exited
+        self.0.kill().ok();
+        self.0.wait().ok();
+    }
+}
+
 /// Decodes a raw array of bytes into pixel data.
 fn image(file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
     let file = content::map_read_result(File::open(file_path))?;
@@ -116,16 +141,10 @@ fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicIma
         "format=rgba"
     };
 
-    let path_str = path.to_string_lossy();
-    let iter = FfmpegCommand::new_with_path(FFMPEG_PATH)
-        .input(&path_str)
-        .args(["-vf", filter, "-frames:v", "1", "-f", "rawvideo", "-"])
-        .spawn()?
-        .iter()
-        .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
+    let mut process = FfmpegSubprocess::new(path, ["-vf", filter, "-frames:v", "1", "-f", "rawvideo", "-"])?;
 
     let mut errors = Vec::new();
-    for event in iter {
+    for event in process.iter()? {
         match event {
             FfmpegEvent::OutputFrame(f) => {
                 let buffer_len = f.data.len();
@@ -214,34 +233,33 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
 
 /// Uses `FFmpeg` to determine if a file contains multiple frames
 fn avif_is_animated(path: &Path) -> ApiResult<bool> {
-    let path_str = path.to_string_lossy();
-    let video_stream_count = FfmpegCommand::new_with_path(FFMPEG_PATH)
-        .input(&path_str)
-        .spawn()?
-        .iter()
-        .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?
+    let mut process = FfmpegSubprocess::new(path, [])?;
+    let video_stream_count = process
+        .iter()?
         .filter(|event| matches!(event, FfmpegEvent::ParsedInputStream(stream) if stream.is_video()))
         .count();
 
     let mut errors = Vec::new();
     for stream_index in 0..video_stream_count {
-        let iter = FfmpegCommand::new_with_path(FFMPEG_PATH)
-            .input(&path_str)
-            .args([
+        let mut process = FfmpegSubprocess::new(
+            path,
+            [
                 "-map",
                 &format!("0:v:{stream_index}"),
                 "-frames:v",
                 "2",
                 "-vf",
                 "scale=1:1:flags=neighbor",
-            ])
-            .rawvideo()
-            .spawn()?
-            .iter()
-            .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
+                "-pix_fmt",
+                "rgb24",
+                "-f",
+                "rawvideo",
+                "-",
+            ],
+        )?;
 
         let mut frames = 0;
-        for event in iter {
+        for event in process.iter()? {
             match event {
                 FfmpegEvent::OutputFrame(_) => frames += 1,
                 FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => errors.push(err),
