@@ -29,7 +29,7 @@ pub struct CachedProperties {
 
 /// A simple ring buffer that stores [`CachedProperties`].
 pub struct RingCache {
-    data: VecDeque<(UploadToken, CachedProperties)>,
+    data: VecDeque<CachedProperties>,
     max_size: usize,
 }
 
@@ -41,8 +41,8 @@ impl RingCache {
         }
     }
 
-    fn insert(&mut self, key: UploadToken, value: CachedProperties) {
-        self.data.push_back((key, value));
+    fn insert(&mut self, value: CachedProperties) {
+        self.data.push_back(value);
         if self.data.len() > self.max_size {
             self.data.pop_front();
         }
@@ -51,21 +51,19 @@ impl RingCache {
     fn remove(&mut self, key: &UploadToken) -> Option<CachedProperties> {
         self.data
             .iter()
-            .position(|(cache_key, _)| cache_key == key)
+            .position(|value| &value.token == key)
             .and_then(|pos| self.data.remove(pos))
-            .map(|(_, cache_value)| cache_value)
     }
 }
 
 /// Computes content properties and caches them in memory.
 pub fn compute_properties(ctx: &Ctx, content_token: UploadToken) -> ApiResult<CachedProperties> {
-    let properties = compute_properties_no_cache(ctx, content_token.clone())?;
+    let properties = compute_properties_no_cache(ctx, content_token)?;
 
-    // Clone this here to make sure we aren't holding onto lock for longer than necessary
     let properties_copy = properties.clone();
-    ctx.get_content_cache().insert(content_token, properties_copy);
+    ctx.get_content_cache().insert(properties);
 
-    Ok(properties)
+    Ok(properties_copy)
 }
 
 /// Returns cached properties of content or computes them if not in cache.
