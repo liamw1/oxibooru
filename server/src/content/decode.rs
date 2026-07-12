@@ -42,18 +42,19 @@ pub fn video_has_audio(path: &Path) -> ApiResult<bool> {
         .iter()
         .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
 
+    let mut errors = Vec::new();
     for event in iter {
         match event {
-            FfmpegEvent::ParsedInputStream(stream) if stream.is_audio() => {
-                return Ok(true);
-            }
-            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => {
-                return Err(ApiError::FfmpegError(err.into()));
-            }
+            FfmpegEvent::ParsedInputStream(stream) if stream.is_audio() => return Ok(true),
+            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => errors.push(err),
             _ => {}
         }
     }
-    Ok(false)
+    if errors.is_empty() {
+        Ok(true)
+    } else {
+        Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
+    }
 }
 
 /// Returns if the swf at `path` has audio.
@@ -94,6 +95,7 @@ pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<Post
 }
 
 const FFMPEG_PATH: &str = "/opt/app/ffmpeg";
+const ERROR_SEPARATOR: &str = "; ";
 
 /// Decodes a raw array of bytes into pixel data.
 fn image(file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
@@ -122,6 +124,7 @@ fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicIma
         .iter()
         .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))?;
 
+    let mut errors = Vec::new();
     for event in iter {
         match event {
             FfmpegEvent::OutputFrame(f) => {
@@ -134,13 +137,15 @@ fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicIma
                 .ok_or(ApiError::FrameBufferMismatch(f.width, f.height, buffer_len))?;
                 return Ok(Some(extracted_frame));
             }
-            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => {
-                return Err(ApiError::FfmpegError(err.into()));
-            }
+            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => errors.push(err),
             _ => {}
         }
     }
-    Ok(None)
+    if errors.is_empty() {
+        Ok(None)
+    } else {
+        Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
+    }
 }
 
 /// Decodes a representative frame of the flash file at the given `path`.
@@ -218,6 +223,7 @@ fn avif_is_animated(path: &Path) -> ApiResult<bool> {
         .filter(|event| matches!(event, FfmpegEvent::ParsedInputStream(stream) if stream.is_video()))
         .count();
 
+    let mut errors = Vec::new();
     for stream_index in 0..video_stream_count {
         let iter = FfmpegCommand::new_with_path(FFMPEG_PATH)
             .input(&path_str)
@@ -238,9 +244,7 @@ fn avif_is_animated(path: &Path) -> ApiResult<bool> {
         for event in iter {
             match event {
                 FfmpegEvent::OutputFrame(_) => frames += 1,
-                FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => {
-                    return Err(ApiError::FfmpegError(err.into()));
-                }
+                FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => errors.push(err),
                 _ => {}
             }
         }
@@ -248,7 +252,11 @@ fn avif_is_animated(path: &Path) -> ApiResult<bool> {
             return Ok(true);
         }
     }
-    Ok(false)
+    if errors.is_empty() {
+        Ok(false)
+    } else {
+        Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
+    }
 }
 
 fn gif_is_animated(path: &Path) -> ApiResult<bool> {
