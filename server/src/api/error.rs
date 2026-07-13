@@ -27,6 +27,8 @@ pub enum ApiError {
     CyclicDependency(ResourceType),
     #[error("Cannot delete default {0}")]
     DeleteDefault(ResourceType),
+    #[error("Downloaded content exceeds maximum allowed size")]
+    DownloadTooLarge,
     #[error("SWF has no decodable images")]
     EmptySwf,
     #[error("Video file has no frames")]
@@ -98,6 +100,7 @@ pub enum ApiError {
     #[error("Content-Type not supported")]
     UnsupportedContentType,
     UnsupportedExtension(#[from] crate::model::enums::ParseExtensionError),
+    UrlValidation(#[from] crate::content::download::UrlValidationError),
 }
 
 impl ApiError {
@@ -123,6 +126,7 @@ impl ApiError {
             Self::Hidden(_) | Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::AlreadyExists(_) | Self::ResourceModified => StatusCode::CONFLICT,
+            Self::DownloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::UnsupportedContentType | Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::CyclicDependency(_)
             | Self::DeleteDefault(_)
@@ -143,7 +147,8 @@ impl ApiError {
             | Self::NoNamesGiven(_)
             | Self::NotAnInteger(_)
             | Self::SelfMerge(_)
-            | Self::SwfDecoding(_) => StatusCode::UNPROCESSABLE_ENTITY,
+            | Self::SwfDecoding(_)
+            | Self::UrlValidation(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::FailedEmailTransport(_)
             | Self::FailedQuery(_)
             | Self::InvalidHeader(_)
@@ -169,6 +174,7 @@ impl ApiError {
             Self::ContentTypeMismatch(..) => "Content Type Mismatch",
             Self::CyclicDependency(_) => "Cyclic Dependency",
             Self::DeleteDefault(_) => "Delete Default",
+            Self::DownloadTooLarge => "Download Too Large",
             Self::EmptySwf => "Empty SWF",
             Self::EmptyVideo => "Empty Video",
             Self::ExpressionFailsRegex(..) => "Expression Fails Regex",
@@ -218,6 +224,7 @@ impl ApiError {
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
             Self::UnsupportedContentType => "Unsupported Content Type",
             Self::UnsupportedExtension(_) => "Unsupported extension",
+            Self::UrlValidation(_) => "URL Validation Error",
         }
     }
 

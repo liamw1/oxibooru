@@ -27,6 +27,7 @@ pub enum ErrorName {
     DimensionLimitsExceeded,
     DimensionMismatch,
     DirectoryNotEmpty,
+    DownloadTooLarge,
     DuplicatePost,
     EmailAddressInvalidDomain,
     EmailAddressInvalidInput,
@@ -205,6 +206,7 @@ pub enum ErrorName {
     UnsupportedFormat,
     UnsupportedImageDimensions,
     UnsupportedPathType,
+    UrlValidationError,
     UserEmailAlreadyExists,
     UserNameAlreadyExists,
     UsernamePasswordMismatch,
@@ -625,6 +627,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::ContentTypeMismatch(..) => ErrorName::ContentTypeMismatch,
             Self::CyclicDependency(_) => ErrorName::CyclicDependency,
             Self::DeleteDefault(_) => ErrorName::DeleteDefault,
+            Self::DownloadTooLarge => ErrorName::DownloadTooLarge,
             Self::EmptySwf => ErrorName::EmptySwf,
             Self::EmptyVideo => ErrorName::EmptyVideo,
             Self::ExpressionFailsRegex(..) => ErrorName::ExpressionFailsRegex,
@@ -674,6 +677,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::UnauthorizedPasswordReset => ErrorName::UnauthorizedPasswordReset,
             Self::UnsupportedContentType => ErrorName::UnsupportedContentType,
             Self::UnsupportedExtension(_) => ErrorName::UnsupportedExtension,
+            Self::UrlValidation(_) => ErrorName::UrlValidationError,
         }
     }
 }
