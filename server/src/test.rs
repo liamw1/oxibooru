@@ -343,8 +343,8 @@ const POSTS: &[NewPost] = &[
         safety: PostSafety::Safe,
         type_: PostType::Image,
         mime_type: MimeType::Jpeg,
-        checksum: Checksum::from_bytes(b"01"),
-        checksum_md5: Md5Checksum::from_bytes(b"01"),
+        checksum: Checksum::from_bytes_test(b"01"),
+        checksum_md5: Md5Checksum::from_bytes_test(b"01"),
         flags: PostFlags::new(),
         source: "starry_night.png",
         description: "0101100010",
@@ -357,8 +357,8 @@ const POSTS: &[NewPost] = &[
         safety: PostSafety::Sketchy,
         type_: PostType::Animation,
         mime_type: MimeType::Gif,
-        checksum: Checksum::from_bytes(b"02"),
-        checksum_md5: Md5Checksum::from_bytes(b"02"),
+        checksum: Checksum::from_bytes_test(b"02"),
+        checksum_md5: Md5Checksum::from_bytes_test(b"02"),
         flags: PostFlags::new(),
         source: "gif.gif",
         description: "",
@@ -371,8 +371,8 @@ const POSTS: &[NewPost] = &[
         safety: PostSafety::Safe,
         type_: PostType::Image,
         mime_type: MimeType::Bmp,
-        checksum: Checksum::from_bytes(b"03"),
-        checksum_md5: Md5Checksum::from_bytes(b"03"),
+        checksum: Checksum::from_bytes_test(b"03"),
+        checksum_md5: Md5Checksum::from_bytes_test(b"03"),
         flags: PostFlags::new(),
         source: "bmp.bmp",
         description: "",
@@ -385,8 +385,8 @@ const POSTS: &[NewPost] = &[
         safety: PostSafety::Safe,
         type_: PostType::Image,
         mime_type: MimeType::Png,
-        checksum: Checksum::from_bytes(b"04"),
-        checksum_md5: Md5Checksum::from_bytes(b"04"),
+        checksum: Checksum::from_bytes_test(b"04"),
+        checksum_md5: Md5Checksum::from_bytes_test(b"04"),
         flags: PostFlags::new(),
         source: "1_pixel.png",
         description: "description9000",
@@ -399,8 +399,8 @@ const POSTS: &[NewPost] = &[
         safety: PostSafety::Unsafe,
         type_: PostType::Video,
         mime_type: MimeType::Mp4,
-        checksum: Checksum::from_bytes(b"05"),
-        checksum_md5: Md5Checksum::from_bytes(b"05"),
+        checksum: Checksum::from_bytes_test(b"05"),
+        checksum_md5: Md5Checksum::from_bytes_test(b"05"),
         flags: PostFlags::new_with(PostFlag::Sound),
         source: "mp4.mp4",
         description: "descriptor",
@@ -600,9 +600,9 @@ fn create_pools(conn: &mut PgConnection) -> QueryResult<()> {
 
 fn create_posts(conn: &mut PgConnection, config: &Config) -> AdminResult<()> {
     for new_post in POSTS {
-        let (post_id, mime_type, source): (i64, MimeType, String) = new_post
+        let (post_id, mime_type, source, custom_thumbnail_size): (_, _, String, _) = new_post
             .insert_into(post::table)
-            .returning((post::id, post::mime_type, post::source))
+            .returning((post::id, post::mime_type, post::source, post::custom_thumbnail_size))
             .get_result(conn)?;
 
         // Simulate uploads
@@ -620,7 +620,7 @@ fn create_posts(conn: &mut PgConnection, config: &Config) -> AdminResult<()> {
             .values(post_signature)
             .execute(conn)?;
 
-        let post_hash = PostHash::new(config, post_id);
+        let post_hash = PostHash::new(config, post_id, Some(custom_thumbnail_size));
 
         let content_path = post_hash.content_path(mime_type);
         std::fs::create_dir_all(content_path.parent().unwrap_or(Path::new("")))?;

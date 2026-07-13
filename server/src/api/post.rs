@@ -651,7 +651,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
             .get_result(conn)
             .optional()?
             .ok_or(ApiError::AlreadyExists(ResourceProperty::PostContent))?;
-            let post_hash = PostHash::new(&ctx.config, post.id);
+            let post_hash = PostHash::new(&ctx.config, post.id, Some(post.custom_thumbnail_size));
 
             // Add tags, relations, and notes
             update::post::set_tags(conn, post.id, &tag_ids)?;
@@ -984,7 +984,7 @@ async fn update_impl(
             let old_mime_type = old_post.mime_type;
             api::verify_version(old_post.last_edit_time, body.version)?;
 
-            let post_hash = PostHash::new(&ctx.config, post_id);
+            let post_hash = PostHash::new(&ctx.config, post_id, Some(old_post.custom_thumbnail_size));
 
             let mut new_post = old_post.clone();
             let old_snapshot_data = SnapshotData::retrieve(conn, old_post)?;
@@ -1223,7 +1223,7 @@ async fn delete(
         _lock = ANTI_DEADLOCK_MUTEX.lock().await;
     }
 
-    let mime_type = connection_pool
+    let (mime_type, custom_thumbnail_size) = connection_pool
         .transaction(move |conn| {
             let post: Post = post::table
                 .find(post_id)
@@ -1233,15 +1233,17 @@ async fn delete(
             api::verify_version(post.last_edit_time, *client_version)?;
 
             let mime_type = post.mime_type;
+            let custom_thumbnail_size = post.custom_thumbnail_size;
             let post_data = SnapshotData::retrieve(conn, post)?;
             snapshot::post::deletion_snapshot(conn, ctx.client, post_id, post_data)?;
 
             diesel::delete(post::table.find(post_id)).execute(conn)?;
-            Ok::<_, ApiError>(mime_type)
+            Ok::<_, ApiError>((mime_type, custom_thumbnail_size))
         })
         .await?;
     if ctx.config.delete_source_files {
-        filesystem::delete_post(&PostHash::new(&ctx.config, post_id), mime_type)?;
+        let post_hash = PostHash::new(&ctx.config, post_id, Some(custom_thumbnail_size));
+        filesystem::delete_post(&post_hash, mime_type)?;
     }
     Ok(Json(()))
 }

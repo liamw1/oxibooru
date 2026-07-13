@@ -5,7 +5,6 @@ use crate::content::hash::{Checksum, PostHash};
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::{decode, hash, signature, thumbnail};
-use crate::model::enums::MimeType;
 use crate::model::post::{CompressedSignature, NewPostSignature};
 use crate::schema::{database_statistics, post, post_signature};
 use crate::search::Builder;
@@ -126,9 +125,9 @@ fn check_integrity_in_parallel(
     admin::is_cancelled()?;
 
     let mut conn = state.connection_pool.get_blocking()?;
-    let (mime_type, checksum): (MimeType, Checksum) = match post::table
+    let (mime_type, checksum, custom_thumbnail_size): (_, Checksum, _) = match post::table
         .find(post_id)
-        .select((post::mime_type, post::checksum))
+        .select((post::mime_type, post::checksum, post::custom_thumbnail_size))
         .first(&mut conn)
         .optional()
     {
@@ -140,7 +139,7 @@ fn check_integrity_in_parallel(
         }
     };
 
-    let content_path = PostHash::new(&state.config, post_id).content_path(mime_type);
+    let content_path = PostHash::new(&state.config, post_id, Some(custom_thumbnail_size)).content_path(mime_type);
     let file_checksum = match hash::compute_checksums(&content_path) {
         Ok((checksum, _)) => checksum,
         Err(err) => {
@@ -190,9 +189,9 @@ fn recompute_checksum_in_parallel(
     admin::is_cancelled()?;
 
     let mut conn = state.connection_pool.get_blocking()?;
-    let mime_type = match post::table
+    let (mime_type, custom_thumbnail_size) = match post::table
         .find(post_id)
-        .select(post::mime_type)
+        .select((post::mime_type, post::custom_thumbnail_size))
         .first(&mut conn)
         .optional()
     {
@@ -204,7 +203,7 @@ fn recompute_checksum_in_parallel(
         }
     };
 
-    let image_path = PostHash::new(&state.config, post_id).content_path(mime_type);
+    let image_path = PostHash::new(&state.config, post_id, Some(custom_thumbnail_size)).content_path(mime_type);
     let (checksum, md5_checksum) = match hash::compute_checksums(&image_path) {
         Ok(checksums) => checksums,
         Err(err) => {
@@ -251,9 +250,9 @@ fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &Pr
     admin::is_cancelled()?;
 
     let mut conn = state.connection_pool.get_blocking()?;
-    let mime_type = match post::table
+    let (mime_type, custom_thumbnail_size) = match post::table
         .find(post_id)
-        .select(post::mime_type)
+        .select((post::mime_type, post::custom_thumbnail_size))
         .first(&mut conn)
         .optional()
     {
@@ -265,7 +264,7 @@ fn recompute_signature_in_parallel(state: &AppState, post_id: i64, progress: &Pr
         }
     };
 
-    let content_path = PostHash::new(&state.config, post_id).content_path(mime_type);
+    let content_path = PostHash::new(&state.config, post_id, Some(custom_thumbnail_size)).content_path(mime_type);
     let image = match decode::representative_image(&state.config, &content_path, mime_type) {
         Ok(image) => image,
         Err(err) => {
@@ -314,9 +313,9 @@ fn recompute_post_type_in_parallel(state: &AppState, post_id: i64, progress: &Pr
     admin::is_cancelled()?;
 
     let mut conn = state.connection_pool.get_blocking()?;
-    let mime_type = match post::table
+    let (mime_type, custom_thumbnail_size) = match post::table
         .find(post_id)
-        .select(post::mime_type)
+        .select((post::mime_type, post::custom_thumbnail_size))
         .first(&mut conn)
         .optional()
     {
@@ -328,7 +327,7 @@ fn recompute_post_type_in_parallel(state: &AppState, post_id: i64, progress: &Pr
         }
     };
 
-    let post_hash = PostHash::new(&state.config, post_id);
+    let post_hash = PostHash::new(&state.config, post_id, Some(custom_thumbnail_size));
     let content_path = post_hash.content_path(mime_type);
     let post_type = match decode::detect_post_type(&content_path, mime_type) {
         Ok(type_) => type_,
@@ -353,9 +352,9 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
     admin::is_cancelled()?;
 
     let mut conn = state.connection_pool.get_blocking()?;
-    let mime_type = match post::table
+    let (mime_type, custom_thumbnail_size) = match post::table
         .find(post_id)
-        .select(post::mime_type)
+        .select((post::mime_type, post::custom_thumbnail_size))
         .first(&mut conn)
         .optional()
     {
@@ -367,7 +366,7 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
         }
     };
 
-    let post_hash = PostHash::new(&state.config, post_id);
+    let post_hash = PostHash::new(&state.config, post_id, Some(custom_thumbnail_size));
     let content_path = post_hash.content_path(mime_type);
     let thumbnail = match decode::representative_image(&state.config, &content_path, mime_type) {
         Ok(image) => thumbnail::create(&state.config, &image, ThumbnailType::Post),

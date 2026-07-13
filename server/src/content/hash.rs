@@ -11,6 +11,7 @@ use diesel::serialize::{Output, ToSql};
 use diesel::sql_types::Bytea;
 use diesel::{FromSqlRow, deserialize, serialize};
 use hex::{FromHex, FromHexError};
+use std::cell::Cell;
 use std::fmt::Display;
 use std::fs::File;
 use std::io::Read;
@@ -22,16 +23,24 @@ pub struct PostHash<'a> {
     post_id: i64,
     hash: String,
     config: &'a Config,
+    has_custom_thumbnail: Cell<Option<bool>>,
 }
 
 impl<'a> PostHash<'a> {
-    pub fn new(config: &'a Config, post_id: i64) -> Self {
+    /// Creates a new [`PostHash`]. A `custom_thumbnail_size` can be optionally given to speed
+    /// up the generation of thumbnail URLs, as it allows for quickly determining if the custom
+    /// or generated thumbnail should be used. If this value is not known `thumbnail_url` will
+    /// fall back to checking the filesystem.
+    pub fn new(config: &'a Config, post_id: i64, custom_thumbnail_size: Option<i64>) -> Self {
+        // This should probably be changed to `blake3::derive_key("Oxibooru content hash", secret.as_bytes())`,
+        // but changing it would be a significant breaking change. Maybe something to change for a 1.0 release. (TODO?)
         let key: [u8; KEY_LEN] = std::array::from_fn(|i| config.content_secret.as_bytes().get(i).copied().unwrap_or(0));
         let hash = blake3::keyed_hash(&key, &post_id.to_le_bytes());
         Self {
             hash: URL_SAFE_NO_PAD.encode(hash.as_bytes()),
             post_id,
             config,
+            has_custom_thumbnail: Cell::new(custom_thumbnail_size.map(|size| size > 0)),
         }
     }
 
@@ -52,8 +61,7 @@ impl<'a> PostHash<'a> {
     /// Returns URL to post thumbnail. Will be a generated thumbnail by default or
     /// a custom thumbnail if it exists.
     pub fn thumbnail_url(&self) -> String {
-        // Note: this requires interacting with the filesystem and might be slow
-        let thumbnail_folder = if self.custom_thumbnail_path().exists() {
+        let thumbnail_folder = if self.has_custom_thumbnail() {
             Directory::CustomThumbnails
         } else {
             Directory::GeneratedThumbnails
@@ -78,6 +86,15 @@ impl<'a> PostHash<'a> {
         let filename = format!("{self}.{THUMBNAIL_EXTENSION}");
         self.config.path(Directory::CustomThumbnails).join(filename)
     }
+
+    fn has_custom_thumbnail(&self) -> bool {
+        self.has_custom_thumbnail.get().unwrap_or_else(|| {
+            // If it is not known, check filesystem
+            let custom_thumbnail_exists = self.custom_thumbnail_path().exists();
+            self.has_custom_thumbnail.replace(Some(custom_thumbnail_exists));
+            custom_thumbnail_exists
+        })
+    }
 }
 
 impl Display for PostHash<'_> {
@@ -100,7 +117,7 @@ pub struct GenericChecksum<const N: usize>([u8; N]);
 impl<const N: usize> GenericChecksum<N> {
     /// Constructs a [`GenericChecksum`] using the first `N` values in a slice of `bytes`.
     /// If the length of the slice is less than `N`, the remaining checksum bytes will be set to 0.
-    pub const fn from_bytes(bytes: &[u8]) -> Self {
+    const fn from_bytes(bytes: &[u8]) -> Self {
         let mut checksum = [0; N];
         let mut index = 0;
         while index < bytes.len() && index < N {
@@ -108,6 +125,11 @@ impl<const N: usize> GenericChecksum<N> {
             index += 1;
         }
         Self(checksum)
+    }
+
+    #[cfg(test)]
+    pub const fn from_bytes_test(bytes: &[u8]) -> Self {
+        Self::from_bytes(bytes)
     }
 }
 
@@ -180,7 +202,7 @@ pub fn compute_checksums(path: &Path) -> std::io::Result<(Checksum, Md5Checksum)
     Ok((checksum, md5_checksum))
 }
 
-/// Similar to [`compute_checksum`], except checksum is base64 encoded.
+/// Hashes the given bytes with Blake3 and encodes the hash with URL-safe base64.
 pub fn compute_url_safe_hash(content: &[u8]) -> String {
     let hash = blake3::hash(content);
     URL_SAFE_NO_PAD.encode(hash.as_bytes())

@@ -136,8 +136,8 @@ pub fn merge(
 ) -> ApiResult<()> {
     let absorbed_id = absorbed_post.id;
     let merge_to_id = merge_to_post.id;
-    let absorbed_hash = PostHash::new(config, absorbed_id);
-    let merge_to_hash = PostHash::new(config, merge_to_id);
+    let absorbed_hash = PostHash::new(config, absorbed_id, Some(absorbed_post.custom_thumbnail_size));
+    let merge_to_hash = PostHash::new(config, merge_to_id, Some(merge_to_post.custom_thumbnail_size));
 
     // Merge relations
     let involved_relations: Vec<PostRelation> = post_relation::table

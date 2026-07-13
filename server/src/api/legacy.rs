@@ -26,7 +26,7 @@ async fn redirect(State(state): State<AppState>, Path(filename): Path<String>) -
         return Err(StatusCode::NOT_FOUND);
     }
 
-    let new_post_hash = PostHash::new(&state.config, post_id);
+    let new_post_hash = PostHash::new(&state.config, post_id, None);
     let new_url = format!("/{}", new_post_hash.content_url(mime_type));
     Ok(Redirect::permanent(&new_url))
 }
