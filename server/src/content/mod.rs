@@ -57,7 +57,7 @@ impl Content {
         let temp_path = token.path(&ctx.config);
         tokio::task::spawn_blocking(move || {
             decode::representative_image(&ctx.config, &temp_path, token.mime_type())
-                .map(|image| thumbnail::create(&ctx.config, &image, thumbnail_type))
+                .map(|image| thumbnail::create(&ctx.config, image, thumbnail_type))
         })
         .await?
     }

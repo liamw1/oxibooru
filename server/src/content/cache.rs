@@ -95,15 +95,16 @@ fn compute_properties_no_cache(ctx: &Ctx, token: UploadToken) -> ApiResult<Cache
     };
 
     let image = decode::representative_image(&ctx.config, &temp_path, mime_type)?;
-
+    let width = i32::try_from(image.width()).map_err(|_| LimitErrorKind::DimensionError)?;
+    let height = i32::try_from(image.height()).map_err(|_| LimitErrorKind::DimensionError)?;
     Ok(CachedProperties {
         token,
         checksum,
         md5_checksum,
         signature: signature::compute(&image),
-        thumbnail: thumbnail::create(&ctx.config, &image, ThumbnailType::Post),
-        width: i32::try_from(image.width()).map_err(|_| LimitErrorKind::DimensionError)?,
-        height: i32::try_from(image.height()).map_err(|_| LimitErrorKind::DimensionError)?,
+        thumbnail: thumbnail::create(&ctx.config, image, ThumbnailType::Post),
+        width,
+        height,
         mime_type,
         post_type,
         file_size,

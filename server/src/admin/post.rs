@@ -369,7 +369,7 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
     let post_hash = PostHash::new(&state.config, post_id, Some(custom_thumbnail_size));
     let content_path = post_hash.content_path(mime_type);
     let thumbnail = match decode::representative_image(&state.config, &content_path, mime_type) {
-        Ok(image) => thumbnail::create(&state.config, &image, ThumbnailType::Post),
+        Ok(image) => thumbnail::create(&state.config, image, ThumbnailType::Post),
         Err(err) => {
             error!("Cannot decode content for post {post_id} for reason: {err}");
             return Ok(());
