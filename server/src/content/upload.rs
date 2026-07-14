@@ -43,7 +43,7 @@ impl UploadToken {
 impl<'de> Deserialize<'de> for UploadToken {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let token = String::deserialize(deserializer)?;
-        if token.contains('/') || token.contains('\\') {
+        if token.contains('/') || token.contains('\\') || token.contains(':') {
             return Err(serde::de::Error::custom("invalid upload token"));
         }
 
