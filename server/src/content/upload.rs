@@ -2,6 +2,7 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
 use crate::filesystem::{self, Directory};
 use crate::model::enums::MimeType;
+use axum::body::Bytes;
 use axum::extract::multipart::{Field, Multipart};
 use axum::extract::rejection::{JsonRejection, MissingJsonContentType};
 use mime::{APPLICATION, FromStrError, JSON, Mime, OCTET_STREAM};
@@ -46,7 +47,7 @@ impl<'de> Deserialize<'de> for UploadToken {
             return Err(serde::de::Error::custom("invalid upload token"));
         }
 
-        let (_uuid, extension) = token.split_once('.').unwrap_or((&token, ""));
+        let (_uuid, extension) = token.rsplit_once('.').unwrap_or((&token, ""));
         let mime_type = MimeType::from_extension(extension).map_err(serde::de::Error::custom)?;
         Ok(Self { token, mime_type })
     }
@@ -62,7 +63,7 @@ pub enum PartName {
 
 pub struct Body<const N: usize> {
     pub files: [Option<UploadToken>; N],
-    pub metadata: Option<Vec<u8>>,
+    pub metadata: Option<Bytes>,
 }
 
 /// Attempts to extract given `fields` and optional JSON "metadata" field from given `form_data`.
@@ -103,7 +104,7 @@ pub async fn extract<const N: usize>(
                 .await
                 .map(Some)?;
         } else {
-            metadata = field.bytes().await.map(|bytes| bytes.to_vec()).map(Some)?;
+            metadata = field.bytes().await.map(Some)?;
         }
     }
     Ok(Body { files, metadata })
