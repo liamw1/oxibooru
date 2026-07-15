@@ -279,7 +279,7 @@ fn change_user_seed(conn: &mut PgConnection, client: Client) -> QueryResult<()> 
             .next()
             .expect("Size of u32 > size of u16");
         let random_i16 = i16::from_le_bytes(random_bytes);
-        let new_seed = f32::from(random_i16) / f32::from(i16::MAX);
+        let new_seed = f32::from(random_i16) / -f32::from(i16::MIN);
         diesel::update(user::table.find(user_id))
             .set(user::search_seed.eq(new_seed))
             .execute(conn)?;
