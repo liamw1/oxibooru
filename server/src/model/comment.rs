@@ -14,7 +14,17 @@ pub struct NewComment<'a> {
     pub user_id: Option<i64>,
     pub post_id: i64,
     pub text: &'a str,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = comment)]
+#[diesel(check_for_backend(Pg))]
+pub struct OrphanedComment {
+    pub user_id: Option<i64>,
+    pub post_id: i64,
+    pub text: String,
     pub creation_time: DateTime,
+    pub last_edit_time: DateTime,
 }
 
 #[derive(Associations, Identifiable, Queryable, Selectable)]

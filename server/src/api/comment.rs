@@ -177,7 +177,6 @@ async fn create(
                 user_id: ctx.client.id,
                 post_id: body.post_id,
                 text: &body.text,
-                creation_time: DateTime::now(),
             }
             .insert_into(comment::table)
             .get_result(conn);

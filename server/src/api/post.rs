@@ -13,7 +13,9 @@ use crate::extract::{
     ResourceParams,
 };
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, ResourceProperty, ResourceType, Score};
-use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
+use crate::model::post::{
+    NewPost, NewPostFavorite, NewPostFeature, NewPostScore, NewPostSignature, Post, PostSignature,
+};
 use crate::resource::post::{Field, Note, PostInfo};
 use crate::schema::{post, post_favorite, post_feature, post_score, post_signature, post_statistics};
 use crate::search::post::QueryBuilder;
@@ -445,7 +447,6 @@ async fn feature(
     let new_post_feature = NewPostFeature {
         post_id: body.id,
         user_id,
-        time: DateTime::now(),
     };
 
     connection_pool
@@ -886,11 +887,7 @@ async fn favorite(
     ctx.verify_privilege(Action::PostFavorite)?;
 
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
-    let new_post_favorite = PostFavorite {
-        post_id,
-        user_id,
-        time: DateTime::now(),
-    };
+    let new_post_favorite = NewPostFavorite { post_id, user_id };
 
     connection_pool
         .transaction(move |conn| {
@@ -937,11 +934,10 @@ async fn rate(
             diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
 
             if let Ok(score) = Score::try_from(*body) {
-                let insert_result = PostScore {
+                let insert_result = NewPostScore {
                     post_id,
                     user_id,
                     score,
-                    time: DateTime::now(),
                 }
                 .insert_into(post_score::table)
                 .execute(conn);

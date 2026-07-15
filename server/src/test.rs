@@ -14,7 +14,7 @@ use crate::model::enums::{
 use crate::model::pool::{NewPool, NewPoolName, PoolPost};
 use crate::model::pool_category::NewPoolCategory;
 use crate::model::post::{
-    NewPost, NewPostFeature, NewPostNote, NewPostSignature, PostFavorite, PostRelation, PostScore, PostTag,
+    NewPost, NewPostFavorite, NewPostFeature, NewPostNote, NewPostScore, NewPostSignature, PostRelation, PostTag,
 };
 use crate::model::tag::{NewTag, NewTagName, TagImplication, TagSuggestion};
 use crate::model::tag_category::NewTagCategory;
@@ -684,34 +684,25 @@ fn populate_database(conn: &mut PgConnection, config: &Config) -> AdminResult<()
 
     // Add favorites
     for &(user_id, post_id) in POST_FAVORITES {
-        PostFavorite {
-            post_id,
-            user_id,
-            time: DateTime::now(),
-        }
-        .insert_into(post_favorite::table)
-        .execute(conn)?;
+        NewPostFavorite { post_id, user_id }
+            .insert_into(post_favorite::table)
+            .execute(conn)?;
     }
 
     // Add features
     for &(user_id, post_id) in POST_FEATURES {
-        NewPostFeature {
-            user_id,
-            post_id,
-            time: DateTime::now(),
-        }
-        .insert_into(post_feature::table)
-        .execute(conn)?;
+        NewPostFeature { post_id, user_id }
+            .insert_into(post_feature::table)
+            .execute(conn)?;
     }
 
     // Add scores
     let new_scores: Vec<_> = POST_SCORES
         .iter()
-        .map(|&(user_id, post_id, score)| PostScore {
+        .map(|&(user_id, post_id, score)| NewPostScore {
             post_id,
             user_id,
             score,
-            time: DateTime::now(),
         })
         .collect();
     new_scores.insert_into(post_score::table).execute(conn)?;
@@ -727,14 +718,9 @@ fn populate_database(conn: &mut PgConnection, config: &Config) -> AdminResult<()
 
     // Add comments
     for &(user_id, post_id, text) in COMMENTS {
-        NewComment {
-            user_id,
-            post_id,
-            text,
-            creation_time: DateTime::now(),
-        }
-        .insert_into(comment::table)
-        .execute(conn)?;
+        NewComment { user_id, post_id, text }
+            .insert_into(comment::table)
+            .execute(conn)?;
     }
 
     // Add comment scores

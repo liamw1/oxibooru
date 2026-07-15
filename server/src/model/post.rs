@@ -96,6 +96,14 @@ pub struct PostTag {
     pub tag_id: i64,
 }
 
+#[derive(Insertable)]
+#[diesel(table_name = post_favorite)]
+#[diesel(check_for_backend(Pg))]
+pub struct NewPostFavorite {
+    pub post_id: i64,
+    pub user_id: i64,
+}
+
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
 #[diesel(belongs_to(Post), belongs_to(User))]
 #[diesel(table_name = post_favorite)]
@@ -111,6 +119,14 @@ pub struct PostFavorite {
 #[diesel(table_name = post_feature)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewPostFeature {
+    pub post_id: i64,
+    pub user_id: i64,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = post_feature)]
+#[diesel(check_for_backend(Pg))]
+pub struct OrphanedPostFeature {
     pub post_id: i64,
     pub user_id: i64,
     pub time: DateTime,
@@ -145,6 +161,15 @@ pub struct PostNote {
     pub post_id: i64,
     pub polygon: Vec<Option<f32>>,
     pub text: LargeString,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = post_score)]
+#[diesel(check_for_backend(Pg))]
+pub struct NewPostScore {
+    pub post_id: i64,
+    pub user_id: i64,
+    pub score: Score,
 }
 
 #[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
