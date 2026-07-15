@@ -106,7 +106,7 @@ impl<'a> QueryBuilder<'a> {
         let search = SearchCriteria::new(ctx, search_criteria, Token::Name).map_err(Box::from)?;
         Ok(Self {
             search,
-            cache_state: CacheState::new(),
+            cache_state: CacheState::default(),
         })
     }
 }

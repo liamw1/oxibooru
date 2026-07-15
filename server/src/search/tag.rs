@@ -147,7 +147,7 @@ impl<'a> QueryBuilder<'a> {
 
         Ok(Self {
             search,
-            cache_state: CacheState::new(),
+            cache_state: CacheState::default(),
         })
     }
 }

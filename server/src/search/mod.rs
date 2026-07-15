@@ -207,11 +207,7 @@ struct UnparsedFilter<'a, T> {
 impl<T> UnparsedFilter<'_, T> {
     /// Returns a version of the filter where `negated` is `false`.
     fn unnegated(self) -> Self {
-        Self {
-            kind: self.kind,
-            condition: self.condition,
-            negated: false,
-        }
+        Self { negated: false, ..self }
     }
 }
 
@@ -226,20 +222,11 @@ struct ParsedSort<T> {
 /// `has_matching` indicates if the [`temp::matching`] table has values.
 /// `has_nonmatching` indicates if the [`temp::nonmatching`] table has values.
 /// `completed` indicates if the cache for this query has been fully built.
+#[derive(Default)]
 struct CacheState {
     has_matching: bool,
     has_nonmatching: bool,
     completed: bool,
-}
-
-impl CacheState {
-    fn new() -> Self {
-        Self {
-            has_matching: false,
-            has_nonmatching: false,
-            completed: false,
-        }
-    }
 }
 
 #[declare_sql_function]
