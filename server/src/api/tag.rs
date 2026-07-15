@@ -1,9 +1,8 @@
 use crate::api::doc::TAG_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, ResourceParams};
 use crate::app::{AppState, Context};
 use crate::config::Action;
-use crate::extract::{Ctx, Json, Path, Query};
+use crate::extract::{Ctx, DeleteBody, Json, MergeBody, PageParams, PagedResponse, Path, Query, ResourceParams};
 use crate::model::enums::{ResourceType, UserRank};
 use crate::model::tag::{NewTag, Tag};
 use crate::resource::tag::{Field, TagInfo};
@@ -33,7 +32,6 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(merge))
 }
 
-const MAX_TAGS_PER_PAGE: i64 = 1000;
 const MAX_TAG_SIBLINGS: i64 = 50;
 
 fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &SmallString) -> ApiResult<i64> {
@@ -119,7 +117,7 @@ async fn list(
     ctx.verify_privilege(Action::TagList)?;
 
     let offset = page.offset.unwrap_or(0);
-    let limit = std::cmp::min(page.limit.get(), MAX_TAGS_PER_PAGE);
+    let limit = page.limit();
     connection_pool
         .transaction(move |conn| {
             let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;

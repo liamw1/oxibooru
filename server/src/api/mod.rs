@@ -2,19 +2,14 @@ use crate::api::doc::ApiDoc;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::config::{Config, RegexType};
-use crate::model::enums::Rating;
-use crate::resource::field::Mask;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use axum::http::StatusCode;
-use serde::{Deserialize, Deserializer, Serialize};
-use std::num::NonZeroI64;
-use std::ops::Deref;
-use std::str::FromStr;
+use serde::{Deserialize, Deserializer};
 use std::time::Duration;
 use tower_http::timeout::TimeoutLayer;
 use tower_http::trace::TraceLayer;
-use utoipa::{IntoParams, OpenApi, ToSchema};
+use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 
 mod comment;
@@ -77,100 +72,6 @@ pub fn verify_valid_email(email: Option<&str>) -> Result<(), lettre::address::Ad
         Some(address) => address.parse::<lettre::Address>().map(|_| ()),
         None => Ok(()),
     }
-}
-
-/// Request body to apply/change a score.
-#[derive(Deserialize, ToSchema)]
-struct RatingBody {
-    score: Rating,
-}
-
-impl Deref for RatingBody {
-    type Target = Rating;
-    fn deref(&self) -> &Self::Target {
-        &self.score
-    }
-}
-
-/// Request body for deleting a resource.
-#[derive(Deserialize, ToSchema)]
-struct DeleteBody {
-    /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
-}
-
-impl Deref for DeleteBody {
-    type Target = DateTime;
-    fn deref(&self) -> &Self::Target {
-        &self.version
-    }
-}
-
-/// Request body for merging resources.
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct MergeBody<T> {
-    /// ID of the source resource to be removed.
-    remove: T,
-    /// ID of the target resource to merge into.
-    merge_to: T,
-    /// Version of the source resource. See [versioning](#Versioning).
-    remove_version: DateTime,
-    /// Version of the target resource. See [versioning](#Versioning).
-    merge_to_version: DateTime,
-}
-
-/// Represents parameters of a request to retrieve one or more resources.
-#[derive(Deserialize, IntoParams)]
-#[serde(bound(deserialize = "F: Into<u64> + FromStr"))]
-struct ResourceParams<F: Into<u64> + FromStr> {
-    /// Query search string
-    #[param(example = "anonymous_token")]
-    query: Option<String>,
-    /// Comma-separated list of fields to include in the response. See [field selection](#Field-Selection) for details.
-    #[param(value_type = Option<String>, example = "field1,field2")]
-    fields: Mask<F>,
-}
-
-impl<F: Into<u64> + FromStr> ResourceParams<F> {
-    fn criteria(&self) -> &str {
-        self.query.as_deref().unwrap_or("")
-    }
-}
-
-/// Represents parameters of a request to retrieve multiple resources, paged.
-#[derive(Deserialize, IntoParams)]
-struct PageParams {
-    /// Starting position in the result set
-    #[param(example = 0)]
-    offset: Option<i64>,
-    /// Maximum number of results to return
-    #[param(value_type = i64, minimum = 1, example = 40)]
-    limit: NonZeroI64,
-}
-
-/// A result of search operation that doesn't involve paging.
-#[derive(Serialize, ToSchema)]
-struct UnpagedResponse<T> {
-    results: Vec<T>,
-}
-
-/// A result of search operation that involves paging.
-#[derive(Serialize, ToSchema)]
-struct PagedResponse<T> {
-    /// The query passed in the original request that contains a standard [search query](#Search).
-    #[schema(examples("anonymous_token named_token:value1,value2,value3 sort:sort_token"))]
-    query: Option<String>,
-    /// The record starting offset, passed in the original request.
-    #[schema(examples(0))]
-    offset: i64,
-    /// Number of records on one page.
-    #[schema(examples(40))]
-    limit: i64,
-    /// How many resources were found. To get the page count, divide this number by `limit`.
-    #[schema(examples(1729))]
-    total: i64,
-    results: Vec<T>,
 }
 
 /// Checks if `current_version` matches `client_version`.

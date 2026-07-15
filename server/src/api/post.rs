@@ -1,6 +1,5 @@
 use crate::api::doc::POST_TAG;
-use crate::api::error::{ApiError, ApiResult};
-use crate::api::{DeleteBody, MergeBody, PageParams, PagedResponse, RatingBody, ResourceParams, error};
+use crate::api::error::{self, ApiError, ApiResult};
 use crate::app::{AppState, Context};
 use crate::config::Action;
 use crate::content::hash::PostHash;
@@ -9,7 +8,10 @@ use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
 use crate::content::{Content, signature, upload};
 use crate::db::AsyncConnectionPool;
-use crate::extract::{Ctx, Json, JsonOrMultipart, Path, Query};
+use crate::extract::{
+    Ctx, DeleteBody, Json, JsonOrMultipart, MergeBody, PageParams, PagedResponse, Path, Query, RatingBody,
+    ResourceParams,
+};
 use crate::model::enums::{PostFlag, PostFlags, PostSafety, ResourceProperty, ResourceType, Score};
 use crate::model::post::{NewPost, NewPostFeature, NewPostSignature, Post, PostFavorite, PostScore, PostSignature};
 use crate::resource::post::{Field, Note, PostInfo};
@@ -53,8 +55,6 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(rate))
         .merge(upload_capable_routes)
 }
-
-const MAX_POSTS_PER_PAGE: i64 = 1000;
 
 static POST_TAG_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
 
@@ -209,7 +209,7 @@ async fn list(
     ctx.verify_privilege(Action::PostList)?;
 
     let offset = page.offset.unwrap_or(0);
-    let limit = std::cmp::min(page.limit.get(), MAX_POSTS_PER_PAGE);
+    let limit = page.limit();
     connection_pool
         .transaction(move |conn| {
             let mut query_builder = QueryBuilder::new(&ctx, resource.criteria())?;
@@ -305,8 +305,8 @@ async fn get_neighbors(
 
     connection_pool
         .transaction(move |conn| {
-            const INITIAL_LIMIT: i64 = 1000;
-            const LIMIT_GROWTH: i64 = 10;
+            const INITIAL_LIMIT: u64 = 1000;
+            const LIMIT_GROWTH: u64 = 10;
 
             verify_visibility(conn, &ctx, post_id)?;
 
@@ -344,7 +344,7 @@ async fn get_neighbors(
 
                 let post_position = post_id_batch.iter().position(|&id| id == post_id);
                 if post_id_batch.len() < usize::try_from(limit).unwrap_or(usize::MAX)
-                    || limit == i64::MAX
+                    || limit == u64::MAX
                     || post_id_batch.len() == usize::MAX
                     || (post_position.is_some() && post_position != Some(post_id_batch.len().saturating_sub(1)))
                 {

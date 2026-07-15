@@ -1,9 +1,8 @@
-use crate::api::ResourceParams;
 use crate::api::doc::INFO_TAG;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::config::{Action, PublicConfig};
-use crate::extract::{Ctx, Json, Query};
+use crate::extract::{Ctx, Json, Query, ResourceParams};
 use crate::model::post::PostFeature;
 use crate::resource::post::{Field, PostInfo};
 use crate::schema::{database_statistics, post_feature, user};

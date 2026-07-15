@@ -1,9 +1,9 @@
+use crate::api;
 use crate::api::doc::USER_TOKEN_TAG;
 use crate::api::error::{ApiError, ApiResult};
-use crate::api::{self, ResourceParams, UnpagedResponse};
 use crate::app::AppState;
 use crate::config::Action;
-use crate::extract::{Ctx, Json, Path, Query};
+use crate::extract::{Ctx, Json, Path, Query, ResourceParams, UnpagedResponse};
 use crate::model::enums::{AvatarStyle, ResourceType};
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
