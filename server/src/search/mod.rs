@@ -34,10 +34,12 @@ pub trait Builder<'a>: Sized {
     }
 
     /// Executes both load and count queries for all rows matching search criteria.
-    /// If the search has a random sort, then this will also mutate the user's search seed.
+    /// If the search has a random sort and they are viewing the first page of results,
+    /// then this will also mutate the user's search seed.
     fn list(&mut self, conn: &mut PgConnection) -> ApiResult<(u64, Vec<i64>)> {
-        if self.criteria().random_sort {
-            change_user_seed(conn, self.criteria().ctx.client)?;
+        let criteria = self.criteria();
+        if criteria.random_sort && criteria.extra_args.is_some_and(|args| args.offset == 0) {
+            change_user_seed(conn, criteria.ctx.client)?;
         }
 
         let total = u64::try_from(self.count(conn)?).unwrap_or(0);
