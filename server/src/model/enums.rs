@@ -125,7 +125,7 @@ impl MimeType {
             "gif" => Ok(Self::Gif),
             "jpg" | "jpeg" | "jpe" | "jif" | "jfif" | "jfi" => Ok(Self::Jpeg),
             "png" => Ok(Self::Png),
-            "mp4" | "m4a" | "m4b" | "m4p" | "m4r" | "m4v" => Ok(Self::Mp4),
+            "mp4" | "m4v" => Ok(Self::Mp4),
             "mov" | "movie" | "qt" => Ok(Self::Mov),
             "webm" => Ok(Self::Webm),
             "webp" => Ok(Self::Webp),
