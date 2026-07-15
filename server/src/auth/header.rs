@@ -13,6 +13,8 @@ use uuid::Uuid;
 #[derive(Debug, Error)]
 #[error(transparent)]
 pub enum AuthenticationError {
+    #[error("Token has been disabled")]
+    DisabledToken,
     #[error("Token has expired")]
     ExpiredToken,
     FailedConnection(#[from] diesel::r2d2::PoolError),
@@ -90,7 +92,7 @@ async fn token_authentication(state: &AppState, credentials: &str) -> Result<Cli
     let token = Uuid::parse_str(&unparsed_token)?;
     let mut conn = state.connection_pool.get().await?;
 
-    let (user_id, rank, enabled, expiration_time): (i64, UserRank, bool, Option<DateTime>) = user_token::table
+    let (user_id, rank, enabled, expiration): (i64, UserRank, bool, Option<DateTime>) = user_token::table
         .inner_join(user::table)
         .select((user::id, user::rank, user_token::enabled, user_token::expiration_time))
         .filter(user::name.eq(username))
@@ -98,9 +100,11 @@ async fn token_authentication(state: &AppState, credentials: &str) -> Result<Cli
         .first(conn.as_mut())
         .optional()?
         .ok_or(AuthenticationError::UsernameTokenMismatch)?;
-
-    let expired = expiration_time.as_ref().is_some_and(|&time| time < DateTime::now());
-    (enabled && !expired)
-        .then_some(Client::new(Some(user_id), rank))
-        .ok_or(AuthenticationError::ExpiredToken)
+    if !enabled {
+        Err(AuthenticationError::DisabledToken)
+    } else if expiration.is_some_and(|expiration_time| DateTime::now() > expiration_time) {
+        Err(AuthenticationError::ExpiredToken)
+    } else {
+        Ok(Client::new(Some(user_id), rank))
+    }
 }
