@@ -349,10 +349,11 @@ async fn delete(
                 .first(conn)
                 .optional()?
                 .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
-            api::verify_version(category.last_edit_time, *client_version)?;
+
             if category.id == 0 {
                 return Err(ApiError::DeleteDefault(ResourceType::TagCategory));
             }
+            api::verify_version(category.last_edit_time, *client_version)?;
 
             diesel::delete(tag_category::table.find(category.id)).execute(conn)?;
             snapshot::tag_category::deletion_snapshot(conn, ctx.client, &category)?;

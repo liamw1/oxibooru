@@ -234,11 +234,11 @@ async fn update(
                     .first(conn)
                     .optional()?
                     .ok_or(ApiError::NotFound(ResourceType::Comment))?;
-                api::verify_version(comment_version, body.version)?;
 
                 if ctx.client.id.is_none_or(|client_id| comment_owner != Some(client_id)) {
                     ctx.verify_privilege(Action::CommentEditAny)?;
                 }
+                api::verify_version(comment_version, body.version)?;
 
                 diesel::update(comment::table.find(comment_id))
                     .set((comment::text.eq(body.text), comment::last_edit_time.eq(DateTime::now())))
@@ -336,11 +336,11 @@ async fn delete(
                 .first(conn)
                 .optional()?
                 .ok_or(ApiError::NotFound(ResourceType::Comment))?;
-            api::verify_version(comment_version, *client_version)?;
 
             if ctx.client.id.is_none_or(|client_id| comment_owner != Some(client_id)) {
                 ctx.verify_privilege(Action::CommentDeleteAny)?;
             }
+            api::verify_version(comment_version, *client_version)?;
 
             diesel::delete(comment::table.find(comment_id)).execute(conn)?;
             Ok::<_, ApiError>(Json(()))

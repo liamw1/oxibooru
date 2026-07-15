@@ -170,14 +170,15 @@ async fn get(
 }
 
 async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBody) -> ApiResult<Json<UserInfo>> {
-    if body.rank == Some(UserRank::Anonymous) {
-        return Err(ApiError::InvalidUserRank);
-    }
     ctx.verify_privilege(Action::UserCreateSelf)?;
 
     let creating_self = ctx.client.id.is_none();
     if !creating_self {
         ctx.verify_privilege(Action::UserCreateAny)?;
+    }
+
+    if body.rank == Some(UserRank::Anonymous) {
+        return Err(ApiError::InvalidUserRank);
     }
 
     if let Some(rank) = body.rank
@@ -238,12 +239,10 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
                 .ok_or(ApiError::AlreadyExists(ResourceProperty::UserEmail))?;
 
                 if let Some(avatar) = custom_avatar {
-                    let action = if creating_self {
-                        Action::UserEditSelfAvatar
-                    } else {
-                        Action::UserEditAnyAvatar
-                    };
-                    ctx.verify_privilege(action)?;
+                    ctx.verify_privilege(Action::UserEditSelfAvatar)?;
+                    if !creating_self {
+                        ctx.verify_privilege(Action::UserEditAnyAvatar)?;
+                    }
 
                     update::user::avatar(conn, &ctx.config, user.id, &body.name, avatar)?;
                 }
@@ -562,6 +561,8 @@ async fn delete(
     Path(username): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
 ) -> ApiResult<Json<()>> {
+    ctx.verify_privilege(Action::UserDeleteSelf)?;
+
     connection_pool
         .transaction(move |conn| {
             let (user_id, user_version): (i64, DateTime) = user::table
@@ -570,12 +571,11 @@ async fn delete(
                 .first(conn)
                 .optional()?
                 .ok_or(ApiError::NotFound(ResourceType::User))?;
-            api::verify_version(user_version, *client_version)?;
 
-            ctx.verify_privilege(Action::UserDeleteSelf)?;
             if ctx.client.id != Some(user_id) {
                 ctx.verify_privilege(Action::UserDeleteAny)?;
             }
+            api::verify_version(user_version, *client_version)?;
 
             diesel::delete(user::table.find(user_id)).execute(conn)?;
             Ok::<_, ApiError>(Json(()))
