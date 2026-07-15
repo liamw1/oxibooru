@@ -4,8 +4,6 @@ use crate::app::AppState;
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::schema::user;
-use argon2::password_hash::SaltString;
-use argon2::password_hash::rand_core::OsRng;
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 
@@ -31,8 +29,7 @@ pub fn reset_password(state: &AppState, editor: &mut UserEditor) {
         let password = input::read("New password: ", editor)?;
         api::verify_matches_regex(&state.config, &password, RegexType::Password)?;
 
-        let salt = SaltString::generate(&mut OsRng);
-        let hash = password::hash_password(&state.config, &password, &salt)
+        let (hash, salt) = password::hash_password(&state.config, &password)
             .map_err(|err| format!("Could not hash password for reason: {err}"))?;
         diesel::update(user::table)
             .filter(user::name.eq(user))

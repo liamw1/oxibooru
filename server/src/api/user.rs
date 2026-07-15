@@ -17,8 +17,6 @@ use crate::search::user::QueryBuilder;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, filesystem, update};
-use argon2::password_hash::SaltString;
-use argon2::password_hash::rand_core::OsRng;
 use axum::extract::DefaultBodyLimit;
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
@@ -195,8 +193,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
     api::verify_matches_regex(&ctx.config, &body.password, RegexType::Password)?;
     api::verify_valid_email(body.email.as_deref())?;
 
-    let salt = SaltString::generate(&mut OsRng);
-    let hash = password::hash_password(&ctx.config, &body.password, &salt)?;
+    let (hash, salt) = password::hash_password(&ctx.config, &body.password)?;
 
     let avatar_style = body.avatar_style.unwrap_or_default();
     let custom_avatar = match Content::new(body.avatar_token, body.avatar_url) {
@@ -380,8 +377,7 @@ async fn update_impl(
                     }
                     api::verify_matches_regex(&ctx.config, &password, RegexType::Password)?;
 
-                    let salt = SaltString::generate(&mut OsRng);
-                    let hash = password::hash_password(&ctx.config, &password, &salt)?;
+                    let (hash, salt) = password::hash_password(&ctx.config, &password)?;
                     diesel::update(user::table.find(user_id))
                         .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
                         .execute(conn)?;

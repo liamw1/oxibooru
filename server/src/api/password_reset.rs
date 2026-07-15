@@ -7,7 +7,6 @@ use crate::extract::{Json, Path};
 use crate::model::enums::ResourceType;
 use crate::schema::user;
 use crate::string::SmallString;
-use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::extract::State;
 use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
@@ -172,8 +171,7 @@ async fn reset_password(
 
             let temporary_password = generate_temporary_password(TEMPORARY_PASSWORD_LENGTH);
 
-            let salt = SaltString::generate(&mut OsRng);
-            let hash = password::hash_password(&state.config, &temporary_password, &salt)?;
+            let (hash, salt) = password::hash_password(&state.config, &temporary_password)?;
             diesel::update(user::table.find(user_id))
                 .set((user::password_salt.eq(salt.as_str()), user::password_hash.eq(hash)))
                 .execute(conn)?;
