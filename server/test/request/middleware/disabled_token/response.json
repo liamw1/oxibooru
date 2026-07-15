@@ -1,5 +1,5 @@
 {
-    "description": "Token has expired",
-    "name": "ExpiredToken",
+    "description": "Token has been disabled",
+    "name": "DisabledToken",
     "title": "Failed Authentication"
 }
