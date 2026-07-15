@@ -164,9 +164,9 @@ impl MimeType {
 
 impl FromStr for MimeType {
     type Err = ParseMimeTypeError;
-
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
+        let content_type = s.split(';').next().unwrap_or(s).trim().to_ascii_lowercase();
+        match content_type.as_str() {
             "application/x-shockwave-flash" | "application/vnd.adobe.flash.movie" => Ok(MimeType::Swf),
             "image/avif" => Ok(MimeType::Avif),
             "image/bmp" => Ok(MimeType::Bmp),
@@ -177,7 +177,7 @@ impl FromStr for MimeType {
             "video/mp4" => Ok(MimeType::Mp4),
             "video/quicktime" => Ok(MimeType::Mov),
             "video/webm" => Ok(MimeType::Webm),
-            s => Err(ParseMimeTypeError(s.into())),
+            _ => Err(ParseMimeTypeError(s.to_owned())),
         }
     }
 }
