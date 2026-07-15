@@ -290,7 +290,7 @@ fn apply_checksum_filter(query: BoxedQuery, filter: UnparsedFilter<Token>) -> Ap
 
 fn apply_flag_filter(query: BoxedQuery, filter: UnparsedFilter<Token>) -> ApiResult<BoxedQuery> {
     let flags: Vec<PostFlag> = parse::values(filter.condition)?;
-    let value = flags.into_iter().fold(PostFlags::new(), |value, flag| value | flag);
+    let value = flags.into_iter().fold(PostFlags::none(), |value, flag| value | flag);
     let bitwise_and = sql::<SmallInt>("")
         .bind(post::flags)
         .sql(" & ")

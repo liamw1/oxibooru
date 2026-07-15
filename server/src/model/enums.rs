@@ -7,7 +7,7 @@ use diesel::{AsExpression, FromSqlRow};
 use mime::Mime;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::ops::{BitOr, BitOrAssign};
+use std::ops::{BitAnd, BitOr, BitOrAssign};
 use std::path::Path;
 use std::str::FromStr;
 use strum::{Display, EnumCount, EnumIter, EnumString, FromRepr, IntoEnumIterator, IntoStaticStr};
@@ -20,7 +20,8 @@ use utoipa::{PartialSchema, ToSchema};
 /// They are encoded in the database as an integer, so changing
 /// the underlying representation of an enum changes its meaning.
 ///
-/// New enum variants should therefore always be appended at the end.
+/// New enum variants should therefore always be appended at the end
+/// or have their underlying values specified explicitly.
 
 #[derive(Debug, Error, PartialEq, Eq)]
 #[error("{0} is not a supported file extension")]
@@ -256,18 +257,18 @@ pub struct PostFlags(u16); // Bit mask of possible flags
 
 impl PostFlags {
     /// Constructs a new [`PostFlags`] with no flags set.
-    pub const fn new() -> Self {
+    pub const fn none() -> Self {
         Self(0)
     }
 
     /// Constructs a new [`PostFlags`] with a single `flag` set.
-    pub const fn new_with(flag: PostFlag) -> Self {
+    pub const fn one(flag: PostFlag) -> Self {
         Self(1 << flag as u16)
     }
 
     /// Constructs a new [`PostFlags`] with a set of `flags` set.
     pub fn from_slice(flags: &[PostFlag]) -> Self {
-        flags.iter().fold(Self::new(), |flags, &flag| flags | flag)
+        flags.iter().fold(Self::none(), |flags, &flag| flags | flag)
     }
 }
 
@@ -277,16 +278,36 @@ impl From<PostFlags> for u16 {
     }
 }
 
-impl<T: Into<u16>> BitOr<T> for PostFlags {
+impl BitOr for PostFlags {
     type Output = Self;
-    fn bitor(self, rhs: T) -> Self::Output {
-        Self(self.0 | rhs.into())
+    fn bitor(self, rhs: PostFlags) -> Self::Output {
+        Self(self.0 | rhs.0)
     }
 }
 
-impl<T: Into<u16>> BitOrAssign<T> for PostFlags {
-    fn bitor_assign(&mut self, rhs: T) {
-        self.0 |= rhs.into();
+impl BitOr<PostFlag> for PostFlags {
+    type Output = Self;
+    fn bitor(self, rhs: PostFlag) -> Self::Output {
+        Self(self.0 | u16::from(rhs))
+    }
+}
+
+impl BitOrAssign for PostFlags {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0
+    }
+}
+
+impl BitOrAssign<PostFlag> for PostFlags {
+    fn bitor_assign(&mut self, rhs: PostFlag) {
+        self.0 |= u16::from(rhs);
+    }
+}
+
+impl BitAnd<PostFlag> for PostFlags {
+    type Output = Self;
+    fn bitand(self, rhs: PostFlag) -> Self::Output {
+        Self(self.0 & u16::from(rhs))
     }
 }
 
@@ -299,7 +320,7 @@ impl ToSql<SmallInt, Pg> for PostFlags {
 
 impl FromSql<SmallInt, Pg> for PostFlags {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
-        i16::from_sql(value).map(|database_value| Self(database_value.cast_unsigned()))
+        i16::from_sql(value).map(i16::cast_unsigned).map(Self)
     }
 }
 
@@ -310,11 +331,8 @@ impl Serialize for PostFlags {
     {
         const _: () = assert!(PostFlag::COUNT <= 16);
 
-        let flags: Vec<&'static str> = PostFlag::iter()
-            .filter(|&flag| {
-                let bit = flag as u16;
-                self.0 & (1 << bit) != 0 // Check if flag is set
-            })
+        let flags: Vec<&str> = PostFlag::iter()
+            .filter(|&flag| *self & flag != Self::none()) // Check if flag is set
             .map(Into::into)
             .collect();
         flags.serialize(serializer)

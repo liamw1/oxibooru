@@ -89,9 +89,9 @@ fn compute_properties_no_cache(ctx: &Ctx, token: UploadToken) -> ApiResult<Cache
         PostType::Flash => decode::swf_has_audio(&temp_path)?,
     };
     let flags = if has_sound {
-        PostFlags::new_with(PostFlag::Sound)
+        PostFlags::one(PostFlag::Sound)
     } else {
-        PostFlags::new()
+        PostFlags::none()
     };
 
     let image = decode::representative_image(&ctx.config, &temp_path, mime_type)?;
