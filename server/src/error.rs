@@ -174,7 +174,6 @@ pub enum ErrorName {
     TaskCancelled,
     TaskPanicked,
     TimedOut,
-    TooFewArgs,
     TooManyArgs,
     TooManyLinks,
     UnableToSendCommand,
@@ -389,7 +388,6 @@ impl ErrorKind for crate::model::enums::ResourceType {
 impl ErrorKind for crate::search::TimeParsingError {
     fn kind(&self) -> ErrorName {
         match self {
-            Self::TooFewArgs => ErrorName::TooFewArgs,
             Self::TooManyArgs => ErrorName::TooManyArgs,
             Self::NotAnInteger(err) => err.kind().kind(),
             Self::OutOfRange(_) => ErrorName::OutOfRange,

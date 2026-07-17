@@ -8,10 +8,6 @@ use time::{Date, Duration, Month, OffsetDateTime, Time};
 /// NOTE: This can be replaced by official Pattern trait when stabilized.
 pub trait Pattern: Copy {
     fn matches(self, c: char) -> bool;
-
-    fn func(self) -> impl Fn(char) -> bool {
-        move |c: char| self.matches(c)
-    }
 }
 
 impl Pattern for char {
@@ -38,13 +34,13 @@ pub fn split_unescaped_whitespace(text: &str) -> impl Iterator<Item = &str> {
 pub fn split_once<P: Pattern>(text: &str, pattern: P) -> Option<(&str, &str)> {
     next_unescaped_split(text, pattern)
         .map(|index| text.split_at(index))
-        .map(|(left, right)| (left, right.strip_prefix(pattern.func()).unwrap_or_default()))
+        .map(|(left, right)| (left, right.strip_prefix(|c| pattern.matches(c)).unwrap_or_default()))
 }
 
 /// Parses string-based `condition`.
 pub fn str_condition(condition: &str) -> StrCondition {
-    if condition.contains('*') {
-        StrCondition::WildCard(unescape(condition).replace('*', "%").replace('_', "\\_").to_lowercase())
+    if next_unescaped_split(condition, '*').is_some() {
+        StrCondition::WildCard(to_like_pattern(condition))
     } else {
         StrCondition::Regular(parse_regular_str(condition))
     }
@@ -108,7 +104,6 @@ pub fn is_multivalued(condition: &str) -> bool {
 struct SplitUnescaped<'a, P> {
     text: &'a str,
     start: usize,
-    end: usize,
     pattern: P,
 }
 
@@ -117,7 +112,6 @@ impl<'a, P: Pattern> SplitUnescaped<'a, P> {
         Self {
             text,
             start: 0,
-            end: next_unescaped_split(text, pattern).unwrap_or(text.len()),
             pattern,
         }
     }
@@ -126,27 +120,29 @@ impl<'a, P: Pattern> SplitUnescaped<'a, P> {
 impl<'a, P: Pattern> Iterator for SplitUnescaped<'a, P> {
     type Item = &'a str;
     fn next(&mut self) -> Option<Self::Item> {
-        if self.start >= self.text.len() {
+        let remainder = self.text.get(self.start..)?;
+        if remainder.is_empty() {
             return None;
         }
-        let next = &self.text[self.start..self.end];
 
-        self.start = self.end + 1;
-        if let Some((head, remainder)) = self.text.split_at_checked(self.start) {
-            self.end = next_unescaped_split(remainder, self.pattern).unwrap_or(remainder.len()) + head.len();
+        if let Some(index) = next_unescaped_split(remainder, self.pattern) {
+            // Advance past the delimiter by its actual byte width
+            let delimiter_len = remainder[index..].chars().next().map_or(1, char::len_utf8);
+            self.start += index + delimiter_len;
+            Some(&remainder[..index])
+        } else {
+            self.start = self.text.len() + 1; // Terminate
+            Some(remainder)
         }
-
-        Some(next)
     }
 }
 
 /// Determines if character at `index` in `text` is escaped with `\`.
 fn is_unescaped(text: &str, index: usize) -> bool {
-    let backslash_count = text
-        .chars()
+    let backslash_count = text.as_bytes()[..index]
+        .iter()
         .rev()
-        .skip(text.len() - index)
-        .take_while(|&c| c == '\\')
+        .take_while(|&&b| b == b'\\')
         .count();
     backslash_count % 2 == 0
 }
@@ -162,29 +158,44 @@ fn next_unescaped_split<P: Pattern>(text: &str, pattern: P) -> Option<usize> {
 fn range_split(text: &str) -> Option<(&str, &str)> {
     let split_index = text
         .char_indices()
-        .filter(|&(_, c)| c == '.')
-        .filter_map(|(index, c)| {
-            let next_char = text.chars().nth(index + 1);
-            (c == '.' && next_char == Some('.')).then_some(index)
-        })
+        .filter_map(|(index, c)| (c == '.' && text[index..].starts_with("..")).then_some(index))
         .find(|&index| is_unescaped(text, index));
-    split_index
-        .map(|index| text.split_at(index))
-        .map(|(left, right)| (left, right.strip_prefix("..").unwrap_or_default()))
+    split_index.map(|index| (&text[..index], &text[index + 2..]))
 }
 
 /// Replaces escaped characters with unescaped ones in `text`.
 fn unescape(text: &str) -> String {
-    let mut escaped = text.starts_with('\\');
-    let start_index = usize::from(escaped);
-    text.chars()
-        .skip(start_index)
-        .filter(|&c| {
-            let skip = !escaped && c == '\\';
-            escaped = skip;
-            !skip
-        })
-        .collect()
+    let mut chars = text.chars();
+    let mut result = String::with_capacity(text.len());
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => result.extend(chars.next()),
+            c => result.push(c),
+        }
+    }
+    result
+}
+
+/// Converts a wildcard query into a SQL LIKE pattern.
+/// Unescaped `*` becomes `%`, literal `\`, `%`, and `_` are LIKE-escaped.
+fn to_like_pattern(text: &str) -> String {
+    let mut chars = text.chars();
+    let mut pattern = String::with_capacity(text.len());
+    while let Some(c) = chars.next() {
+        let literal = match c {
+            '\\' => chars.next().unwrap_or('\\'),
+            '*' => {
+                pattern.push('%');
+                continue;
+            }
+            c => c,
+        };
+        if matches!(literal, '\\' | '%' | '_') {
+            pattern.push('\\');
+        }
+        pattern.push(literal);
+    }
+    pattern
 }
 
 /// Parses a non-wildcard string-based `filter`.
@@ -208,10 +219,7 @@ fn parse_time(time: &str) -> Result<Range<DateTime>, TimeParsingError> {
     }
 
     let mut date_iterator = time.split('-');
-    let year: i32 = date_iterator
-        .next()
-        .ok_or(TimeParsingError::TooFewArgs)
-        .and_then(|value| value.parse().map_err(TimeParsingError::from))?;
+    let year: i32 = date_iterator.next().unwrap_or("").parse()?;
     let month = date_iterator.next().map(parse_month).transpose()?;
     let day: Option<u8> = date_iterator.next().map(str::parse).transpose()?;
     if date_iterator.next().is_some() {
@@ -304,6 +312,30 @@ mod test {
     }
 
     #[test]
+    fn condition_parsing_multibyte_chars() {
+        assert_eq!(split_once("café:bar", ':'), Some(("café", "bar")));
+        assert_eq!(split_once("é\\:b", ':'), None);
+        assert_eq!(split_once("a※b", '※'), Some(("a", "b")));
+        assert_eq!(split_once("a\\:é", ':'), None);
+
+        assert_eq!(
+            str_condition("🦀,日本語,émoji"),
+            StrCondition::Regular(Condition::Values(vec!["🦀".into(), "日本語".into(), "émoji".into()]))
+        );
+        assert_eq!(str_condition("a\\,é"), StrCondition::Regular(Condition::Values(vec!["a,é".into()])));
+        assert_eq!(str_condition("a\\..é"), StrCondition::Regular(Condition::Values(vec!["a..é".into()])));
+
+        assert_eq!(str_condition("é.."), StrCondition::Regular(Condition::GreaterEq("é".into())));
+        assert_eq!(str_condition("..é"), StrCondition::Regular(Condition::LessEq("é".into())));
+        assert_eq!(str_condition("あ..ん"), StrCondition::Regular(Condition::Range("あ".into().."ん".into())));
+        assert_eq!(str_condition("🦀..🦞"), StrCondition::Regular(Condition::Range("🦀".into().."🦞".into())));
+
+        assert_eq!(str_condition("🦀*"), StrCondition::WildCard("🦀%".into()));
+        assert_eq!(str_condition("*日本語*"), StrCondition::WildCard("%日本語%".into()));
+        assert_eq!(str_condition("ÉCLAIR*"), StrCondition::WildCard("ÉCLAIR%".into()));
+    }
+
+    #[test]
     fn split_unescaped() {
         let mut without_escapes = SplitUnescaped::new("The quick brown fox jumps over the lazy dog.", IsWhitespace);
         assert_eq!(without_escapes.next(), Some("The"));
@@ -334,6 +366,56 @@ mod test {
         let mut many_escapes = SplitUnescaped::new("lazy\\\\\\\\\\\\\\ dog.", IsWhitespace);
         assert_eq!(many_escapes.next(), Some("lazy\\\\\\\\\\\\\\ dog."));
         assert_eq!(many_escapes.next(), None);
+    }
+
+    #[test]
+    fn split_unescaped_multibyte_chars() {
+        let mut without_escapes = SplitUnescaped::new("Ｗｉｄｅ 𝓯𝓪𝓷𝓬𝔂 Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text العربية ᚛ᚉᚑᚅᚔ᚜ 𝄞 🦀", IsWhitespace);
+        assert_eq!(without_escapes.next(), Some("Ｗｉｄｅ"));
+        assert_eq!(without_escapes.next(), Some("𝓯𝓪𝓷𝓬𝔂"));
+        assert_eq!(without_escapes.next(), Some("Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text"));
+        assert_eq!(without_escapes.next(), Some("العربية"));
+        assert_eq!(without_escapes.next(), Some("᚛ᚉᚑᚅᚔ᚜"));
+        assert_eq!(without_escapes.next(), Some("𝄞"));
+        assert_eq!(without_escapes.next(), Some("🦀"));
+        assert_eq!(without_escapes.next(), None);
+
+        let mut with_escapes =
+            SplitUnescaped::new("Ｗｉｄｅ\\ 𝓯𝓪𝓷𝓬𝔂\\ Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text العربية\\ ᚛ᚉᚑᚅᚔ᚜ 𝄞\\ 🦀", IsWhitespace);
+        assert_eq!(with_escapes.next(), Some("Ｗｉｄｅ\\ 𝓯𝓪𝓷𝓬𝔂\\ Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text"));
+        assert_eq!(with_escapes.next(), Some("العربية\\ ᚛ᚉᚑᚅᚔ᚜"));
+        assert_eq!(with_escapes.next(), Some("𝄞\\ 🦀"));
+        assert_eq!(with_escapes.next(), None);
+
+        let mut escaped_escapes = SplitUnescaped::new("Ｗｉｄｅ\\\\ 𝓯𝓪𝓷𝓬𝔂\\\\ 𝄞\\\\ 🦀", IsWhitespace);
+        assert_eq!(escaped_escapes.next(), Some("Ｗｉｄｅ\\\\"));
+        assert_eq!(escaped_escapes.next(), Some("𝓯𝓪𝓷𝓬𝔂\\\\"));
+        assert_eq!(escaped_escapes.next(), Some("𝄞\\\\"));
+        assert_eq!(escaped_escapes.next(), Some("🦀"));
+        assert_eq!(escaped_escapes.next(), None);
+
+        let mut many_escapes = SplitUnescaped::new("Ｗｉｄｅ\\\\\\\\\\\\\\ 𝓯𝓪𝓷𝓬𝔂.", IsWhitespace);
+        assert_eq!(many_escapes.next(), Some("Ｗｉｄｅ\\\\\\\\\\\\\\ 𝓯𝓪𝓷𝓬𝔂."));
+        assert_eq!(many_escapes.next(), None);
+    }
+
+    #[test]
+    fn split_unescape_multibyte_delimiter() {
+        let mut multibyte_delimiter = SplitUnescaped::new("a※b※c※É※𝄞※🦀", '※');
+        assert_eq!(multibyte_delimiter.next(), Some("a"));
+        assert_eq!(multibyte_delimiter.next(), Some("b"));
+        assert_eq!(multibyte_delimiter.next(), Some("c"));
+        assert_eq!(multibyte_delimiter.next(), Some("É"));
+        assert_eq!(multibyte_delimiter.next(), Some("𝄞"));
+        assert_eq!(multibyte_delimiter.next(), Some("🦀"));
+        assert_eq!(multibyte_delimiter.next(), None);
+
+        let mut multibyte_delimiter_escaped = SplitUnescaped::new("a\\※b※c※É\\※𝄞※🦀", '※');
+        assert_eq!(multibyte_delimiter_escaped.next(), Some("a\\※b"));
+        assert_eq!(multibyte_delimiter_escaped.next(), Some("c"));
+        assert_eq!(multibyte_delimiter_escaped.next(), Some("É\\※𝄞"));
+        assert_eq!(multibyte_delimiter_escaped.next(), Some("🦀"));
+        assert_eq!(multibyte_delimiter_escaped.next(), None);
     }
 
     #[test]
@@ -395,5 +477,24 @@ mod test {
         assert_eq!(str_condition("\\..."), StrCondition::Regular(Condition::GreaterEq(".".into())));
         assert_eq!(str_condition("..\\."), StrCondition::Regular(Condition::LessEq(".".into())));
         assert_eq!(str_condition("\\\\..."), StrCondition::Regular(Condition::Range("\\".into()..".".into())));
+    }
+
+    #[test]
+    fn escaped_asterisk() {
+        assert_eq!(str_condition("a\\*b"), StrCondition::Regular(Condition::Values(vec!["a*b".into()])));
+        assert_eq!(str_condition("a\\*b*"), StrCondition::WildCard("a*b%".into()));
+        assert_eq!(str_condition("a\\\\*b"), StrCondition::WildCard("a\\\\%b".into()));
+        assert_eq!(str_condition("a\\\\\\*b"), StrCondition::Regular(Condition::Values(vec!["a\\*b".into()])));
+        assert_eq!(str_condition("a\\\\\\\\*b"), StrCondition::WildCard("a\\\\\\\\%b".into()));
+    }
+
+    #[test]
+    fn wildcard_escaping() {
+        assert_eq!(str_condition("a_b*"), StrCondition::WildCard("a\\_b%".into()));
+        assert_eq!(str_condition("a\\_b*"), StrCondition::WildCard("a\\_b%".into()));
+        assert_eq!(str_condition("a\\\\_b*"), StrCondition::WildCard("a\\\\\\_b%".into()));
+        assert_eq!(str_condition("100%*"), StrCondition::WildCard("100\\%%".into()));
+        assert_eq!(str_condition("100\\%*"), StrCondition::WildCard("100\\%%".into()));
+        assert_eq!(str_condition("100\\\\%*"), StrCondition::WildCard("100\\\\\\%%".into()));
     }
 }

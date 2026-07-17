@@ -66,8 +66,6 @@ pub trait Builder<'a>: Sized {
 #[derive(Debug, thiserror::Error)]
 #[error(transparent)]
 pub enum TimeParsingError {
-    #[error("Dates need at least one parameter")]
-    TooFewArgs,
     #[error("Dates can have at most one parameter")]
     TooManyArgs,
     NotAnInteger(#[from] std::num::ParseIntError),

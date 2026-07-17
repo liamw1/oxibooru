@@ -28,10 +28,6 @@ impl SmallString {
     pub fn new(text: impl AsRef<str>) -> Self {
         Self(CompactString::new(text))
     }
-
-    pub fn to_lowercase(&self) -> Self {
-        Self(self.0.to_lowercase())
-    }
 }
 
 impl Deref for SmallString {
