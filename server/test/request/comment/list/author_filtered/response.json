@@ -5,7 +5,10 @@
     "results": [
         {
             "id": 2
+        },
+        {
+            "id": 4
         }
     ],
-    "total": 1
+    "total": 2
 }

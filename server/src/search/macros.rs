@@ -42,17 +42,21 @@ macro_rules! apply_time_filter {
 #[macro_export]
 macro_rules! apply_str_filter {
     ($query:expr, $expression:expr, $filter:expr) => {{
-        use diesel::TextExpressionMethods;
+        use diesel::{BoolExpressionMethods, TextExpressionMethods};
         match $crate::search::parse::str_condition($filter.condition) {
             $crate::search::StrCondition::Regular(condition) => {
                 $crate::apply_condition!($query, $expression, $filter, condition)
             }
             $crate::search::StrCondition::WildCard(pattern) => match $filter.negated {
                 // Even though most text-based columns are CITEXT, we cast to lower
-                // here to get postgres to use TEXT index. We do this because CITEXT
+                // here to get PostgreSQL to use TEXT index. We do this because CITEXT
                 // indexes do not work with patterns.
-                true => $query.filter($crate::search::lower($expression).not_like(pattern)),
                 false => $query.filter($crate::search::lower($expression).like(pattern)),
+                true => $query.filter(
+                    $crate::search::lower($expression)
+                        .not_like(pattern)
+                        .or($expression.is_null()),
+                ),
             },
         }
     }};
@@ -210,15 +214,24 @@ macro_rules! apply_random_sort {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! apply_condition {
-    ($query:expr, $expression:expr, $filter:expr, $condition:expr) => {
+    ($query:expr, $expression:expr, $filter:expr, $condition:expr) => {{
+        use diesel::BoolExpressionMethods;
         if $filter.negated {
             match $condition {
-                $crate::search::Condition::Values(values) => $query.filter($expression.ne_all(values)),
-                $crate::search::Condition::GreaterEq(value) => $query.filter($expression.lt(value)),
-                $crate::search::Condition::LessEq(value) => $query.filter($expression.gt(value)),
-                $crate::search::Condition::Range(range) => {
-                    $query.filter($expression.not_between(range.start, range.end))
+                $crate::search::Condition::Values(values) => {
+                    $query.filter($expression.ne_all(values).or($expression.is_null()))
                 }
+                $crate::search::Condition::GreaterEq(value) => {
+                    $query.filter($expression.lt(value).or($expression.is_null()))
+                }
+                $crate::search::Condition::LessEq(value) => {
+                    $query.filter($expression.gt(value).or($expression.is_null()))
+                }
+                $crate::search::Condition::Range(range) => $query.filter(
+                    $expression
+                        .not_between(range.start, range.end)
+                        .or($expression.is_null()),
+                ),
             }
         } else {
             match $condition {
@@ -228,5 +241,5 @@ macro_rules! apply_condition {
                 $crate::search::Condition::Range(range) => $query.filter($expression.between(range.start, range.end)),
             }
         }
-    };
+    }};
 }
