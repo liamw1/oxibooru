@@ -28,7 +28,7 @@ macro_rules! apply_time_filter {
                     };
                 }
                 $crate::search::Condition::GreaterEq(time) => $crate::search::Condition::GreaterEq(time.start),
-                $crate::search::Condition::LessEq(time) => $crate::search::Condition::LessEq(time.start),
+                $crate::search::Condition::LessEq(time) => $crate::search::Condition::LessEq(time.end),
                 $crate::search::Condition::Range(range) => {
                     $crate::search::Condition::Range(range.start.start..range.end.end)
                 }
