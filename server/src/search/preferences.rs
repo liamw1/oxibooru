@@ -40,20 +40,15 @@ pub fn hidden_posts<C>(ctx: &Context, post_id_column: C) -> Option<BoxedQuery>
 where
     C: Expression<SqlType = BigInt> + QueryFragment<Pg> + Send + 'static,
 {
-    if ctx.client.rank != UserRank::Anonymous {
+    let preferences = &ctx.config.anonymous_preferences;
+    if ctx.client.rank != UserRank::Anonymous || preferences.is_empty() {
         return None;
     }
-    let preferences = &ctx.config.anonymous_preferences;
 
     let mut query = inner_post
         .select(sql::<Integer>("0"))
         .inner_join(post_statistics::table)
         .into_boxed();
-
-    // If no preferences are specified, no posts are hidden
-    if preferences.is_empty() {
-        return Some(query.filter(sql::<Bool>("0 = 1")));
-    }
 
     if preferences.hide_sketchy {
         query = query.or_filter(inner_post.field(post::safety).eq(PostSafety::Sketchy));
