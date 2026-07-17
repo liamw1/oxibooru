@@ -7,7 +7,6 @@ use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::model::tag_category::{NewTagCategory, TagCategory};
 use crate::resource::tag_category::{Field, TagCategoryInfo};
 use crate::schema::{tag, tag_category};
-use crate::search::preferences;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use crate::{api, snapshot};
@@ -31,7 +30,7 @@ fn verify_visibility(conn: &mut PgConnection, ctx: &Context, category_name: &Sma
         .optional()?
         .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
 
-    if preferences::category_hidden(conn, ctx, category_name)? {
+    if ctx.preferences().category_hidden(conn, category_name)? {
         Err(ApiError::Hidden(ResourceType::TagCategory))
     } else {
         Ok(category)

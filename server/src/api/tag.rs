@@ -7,8 +7,8 @@ use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, Tag};
 use crate::resource::tag::{Field, TagInfo};
 use crate::schema::{post_tag, tag, tag_category, tag_name};
+use crate::search::Builder;
 use crate::search::tag::QueryBuilder;
-use crate::search::{Builder, preferences};
 use crate::snapshot::tag::SnapshotData;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
@@ -35,7 +35,14 @@ pub fn routes() -> OpenApiRouter<AppState> {
 const MAX_TAG_SIBLINGS: i64 = 50;
 
 fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &SmallString) -> ApiResult<i64> {
-    if preferences::has_preferences(ctx) {
+    if ctx.preferences().is_empty() {
+        tag_name::table
+            .select(tag_name::tag_id)
+            .filter(tag_name::name.eq(tag_name))
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))
+    } else {
         let (tag_id, category_name): (i64, SmallString) = tag::table
             .inner_join(tag_name::table)
             .inner_join(tag_category::table)
@@ -45,18 +52,11 @@ fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &SmallStr
             .optional()?
             .ok_or(ApiError::NotFound(ResourceType::Tag))?;
 
-        if preferences::tag_hidden(conn, ctx, tag_name, &category_name)? {
+        if ctx.preferences().tag_hidden(conn, tag_name, &category_name)? {
             Err(ApiError::Hidden(ResourceType::Tag))
         } else {
             Ok(tag_id)
         }
-    } else {
-        tag_name::table
-            .select(tag_name::tag_id)
-            .filter(tag_name::name.eq(tag_name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Tag))
     }
 }
 
@@ -229,7 +229,7 @@ async fn get_siblings(
                 .limit(MAX_TAG_SIBLINGS)
                 .into_boxed();
 
-            if let Some(hidden_tags) = preferences::hidden_tags(&ctx) {
+            if let Some(hidden_tags) = ctx.preferences().hidden_tags() {
                 sibling_query = sibling_query.filter(post_tag::tag_id.ne_all(hidden_tags));
             }
 

@@ -8,8 +8,8 @@ use crate::model::comment::{NewComment, NewCommentScore};
 use crate::model::enums::{ResourceType, Score};
 use crate::resource::comment::{CommentInfo, Field};
 use crate::schema::{comment, comment_score};
+use crate::search::Builder;
 use crate::search::comment::QueryBuilder;
-use crate::search::{Builder, preferences};
 use crate::time::DateTime;
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
@@ -31,7 +31,7 @@ fn verify_visibility(conn: &mut PgConnection, ctx: &Context, comment_id: i64) ->
         return Err(ApiError::NotFound(ResourceType::Comment));
     }
 
-    if let Some(hidden_posts) = preferences::hidden_posts(ctx, comment::post_id) {
+    if let Some(hidden_posts) = ctx.preferences().hidden_posts(comment::post_id) {
         let comment_lookup = comment::table.find(comment_id).filter(exists(hidden_posts));
         let comment_hidden: bool = diesel::select(exists(comment_lookup)).first(conn)?;
         if comment_hidden {

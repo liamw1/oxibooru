@@ -9,7 +9,6 @@ use crate::schema::{
 };
 use crate::search::{
     self, Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
-    preferences,
 };
 use crate::{
     apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
@@ -102,7 +101,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() || preferences::has_preferences(self.search.ctx) {
+        if self.search.has_filter() || !self.search.ctx.preferences().is_empty() {
             let unsorted_query = self.build_filtered(conn)?;
             unsorted_query.count().first(conn)
         } else {
@@ -166,7 +165,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
         if let Some(nonmatching) = nonmatching_posts {
             update_nonmatching_filter_cache!(conn, nonmatching, self.cache_state)?;
         }
-        if let Some(hidden_posts) = preferences::hidden_posts(self.search.ctx, post::id) {
+        if let Some(hidden_posts) = self.search.ctx.preferences().hidden_posts(post::id) {
             query = query.filter(not(exists(hidden_posts)));
         }
         Ok(apply_cache_filters!(query, post::id, self.cache_state))

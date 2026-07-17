@@ -1,21 +1,21 @@
-# Used to salt the users' password hashes
+# Used to salt the users' password hashes.
 password_secret = "change"
-# Used to generate filenames for static content (any bytes after the first 32 will be ignored)
+# Used to generate filenames for static content (any bytes after the first 32 will be ignored).
 content_secret = "change"
 
-# full url to the homepage of this szurubooru site, with no trailing slash
-# domain: # example: http://example.com
+# full url to the homepage of this szurubooru site, with no trailing slash.
+#domain: # example: http://example.com
 
 data_url = "data"
 data_dir = "/data"
 
-# Webhooks to call when events occur (such as post/tag/user/etc. changes)
-# the listed urls will be called with a HTTP POST request with a payload
-# containing a snapshot resource as JSON. See docs/API.md for details
+# Webhooks to call when events occur (such as post/tag/user/etc. changes).
+# The listed urls will be called with a HTTP POST request with a payload
+# containing a snapshot resource as JSON. See docs/API.md for details.
 webhooks = []
 
-# Delete thumbnails and source files on post delete
-# Original functionality is false, to mitigate the impacts of admins going on unchecked post purges
+# Delete thumbnails and source files on post delete.
+# Original functionality is false, to mitigate the impacts of admins going on unchecked post purges.
 delete_source_files = false
 
 # Adds tag implications to post tags on edit.
@@ -23,20 +23,20 @@ delete_source_files = false
 # like tags not able to be removed due to being implied by another tag.
 append_tag_implications_on_post_edit = false
 
-# Threshold used for reverse search
-# Must be a number between 0 and 1
+# Threshold used for reverse search.
+# Must be a number between 0 and 1.
 post_similarity_threshold = 0.55
 
 pool_name_regex     = "^\\S+$"
 pool_category_regex = "^[^\\s%+#/]+$"
 
-# Directive for controlling log verbosity for different parts of the server
-# Valid log levels are trace, debug, info, warn, and error
-# For additional options, see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives
+# Directive for controlling log verbosity for different parts of the server.
+# Valid log levels are trace, debug, info, warn, and error.
+# For additional options, see https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives.
 log_filter = "oxibooru_server=info,tower_http=debug,axum=trace"
 
-# Enables/disables auto_explain in PostgreSQL
-# When enabled, causes SQL queries to be logged and explained automatically
+# Enables/disables auto_explain in PostgreSQL.
+# When enabled, causes SQL queries to be logged and explained automatically.
 # This has a negative performance impact, but can be useful for debugging.
 auto_explain = false
 
@@ -46,16 +46,18 @@ avatar_height = 300
 post_width    = 300
 post_height   = 300
 
-# Used to send password reset e-mails
-# port, username, and password are optional
-# [smtp]
-# host = # example: "smtp.gmail.com"
-# port = # example: 25
-# username = # example: "bot"
-# password = # example: "groovy123"
-# from     = # example: "App <noreply@example.com>"
+# Used to send password reset e-mails.
+# Port, username, and password are optional.
+#[smtp]
+#host = # example: "smtp.gmail.com"
+#port = # example: 25
+#username = # example: "bot"
+#password = # example: "groovy123"
+#from     = # example: "App <noreply@example.com>"
 
-# Preferences that are automatically applied to anonymous users
+# Preferences that are automatically applied to anonymous users. You can also apply server-wide preferences to other
+# user rank levels by making similar config tables, up to and including moderators. Preferences accumulate down the rank
+# hierarchy, so any tags/categories blacklisted for moderators are also blacklisted for power users, regular users, etc.
 [anonymous_preferences]
 tag_blacklist = []
 tag_category_blacklist = []
@@ -64,22 +66,23 @@ hide_sketchy = false
 hide_untagged = false
 
 [public_info]
-# Shown in the website title and on the front page
+# Shown in the website title and on the front page.
 name = "oxibooru"
 
 default_user_rank = "regular"
 
 enable_safety = true
 
-# Don't make these more restrictive unless you want to annoy people
-# If you do customize them, make sure to update the instructions in the registration form template as well
+# Don't make these more restrictive unless you want to annoy people.
+# If you do customize them, make sure to update the instructions in the registration form template as well.
 username_regex = "^[a-zA-Z0-9_-]{1,32}$"
 password_regex = "^.{5,}$"
 
 tag_name_regex          = "^\\S+$"
 tag_category_name_regex = "^[^\\s%+#/]+$"
 
-# contact_email = example: bob@example.com. # Meant for manual password reset procedures
+# Meant for manual password reset procedures.
+#contact_email = example: bob@example.com
 
 [public_info.privileges]
 user_create_self           = "anonymous" # Registration permission
@@ -95,7 +98,7 @@ user_edit_self_name        = "regular"
 user_edit_self_pass        = "regular"
 user_edit_self_email       = "regular"
 user_edit_self_avatar      = "regular"
-user_edit_self_rank        = "moderator" # one can't promote themselves or anyone to upper rank than their own
+user_edit_self_rank        = "moderator" # One can't promote themselves or anyone to upper rank than their own
 user_delete_any            = "administrator"
 user_delete_self           = "regular"
 

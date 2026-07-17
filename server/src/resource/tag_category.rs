@@ -2,7 +2,6 @@ use crate::app::Context;
 use crate::model::tag_category::TagCategory;
 use crate::resource::field::Mask;
 use crate::schema::{tag_category, tag_category_statistics};
-use crate::search::preferences;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
@@ -72,7 +71,7 @@ impl TagCategoryInfo {
             .select((TagCategory::as_select(), tag_category_statistics::usage_count))
             .order(tag_category::order)
             .into_boxed();
-        if let Some(hidden_categories) = preferences::hidden_categories(ctx) {
+        if let Some(hidden_categories) = ctx.preferences().hidden_categories() {
             tag_categories = tag_categories.filter(tag_category::name.ne_all(hidden_categories));
         }
 

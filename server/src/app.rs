@@ -5,6 +5,8 @@ use crate::config::{Action, Config};
 use crate::content::cache::RingCache;
 use crate::db::AsyncConnectionPool;
 use crate::extract::Ctx;
+use crate::model::enums::UserRank;
+use crate::search::preferences::Preferences;
 use crate::{admin, api, config, db, filesystem};
 use axum::Router;
 use reqwest::Client as HttpClient;
@@ -80,6 +82,17 @@ impl Context {
 
     pub fn get_content_cache(&self) -> MutexGuard<'_, RingCache> {
         self.content_cache.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    pub fn preferences(&self) -> &Preferences {
+        match self.client.rank {
+            UserRank::Anonymous => &self.config.anonymous_preferences,
+            UserRank::Restricted => &self.config.restricted_preferences,
+            UserRank::Regular => &self.config.regular_preferences,
+            UserRank::Power => &self.config.power_preferences,
+            UserRank::Moderator => &self.config.moderator_preferences,
+            UserRank::Administrator => &self.config.administrator_preferences,
+        }
     }
 }
 

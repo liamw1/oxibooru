@@ -518,7 +518,7 @@ mod test {
 
         // Quotes are stripped from plain values
         assert_eq!(str_condition(r#""str""#), StrCondition::Regular(Condition::Values(vec!["str".into()])));
-        assert_eq!(str_condition(r#""""#), StrCondition::Regular(Condition::Values(vec!["".into()])));
+        assert_eq!(str_condition(r#""""#), StrCondition::Regular(Condition::Values(vec![String::new()])));
 
         // Quoted sections can be mixed with unquoted text
         assert_eq!(str_condition(r#"a"b,c"d"#), StrCondition::Regular(Condition::Values(vec!["ab,cd".into()])));
@@ -596,9 +596,9 @@ mod test {
         // Empty quoted values in lists and ranges
         assert_eq!(
             str_condition(r#"a,"",b"#),
-            StrCondition::Regular(Condition::Values(vec!["a".into(), "".into(), "b".into()]))
+            StrCondition::Regular(Condition::Values(vec!["a".into(), String::new(), "b".into()]))
         );
-        assert_eq!(str_condition(r#"""..b"#), StrCondition::Regular(Condition::Range("".into().."b".into())));
+        assert_eq!(str_condition(r#"""..b"#), StrCondition::Regular(Condition::Range(String::new().."b".into())));
 
         // Quotes adjacent to range dots
         assert_eq!(str_condition(r#"a"."..b"#), StrCondition::Regular(Condition::Range("a.".into().."b".into())));
@@ -625,7 +625,7 @@ mod test {
             StrCondition::Regular(Condition::Values(vec!["a".into(), "b,c".into()]))
         );
         assert_eq!(str_condition(r#""a*"#), StrCondition::Regular(Condition::Values(vec!["a*".into()])));
-        assert_eq!(unescape(r#"""#), "".to_owned());
+        assert_eq!(unescape(r#"""#), String::new());
     }
 
     #[test]

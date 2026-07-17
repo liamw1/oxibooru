@@ -1,5 +1,6 @@
 use crate::filesystem::Directory;
 use crate::model::enums::UserRank;
+use crate::search::preferences::Preferences;
 use crate::string::SmallString;
 use config::builder::DefaultState;
 use config::{ConfigBuilder, File, FileFormat};
@@ -55,25 +56,6 @@ pub struct SmtpConfig {
     pub username: Option<SmallString>,
     pub password: Option<SmallString>,
     pub from: Mailbox,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct AnonymousPreferences {
-    pub tag_blacklist: Vec<SmallString>,
-    pub tag_category_blacklist: Vec<SmallString>,
-    pub hide_unsafe: bool,
-    pub hide_sketchy: bool,
-    pub hide_untagged: bool,
-}
-
-impl AnonymousPreferences {
-    pub fn is_empty(&self) -> bool {
-        self.tag_blacklist.is_empty()
-            && self.tag_category_blacklist.is_empty()
-            && !self.hide_unsafe
-            && !self.hide_sketchy
-            && !self.hide_untagged
-    }
 }
 
 #[derive(Clone, Copy, EnumCount, EnumIter, EnumTable, IntoStaticStr)]
@@ -271,7 +253,18 @@ pub struct Config {
     pub auto_explain: bool,
     pub thumbnails: ThumbnailConfig,
     pub smtp: Option<SmtpConfig>,
-    pub anonymous_preferences: AnonymousPreferences,
+    #[serde(default)]
+    pub anonymous_preferences: Preferences,
+    #[serde(default)]
+    pub restricted_preferences: Preferences,
+    #[serde(default)]
+    pub regular_preferences: Preferences,
+    #[serde(default)]
+    pub power_preferences: Preferences,
+    #[serde(default)]
+    pub moderator_preferences: Preferences,
+    #[serde(skip)] // Administrators have no server-wide preferences/blacklists
+    pub administrator_preferences: Preferences,
     pub public_info: PublicConfig,
 }
 
@@ -394,5 +387,12 @@ fn create_config(config_path: Option<&str>) -> Config {
         }
     };
     config.public_info.can_send_mails = config.smtp.is_some();
+
+    // Accumulate preferences from higher user ranks
+    config.power_preferences.merge(&config.moderator_preferences);
+    config.regular_preferences.merge(&config.power_preferences);
+    config.restricted_preferences.merge(&config.regular_preferences);
+    config.anonymous_preferences.merge(&config.restricted_preferences);
+
     config
 }

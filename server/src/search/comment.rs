@@ -1,7 +1,7 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::Context;
 use crate::schema::{comment, comment_statistics, database_statistics, user};
-use crate::search::{Builder, Order, ParsedSort, SearchCriteria, preferences};
+use crate::search::{Builder, Order, ParsedSort, SearchCriteria};
 use crate::{apply_filter, apply_random_sort, apply_sort, apply_str_filter, apply_time_filter};
 use diesel::dsl::{InnerJoin, IntoBoxed, LeftJoin, Select, exists, not};
 use diesel::pg::Pg;
@@ -41,7 +41,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
     }
 
     fn count(&mut self, conn: &mut PgConnection) -> ApiResult<i64> {
-        if self.search.has_filter() || preferences::has_preferences(self.search.ctx) {
+        if self.search.has_filter() || !self.search.ctx.preferences().is_empty() {
             let unsorted_query = self.build_filtered(conn)?;
             unsorted_query.count().first(conn)
         } else {
@@ -73,7 +73,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             })?;
 
         // Apply preference filters to comments
-        if let Some(hidden_posts) = preferences::hidden_posts(self.search.ctx, comment::post_id) {
+        if let Some(hidden_posts) = self.search.ctx.preferences().hidden_posts(comment::post_id) {
             query = query.filter(not(exists(hidden_posts)));
         }
         Ok(query)

@@ -15,7 +15,6 @@ use crate::schema::{
     comment, pool_post, post, post_favorite, post_feature, post_note, post_relation, post_score, post_signature,
     post_tag,
 };
-use crate::search::preferences;
 use crate::time::DateTime;
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
@@ -58,7 +57,7 @@ pub fn set_relations(
     new_related_posts: &mut Vec<i64>,
 ) -> ApiResult<()> {
     // Add relations client doesn't know about
-    if let Some(hidden_posts) = preferences::hidden_posts(ctx, post_relation::child_id) {
+    if let Some(hidden_posts) = ctx.preferences().hidden_posts(post_relation::child_id) {
         let hidden_relations: Vec<i64> = post_relation::table
             .select(post_relation::child_id)
             .filter(post_relation::parent_id.eq(post_id))
