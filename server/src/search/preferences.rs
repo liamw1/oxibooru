@@ -1,4 +1,5 @@
 use crate::app::Context;
+use crate::config::AnonymousPreferences;
 use crate::model::enums::{PostSafety, UserRank};
 use crate::schema::{post, post_statistics, post_tag, tag, tag_category, tag_name};
 use crate::string::SmallString;
@@ -11,8 +12,15 @@ use diesel::{Expression, ExpressionMethods, PgConnection, QueryDsl, QueryResult,
 
 alias!(post as inner_post: PostAlias);
 
-pub type BoxedQuery =
+pub type HiddenTagsBoxedQuery<'a> =
+    IntoBoxed<'a, InnerJoin<InnerJoin<Select<tag::table, tag::id>, tag_category::table>, tag_name::table>, Pg>;
+
+pub type HiddenPostsBoxedQuery =
     IntoBoxed<'static, InnerJoin<Select<inner_post, SqlLiteral<Integer>>, post_statistics::table>, Pg>;
+
+pub fn get(ctx: &Context) -> Option<&AnonymousPreferences> {
+    (ctx.client.rank == UserRank::Anonymous && has_preferences(ctx)).then_some(&ctx.config.anonymous_preferences)
+}
 
 pub fn has_preferences(ctx: &Context) -> bool {
     ctx.client.rank == UserRank::Anonymous && !ctx.config.anonymous_preferences.is_empty()
@@ -36,7 +44,34 @@ pub fn tag_hidden(conn: &mut PgConnection, ctx: &Context, tag_name: &str, catego
     })
 }
 
-pub fn hidden_posts<C>(ctx: &Context, post_id_column: C) -> Option<BoxedQuery>
+pub fn hidden_categories(ctx: &Context) -> Option<&[SmallString]> {
+    let preferences = &ctx.config.anonymous_preferences;
+    (ctx.client.rank == UserRank::Anonymous && !preferences.is_empty()).then_some(&preferences.tag_category_blacklist)
+}
+
+pub fn hidden_tags<'a>(ctx: &'a Context) -> Option<HiddenTagsBoxedQuery<'a>> {
+    let preferences = &ctx.config.anonymous_preferences;
+    if ctx.client.rank != UserRank::Anonymous
+        || (preferences.tag_blacklist.is_empty() && preferences.tag_category_blacklist.is_empty())
+    {
+        return None;
+    }
+
+    let mut query = tag::table
+        .select(tag::id)
+        .inner_join(tag_category::table)
+        .inner_join(tag_name::table)
+        .into_boxed();
+    if !preferences.tag_blacklist.is_empty() {
+        query = query.filter(tag_name::name.eq_any(&preferences.tag_blacklist));
+    }
+    if !preferences.tag_category_blacklist.is_empty() {
+        query = query.or_filter(tag_category::name.eq_any(&preferences.tag_category_blacklist));
+    }
+    Some(query)
+}
+
+pub fn hidden_posts<C>(ctx: &Context, post_id_column: C) -> Option<HiddenPostsBoxedQuery>
 where
     C: Expression<SqlType = BigInt> + QueryFragment<Pg> + Send + 'static,
 {

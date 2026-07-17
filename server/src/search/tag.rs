@@ -1,11 +1,10 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::Context;
-use crate::model::enums::UserRank;
 use crate::model::tag::TagName;
 use crate::schema::{
     database_statistics, tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion,
 };
-use crate::search::{Builder, CacheState, Order, ParsedSort, SearchCriteria, UnparsedFilter};
+use crate::search::{Builder, CacheState, Order, ParsedSort, SearchCriteria, UnparsedFilter, preferences};
 use crate::{
     apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
     apply_time_filter, update_filter_cache,
@@ -123,9 +122,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
 impl<'a> QueryBuilder<'a> {
     pub fn new(ctx: &'a Context, search_criteria: &'a str) -> ApiResult<Self> {
         let mut search = SearchCriteria::new(ctx, search_criteria, Token::Name).map_err(Box::from)?;
-        if ctx.client.rank == UserRank::Anonymous {
-            let preferences = &ctx.config.anonymous_preferences;
-
+        if let Some(preferences) = preferences::get(ctx) {
             let tag_blacklist_filters = preferences.tag_blacklist.iter().map(|condition| UnparsedFilter {
                 kind: Token::Name,
                 condition,

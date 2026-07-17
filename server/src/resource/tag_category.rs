@@ -1,8 +1,8 @@
 use crate::app::Context;
-use crate::model::enums::UserRank;
 use crate::model::tag_category::TagCategory;
 use crate::resource::field::Mask;
 use crate::schema::{tag_category, tag_category_statistics};
+use crate::search::preferences;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper};
@@ -72,9 +72,8 @@ impl TagCategoryInfo {
             .select((TagCategory::as_select(), tag_category_statistics::usage_count))
             .order(tag_category::order)
             .into_boxed();
-        if ctx.client.rank == UserRank::Anonymous {
-            tag_categories = tag_categories
-                .filter(tag_category::name.ne_all(&ctx.config.anonymous_preferences.tag_category_blacklist));
+        if let Some(hidden_categories) = preferences::hidden_categories(ctx) {
+            tag_categories = tag_categories.filter(tag_category::name.ne_all(hidden_categories));
         }
 
         let tag_categories: Vec<(TagCategory, i64)> = tag_categories.load(conn)?;

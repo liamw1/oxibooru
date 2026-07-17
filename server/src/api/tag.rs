@@ -3,7 +3,7 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::app::{AppState, Context};
 use crate::config::Action;
 use crate::extract::{Ctx, DeleteBody, Json, MergeBody, PageParams, PagedResponse, Path, Query, ResourceParams};
-use crate::model::enums::{ResourceType, UserRank};
+use crate::model::enums::ResourceType;
 use crate::model::tag::{NewTag, Tag};
 use crate::resource::tag::{Field, TagInfo};
 use crate::schema::{post_tag, tag, tag_category, tag_name};
@@ -35,7 +35,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 const MAX_TAG_SIBLINGS: i64 = 50;
 
 fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &SmallString) -> ApiResult<i64> {
-    if ctx.client.rank == UserRank::Anonymous {
+    if preferences::has_preferences(ctx) {
         let (tag_id, category_name): (i64, SmallString) = tag::table
             .inner_join(tag_name::table)
             .inner_join(tag_category::table)
@@ -229,14 +229,7 @@ async fn get_siblings(
                 .limit(MAX_TAG_SIBLINGS)
                 .into_boxed();
 
-            if ctx.client.rank == UserRank::Anonymous {
-                let preferences = &ctx.config.anonymous_preferences;
-                let hidden_tags = tag::table
-                    .select(tag::id)
-                    .inner_join(tag_category::table)
-                    .inner_join(tag_name::table)
-                    .filter(tag_name::name.eq_any(&preferences.tag_blacklist))
-                    .or_filter(tag_category::name.eq_any(&preferences.tag_category_blacklist));
+            if let Some(hidden_tags) = preferences::hidden_tags(&ctx) {
                 sibling_query = sibling_query.filter(post_tag::tag_id.ne_all(hidden_tags));
             }
 
