@@ -100,6 +100,14 @@ pub fn is_multivalued(condition: &str) -> bool {
         || range_split(condition).is_some()
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum CharKind {
+    Normal,  // Unquoted, unescaped — splittable, `*` is a wildcard
+    Literal, // Inside quotes or after `\` — never split, never wildcard
+    Quote,   // An unescaped `"` — syntax, dropped on unescape
+    Escape,  // An unescaped `\` — syntax, dropped on unescape
+}
+
 /// A general iterator over patterns that are not escaped with `\`.
 struct SplitUnescaped<'a, P> {
     text: &'a str,
@@ -137,63 +145,62 @@ impl<'a, P: Pattern> Iterator for SplitUnescaped<'a, P> {
     }
 }
 
-/// Determines if character at `index` in `text` is escaped with `\`.
-fn is_unescaped(text: &str, index: usize) -> bool {
-    let backslash_count = text.as_bytes()[..index]
-        .iter()
-        .rev()
-        .take_while(|&&b| b == b'\\')
-        .count();
-    backslash_count % 2 == 0
+fn scan(text: &str) -> impl Iterator<Item = (usize, char, CharKind)> + '_ {
+    let mut quoted = false;
+    let mut escaped = false;
+    text.char_indices().map(move |(i, c)| {
+        let kind = if escaped {
+            escaped = false;
+            CharKind::Literal
+        } else if c == '\\' {
+            escaped = true;
+            CharKind::Escape
+        } else if c == '"' {
+            quoted = !quoted;
+            CharKind::Quote
+        } else if quoted {
+            CharKind::Literal
+        } else {
+            CharKind::Normal
+        };
+        (i, c, kind)
+    })
 }
 
 /// Finds the index of next unescaped character that matches `pattern` in `text`.
 fn next_unescaped_split<P: Pattern>(text: &str, pattern: P) -> Option<usize> {
-    text.char_indices()
-        .filter_map(|(index, c)| pattern.matches(c).then_some(index))
-        .find(|&index| is_unescaped(text, index))
+    scan(text).find_map(|(i, c, kind)| (kind == CharKind::Normal && pattern.matches(c)).then_some(i))
 }
 
 /// Splits `text` into two parts if it contains an unescaped ".." substring.
 fn range_split(text: &str) -> Option<(&str, &str)> {
-    let split_index = text
-        .char_indices()
-        .filter_map(|(index, c)| (c == '.' && text[index..].starts_with("..")).then_some(index))
-        .find(|&index| is_unescaped(text, index));
-    split_index.map(|index| (&text[..index], &text[index + 2..]))
+    scan(text)
+        .find_map(|(i, _, kind)| (kind == CharKind::Normal && text[i..].starts_with("..")).then_some(i))
+        .map(|i| (&text[..i], &text[i + 2..]))
 }
 
 /// Replaces escaped characters with unescaped ones in `text`.
 fn unescape(text: &str) -> String {
-    let mut chars = text.chars();
-    let mut result = String::with_capacity(text.len());
-    while let Some(c) = chars.next() {
-        match c {
-            '\\' => result.extend(chars.next()),
-            c => result.push(c),
-        }
-    }
-    result
+    scan(text)
+        .filter_map(|(_, c, kind)| matches!(kind, CharKind::Normal | CharKind::Literal).then_some(c))
+        .collect()
 }
 
 /// Converts a wildcard query into a SQL LIKE pattern.
 /// Unescaped `*` becomes `%`, literal `\`, `%`, and `_` are LIKE-escaped.
 fn to_like_pattern(text: &str) -> String {
-    let mut chars = text.chars();
     let mut pattern = String::with_capacity(text.len());
-    while let Some(c) = chars.next() {
-        let literal = match c {
-            '\\' => chars.next().unwrap_or('\\'),
-            '*' => {
-                pattern.push('%');
-                continue;
+    for (_, c, kind) in scan(text) {
+        match kind {
+            CharKind::Quote | CharKind::Escape => {}
+            CharKind::Normal if c == '*' => pattern.push('%'),
+            CharKind::Normal | CharKind::Literal => {
+                if matches!(c, '\\' | '%' | '_') {
+                    pattern.push('\\');
+                }
+                pattern.push(c);
             }
-            c => c,
-        };
-        if matches!(literal, '\\' | '%' | '_') {
-            pattern.push('\\');
         }
-        pattern.push(literal);
     }
     pattern
 }
@@ -314,16 +321,16 @@ mod test {
     #[test]
     fn condition_parsing_multibyte_chars() {
         assert_eq!(split_once("café:bar", ':'), Some(("café", "bar")));
-        assert_eq!(split_once("é\\:b", ':'), None);
+        assert_eq!(split_once(r"é\:b", ':'), None);
         assert_eq!(split_once("a※b", '※'), Some(("a", "b")));
-        assert_eq!(split_once("a\\:é", ':'), None);
+        assert_eq!(split_once(r"a\:é", ':'), None);
 
         assert_eq!(
             str_condition("🦀,日本語,émoji"),
             StrCondition::Regular(Condition::Values(vec!["🦀".into(), "日本語".into(), "émoji".into()]))
         );
-        assert_eq!(str_condition("a\\,é"), StrCondition::Regular(Condition::Values(vec!["a,é".into()])));
-        assert_eq!(str_condition("a\\..é"), StrCondition::Regular(Condition::Values(vec!["a..é".into()])));
+        assert_eq!(str_condition(r"a\,é"), StrCondition::Regular(Condition::Values(vec!["a,é".into()])));
+        assert_eq!(str_condition(r"a\..é"), StrCondition::Regular(Condition::Values(vec!["a..é".into()])));
 
         assert_eq!(str_condition("é.."), StrCondition::Regular(Condition::GreaterEq("é".into())));
         assert_eq!(str_condition("..é"), StrCondition::Regular(Condition::LessEq("é".into())));
@@ -349,53 +356,52 @@ mod test {
         assert_eq!(without_escapes.next(), Some("dog."));
         assert_eq!(without_escapes.next(), None);
 
-        let mut with_escapes = SplitUnescaped::new("The quick\\ brown\\ fox jumps over the lazy\\ dog.", IsWhitespace);
+        let mut with_escapes = SplitUnescaped::new(r"The quick\ brown\ fox jumps over the lazy\ dog.", IsWhitespace);
         assert_eq!(with_escapes.next(), Some("The"));
-        assert_eq!(with_escapes.next(), Some("quick\\ brown\\ fox"));
+        assert_eq!(with_escapes.next(), Some(r"quick\ brown\ fox"));
         assert_eq!(with_escapes.next(), Some("jumps"));
         assert_eq!(with_escapes.next(), Some("over"));
         assert_eq!(with_escapes.next(), Some("the"));
-        assert_eq!(with_escapes.next(), Some("lazy\\ dog."));
+        assert_eq!(with_escapes.next(), Some(r"lazy\ dog."));
         assert_eq!(with_escapes.next(), None);
 
-        let mut escaped_escapes = SplitUnescaped::new("lazy\\\\ dog.", IsWhitespace);
-        assert_eq!(escaped_escapes.next(), Some("lazy\\\\"));
+        let mut escaped_escapes = SplitUnescaped::new(r"lazy\\ dog.", IsWhitespace);
+        assert_eq!(escaped_escapes.next(), Some(r"lazy\\"));
         assert_eq!(escaped_escapes.next(), Some("dog."));
         assert_eq!(escaped_escapes.next(), None);
 
-        let mut many_escapes = SplitUnescaped::new("lazy\\\\\\\\\\\\\\ dog.", IsWhitespace);
-        assert_eq!(many_escapes.next(), Some("lazy\\\\\\\\\\\\\\ dog."));
+        let mut many_escapes = SplitUnescaped::new(r"lazy\\\\\\\ dog.", IsWhitespace);
+        assert_eq!(many_escapes.next(), Some(r"lazy\\\\\\\ dog."));
         assert_eq!(many_escapes.next(), None);
     }
 
     #[test]
     fn split_unescaped_multibyte_chars() {
-        let mut without_escapes = SplitUnescaped::new("Ｗｉｄｅ 𝓯𝓪𝓷𝓬𝔂 Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text العربية ᚛ᚉᚑᚅᚔ᚜ 𝄞 🦀", IsWhitespace);
+        let mut without_escapes = SplitUnescaped::new("Ｗｉｄｅ 𝓯𝓪𝓷𝓬𝔂 Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text العربية ᚛ᚉᚑᚅᚔ᚜ 𝄞 🦀", IsWhitespace);
         assert_eq!(without_escapes.next(), Some("Ｗｉｄｅ"));
         assert_eq!(without_escapes.next(), Some("𝓯𝓪𝓷𝓬𝔂"));
-        assert_eq!(without_escapes.next(), Some("Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text"));
+        assert_eq!(without_escapes.next(), Some("Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text"));
         assert_eq!(without_escapes.next(), Some("العربية"));
         assert_eq!(without_escapes.next(), Some("᚛ᚉᚑᚅᚔ᚜"));
         assert_eq!(without_escapes.next(), Some("𝄞"));
         assert_eq!(without_escapes.next(), Some("🦀"));
         assert_eq!(without_escapes.next(), None);
 
-        let mut with_escapes =
-            SplitUnescaped::new("Ｗｉｄｅ\\ 𝓯𝓪𝓷𝓬𝔂\\ Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text العربية\\ ᚛ᚉᚑᚅᚔ᚜ 𝄞\\ 🦀", IsWhitespace);
-        assert_eq!(with_escapes.next(), Some("Ｗｉｄｅ\\ 𝓯𝓪𝓷𝓬𝔂\\ Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text"));
-        assert_eq!(with_escapes.next(), Some("العربية\\ ᚛ᚉᚑᚅᚔ᚜"));
-        assert_eq!(with_escapes.next(), Some("𝄞\\ 🦀"));
+        let mut with_escapes = SplitUnescaped::new(r"Ｗｉｄｅ\ 𝓯𝓪𝓷𝓬𝔂\ Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text العربية\ ᚛ᚉᚑᚅᚔ᚜ 𝄞\ 🦀", IsWhitespace);
+        assert_eq!(with_escapes.next(), Some(r"Ｗｉｄｅ\ 𝓯𝓪𝓷𝓬𝔂\ Z̸̢̪̈́a̴͚̕l̶̡̎g̷̻̈o̶̸͇͝text"));
+        assert_eq!(with_escapes.next(), Some(r"العربية\ ᚛ᚉᚑᚅᚔ᚜"));
+        assert_eq!(with_escapes.next(), Some(r"𝄞\ 🦀"));
         assert_eq!(with_escapes.next(), None);
 
-        let mut escaped_escapes = SplitUnescaped::new("Ｗｉｄｅ\\\\ 𝓯𝓪𝓷𝓬𝔂\\\\ 𝄞\\\\ 🦀", IsWhitespace);
-        assert_eq!(escaped_escapes.next(), Some("Ｗｉｄｅ\\\\"));
-        assert_eq!(escaped_escapes.next(), Some("𝓯𝓪𝓷𝓬𝔂\\\\"));
-        assert_eq!(escaped_escapes.next(), Some("𝄞\\\\"));
+        let mut escaped_escapes = SplitUnescaped::new(r"Ｗｉｄｅ\\ 𝓯𝓪𝓷𝓬𝔂\\ 𝄞\\ 🦀", IsWhitespace);
+        assert_eq!(escaped_escapes.next(), Some(r"Ｗｉｄｅ\\"));
+        assert_eq!(escaped_escapes.next(), Some(r"𝓯𝓪𝓷𝓬𝔂\\"));
+        assert_eq!(escaped_escapes.next(), Some(r"𝄞\\"));
         assert_eq!(escaped_escapes.next(), Some("🦀"));
         assert_eq!(escaped_escapes.next(), None);
 
-        let mut many_escapes = SplitUnescaped::new("Ｗｉｄｅ\\\\\\\\\\\\\\ 𝓯𝓪𝓷𝓬𝔂.", IsWhitespace);
-        assert_eq!(many_escapes.next(), Some("Ｗｉｄｅ\\\\\\\\\\\\\\ 𝓯𝓪𝓷𝓬𝔂."));
+        let mut many_escapes = SplitUnescaped::new(r"Ｗｉｄｅ\\\\\\\ 𝓯𝓪𝓷𝓬𝔂.", IsWhitespace);
+        assert_eq!(many_escapes.next(), Some(r"Ｗｉｄｅ\\\\\\\ 𝓯𝓪𝓷𝓬𝔂."));
         assert_eq!(many_escapes.next(), None);
     }
 
@@ -410,10 +416,10 @@ mod test {
         assert_eq!(multibyte_delimiter.next(), Some("🦀"));
         assert_eq!(multibyte_delimiter.next(), None);
 
-        let mut multibyte_delimiter_escaped = SplitUnescaped::new("a\\※b※c※É\\※𝄞※🦀", '※');
-        assert_eq!(multibyte_delimiter_escaped.next(), Some("a\\※b"));
+        let mut multibyte_delimiter_escaped = SplitUnescaped::new(r"a\※b※c※É\※𝄞※🦀", '※');
+        assert_eq!(multibyte_delimiter_escaped.next(), Some(r"a\※b"));
         assert_eq!(multibyte_delimiter_escaped.next(), Some("c"));
-        assert_eq!(multibyte_delimiter_escaped.next(), Some("É\\※𝄞"));
+        assert_eq!(multibyte_delimiter_escaped.next(), Some(r"É\※𝄞"));
         assert_eq!(multibyte_delimiter_escaped.next(), Some("🦀"));
         assert_eq!(multibyte_delimiter_escaped.next(), None);
     }
@@ -423,8 +429,8 @@ mod test {
         let mut empty_string = SplitUnescaped::new("", IsWhitespace);
         assert_eq!(empty_string.next(), None);
 
-        let mut only_escape = SplitUnescaped::new("\\", IsWhitespace);
-        assert_eq!(only_escape.next(), Some("\\"));
+        let mut only_escape = SplitUnescaped::new(r"\", IsWhitespace);
+        assert_eq!(only_escape.next(), Some(r"\"));
         assert_eq!(only_escape.next(), None);
 
         let mut only_delimiter = SplitUnescaped::new(",,,", ',');
@@ -443,58 +449,223 @@ mod test {
 
     #[test]
     fn escaped_strings() {
-        assert_eq!(split_once("a\\:b", ':'), None);
-        assert_eq!(split_once("a\\::b", ':'), Some(("a\\:", "b")));
-        assert_eq!(split_once("a\\\\:b", ':'), Some(("a\\\\", "b")));
+        assert_eq!(split_once(r"a\:b", ':'), None);
+        assert_eq!(split_once(r"a\::b", ':'), Some((r"a\:", "b")));
+        assert_eq!(split_once(r"a\\:b", ':'), Some((r"a\\", "b")));
 
-        assert_eq!(unescape("\\."), ".".to_owned());
-        assert_eq!(unescape("\\\\."), "\\.".to_owned());
-        assert_eq!(unescape("\\\\\\."), "\\.".to_owned());
-        assert_eq!(unescape("\\\\\\\\."), "\\\\.".to_owned());
-        assert_eq!(unescape(",\\.,x.\\\\:.j..\\,"), ",.,x.\\:.j..,".to_owned());
+        assert_eq!(unescape(r"\."), ".".to_owned());
+        assert_eq!(unescape(r"\\."), r"\.".to_owned());
+        assert_eq!(unescape(r"\\\."), r"\.".to_owned());
+        assert_eq!(unescape(r"\\\\."), r"\\.".to_owned());
+        assert_eq!(unescape(r",\.,x.\\:.j..\,"), r",.,x.\:.j..,".to_owned());
 
         // Check that escaped tokens are escaped properly
         assert_eq!(
-            str_condition("a\\,,b\\.,c\\:,d\\\\,e"),
+            str_condition(r"a\,,b\.,c\:,d\\,e"),
             StrCondition::Regular(Condition::Values(vec![
                 "a,".into(),
                 "b.".into(),
                 "c:".into(),
-                "d\\".into(),
+                r"d\".into(),
                 "e".into()
             ]))
         );
 
         // Commas with an even number of backslashes behind it shouldn't be escaped
         assert_eq!(
-            str_condition("a\\\\,b\\\\\\,c\\\\\\\\,d"),
-            StrCondition::Regular(Condition::Values(vec!["a\\".into(), "b\\,c\\\\".into(), "d".into()]))
+            str_condition(r"a\\,b\\\,c\\\\,d"),
+            StrCondition::Regular(Condition::Values(vec![r"a\".into(), r"b\,c\\".into(), "d".into()]))
         );
 
         // Check that ranged conditions are escaped properly
-        assert_eq!(str_condition("a\\..b"), StrCondition::Regular(Condition::Values(vec!["a..b".into()])));
-        assert_eq!(str_condition("a\\\\..b"), StrCondition::Regular(Condition::Range("a\\".into().."b".into())));
-        assert_eq!(str_condition("\\..."), StrCondition::Regular(Condition::GreaterEq(".".into())));
-        assert_eq!(str_condition("..\\."), StrCondition::Regular(Condition::LessEq(".".into())));
-        assert_eq!(str_condition("\\\\..."), StrCondition::Regular(Condition::Range("\\".into()..".".into())));
+        assert_eq!(str_condition(r"a\..b"), StrCondition::Regular(Condition::Values(vec!["a..b".into()])));
+        assert_eq!(str_condition(r"a.\.b"), StrCondition::Regular(Condition::Values(vec!["a..b".into()])));
+        assert_eq!(str_condition(r"a\\..b"), StrCondition::Regular(Condition::Range(r"a\".into().."b".into())));
+        assert_eq!(str_condition(r"\..."), StrCondition::Regular(Condition::GreaterEq(".".into())));
+        assert_eq!(str_condition(r"..\."), StrCondition::Regular(Condition::LessEq(".".into())));
+        assert_eq!(str_condition(r"\\..."), StrCondition::Regular(Condition::Range(r"\".into()..".".into())));
     }
 
     #[test]
     fn escaped_asterisk() {
-        assert_eq!(str_condition("a\\*b"), StrCondition::Regular(Condition::Values(vec!["a*b".into()])));
-        assert_eq!(str_condition("a\\*b*"), StrCondition::WildCard("a*b%".into()));
-        assert_eq!(str_condition("a\\\\*b"), StrCondition::WildCard("a\\\\%b".into()));
-        assert_eq!(str_condition("a\\\\\\*b"), StrCondition::Regular(Condition::Values(vec!["a\\*b".into()])));
-        assert_eq!(str_condition("a\\\\\\\\*b"), StrCondition::WildCard("a\\\\\\\\%b".into()));
+        assert_eq!(str_condition(r"a\*b"), StrCondition::Regular(Condition::Values(vec!["a*b".into()])));
+        assert_eq!(str_condition(r"a\*b*"), StrCondition::WildCard("a*b%".into()));
+        assert_eq!(str_condition(r"a\\*b"), StrCondition::WildCard(r"a\\%b".into()));
+        assert_eq!(str_condition(r"a\\\*b"), StrCondition::Regular(Condition::Values(vec![r"a\*b".into()])));
+        assert_eq!(str_condition(r"a\\\\*b"), StrCondition::WildCard(r"a\\\\%b".into()));
     }
 
     #[test]
-    fn wildcard_escaping() {
-        assert_eq!(str_condition("a_b*"), StrCondition::WildCard("a\\_b%".into()));
-        assert_eq!(str_condition("a\\_b*"), StrCondition::WildCard("a\\_b%".into()));
-        assert_eq!(str_condition("a\\\\_b*"), StrCondition::WildCard("a\\\\\\_b%".into()));
-        assert_eq!(str_condition("100%*"), StrCondition::WildCard("100\\%%".into()));
-        assert_eq!(str_condition("100\\%*"), StrCondition::WildCard("100\\%%".into()));
-        assert_eq!(str_condition("100\\\\%*"), StrCondition::WildCard("100\\\\\\%%".into()));
+    fn pattern_escaping() {
+        assert_eq!(str_condition("a_b*"), StrCondition::WildCard(r"a\_b%".into()));
+        assert_eq!(str_condition(r"a\_b*"), StrCondition::WildCard(r"a\_b%".into()));
+        assert_eq!(str_condition(r"a\\_b*"), StrCondition::WildCard(r"a\\\_b%".into()));
+        assert_eq!(str_condition("100%*"), StrCondition::WildCard(r"100\%%".into()));
+        assert_eq!(str_condition(r"100\%*"), StrCondition::WildCard(r"100\%%".into()));
+        assert_eq!(str_condition(r"100\\%*"), StrCondition::WildCard(r"100\\\%%".into()));
+    }
+
+    #[test]
+    fn string_literals() {
+        assert_eq!(split_once(r#""a:b":c"#, ':'), Some((r#""a:b""#, "c")));
+        assert_eq!(split_once(r#""a:b""#, ':'), None);
+        assert_eq!(split_once(r#"a":"※b"#, '※'), Some((r#"a":""#, "b")));
+
+        // Quoted delimiters are treated as literals
+        assert_eq!(str_condition(r#""a,b""#), StrCondition::Regular(Condition::Values(vec!["a,b".into()])));
+        assert_eq!(str_condition(r#""a..b""#), StrCondition::Regular(Condition::Values(vec!["a..b".into()])));
+        assert_eq!(str_condition(r#""a*b""#), StrCondition::Regular(Condition::Values(vec!["a*b".into()])));
+
+        // Quotes are stripped from plain values
+        assert_eq!(str_condition(r#""str""#), StrCondition::Regular(Condition::Values(vec!["str".into()])));
+        assert_eq!(str_condition(r#""""#), StrCondition::Regular(Condition::Values(vec!["".into()])));
+
+        // Quoted sections can be mixed with unquoted text
+        assert_eq!(str_condition(r#"a"b,c"d"#), StrCondition::Regular(Condition::Values(vec!["ab,cd".into()])));
+        assert_eq!(
+            str_condition(r#""a,b",c,"d""#),
+            StrCondition::Regular(Condition::Values(vec!["a,b".into(), "c".into(), "d".into()]))
+        );
+
+        // Delimiters outside quotes still split
+        assert_eq!(str_condition(r#""a","b""#), StrCondition::Regular(Condition::Values(vec!["a".into(), "b".into()])));
+        assert_eq!(str_condition(r#""a".."b""#), StrCondition::Regular(Condition::Range("a".into().."b".into())));
+        assert_eq!(str_condition(r#""a,b".."#), StrCondition::Regular(Condition::GreaterEq("a,b".into())));
+        assert_eq!(str_condition(r#".."y,z""#), StrCondition::Regular(Condition::LessEq("y,z".into())));
+
+        // Wildcards outside quotes are still wildcards
+        assert_eq!(str_condition(r#""a*b"*"#), StrCondition::WildCard("a*b%".into()));
+        assert_eq!(str_condition(r#""100%"*"#), StrCondition::WildCard(r"100\%%".into()));
+        assert_eq!(str_condition(r#""a_b"*"#), StrCondition::WildCard(r"a\_b%".into()));
+    }
+
+    #[test]
+    fn string_literal_escapes() {
+        // Escaped quotes are literal quotes
+        assert_eq!(unescape(r#"\""#), r#"""#.to_owned());
+        assert_eq!(str_condition(r#"a\"b"#), StrCondition::Regular(Condition::Values(vec![r#"a"b"#.into()])));
+        assert_eq!(
+            str_condition(r#""say \"hi\"""#),
+            StrCondition::Regular(Condition::Values(vec![r#"say "hi""#.into()]))
+        );
+
+        // Escaped quotes do not open or close a literal
+        assert_eq!(
+            str_condition(r#"a\",b"#),
+            StrCondition::Regular(Condition::Values(vec![r#"a""#.into(), "b".into()]))
+        );
+        assert_eq!(str_condition(r#""a\",b""#), StrCondition::Regular(Condition::Values(vec![r#"a",b"#.into()])));
+
+        // Backslashes with even parity before a quote leave it unescaped
+        assert_eq!(str_condition(r#"a\\",b""#), StrCondition::Regular(Condition::Values(vec![r"a\,b".into()])));
+    }
+
+    #[test]
+    fn split_unescaped_string_literals() {
+        let mut quoted_whitespace = SplitUnescaped::new(r#"The "quick brown fox" jumps"#, IsWhitespace);
+        assert_eq!(quoted_whitespace.next(), Some("The"));
+        assert_eq!(quoted_whitespace.next(), Some(r#""quick brown fox""#));
+        assert_eq!(quoted_whitespace.next(), Some("jumps"));
+        assert_eq!(quoted_whitespace.next(), None);
+
+        let mut quoted_delimiter = SplitUnescaped::new(r#"a,"b,c",d"#, ',');
+        assert_eq!(quoted_delimiter.next(), Some("a"));
+        assert_eq!(quoted_delimiter.next(), Some(r#""b,c""#));
+        assert_eq!(quoted_delimiter.next(), Some("d"));
+        assert_eq!(quoted_delimiter.next(), None);
+
+        let mut escaped_quote = SplitUnescaped::new(r#"a\" b"c d""#, IsWhitespace);
+        assert_eq!(escaped_quote.next(), Some(r#"a\""#));
+        assert_eq!(escaped_quote.next(), Some(r#"b"c d""#));
+        assert_eq!(escaped_quote.next(), None);
+    }
+
+    #[test]
+    fn string_literal_multibyte_chars() {
+        assert_eq!(str_condition(r#""日本,語""#), StrCondition::Regular(Condition::Values(vec!["日本,語".into()])));
+        assert_eq!(str_condition(r#""🦀..🦞""#), StrCondition::Regular(Condition::Values(vec!["🦀..🦞".into()])));
+        assert_eq!(str_condition(r#"é"※,※"é"#), StrCondition::Regular(Condition::Values(vec!["é※,※é".into()])));
+        assert_eq!(str_condition(r#""𝄞 *"*"#), StrCondition::WildCard("𝄞 *%".into()));
+    }
+
+    #[test]
+    fn string_literal_edge_cases() {
+        // A quoted asterisk alone never creates a wildcard
+        assert_eq!(str_condition(r#""*""#), StrCondition::Regular(Condition::Values(vec!["*".into()])));
+
+        // Empty quoted values in lists and ranges
+        assert_eq!(
+            str_condition(r#"a,"",b"#),
+            StrCondition::Regular(Condition::Values(vec!["a".into(), "".into(), "b".into()]))
+        );
+        assert_eq!(str_condition(r#"""..b"#), StrCondition::Regular(Condition::Range("".into().."b".into())));
+
+        // Quotes adjacent to range dots
+        assert_eq!(str_condition(r#"a"."..b"#), StrCondition::Regular(Condition::Range("a.".into().."b".into())));
+        assert_eq!(str_condition(r#"a.."."b"#), StrCondition::Regular(Condition::Range("a".into()..".b".into())));
+
+        // A quoted dot followed by a real dot is not a range
+        assert_eq!(str_condition(r#"a".".b"#), StrCondition::Regular(Condition::Values(vec!["a..b".into()])));
+
+        // Escaped backslash inside quotes is a literal backslash
+        assert_eq!(unescape(r#""a\\b""#), r"a\b".to_owned());
+        assert_eq!(str_condition(r#""a\\,b""#), StrCondition::Regular(Condition::Values(vec![r"a\,b".into()])));
+
+        // Backslash-escaped delimiter inside quotes stays literal
+        assert_eq!(str_condition(r#""a\,b""#), StrCondition::Regular(Condition::Values(vec!["a,b".into()])));
+    }
+
+    #[test]
+    fn unterminated_quotes() {
+        // An unterminated quote extends to the end of the string
+        assert_eq!(str_condition(r#""a,b"#), StrCondition::Regular(Condition::Values(vec!["a,b".into()])));
+        assert_eq!(str_condition(r#"a"..b"#), StrCondition::Regular(Condition::Values(vec!["a..b".into()])));
+        assert_eq!(
+            str_condition(r#"a,"b,c"#),
+            StrCondition::Regular(Condition::Values(vec!["a".into(), "b,c".into()]))
+        );
+        assert_eq!(str_condition(r#""a*"#), StrCondition::Regular(Condition::Values(vec!["a*".into()])));
+        assert_eq!(unescape(r#"""#), "".to_owned());
+    }
+
+    #[test]
+    fn multivalued() {
+        // Normal strings
+        assert!(!is_multivalued("a"));
+        assert!(!is_multivalued("a.b.c"));
+        assert!(is_multivalued("a,b,c"));
+        assert!(is_multivalued("a.."));
+        assert!(is_multivalued("..b"));
+        assert!(is_multivalued("a..b"));
+        assert!(is_multivalued("a*"));
+
+        // Escaped delimiters
+        assert!(!is_multivalued(r"a\,b\,c"));
+        assert!(!is_multivalued(r"a\..b"));
+        assert!(!is_multivalued(r"a\*"));
+        assert!(is_multivalued(r"a\\,b\\,c"));
+        assert!(is_multivalued(r"a\\..b"));
+        assert!(is_multivalued(r"a\\*b"));
+
+        // String literals
+        assert!(!is_multivalued(r#""a,b""#));
+        assert!(!is_multivalued(r#""a..b""#));
+        assert!(!is_multivalued(r#""a*b""#));
+        assert!(is_multivalued(r#""a",b"#));
+        assert!(is_multivalued(r#""a"..b"#));
+        assert!(is_multivalued(r#""a"*"#));
+
+        // Escaped quotes
+        assert!(is_multivalued(r#"\"a,b\""#));
+        assert!(is_multivalued(r#"\"a..b\""#));
+        assert!(is_multivalued(r#"\"a*\""#));
+        assert!(!is_multivalued(r#""\"a,b\"""#));
+        assert!(!is_multivalued(r#""\"a..b\"""#));
+        assert!(!is_multivalued(r#""\"a*\"""#));
+
+        // String literals with escaped delimeters
+        assert!(!is_multivalued(r#""a\,b""#));
+        assert!(!is_multivalued(r#""a\..b""#));
+        assert!(!is_multivalued(r#""a\*b""#));
     }
 }
