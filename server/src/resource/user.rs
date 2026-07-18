@@ -208,7 +208,7 @@ fn get_ratings(
         .filter(post_score::score.eq(score))
         .load(conn)
         .map(|like_counts| {
-            resource::order_like(like_counts, users, |&(id, _)| id)
+            resource::order_as_padded(like_counts, users, |&(id, _)| id)
                 .into_iter()
                 .map(|like_count| like_count.map_or(0, |(_, count)| count))
                 .map(PrivateData::Expose)

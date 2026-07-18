@@ -68,7 +68,7 @@ where
 /// the missing values are padded as None in the resulting vector.
 ///
 /// The note in the above comment applies here as well.
-fn order_like<V, T, F>(unordered_values: Vec<V>, ordered_values: &[T], get_id: F) -> Vec<Option<V>>
+fn order_as_padded<V, T, F>(unordered_values: Vec<V>, ordered_values: &[T], get_id: F) -> Vec<Option<V>>
 where
     for<'a> &'a T: Identifiable<Id = &'a i64>,
     F: Fn(&V) -> i64,
@@ -111,8 +111,6 @@ fn collect_names(ordered_names: Vec<(i64, SmallString)>) -> HashMap<i64, Arc<[Sm
     for &[start, end] in name_boundaries.array_windows() {
         let name_count = end - start;
 
-        // Create buffer with exact capactiy so that it doesn't need to be reallocated to
-        // the correct size when moving to the Arc
         let (id, first_name) = name_iter
             .next()
             .expect("There must be at least one name in a name boundary");

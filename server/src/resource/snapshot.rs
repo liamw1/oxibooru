@@ -294,7 +294,7 @@ fn get_users(conn: &mut PgConnection, config: &Config, snapshots: &[Snapshot]) -
         .filter(snapshot::id.eq_any(snapshot_ids))
         .load::<(i64, SmallString, AvatarStyle)>(conn)
         .map(|user_info| {
-            resource::order_like(user_info, snapshots, |&(id, ..)| id)
+            resource::order_as_padded(user_info, snapshots, |&(id, ..)| id)
                 .into_iter()
                 .map(|user_info| user_info.map(|(_, name, avatar_style)| MicroUser::new(config, name, avatar_style)))
                 .collect()

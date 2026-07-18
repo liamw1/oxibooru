@@ -320,7 +320,7 @@ fn get_owners(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> Query
         .select((post::id, user::name, user::avatar_style))
         .load::<(i64, SmallString, AvatarStyle)>(conn)
         .map(|post_info| {
-            resource::order_like(post_info, posts, |&(id, ..)| id)
+            resource::order_as_padded(post_info, posts, |&(id, ..)| id)
                 .into_iter()
                 .map(|post_owner| {
                     post_owner.map(|(_, username, avatar_style)| MicroUser::new(config, username, avatar_style))
@@ -526,7 +526,7 @@ fn get_own_scores(conn: &mut PgConnection, client: Client, posts: &[Post]) -> Qu
             .filter(post_score::user_id.eq(client_id))
             .load::<PostScore>(conn)
             .map(|client_scores| {
-                resource::order_like(client_scores, posts, |score| score.post_id)
+                resource::order_as_padded(client_scores, posts, |score| score.post_id)
                     .into_iter()
                     .map(|client_score| client_score.map(|score| Rating::from(score.score)).unwrap_or_default())
                     .collect()
@@ -542,7 +542,7 @@ fn get_own_favorites(conn: &mut PgConnection, client: Client, posts: &[Post]) ->
             .filter(post_favorite::user_id.eq(client_id))
             .load::<PostFavorite>(conn)
             .map(|client_favorites| {
-                resource::order_like(client_favorites, posts, |favorite| favorite.post_id)
+                resource::order_as_padded(client_favorites, posts, |favorite| favorite.post_id)
                     .into_iter()
                     .map(|client_favorite| client_favorite.is_some())
                     .collect()

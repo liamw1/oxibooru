@@ -127,7 +127,7 @@ fn get_owners(conn: &mut PgConnection, config: &Config, comments: &[Comment]) ->
         .select((comment::id, user::name, user::avatar_style))
         .load::<(i64, SmallString, AvatarStyle)>(conn)
         .map(|comment_info| {
-            resource::order_like(comment_info, comments, |&(id, ..)| id)
+            resource::order_as_padded(comment_info, comments, |&(id, ..)| id)
                 .into_iter()
                 .map(|comment_owner| {
                     comment_owner.map(|(_, username, avatar_style)| MicroUser::new(config, username, avatar_style))
@@ -156,7 +156,7 @@ fn get_own_scores(conn: &mut PgConnection, client: Client, comments: &[Comment])
             .filter(comment_score::user_id.eq(client_id))
             .load::<CommentScore>(conn)
             .map(|client_scores| {
-                resource::order_like(client_scores, comments, |score| score.comment_id)
+                resource::order_as_padded(client_scores, comments, |score| score.comment_id)
                     .into_iter()
                     .map(|client_score| client_score.map(|score| Rating::from(score.score)).unwrap_or_default())
                     .collect()
