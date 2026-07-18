@@ -4,6 +4,7 @@ use crate::app::AppState;
 use crate::auth::password;
 use crate::config::RegexType;
 use crate::schema::user;
+use crate::string::SecretString;
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, QueryDsl, RunQueryDsl};
 
@@ -26,8 +27,8 @@ pub fn reset_password(state: &AppState, editor: &mut UserEditor) {
             Err(err) => return Err(format!("Could not determine if user exists for reason: {err}").into()),
         }
 
-        let password = input::read("New password: ", editor)?;
-        api::verify_matches_regex(&state.config, &password, RegexType::Password)?;
+        let password = input::read("New password: ", editor).map(SecretString::from)?;
+        api::verify_matches_regex(&state.config, password.read(), RegexType::Password)?;
 
         let (hash, salt) = password::hash_password(&state.config, &password)
             .map_err(|err| format!("Could not hash password for reason: {err}"))?;

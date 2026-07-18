@@ -60,11 +60,16 @@ pub fn routes(state: AppState) -> OpenApiRouter {
 /// Checks if `haystack` matches regex `regex_type`.
 /// Returns error if it does not match on the regex.
 pub fn verify_matches_regex(config: &Config, haystack: &str, regex_type: RegexType) -> ApiResult<()> {
-    config
-        .regex(regex_type)
-        .is_match(haystack)
-        .then_some(())
-        .ok_or_else(|| ApiError::ExpressionFailsRegex(SmallString::new(haystack), regex_type))
+    if config.regex(regex_type).is_match(haystack) {
+        Ok(())
+    } else {
+        let info = if regex_type == RegexType::Password {
+            "[password]"
+        } else {
+            haystack
+        };
+        Err(ApiError::ExpressionFailsRegex(SmallString::new(info), regex_type))
+    }
 }
 
 /// Checks if `email` is a valid email.

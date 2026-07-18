@@ -8,11 +8,81 @@ use diesel::sql_types::Text;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
 use std::convert::Infallible;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
 use utoipa::ToSchema;
+
+/// A wrapper over a [`String`] that's meant to contain sensitive data.
+/// Uses custom [`Debug`] implementation so that text can't be accidentally leaked
+/// via panic logs.
+#[derive(PartialEq, Eq, Deserialize, AsExpression, FromSqlRow, ToSchema)]
+#[diesel(sql_type = Text, sql_type = Citext)]
+#[schema(value_type = String, description = "")]
+pub struct SecretString(String);
+
+impl SecretString {
+    pub const fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+
+    pub const fn read(&self) -> &str {
+        self.0.as_str()
+    }
+
+    pub fn into_string(self) -> String {
+        self.0
+    }
+}
+
+impl From<&str> for SecretString {
+    fn from(value: &str) -> Self {
+        Self(value.to_owned())
+    }
+}
+
+impl From<String> for SecretString {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl FromIterator<char> for SecretString {
+    fn from_iter<T: IntoIterator<Item = char>>(iter: T) -> Self {
+        Self(iter.into_iter().collect())
+    }
+}
+
+impl std::fmt::Debug for SecretString {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "SecretString([REDACTED])")
+    }
+}
+
+impl ToSql<Text, Pg> for SecretString {
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        <str as ToSql<Text, Pg>>::to_sql(&self.0, out)
+    }
+}
+
+impl ToSql<Citext, Pg> for SecretString {
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        <str as ToSql<Citext, Pg>>::to_sql(&self.0, out)
+    }
+}
+
+impl FromSql<Text, Pg> for SecretString {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        str::from_utf8(value.as_bytes()).map(Self::from).map_err(Box::from)
+    }
+}
+
+impl FromSql<Citext, Pg> for SecretString {
+    fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
+        str::from_utf8(value.as_bytes()).map(Self::from).map_err(Box::from)
+    }
+}
 
 /// A wrapper over [`CompactString`] that can be serialized to or deserialized from the database.
 /// Implements Small String Optimization (SSO), so it doesn't allocate if the length is 24 bytes or less.
@@ -63,7 +133,7 @@ impl From<i64> for SmallString {
 }
 
 impl Display for SmallString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }
@@ -108,7 +178,7 @@ impl Deref for LargeString {
 }
 
 impl Display for LargeString {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
 }

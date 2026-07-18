@@ -476,7 +476,7 @@ fn recreate_database() -> AdminResult<AppState> {
         let postgres_connection_pool = Pool::builder()
             .max_size(1)
             .test_on_check_out(true)
-            .build(ConnectionManager::<PgConnection>::new(postgres_url))
+            .build(ConnectionManager::<PgConnection>::new(postgres_url.read()))
             .expect("Postgres connection pool must be constructible");
 
         let mut conn = postgres_connection_pool.get()?;

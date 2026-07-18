@@ -325,10 +325,7 @@ impl FromSql<SmallInt, Pg> for PostFlags {
 }
 
 impl Serialize for PostFlags {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         const _: () = assert!(PostFlag::COUNT <= 16);
 
         let flags: Vec<&str> = PostFlag::iter()

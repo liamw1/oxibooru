@@ -1,7 +1,7 @@
 use crate::filesystem::Directory;
 use crate::model::enums::UserRank;
 use crate::search::preferences::Preferences;
-use crate::string::SmallString;
+use crate::string::{SecretString, SmallString};
 use config::builder::DefaultState;
 use config::{ConfigBuilder, File, FileFormat};
 use lettre::message::Mailbox;
@@ -33,14 +33,14 @@ pub struct Env {
     pub http_referer: Option<String>,
     pub domain_port: Option<u16>,
     pub server_port: u16,
-    postgres_user: String,
-    postgres_password: String,
-    postgres_hostname: String,
+    postgres_user: SecretString,
+    postgres_password: SecretString,
+    postgres_hostname: SecretString,
     postgres_port: u16,
-    postgres_database: String,
+    postgres_database: SecretString,
 }
 
-#[derive(Debug, Display, Clone, Copy)]
+#[derive(Debug, Display, Clone, Copy, PartialEq, Eq)]
 #[strum(serialize_all = "lowercase")]
 pub enum RegexType {
     Pool,
@@ -73,10 +73,10 @@ impl ThumbnailConfig {
 
 #[derive(Debug, Deserialize)]
 pub struct SmtpConfig {
-    pub host: SmallString,
+    pub host: SecretString,
     pub port: Option<u16>,
-    pub username: Option<SmallString>,
-    pub password: Option<SmallString>,
+    pub username: Option<SecretString>,
+    pub password: Option<SecretString>,
     pub from: Mailbox,
 }
 
@@ -263,8 +263,8 @@ pub struct Config {
     pub data_dir: PathBuf,
     pub data_url: String,
     pub webhooks: Vec<Url>,
-    pub password_secret: SmallString,
-    pub content_secret: SmallString,
+    pub password_secret: SecretString,
+    pub content_secret: SecretString,
     pub domain: Option<SmallString>,
     pub delete_source_files: bool,
     pub append_tag_implications_on_post_edit: bool,
@@ -371,14 +371,14 @@ pub fn read_env(config: &Config) -> Result<Arc<Env>, Box<dyn Error>> {
         .and_then(|var| var.parse().ok())
         .unwrap_or(DEFAULT_SERVER_PORT);
 
-    let postgres_user = std::env::var("POSTGRES_USER")?;
-    let postgres_password = std::env::var("POSTGRES_PASSWORD")?;
-    let postgres_hostname = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
+    let postgres_user = std::env::var("POSTGRES_USER").map(SecretString::from)?;
+    let postgres_password = std::env::var("POSTGRES_PASSWORD").map(SecretString::from)?;
+    let postgres_hostname = SecretString::from(std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into()));
     let postgres_port = std::env::var("POSTGRES_PORT")
         .ok()
         .and_then(|port| port.parse().ok())
         .unwrap_or(DEFAULT_POSTGRES_PORT);
-    let postgres_database = std::env::var("POSTGRES_DB")?;
+    let postgres_database = std::env::var("POSTGRES_DB").map(SecretString::from)?;
 
     Ok(Arc::new(Env {
         http_origin,
@@ -413,15 +413,17 @@ pub fn test_config(override_relative_path: Option<&str>) -> Config {
 
 /// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DB`
 /// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DB`.
-pub fn database_url(env: &Env, database_override: Option<&str>) -> String {
+pub fn database_url(env: &Env, database_override: Option<&str>) -> SecretString {
     // Percent-encode credentials to allow for special characters
     let port = env.postgres_port;
-    let user = percent_encoding::utf8_percent_encode(&env.postgres_user, NON_ALPHANUMERIC);
-    let password = percent_encoding::utf8_percent_encode(&env.postgres_password, NON_ALPHANUMERIC);
-    let hostname = percent_encoding::utf8_percent_encode(&env.postgres_hostname, NON_ALPHANUMERIC);
-    let database =
-        percent_encoding::utf8_percent_encode(database_override.unwrap_or(&env.postgres_database), NON_ALPHANUMERIC);
-    format!("postgres://{user}:{password}@{hostname}:{port}/{database}")
+    let user = percent_encoding::utf8_percent_encode(env.postgres_user.read(), NON_ALPHANUMERIC);
+    let password = percent_encoding::utf8_percent_encode(env.postgres_password.read(), NON_ALPHANUMERIC);
+    let hostname = percent_encoding::utf8_percent_encode(env.postgres_hostname.read(), NON_ALPHANUMERIC);
+    let database = percent_encoding::utf8_percent_encode(
+        database_override.unwrap_or(env.postgres_database.read()),
+        NON_ALPHANUMERIC,
+    );
+    SecretString::from(format!("postgres://{user}:{password}@{hostname}:{port}/{database}"))
 }
 
 /// Set of characters that allow for file traversal.

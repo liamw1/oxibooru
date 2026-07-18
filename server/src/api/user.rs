@@ -13,7 +13,7 @@ use crate::resource::user::{Field, UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::search::Builder;
 use crate::search::user::QueryBuilder;
-use crate::string::SmallString;
+use crate::string::{SecretString, SmallString};
 use crate::time::DateTime;
 use crate::{api, filesystem, update};
 use axum::extract::DefaultBodyLimit;
@@ -180,8 +180,8 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
     }
 
     api::verify_matches_regex(&ctx.config, &body.name, RegexType::Username)?;
-    api::verify_matches_regex(&ctx.config, &body.password, RegexType::Password)?;
-    api::verify_valid_email(body.email.as_deref())?;
+    api::verify_matches_regex(&ctx.config, body.password.read(), RegexType::Password)?;
+    api::verify_valid_email(body.email.as_ref().map(SecretString::read))?;
 
     let (hash, salt) = password::hash_password(&ctx.config, &body.password)?;
 
@@ -217,9 +217,9 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
 
                 let user: User = NewUser {
                     name: &body.name,
-                    password_hash: &hash,
+                    password_hash: hash.read(),
                     password_salt: salt.as_str(),
-                    email: body.email.as_deref(),
+                    email: body.email.as_ref().map(SecretString::read),
                     rank,
                     avatar_style,
                 }
@@ -256,9 +256,9 @@ struct UserCreateBody {
     /// Username. Must match `user_name_regex` from server's configuration.
     name: SmallString,
     /// Password. Must match `password_regex` from server's configuration.
-    password: SmallString,
+    password: SecretString,
     /// Email address.
-    email: Option<SmallString>,
+    email: Option<SecretString>,
     /// User rank. Defaults to `default_rank` from server's configuration.
     rank: Option<UserRank>,
     /// Avatar style.
@@ -364,7 +364,7 @@ async fn update_impl(
                     if !editing_self {
                         ctx.verify_privilege(Action::UserEditAnyPass)?;
                     }
-                    api::verify_matches_regex(&ctx.config, &password, RegexType::Password)?;
+                    api::verify_matches_regex(&ctx.config, password.read(), RegexType::Password)?;
 
                     let (hash, salt) = password::hash_password(&ctx.config, &password)?;
                     diesel::update(user::table.find(user_id))
@@ -376,7 +376,7 @@ async fn update_impl(
                     if !editing_self {
                         ctx.verify_privilege(Action::UserEditAnyEmail)?;
                     }
-                    api::verify_valid_email(email.as_deref())?;
+                    api::verify_valid_email(email.as_ref().map(SecretString::read))?;
 
                     let update_result = diesel::update(user::table.find(user_id))
                         .set(user::email.eq(email))
@@ -456,10 +456,10 @@ struct UserUpdateBody {
     /// New username. Must match `user_name_regex` from server's configuration.
     name: Option<SmallString>,
     /// New password. Must match `password_regex` from server's configuration.
-    password: Option<SmallString>,
+    password: Option<SecretString>,
     /// Email address. Set to null to remove.
     #[serde(default, deserialize_with = "api::deserialize_some")]
-    email: Option<Option<SmallString>>,
+    email: Option<Option<SecretString>>,
     /// User rank.
     rank: Option<UserRank>,
     /// Avatar style.

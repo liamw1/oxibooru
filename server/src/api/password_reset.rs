@@ -6,7 +6,7 @@ use crate::content::hash;
 use crate::extract::{Json, Path};
 use crate::model::enums::ResourceType;
 use crate::schema::user;
-use crate::string::SmallString;
+use crate::string::{SecretString, SmallString};
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::extract::State;
 use diesel::{BoolExpressionMethods, ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl};
@@ -16,7 +16,8 @@ use lettre::message::header::ContentType;
 use lettre::transport::smtp::authentication::Credentials;
 use lettre::{Message, SmtpTransport, Transport};
 use percent_encoding::NON_ALPHANUMERIC;
-use serde::{Deserialize, Serialize};
+use serde::ser::SerializeStruct;
+use serde::{Deserialize, Serialize, Serializer};
 use std::str::FromStr;
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
@@ -101,9 +102,9 @@ async fn request_reset(State(state): State<AppState>, Path(identifier): Path<Sma
         ))?;
 
     // Open a remote connection to SMTP relay
-    let mut smtp_builder = SmtpTransport::relay(&smtp_info.host)?;
+    let mut smtp_builder = SmtpTransport::relay(smtp_info.host.read())?;
     if let (Some(smtp_username), Some(smtp_password)) = (smtp_info.username.as_ref(), smtp_info.password.as_ref()) {
-        let credentials = Credentials::new(smtp_username.to_string(), smtp_password.to_string());
+        let credentials = Credentials::new(smtp_username.read().to_owned(), smtp_password.read().to_owned());
         smtp_builder = smtp_builder.credentials(credentials);
     }
     if let Some(port) = smtp_info.port {
@@ -121,13 +122,21 @@ struct ResetToken {
 }
 
 /// Response containing the new temporary password. Sent as plain-text.
-#[derive(Serialize, ToSchema)]
+#[derive(ToSchema)]
 struct NewPassword {
-    password: String,
+    password: SecretString,
+}
+
+impl Serialize for NewPassword {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let mut state = serializer.serialize_struct("NewPassword", 1)?;
+        state.serialize_field("password", self.password.read())?;
+        state.end()
+    }
 }
 
 /// Creates a random sequence of printable ASCII characters of the given `length`.
-fn generate_temporary_password(length: u8) -> String {
+fn generate_temporary_password(length: u8) -> SecretString {
     const NUM_CHARACTERS: u8 = b'~' - b'!';
 
     let rng = &mut OsRng;

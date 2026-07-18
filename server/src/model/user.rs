@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::content::hash;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::schema::{user, user_token};
-use crate::string::{LargeString, SmallString};
+use crate::string::{LargeString, SecretString, SmallString};
 use crate::time::DateTime;
 use diesel::pg::Pg;
 use diesel::{AsChangeset, Associations, Identifiable, Insertable, Queryable, Selectable};
@@ -27,9 +27,9 @@ pub struct NewUser<'a> {
 pub struct User {
     pub id: i64,
     pub name: SmallString,
-    pub password_hash: String,
-    pub password_salt: String,
-    pub email: Option<SmallString>,
+    pub password_hash: SecretString,
+    pub password_salt: SecretString,
+    pub email: Option<SecretString>,
     pub rank: UserRank,
     pub avatar_style: AvatarStyle,
     pub creation_time: DateTime,

@@ -4,6 +4,8 @@ use crate::app::AppState;
 use crate::config::{Config, Env};
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::schema::database_statistics;
+#[cfg(test)]
+use crate::string::SecretString;
 use crate::{admin, app, config};
 use diesel::migration::Migration;
 use diesel::pg::Pg;
@@ -94,18 +96,18 @@ pub fn create_connection_pool(env: &Env, config: Arc<Config>) -> Result<AsyncCon
             .idle_timeout(None)
             .test_on_check_out(true)
             .connection_customizer(Box::new(ConnectionInitialzier { config }))
-            .build(ConnectionManager::new(config::database_url(env, None)))
+            .build(ConnectionManager::new(config::database_url(env, None).read()))
             .map(|pool| AsyncConnectionPool { pool, semaphore })
     }
 }
 
 #[cfg(test)]
-pub fn create_test_connection_pool(test_url: String) -> AsyncConnectionPool {
+pub fn create_test_connection_pool(test_url: SecretString) -> AsyncConnectionPool {
     let pool = Pool::builder()
         .max_lifetime(None)
         .idle_timeout(None)
         .test_on_check_out(true)
-        .build(ConnectionManager::new(test_url))
+        .build(ConnectionManager::new(test_url.read()))
         .expect("Test connection pool must be constructible");
     let semaphore = Arc::new(Semaphore::new(usize::try_from(pool.max_size()).unwrap()));
     AsyncConnectionPool { pool, semaphore }

@@ -1,5 +1,5 @@
 {
-    "description": "'pass' does not match on password regex",
+    "description": "'[password]' does not match on password regex",
     "name": "ExpressionFailsRegex",
     "title": "Expression Fails Regex"
 }

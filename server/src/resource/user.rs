@@ -6,7 +6,7 @@ use crate::model::user::User;
 use crate::resource;
 use crate::resource::field::{Batcher, Mask};
 use crate::schema::{post_score, user};
-use crate::string::SmallString;
+use crate::string::{SecretString, SmallString};
 use crate::time::DateTime;
 use crate::user_stats;
 use diesel::dsl::count_star;
@@ -82,7 +82,7 @@ pub struct UserInfo {
     /// The user email. It is available only if the request is authenticated by the same user,
     /// or the authenticated user can change the email. If it's unavailable, the server returns `false`.
     /// If the user hasn't specified an email, the server returns `null`.
-    email: Option<PrivateData<Option<SmallString>>>,
+    email: Option<PrivateData<Option<String>>>,
     /// The user rank, which effectively affects their privileges.
     rank: Option<UserRank>,
     /// The last login time.
@@ -154,7 +154,7 @@ impl UserInfo {
                 version: fields[Field::Version].then_some(user.last_edit_time),
                 name: fields[Field::Name].then_some(user.name),
                 email: fields[Field::Email].then_some(match visibility {
-                    Visibility::Full => PrivateData::Expose(user.email),
+                    Visibility::Full => PrivateData::Expose(user.email.map(SecretString::into_string)),
                     Visibility::PublicOnly => PrivateData::Visible(false),
                 }),
                 rank: fields[Field::Rank].then_some(user.rank),
