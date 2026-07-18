@@ -47,7 +47,7 @@ pub fn video_has_audio(config: &Config, path: &Path) -> ApiResult<bool> {
         }
     }
     if errors.is_empty() {
-        Ok(true)
+        Ok(false)
     } else {
         Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
     }
