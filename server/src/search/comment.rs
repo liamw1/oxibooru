@@ -86,7 +86,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
         }
 
         let default_sort = std::iter::once(ParsedSort {
-            kind: Token::CreationTime,
+            kind: Token::Id,
             order: Order::default(),
         });
         let sorts = self.search.sorts.iter().copied().chain(default_sort);
