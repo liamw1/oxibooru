@@ -298,11 +298,6 @@ impl Config {
         self.smtp.as_ref()
     }
 
-    pub fn default_rank(&self) -> UserRank {
-        // Default user rank can't be anonymous
-        std::cmp::max(self.public_info.default_user_rank, UserRank::Restricted)
-    }
-
     pub fn privileges(&self) -> &PrivilegeConfig {
         &self.public_info.privileges
     }
@@ -464,8 +459,10 @@ fn create_config(args: Args) -> Config {
             std::process::exit(1);
         }
     };
-    config.public_info.can_send_mails = config.smtp.is_some();
     config.args = args;
+    config.public_info.can_send_mails = config.smtp.is_some();
+    // Default user rank can't be anonymous
+    config.public_info.default_user_rank = std::cmp::max(config.public_info.default_user_rank, UserRank::Restricted);
 
     // Accumulate preferences from higher user ranks
     config.power_preferences.merge(&config.moderator_preferences);

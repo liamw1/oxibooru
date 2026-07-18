@@ -174,7 +174,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
     }
 
     if let Some(rank) = body.rank
-        && rank > ctx.config.default_rank()
+        && rank > ctx.config.public_info.default_user_rank
     {
         api::verify_rank(ctx.client, rank)?;
     }
@@ -210,7 +210,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
                     .select(database_statistics::user_count)
                     .first(conn)?;
                 let rank = if user_count > 0 {
-                    body.rank.unwrap_or(ctx.config.default_rank())
+                    body.rank.unwrap_or(ctx.config.public_info.default_user_rank)
                 } else {
                     UserRank::Administrator
                 };
