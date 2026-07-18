@@ -1,5 +1,6 @@
+use crate::content::hash;
 use crate::filesystem::Directory;
-use crate::model::enums::UserRank;
+use crate::model::enums::{AvatarStyle, UserRank};
 use crate::search::preferences::Preferences;
 use crate::string::{SecretString, SmallString};
 use config::builder::DefaultState;
@@ -322,20 +323,26 @@ impl Config {
         self.data_dir.join(folder)
     }
 
+    /// Returns a URL to either a custom or gravatar avatar depending on the given `avatar_style`.
+    pub fn avatar_url(&self, lowercase_username: &str, avatar_style: AvatarStyle) -> String {
+        match avatar_style {
+            AvatarStyle::Gravatar => hash::gravatar_url(self, lowercase_username),
+            AvatarStyle::Manual => self.custom_avatar_url(lowercase_username),
+        }
+    }
+
     /// Returns URL to custom user avatar.
-    pub fn custom_avatar_url(&self, username: &str) -> String {
+    pub fn custom_avatar_url(&self, lowercase_username: &str) -> String {
         // Encode characters that could allow for file traversal, and the encode again for the URL
-        let lowercase_username = username.to_lowercase();
-        let encoded_username = percent_encoding::utf8_percent_encode(&lowercase_username, TRAVERSAL).to_string();
+        let encoded_username = percent_encoding::utf8_percent_encode(lowercase_username, TRAVERSAL).to_string();
         let double_encoded_username = percent_encoding::utf8_percent_encode(&encoded_username, NON_ALPHANUMERIC);
         format!("{}/avatars/{double_encoded_username}.png", self.data_url.trim_end_matches('/'))
     }
 
     /// Returns path to custom user avatar on disk.
-    pub fn custom_avatar_path(&self, username: &str) -> PathBuf {
+    pub fn custom_avatar_path(&self, lowercase_username: &str) -> PathBuf {
         // Encode characters that could allow for file traversal
-        let lowercase_username = username.to_lowercase();
-        let encoded_username = percent_encoding::utf8_percent_encode(&lowercase_username, TRAVERSAL);
+        let encoded_username = percent_encoding::utf8_percent_encode(lowercase_username, TRAVERSAL);
         let filename = format!("{encoded_username}.png");
         self.path(Directory::Avatars).join(filename)
     }

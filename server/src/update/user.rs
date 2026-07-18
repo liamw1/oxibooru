@@ -27,12 +27,12 @@ pub fn avatar(
     conn: &mut PgConnection,
     config: &Config,
     user_id: i64,
-    name: &str,
+    lowercase_username: &str,
     avatar: DynamicImage,
 ) -> ApiResult<()> {
-    filesystem::delete_custom_avatar(config, name)?;
+    filesystem::delete_custom_avatar(config, lowercase_username)?;
 
-    let avatar_size = filesystem::save_custom_avatar(config, name, avatar)?;
+    let avatar_size = filesystem::save_custom_avatar(config, lowercase_username, avatar)?;
     diesel::update(user::table.find(user_id))
         .set(user::custom_avatar_size.eq(avatar_size))
         .execute(conn)?;

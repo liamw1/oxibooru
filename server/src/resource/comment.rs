@@ -2,12 +2,12 @@ use crate::app::Context;
 use crate::auth::Client;
 use crate::config::Config;
 use crate::model::comment::{Comment, CommentScore};
-use crate::model::enums::{AvatarStyle, Rating};
+use crate::model::enums::Rating;
 use crate::resource;
 use crate::resource::field::{Batcher, Mask};
 use crate::resource::user::MicroUser;
 use crate::schema::{comment, comment_score, comment_statistics, user};
-use crate::string::{LargeString, SmallString};
+use crate::string::{LargeString, SmallString, lower};
 use crate::time::DateTime;
 use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
@@ -124,13 +124,15 @@ fn get_owners(conn: &mut PgConnection, config: &Config, comments: &[Comment]) ->
     comment::table
         .filter(comment::id.eq_any(&comment_ids))
         .inner_join(user::table)
-        .select((comment::id, user::name, user::avatar_style))
-        .load::<(i64, SmallString, AvatarStyle)>(conn)
+        .select((comment::id, user::name, lower(user::name), user::avatar_style))
+        .load::<(_, SmallString, SmallString, _)>(conn)
         .map(|comment_info| {
             resource::order_as_padded(comment_info, comments, |&(id, ..)| id)
                 .into_iter()
                 .map(|comment_owner| {
-                    comment_owner.map(|(_, username, avatar_style)| MicroUser::new(config, username, avatar_style))
+                    comment_owner.map(|(_, username, lowercase_username, avatar_style)| {
+                        MicroUser::new(config, username, &lowercase_username, avatar_style)
+                    })
                 })
                 .collect()
         })

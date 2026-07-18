@@ -8,12 +8,12 @@ use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
 use crate::content::{Content, upload};
 use crate::extract::{Ctx, DeleteBody, Json, JsonOrMultipart, PageParams, PagedResponse, Path, Query, ResourceParams};
 use crate::model::enums::{AvatarStyle, ResourceProperty, ResourceType, UserRank};
-use crate::model::user::{NewUser, User};
+use crate::model::user::NewUser;
 use crate::resource::user::{Field, UserInfo, Visibility};
 use crate::schema::{database_statistics, user};
 use crate::search::Builder;
 use crate::search::user::QueryBuilder;
-use crate::string::{SecretString, SmallString};
+use crate::string::{SecretString, SmallString, lower};
 use crate::time::DateTime;
 use crate::{api, filesystem, update};
 use axum::extract::DefaultBodyLimit;
@@ -195,7 +195,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
     };
 
     let Ctx(ctx, connection_pool) = ctx;
-    let user = connection_pool
+    let user_id = connection_pool
         .transaction({
             let ctx = ctx.clone();
             move |conn| {
@@ -215,7 +215,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
                     UserRank::Administrator
                 };
 
-                let user: User = NewUser {
+                let (user_id, lowercase_name): (_, SmallString) = NewUser {
                     name: &body.name,
                     password_hash: hash.read(),
                     password_salt: salt.as_str(),
@@ -224,6 +224,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
                     avatar_style,
                 }
                 .insert_into(user::table)
+                .returning((user::id, lower(user::name)))
                 .on_conflict(user::email)
                 .do_nothing()
                 .get_result(conn)
@@ -236,15 +237,15 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
                         ctx.verify_privilege(Action::UserEditAnyAvatar)?;
                     }
 
-                    update::user::avatar(conn, &ctx.config, user.id, &body.name, avatar)?;
+                    update::user::avatar(conn, &ctx.config, user_id, &lowercase_name, avatar)?;
                 }
 
-                Ok::<_, ApiError>(user)
+                Ok::<_, ApiError>(user_id)
             }
         })
         .await?;
     connection_pool
-        .transaction(move |conn| UserInfo::new(conn, &ctx.config, user, params.fields, Visibility::Full))
+        .transaction(move |conn| UserInfo::new_from_id(conn, &ctx.config, user_id, params.fields, Visibility::Full))
         .await
         .map(Json)
 }
@@ -343,8 +344,8 @@ async fn update_impl(
         .transaction({
             let ctx = ctx.clone();
             move |conn| {
-                let (user_id, user_version, target_rank) = user::table
-                    .select((user::id, user::last_edit_time, user::rank))
+                let (user_id, lowercase_name, user_version, target_rank): (_, SmallString, _, _) = user::table
+                    .select((user::id, lower(user::name), user::last_edit_time, user::rank))
                     .filter(user::name.eq(&username))
                     .first(conn)
                     .optional()?
@@ -414,7 +415,7 @@ async fn update_impl(
                         ctx.verify_privilege(Action::UserEditAnyAvatar)?;
                     }
 
-                    update::user::avatar(conn, &ctx.config, user_id, &username, avatar)?;
+                    update::user::avatar(conn, &ctx.config, user_id, &lowercase_name, avatar)?;
                 }
                 if let Some(new_name) = body.name.as_deref() {
                     ctx.verify_privilege(Action::UserEditSelfName)?;
@@ -426,12 +427,14 @@ async fn update_impl(
                     // Update first to see if new name clashes with any existing names
                     let update_result = diesel::update(user::table.find(user_id))
                         .set(user::name.eq(new_name))
-                        .execute(conn);
-                    error::map_unique_violation(update_result, ResourceProperty::UserName)?;
+                        .returning(lower(user::name))
+                        .get_result(conn);
+                    let new_name_lowercase: SmallString =
+                        error::map_unique_violation(update_result, ResourceProperty::UserName)?;
 
-                    let old_custom_avatar_path = ctx.config.custom_avatar_path(&username);
+                    let old_custom_avatar_path = ctx.config.custom_avatar_path(&lowercase_name);
                     if old_custom_avatar_path.try_exists()? {
-                        let new_custom_avatar_path = ctx.config.custom_avatar_path(new_name);
+                        let new_custom_avatar_path = ctx.config.custom_avatar_path(&new_name_lowercase);
                         filesystem::move_file(&old_custom_avatar_path, &new_custom_avatar_path)?;
                     }
                 }

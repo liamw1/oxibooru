@@ -18,7 +18,7 @@ use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_note, post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
 };
-use crate::string::{LargeString, SmallString};
+use crate::string::{LargeString, SmallString, lower};
 use crate::time::DateTime;
 use diesel::dsl::{exists, not};
 use diesel::{
@@ -317,13 +317,15 @@ fn get_owners(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> Query
     post::table
         .filter(post::id.eq_any(&post_ids))
         .inner_join(user::table)
-        .select((post::id, user::name, user::avatar_style))
-        .load::<(i64, SmallString, AvatarStyle)>(conn)
+        .select((post::id, user::name, lower(user::name), user::avatar_style))
+        .load::<(_, SmallString, SmallString, _)>(conn)
         .map(|post_info| {
             resource::order_as_padded(post_info, posts, |&(id, ..)| id)
                 .into_iter()
                 .map(|post_owner| {
-                    post_owner.map(|(_, username, avatar_style)| MicroUser::new(config, username, avatar_style))
+                    post_owner.map(|(_, username, lowercase_username, avatar_style)| {
+                        MicroUser::new(config, username, &lowercase_username, avatar_style)
+                    })
                 })
                 .collect()
         })
@@ -388,11 +390,15 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
 }
 
 fn get_comments(conn: &mut PgConnection, ctx: &Context, posts: &[Post]) -> QueryResult<Vec<Vec<CommentInfo>>> {
-    type CommentData = (Comment, i64, Option<(SmallString, AvatarStyle)>);
+    type CommentData = (Comment, i64, Option<(SmallString, SmallString, AvatarStyle)>);
     let comments: Vec<CommentData> = Comment::belonging_to(posts)
         .inner_join(comment_statistics::table)
         .left_join(user::table)
-        .select((Comment::as_select(), comment_statistics::score, (user::name, user::avatar_style).nullable()))
+        .select((
+            Comment::as_select(),
+            comment_statistics::score,
+            (user::name, lower(user::name), user::avatar_style).nullable(),
+        ))
         .order(comment::creation_time)
         .load(conn)?;
     let comment_ids: Vec<i64> = comments.iter().map(|(comment, ..)| comment.id).collect();
@@ -424,9 +430,9 @@ fn get_comments(conn: &mut PgConnection, ctx: &Context, posts: &[Post]) -> Query
                         version: Some(comment.last_edit_time),
                         id: Some(id),
                         post_id: Some(post.id),
-                        user: Some(
-                            owner.map(|(username, avatar_style)| MicroUser::new(&ctx.config, username, avatar_style)),
-                        ),
+                        user: Some(owner.map(|(username, lowercase_username, avatar_style)| {
+                            MicroUser::new(&ctx.config, username, &lowercase_username, avatar_style)
+                        })),
                         text: Some(comment.text),
                         creation_time: Some(comment.creation_time),
                         last_edit_time: Some(comment.last_edit_time),
@@ -553,9 +559,9 @@ fn get_own_favorites(conn: &mut PgConnection, client: Client, posts: &[Post]) ->
 }
 
 fn get_favorited_by(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> QueryResult<Vec<Vec<MicroUser>>> {
-    let users_who_favorited: Vec<(PostFavorite, SmallString, AvatarStyle)> = PostFavorite::belonging_to(posts)
+    let users_who_favorited: Vec<(PostFavorite, SmallString, SmallString, _)> = PostFavorite::belonging_to(posts)
         .inner_join(user::table)
-        .select((PostFavorite::as_select(), user::name, user::avatar_style))
+        .select((PostFavorite::as_select(), user::name, lower(user::name), user::avatar_style))
         .order(user::name)
         .load(conn)?;
     Ok(users_who_favorited
@@ -564,7 +570,9 @@ fn get_favorited_by(conn: &mut PgConnection, config: &Config, posts: &[Post]) ->
         .map(|user_favorites| {
             user_favorites
                 .into_iter()
-                .map(|(_, username, avatar_style)| MicroUser::new(config, username, avatar_style))
+                .map(|(_, username, lowercase_username, avatar_style)| {
+                    MicroUser::new(config, username, &lowercase_username, avatar_style)
+                })
                 .collect()
         })
         .collect())

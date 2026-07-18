@@ -6,7 +6,7 @@ use crate::model::user::User;
 use crate::resource;
 use crate::resource::field::{Batcher, Mask};
 use crate::schema::{post_score, user};
-use crate::string::{SecretString, SmallString};
+use crate::string::{SecretString, SmallString, lower};
 use crate::time::DateTime;
 use crate::user_stats;
 use diesel::dsl::count_star;
@@ -30,12 +30,15 @@ pub struct MicroUser {
 }
 
 impl MicroUser {
-    pub fn new(config: &Config, name: SmallString, avatar_style: AvatarStyle) -> Self {
+    pub fn new(config: &Config, display_name: SmallString, lowercase_name: &str, avatar_style: AvatarStyle) -> Self {
         let avatar_url = match avatar_style {
-            AvatarStyle::Gravatar => hash::gravatar_url(config, &name),
-            AvatarStyle::Manual => config.custom_avatar_url(&name),
+            AvatarStyle::Gravatar => hash::gravatar_url(config, lowercase_name),
+            AvatarStyle::Manual => config.custom_avatar_url(lowercase_name),
         };
-        Self { name, avatar_url }
+        Self {
+            name: display_name,
+            avatar_url,
+        }
     }
 }
 
@@ -108,16 +111,6 @@ pub struct UserInfo {
 }
 
 impl UserInfo {
-    pub fn new(
-        conn: &mut PgConnection,
-        config: &Config,
-        user: User,
-        fields: Mask<Field>,
-        visibility: Visibility,
-    ) -> QueryResult<Self> {
-        Self::new_batch(conn, config, vec![user], fields, visibility).map(resource::single)
-    }
-
     pub fn new_from_id(
         conn: &mut PgConnection,
         config: &Config,
@@ -139,6 +132,7 @@ impl UserInfo {
         use crate::schema::user_statistics::dsl::*;
 
         let f = Batcher::new(fields, users.len());
+        let mut avatar_urls = f.exec(Field::AvatarUrl, || get_avatar_urls(conn, config, &users))?;
         let mut comment_counts = f.exec(Field::CommentCount, || user_stats!(conn, &users, comment_count))?;
         let mut upload_counts = f.exec(Field::UploadedPostCount, || user_stats!(conn, &users, upload_count))?;
         let mut like_counts = f.exec(Field::LikedPostCount, || get_ratings(conn, &users, Score::Like, visibility))?;
@@ -150,7 +144,6 @@ impl UserInfo {
             .into_iter()
             .rev()
             .map(|user| Self {
-                avatar_url: fields[Field::AvatarUrl].then(|| user.avatar_url(config)),
                 version: fields[Field::Version].then_some(user.last_edit_time),
                 name: fields[Field::Name].then_some(user.name),
                 email: fields[Field::Email].then_some(match visibility {
@@ -161,6 +154,7 @@ impl UserInfo {
                 last_login_time: fields[Field::LastLoginTime].then_some(user.last_login_time),
                 creation_time: fields[Field::CreationTime].then_some(user.creation_time),
                 avatar_style: fields[Field::AvatarStyle].then_some(user.avatar_style),
+                avatar_url: avatar_urls.pop(),
                 comment_count: comment_counts.pop(),
                 uploaded_post_count: upload_counts.pop(),
                 liked_post_count: like_counts.pop(),
@@ -190,6 +184,20 @@ impl UserInfo {
 enum PrivateData<T> {
     Expose(T),
     Visible(bool), // Set to false to indicate hidden
+}
+
+fn get_avatar_urls(conn: &mut PgConnection, config: &Config, users: &[User]) -> QueryResult<Vec<String>> {
+    let user_ids: Vec<_> = users.iter().map(Identifiable::id).copied().collect();
+    user::table
+        .select((user::id, lower(user::name), user::avatar_style))
+        .filter(user::id.eq_any(&user_ids))
+        .load::<(_, SmallString, _)>(conn)
+        .map(|user_info| {
+            resource::order_transformed_as(user_info, &user_ids, |&(id, _, _)| id)
+                .into_iter()
+                .map(|(_, lowercase_name, avatar_style)| config.avatar_url(&lowercase_name, avatar_style))
+                .collect()
+        })
 }
 
 fn get_ratings(

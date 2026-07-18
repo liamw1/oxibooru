@@ -485,7 +485,7 @@ fn recreate_database() -> AdminResult<AppState> {
     }
 
     let test_url = config::database_url(&env, Some(DATABASE_NAME));
-    let test_connection_pool = db::create_test_connection_pool(test_url);
+    let test_connection_pool = db::create_test_connection_pool(&test_url);
     db::run_database_migrations(&test_connection_pool).expect("Must be able to run test migrations");
 
     let mut conn = test_connection_pool.get_blocking()?;

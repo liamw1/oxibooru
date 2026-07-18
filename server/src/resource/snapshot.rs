@@ -1,11 +1,11 @@
 use crate::config::Config;
-use crate::model::enums::{AvatarStyle, ResourceOperation, ResourceType};
+use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::model::snapshot::Snapshot;
 use crate::resource;
 use crate::resource::field::{Batcher, Mask};
 use crate::resource::user::MicroUser;
 use crate::schema::{snapshot, user};
-use crate::string::SmallString;
+use crate::string::{SmallString, lower};
 use crate::time::DateTime;
 use diesel::{ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
@@ -290,13 +290,17 @@ fn get_users(conn: &mut PgConnection, config: &Config, snapshots: &[Snapshot]) -
     let snapshot_ids: Vec<_> = snapshots.iter().map(Identifiable::id).collect();
     snapshot::table
         .inner_join(user::table)
-        .select((snapshot::id, user::name, user::avatar_style))
+        .select((snapshot::id, user::name, lower(user::name), user::avatar_style))
         .filter(snapshot::id.eq_any(snapshot_ids))
-        .load::<(i64, SmallString, AvatarStyle)>(conn)
+        .load::<(_, SmallString, SmallString, _)>(conn)
         .map(|user_info| {
             resource::order_as_padded(user_info, snapshots, |&(id, ..)| id)
                 .into_iter()
-                .map(|user_info| user_info.map(|(_, name, avatar_style)| MicroUser::new(config, name, avatar_style)))
+                .map(|user_info| {
+                    user_info.map(|(_, name, lowercase_name, avatar_style)| {
+                        MicroUser::new(config, name, &lowercase_name, avatar_style)
+                    })
+                })
                 .collect()
         })
 }

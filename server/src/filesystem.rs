@@ -66,17 +66,17 @@ where
 
 /// Saves custom avatar `thumbnail` for user with name `username` to disk.
 /// Returns size of the thumbnail in bytes.
-pub fn save_custom_avatar(config: &Config, username: &str, thumbnail: DynamicImage) -> ImageResult<i64> {
+pub fn save_custom_avatar(config: &Config, lowercase_username: &str, thumbnail: DynamicImage) -> ImageResult<i64> {
     std::fs::create_dir_all(config.path(Directory::Avatars))?;
 
-    let avatar_path = config.custom_avatar_path(username);
+    let avatar_path = config.custom_avatar_path(lowercase_username);
     thumbnail.into_rgb8().save(&avatar_path)?;
     file_size(&avatar_path).map_err(ImageError::from)
 }
 
 /// Deletes custom avatar for user with name `username` from disk, if it exists.
-pub fn delete_custom_avatar(config: &Config, username: &str) -> std::io::Result<()> {
-    let custom_avatar_path = config.custom_avatar_path(username);
+pub fn delete_custom_avatar(config: &Config, lowercase_username: &str) -> std::io::Result<()> {
+    let custom_avatar_path = config.custom_avatar_path(lowercase_username);
     remove_if_exists(&custom_avatar_path)
 }
 

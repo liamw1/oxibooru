@@ -167,8 +167,8 @@ impl<const N: usize> FromSql<Bytea, Pg> for GenericChecksum<N> {
     }
 }
 
-pub fn gravatar_url(config: &Config, username: &str) -> String {
-    let username_hash = blake3::hash(username.to_lowercase().as_bytes());
+pub fn gravatar_url(config: &Config, lowercase_username: &str) -> String {
+    let username_hash = blake3::hash(lowercase_username.as_bytes());
     let hex_encoded_hash = hex::encode(username_hash.as_bytes());
     format!("https://gravatar.com/avatar/{hex_encoded_hash}?d=retro&s={}", config.thumbnails.avatar_width)
 }

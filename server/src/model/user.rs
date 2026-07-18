@@ -1,5 +1,3 @@
-use crate::config::Config;
-use crate::content::hash;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::schema::{user, user_token};
 use crate::string::{LargeString, SecretString, SmallString};
@@ -39,16 +37,6 @@ pub struct User {
     custom_avatar_size: i64,
     #[allow(dead_code)]
     search_seed: f32,
-}
-
-impl User {
-    /// Returns a URL to either a custom or gravatar avatar depending on the user's avatar style.
-    pub fn avatar_url(&self, config: &Config) -> String {
-        match self.avatar_style {
-            AvatarStyle::Gravatar => hash::gravatar_url(config, &self.name),
-            AvatarStyle::Manual => config.custom_avatar_url(&self.name),
-        }
-    }
 }
 
 #[derive(Insertable)]

@@ -9,7 +9,7 @@ use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
 use crate::resource::user_token::{Field, UserTokenInfo};
 use crate::schema::{user, user_token};
-use crate::string::{LargeString, SmallString};
+use crate::string::{LargeString, SmallString, lower};
 use crate::time::DateTime;
 use diesel::dsl::sql;
 use diesel::sql_types::Integer;
@@ -51,13 +51,13 @@ async fn list(
 ) -> ApiResult<Json<UnpagedResponse<UserTokenInfo>>> {
     ctx.verify_privilege(Action::UserTokenListSelf)?;
 
-    let (avatar_style, user_tokens) = connection_pool
+    let (lowercase_name, avatar_style, user_tokens) = connection_pool
         .transaction({
             let ctx = ctx.clone();
             let username = username.clone();
             move |conn| {
-                let (user_id, avatar_style, target_rank) = user::table
-                    .select((user::id, user::avatar_style, user::rank))
+                let (user_id, lowercase_name, avatar_style, target_rank): (_, SmallString, _, _) = user::table
+                    .select((user::id, lower(user::name), user::avatar_style, user::rank))
                     .filter(user::name.eq(&username))
                     .first(conn)
                     .optional()?
@@ -71,7 +71,7 @@ async fn list(
                     .filter(user_token::user_id.eq(user_id))
                     .order(user_token::creation_time.desc())
                     .load(conn)
-                    .map(|tokens| (avatar_style, tokens))
+                    .map(|tokens| (lowercase_name, avatar_style, tokens))
                     .map_err(ApiError::from)
             }
         })
@@ -80,7 +80,11 @@ async fn list(
     let results = user_tokens
         .into_iter()
         .map(|user_token| {
-            UserTokenInfo::new(MicroUser::new(&ctx.config, username.clone(), avatar_style), user_token, params.fields)
+            UserTokenInfo::new(
+                MicroUser::new(&ctx.config, username.clone(), &lowercase_name, avatar_style),
+                user_token,
+                params.fields,
+            )
         })
         .collect();
     Ok(Json(UnpagedResponse { results }))
@@ -124,13 +128,13 @@ async fn create(
 ) -> ApiResult<Json<UserTokenInfo>> {
     ctx.verify_privilege(Action::UserTokenCreateSelf)?;
 
-    let (user_token, avatar_style) = connection_pool
+    let (user_token, lowercase_name, avatar_style) = connection_pool
         .transaction({
             let ctx = ctx.clone();
             let username = username.clone();
             move |conn| {
-                let (user_id, avatar_style, target_rank) = user::table
-                    .select((user::id, user::avatar_style, user::rank))
+                let (user_id, lowercase_name, avatar_style, target_rank): (_, SmallString, _, _) = user::table
+                    .select((user::id, lower(user::name), user::avatar_style, user::rank))
                     .filter(user::name.eq(&username))
                     .first(conn)
                     .optional()?
@@ -160,12 +164,12 @@ async fn create(
                 }
                 .insert_into(user_token::table)
                 .get_result(conn)?;
-                Ok::<_, ApiError>((user_token, avatar_style))
+                Ok::<_, ApiError>((user_token, lowercase_name, avatar_style))
             }
         })
         .await?;
     Ok(Json(UserTokenInfo::new(
-        MicroUser::new(&ctx.config, username, avatar_style),
+        MicroUser::new(&ctx.config, username, &lowercase_name, avatar_style),
         user_token,
         params.fields,
     )))
@@ -215,13 +219,13 @@ async fn update(
 ) -> ApiResult<Json<UserTokenInfo>> {
     ctx.verify_privilege(Action::UserTokenEditSelf)?;
 
-    let (updated_user_token, avatar_style) = connection_pool
+    let (updated_user_token, lowercase_name, avatar_style) = connection_pool
         .transaction({
             let ctx = ctx.clone();
             let username = username.clone();
             move |conn| {
-                let (user_id, avatar_style, target_rank) = user::table
-                    .select((user::id, user::avatar_style, user::rank))
+                let (user_id, lowercase_name, avatar_style, target_rank): (_, SmallString, _, _) = user::table
+                    .select((user::id, lower(user::name), user::avatar_style, user::rank))
                     .filter(user::name.eq(&username))
                     .first(conn)
                     .optional()?
@@ -251,12 +255,12 @@ async fn update(
                 user_token.last_edit_time = DateTime::now();
 
                 let updated_user_token: UserToken = user_token.save_changes(conn)?;
-                Ok::<_, ApiError>((updated_user_token, avatar_style))
+                Ok::<_, ApiError>((updated_user_token, lowercase_name, avatar_style))
             }
         })
         .await?;
     Ok(Json(UserTokenInfo::new(
-        MicroUser::new(&ctx.config, username, avatar_style),
+        MicroUser::new(&ctx.config, username, &lowercase_name, avatar_style),
         updated_user_token,
         params.fields,
     )))

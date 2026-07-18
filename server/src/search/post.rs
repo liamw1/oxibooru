@@ -8,8 +8,9 @@ use crate::schema::{
     post_note, post_score, post_statistics, post_tag, tag, tag_category, tag_name, user,
 };
 use crate::search::{
-    self, Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
+    Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
 };
+use crate::string::lower;
 use crate::{
     apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
     apply_time_filter, update_filter_cache, update_nonmatching_filter_cache,
@@ -325,7 +326,7 @@ fn apply_tag_filter(
             StrCondition::Regular(Condition::Range(range)) => {
                 nonmatching.or_filter(tag_name::name.between(range.start, range.end))
             }
-            StrCondition::WildCard(pattern) => nonmatching.or_filter(search::lower(tag_name::name).like(pattern)),
+            StrCondition::WildCard(pattern) => nonmatching.or_filter(lower(tag_name::name).like(pattern)),
         };
         nonmatching_posts.replace(nonmatching);
     } else {

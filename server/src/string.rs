@@ -1,10 +1,10 @@
 use compact_str::{CompactString, ToCompactString};
-use diesel::AsExpression;
 use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::pg::sql_types::Citext;
 use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, Output, ToSql};
-use diesel::sql_types::Text;
+use diesel::sql_types::{SingleValue, Text};
+use diesel::{AsExpression, declare_sql_function};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
 use std::convert::Infallible;
@@ -13,6 +13,11 @@ use std::ops::Deref;
 use std::str::FromStr;
 use std::sync::Arc;
 use utoipa::ToSchema;
+
+#[declare_sql_function]
+extern "SQL" {
+    fn lower<T: SingleValue>(text: T) -> Text;
+}
 
 /// A wrapper over a [`String`] that's meant to contain sensitive data.
 /// Uses custom [`Debug`] implementation so that text can't be accidentally leaked

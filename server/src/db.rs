@@ -102,7 +102,7 @@ pub fn create_connection_pool(env: &Env, config: Arc<Config>) -> Result<AsyncCon
 }
 
 #[cfg(test)]
-pub fn create_test_connection_pool(test_url: SecretString) -> AsyncConnectionPool {
+pub fn create_test_connection_pool(test_url: &SecretString) -> AsyncConnectionPool {
     let pool = Pool::builder()
         .max_lifetime(None)
         .idle_timeout(None)

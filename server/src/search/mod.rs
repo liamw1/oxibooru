@@ -2,7 +2,7 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::app::Context;
 use crate::auth::Client;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
-use diesel::sql_types::{Float, SingleValue};
+use diesel::sql_types::Float;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, declare_sql_function};
 use std::ops::{Not, Range};
 use std::str::FromStr;
@@ -230,11 +230,6 @@ struct CacheState {
 #[declare_sql_function]
 extern "SQL" {
     fn random() -> BigInt;
-}
-
-#[declare_sql_function]
-extern "SQL" {
-    fn lower<T: SingleValue>(text: T) -> Text;
 }
 
 /// Sets the global postgresql random seed to the search seed of the `client`.
