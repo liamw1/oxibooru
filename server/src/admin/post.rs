@@ -375,7 +375,7 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
             return Ok(());
         }
     };
-    if let Err(err) = update::post::thumbnail(&mut conn, &post_hash, &thumbnail, ThumbnailCategory::Generated) {
+    if let Err(err) = update::post::thumbnail(&mut conn, &post_hash, thumbnail, ThumbnailCategory::Generated) {
         error!("Cannot save thumbnail for post {post_id} for reason: {err}");
     } else {
         progress.increment();

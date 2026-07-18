@@ -678,9 +678,9 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
             // Create thumbnails
             if let Some(thumbnail) = custom_thumbnail {
                 ctx.verify_privilege(Action::PostEditThumbnail)?;
-                update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
+                update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
             }
-            update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
+            update::post::thumbnail(conn, &post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
 
             let post_data = SnapshotData {
                 safety: post.safety,
@@ -1081,11 +1081,11 @@ async fn update_impl(
                 filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
                 // Replace generated thumbnail
-                update::post::thumbnail(conn, &post_hash, &content_properties.thumbnail, ThumbnailCategory::Generated)?;
+                update::post::thumbnail(conn, &post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
             }
             if let Some(thumbnail) = custom_thumbnail {
                 ctx.verify_privilege(Action::PostEditThumbnail)?;
-                update::post::thumbnail(conn, &post_hash, &thumbnail, ThumbnailCategory::Custom)?;
+                update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
             }
 
             new_post.last_edit_time = DateTime::now();

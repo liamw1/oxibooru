@@ -84,7 +84,7 @@ pub fn delete_custom_avatar(config: &Config, lowercase_username: &str) -> std::i
 /// Returns size of the thumbnail in bytes.
 pub fn save_post_thumbnail(
     post: &PostHash,
-    thumbnail: &DynamicImage,
+    thumbnail: DynamicImage,
     thumbnail_type: ThumbnailCategory,
 ) -> ImageResult<i64> {
     let thumbnail_path = match thumbnail_type {
@@ -93,7 +93,7 @@ pub fn save_post_thumbnail(
     };
     std::fs::create_dir_all(thumbnail_path.parent().unwrap_or(Path::new("")))?;
 
-    thumbnail.to_rgb8().save(&thumbnail_path)?;
+    thumbnail.into_rgb8().save(&thumbnail_path)?;
     file_size(&thumbnail_path).map_err(ImageError::from)
 }
 

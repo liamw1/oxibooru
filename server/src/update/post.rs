@@ -33,7 +33,7 @@ pub fn last_edit_time(conn: &mut PgConnection, post_id: i64) -> ApiResult<()> {
 pub fn thumbnail(
     conn: &mut PgConnection,
     post_hash: &PostHash,
-    thumbnail: &DynamicImage,
+    thumbnail: DynamicImage,
     thumbnail_type: ThumbnailCategory,
 ) -> ApiResult<()> {
     filesystem::delete_post_thumbnail(post_hash, thumbnail_type)?;
