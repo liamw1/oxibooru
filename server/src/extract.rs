@@ -179,8 +179,12 @@ pub struct MergeBody<T> {
 
 /// Represents parameters of a request to retrieve one or more resources.
 #[derive(Clone, Deserialize, IntoParams)]
-#[serde(bound(deserialize = "F: Into<u64> + FromStr"))]
-pub struct ResourceParams<F: Into<u64> + FromStr> {
+#[serde(bound(deserialize = "F: FromStr, u64: From<F>"))]
+pub struct ResourceParams<F>
+where
+    F: FromStr,
+    u64: From<F>,
+{
     /// Query search string
     #[param(example = "anonymous_token")]
     pub query: Option<String>,
@@ -189,7 +193,11 @@ pub struct ResourceParams<F: Into<u64> + FromStr> {
     pub fields: Mask<F>,
 }
 
-impl<F: Into<u64> + FromStr> ResourceParams<F> {
+impl<F> ResourceParams<F>
+where
+    F: FromStr,
+    u64: From<F>,
+{
     pub fn criteria(&self) -> &str {
         self.query.as_deref().unwrap_or("")
     }

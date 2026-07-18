@@ -9,8 +9,11 @@ pub struct Mask<F> {
     phantom: PhantomData<F>,
 }
 
-impl<F: Into<u64>> Mask<F> {
-    pub const fn new() -> Self {
+impl<F> Mask<F>
+where
+    u64: From<F>,
+{
+    const fn none() -> Self {
         Self::from_u64(0)
     }
 
@@ -22,46 +25,67 @@ impl<F: Into<u64>> Mask<F> {
     }
 
     fn contains(&self, field: F) -> bool {
-        self.value & (1 << field.into()) != 0
+        self.value & (1 << u64::from(field)) != 0
     }
 }
 
-impl<F: Into<u64>> Index<F> for Mask<F> {
+impl<F> Index<F> for Mask<F>
+where
+    u64: From<F>,
+{
     type Output = bool;
     fn index(&self, index: F) -> &Self::Output {
         if self.contains(index) { &true } else { &false }
     }
 }
 
-impl<F: Into<u64>> BitOr<F> for Mask<F> {
+impl<F> BitOr<F> for Mask<F>
+where
+    u64: From<F>,
+{
     type Output = Self;
     fn bitor(self, rhs: F) -> Self::Output {
-        Self::from_u64(self.value | (1 << rhs.into()))
+        Self::from_u64(self.value | (1 << u64::from(rhs)))
     }
 }
 
-impl<F: Into<u64>> BitOrAssign<F> for Mask<F> {
+impl<F> BitOrAssign<F> for Mask<F>
+where
+    u64: From<F>,
+{
     fn bitor_assign(&mut self, rhs: F) {
-        self.value |= 1 << rhs.into();
+        self.value |= 1 << u64::from(rhs);
     }
 }
 
-impl<F: Copy + Into<u64>> From<&[F]> for Mask<F> {
+impl<F> From<&[F]> for Mask<F>
+where
+    F: Copy,
+    u64: From<F>,
+{
     fn from(value: &[F]) -> Self {
-        value.iter().fold(Self::new(), |fields, &field| fields | field)
+        value.iter().fold(Self::none(), |fields, &field| fields | field)
     }
 }
 
-impl<F: Copy + Into<u64>, const N: usize> From<[F; N]> for Mask<F> {
+impl<F, const N: usize> From<[F; N]> for Mask<F>
+where
+    F: Copy,
+    u64: From<F>,
+{
     fn from(value: [F; N]) -> Self {
         Self::from(value.as_slice())
     }
 }
 
-impl<'de, F: Into<u64> + FromStr> Deserialize<'de> for Mask<F> {
+impl<'de, F> Deserialize<'de> for Mask<F>
+where
+    F: FromStr,
+    u64: From<F>,
+{
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         if let Some(field_list) = Option::<String>::deserialize(deserializer)? {
-            field_list.split(',').try_fold(Self::new(), |fields, field_str| {
+            field_list.split(',').try_fold(Self::none(), |fields, field_str| {
                 F::from_str(field_str.trim())
                     .map(|field| fields | field)
                     .map_err(|_| serde::de::Error::custom(format!("invalid field `{field_str}`")))
@@ -77,7 +101,10 @@ pub struct Batcher<F> {
     batch_size: usize,
 }
 
-impl<F: Into<u64>> Batcher<F> {
+impl<F> Batcher<F>
+where
+    u64: From<F>,
+{
     pub fn new(enabled_fields: Mask<F>, batch_size: usize) -> Self {
         Self {
             enabled_fields,
