@@ -236,13 +236,29 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
     }))
 }
 
+/// Returns the number of video streams in the file at `path`.
+fn video_stream_count(config: &Config, path: &Path) -> ApiResult<usize> {
+    let mut process = FfmpegSubprocess::new(config, path, ["-c", "copy", "-t", "0", "-f", "null", "-"])?;
+
+    let mut stream_count = 0;
+    let mut errors = Vec::new();
+    for event in process.events()? {
+        match event {
+            FfmpegEvent::ParsedInputStream(stream) if stream.is_video() => stream_count += 1,
+            FfmpegEvent::Log(LogLevel::Error | LogLevel::Fatal, err) | FfmpegEvent::Error(err) => errors.push(err),
+            _ => {}
+        }
+    }
+    if stream_count > 1 || errors.is_empty() {
+        Ok(stream_count)
+    } else {
+        Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
+    }
+}
+
 /// Uses `FFmpeg` to determine if a file contains multiple frames
 fn avif_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
-    let mut process = FfmpegSubprocess::new(config, path, [])?;
-    let video_stream_count = process
-        .events()?
-        .filter(|event| matches!(event, FfmpegEvent::ParsedInputStream(stream) if stream.is_video()))
-        .count();
+    let video_stream_count = video_stream_count(config, path)?;
 
     let mut errors = Vec::new();
     for stream_index in 0..video_stream_count {
