@@ -45,7 +45,7 @@ async fn main() {
     let state = app::AppState::new(downloader, connection_pool, env, config);
 
     // Initialize and run server
-    app::initialize(&state).unwrap_or_else(|err| app::shutdown("An error occured during initialization", err));
+    app::initialize(&state).unwrap_or_else(|err| app::shutdown("An error occurred during initialization", err));
     app::run(state)
         .await
         .unwrap_or_else(|err| app::shutdown("Failed to start server", err));
