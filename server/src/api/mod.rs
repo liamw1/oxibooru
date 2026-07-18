@@ -1,7 +1,9 @@
 use crate::api::doc::ApiDoc;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
+use crate::auth::Client;
 use crate::config::{Config, RegexType};
+use crate::model::enums::UserRank;
 use crate::string::SmallString;
 use crate::time::DateTime;
 use axum::http::StatusCode;
@@ -85,6 +87,14 @@ fn verify_version(current_version: DateTime, client_version: DateTime) -> ApiRes
     (current_version == client_version)
         .then_some(())
         .ok_or(ApiError::ResourceModified)
+}
+
+/// Checks if the `client` is at least `required_rank`.
+/// Returns error if client is lower rank than `required_rank`.
+fn verify_rank(client: Client, required_rank: UserRank) -> ApiResult<()> {
+    (client.rank >= required_rank)
+        .then_some(())
+        .ok_or(ApiError::InsufficientPrivileges)
 }
 
 // Any value that is present is considered Some value, including null.

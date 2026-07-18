@@ -1,7 +1,7 @@
 use crate::api::doc::USER_TAG;
 use crate::api::error::{self, ApiError, ApiResult};
 use crate::app::AppState;
-use crate::auth::{Client, password};
+use crate::auth::password;
 use crate::config::{Action, RegexType};
 use crate::content::thumbnail::ThumbnailType;
 use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
@@ -44,14 +44,6 @@ struct Multipart<T> {
     /// Avatar file.
     #[schema(format = Binary)]
     avatar: Option<String>,
-}
-
-/// Checks if the `client` is at least `required_rank`.
-/// Returns error if client is lower rank than `required_rank`.
-fn verify_rank(client: Client, required_rank: UserRank) -> ApiResult<()> {
-    (client.rank >= required_rank)
-        .then_some(())
-        .ok_or(ApiError::InsufficientPrivileges)
 }
 
 /// Searches for users.
@@ -184,7 +176,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
     if let Some(rank) = body.rank
         && rank > ctx.config.default_rank()
     {
-        verify_rank(ctx.client, rank)?;
+        api::verify_rank(ctx.client, rank)?;
     }
 
     api::verify_matches_regex(&ctx.config, &body.name, RegexType::Username)?;
@@ -351,8 +343,8 @@ async fn update_impl(
         .transaction({
             let ctx = ctx.clone();
             move |conn| {
-                let (user_id, user_version): (i64, DateTime) = user::table
-                    .select((user::id, user::last_edit_time))
+                let (user_id, user_version, target_rank) = user::table
+                    .select((user::id, user::last_edit_time, user::rank))
                     .filter(user::name.eq(&username))
                     .first(conn)
                     .optional()?
@@ -363,6 +355,7 @@ async fn update_impl(
                 let visibility = if editing_self {
                     Visibility::Full
                 } else {
+                    api::verify_rank(ctx.client, target_rank)?;
                     Visibility::PublicOnly
                 };
 
@@ -399,9 +392,7 @@ async fn update_impl(
                     if !editing_self {
                         ctx.verify_privilege(Action::UserEditAnyRank)?;
                     }
-                    if rank > ctx.config.default_rank() {
-                        verify_rank(ctx.client, rank)?;
-                    }
+                    api::verify_rank(ctx.client, rank)?;
 
                     diesel::update(user::table.find(user_id))
                         .set(user::rank.eq(rank))
@@ -565,8 +556,8 @@ async fn delete(
 
     connection_pool
         .transaction(move |conn| {
-            let (user_id, user_version): (i64, DateTime) = user::table
-                .select((user::id, user::last_edit_time))
+            let (user_id, user_version, target_rank) = user::table
+                .select((user::id, user::last_edit_time, user::rank))
                 .filter(user::name.eq(username))
                 .first(conn)
                 .optional()?
@@ -574,6 +565,7 @@ async fn delete(
 
             if ctx.client.id != Some(user_id) {
                 ctx.verify_privilege(Action::UserDeleteAny)?;
+                api::verify_rank(ctx.client, target_rank)?;
             }
             api::verify_version(user_version, *client_version)?;
 

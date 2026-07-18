@@ -4,7 +4,7 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Path, Query, ResourceParams, UnpagedResponse};
-use crate::model::enums::{AvatarStyle, ResourceType};
+use crate::model::enums::ResourceType;
 use crate::model::user::{NewUserToken, UserToken};
 use crate::resource::user::MicroUser;
 use crate::resource::user_token::{Field, UserTokenInfo};
@@ -56,14 +56,15 @@ async fn list(
             let ctx = ctx.clone();
             let username = username.clone();
             move |conn| {
-                let (user_id, avatar_style): (i64, AvatarStyle) = user::table
-                    .select((user::id, user::avatar_style))
+                let (user_id, avatar_style, target_rank) = user::table
+                    .select((user::id, user::avatar_style, user::rank))
                     .filter(user::name.eq(&username))
                     .first(conn)
                     .optional()?
                     .ok_or(ApiError::NotFound(ResourceType::User))?;
                 if ctx.client.id != Some(user_id) {
                     ctx.verify_privilege(Action::UserTokenListAny)?;
+                    api::verify_rank(ctx.client, target_rank)?;
                 }
 
                 user_token::table
@@ -128,14 +129,15 @@ async fn create(
             let ctx = ctx.clone();
             let username = username.clone();
             move |conn| {
-                let (user_id, avatar_style): (i64, AvatarStyle) = user::table
-                    .select((user::id, user::avatar_style))
+                let (user_id, avatar_style, target_rank) = user::table
+                    .select((user::id, user::avatar_style, user::rank))
                     .filter(user::name.eq(&username))
                     .first(conn)
                     .optional()?
                     .ok_or(ApiError::NotFound(ResourceType::User))?;
                 if ctx.client.id != Some(user_id) {
                     ctx.verify_privilege(Action::UserTokenCreateAny)?;
+                    api::verify_rank(ctx.client, target_rank)?;
                 }
 
                 // Delete any expired or disabled tokens owned by user
@@ -218,14 +220,15 @@ async fn update(
             let ctx = ctx.clone();
             let username = username.clone();
             move |conn| {
-                let (user_id, avatar_style): (i64, AvatarStyle) = user::table
-                    .select((user::id, user::avatar_style))
+                let (user_id, avatar_style, target_rank) = user::table
+                    .select((user::id, user::avatar_style, user::rank))
                     .filter(user::name.eq(&username))
                     .first(conn)
                     .optional()?
                     .ok_or(ApiError::NotFound(ResourceType::User))?;
                 if ctx.client.id != Some(user_id) {
                     ctx.verify_privilege(Action::UserTokenEditAny)?;
+                    api::verify_rank(ctx.client, target_rank)?;
                 }
 
                 let mut user_token: UserToken = user_token::table
@@ -281,14 +284,15 @@ async fn delete(Ctx(ctx, connection_pool): Ctx, Path((username, token)): Path<(S
 
     connection_pool
         .transaction(move |conn| {
-            let user_token_owner: i64 = user::table
-                .select(user::id)
+            let (user_token_owner, target_rank) = user::table
+                .select((user::id, user::rank))
                 .filter(user::name.eq(username))
                 .first(conn)
                 .optional()?
                 .ok_or(ApiError::NotFound(ResourceType::User))?;
             if ctx.client.id != Some(user_token_owner) {
                 ctx.verify_privilege(Action::UserTokenDeleteAny)?;
+                api::verify_rank(ctx.client, target_rank)?;
             }
 
             let _: i32 = diesel::delete(
