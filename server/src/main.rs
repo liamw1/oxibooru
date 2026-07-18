@@ -1,15 +1,3 @@
-#![warn(clippy::pedantic)]
-// Gives warnings on derives
-#![allow(clippy::needless_for_each, clippy::large_stack_arrays, clippy::too_many_arguments)]
-// Gives warnings for integer casts in const context
-#![allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
-// Option<Option<T>> is convenient for deserializing optional nullable JSON fields
-#![allow(clippy::option_option)]
-// Buggy: Fires when using assert_eq! to compare to 0.0
-#![allow(clippy::float_cmp)]
-// Too subjective
-#![allow(clippy::unreadable_literal, clippy::too_many_lines)]
-
 mod admin;
 mod api;
 mod app;
@@ -32,8 +20,8 @@ mod test;
 mod time;
 mod update;
 
-// Avoid musl's default allocator due to lackluster performance
-// https://nickb.dev/blog/default-musl-allocator-considered-harmful-to-performance
+/// Avoid musl's default allocator due to lackluster performance
+/// https://nickb.dev/blog/default-musl-allocator-considered-harmful-to-performance
 #[cfg(target_env = "musl")]
 #[global_allocator]
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;

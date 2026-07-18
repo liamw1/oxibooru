@@ -380,7 +380,7 @@ pub fn read_env(config: &Config) -> Result<Arc<Env>, Box<dyn Error>> {
         .unwrap_or(DEFAULT_POSTGRES_PORT);
     let postgres_database = std::env::var("POSTGRES_DB")?;
 
-    Ok(Env {
+    Ok(Arc::new(Env {
         http_origin,
         http_referer,
         domain_port,
@@ -390,8 +390,7 @@ pub fn read_env(config: &Config) -> Result<Arc<Env>, Box<dyn Error>> {
         postgres_hostname,
         postgres_port,
         postgres_database,
-    })
-    .map(Arc::new)
+    }))
 }
 
 /// Deserializes the `config.toml`.
@@ -431,7 +430,7 @@ const TRAVERSAL: &AsciiSet = &CONTROLS.add(b'/').add(b'\\').add(b'.').add(b':').
 const DEFAULT_CONFIG: &str = include_str!("../config.toml.dist");
 
 #[cfg(feature = "load_env")]
-fn load_dotenv(env_path: Option<&Path>) -> dotenvy::Result<()> {
+fn load_dotenv(env_path: Option<&Path>) -> dotenvy::Result<PathBuf> {
     if let Some(env_path) = env_path {
         // If env_path is specified in args, read from that path
         dotenvy::from_filename(env_path)
@@ -439,7 +438,6 @@ fn load_dotenv(env_path: Option<&Path>) -> dotenvy::Result<()> {
         // Otherwise, try to read a `.env` from the working directory or its parent
         dotenvy::from_filename(".env").or_else(|_| dotenvy::from_filename("../.env"))
     }
-    .map(|_| ())
 }
 
 fn create_config(args: Args) -> Config {
