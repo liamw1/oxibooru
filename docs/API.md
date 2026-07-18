@@ -754,12 +754,12 @@ data.
 
     **Special tokens**
 
-    | `<value>`    | Description                                                   |
-    | ------------ | ------------------------------------------------------------- |
-    | `liked`      | posts liked by currently logged in user                       |
-    | `disliked`   | posts disliked by currently logged in user                    |
-    | `fav`        | posts added to favorites by currently logged in user          |
-    | `tumbleweed` | posts with score of 0, without comments and without favorites |
+    | `<value>`    | Description                                          |
+    | ------------ | ---------------------------------------------------- |
+    | `liked`      | posts liked by currently logged in user              |
+    | `disliked`   | posts disliked by currently logged in user           |
+    | `fav`        | posts added to favorites by currently logged in user |
+    | `tumbleweed` | posts without ratings, comments, or favorites        |
 
 ### Getting post
 - **Request**
@@ -913,8 +913,7 @@ data.
     found. Safety must be any of `"safe"`, `"sketchy"` or `"unsafe"`. Relations
     must contain valid post IDs. If `<flag>` is omitted, they will be defined
     by default (`"loop"` will be set for all video posts, and `"sound"` will be
-    auto-detected). Sending empty `thumbnail` will cause the post to use default
-    thumbnail. If `anonymous` is set to truthy value, the uploader name won't be
+    auto-detected). If `anonymous` is set to truthy value, the uploader name won't be
     recorded (privilege verification still applies; it's possible to disallow
     anonymous uploads completely from config.) For details on how to pass `content`
     and `thumbnail`, see [file uploads](#file-uploads).
@@ -1045,8 +1044,7 @@ data.
     suggestions, one name and their category is set to the first tag category
     found. Safety must be any of `"safe"`, `"sketchy"` or `"unsafe"`. Relations
     must contain valid post IDs. `<flag>` can be either `"loop"` to enable looping
-    for video posts or `"sound"` to indicate sound. Sending empty `thumbnail` will
-    reset the post thumbnail to default. For details how to pass `content` and
+    for video posts or `"sound"` to indicate sound. For details how to pass `content` and
     `thumbnail`, see [file uploads](#file-uploads). All fields except the
     [`version`](#versioning) are optional - update concerns only provided
     fields.

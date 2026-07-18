@@ -15,10 +15,7 @@ use crate::time::DateTime;
 use crate::update::tag::FetchMode;
 use crate::{api, snapshot, update};
 use diesel::dsl::count_star;
-use diesel::{
-    ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl,
-    SelectableHelper,
-};
+use diesel::{ExpressionMethods, Insertable, OptionalExtension, PgConnection, QueryDsl, RunQueryDsl, SaveChangesDsl};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
@@ -34,7 +31,7 @@ pub fn routes() -> OpenApiRouter<AppState> {
 
 const MAX_TAG_SIBLINGS: i64 = 50;
 
-fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &SmallString) -> ApiResult<i64> {
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &str) -> ApiResult<i64> {
     if ctx.preferences().is_empty() {
         tag_name::table
             .select(tag_name::tag_id)
@@ -365,29 +362,33 @@ async fn merge(
     ctx.verify_privilege(Action::TagView)?;
     ctx.verify_privilege(Action::TagMerge)?;
 
-    let get_tag_info = |conn: &mut PgConnection, name: &str| {
+    let get_tag_info = |conn: &mut PgConnection, ctx: &Context, name: &str| {
+        let tag_id = verify_visibility(conn, ctx, name)?;
         tag::table
-            .select((tag::id, tag::last_edit_time))
-            .inner_join(tag_name::table)
-            .filter(tag_name::name.eq(name))
+            .find(tag_id)
+            .select(tag::last_edit_time)
             .first(conn)
             .optional()?
             .ok_or(ApiError::NotFound(ResourceType::Tag))
+            .map(|last_edit_time| (tag_id, last_edit_time))
     };
 
     let merged_tag_id = connection_pool
-        .transaction(move |conn| {
-            let (absorbed_id, absorbed_version) = get_tag_info(conn, &body.remove)?;
-            let (merge_to_id, merge_to_version) = get_tag_info(conn, &body.merge_to)?;
-            if absorbed_id == merge_to_id {
-                return Err(ApiError::SelfMerge(ResourceType::Tag));
-            }
-            api::verify_version(absorbed_version, body.remove_version)?;
-            api::verify_version(merge_to_version, body.merge_to_version)?;
+        .transaction({
+            let ctx = ctx.clone();
+            move |conn| {
+                let (absorbed_id, absorbed_version) = get_tag_info(conn, &ctx, &body.remove)?;
+                let (merge_to_id, merge_to_version) = get_tag_info(conn, &ctx, &body.merge_to)?;
+                if absorbed_id == merge_to_id {
+                    return Err(ApiError::SelfMerge(ResourceType::Tag));
+                }
+                api::verify_version(absorbed_version, body.remove_version)?;
+                api::verify_version(merge_to_version, body.merge_to_version)?;
 
-            update::tag::merge(conn, absorbed_id, merge_to_id)?;
-            snapshot::tag::merge_snapshot(conn, ctx.client, body.remove, &body.merge_to)?;
-            Ok::<_, ApiError>(merge_to_id)
+                update::tag::merge(conn, absorbed_id, merge_to_id)?;
+                snapshot::tag::merge_snapshot(conn, ctx.client, body.remove, &body.merge_to)?;
+                Ok::<_, ApiError>(merge_to_id)
+            }
         })
         .await?;
     connection_pool
@@ -451,68 +452,69 @@ async fn update(
     ctx.verify_privilege(Action::TagView)?;
 
     let tag_id = connection_pool
-        .transaction(move |conn| {
-            let old_tag: Tag = tag::table
-                .inner_join(tag_name::table)
-                .select(Tag::as_select())
-                .filter(tag_name::name.eq(name))
-                .first(conn)
-                .optional()?
-                .ok_or(ApiError::NotFound(ResourceType::Tag))?;
-            let tag_id = old_tag.id;
-            api::verify_version(old_tag.last_edit_time, body.version)?;
-
-            let mut new_tag = old_tag.clone();
-            let old_snapshot_data = SnapshotData::retrieve(conn, old_tag)?;
-            let mut new_snapshot_data = old_snapshot_data.clone();
-
-            if let Some(category) = body.category {
-                ctx.verify_privilege(Action::TagEditCategory)?;
-
-                let category_id: i64 = tag_category::table
-                    .select(tag_category::id)
-                    .filter(tag_category::name.eq(&category))
+        .transaction({
+            let ctx = ctx.clone();
+            move |conn| {
+                let tag_id = verify_visibility(conn, &ctx, &name)?;
+                let old_tag: Tag = tag::table
+                    .find(tag_id)
                     .first(conn)
                     .optional()?
-                    .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
-                new_tag.category_id = category_id;
-                new_snapshot_data.category = category;
-            }
-            if let Some(description) = body.description {
-                ctx.verify_privilege(Action::TagEditDescription)?;
-                new_tag.description = description.clone();
-                new_snapshot_data.description = description;
-            }
-            if let Some(names) = body.names {
-                ctx.verify_privilege(Action::TagEditName)?;
-                if names.is_empty() {
-                    return Err(ApiError::NoNamesGiven(ResourceType::Tag));
+                    .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+                api::verify_version(old_tag.last_edit_time, body.version)?;
+
+                let mut new_tag = old_tag.clone();
+                let old_snapshot_data = SnapshotData::retrieve(conn, old_tag)?;
+                let mut new_snapshot_data = old_snapshot_data.clone();
+
+                if let Some(category) = body.category {
+                    ctx.verify_privilege(Action::TagEditCategory)?;
+
+                    let category_id: i64 = tag_category::table
+                        .select(tag_category::id)
+                        .filter(tag_category::name.eq(&category))
+                        .first(conn)
+                        .optional()?
+                        .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+                    new_tag.category_id = category_id;
+                    new_snapshot_data.category = category;
+                }
+                if let Some(description) = body.description {
+                    ctx.verify_privilege(Action::TagEditDescription)?;
+                    new_tag.description = description.clone();
+                    new_snapshot_data.description = description;
+                }
+                if let Some(names) = body.names {
+                    ctx.verify_privilege(Action::TagEditName)?;
+                    if names.is_empty() {
+                        return Err(ApiError::NoNamesGiven(ResourceType::Tag));
+                    }
+
+                    update::tag::set_names(conn, &ctx.config, tag_id, &names)?;
+                    new_snapshot_data.names = names;
+                }
+                if let Some(implications) = body.implications {
+                    ctx.verify_privilege(Action::TagEditImplication)?;
+
+                    let (implied_ids, implications) =
+                        update::tag::get_or_create_tags(conn, &ctx, implications, FetchMode::Acyclic)?;
+                    update::tag::set_implications(conn, tag_id, &implied_ids)?;
+                    new_snapshot_data.implications = implications;
+                }
+                if let Some(suggestions) = body.suggestions {
+                    ctx.verify_privilege(Action::TagEditSuggestion)?;
+
+                    let (suggested_ids, suggestions) =
+                        update::tag::get_or_create_tags(conn, &ctx, suggestions, FetchMode::Acyclic)?;
+                    update::tag::set_suggestions(conn, tag_id, &suggested_ids)?;
+                    new_snapshot_data.suggestions = suggestions;
                 }
 
-                update::tag::set_names(conn, &ctx.config, tag_id, &names)?;
-                new_snapshot_data.names = names;
+                new_tag.last_edit_time = DateTime::now();
+                let _: Tag = new_tag.save_changes(conn)?;
+                snapshot::tag::modification_snapshot(conn, ctx.client, old_snapshot_data, new_snapshot_data)?;
+                Ok::<_, ApiError>(tag_id)
             }
-            if let Some(implications) = body.implications {
-                ctx.verify_privilege(Action::TagEditImplication)?;
-
-                let (implied_ids, implications) =
-                    update::tag::get_or_create_tags(conn, &ctx, implications, FetchMode::Acyclic)?;
-                update::tag::set_implications(conn, tag_id, &implied_ids)?;
-                new_snapshot_data.implications = implications;
-            }
-            if let Some(suggestions) = body.suggestions {
-                ctx.verify_privilege(Action::TagEditSuggestion)?;
-
-                let (suggested_ids, suggestions) =
-                    update::tag::get_or_create_tags(conn, &ctx, suggestions, FetchMode::Acyclic)?;
-                update::tag::set_suggestions(conn, tag_id, &suggested_ids)?;
-                new_snapshot_data.suggestions = suggestions;
-            }
-
-            new_tag.last_edit_time = DateTime::now();
-            let _: Tag = new_tag.save_changes(conn)?;
-            snapshot::tag::modification_snapshot(conn, ctx.client, old_snapshot_data, new_snapshot_data)?;
-            Ok::<_, ApiError>(tag_id)
         })
         .await?;
     connection_pool
@@ -548,10 +550,9 @@ async fn delete(
 
     connection_pool
         .transaction(move |conn| {
+            let tag_id = verify_visibility(conn, &ctx, &name)?;
             let tag: Tag = tag::table
-                .select(Tag::as_select())
-                .inner_join(tag_name::table)
-                .filter(tag_name::name.eq(name))
+                .find(tag_id)
                 .first(conn)
                 .optional()?
                 .ok_or(ApiError::NotFound(ResourceType::Tag))?;
@@ -795,17 +796,10 @@ mod test {
             "tag/list/with_preferences",
         )
         .await?;
-        verify_response_with_user(UserRank::Anonymous, "GET /tag/tagme", "tag/get/with_preferences").await?;
         verify_response_with_user(
             UserRank::Anonymous,
             "GET /tag-siblings/rock/?fields=names,implications,suggestions",
             "tag/get_siblings/with_preferences",
-        )
-        .await?;
-        verify_response_with_user(
-            UserRank::Anonymous,
-            "GET /tag-siblings/rock/?fields=names,implications,suggestions",
-            "tag/get_siblings/of_blacklisted",
         )
         .await?;
         verify_response_with_user(
@@ -817,6 +811,21 @@ mod test {
 
         reset_database();
         Ok(())
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn blacklisted() -> ApiResult<()> {
+        verify_response_with_user(UserRank::Anonymous, "GET /tag/tagme", "tag/get/blacklisted").await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "GET /tag-siblings/rock/?fields=names,implications,suggestions",
+            "tag/get_siblings/blacklisted",
+        )
+        .await?;
+        verify_response_with_user(UserRank::Anonymous, "PUT /tag/tagme", "tag/edit/blacklisted").await?;
+        verify_response_with_user(UserRank::Anonymous, "POST /tag-merge", "tag/merge/blacklisted").await?;
+        verify_response_with_user(UserRank::Anonymous, "DELETE /tag/tagme", "tag/delete/blacklisted").await
     }
 
     #[tokio::test]

@@ -202,34 +202,33 @@ async fn update(
     ctx.verify_privilege(Action::TagCategoryView)?;
 
     let updated_category = connection_pool
-        .transaction(move |conn| {
-            let old_category: TagCategory = tag_category::table
-                .filter(tag_category::name.eq(name))
-                .first(conn)
-                .optional()?
-                .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
-            api::verify_version(old_category.last_edit_time, body.version)?;
+        .transaction({
+            let ctx = ctx.clone();
+            move |conn| {
+                let old_category = verify_visibility(conn, &ctx, &name)?;
+                api::verify_version(old_category.last_edit_time, body.version)?;
 
-            let mut new_category = old_category.clone();
-            if let Some(order) = body.order {
-                ctx.verify_privilege(Action::TagCategoryEditOrder)?;
-                new_category.order = order;
-            }
-            if let Some(name) = body.name {
-                ctx.verify_privilege(Action::TagCategoryEditName)?;
-                api::verify_matches_regex(&ctx.config, &name, RegexType::TagCategory)?;
-                new_category.name = name;
-            }
-            if let Some(color) = body.color {
-                ctx.verify_privilege(Action::TagCategoryEditColor)?;
-                new_category.color = color;
-            }
+                let mut new_category = old_category.clone();
+                if let Some(order) = body.order {
+                    ctx.verify_privilege(Action::TagCategoryEditOrder)?;
+                    new_category.order = order;
+                }
+                if let Some(name) = body.name {
+                    ctx.verify_privilege(Action::TagCategoryEditName)?;
+                    api::verify_matches_regex(&ctx.config, &name, RegexType::TagCategory)?;
+                    new_category.name = name;
+                }
+                if let Some(color) = body.color {
+                    ctx.verify_privilege(Action::TagCategoryEditColor)?;
+                    new_category.color = color;
+                }
 
-            new_category.last_edit_time = DateTime::now();
-            let saved_category: TagCategory =
-                error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::TagCategoryName)?;
-            snapshot::tag_category::modification_snapshot(conn, ctx.client, &old_category, &new_category)?;
-            Ok::<_, ApiError>(saved_category)
+                new_category.last_edit_time = DateTime::now();
+                let saved_category: TagCategory =
+                    error::map_unique_violation(new_category.save_changes(conn), ResourceProperty::TagCategoryName)?;
+                snapshot::tag_category::modification_snapshot(conn, ctx.client, &old_category, &new_category)?;
+                Ok::<_, ApiError>(saved_category)
+            }
         })
         .await?;
     connection_pool
@@ -266,11 +265,7 @@ async fn set_default(
 
     let new_default_category: TagCategory = connection_pool
         .transaction(move |conn| {
-            let mut category: TagCategory = tag_category::table
-                .filter(tag_category::name.eq(name))
-                .first(conn)
-                .optional()?
-                .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+            let mut category = verify_visibility(conn, &ctx, &name)?;
             let mut old_default_category: TagCategory =
                 tag_category::table.filter(TagCategory::is_default()).first(conn)?;
 
@@ -343,11 +338,7 @@ async fn delete(
 
     connection_pool
         .transaction(move |conn| {
-            let category: TagCategory = tag_category::table
-                .filter(tag_category::name.eq(name))
-                .first(conn)
-                .optional()?
-                .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+            let category = verify_visibility(conn, &ctx, &name)?;
 
             if category.id == 0 {
                 return Err(ApiError::DeleteDefault(ResourceType::TagCategory));
@@ -489,8 +480,23 @@ mod test {
             "GET /tag-categories/?fields=name",
             "tag_category/list/with_preferences",
         )
+        .await
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn blacklisted() -> ApiResult<()> {
+        verify_response_with_user(UserRank::Anonymous, "GET /tag-category/meta", "tag_category/get/blacklisted")
+            .await?;
+        verify_response_with_user(UserRank::Anonymous, "PUT /tag-category/meta", "tag_category/edit/blacklisted")
+            .await?;
+        verify_response_with_user(
+            UserRank::Anonymous,
+            "PUT /tag-category/meta/default",
+            "tag_category/set_default/blacklisted",
+        )
         .await?;
-        verify_response_with_user(UserRank::Anonymous, "GET /tag-category/meta", "tag_category/get/with_preferences")
+        verify_response_with_user(UserRank::Anonymous, "DELETE /tag-category/meta", "tag_category/delete/blacklisted")
             .await
     }
 

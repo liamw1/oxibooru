@@ -258,7 +258,7 @@
         </tr>
         <tr>
             <td><code>tumbleweed</code></td>
-            <td>posts with score of 0, without comments and without favorites</td>
+            <td>posts without ratings, comments, or favorites</td>
         </tr>
     </tbody>
 </table>

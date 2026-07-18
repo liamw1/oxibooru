@@ -228,6 +228,8 @@ async fn update(
         .transaction({
             let ctx = ctx.clone();
             move |conn| {
+                verify_visibility(conn, &ctx, comment_id)?;
+
                 let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
                     .find(comment_id)
                     .select((comment::user_id, comment::last_edit_time))
@@ -283,20 +285,24 @@ async fn rate(
 
     let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
     connection_pool
-        .transaction(move |conn| {
-            diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
+        .transaction({
+            let ctx = ctx.clone();
+            move |conn| {
+                verify_visibility(conn, &ctx, comment_id)?;
 
-            if let Ok(score) = Score::try_from(*body) {
-                let insert_result = NewCommentScore {
-                    comment_id,
-                    user_id,
-                    score,
+                diesel::delete(comment_score::table.find((comment_id, user_id))).execute(conn)?;
+                if let Ok(score) = Score::try_from(*body) {
+                    let insert_result = NewCommentScore {
+                        comment_id,
+                        user_id,
+                        score,
+                    }
+                    .insert_into(comment_score::table)
+                    .execute(conn);
+                    error::map_foreign_key_violation(insert_result, ResourceType::Comment)?;
                 }
-                .insert_into(comment_score::table)
-                .execute(conn);
-                error::map_foreign_key_violation(insert_result, ResourceType::Comment)?;
+                Ok::<_, ApiError>(())
             }
-            Ok::<_, ApiError>(())
         })
         .await?;
     connection_pool
@@ -330,6 +336,8 @@ async fn delete(
 
     connection_pool
         .transaction(move |conn| {
+            verify_visibility(conn, &ctx, comment_id)?;
+
             let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
                 .find(comment_id)
                 .select((comment::user_id, comment::last_edit_time))
@@ -532,8 +540,15 @@ mod test {
             "GET /comments/?query=-sort:id&limit=9&fields=id",
             "comment/list/with_preferences",
         )
-        .await?;
-        verify_response_with_user(UserRank::Anonymous, "GET /comment/1", "comment/get/with_preferences").await
+        .await
+    }
+
+    #[tokio::test]
+    #[parallel]
+    async fn blacklisted() -> ApiResult<()> {
+        verify_response_with_user(UserRank::Anonymous, "GET /comment/1", "comment/get/blacklisted").await?;
+        verify_response_with_user(UserRank::Regular, "PUT /comment/1/score", "comment/rate/blacklisted").await?;
+        verify_response_with_user(UserRank::Anonymous, "DELETE /comment/1", "comment/delete/blacklisted").await
     }
 
     #[tokio::test]

@@ -1,0 +1,6 @@
+[regular_preferences]
+tag_blacklist = ["classic_literature"]
+
+[public_info.privileges]
+comment_view = "regular"
+comment_score = "regular"

@@ -1,0 +1,6 @@
+[anonymous_preferences]
+tag_blacklist = ["classic_literature"]
+
+[public_info.privileges]
+comment_delete_own = "anonymous"
+comment_delete_any = "anonymous"
