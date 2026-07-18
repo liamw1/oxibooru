@@ -28,7 +28,7 @@ pub struct TagCategory {
 }
 
 impl TagCategory {
-    pub fn default() -> SqlLiteral<Bool, UncheckedBind<SqlLiteral<Bool>, tag_category::id>> {
+    pub fn is_default() -> SqlLiteral<Bool, UncheckedBind<SqlLiteral<Bool>, tag_category::id>> {
         sql("").bind(tag_category::id).sql(" = 0")
     }
 }

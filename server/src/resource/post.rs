@@ -353,7 +353,7 @@ fn get_tags(conn: &mut PgConnection, posts: &[Post]) -> QueryResult<Vec<Vec<Micr
     let post_tags: Vec<(PostTag, i64, i64)> = PostTag::belonging_to(posts)
         .inner_join(tag_info)
         .select((PostTag::as_select(), tag::category_id, tag_statistics::usage_count))
-        .filter(TagName::primary())
+        .filter(TagName::is_primary())
         .order((tag_category::order, tag_name::name))
         .load(conn)?;
     let tag_ids: HashSet<i64> = post_tags.iter().map(|(post_tag, ..)| post_tag.tag_id).collect();

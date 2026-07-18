@@ -34,13 +34,13 @@ impl SnapshotData {
             .inner_join(tag_implication::table.on(tag_name::tag_id.eq(tag_implication::child_id)))
             .select(tag_name::name)
             .filter(tag_implication::parent_id.eq(tag.id))
-            .filter(TagName::primary())
+            .filter(TagName::is_primary())
             .load(conn)?;
         let suggestions = tag_name::table
             .inner_join(tag_suggestion::table.on(tag_name::tag_id.eq(tag_suggestion::child_id)))
             .select(tag_name::name)
             .filter(tag_suggestion::parent_id.eq(tag.id))
-            .filter(TagName::primary())
+            .filter(TagName::is_primary())
             .load(conn)?;
         Ok(Self {
             description: tag.description,
@@ -65,7 +65,7 @@ pub fn creation_snapshot(conn: &mut PgConnection, client: Client, tag_data: Snap
 pub fn new_name_snapshots(conn: &mut PgConnection, client: Client, new_names: Vec<SmallString>) -> ApiResult<usize> {
     let default_category_name: SmallString = tag_category::table
         .select(tag_category::name)
-        .filter(TagCategory::default())
+        .filter(TagCategory::is_default())
         .first(conn)?;
     let new_snapshots: Vec<NewSnapshot> = new_names
         .into_iter()

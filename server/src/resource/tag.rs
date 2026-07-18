@@ -148,7 +148,7 @@ fn get_implications(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Ve
     let implications: Vec<(TagImplication, i64, i64)> = TagImplication::belonging_to(tags)
         .inner_join(implication_info.on(tag::id.eq(tag_implication::child_id)))
         .select((TagImplication::as_select(), tag::category_id, tag_statistics::usage_count))
-        .filter(TagName::primary())
+        .filter(TagName::is_primary())
         .order(tag_name::name)
         .load(conn)?;
     let implication_ids: HashSet<i64> = implications
@@ -190,7 +190,7 @@ fn get_suggestions(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec
     let suggestions: Vec<(TagSuggestion, i64, i64)> = TagSuggestion::belonging_to(tags)
         .inner_join(suggestion_info.on(tag::id.eq(tag_suggestion::child_id)))
         .select((TagSuggestion::as_select(), tag::category_id, tag_statistics::usage_count))
-        .filter(TagName::primary())
+        .filter(TagName::is_primary())
         .order(tag_name::name)
         .load(conn)?;
     let suggestion_ids: HashSet<i64> = suggestions.iter().map(|(suggestion, ..)| suggestion.child_id).collect();

@@ -173,7 +173,7 @@ pub fn get_or_create_tags(
     let primary_tag_names = tag_name::table
         .select(tag_name::name)
         .filter(tag_name::tag_id.eq_any(&tag_ids))
-        .filter(TagName::primary())
+        .filter(TagName::is_primary())
         .load(conn)?;
     Ok((tag_ids, primary_tag_names))
 }

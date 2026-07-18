@@ -252,7 +252,7 @@ async fn set_default(
                 .optional()?
                 .ok_or(ApiError::NotFound(ResourceType::PoolCategory))?;
             let mut old_default_category: PoolCategory =
-                pool_category::table.filter(PoolCategory::default()).first(conn)?;
+                pool_category::table.filter(PoolCategory::is_default()).first(conn)?;
 
             let defaulted_pools: Vec<i64> = diesel::update(pool::table)
                 .filter(pool::category_id.eq(category.id))

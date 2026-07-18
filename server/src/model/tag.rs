@@ -54,7 +54,7 @@ impl TagName {
     /// `tag_name::order.eq(0)` (as much as 15x). Presumably this is because Diesel uses bind
     /// parameters and the Postgres can't optimize these queries as well when it doesn't know
     /// the exact value of `order`.
-    pub fn primary() -> SqlLiteral<Bool, UncheckedBind<SqlLiteral<Bool>, tag_name::order>> {
+    pub fn is_primary() -> SqlLiteral<Bool, UncheckedBind<SqlLiteral<Bool>, tag_name::order>> {
         sql("").bind(tag_name::order).sql(" = 0")
     }
 }

@@ -33,7 +33,7 @@ impl SnapshotData {
             .inner_join(post_tag::table.on(tag_name::tag_id.eq(post_tag::tag_id)))
             .select(tag_name::name)
             .filter(post_tag::post_id.eq(post.id))
-            .filter(TagName::primary())
+            .filter(TagName::is_primary())
             .load(conn)?;
         let relations = post_relation::table
             .select(post_relation::child_id)

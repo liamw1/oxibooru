@@ -826,7 +826,7 @@ mod statistics_tests {
         let stats: Vec<(SmallString, i64)> = pool_statistics::table
             .inner_join(pool_name::table.on(pool_name::pool_id.eq(pool_statistics::pool_id)))
             .select((pool_name::name, pool_statistics::post_count))
-            .filter(PoolName::primary())
+            .filter(PoolName::is_primary())
             .load(&mut conn)?;
         for (pool_name, post_count) in stats {
             let exepected_post_count = POOL_POSTS.iter().filter(|&&(name, _)| *name == *pool_name).count() as i64;
@@ -903,7 +903,7 @@ mod statistics_tests {
         let stats: Vec<(SmallString, i64)> = tag_statistics::table
             .inner_join(tag_name::table.on(tag_name::tag_id.eq(tag_statistics::tag_id)))
             .select((tag_name::name, tag_statistics::usage_count))
-            .filter(TagName::primary())
+            .filter(TagName::is_primary())
             .load(&mut conn)?;
         for (tag_name, usage_count) in stats {
             let expected_usage_count = POST_TAGS

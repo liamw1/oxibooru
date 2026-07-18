@@ -26,7 +26,7 @@ pub struct PoolCategory {
 }
 
 impl PoolCategory {
-    pub fn default() -> SqlLiteral<Bool, UncheckedBind<SqlLiteral<Bool>, pool_category::id>> {
+    pub fn is_default() -> SqlLiteral<Bool, UncheckedBind<SqlLiteral<Bool>, pool_category::id>> {
         sql("").bind(pool_category::id).sql(" = 0")
     }
 }
