@@ -62,7 +62,7 @@ impl<'de, F: Into<u64> + FromStr> Deserialize<'de> for Mask<F> {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         if let Some(field_list) = Option::<String>::deserialize(deserializer)? {
             field_list.split(',').try_fold(Self::new(), |fields, field_str| {
-                F::from_str(field_str)
+                F::from_str(field_str.trim())
                     .map(|field| fields | field)
                     .map_err(|_| serde::de::Error::custom(format!("invalid field `{field_str}`")))
             })
