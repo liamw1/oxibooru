@@ -6,7 +6,6 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::{SingleValue, Text};
 use diesel::{AsExpression, declare_sql_function};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::borrow::Cow;
 use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
@@ -99,12 +98,6 @@ impl FromSql<Citext, Pg> for SecretString {
 #[schema(value_type = String, description = "")]
 pub struct SmallString(CompactString);
 
-impl SmallString {
-    pub fn new(text: impl AsRef<str>) -> Self {
-        Self(CompactString::new(text))
-    }
-}
-
 impl Deref for SmallString {
     type Target = str;
     fn deref(&self) -> &Self::Target {
@@ -119,15 +112,9 @@ impl FromStr for SmallString {
     }
 }
 
-impl From<String> for SmallString {
-    fn from(value: String) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<Cow<'_, str>> for SmallString {
-    fn from(value: Cow<str>) -> Self {
-        Self::new(value)
+impl From<&str> for SmallString {
+    fn from(value: &str) -> Self {
+        Self(CompactString::from(value))
     }
 }
 

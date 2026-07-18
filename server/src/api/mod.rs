@@ -68,7 +68,7 @@ pub fn verify_matches_regex(config: &Config, haystack: &str, regex_type: RegexTy
         } else {
             haystack
         };
-        Err(ApiError::ExpressionFailsRegex(SmallString::new(info), regex_type))
+        Err(ApiError::ExpressionFailsRegex(SmallString::from(info), regex_type))
     }
 }
 

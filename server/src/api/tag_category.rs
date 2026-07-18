@@ -284,7 +284,7 @@ async fn set_default(
             std::mem::swap(&mut category.id, &mut old_default_category.id);
 
             // Give new default category an empty name so it doesn't violate uniqueness
-            let mut temporary_category_name = SmallString::new("");
+            let mut temporary_category_name = SmallString::from("");
             std::mem::swap(&mut category.name, &mut temporary_category_name);
             let mut new_default_category: TagCategory = category.save_changes(conn)?;
 
