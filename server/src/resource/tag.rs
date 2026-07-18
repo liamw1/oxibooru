@@ -119,18 +119,19 @@ impl TagInfo {
 }
 
 fn get_categories(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<SmallString>> {
-    let tag_ids: Vec<_> = tags.iter().map(|tag| tag.id).collect();
-    tag::table
-        .inner_join(tag_category::table)
-        .select((tag::id, tag_category::name))
-        .filter(tag::id.eq_any(&tag_ids))
-        .load(conn)
-        .map(|category_names| {
-            resource::order_transformed_as(category_names, &tag_ids, |&(tag_id, _)| tag_id)
-                .into_iter()
-                .map(|(_, category_name)| category_name)
-                .collect()
-        })
+    let category_ids: HashSet<_> = tags.iter().map(|tag| tag.category_id).collect();
+    let categories: HashMap<i64, SmallString> = tag_category::table
+        .select((tag_category::id, tag_category::name))
+        .filter(tag_category::id.eq_any(category_ids))
+        .load(conn)?
+        .into_iter()
+        .collect();
+
+    Ok(tags
+        .iter()
+        .map(|tag| categories.get(&tag.category_id).expect("Tag must have a category"))
+        .cloned()
+        .collect())
 }
 
 fn get_names(conn: &mut PgConnection, tags: &[Tag]) -> QueryResult<Vec<Vec<SmallString>>> {

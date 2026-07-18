@@ -14,6 +14,7 @@ use diesel::{
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use strum::EnumString;
 use utoipa::ToSchema;
@@ -134,18 +135,19 @@ impl PoolInfo {
 }
 
 fn get_categories(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<SmallString>> {
-    let pool_ids: Vec<_> = pools.iter().map(Identifiable::id).copied().collect();
-    pool::table
-        .inner_join(pool_category::table)
-        .select((pool::id, pool_category::name))
-        .filter(pool::id.eq_any(&pool_ids))
-        .load(conn)
-        .map(|category_names| {
-            resource::order_transformed_as(category_names, &pool_ids, |&(pool_id, _)| pool_id)
-                .into_iter()
-                .map(|(_, category_name)| category_name)
-                .collect()
-        })
+    let category_ids: HashSet<_> = pools.iter().map(|pool| pool.category_id).collect();
+    let categories: HashMap<i64, SmallString> = pool_category::table
+        .select((pool_category::id, pool_category::name))
+        .filter(pool_category::id.eq_any(category_ids))
+        .load(conn)?
+        .into_iter()
+        .collect();
+
+    Ok(pools
+        .iter()
+        .map(|pool| categories.get(&pool.category_id).expect("Pool must have a category"))
+        .cloned()
+        .collect())
 }
 
 fn get_names(conn: &mut PgConnection, pools: &[Pool]) -> QueryResult<Vec<Vec<SmallString>>> {
