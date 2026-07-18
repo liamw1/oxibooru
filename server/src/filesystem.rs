@@ -176,11 +176,11 @@ pub fn move_file(from: &Path, to: &Path) -> std::io::Result<()> {
 /// Spawns an asynchronous task that periodically checks the temporary
 /// upload directory for stale file uploads and deletes them.
 pub fn spawn_temporary_uploads_cleanup_task(config: Arc<Config>) {
-    const CLEANUP_INTERVAL: Duration = Duration::from_mins(10);
+    const SWEEP_INTERVAL: Duration = Duration::from_hours(1);
 
     tokio::spawn(async move {
         let mut uploads = HashMap::new();
-        let mut interval = tokio::time::interval(CLEANUP_INTERVAL);
+        let mut interval = tokio::time::interval(SWEEP_INTERVAL);
         interval.set_missed_tick_behavior(MissedTickBehavior::Delay);
         loop {
             interval.tick().await;
