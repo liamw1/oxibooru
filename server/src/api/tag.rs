@@ -40,7 +40,7 @@ fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &str) -> 
             .optional()?
             .ok_or(ApiError::NotFound(ResourceType::Tag))
     } else {
-        let (tag_id, category_name): (i64, SmallString) = tag::table
+        let (tag_id, category_name): (_, SmallString) = tag::table
             .inner_join(tag_name::table)
             .inner_join(tag_category::table)
             .select((tag::id, tag_category::name))
@@ -230,7 +230,7 @@ async fn get_siblings(
                 sibling_query = sibling_query.filter(post_tag::tag_id.ne_all(hidden_tags));
             }
 
-            let (sibling_ids, common_post_counts): (Vec<i64>, Vec<i64>) =
+            let (sibling_ids, common_post_counts): (Vec<_>, Vec<_>) =
                 sibling_query.load::<(i64, i64)>(conn)?.into_iter().unzip();
 
             let results = TagInfo::new_batch_from_ids(conn, &sibling_ids, params.fields)?
@@ -296,7 +296,7 @@ async fn create(
 
     let tag = connection_pool
         .transaction(move |conn| {
-            let (category_id, category): (i64, SmallString) = tag_category::table
+            let (category_id, category) = tag_category::table
                 .select((tag_category::id, tag_category::name))
                 .filter(tag_category::name.eq(body.category))
                 .first(conn)

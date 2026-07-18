@@ -182,7 +182,7 @@ async fn create(
         .transaction({
             let config = Arc::clone(&ctx.config);
             move |conn| {
-                let (category_id, category): (i64, SmallString) = pool_category::table
+                let (category_id, category) = pool_category::table
                     .select((pool_category::id, pool_category::name))
                     .filter(pool_category::name.eq(body.category))
                     .first(conn)

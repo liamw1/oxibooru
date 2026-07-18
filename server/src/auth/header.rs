@@ -1,6 +1,5 @@
 use crate::app::AppState;
 use crate::auth::{self, Client};
-use crate::model::enums::UserRank;
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
 use base64::prelude::BASE64_STANDARD;
@@ -70,7 +69,7 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
 /// and that the username/password combination is valid.
 async fn basic_access_authentication(state: &AppState, credentials: &str) -> Result<Client, AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
-    let (user_id, rank, password_hash): (i64, UserRank, String) = {
+    let (user_id, rank, password_hash): (_, _, String) = {
         let mut conn = state.connection_pool.get().await?;
 
         // For security reasons, don't give any indication to the user if it was the password
@@ -102,7 +101,7 @@ async fn token_authentication(state: &AppState, credentials: &str) -> Result<Cli
     let token = Uuid::parse_str(&unparsed_token)?;
     let mut conn = state.connection_pool.get().await?;
 
-    let (user_id, rank, enabled, expiration): (i64, UserRank, bool, Option<DateTime>) = user_token::table
+    let (user_id, rank, enabled, expiration): (_, _, bool, Option<DateTime>) = user_token::table
         .inner_join(user::table)
         .select((user::id, user::rank, user_token::enabled, user_token::expiration_time))
         .filter(user::name.eq(username))

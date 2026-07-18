@@ -230,7 +230,7 @@ async fn update(
             move |conn| {
                 verify_visibility(conn, &ctx, comment_id)?;
 
-                let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
+                let (comment_owner, comment_version): (Option<_>, _) = comment::table
                     .find(comment_id)
                     .select((comment::user_id, comment::last_edit_time))
                     .first(conn)
@@ -338,7 +338,7 @@ async fn delete(
         .transaction(move |conn| {
             verify_visibility(conn, &ctx, comment_id)?;
 
-            let (comment_owner, comment_version): (Option<i64>, DateTime) = comment::table
+            let (comment_owner, comment_version): (Option<_>, _) = comment::table
                 .find(comment_id)
                 .select((comment::user_id, comment::last_edit_time))
                 .first(conn)
