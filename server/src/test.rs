@@ -27,7 +27,7 @@ use crate::schema::{
 };
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, app, config, db};
+use crate::{api, config, db};
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use axum::ServiceExt;
 use axum::extract::Request;
@@ -462,18 +462,17 @@ fn get_state_guard() -> MutexGuard<'static, Option<AppState>> {
 }
 
 fn recreate_database() -> AdminResult<AppState> {
-    #[cfg(feature = "load_env")]
-    app::load_env().expect("Failed to load .env");
-
     let rng = &mut OsRng;
     let test_data_directory = std::env::temp_dir().join(rng.next_u64().to_string());
 
     let mut test_config = config::test_config(None);
     test_config.data_dir = test_data_directory;
 
+    let env = config::read_env(&test_config).expect("Must be able to read environment");
+
     // Drop and create test database via postgres database
     {
-        let postgres_url = config::database_url(Some("postgres"));
+        let postgres_url = config::database_url(&env, Some("postgres"));
         let postgres_connection_pool = Pool::builder()
             .max_size(1)
             .test_on_check_out(true)
@@ -485,7 +484,7 @@ fn recreate_database() -> AdminResult<AppState> {
         diesel::sql_query(format!("CREATE DATABASE {DATABASE_NAME}")).execute(&mut conn)?;
     }
 
-    let test_url = config::database_url(Some(DATABASE_NAME));
+    let test_url = config::database_url(&env, Some(DATABASE_NAME));
     let test_connection_pool = db::create_test_connection_pool(test_url);
     db::run_database_migrations(&test_connection_pool).expect("Must be able to run test migrations");
 
@@ -493,7 +492,7 @@ fn recreate_database() -> AdminResult<AppState> {
     populate_database(&mut conn, &test_config)?;
 
     let downloader = download::create_client().expect("Must be able to create downloader client");
-    Ok(AppState::new(downloader, test_connection_pool, Arc::new(test_config)))
+    Ok(AppState::new(downloader, test_connection_pool, env, Arc::new(test_config)))
 }
 
 const fn new_user(name: &'static str, email: Option<&'static str>, rank: UserRank) -> NewUser<'static> {

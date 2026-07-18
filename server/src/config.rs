@@ -9,14 +9,36 @@ use percent_encoding::{AsciiSet, CONTROLS, NON_ALPHANUMERIC};
 use regex::Regex;
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::borrow::ToOwned;
 use std::collections::HashMap;
+use std::error::Error;
+#[cfg(feature = "load_env")]
+use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 use strum::{Display, EnumCount, EnumIter, EnumTable, IntoEnumIterator, IntoStaticStr};
 use url::Url;
 use utoipa::openapi::{ObjectBuilder, RefOr, Schema};
 use utoipa::{PartialSchema, ToSchema};
+
+#[derive(Debug, Default)]
+pub struct Args {
+    pub admin_mode: bool,
+    pub env_path: Option<PathBuf>,
+    pub config_path: Option<String>,
+    pub ffmpeg_path: Option<PathBuf>,
+}
+
+pub struct Env {
+    pub http_origin: Option<String>,
+    pub http_referer: Option<String>,
+    pub domain_port: Option<u16>,
+    pub server_port: u16,
+    postgres_user: String,
+    postgres_password: String,
+    postgres_hostname: String,
+    postgres_port: u16,
+    postgres_database: String,
+}
 
 #[derive(Debug, Display, Clone, Copy)]
 #[strum(serialize_all = "lowercase")]
@@ -236,6 +258,8 @@ pub struct PublicConfig {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
+    #[serde(skip)]
+    pub args: Args,
     pub data_dir: PathBuf,
     pub data_url: String,
     pub webhooks: Vec<Url>,
@@ -317,52 +341,87 @@ impl Config {
     }
 }
 
+/// Reads commandline args.
+pub fn read_args() -> Args {
+    let admin_mode = std::env::args().any(|arg| arg == "--admin");
+    let env_path = std::env::args().find_map(|arg| arg.strip_prefix("--env-path=").map(PathBuf::from));
+    let config_path = std::env::args().find_map(|arg| arg.strip_prefix("--config-path=").map(String::from));
+    let ffmpeg_path = std::env::args().find_map(|arg| arg.strip_prefix("--ffmpeg-path=").map(PathBuf::from));
+    Args {
+        admin_mode,
+        env_path,
+        config_path,
+        ffmpeg_path,
+    }
+}
+
+pub fn read_env(config: &Config) -> Result<Arc<Env>, Box<dyn Error>> {
+    const DEFAULT_SERVER_PORT: u16 = 6666;
+    const DEFAULT_POSTGRES_PORT: u16 = 5432;
+
+    #[cfg(feature = "load_env")]
+    load_dotenv(config.args.env_path.as_deref())?;
+
+    let http_origin = std::env::var("HTTP_ORIGIN").ok();
+    let http_referer = std::env::var("HTTP_REFERER").ok();
+    let domain_port = std::env::var("PORT").ok().and_then(|port| port.parse().ok());
+
+    let server_port = std::env::var("SERVER_PORT")
+        .ok()
+        .and_then(|var| var.parse().ok())
+        .unwrap_or(DEFAULT_SERVER_PORT);
+
+    let postgres_user = std::env::var("POSTGRES_USER")?;
+    let postgres_password = std::env::var("POSTGRES_PASSWORD")?;
+    let postgres_hostname = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
+    let postgres_port = std::env::var("POSTGRES_PORT")
+        .ok()
+        .and_then(|port| port.parse().ok())
+        .unwrap_or(DEFAULT_POSTGRES_PORT);
+    let postgres_database = std::env::var("POSTGRES_DB")?;
+
+    Ok(Env {
+        http_origin,
+        http_referer,
+        domain_port,
+        server_port,
+        postgres_user,
+        postgres_password,
+        postgres_hostname,
+        postgres_port,
+        postgres_database,
+    })
+    .map(Arc::new)
+}
+
 /// Deserializes the `config.toml`.
 /// Any values not present will default to the corresponding value in `config.toml.dist`.
-pub fn create() -> Arc<Config> {
+pub fn create(args: Args) -> Arc<Config> {
     if cfg!(test) {
         panic!("Production config disallowed in test build!")
     } else {
-        let config_path = std::env::args().find_map(|arg| arg.strip_prefix("--config-path=").map(ToOwned::to_owned));
-        let config_path = config_path.as_deref().unwrap_or("config");
-        Arc::new(create_config(Some(config_path)))
+        Arc::new(create_config(args))
     }
 }
 
 /// Creates a test config with an optional `override_relative_path` to override the default config.
 #[cfg(test)]
 pub fn test_config(override_relative_path: Option<&str>) -> Config {
-    let override_path = override_relative_path.map(|relative_path| format!("test/request/{relative_path}/config"));
-    create_config(override_path.as_deref())
-}
-
-pub fn port() -> u16 {
-    const DEFAULT_PORT: u16 = 6666;
-    std::env::var("SERVER_PORT")
-        .ok()
-        .and_then(|var| var.parse().ok())
-        .unwrap_or(DEFAULT_PORT)
+    let mut args = read_args();
+    args.config_path = override_relative_path.map(|relative_path| format!("test/request/{relative_path}/config"));
+    create_config(args)
 }
 
 /// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DB`
 /// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DB`.
-pub fn database_url(database_override: Option<&str>) -> String {
-    const DEFAULT_POSTGRES_PORT: u16 = 5432;
-
-    let user = std::env::var("POSTGRES_USER").expect("POSTGRES_USER must be defined in .env");
-    let password = std::env::var("POSTGRES_PASSWORD").expect("POSTGRES_PASSWORD must be defined in .env");
-    let hostname = std::env::var("POSTGRES_HOST").unwrap_or_else(|_| "localhost".into());
-    let port = std::env::var("POSTGRES_PORT")
-        .ok()
-        .and_then(|port| port.parse().ok())
-        .unwrap_or(DEFAULT_POSTGRES_PORT);
-    let database = std::env::var("POSTGRES_DB").expect("POSTGRES_DB must be defined in .env");
-
+pub fn database_url(env: &Env, database_override: Option<&str>) -> String {
     // Percent-encode credentials to allow for special characters
-    let user = percent_encoding::utf8_percent_encode(&user, NON_ALPHANUMERIC);
-    let password = percent_encoding::utf8_percent_encode(&password, NON_ALPHANUMERIC);
-    let hostname = percent_encoding::utf8_percent_encode(&hostname, NON_ALPHANUMERIC);
-    let database = percent_encoding::utf8_percent_encode(database_override.unwrap_or(&database), NON_ALPHANUMERIC);
+    let port = env.postgres_port;
+    let user = percent_encoding::utf8_percent_encode(&env.postgres_user, NON_ALPHANUMERIC);
+    let password = percent_encoding::utf8_percent_encode(&env.postgres_password, NON_ALPHANUMERIC);
+    let hostname = percent_encoding::utf8_percent_encode(&env.postgres_hostname, NON_ALPHANUMERIC);
+    let database =
+        percent_encoding::utf8_percent_encode(database_override.unwrap_or(&env.postgres_database), NON_ALPHANUMERIC);
     format!("postgres://{user}:{password}@{hostname}:{port}/{database}")
 }
 
@@ -371,10 +430,22 @@ const TRAVERSAL: &AsciiSet = &CONTROLS.add(b'/').add(b'\\').add(b'.').add(b':').
 
 const DEFAULT_CONFIG: &str = include_str!("../config.toml.dist");
 
-fn create_config(config_path: Option<&str>) -> Config {
+#[cfg(feature = "load_env")]
+fn load_dotenv(env_path: Option<&Path>) -> dotenvy::Result<()> {
+    if let Some(env_path) = env_path {
+        // If env_path is specified in args, read from that path
+        dotenvy::from_filename(env_path)
+    } else {
+        // Otherwise, try to read a `.env` from the working directory or its parent
+        dotenvy::from_filename(".env").or_else(|_| dotenvy::from_filename("../.env"))
+    }
+    .map(|_| ())
+}
+
+fn create_config(args: Args) -> Config {
     let mut config_builder =
         ConfigBuilder::<DefaultState>::default().add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml));
-    if let Some(path) = config_path {
+    if let Some(path) = args.config_path.as_deref() {
         config_builder = config_builder.add_source(File::with_name(path));
     }
 
@@ -387,6 +458,7 @@ fn create_config(config_path: Option<&str>) -> Config {
         }
     };
     config.public_info.can_send_mails = config.smtp.is_some();
+    config.args = args;
 
     // Accumulate preferences from higher user ranks
     config.power_preferences.merge(&config.moderator_preferences);

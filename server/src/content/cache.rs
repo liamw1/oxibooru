@@ -82,10 +82,10 @@ fn compute_properties_no_cache(ctx: &Ctx, token: UploadToken) -> ApiResult<Cache
     let (checksum, md5_checksum) = content::map_read_result(hash::compute_checksums(&temp_path))?;
 
     let mime_type = token.mime_type();
-    let post_type = decode::detect_post_type(&temp_path, mime_type)?;
+    let post_type = decode::detect_post_type(&ctx.config, &temp_path, mime_type)?;
     let has_sound = match post_type {
         PostType::Image | PostType::Animation => false,
-        PostType::Video => decode::video_has_audio(&temp_path)?,
+        PostType::Video => decode::video_has_audio(&ctx.config, &temp_path)?,
         PostType::Flash => decode::swf_has_audio(&temp_path)?,
     };
     let flags = if has_sound {

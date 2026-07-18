@@ -1,7 +1,7 @@
 use crate::admin::AdminTask;
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
-use crate::config::Config;
+use crate::config::{Config, Env};
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::schema::database_statistics;
 use crate::{admin, app, config};
@@ -79,7 +79,7 @@ impl AsyncConnectionPool {
 }
 
 /// Creates a connection pool to the database.
-pub fn create_connection_pool(config: Arc<Config>) -> Result<AsyncConnectionPool, PoolError> {
+pub fn create_connection_pool(env: &Env, config: Arc<Config>) -> Result<AsyncConnectionPool, PoolError> {
     if cfg!(test) {
         panic!("Connection to production database disallowed in test build!")
     } else {
@@ -94,7 +94,7 @@ pub fn create_connection_pool(config: Arc<Config>) -> Result<AsyncConnectionPool
             .idle_timeout(None)
             .test_on_check_out(true)
             .connection_customizer(Box::new(ConnectionInitialzier { config }))
-            .build(ConnectionManager::new(config::database_url(None)))
+            .build(ConnectionManager::new(config::database_url(env, None)))
             .map(|pool| AsyncConnectionPool { pool, semaphore })
     }
 }

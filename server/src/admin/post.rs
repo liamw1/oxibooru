@@ -329,7 +329,7 @@ fn recompute_post_type_in_parallel(state: &AppState, post_id: i64, progress: &Pr
 
     let post_hash = PostHash::new(&state.config, post_id, Some(custom_thumbnail_size));
     let content_path = post_hash.content_path(mime_type);
-    let post_type = match decode::detect_post_type(&content_path, mime_type) {
+    let post_type = match decode::detect_post_type(&state.config, &content_path, mime_type) {
         Ok(type_) => type_,
         Err(err) => {
             error!("Cannot detect post type for post {post_id} for reason: {err}");

@@ -40,23 +40,25 @@ static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[tokio::main]
 async fn main() {
-    #[cfg(feature = "load_env")]
-    app::load_env().unwrap_or_else(|err| app::shutdown("Failed to load .env", err));
+    let args = config::read_args();
 
     // Enable logging
-    let config = config::create();
+    let config = config::create(args);
     app::enable_tracing(&config);
+
+    // Read environment
+    let env = config::read_env(&config).unwrap_or_else(|err| app::shutdown("Failed to read environment", err));
 
     // Create global app state
     let downloader = content::download::create_client()
-        .unwrap_or_else(|err| app::shutdown("Unable to create downloader client", err));
-    let connection_pool = db::create_connection_pool(config.clone())
-        .unwrap_or_else(|err| app::shutdown("Unable to build connection pool", err));
-    let state = app::AppState::new(downloader, connection_pool, config);
+        .unwrap_or_else(|err| app::shutdown("Failed to create downloader client", err));
+    let connection_pool = db::create_connection_pool(&env, config.clone())
+        .unwrap_or_else(|err| app::shutdown("Failed to build connection pool", err));
+    let state = app::AppState::new(downloader, connection_pool, env, config);
 
     // Initialize and run server
     app::initialize(&state).unwrap_or_else(|err| app::shutdown("An error occured during initialization", err));
     app::run(state)
         .await
-        .unwrap_or_else(|err| app::shutdown("Unable to start server", err));
+        .unwrap_or_else(|err| app::shutdown("Failed to start server", err));
 }

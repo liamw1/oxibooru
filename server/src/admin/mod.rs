@@ -96,11 +96,6 @@ pub enum AdminTask {
     ResetThumbnailSizes,
 }
 
-/// Checks if server was started in admin mode.
-pub fn enabled() -> bool {
-    std::env::args().any(|arg| arg == "--admin")
-}
-
 /// Starts server CLI.
 pub fn command_line_mode(state: &AppState) {
     println!("Running Oxibooru admin command line interface on {} threads.", app::num_rayon_threads());

@@ -66,15 +66,15 @@ async fn request_reset(State(state): State<AppState>, Path(identifier): Path<Sma
     let user_mailbox = Mailbox::new(None, Address::from_str(&user_email)?);
 
     let domain = if let Some(domain) = state.config.domain.as_deref() {
-        domain.to_string()
-    } else if let Ok(domain) = std::env::var("HTTP_ORIGIN") {
         domain
-    } else if let Ok(domain) = std::env::var("HTTP_REFERER") {
+    } else if let Some(domain) = state.env.http_origin.as_deref() {
         domain
-    } else if let Ok(port) = std::env::var("PORT") {
-        format!("http://localhost:{port}")
+    } else if let Some(domain) = state.env.http_referer.as_deref() {
+        domain
+    } else if let Some(port) = state.env.domain_port {
+        &format!("http://localhost:{port}")
     } else {
-        String::new()
+        ""
     };
     let domain = domain.trim_end_matches('/');
 

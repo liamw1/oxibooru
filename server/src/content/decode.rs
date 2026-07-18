@@ -26,17 +26,17 @@ pub fn representative_image(config: &Config, file_path: &Path, mime_type: MimeTy
         MimeType::Png => image(file_path, ImageFormat::Png),
         MimeType::Webp => image(file_path, ImageFormat::WebP),
         MimeType::Swf => flash_image(config, file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
-        MimeType::Avif => ffmpeg_frame(file_path, PostType::Image)
+        MimeType::Avif => ffmpeg_frame(config, file_path, PostType::Image)
             .and_then(|frame| frame.ok_or(ApiError::FfmpegError("Unable to decode AVIF image with FFmpeg".into()))),
         MimeType::Mov | MimeType::Mp4 | MimeType::Webm => {
-            ffmpeg_frame(file_path, PostType::Video).and_then(|frame| frame.ok_or(ApiError::EmptyVideo))
+            ffmpeg_frame(config, file_path, PostType::Video).and_then(|frame| frame.ok_or(ApiError::EmptyVideo))
         }
     }
 }
 
 /// Returns if the video at `path` has an audio channel.
-pub fn video_has_audio(path: &Path) -> ApiResult<bool> {
-    let mut process = FfmpegSubprocess::new(path, ["-c", "copy", "-t", "0", "-f", "null", "-"])?;
+pub fn video_has_audio(config: &Config, path: &Path) -> ApiResult<bool> {
+    let mut process = FfmpegSubprocess::new(config, path, ["-c", "copy", "-t", "0", "-f", "null", "-"])?;
 
     let mut errors = Vec::new();
     for event in process.events()? {
@@ -77,11 +77,11 @@ pub fn swf_has_audio(path: &Path) -> ApiResult<bool> {
 /// Returns the post type based on file content.
 /// For image formats that support animation, it checks the file content for multiple frames.
 /// For everything else, it just checks the mime type.
-pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<PostType> {
+pub fn detect_post_type(config: &Config, file_path: &Path, mime_type: MimeType) -> ApiResult<PostType> {
     // Shorthand to return PostType::Animation or PostType::Image based on bool input
     let image_type = |animated: bool| -> PostType { if animated { PostType::Animation } else { PostType::Image } };
     match mime_type {
-        MimeType::Avif => avif_is_animated(file_path).map(image_type),
+        MimeType::Avif => avif_is_animated(config, file_path).map(image_type),
         MimeType::Gif => gif_is_animated(file_path).map(image_type),
         MimeType::Webp => webp_is_animated(file_path).map(image_type),
         MimeType::Bmp | MimeType::Jpeg | MimeType::Png => Ok(PostType::Image),
@@ -90,17 +90,22 @@ pub fn detect_post_type(file_path: &Path, mime_type: MimeType) -> ApiResult<Post
     }
 }
 
-const FFMPEG_PATH: &str = "/opt/app/ffmpeg";
+const DEFAULT_FFMPEG_PATH: &str = "/opt/app/ffmpeg";
 const ERROR_SEPARATOR: &str = "; ";
 
 /// RAII guard that kills the `FFmpeg` subprocess when dropped.
 struct FfmpegSubprocess(FfmpegChild);
 
 impl FfmpegSubprocess {
-    fn new<const N: usize>(input: &Path, args: [&str; N]) -> std::io::Result<Self> {
+    fn new<const N: usize>(config: &Config, input: &Path, args: [&str; N]) -> std::io::Result<Self> {
+        let ffmpeg_path = config
+            .args
+            .ffmpeg_path
+            .as_deref()
+            .unwrap_or(Path::new(DEFAULT_FFMPEG_PATH));
         // Lossy conversion is fine here since filenames are ASCII upload tokens
         let input_str = input.to_string_lossy();
-        FfmpegCommand::new_with_path(FFMPEG_PATH)
+        FfmpegCommand::new_with_path(ffmpeg_path)
             .input(&input_str)
             .args(args)
             .spawn()
@@ -133,7 +138,7 @@ fn image(file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
 }
 
 /// Decodes a representative frame of the image or video at the given `path`.
-fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicImage>> {
+fn ffmpeg_frame(config: &Config, path: &Path, post_type: PostType) -> ApiResult<Option<DynamicImage>> {
     let is_video_format = matches!(post_type, PostType::Video | PostType::Flash);
     let filter = if is_video_format {
         "thumbnail,format=rgb24"
@@ -141,7 +146,7 @@ fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicIma
         "format=rgba"
     };
 
-    let mut process = FfmpegSubprocess::new(path, ["-vf", filter, "-frames:v", "1", "-f", "rawvideo", "-"])?;
+    let mut process = FfmpegSubprocess::new(config, path, ["-vf", filter, "-frames:v", "1", "-f", "rawvideo", "-"])?;
 
     let mut errors = Vec::new();
     for event in process.events()? {
@@ -170,7 +175,7 @@ fn ffmpeg_frame(path: &Path, post_type: PostType) -> ApiResult<Option<DynamicIma
 /// Decodes a representative frame of the flash file at the given `path`.
 fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> {
     // First try feeding to FFmpeg for a representative frame
-    match ffmpeg_frame(path, PostType::Flash) {
+    match ffmpeg_frame(config, path, PostType::Flash) {
         Ok(Some(frame)) => return Ok(Some(frame)),
         Ok(None) => warn!("FFmpeg gave no image output for flash file, falling back to parsing flash tags..."),
         Err(err) => error!("Failed to extract thumbnail with FFmpeg: {err}"),
@@ -232,8 +237,8 @@ fn flash_image(config: &Config, path: &Path) -> ApiResult<Option<DynamicImage>> 
 }
 
 /// Uses `FFmpeg` to determine if a file contains multiple frames
-fn avif_is_animated(path: &Path) -> ApiResult<bool> {
-    let mut process = FfmpegSubprocess::new(path, [])?;
+fn avif_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
+    let mut process = FfmpegSubprocess::new(config, path, [])?;
     let video_stream_count = process
         .events()?
         .filter(|event| matches!(event, FfmpegEvent::ParsedInputStream(stream) if stream.is_video()))
@@ -242,6 +247,7 @@ fn avif_is_animated(path: &Path) -> ApiResult<bool> {
     let mut errors = Vec::new();
     for stream_index in 0..video_stream_count {
         let mut process = FfmpegSubprocess::new(
+            config,
             path,
             [
                 "-map",

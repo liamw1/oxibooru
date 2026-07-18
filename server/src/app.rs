@@ -1,16 +1,15 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::middleware;
 use crate::auth::Client;
-use crate::config::{Action, Config};
+use crate::config::{Action, Config, Env};
 use crate::content::cache::RingCache;
 use crate::db::AsyncConnectionPool;
 use crate::extract::Ctx;
 use crate::model::enums::UserRank;
 use crate::search::preferences::Preferences;
-use crate::{admin, api, config, db, filesystem};
+use crate::{admin, api, db, filesystem};
 use axum::Router;
 use reqwest::Client as HttpClient;
-use std::borrow::ToOwned;
 use std::error::Error;
 use std::fmt::Display;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
@@ -28,6 +27,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(Clone)]
 pub struct AppState {
+    pub env: Arc<Env>,
     pub config: Arc<Config>,
     pub downloader: HttpClient,
     pub connection_pool: AsyncConnectionPool,
@@ -35,10 +35,16 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(downloader: HttpClient, connection_pool: AsyncConnectionPool, config: Arc<Config>) -> Self {
+    pub fn new(
+        downloader: HttpClient,
+        connection_pool: AsyncConnectionPool,
+        env: Arc<Env>,
+        config: Arc<Config>,
+    ) -> Self {
         /// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
         const CONTENT_CACHE_SIZE: usize = 10;
         Self {
+            env,
             config,
             downloader,
             connection_pool,
@@ -120,24 +126,12 @@ pub fn enable_tracing(config: &Config) {
     }
 }
 
-#[cfg(feature = "load_env")]
-pub fn load_env() -> dotenvy::Result<()> {
-    if let Some(env_path) = std::env::args().find_map(|arg| arg.strip_prefix("--env-path=").map(ToOwned::to_owned)) {
-        // If env_path is specified in args, read from that path
-        dotenvy::from_filename(env_path)
-    } else {
-        // Otherwise, try to read a `.env` from the working directory or its parent
-        dotenvy::from_filename(".env").or_else(|_| dotenvy::from_filename("../.env"))
-    }
-    .map(|_| ())
-}
-
 pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> {
     if let Some(migration_range) = db::run_database_migrations(&state.connection_pool)? {
         db::run_server_migrations(state, migration_range)?;
     }
 
-    if admin::enabled() {
+    if state.config.args.admin_mode {
         admin::command_line_mode(state);
         std::process::exit(0);
     }
@@ -150,6 +144,8 @@ pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> 
 }
 
 pub async fn run(state: AppState) -> std::io::Result<()> {
+    let server_port = state.env.server_port;
+
     let (router, api) = api::routes(state).split_for_parts();
     let normalized_router = ServiceBuilder::new()
         .layer(NormalizePathLayer::trim_trailing_slash())
@@ -158,7 +154,7 @@ pub async fn run(state: AppState) -> std::io::Result<()> {
         .merge(SwaggerUi::new("/docs").url("/apidoc/openapi.json", api))
         .fallback_service(normalized_router);
 
-    let address = format!("0.0.0.0:{}", config::port());
+    let address = format!("0.0.0.0:{server_port}");
     let listener = TcpListener::bind(address).await?;
     info!("Oxibooru server running on {} threads", Handle::current().metrics().num_workers());
     debug!("listening on {}", listener.local_addr()?);
