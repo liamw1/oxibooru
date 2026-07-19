@@ -203,7 +203,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
                     diesel::select(exists(user::table.select(user::id).filter(user::name.eq(&body.name))))
                         .first(conn)?;
                 if name_exists {
-                    return Err(ApiError::AlreadyExists(ResourceProperty::UserName))?;
+                    return Err(ApiError::AlreadyExists(ResourceProperty::UserName));
                 }
 
                 let user_count: i64 = database_statistics::table
