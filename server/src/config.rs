@@ -12,8 +12,6 @@ use serde::ser::SerializeStruct;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::error::Error;
-#[cfg(feature = "load_env")]
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
 use strum::{Display, EnumCount, EnumIter, EnumTable, IntoEnumIterator, IntoStaticStr};
@@ -24,9 +22,10 @@ use utoipa::{PartialSchema, ToSchema};
 #[derive(Debug, Default)]
 pub struct Args {
     pub admin_mode: bool,
-    pub env_path: Option<PathBuf>,
     pub config_path: Option<String>,
     pub ffmpeg_path: Option<PathBuf>,
+    #[cfg(feature = "load_env")]
+    pub env_path: Option<PathBuf>,
 }
 
 pub struct Env {
@@ -347,23 +346,23 @@ impl Config {
 /// Reads commandline args.
 pub fn read_args() -> Args {
     let admin_mode = std::env::args().any(|arg| arg == "--admin");
-    let env_path = std::env::args().find_map(|arg| arg.strip_prefix("--env-path=").map(PathBuf::from));
     let config_path = std::env::args().find_map(|arg| arg.strip_prefix("--config-path=").map(String::from));
     let ffmpeg_path = std::env::args().find_map(|arg| arg.strip_prefix("--ffmpeg-path=").map(PathBuf::from));
+    #[cfg(feature = "load_env")]
+    let env_path = std::env::args().find_map(|arg| arg.strip_prefix("--env-path=").map(PathBuf::from));
     Args {
         admin_mode,
-        env_path,
         config_path,
         ffmpeg_path,
+        #[cfg(feature = "load_env")]
+        env_path,
     }
 }
-
 pub fn read_env(config: &Config) -> Result<Arc<Env>, Box<dyn Error>> {
     const DEFAULT_SERVER_PORT: u16 = 6666;
     const DEFAULT_POSTGRES_PORT: u16 = 5432;
 
-    #[cfg(feature = "load_env")]
-    load_dotenv(config.args.env_path.as_deref())?;
+    load_dotenv(config)?;
 
     let http_origin = std::env::var("HTTP_ORIGIN").ok();
     let http_referer = std::env::var("HTTP_REFERER").ok();
@@ -445,9 +444,15 @@ const INVALID_USERNAME_CHARS: &AsciiSet = &CONTROLS
 
 const DEFAULT_CONFIG: &str = include_str!("../config.toml.dist");
 
+#[cfg(not(feature = "load_env"))]
+#[allow(clippy::unnecessary_wraps)]
+fn load_dotenv(_config: &Config) -> Result<(), std::convert::Infallible> {
+    Ok(())
+}
+
 #[cfg(feature = "load_env")]
-fn load_dotenv(env_path: Option<&Path>) -> dotenvy::Result<PathBuf> {
-    if let Some(env_path) = env_path {
+fn load_dotenv(config: &Config) -> dotenvy::Result<PathBuf> {
+    if let Some(env_path) = config.args.env_path.as_deref() {
         // If env_path is specified in args, read from that path
         dotenvy::from_filename(env_path)
     } else {
