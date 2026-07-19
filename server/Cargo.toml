@@ -12,7 +12,7 @@ blake3 = { version = "1.5.5", features = ["traits-preview"] }
 byteorder = "1.5.0"
 compact_str = { version = "0.9.0", features = ["serde"] }
 config = { version = "0.15.18", default-features = false, features = ["toml"] }
-diesel = { version = "2.3.2", features = ["postgres", "r2d2", "time", "uuid", "serde_json",
+diesel = { version = "2.3.10", features = ["postgres", "r2d2", "time", "uuid", "serde_json",
                                           "i-implement-a-third-party-backend-and-opt-into-breaking-changes"] }
 diesel_migrations = { version = "2.3.0", features = ["postgres"] }
 dotenvy = { version = "0.15.7", optional = true }
@@ -37,7 +37,7 @@ serde = { version = "1.0.217", features = ["derive", "rc"] }
 serde_json = "1.0.138"
 serde_regex = "1.1.0"
 serde_repr = "0.1.19"
-serde_with = "3.12.0"
+serde_with = "3.21.0"
 server-macros = { path = "macros" }
 signal-hook = "0.3.18"
 strum = { version = "0.27.0", features = ["derive"] }
