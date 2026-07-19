@@ -77,7 +77,10 @@ take following form:</p>
 by negating the whole token.</p>
 
 <p>You can escape special characters such as <code>:</code> and <code>-</code>
-by prepending them with a backslash: <code>\\</code>.</p>
+by prepending them with a backslash: <code>\</code>.</p>
+
+<p> String literals are supported using double quotes (<code>"</code>). Inside a string literal, only
+the <code>"</code> character can be escaped with <code>\</code>.</p>
 
 <h1>Example</h1>
 
