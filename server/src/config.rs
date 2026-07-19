@@ -462,9 +462,17 @@ fn load_dotenv(config: &Config) -> dotenvy::Result<PathBuf> {
 }
 
 fn create_config(args: Args) -> Config {
+    let config_path = if let Some(config_path) = args.config_path.as_deref() {
+        Some(config_path)
+    } else if !cfg!(test) {
+        Some("config")
+    } else {
+        None
+    };
+
     let mut config_builder =
         ConfigBuilder::<DefaultState>::default().add_source(File::from_str(DEFAULT_CONFIG, FileFormat::Toml));
-    if let Some(path) = args.config_path.as_deref() {
+    if let Some(path) = config_path {
         config_builder = config_builder.add_source(File::with_name(path));
     }
 
