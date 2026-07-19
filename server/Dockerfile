@@ -35,16 +35,10 @@ RUN ./configure \
     --disable-network \
     --disable-autodetect \
     --disable-doc \
-    --disable-htmlpages \
-    --disable-manpages \
-    --disable-podpages \
-    --disable-txtpages \
     --disable-debug \
     --disable-ffprobe \
-    --disable-shared \
     --disable-pic \
     \
-    --enable-static \
     --enable-libdav1d \
     --enable-protocol=file,pipe \
     --enable-demuxer=avif,matroska,mov,swf \
@@ -53,7 +47,6 @@ RUN ./configure \
     --enable-filter=copy,format,null,scale,thumbnail \
     --enable-encoder=rawvideo \
     --enable-muxer=null,rawvideo \
-    --enable-swscale \
     \
     ${TARGET_CPU:+--cpu=$TARGET_CPU} \
     --extra-ldflags="-static" \
@@ -118,8 +111,8 @@ COPY --from=builder --chown=${PUID}:${PGID} /data /data
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 # Copy binaries with ownership
-COPY --from=ffmpeg_builder --chown=${PUID}:${PGID} /build/ffmpeg-${FFMPEG_VERSION}/ffmpeg /opt/app/ffmpeg
-COPY --from=builder --chown=${PUID}:${PGID} /opt/app/target/release/oxibooru_server /opt/app/server
+COPY --from=ffmpeg_builder /build/ffmpeg-${FFMPEG_VERSION}/ffmpeg /opt/app/ffmpeg
+COPY --from=builder /opt/app/target/release/oxibooru_server /opt/app/server
 
 # Run it!
 USER ${PUID}:${PGID}
@@ -133,7 +126,7 @@ VOLUME ["/data/"]
 ARG DOCKER_REPO
 ARG BUILD_DATE
 ARG SOURCE_COMMIT
-LABEL maintainer="" \
+LABEL \
   org.opencontainers.image.title="${DOCKER_REPO}" \
   org.opencontainers.image.url="https://github.com/liamw1/oxibooru" \
   org.opencontainers.image.documentation="https://github.com/liamw1/oxibooru/blob/${SOURCE_COMMIT}/docs/INSTALL.md" \
