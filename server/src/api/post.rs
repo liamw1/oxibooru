@@ -609,10 +609,11 @@ async fn reverse_search(
 }
 
 async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBody) -> ApiResult<Json<PostInfo>> {
-    let action = if body.anonymous.unwrap_or(false) {
-        Action::PostCreateAnonymous
-    } else {
+    let identified_upload = !body.anonymous.unwrap_or(false);
+    let action = if identified_upload {
         Action::PostCreateIdentified
+    } else {
+        Action::PostCreateAnonymous
     };
     ctx.verify_privilege(action)?;
 
@@ -637,7 +638,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
             let notes = body.notes.unwrap_or_default();
 
             let post: Post = NewPost {
-                user_id: ctx.client.id,
+                user_id: (identified_upload).then_some(ctx.client.id).flatten(),
                 file_size: content_properties.file_size,
                 width: content_properties.width,
                 height: content_properties.height,
@@ -1442,6 +1443,11 @@ mod test {
 
         assert!(post_path.exists());
         assert!(thumbnail_path.exists());
+
+        verify_response("DELETE /post/6", "post/delete/typical").await?;
+
+        simulate_upload("1_pixel.png", "cool_post.png")?;
+        verify_response(&format!("POST /posts/?{FIELDS}"), "post/create/anonymous").await?;
 
         simulate_upload("1_pixel.png", "duplicate.png")?;
         verify_response("POST /posts", "post/create/duplicate").await?;

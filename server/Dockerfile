@@ -110,7 +110,7 @@ COPY --from=builder --chown=${PUID}:${PGID} /data /data
 # Copy SSL certs for outbound requests
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
-# Copy binaries with ownership
+# Copy binaries
 COPY --from=ffmpeg_builder /build/ffmpeg-${FFMPEG_VERSION}/ffmpeg /opt/app/ffmpeg
 COPY --from=builder /opt/app/target/release/oxibooru_server /opt/app/server
 

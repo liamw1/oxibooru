@@ -1,0 +1,56 @@
+{
+    "canvasHeight": 1,
+    "canvasWidth": 1,
+    "checksum": "fb172648054a23d19661f3c4ba6c72853763b675f4171b20fe90b4c51e07968c",
+    "checksumMD5": "beefb99a3dd697cc16c1e145524c16a7",
+    "commentCount": 0,
+    "contentUrl": "data/posts/000000/00/7_TGk6DT2PStf-dX3rbCnEp0h-YpBI9jXx7meMPWYxPbY.png",
+    "description": "cool stuff",
+    "favoriteCount": 0,
+    "favoritedBy": [],
+    "featureCount": 0,
+    "fileSize": 70,
+    "flags": [
+        "sound"
+    ],
+    "hasCustomThumbnail": false,
+    "id": 7,
+    "mimeType": "image/png",
+    "noteCount": 0,
+    "notes": [],
+    "ownFavorite": false,
+    "ownScore": 0,
+    "pools": [],
+    "relationCount": 3,
+    "relations": [
+        {
+            "id": 1,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/1_iGFPsLTXh9Y5dv5MK8eHS3v0AqYmUcGZOsd-IAORWd0.jpg"
+        },
+        {
+            "id": 2,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/2_i0tcn4hk_MhPFVFde4CDLidE25Bn3SC7tPgAigC2u3U.jpg"
+        },
+        {
+            "id": 3,
+            "thumbnailUrl": "data/generated-thumbnails/000000/00/3_gGlraYfqCJkDAmHNBW0g8g31GJ3iSv6mkLktkY67Rog.jpg"
+        }
+    ],
+    "safety": "sketchy",
+    "score": 0,
+    "source": "Shh",
+    "tagCount": 1,
+    "tags": [
+        {
+            "category": "default",
+            "names": [
+                "tagme",
+                "tag_me"
+            ],
+            "usages": 2
+        }
+    ],
+    "thumbnailUrl": "data/generated-thumbnails/000000/00/7_TGk6DT2PStf-dX3rbCnEp0h-YpBI9jXx7meMPWYxPbY.jpg",
+    "type": "image",
+    "user": null
+}

@@ -1,0 +1,18 @@
+{
+    "anonymous": true,
+    "tags": [
+        "tagme"
+    ],
+    "safety": "sketchy",
+    "source": "Shh",
+    "description": "cool stuff",
+    "relations": [
+        1,
+        2,
+        3
+    ],
+    "flags": [
+        "sound"
+    ],
+    "contentToken": "cool_post.png"
+}
