@@ -8,9 +8,11 @@ use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
 use ffmpeg_sidecar::iter::FfmpegIterator;
 use image::codecs::{gif::GifDecoder, webp::WebPDecoder};
 use image::{AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits, RgbImage, RgbaImage};
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use std::str::FromStr;
 use swf::Tag;
 use tracing::{error, warn};
 
@@ -88,6 +90,12 @@ pub fn detect_post_type(config: &Config, file_path: &Path, mime_type: MimeType) 
         MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Ok(PostType::Video),
         MimeType::Swf => Ok(PostType::Flash),
     }
+}
+
+pub fn infer_mime_type(prefix: &[u8]) -> ApiResult<MimeType> {
+    let kind = infer::get(prefix).ok_or(ApiError::MissingContentType)?;
+    let mime_type = kind.mime_type();
+    MimeType::from_str(mime_type).map_err(|_| ApiError::UnsupportedContentType(Cow::Borrowed(mime_type)))
 }
 
 const DEFAULT_FFMPEG_PATH: &str = "/opt/app/ffmpeg";

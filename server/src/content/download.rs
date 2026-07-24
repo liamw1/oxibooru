@@ -3,16 +3,13 @@ use crate::app::Context;
 use crate::config::Action;
 use crate::content::upload::MAX_UPLOAD_SIZE;
 use crate::content::upload::UploadToken;
-use crate::model::enums::MimeType;
-use crate::{content, filesystem};
+use crate::filesystem;
 use futures::TryStreamExt;
-use mime::Mime;
 use reqwest::dns::{Name, Resolve, Resolving};
 use reqwest::header::{HeaderMap, HeaderValue, REFERER};
 use reqwest::redirect::Policy;
 use reqwest::{Client, StatusCode};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
@@ -72,13 +69,9 @@ pub async fn from_url(ctx: &Context, url: Url) -> ApiResult<UploadToken> {
     }
     let response = response.error_for_status()?;
 
-    let mime = content::parse_header(response.headers())?;
-    let mime_essence = mime.as_ref().map_or("", Mime::essence_str);
-    let mime_type = MimeType::from_str(mime_essence).map_err(Box::from)?;
-
     // Cap total bytes read; Content-Length can lie or be absent. Exceeding the cap aborts
     // the stream with an error instead of silently truncating the file.
-    let mut total = 0usize;
+    let mut total = 0;
     let limited_stream = response.bytes_stream().map_err(ApiError::from).and_then(move |chunk| {
         total += chunk.len();
         futures::future::ready(if total > MAX_UPLOAD_SIZE {
@@ -87,7 +80,7 @@ pub async fn from_url(ctx: &Context, url: Url) -> ApiResult<UploadToken> {
             Ok(chunk)
         })
     });
-    filesystem::save_uploaded_file(&ctx.config, limited_stream, mime_type).await
+    filesystem::save_uploaded_file(&ctx.config, limited_stream).await
 }
 
 const MAX_REDIRECTS: usize = 5;
