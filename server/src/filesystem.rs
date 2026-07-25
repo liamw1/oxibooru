@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use strum::{Display, IntoStaticStr};
 use tokio::fs::File;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncWriteExt, BufWriter};
 use tokio::time::MissedTickBehavior;
 use tracing::warn;
 
@@ -50,7 +50,10 @@ where
     S: StreamExt<Item = Result<Bytes, E>> + Unpin,
     ApiError: From<E>,
 {
-    const SNIFF_LEN: usize = 512;
+    const KB: usize = 1024;
+    const MB: usize = 1024 * KB;
+    const SNIFF_LEN: usize = KB / 2;
+    const BUFFER_CAPACITY: usize = 4 * MB;
 
     // Buffer enough of the stream to infer MIME type
     let mut prefix = Vec::with_capacity(SNIFF_LEN);
@@ -66,13 +69,16 @@ where
     let upload_token = UploadToken::new(mime_type);
     let upload_path = upload_token.path(config);
 
-    let mut file = File::create(upload_path).await?;
-    file.write_all(&prefix).await?;
+    // Create a buffered writer to reduce frequency of syscalls when writing file
+    let file = File::create(upload_path).await?;
+    let mut writer = BufWriter::with_capacity(BUFFER_CAPACITY, file);
+
+    writer.write_all(&prefix).await?;
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
-        file.write_all(&chunk).await?;
+        writer.write_all(&chunk).await?;
     }
-    file.flush().await?;
+    writer.flush().await?;
 
     Ok(upload_token)
 }
