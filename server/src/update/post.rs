@@ -296,13 +296,7 @@ pub fn merge(
     diesel::delete(post::table.find(absorbed_id)).execute(conn)?;
 
     if replace_content {
-        filesystem::swap_posts(
-            config,
-            &absorbed_hash,
-            absorbed_post.mime_type,
-            &merge_to_hash,
-            merge_to_post.mime_type,
-        )?;
+        filesystem::swap_posts(&absorbed_hash, absorbed_post.mime_type, &merge_to_hash, merge_to_post.mime_type)?;
 
         // If replacing content, update metadata. This needs to be done after deletion because checksum has UNIQUE constraint
         diesel::update(post::table.find(merge_to_post.id))

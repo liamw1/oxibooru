@@ -41,7 +41,7 @@ impl AppState {
         env: Arc<Env>,
         config: Arc<Config>,
     ) -> Self {
-        /// Max number of elements in the content cache. Should be as large as the number of users expected to be uploading concurrently.
+        /// Max number of elements in the content cache. Should be roughly as large as the number of users expected to be uploading concurrently.
         const CONTENT_CACHE_SIZE: usize = 10;
         Self {
             env,
@@ -126,6 +126,7 @@ pub fn enable_tracing(config: &Config) {
     }
 }
 
+/// Runs database migrations, initializes snapshot counter, and spawns any long-running tasks.
 pub fn initialize(state: &AppState) -> Result<(), Box<dyn Error + Send + Sync>> {
     if let Some(migration_range) = db::run_database_migrations(&state.connection_pool)? {
         db::run_server_migrations(state, migration_range)?;
@@ -163,6 +164,7 @@ pub async fn run(state: AppState) -> std::io::Result<()> {
         .await
 }
 
+/// Logs given `message` and `error` to console and terminates the process.
 pub fn shutdown<E: Display>(message: &str, error: E) -> ! {
     error!("{message}. Details:\n{error}");
     std::process::exit(1)

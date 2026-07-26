@@ -358,6 +358,8 @@ pub fn read_args() -> Args {
         env_path,
     }
 }
+
+/// Reads all environment variables used by server.
 pub fn read_env(config: &Config) -> Result<Arc<Env>, Box<dyn Error>> {
     const DEFAULT_SERVER_PORT: u16 = 6666;
     const DEFAULT_POSTGRES_PORT: u16 = 5432;
@@ -413,8 +415,8 @@ pub fn test_config(override_relative_path: Option<&str>) -> Config {
     create_config(args)
 }
 
-/// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DB`
-/// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DB`.
+/// Constructs a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, and `POSTGRES_DB`
+/// environment variables. If `database_override` is not `None`, then its value will be used in place of `POSTGRES_DB`.
 pub fn database_url(env: &Env, database_override: Option<&str>) -> SecretString {
     // Percent-encode credentials to allow for special characters
     let port = env.postgres_port;

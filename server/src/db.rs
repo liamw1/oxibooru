@@ -95,7 +95,7 @@ pub fn create_connection_pool(env: &Env, config: Arc<Config>) -> Result<AsyncCon
             .max_lifetime(None)
             .idle_timeout(None)
             .test_on_check_out(true)
-            .connection_customizer(Box::new(ConnectionInitialzier { config }))
+            .connection_customizer(Box::new(ConnectionInitializer { config }))
             .build(ConnectionManager::new(config::database_url(env, None).read()))
             .map(|pool| AsyncConnectionPool { pool, semaphore })
     }
@@ -209,11 +209,11 @@ const MIGRATIONS: EmbeddedMigrations = embed_migrations!();
 const SEMAPHORE_PANIC_MESSAGE: &str = "Semaphore should never close";
 
 #[derive(Debug)]
-struct ConnectionInitialzier {
+struct ConnectionInitializer {
     config: Arc<Config>,
 }
 
-impl CustomizeConnection<PgConnection, diesel::r2d2::Error> for ConnectionInitialzier {
+impl CustomizeConnection<PgConnection, diesel::r2d2::Error> for ConnectionInitializer {
     fn on_acquire(&self, conn: &mut PgConnection) -> Result<(), diesel::r2d2::Error> {
         if self.config.auto_explain {
             diesel::sql_query("LOAD 'auto_explain';").execute(conn)?;
