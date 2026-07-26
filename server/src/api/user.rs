@@ -461,6 +461,7 @@ struct UserUpdateBody {
     /// New password. Must match `password_regex` from server's configuration.
     password: Option<SecretString>,
     /// Email address. Set to null to remove.
+    #[schema(nullable)]
     #[serde(default, deserialize_with = "api::deserialize_some")]
     email: Option<Option<SecretString>>,
     /// User rank.
