@@ -13,7 +13,10 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 use swf::Tag;
+use tokio::sync::oneshot::Sender;
 use tracing::{error, warn};
 
 /// Returns a representative image for the given content.
@@ -48,7 +51,9 @@ pub fn video_has_audio(config: &Config, path: &Path) -> ApiResult<bool> {
             _ => {}
         }
     }
-    if errors.is_empty() {
+    if process.timed_out() {
+        Err(ApiError::FfmpegError(FFMPEG_TIMEOUT_MESSAGE.into()))
+    } else if errors.is_empty() {
         Ok(false)
     } else {
         Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
@@ -100,9 +105,22 @@ pub fn infer_mime_type(prefix: &[u8]) -> ApiResult<MimeType> {
 
 const DEFAULT_FFMPEG_PATH: &str = "/opt/app/ffmpeg";
 const ERROR_SEPARATOR: &str = "; ";
+const FFMPEG_TIMEOUT: Duration = Duration::from_mins(1);
+const FFMPEG_TIMEOUT_MESSAGE: &str = "FFmpeg timed out decoding file";
 
-/// RAII guard that kills the `FFmpeg` subprocess when dropped.
-struct FfmpegSubprocess(FfmpegChild);
+struct FfmpegChildState {
+    child: FfmpegChild,
+    timed_out: bool,
+}
+
+/// RAII guard that kills the `FFmpeg` subprocess when dropped, with a watchdog
+/// task that kills it early if it runs longer than the configured timeout. This
+/// kill is intended to unblock the event iterator if the subprocess stalls for
+/// whatever reason.
+struct FfmpegSubprocess {
+    state: Arc<Mutex<FfmpegChildState>>,
+    watchdog_disarm: Option<Sender<()>>,
+}
 
 impl FfmpegSubprocess {
     fn new<const N: usize>(config: &Config, input: &Path, args: [&str; N]) -> std::io::Result<Self> {
@@ -111,27 +129,67 @@ impl FfmpegSubprocess {
             .ffmpeg_path
             .as_deref()
             .unwrap_or(Path::new(DEFAULT_FFMPEG_PATH));
+
         // Lossy conversion is fine here since filenames are ASCII upload tokens
         let input_str = input.to_string_lossy();
-        FfmpegCommand::new_with_path(ffmpeg_path)
+        let child = FfmpegCommand::new_with_path(ffmpeg_path)
             .input(&input_str)
             .args(args)
-            .spawn()
-            .map(Self)
+            .spawn()?;
+
+        let state = Arc::new(Mutex::new(FfmpegChildState {
+            child,
+            timed_out: false,
+        }));
+        let (disarm_tx, disarm_rx) = tokio::sync::oneshot::channel::<()>();
+
+        tokio::spawn({
+            let state = Arc::clone(&state);
+            async move {
+                tokio::select! {
+                    _ = tokio::time::sleep(FFMPEG_TIMEOUT) => {
+                        warn!("Killing FFmpeg subprocess after {}s", FFMPEG_TIMEOUT.as_secs());
+
+                        let mut guard = state.lock().unwrap_or_else(PoisonError::into_inner);
+                        guard.timed_out = true;
+                        guard.child.kill().ok(); // Ignore errors as the process may have already exited
+                    }
+                    _ = disarm_rx => {} // If Sender transmits Err(RecvError) due to being dropped, cancel reaper
+                }
+            }
+        });
+        Ok(Self {
+            state,
+            watchdog_disarm: Some(disarm_tx),
+        })
     }
 
     fn events(&mut self) -> ApiResult<FfmpegIterator> {
-        self.0
+        self.state
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .child
             .iter()
             .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))
+    }
+
+    /// Returns whether the watchdog killed the process.
+    /// Only meaningful after the event iterator has been exhausted.
+    fn timed_out(&self) -> bool {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner).timed_out
     }
 }
 
 impl Drop for FfmpegSubprocess {
     fn drop(&mut self) {
+        // Disarm the watchdog by dropping the oneshot sender. This transmits
+        // an Err(RecvError) and cancels the process reaper.
+        self.watchdog_disarm.take();
+
+        let mut guard = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         // Ignore errors as the process may have already exited
-        self.0.kill().ok();
-        self.0.wait().ok();
+        guard.child.kill().ok();
+        guard.child.wait().ok();
     }
 }
 
@@ -173,7 +231,9 @@ fn ffmpeg_frame(config: &Config, path: &Path, post_type: PostType) -> ApiResult<
             _ => {}
         }
     }
-    if errors.is_empty() {
+    if process.timed_out() {
+        Err(ApiError::FfmpegError(FFMPEG_TIMEOUT_MESSAGE.into()))
+    } else if errors.is_empty() {
         Ok(None)
     } else {
         Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
@@ -257,7 +317,9 @@ fn video_stream_count(config: &Config, path: &Path) -> ApiResult<usize> {
             _ => {}
         }
     }
-    if stream_count > 1 || errors.is_empty() {
+    if process.timed_out() {
+        Err(ApiError::FfmpegError(FFMPEG_TIMEOUT_MESSAGE.into()))
+    } else if stream_count > 1 || errors.is_empty() {
         Ok(stream_count)
     } else {
         Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
@@ -298,6 +360,8 @@ fn avif_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
         }
         if frames > 1 {
             return Ok(true);
+        } else if process.timed_out() {
+            return Err(ApiError::FfmpegError(FFMPEG_TIMEOUT_MESSAGE.into()));
         }
     }
     if errors.is_empty() {

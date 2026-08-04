@@ -1,6 +1,6 @@
 [package]
 name = "oxibooru_server"
-version = "0.8.0"
+version = "0.8.1"
 license = "GPL-3.0"
 edition = "2024"
 
