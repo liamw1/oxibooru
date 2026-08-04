@@ -147,7 +147,7 @@ impl FfmpegSubprocess {
             let state = Arc::clone(&state);
             async move {
                 tokio::select! {
-                    _ = tokio::time::sleep(FFMPEG_TIMEOUT) => {
+                    () = tokio::time::sleep(FFMPEG_TIMEOUT) => {
                         warn!("Killing FFmpeg subprocess after {}s", FFMPEG_TIMEOUT.as_secs());
 
                         let mut guard = state.lock().unwrap_or_else(PoisonError::into_inner);
