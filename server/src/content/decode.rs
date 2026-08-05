@@ -13,10 +13,10 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
 use std::str::FromStr;
+use std::sync::mpsc::{RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 use swf::Tag;
-use tokio::sync::oneshot::Sender;
 use tracing::{error, warn};
 
 /// Returns a representative image for the given content.
@@ -119,7 +119,7 @@ struct FfmpegChildState {
 /// whatever reason.
 struct FfmpegSubprocess {
     state: Arc<Mutex<FfmpegChildState>>,
-    watchdog_disarm: Option<Sender<()>>,
+    watchdog_disarm: Option<SyncSender<()>>,
 }
 
 impl FfmpegSubprocess {
@@ -133,6 +133,7 @@ impl FfmpegSubprocess {
         // Lossy conversion is fine here since filenames are ASCII upload tokens
         let input_str = input.to_string_lossy();
         let child = FfmpegCommand::new_with_path(ffmpeg_path)
+            .args(["-nostdin", "-threads", "1"])
             .input(&input_str)
             .args(args)
             .spawn()?;
@@ -141,20 +142,18 @@ impl FfmpegSubprocess {
             child,
             timed_out: false,
         }));
-        let (disarm_tx, disarm_rx) = tokio::sync::oneshot::channel::<()>();
+        let (disarm_tx, disarm_rx) = std::sync::mpsc::sync_channel::<()>(1);
 
-        tokio::spawn({
+        std::thread::spawn({
             let state = Arc::clone(&state);
-            async move {
-                tokio::select! {
-                    () = tokio::time::sleep(FFMPEG_TIMEOUT) => {
-                        warn!("Killing FFmpeg subprocess after {}s", FFMPEG_TIMEOUT.as_secs());
+            move || {
+                // Blocks until disarmed (sender dropped or timeout)
+                if disarm_rx.recv_timeout(FFMPEG_TIMEOUT) == Err(RecvTimeoutError::Timeout) {
+                    warn!("Killing FFmpeg subprocess after {}s", FFMPEG_TIMEOUT.as_secs());
 
-                        let mut guard = state.lock().unwrap_or_else(PoisonError::into_inner);
-                        guard.timed_out = true;
-                        guard.child.kill().ok(); // Ignore errors as the process may have already exited
-                    }
-                    _ = disarm_rx => {} // If Sender transmits Err(RecvError) due to being dropped, cancel reaper
+                    let mut guard = state.lock().unwrap_or_else(PoisonError::into_inner);
+                    guard.timed_out = true;
+                    guard.child.kill().ok(); // Ignore errors as the process may have already exited
                 }
             }
         });
@@ -206,13 +205,30 @@ fn image(file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
 /// Decodes a representative frame of the image or video at the given `path`.
 fn ffmpeg_frame(config: &Config, path: &Path, post_type: PostType) -> ApiResult<Option<DynamicImage>> {
     let is_video_format = matches!(post_type, PostType::Video | PostType::Flash);
-    let filter = if is_video_format {
-        "thumbnail,format=rgb24"
+    let (filter, format) = if is_video_format {
+        ("thumbnail", "rgb24")
     } else {
-        "format=rgba"
+        ("null", "rgba")
     };
 
-    let mut process = FfmpegSubprocess::new(config, path, ["-vf", filter, "-frames:v", "1", "-f", "rawvideo", "-"])?;
+    let mut process = FfmpegSubprocess::new(
+        config,
+        path,
+        [
+            "-an",
+            "-sn",
+            "-dn",
+            "-vf",
+            filter,
+            "-pix_fmt",
+            format,
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+    )?;
 
     let mut errors = Vec::new();
     for event in process.events()? {
@@ -338,6 +354,9 @@ fn avif_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
             [
                 "-map",
                 &format!("0:v:{stream_index}"),
+                "-an",
+                "-sn",
+                "-dn",
                 "-frames:v",
                 "2",
                 "-vf",
