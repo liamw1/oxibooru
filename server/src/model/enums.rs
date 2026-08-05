@@ -174,7 +174,7 @@ impl FromStr for MimeType {
             "image/jpeg" => Ok(MimeType::Jpeg),
             "image/png" => Ok(MimeType::Png),
             "image/webp" => Ok(MimeType::Webp),
-            "video/mp4" => Ok(MimeType::Mp4),
+            "video/mp4" | "video/x-m4v" => Ok(MimeType::Mp4),
             "video/quicktime" => Ok(MimeType::Mov),
             "video/webm" => Ok(MimeType::Webm),
             _ => Err(ParseMimeTypeError(s.to_owned())),

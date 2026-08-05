@@ -181,8 +181,8 @@ impl FfmpegSubprocess {
 
 impl Drop for FfmpegSubprocess {
     fn drop(&mut self) {
-        // Disarm the watchdog by dropping the oneshot sender. This transmits
-        // an Err(RecvError) and cancels the process reaper.
+        // Disarm the watchdog by dropping the sender. This causes recv_timeout
+        // to return Err(Disconnected), letting the watchdog thread exit early.
         self.watchdog_disarm.take();
 
         let mut guard = self.state.lock().unwrap_or_else(PoisonError::into_inner);
