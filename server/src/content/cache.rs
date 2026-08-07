@@ -87,6 +87,7 @@ fn compute_properties_no_cache(ctx: &Ctx, token: UploadToken) -> ApiResult<Cache
         PostType::Image | PostType::Animation => false,
         PostType::Video => decode::video_has_audio(&ctx.config, &temp_path)?,
         PostType::Flash => decode::swf_has_audio(&temp_path)?,
+        PostType::Pdf => false,
     };
     let flags = if has_sound {
         PostFlags::one(PostFlag::Sound)
