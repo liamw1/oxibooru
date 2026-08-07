@@ -25,11 +25,11 @@ use tracing::{error, warn};
 /// For Flash media, it is the largest image that can be decoded from the Flash tags.
 pub fn representative_image(config: &Config, file_path: &Path, mime_type: MimeType) -> ApiResult<DynamicImage> {
     match mime_type {
-        MimeType::Bmp => image(file_path, ImageFormat::Bmp),
-        MimeType::Gif => image(file_path, ImageFormat::Gif),
-        MimeType::Jpeg => image(file_path, ImageFormat::Jpeg),
-        MimeType::Png => image(file_path, ImageFormat::Png),
-        MimeType::Webp => image(file_path, ImageFormat::WebP),
+        MimeType::Bmp => image(config, file_path, ImageFormat::Bmp),
+        MimeType::Gif => image(config, file_path, ImageFormat::Gif),
+        MimeType::Jpeg => image(config, file_path, ImageFormat::Jpeg),
+        MimeType::Png => image(config, file_path, ImageFormat::Png),
+        MimeType::Webp => image(config, file_path, ImageFormat::WebP),
         MimeType::Swf => flash_image(config, file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
         MimeType::Avif => ffmpeg_frame(config, file_path, PostType::Image)
             .and_then(|frame| frame.ok_or(ApiError::FfmpegError("Unable to decode AVIF image with FFmpeg".into()))),
@@ -89,14 +89,15 @@ pub fn detect_post_type(config: &Config, file_path: &Path, mime_type: MimeType) 
     let image_type = |animated: bool| -> PostType { if animated { PostType::Animation } else { PostType::Image } };
     match mime_type {
         MimeType::Avif => avif_is_animated(config, file_path).map(image_type),
-        MimeType::Gif => gif_is_animated(file_path).map(image_type),
-        MimeType::Webp => webp_is_animated(file_path).map(image_type),
+        MimeType::Gif => gif_is_animated(config, file_path).map(image_type),
+        MimeType::Webp => webp_is_animated(config, file_path).map(image_type),
         MimeType::Bmp | MimeType::Jpeg | MimeType::Png => Ok(PostType::Image),
         MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Ok(PostType::Video),
         MimeType::Swf => Ok(PostType::Flash),
     }
 }
 
+/// Infers MIME type from magic bytes in `prefix`, the first few hundred bytes in a file.
 pub fn infer_mime_type(prefix: &[u8]) -> ApiResult<MimeType> {
     let kind = infer::get(prefix).ok_or(ApiError::MissingContentType)?;
     let mime_type = kind.mime_type();
@@ -105,7 +106,6 @@ pub fn infer_mime_type(prefix: &[u8]) -> ApiResult<MimeType> {
 
 const DEFAULT_FFMPEG_PATH: &str = "/opt/app/ffmpeg";
 const ERROR_SEPARATOR: &str = "; ";
-const FFMPEG_TIMEOUT: Duration = Duration::from_mins(1);
 const FFMPEG_TIMEOUT_MESSAGE: &str = "FFmpeg timed out decoding file";
 
 struct FfmpegChildState {
@@ -146,10 +146,11 @@ impl FfmpegSubprocess {
 
         std::thread::spawn({
             let state = Arc::clone(&state);
+            let ffmpeg_timeout = Duration::from_secs(config.limits.ffmpeg_timeout_seconds);
             move || {
                 // Blocks until disarmed (sender dropped or timeout)
-                if disarm_rx.recv_timeout(FFMPEG_TIMEOUT) == Err(RecvTimeoutError::Timeout) {
-                    warn!("Killing FFmpeg subprocess after {}s", FFMPEG_TIMEOUT.as_secs());
+                if disarm_rx.recv_timeout(ffmpeg_timeout) == Err(RecvTimeoutError::Timeout) {
+                    warn!("Killing FFmpeg subprocess after {}s", ffmpeg_timeout.as_secs());
 
                     let mut guard = state.lock().unwrap_or_else(PoisonError::into_inner);
                     guard.timed_out = true;
@@ -193,12 +194,12 @@ impl Drop for FfmpegSubprocess {
 }
 
 /// Decodes a raw array of bytes into pixel data.
-fn image(file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
+fn image(config: &Config, file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
     let file = content::map_read_result(File::open(file_path))?;
 
     let mut reader = ImageReader::new(BufReader::new(file));
     reader.set_format(format);
-    reader.limits(image_reader_limits());
+    reader.limits(image_reader_limits(config));
     reader.decode().map_err(ApiError::from)
 }
 
@@ -390,10 +391,10 @@ fn avif_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
     }
 }
 
-fn gif_is_animated(path: &Path) -> ApiResult<bool> {
+fn gif_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
     let file = content::map_read_result(File::open(path))?;
     let mut decoder = GifDecoder::new(BufReader::new(file))?;
-    decoder.set_limits(image_reader_limits())?;
+    decoder.set_limits(image_reader_limits(config))?;
 
     // GIF doesn't store a frame count, so just check for a second frame.
     let mut frames = decoder.into_frames();
@@ -404,20 +405,18 @@ fn gif_is_animated(path: &Path) -> ApiResult<bool> {
         .map_err(ApiError::from)
 }
 
-fn webp_is_animated(path: &Path) -> ApiResult<bool> {
+fn webp_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
     let file = content::map_read_result(File::open(path))?;
     let mut decoder = WebPDecoder::new(BufReader::new(file))?;
-    decoder.set_limits(image_reader_limits())?;
+    decoder.set_limits(image_reader_limits(config))?;
     Ok(decoder.has_animation())
 }
 
 /// Returns maximum decoded image size.
-fn image_reader_limits() -> Limits {
-    const MB: u64 = 1024_u64.pow(2);
-
+fn image_reader_limits(config: &Config) -> Limits {
     let mut limits = Limits::no_limits();
-    limits.max_alloc = Some(256 * MB);
-    limits.max_image_width = Some(16384);
-    limits.max_image_height = Some(16384);
+    limits.max_alloc = Some(config.limits.max_image_allocation.as_u64());
+    limits.max_image_width = Some(config.limits.max_image_width);
+    limits.max_image_height = Some(config.limits.max_image_height);
     limits
 }

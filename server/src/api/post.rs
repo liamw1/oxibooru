@@ -5,7 +5,7 @@ use crate::config::Action;
 use crate::content::hash::PostHash;
 use crate::content::signature::SignatureCache;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
-use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
+use crate::content::upload::{PartName, UploadToken};
 use crate::content::{Content, signature, upload};
 use crate::db::AsyncConnectionPool;
 use crate::extract::{
@@ -40,12 +40,12 @@ use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-pub fn routes() -> OpenApiRouter<AppState> {
+pub fn routes(upload_limit: DefaultBodyLimit) -> OpenApiRouter<AppState> {
     let upload_capable_routes = OpenApiRouter::new()
         .routes(routes!(reverse_search))
         .routes(routes!(create))
         .routes(routes!(update))
-        .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE));
+        .route_layer(upload_limit);
     OpenApiRouter::new()
         .routes(routes!(list))
         .routes(routes!(get, delete))
@@ -1704,6 +1704,7 @@ mod test {
         simulate_upload("1_pixel.png", "upload.png")?;
         verify_response("POST /posts/reverse-search", "post/reverse_search/invalid_token").await?;
 
+        simulate_upload("gradient.png", "image.png")?;
         verify_response("POST /posts", "post/create/invalid_tag").await?;
         verify_response("POST /posts", "post/create/invalid_safety").await?;
         verify_response("POST /posts", "post/create/invalid_note").await?;
@@ -1713,6 +1714,12 @@ mod test {
         verify_response("POST /posts", "post/create/missing_content").await?;
         verify_response("POST /posts", "post/create/duplicate_relation").await?;
         verify_response("POST /posts", "post/create/nonexistent_relation").await?;
+        verify_response("POST /posts", "post/create/content_too_wide").await?;
+        verify_response("POST /posts", "post/create/content_too_tall").await?;
+        verify_response("POST /posts", "post/create/content_too_large").await?;
+        verify_response("POST /posts", "post/create/thumbnail_too_wide").await?;
+        verify_response("POST /posts", "post/create/thumbnail_too_tall").await?;
+        verify_response("POST /posts", "post/create/thumbnail_too_large").await?;
 
         verify_response("PUT /post/1", "post/edit/invalid_tag").await?;
         verify_response("PUT /post/1", "post/edit/invalid_safety").await?;
@@ -1722,6 +1729,12 @@ mod test {
         verify_response("PUT /post/1", "post/edit/invalid_thumbnail_token").await?;
         verify_response("PUT /post/1", "post/edit/duplicate_relation").await?;
         verify_response("PUT /post/1", "post/edit/nonexistent_relation").await?;
+        verify_response("PUT /post/1", "post/edit/content_too_wide").await?;
+        verify_response("PUT /post/1", "post/edit/content_too_tall").await?;
+        verify_response("PUT /post/1", "post/edit/content_too_large").await?;
+        verify_response("PUT /post/1", "post/edit/thumbnail_too_wide").await?;
+        verify_response("PUT /post/1", "post/edit/thumbnail_too_tall").await?;
+        verify_response("PUT /post/1", "post/edit/thumbnail_too_large").await?;
 
         verify_response("PUT /post/1/score", "post/rate/invalid").await?;
         verify_response("POST /featured-post", "post/feature/double_feature").await?;

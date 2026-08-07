@@ -1,7 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::Context;
-use crate::config::Action;
-use crate::content::upload::MAX_UPLOAD_SIZE;
+use crate::config::{Action, Config};
 use crate::content::upload::UploadToken;
 use crate::filesystem;
 use futures::TryStreamExt;
@@ -28,18 +27,19 @@ pub enum UrlValidationError {
     MissingHost,
 }
 
-pub fn create_client() -> reqwest::Result<Client> {
+pub fn create_client(config: &Config) -> reqwest::Result<Client> {
     // Some websites expect a user-agent
     const FAKE_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0";
-    const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
-    const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
+    let max_redirects = config.limits.max_download_redirects;
+    let download_timeout = Duration::from_mins(config.limits.download_timeout_minutes);
+    let connect_timeout = Duration::from_secs(config.limits.download_connect_timeout_seconds);
     Client::builder()
         .user_agent(FAKE_USER_AGENT)
         .no_proxy() // Ignore HTTP_PROXY/HTTPS_PROXY etc. A configured proxy would make connections bypass PublicOnlyResolver entirely.
         .dns_resolver(Arc::new(PublicOnlyResolver))
-        .redirect(Policy::custom(|attempt| {
-            if attempt.previous().len() >= MAX_REDIRECTS {
+        .redirect(Policy::custom(move |attempt| {
+            if attempt.previous().len() >= max_redirects {
                 return attempt.error("too many redirects");
             }
             // Redirect targets must also be https and not literal private IPs.
@@ -48,8 +48,8 @@ pub fn create_client() -> reqwest::Result<Client> {
                 Err(_) => attempt.error("redirect to disallowed URL"),
             }
         }))
-        .timeout(DOWNLOAD_TIMEOUT)
-        .connect_timeout(CONNECTION_TIMEOUT)
+        .timeout(download_timeout)
+        .connect_timeout(connect_timeout)
         .build()
 }
 
@@ -74,7 +74,7 @@ pub async fn from_url(ctx: &Context, url: Url) -> ApiResult<UploadToken> {
     let mut total = 0;
     let limited_stream = response.bytes_stream().map_err(ApiError::from).and_then(move |chunk| {
         total += chunk.len();
-        futures::future::ready(if total > MAX_UPLOAD_SIZE {
+        futures::future::ready(if total > ctx.config.limits.max_upload_size.as_usize() {
             Err(ApiError::DownloadTooLarge)
         } else {
             Ok(chunk)
@@ -82,8 +82,6 @@ pub async fn from_url(ctx: &Context, url: Url) -> ApiResult<UploadToken> {
     });
     filesystem::save_uploaded_file(&ctx.config, limited_stream).await
 }
-
-const MAX_REDIRECTS: usize = 5;
 
 /// DNS resolver that filters out non-public addresses.
 /// Because filtering happens *inside* resolution, redirect hops are

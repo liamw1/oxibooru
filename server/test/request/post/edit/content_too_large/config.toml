@@ -1,0 +1,2 @@
+[limits]
+max_image_allocation = "200B"

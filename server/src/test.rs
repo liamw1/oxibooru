@@ -491,7 +491,7 @@ fn recreate_database() -> AdminResult<AppState> {
     let mut conn = test_connection_pool.get_blocking()?;
     populate_database(&mut conn, &test_config)?;
 
-    let downloader = download::create_client().expect("Must be able to create downloader client");
+    let downloader = download::create_client(&test_config).expect("Must be able to create downloader client");
     Ok(AppState::new(downloader, test_connection_pool, env, Arc::new(test_config)))
 }
 

@@ -55,6 +55,17 @@ post_height   = 300
 #password = # example: "groovy123"
 #from     = # example: "App <noreply@example.com>"
 
+[limits]
+max_image_width                  = 16384    # Widest image that can be uploaded
+max_image_height                 = 16384    # Tallest image that can be uploaded
+max_image_allocation             = "256MB"  # Largest uncompressed image size
+max_upload_size                  = "4GB"    # Largest file size that can be uploaded/downloaded
+ffmpeg_timeout_seconds           = 60       # Fallback timeout for FFmpeg processes that stall
+request_timeout_seconds          = 60       # Fallback timeout for server API
+max_download_redirects           = 5        # Maximum number of times downloader will follow redirects
+download_timeout_minutes         = 10       # Timeout for downloading files
+download_connect_timeout_seconds = 10       # Timeout for connecting to download URL
+
 # Preferences that are automatically applied to anonymous users. You can also apply server-wide preferences to other
 # user rank levels by making similar config tables, up to and including moderators. Preferences accumulate down the rank
 # hierarchy, so any tags/categories blacklisted for moderators are also blacklisted for power users, regular users, etc.
