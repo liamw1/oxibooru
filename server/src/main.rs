@@ -18,6 +18,7 @@ mod string;
 #[cfg(test)]
 mod test;
 mod time;
+mod unit;
 mod update;
 
 /// Avoid musl's default allocator due to lackluster performance
@@ -38,7 +39,7 @@ async fn main() {
     let env = config::read_env(&config).unwrap_or_else(|err| app::shutdown("Failed to read environment", err));
 
     // Create global app state
-    let downloader = content::download::create_client()
+    let downloader = content::download::create_client(&config)
         .unwrap_or_else(|err| app::shutdown("Failed to create downloader client", err));
     let connection_pool = db::create_connection_pool(&env, config.clone())
         .unwrap_or_else(|err| app::shutdown("Failed to build connection pool", err));

@@ -6,6 +6,7 @@ use crate::config::{Config, RegexType};
 use crate::model::enums::UserRank;
 use crate::string::SmallString;
 use crate::time::DateTime;
+use axum::extract::DefaultBodyLimit;
 use axum::http::StatusCode;
 use serde::{Deserialize, Deserializer};
 use std::time::Duration;
@@ -32,6 +33,10 @@ mod user;
 mod user_token;
 
 pub fn routes(state: AppState) -> OpenApiRouter {
+    let max_upload_size = usize::try_from(state.config.limits.max_upload_size).unwrap_or(usize::MAX);
+    let upload_limit = DefaultBodyLimit::max(max_upload_size);
+    let request_timeout = Duration::from_secs(state.config.limits.request_timeout_seconds);
+
     OpenApiRouter::with_openapi(ApiDoc::openapi())
         .merge(comment::routes())
         .merge(info::routes())
@@ -39,16 +44,16 @@ pub fn routes(state: AppState) -> OpenApiRouter {
         .merge(password_reset::routes())
         .merge(pool::routes())
         .merge(pool_category::routes())
-        .merge(post::routes())
+        .merge(post::routes(upload_limit))
         .merge(snapshot::routes())
         .merge(tag::routes())
         .merge(tag_category::routes())
-        .merge(upload::routes())
-        .merge(user::routes())
+        .merge(upload::routes(upload_limit))
+        .merge(user::routes(upload_limit))
         .merge(user_token::routes())
         .layer((
             TraceLayer::new_for_http(),
-            TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_mins(1)),
+            TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, request_timeout),
         ))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::post_to_webhooks))

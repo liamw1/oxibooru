@@ -27,14 +27,6 @@ use utoipa::{PartialSchema, ToSchema};
 #[error("{0} is not a supported file extension")]
 pub struct ParseExtensionError(String);
 
-#[derive(Debug, Error, PartialEq, Eq)]
-#[error("Content-Type {0} is not supported")]
-pub struct ParseMimeTypeError(String);
-
-#[derive(Debug, Error)]
-#[error("Cannot convert None to Score")]
-pub struct FromRatingError;
-
 #[derive(
     Debug, Default, Clone, Copy, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize, ToSchema,
 )]
@@ -168,7 +160,7 @@ impl MimeType {
 }
 
 impl FromStr for MimeType {
-    type Err = ParseMimeTypeError;
+    type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let content_type = s.split(';').next().unwrap_or(s).trim().to_ascii_lowercase();
         match content_type.as_str() {
@@ -183,7 +175,7 @@ impl FromStr for MimeType {
             "video/mp4" | "video/x-m4v" => Ok(MimeType::Mp4),
             "video/quicktime" => Ok(MimeType::Mov),
             "video/webm" => Ok(MimeType::Webm),
-            _ => Err(ParseMimeTypeError(s.to_owned())),
+            _ => Err(format!("MIME type {content_type} is not supported")),
         }
     }
 }
@@ -430,10 +422,10 @@ pub enum Score {
 }
 
 impl TryFrom<Rating> for Score {
-    type Error = FromRatingError;
+    type Error = &'static str;
     fn try_from(value: Rating) -> Result<Self, Self::Error> {
         match value {
-            Rating::None => Err(FromRatingError),
+            Rating::None => Err("Cannot convert `None` to Score"),
             Rating::Dislike => Ok(Self::Dislike),
             Rating::Like => Ok(Self::Like),
         }

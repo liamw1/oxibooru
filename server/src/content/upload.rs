@@ -13,8 +13,6 @@ use strum::IntoStaticStr;
 use tracing::warn;
 use uuid::Uuid;
 
-pub const MAX_UPLOAD_SIZE: usize = 4 * 1024_usize.pow(3);
-
 /// A token that represents a file that's been streamed to disk during upload.
 #[derive(Clone, PartialEq, Eq, Serialize)]
 #[serde(transparent)]

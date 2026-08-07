@@ -3,6 +3,7 @@ use crate::filesystem::Directory;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::search::preferences::Preferences;
 use crate::string::{SecretString, SmallString};
+use crate::unit::ByteCount;
 use config::builder::DefaultState;
 use config::{ConfigBuilder, File, FileFormat};
 use lettre::message::Mailbox;
@@ -78,6 +79,19 @@ pub struct SmtpConfig {
     pub username: Option<SecretString>,
     pub password: Option<SecretString>,
     pub from: Mailbox,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LimitsConfig {
+    pub max_image_width: u32,
+    pub max_image_height: u32,
+    pub max_image_allocation: ByteCount,
+    pub max_upload_size: ByteCount,
+    pub ffmpeg_timeout_seconds: u64,
+    pub request_timeout_seconds: u64,
+    pub max_download_redirects: usize,
+    pub download_timeout_minutes: u64,
+    pub download_connect_timeout_seconds: u64,
 }
 
 #[derive(Clone, Copy, EnumCount, EnumIter, EnumTable, IntoStaticStr)]
@@ -277,6 +291,7 @@ pub struct Config {
     pub auto_explain: bool,
     pub thumbnails: ThumbnailConfig,
     pub smtp: Option<SmtpConfig>,
+    pub limits: LimitsConfig,
     #[serde(default)]
     pub anonymous_preferences: Preferences,
     #[serde(default)]

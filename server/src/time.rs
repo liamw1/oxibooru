@@ -1,3 +1,4 @@
+use crate::unit;
 use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::expression::AsExpression;
 use diesel::pg::{Pg, PgValue};
@@ -29,15 +30,8 @@ impl<'a> Timer<'a> {
 
 impl Drop for Timer<'_> {
     fn drop(&mut self) {
-        let elapsed_time = self.start.elapsed();
-        let time_in_s = elapsed_time.as_secs_f64();
-        match elapsed_time.as_nanos().checked_ilog10().unwrap_or(0) {
-            0..3 => info!("{} took {:.1}ns", self.name, time_in_s * 1e9),
-            3..6 => info!("{} took {:.3}μs", self.name, time_in_s * 1e6),
-            6..9 => info!("{} took {:.3}ms", self.name, time_in_s * 1e3),
-            9..12 => info!("{} took {:.3}s", self.name, time_in_s),
-            12.. => info!("{} took {:.0}s", self.name, time_in_s),
-        }
+        let elasped_time = unit::format_duration(self.start.elapsed());
+        info!("{} took {elasped_time}", self.name);
     }
 }
 
