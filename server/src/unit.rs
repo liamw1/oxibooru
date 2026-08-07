@@ -1,20 +1,25 @@
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
+use std::convert::TryFrom;
 use std::fmt::Display;
-use std::num::NonZeroU128;
+use std::num::{NonZeroU128, TryFromIntError};
 use std::str::FromStr;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ByteCount(u128);
 
-impl ByteCount {
-    pub fn as_u64(self) -> u64 {
-        u64::try_from(self.0).unwrap_or(u64::MAX)
+impl TryFrom<ByteCount> for u64 {
+    type Error = TryFromIntError;
+    fn try_from(value: ByteCount) -> Result<Self, Self::Error> {
+        u64::try_from(value.0)
     }
+}
 
-    pub fn as_usize(self) -> usize {
-        usize::try_from(self.0).unwrap_or(usize::MAX)
+impl TryFrom<ByteCount> for usize {
+    type Error = TryFromIntError;
+    fn try_from(value: ByteCount) -> Result<Self, Self::Error> {
+        usize::try_from(value.0)
     }
 }
 

@@ -33,7 +33,8 @@ mod user;
 mod user_token;
 
 pub fn routes(state: AppState) -> OpenApiRouter {
-    let upload_limit = DefaultBodyLimit::max(state.config.limits.max_upload_size.as_usize());
+    let max_upload_size = usize::try_from(state.config.limits.max_upload_size).unwrap_or(usize::MAX);
+    let upload_limit = DefaultBodyLimit::max(max_upload_size);
     let request_timeout = Duration::from_secs(state.config.limits.request_timeout_seconds);
 
     OpenApiRouter::with_openapi(ApiDoc::openapi())

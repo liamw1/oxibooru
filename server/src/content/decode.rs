@@ -414,8 +414,10 @@ fn webp_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
 
 /// Returns maximum decoded image size.
 fn image_reader_limits(config: &Config) -> Limits {
+    let max_allocation = u64::try_from(config.limits.max_image_allocation).unwrap_or(u64::MAX);
+
     let mut limits = Limits::no_limits();
-    limits.max_alloc = Some(config.limits.max_image_allocation.as_u64());
+    limits.max_alloc = Some(max_allocation);
     limits.max_image_width = Some(config.limits.max_image_width);
     limits.max_image_height = Some(config.limits.max_image_height);
     limits
