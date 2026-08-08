@@ -11,7 +11,7 @@ use image::codecs::{gif::GifDecoder, webp::WebPDecoder};
 use image::{AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits, RgbImage, RgbaImage};
 use std::borrow::Cow;
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::BufReader;
 use std::path::Path;
 use std::str::FromStr;
 use std::sync::mpsc::{RecvTimeoutError, SyncSender};
