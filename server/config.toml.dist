@@ -58,6 +58,8 @@ post_height   = 300
 [limits]
 max_image_width                  = 16384    # Widest image that can be uploaded
 max_image_height                 = 16384    # Tallest image that can be uploaded
+max_pdf_width                    = 1200     # Max width of the preview image generated for a PDF 
+max_pdf_height                   = 1200     # Max height of the preview image generated for a PDF 
 max_image_allocation             = "256MB"  # Largest uncompressed image size
 max_upload_size                  = "4GB"    # Largest file size that can be uploaded/downloaded
 ffmpeg_timeout_seconds           = 60       # Fallback timeout for FFmpeg processes that stall

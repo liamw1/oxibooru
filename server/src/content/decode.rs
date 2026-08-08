@@ -1,5 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
+use crate::content::pdf::pdf_preview_image;
 use crate::content::{self, flash};
 use crate::model::enums::{MimeType, PostType};
 use ffmpeg_sidecar::child::FfmpegChild;
@@ -36,6 +37,7 @@ pub fn representative_image(config: &Config, file_path: &Path, mime_type: MimeTy
         MimeType::Mov | MimeType::Mp4 | MimeType::Webm => {
             ffmpeg_frame(config, file_path, PostType::Video).and_then(|frame| frame.ok_or(ApiError::EmptyVideo))
         }
+        MimeType::Pdf => pdf_preview_image(config, file_path),
     }
 }
 
@@ -94,6 +96,7 @@ pub fn detect_post_type(config: &Config, file_path: &Path, mime_type: MimeType) 
         MimeType::Bmp | MimeType::Jpeg | MimeType::Png => Ok(PostType::Image),
         MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Ok(PostType::Video),
         MimeType::Swf => Ok(PostType::Flash),
+        MimeType::Pdf => Ok(PostType::Pdf),
     }
 }
 
