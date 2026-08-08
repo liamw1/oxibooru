@@ -21,13 +21,13 @@ pub fn pdf_representative_image(config: &Config, file_path: &Path) -> ApiResult<
 
     let page = pdf
         .pages()
-        .get(0)
+        .first()
         .ok_or(ApiError::FromStr("Failed to get page 1 from PDF".into()))?;
 
     let (dimensions, ratio) = {
         let dimensions = page.render_dimensions();
 
-        let max_size = (config.limits.max_pdf_width as f32, config.limits.max_pdf_height as f32);
+        let max_size = (f32::from(config.limits.max_pdf_width), f32::from(config.limits.max_pdf_height));
 
         let ratios = (max_size.0 / dimensions.0, max_size.1 / dimensions.1);
 
@@ -40,13 +40,17 @@ pub fn pdf_representative_image(config: &Config, file_path: &Path) -> ApiResult<
         ((dimensions.0 * ratio, dimensions.1 * ratio), ratio)
     };
 
+    let dimensions: (u16, u16) = (
+        num_traits::cast(dimensions.0).ok_or(ApiError::FromStr("Failed to render PDF".into()))?,
+        num_traits::cast(dimensions.1).ok_or(ApiError::FromStr("Failed to render PDF".into()))?,
+    );
+
     let render_settings = RenderSettings {
         x_scale: ratio,
         y_scale: ratio,
-        width: Some(dimensions.0 as u16),
-        height: Some(dimensions.1 as u16),
+        width: Some(dimensions.0),
+        height: Some(dimensions.1),
         bg_color: WHITE,
-        ..Default::default()
     };
     let cache = RenderCache::new();
 
@@ -55,7 +59,7 @@ pub fn pdf_representative_image(config: &Config, file_path: &Path) -> ApiResult<
     let png = pixmap.data_as_u8_slice();
 
     Ok(DynamicImage::ImageRgba8(
-        RgbaImage::from_raw(pixmap.width() as u32, pixmap.height() as u32, png.to_vec())
+        RgbaImage::from_raw(u32::from(pixmap.width()), u32::from(pixmap.height()), png.to_vec())
             .ok_or(ApiError::FromStr("Failed to render PDF".into()))?,
     ))
 }
