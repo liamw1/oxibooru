@@ -1,4 +1,5 @@
 use crate::api::error::{ApiError, ApiResult};
+use crate::config::Config;
 use hayro::hayro_interpret::InterpreterSettings;
 use hayro::hayro_syntax::Pdf;
 use hayro::{RenderCache, RenderSettings, render};
@@ -8,7 +9,7 @@ use std::io::Read;
 use std::path::Path;
 use vello_cpu::color::palette::css::WHITE;
 
-pub fn pdf_representative_image(file_path: &Path) -> ApiResult<DynamicImage> {
+pub fn pdf_representative_image(config: &Config, file_path: &Path) -> ApiResult<DynamicImage> {
     let mut file = Vec::new();
     File::open(file_path)?
         .read_to_end(&mut file)
@@ -26,16 +27,17 @@ pub fn pdf_representative_image(file_path: &Path) -> ApiResult<DynamicImage> {
     let (dimensions, ratio) = {
         let dimensions = page.render_dimensions();
 
-        let max_size = 1000.0;
+        let max_size = (config.limits.max_pdf_width as f32, config.limits.max_pdf_height as f32);
 
-        if dimensions.0 <= max_size && dimensions.1 <= max_size {
-            (dimensions, 1.0)
-        } else {
-            let longest_side = dimensions.0.max(dimensions.1);
-            let ratio = max_size / longest_side;
+        let ratios = (max_size.0 / dimensions.0, max_size.1 / dimensions.1);
 
-            ((dimensions.0 * ratio, dimensions.1 * ratio), ratio)
-        }
+        // find the min ratio to scale down the image while maintaining aspect ratio
+        let ratio = f32::min(ratios.0, ratios.1);
+
+        // ensure ratio is at most 1.0. We only want to downscale, not upscale.
+        let ratio = f32::min(1.0, ratio);
+
+        ((dimensions.0 * ratio, dimensions.1 * ratio), ratio)
     };
 
     let render_settings = RenderSettings {

@@ -37,7 +37,7 @@ pub fn representative_image(config: &Config, file_path: &Path, mime_type: MimeTy
         MimeType::Mov | MimeType::Mp4 | MimeType::Webm => {
             ffmpeg_frame(config, file_path, PostType::Video).and_then(|frame| frame.ok_or(ApiError::EmptyVideo))
         }
-        MimeType::Pdf => pdf_representative_image(file_path),
+        MimeType::Pdf => pdf_representative_image(config, file_path),
     }
 }
 

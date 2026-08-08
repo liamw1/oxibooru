@@ -85,6 +85,8 @@ pub struct SmtpConfig {
 pub struct LimitsConfig {
     pub max_image_width: u32,
     pub max_image_height: u32,
+    pub max_pdf_width: u32,
+    pub max_pdf_height: u32,
     pub max_image_allocation: ByteCount,
     pub max_upload_size: ByteCount,
     pub ffmpeg_timeout_seconds: u64,
