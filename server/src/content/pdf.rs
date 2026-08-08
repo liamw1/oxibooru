@@ -9,7 +9,7 @@ use std::io::Read;
 use std::path::Path;
 use vello_cpu::color::palette::css::WHITE;
 
-pub fn pdf_representative_image(config: &Config, file_path: &Path) -> ApiResult<DynamicImage> {
+pub fn pdf_preview_image(config: &Config, file_path: &Path) -> ApiResult<DynamicImage> {
     let mut file = Vec::new();
     File::open(file_path)?
         .read_to_end(&mut file)
