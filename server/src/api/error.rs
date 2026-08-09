@@ -85,6 +85,7 @@ pub enum ApiError {
     NotLoggedIn,
     Password(#[from] argon2::password_hash::Error),
     PathRejection(#[from] axum::extract::rejection::PathRejection),
+    PdfLoadError(#[from] crate::model::enums::PdfLoadError),
     QueryRejection(#[from] axum::extract::rejection::QueryRejection),
     Request(#[from] reqwest::Error),
     #[error("Someone else modified this in the meantime. Please try again.")]
@@ -152,6 +153,7 @@ impl ApiError {
             | Self::InvalidHeader(_)
             | Self::MissingSmtpInfo
             | Self::StdIo(_)
+            | Self::PdfLoadError(_)
             | Self::TaskJoin(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedAuthentication(err) => match err {
@@ -211,6 +213,7 @@ impl ApiError {
             Self::NotLoggedIn => "Not Logged In",
             Self::Password(_) => "Password Error",
             Self::PathRejection(_) => "Path Rejection",
+            Self::PdfLoadError(_) => "PDF Load Error",
             Self::QueryRejection(_) => "Query Rejection",
             Self::Request(_) => "Request Error",
             Self::ResourceModified => "Resource Modified",

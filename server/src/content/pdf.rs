@@ -1,21 +1,18 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
+use crate::content;
 use hayro::hayro_interpret::InterpreterSettings;
 use hayro::hayro_syntax::Pdf;
 use hayro::{RenderCache, RenderSettings, render};
 use image::{DynamicImage, RgbaImage};
-use std::fs::File;
-use std::io::Read;
 use std::path::Path;
 use vello_cpu::color::palette::css::WHITE;
 
 pub fn pdf_preview_image(config: &Config, file_path: &Path) -> ApiResult<DynamicImage> {
-    let mut file = Vec::new();
-    File::open(file_path)?
-        .read_to_end(&mut file)
-        .map_err(|_| ApiError::FromStr("Failed to render PDF".into()))?;
-
-    let pdf = Pdf::new(file).map_err(|_| ApiError::FromStr("Failed to render PDF".into()))?;
+    let pdf = {
+        let file_contents = content::map_read_result(std::fs::read(file_path))?;
+        Pdf::new(file_contents).map_err(crate::model::enums::PdfLoadError)?
+    };
 
     let interpreter_settings = InterpreterSettings { ..Default::default() };
 
