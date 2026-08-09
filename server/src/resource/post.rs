@@ -1,7 +1,7 @@
 use crate::app::Context;
 use crate::auth::Client;
 use crate::config::Config;
-use crate::content::hash::PostHash;
+use crate::content::hash::{Checksum, Md5Checksum, PostHash};
 use crate::model::comment::Comment;
 use crate::model::enums::{AvatarStyle, MimeType, PostFlags, PostSafety, PostType, Rating, Score};
 use crate::model::pool::PoolPost;
@@ -156,10 +156,10 @@ pub struct PostInfo {
     /// Subsidiary to `<type>`, used to tell exact content format. Useful for `<video>` tags for instance.
     mime_type: Option<MimeType>,
     /// The BLAKE3 file checksum.
-    checksum: Option<String>,
+    checksum: Option<Checksum>,
     /// The MD5 file checksum.
     #[serde(rename = "checksumMD5")]
-    checksum_md5: Option<String>,
+    checksum_md5: Option<Md5Checksum>,
     /// Various flags such as whether the post is looped.
     flags: Option<PostFlags>,
     /// Where the post was grabbed form, supplied by the user.
@@ -264,8 +264,8 @@ impl PostInfo {
                 safety: fields[Field::Safety].then_some(post.safety),
                 type_: fields[Field::Type].then_some(post.type_),
                 mime_type: fields[Field::MimeType].then_some(post.mime_type),
-                checksum: fields[Field::Checksum].then(|| hex::encode(&post.checksum)),
-                checksum_md5: fields[Field::ChecksumMd5].then(|| hex::encode(&post.checksum_md5)),
+                checksum: fields[Field::Checksum].then_some(post.checksum),
+                checksum_md5: fields[Field::ChecksumMd5].then_some(post.checksum_md5),
                 flags: fields[Field::Flags].then_some(post.flags),
                 source: fields[Field::Source].then_some(post.source),
                 description: fields[Field::Description].then_some(post.description),

@@ -685,7 +685,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
 
             let post_data = SnapshotData {
                 safety: post.safety,
-                checksum: hex::encode(&post.checksum),
+                checksum: post.checksum,
                 flags: post.flags,
                 source: post.source,
                 description: post.description,
@@ -1055,7 +1055,7 @@ async fn update_impl(
             if let Some(content_properties) = new_content {
                 ctx.verify_privilege(Action::PostEditContent)?;
 
-                new_snapshot_data.checksum = hex::encode(&content_properties.checksum);
+                new_snapshot_data.checksum = content_properties.checksum;
 
                 // Update content metadata
                 new_post.file_size = content_properties.file_size;

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
 use std::convert::TryFrom;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::num::{NonZeroU128, TryFromIntError};
 use std::str::FromStr;
 use std::time::Duration;
@@ -24,7 +24,7 @@ impl TryFrom<ByteCount> for usize {
 }
 
 impl Display for ByteCount {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         f.write_str(&format(self.0, SI_BASE, SI_PREFIXES, "B"))
     }
 }

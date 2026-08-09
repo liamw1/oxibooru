@@ -11,12 +11,14 @@ use diesel::serialize::{Output, ToSql};
 use diesel::sql_types::Bytea;
 use diesel::{FromSqlRow, deserialize, serialize};
 use hex::{FromHex, FromHexError};
+use serde::{Serialize, Serializer};
 use std::cell::Cell;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::fs::File;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use utoipa::ToSchema;
 
 /// Stores a `post_id` and cached post `hash`.
 pub struct PostHash<'a> {
@@ -98,7 +100,7 @@ impl<'a> PostHash<'a> {
 }
 
 impl Display for PostHash<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let outer_bucket = self.post_id / 1_000_000;
         let inner_bucket = (self.post_id / 10_000) % 100;
         write!(f, "{outer_bucket:06}/{inner_bucket:02}/{}_{}", self.post_id, self.hash)
@@ -110,8 +112,9 @@ pub type Md5Checksum = GenericChecksum<16>;
 
 /// Represents a fixed-size checksum of length `N`.
 /// Can be deserialized from the database without allocation.
-#[derive(Debug, Clone, PartialEq, Eq, AsExpression, FromSqlRow)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsExpression, FromSqlRow, ToSchema)]
 #[diesel(sql_type = Bytea)]
+#[schema(value_type = String, description = "Hex-encoded checksum", pattern = "^[0-9a-fA-F]+$")]
 pub struct GenericChecksum<const N: usize>([u8; N]);
 
 impl<const N: usize> GenericChecksum<N> {
@@ -152,6 +155,18 @@ where
     type Err = FromHexError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         <[u8; N]>::from_hex(s).map(Self)
+    }
+}
+
+impl<const N: usize> Display for GenericChecksum<N> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&hex::encode(self.0))
+    }
+}
+
+impl<const N: usize> Serialize for GenericChecksum<N> {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&hex::encode(self.0))
     }
 }
 
