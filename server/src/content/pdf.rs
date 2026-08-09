@@ -14,12 +14,7 @@ pub fn pdf_preview_image(config: &Config, file_path: &Path) -> ApiResult<Dynamic
         Pdf::new(file_contents).map_err(crate::model::enums::PdfLoadError)?
     };
 
-    let interpreter_settings = InterpreterSettings { ..Default::default() };
-
-    let page = pdf
-        .pages()
-        .first()
-        .ok_or(ApiError::FromStr("Failed to get page 1 from PDF".into()))?;
+    let page = pdf.pages().first().ok_or(ApiError::EmptyPdf)?;
 
     let (dimensions, ratio) = {
         let dimensions = page.render_dimensions();
@@ -51,7 +46,7 @@ pub fn pdf_preview_image(config: &Config, file_path: &Path) -> ApiResult<Dynamic
     };
     let cache = RenderCache::new();
 
-    let pixmap = render(page, &cache, &interpreter_settings, &render_settings);
+    let pixmap = render(page, &cache, &InterpreterSettings::default(), &render_settings);
 
     let png = pixmap.data_as_u8_slice();
 

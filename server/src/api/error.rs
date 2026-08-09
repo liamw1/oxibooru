@@ -28,6 +28,8 @@ pub enum ApiError {
     DeleteDefault(ResourceType),
     #[error("Downloaded content exceeds maximum allowed size")]
     DownloadTooLarge,
+    #[error("PDF has no pages")]
+    EmptyPdf,
     #[error("SWF has no decodable images")]
     EmptySwf,
     #[error("Video file has no frames")]
@@ -129,6 +131,7 @@ impl ApiError {
             Self::UnsupportedContentType(_) | Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::CyclicDependency(_)
             | Self::DeleteDefault(_)
+            | Self::EmptyPdf
             | Self::EmptySwf
             | Self::EmptyVideo
             | Self::ExpressionFailsRegex(..)
@@ -145,6 +148,7 @@ impl ApiError {
             | Self::NoEmail
             | Self::NoNamesGiven(_)
             | Self::NotAnInteger(_)
+            | Self::PdfLoadError(_)
             | Self::SelfMerge(_)
             | Self::SwfDecoding(_)
             | Self::UrlValidation(_) => StatusCode::UNPROCESSABLE_ENTITY,
@@ -153,7 +157,6 @@ impl ApiError {
             | Self::InvalidHeader(_)
             | Self::MissingSmtpInfo
             | Self::StdIo(_)
-            | Self::PdfLoadError(_)
             | Self::TaskJoin(_) => StatusCode::INTERNAL_SERVER_ERROR,
             Self::FailedConnection(_) => StatusCode::SERVICE_UNAVAILABLE,
             Self::FailedAuthentication(err) => match err {
@@ -174,6 +177,7 @@ impl ApiError {
             Self::CyclicDependency(_) => "Cyclic Dependency",
             Self::DeleteDefault(_) => "Delete Default",
             Self::DownloadTooLarge => "Download Too Large",
+            Self::EmptyPdf => "Empty PDF",
             Self::EmptySwf => "Empty SWF",
             Self::EmptyVideo => "Empty Video",
             Self::ExpressionFailsRegex(..) => "Expression Fails Regex",
