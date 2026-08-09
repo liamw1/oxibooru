@@ -514,3 +514,18 @@ fn create_config(args: Args) -> Config {
 
     config
 }
+
+mod serde_regex {
+    use regex::Regex;
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(regex: &Regex, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(regex.as_str())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Regex, D::Error> {
+        let pattern = String::deserialize(deserializer)?;
+        Regex::new(&pattern).map_err(D::Error::custom)
+    }
+}

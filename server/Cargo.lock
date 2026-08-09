@@ -2094,7 +2094,6 @@ dependencies = [
  "rustyline",
  "serde",
  "serde_json",
- "serde_regex",
  "serde_repr",
  "serde_with",
  "serial_test",
@@ -2870,16 +2869,6 @@ dependencies = [
  "itoa",
  "serde",
  "serde_core",
-]
-
-[[package]]
-name = "serde_regex"
-version = "1.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bafc8d0c5330cecff10f16b459b479fd9acaa5b4acd7167301414e21b0057012"
-dependencies = [
- "regex",
- "serde",
 ]
 
 [[package]]
