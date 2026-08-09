@@ -83,6 +83,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "array-init"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d62b7694a562cdf5a74227903507c56ab2cc8bdd1f781ed5cb4cf9c9f810bfc"
+
+[[package]]
 name = "arrayref"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1639,6 +1645,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "jxl"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ad19139224d7643adda1d4b9792caea2346ce7a079ef00ae653b1d7a938dce7"
+dependencies = [
+ "array-init",
+ "byteorder",
+ "jxl_macros",
+ "jxl_simd",
+ "jxl_transforms",
+ "num-derive",
+ "num-traits",
+ "thiserror",
+]
+
+[[package]]
+name = "jxl_macros"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "341267f3e48d02b0fc44aa3102e0ac46204e726bc63a1caa161431f309e9de42"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "jxl_simd"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b772b4e3b3cf3af88c7dde9fc2d6b63cbb89f29eb5cf30cb132ec7adfed533e"
+
+[[package]]
+name = "jxl_transforms"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2dae97098351cbffdbca17907de1055bf60be86e692f9d657f5b565e336b43b"
+dependencies = [
+ "jxl_simd",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2098,6 +2146,7 @@ dependencies = [
  "hmac",
  "image",
  "infer",
+ "jxl",
  "lettre",
  "md5",
  "mimalloc",

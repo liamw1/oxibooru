@@ -13,6 +13,7 @@ pub mod decode;
 pub mod download;
 mod flash;
 pub mod hash;
+mod jxl;
 pub mod signature;
 pub mod thumbnail;
 pub mod upload;
