@@ -56,7 +56,6 @@ utoipa = { version = "5.4.0", features = ["axum_extras", "time", "url", "uuid"] 
 utoipa-axum = "0.2.0"
 utoipa-swagger-ui = { version = "9.0.2", features = ["axum", "vendored"] }
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
-vello_cpu = "0.2.0"
 walkdir = "2.5.0"
 
 [target.'cfg(target_env = "musl")'.dependencies]
