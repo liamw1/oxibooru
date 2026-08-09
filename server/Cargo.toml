@@ -9,7 +9,6 @@ argon2 = { version = "0.5.3", features = ["std"] }
 axum = { version = "0.8.4", features = ["multipart"] }
 base64 = "0.22.1"
 blake3 = { version = "1.5.5", features = ["traits-preview"] }
-byteorder = "1.5.0"
 compact_str = { version = "0.9.0", features = ["serde"] }
 config = { version = "0.15.18", default-features = false, features = ["toml"] }
 diesel = { version = "2.3.10", features = ["postgres", "r2d2", "time", "uuid", "serde_json",

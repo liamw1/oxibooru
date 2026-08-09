@@ -1,4 +1,3 @@
-use byteorder::{NetworkEndian, WriteBytesExt};
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, IsNull, Output, ToSql};
@@ -7,6 +6,7 @@ use diesel::{AsExpression, FromSqlRow};
 use mime::Mime;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::io::Write;
 use std::ops::{BitAnd, BitOr, BitOrAssign};
 use std::path::Path;
 use std::str::FromStr;
@@ -41,7 +41,7 @@ pub enum AvatarStyle {
 
 impl ToSql<SmallInt, Pg> for AvatarStyle {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(*self as i16)?;
+        out.write_all(&(*self as i16).to_be_bytes())?;
         Ok(IsNull::No)
     }
 }
@@ -69,7 +69,7 @@ pub enum PostType {
 
 impl ToSql<SmallInt, Pg> for PostType {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(*self as i16)?;
+        out.write_all(&(*self as i16).to_be_bytes())?;
         Ok(IsNull::No)
     }
 }
@@ -176,7 +176,7 @@ impl FromStr for MimeType {
 
 impl ToSql<SmallInt, Pg> for MimeType {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(*self as i16)?;
+        out.write_all(&(*self as i16).to_be_bytes())?;
         Ok(IsNull::No)
     }
 }
@@ -216,7 +216,7 @@ pub enum PostSafety {
 
 impl ToSql<SmallInt, Pg> for PostSafety {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(*self as i16)?;
+        out.write_all(&(*self as i16).to_be_bytes())?;
         Ok(IsNull::No)
     }
 }
@@ -305,7 +305,7 @@ impl BitAnd<PostFlag> for PostFlags {
 
 impl ToSql<SmallInt, Pg> for PostFlags {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(self.0.cast_signed())?;
+        out.write_all(&(self.0.cast_signed()).to_be_bytes())?;
         Ok(IsNull::No)
     }
 }
@@ -359,7 +359,7 @@ pub enum UserRank {
 
 impl ToSql<SmallInt, Pg> for UserRank {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(*self as i16)?;
+        out.write_all(&(*self as i16).to_be_bytes())?;
         Ok(IsNull::No)
     }
 }
@@ -428,7 +428,7 @@ impl TryFrom<Rating> for Score {
 
 impl ToSql<SmallInt, Pg> for Score {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(*self as i16)?;
+        out.write_all(&(*self as i16).to_be_bytes())?;
         Ok(IsNull::No)
     }
 }
@@ -453,7 +453,7 @@ pub enum ResourceOperation {
 
 impl ToSql<SmallInt, Pg> for ResourceOperation {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(*self as i16)?;
+        out.write_all(&(*self as i16).to_be_bytes())?;
         Ok(IsNull::No)
     }
 }
@@ -485,7 +485,7 @@ pub enum ResourceType {
 
 impl ToSql<SmallInt, Pg> for ResourceType {
     fn to_sql(&self, out: &mut Output<Pg>) -> serialize::Result {
-        out.write_i16::<NetworkEndian>(*self as i16)?;
+        out.write_all(&(*self as i16).to_be_bytes())?;
         Ok(IsNull::No)
     }
 }
