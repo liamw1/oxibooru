@@ -17,7 +17,7 @@ diesel_migrations = { version = "2.3.0", features = ["postgres"] }
 dotenvy = { version = "0.15.7", optional = true }
 ffmpeg-sidecar = { version = "2.5.0", default-features = false }
 flate2 = "1.0.35"
-futures = "0.3.32"
+futures-core = "0.3.33"
 hex = "0.4.3"
 hmac = "0.13.0"
 image = { version = "0.25.5", default-features = false, features = ["bmp", "gif", "jpeg", "png", "webp", "rayon"] }

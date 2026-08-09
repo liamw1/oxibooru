@@ -22,12 +22,12 @@ pub type ApiResult<T> = Result<T, ApiError>;
 pub enum ApiError {
     #[error("{0} already exists")]
     AlreadyExists(ResourceProperty),
+    #[error("Content exceeds maximum allowed size")]
+    ContentTooLarge,
     #[error("Cyclic dependency detected in {0}s")]
     CyclicDependency(ResourceType),
     #[error("Cannot delete default {0}")]
     DeleteDefault(ResourceType),
-    #[error("Downloaded content exceeds maximum allowed size")]
-    DownloadTooLarge,
     #[error("SWF has no decodable images")]
     EmptySwf,
     #[error("Video file has no frames")]
@@ -124,7 +124,7 @@ impl ApiError {
             Self::Hidden(_) | Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::AlreadyExists(_) | Self::ResourceModified => StatusCode::CONFLICT,
-            Self::DownloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+            Self::ContentTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
             Self::UnsupportedContentType(_) | Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::CyclicDependency(_)
             | Self::DeleteDefault(_)
@@ -169,9 +169,9 @@ impl ApiError {
     fn category(&self) -> &'static str {
         match self {
             Self::AlreadyExists(_) => "Already Exists",
+            Self::ContentTooLarge => "Content Too Large",
             Self::CyclicDependency(_) => "Cyclic Dependency",
             Self::DeleteDefault(_) => "Delete Default",
-            Self::DownloadTooLarge => "Download Too Large",
             Self::EmptySwf => "Empty SWF",
             Self::EmptyVideo => "Empty Video",
             Self::ExpressionFailsRegex(..) => "Expression Fails Regex",

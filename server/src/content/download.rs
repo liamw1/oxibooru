@@ -1,9 +1,8 @@
-use crate::api::error::{ApiError, ApiResult};
+use crate::api::error::ApiResult;
 use crate::app::Context;
 use crate::config::{Action, Config};
 use crate::content::upload::UploadToken;
 use crate::filesystem;
-use futures::TryStreamExt;
 use reqwest::dns::{Name, Resolve, Resolving};
 use reqwest::header::{HeaderMap, HeaderValue, REFERER};
 use reqwest::redirect::Policy;
@@ -68,20 +67,7 @@ pub async fn from_url(ctx: &Context, url: Url) -> ApiResult<UploadToken> {
         response = ctx.downloader.get(url).headers(headers).send().await?;
     }
     let response = response.error_for_status()?;
-
-    // Cap total bytes read; Content-Length can lie or be absent. Exceeding the cap aborts
-    // the stream with an error instead of silently truncating the file.
-    let mut total = 0;
-    let max_upload_size = usize::try_from(ctx.config.limits.max_upload_size).unwrap_or(usize::MAX);
-    let limited_stream = response.bytes_stream().map_err(ApiError::from).and_then(move |chunk| {
-        total += chunk.len();
-        futures::future::ready(if total > max_upload_size {
-            Err(ApiError::DownloadTooLarge)
-        } else {
-            Ok(chunk)
-        })
-    });
-    filesystem::save_uploaded_file(&ctx.config, limited_stream).await
+    filesystem::save_uploaded_file(&ctx.config, response.bytes_stream()).await
 }
 
 /// DNS resolver that filters out non-public addresses.

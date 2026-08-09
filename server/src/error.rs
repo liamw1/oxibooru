@@ -17,6 +17,7 @@ pub enum ErrorName {
     ConnectionAborted,
     ConnectionRefused,
     ConnectionReset,
+    ContentTooLarge,
     CrossesDevices,
     CryptoError,
     CyclicDependency,
@@ -27,7 +28,6 @@ pub enum ErrorName {
     DimensionMismatch,
     DirectoryNotEmpty,
     DisabledToken,
-    DownloadTooLarge,
     DuplicatePost,
     EmailAddressInvalidDomain,
     EmailAddressInvalidInput,
@@ -612,9 +612,9 @@ impl ErrorKind for crate::api::error::ApiError {
     fn kind(&self) -> ErrorName {
         match self {
             Self::AlreadyExists(err) => err.kind(),
+            Self::ContentTooLarge => ErrorName::ContentTooLarge,
             Self::CyclicDependency(_) => ErrorName::CyclicDependency,
             Self::DeleteDefault(_) => ErrorName::DeleteDefault,
-            Self::DownloadTooLarge => ErrorName::DownloadTooLarge,
             Self::EmptySwf => ErrorName::EmptySwf,
             Self::EmptyVideo => ErrorName::EmptyVideo,
             Self::ExpressionFailsRegex(..) => ErrorName::ExpressionFailsRegex,

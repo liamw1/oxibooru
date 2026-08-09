@@ -6,7 +6,7 @@ use crate::content::thumbnail::ThumbnailCategory;
 use crate::content::upload::UploadToken;
 use crate::model::enums::MimeType;
 use axum::body::Bytes;
-use futures::StreamExt;
+use futures_core::Stream;
 use image::error::ImageError;
 use image::{DynamicImage, ImageResult};
 use std::collections::hash_map::Entry;
@@ -15,6 +15,7 @@ use std::ffi::{OsStr, OsString};
 use std::io::ErrorKind;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::pin::pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -46,9 +47,9 @@ pub fn file_size(path: &Path) -> std::io::Result<i64> {
 ///
 /// Does not perform cleanup on error. It instead relies on the cleanup task spawned from
 /// `spawn_temporary_uploads_cleanup_task` to clean out failed uploads.
-pub async fn save_uploaded_file<S, E>(config: &Config, mut stream: S) -> ApiResult<UploadToken>
+pub async fn save_uploaded_file<S, E>(config: &Config, stream: S) -> ApiResult<UploadToken>
 where
-    S: StreamExt<Item = Result<Bytes, E>> + Unpin,
+    S: Stream<Item = Result<Bytes, E>>,
     ApiError: From<E>,
 {
     const KB: usize = 1024;
@@ -56,12 +57,22 @@ where
     const SNIFF_LEN: usize = KB / 2;
     const BUFFER_CAPACITY: usize = 4 * MB;
 
+    let mut stream = pin!(stream);
+    let mut next_chunk = async || std::future::poll_fn(|ctx| stream.as_mut().poll_next(ctx)).await;
+    let max_upload_size = usize::try_from(config.limits.max_upload_size).unwrap_or(usize::MAX);
+
     // Buffer enough of the stream to infer MIME type
+    let mut total = 0;
     let mut prefix = Vec::with_capacity(SNIFF_LEN);
     while prefix.len() < SNIFF_LEN
-        && let Some(chunk) = stream.next().await
+        && let Some(chunk) = next_chunk().await
     {
-        prefix.extend_from_slice(&chunk?);
+        let chunk = chunk?;
+        total += chunk.len();
+        if total > max_upload_size {
+            return Err(ApiError::ContentTooLarge);
+        }
+        prefix.extend_from_slice(&chunk);
     }
     let mime_type = decode::infer_mime_type(&prefix)?;
 
@@ -75,8 +86,12 @@ where
     let mut writer = BufWriter::with_capacity(BUFFER_CAPACITY, file);
 
     writer.write_all(&prefix).await?;
-    while let Some(chunk) = stream.next().await {
+    while let Some(chunk) = next_chunk().await {
         let chunk = chunk?;
+        total += chunk.len();
+        if total > max_upload_size {
+            return Err(ApiError::ContentTooLarge);
+        }
         writer.write_all(&chunk).await?;
     }
     writer.flush().await?;
