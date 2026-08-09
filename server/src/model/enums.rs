@@ -34,7 +34,7 @@ pub struct PdfLoadError(pub hayro::hayro_syntax::LoadPdfError);
 impl std::fmt::Display for PdfLoadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
-            hayro::hayro_syntax::LoadPdfError::Decryption(e) => write!(f, "PDF decryption error: {:?}", e),
+            hayro::hayro_syntax::LoadPdfError::Decryption(e) => write!(f, "PDF decryption error: {e:?}"),
             hayro::hayro_syntax::LoadPdfError::Invalid => write!(f, "Invalid PDF file"),
         }
     }

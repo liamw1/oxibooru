@@ -53,17 +53,16 @@ pub fn pdf_preview_image(config: &Config, file_path: &Path) -> ApiResult<Dynamic
     let rgba_vec = pixmap
         .take()
         .into_iter()
-        .map(|c| c.to_u8_array())
-        .flatten()
+        .flat_map(hayro::vello_cpu::color::PremulRgba8::to_u8_array)
         .collect::<Vec<u8>>();
 
     let size = rgba_vec.len();
 
     Ok(DynamicImage::ImageRgba8(
         RgbaImage::from_raw(u32::from(width), u32::from(height), rgba_vec).ok_or(ApiError::FrameBufferMismatch(
-            width as u32,
-            height as u32,
-            size as usize,
+            u32::from(width),
+            u32::from(height),
+            size,
         ))?,
     ))
 }
