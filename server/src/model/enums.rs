@@ -78,7 +78,7 @@ pub enum PostType {
     Animation,
     Video,
     Flash,
-    Pdf,
+    Document,
 }
 
 impl ToSql<SmallInt, Pg> for PostType {

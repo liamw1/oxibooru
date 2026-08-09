@@ -96,7 +96,7 @@ pub fn detect_post_type(config: &Config, file_path: &Path, mime_type: MimeType) 
         MimeType::Bmp | MimeType::Jpeg | MimeType::Png => Ok(PostType::Image),
         MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Ok(PostType::Video),
         MimeType::Swf => Ok(PostType::Flash),
-        MimeType::Pdf => Ok(PostType::Pdf),
+        MimeType::Pdf => Ok(PostType::Document),
     }
 }
 

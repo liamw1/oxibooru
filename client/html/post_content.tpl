@@ -28,7 +28,7 @@
             'Your browser doesn\'t support HTML5 videos.')
         %>
 
-    <% } if (ctx.post.type === 'pdf') { %>
+    <% } if (ctx.post.type === 'document' && ctx.post.mimeType === 'application/pdf') { %>
 
         <object data='<%- ctx.post.contentUrl %>'
             type='application/pdf' 
