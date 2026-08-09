@@ -17,8 +17,8 @@ use tokio::net::TcpListener;
 use tokio::runtime::Handle;
 #[cfg(unix)]
 use tokio::signal::unix::SignalKind;
-use tower::ServiceBuilder;
 use tower_http::normalize_path::NormalizePathLayer;
+use tower_layer::Layer;
 use tracing::{debug, error, info, warn};
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::layer::SubscriberExt;
@@ -148,9 +148,7 @@ pub async fn run(state: AppState) -> std::io::Result<()> {
     let server_port = state.env.server_port;
 
     let (router, api) = api::routes(state).split_for_parts();
-    let normalized_router = ServiceBuilder::new()
-        .layer(NormalizePathLayer::trim_trailing_slash())
-        .service(router);
+    let normalized_router = NormalizePathLayer::trim_trailing_slash().layer(router);
     let app = Router::new()
         .merge(SwaggerUi::new("/docs").url("/apidoc/openapi.json", api))
         .fallback_service(normalized_router);

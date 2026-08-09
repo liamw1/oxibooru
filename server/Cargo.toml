@@ -45,8 +45,8 @@ swf = "0.2.2"
 thiserror = "2.0.11"
 time = { version = "0.3.47", features = ["serde-human-readable"] }
 tokio = { version = "1.43.0", features = ["fs", "rt-multi-thread", "signal"] }
-tower = "0.5.2"
 tower-http = { version = "0.6.6", features = ["trace", "timeout", "normalize-path"] }
+tower-layer = "0.3.3"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = { version = "2.5.4", features = ["serde"] }

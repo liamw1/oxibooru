@@ -40,8 +40,8 @@ use serde_json::Value;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
-use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
+use tower_layer::Layer;
 use uuid::Uuid;
 
 pub const TEST_PASSWORD: &str = "test_password";
