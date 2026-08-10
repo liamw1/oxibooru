@@ -3,6 +3,7 @@ use crate::filesystem::Directory;
 use crate::model::enums::{AvatarStyle, UserRank};
 use crate::search::preferences::Preferences;
 use crate::string::{SecretString, SmallString};
+use crate::unit::ByteCount;
 use config::builder::DefaultState;
 use config::{ConfigBuilder, File, FileFormat};
 use lettre::message::Mailbox;
@@ -78,6 +79,19 @@ pub struct SmtpConfig {
     pub username: Option<SecretString>,
     pub password: Option<SecretString>,
     pub from: Mailbox,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct LimitsConfig {
+    pub max_image_width: u32,
+    pub max_image_height: u32,
+    pub max_image_allocation: ByteCount,
+    pub max_upload_size: ByteCount,
+    pub ffmpeg_timeout_seconds: u64,
+    pub request_timeout_seconds: u64,
+    pub max_download_redirects: usize,
+    pub download_timeout_minutes: u64,
+    pub download_connect_timeout_seconds: u64,
 }
 
 #[derive(Clone, Copy, EnumCount, EnumIter, EnumTable, IntoStaticStr)]
@@ -277,6 +291,7 @@ pub struct Config {
     pub auto_explain: bool,
     pub thumbnails: ThumbnailConfig,
     pub smtp: Option<SmtpConfig>,
+    pub limits: LimitsConfig,
     #[serde(default)]
     pub anonymous_preferences: Preferences,
     #[serde(default)]
@@ -358,6 +373,8 @@ pub fn read_args() -> Args {
         env_path,
     }
 }
+
+/// Reads all environment variables used by server.
 pub fn read_env(config: &Config) -> Result<Arc<Env>, Box<dyn Error>> {
     const DEFAULT_SERVER_PORT: u16 = 6666;
     const DEFAULT_POSTGRES_PORT: u16 = 5432;
@@ -413,8 +430,8 @@ pub fn test_config(override_relative_path: Option<&str>) -> Config {
     create_config(args)
 }
 
-/// Returns a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_DB`
-/// environment variables. If `database_override` is not `None`, then it's value will be used in place of `POSTGRES_DB`.
+/// Constructs a url for the database using `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, `POSTGRES_PORT`, and `POSTGRES_DB`
+/// environment variables. If `database_override` is not `None`, then its value will be used in place of `POSTGRES_DB`.
 pub fn database_url(env: &Env, database_override: Option<&str>) -> SecretString {
     // Percent-encode credentials to allow for special characters
     let port = env.postgres_port;
@@ -496,4 +513,19 @@ fn create_config(args: Args) -> Config {
     config.anonymous_preferences.merge(&config.restricted_preferences);
 
     config
+}
+
+mod serde_regex {
+    use regex::Regex;
+    use serde::de::Error;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(regex: &Regex, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(regex.as_str())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Regex, D::Error> {
+        let pattern = String::deserialize(deserializer)?;
+        Regex::new(&pattern).map_err(D::Error::custom)
+    }
 }

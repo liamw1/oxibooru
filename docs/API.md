@@ -2861,7 +2861,10 @@ Sort style token values can be appended with ,asc or ,desc to control the sort
 direction, which can be also controlled by negating the whole token.
 
 You can escape special characters such as `:`, `*`, and `,` by prepending them with a
-backslash: `\\`.
+backslash: `\`.
+
+String literals are supported using double quotes (`"`). Inside a string literal, only
+the `"` character can be escaped with `\`.
 
 **Example**
 

@@ -8,9 +8,14 @@ use ffmpeg_sidecar::event::{FfmpegEvent, LogLevel};
 use ffmpeg_sidecar::iter::FfmpegIterator;
 use image::codecs::{gif::GifDecoder, webp::WebPDecoder};
 use image::{AnimationDecoder, DynamicImage, ImageDecoder, ImageFormat, ImageReader, Limits, RgbImage, RgbaImage};
+use std::borrow::Cow;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::Path;
+use std::str::FromStr;
+use std::sync::mpsc::{RecvTimeoutError, SyncSender};
+use std::sync::{Arc, Mutex, PoisonError};
+use std::time::Duration;
 use swf::Tag;
 use tracing::{error, warn};
 
@@ -20,11 +25,11 @@ use tracing::{error, warn};
 /// For Flash media, it is the largest image that can be decoded from the Flash tags.
 pub fn representative_image(config: &Config, file_path: &Path, mime_type: MimeType) -> ApiResult<DynamicImage> {
     match mime_type {
-        MimeType::Bmp => image(file_path, ImageFormat::Bmp),
-        MimeType::Gif => image(file_path, ImageFormat::Gif),
-        MimeType::Jpeg => image(file_path, ImageFormat::Jpeg),
-        MimeType::Png => image(file_path, ImageFormat::Png),
-        MimeType::Webp => image(file_path, ImageFormat::WebP),
+        MimeType::Bmp => image(config, file_path, ImageFormat::Bmp),
+        MimeType::Gif => image(config, file_path, ImageFormat::Gif),
+        MimeType::Jpeg => image(config, file_path, ImageFormat::Jpeg),
+        MimeType::Png => image(config, file_path, ImageFormat::Png),
+        MimeType::Webp => image(config, file_path, ImageFormat::WebP),
         MimeType::Swf => flash_image(config, file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
         MimeType::Avif => ffmpeg_frame(config, file_path, PostType::Image)
             .and_then(|frame| frame.ok_or(ApiError::FfmpegError("Unable to decode AVIF image with FFmpeg".into()))),
@@ -46,7 +51,9 @@ pub fn video_has_audio(config: &Config, path: &Path) -> ApiResult<bool> {
             _ => {}
         }
     }
-    if errors.is_empty() {
+    if process.timed_out() {
+        Err(ApiError::FfmpegError(FFMPEG_TIMEOUT_MESSAGE.into()))
+    } else if errors.is_empty() {
         Ok(false)
     } else {
         Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
@@ -82,19 +89,38 @@ pub fn detect_post_type(config: &Config, file_path: &Path, mime_type: MimeType) 
     let image_type = |animated: bool| -> PostType { if animated { PostType::Animation } else { PostType::Image } };
     match mime_type {
         MimeType::Avif => avif_is_animated(config, file_path).map(image_type),
-        MimeType::Gif => gif_is_animated(file_path).map(image_type),
-        MimeType::Webp => webp_is_animated(file_path).map(image_type),
+        MimeType::Gif => gif_is_animated(config, file_path).map(image_type),
+        MimeType::Webp => webp_is_animated(config, file_path).map(image_type),
         MimeType::Bmp | MimeType::Jpeg | MimeType::Png => Ok(PostType::Image),
         MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Ok(PostType::Video),
         MimeType::Swf => Ok(PostType::Flash),
     }
 }
 
+/// Infers MIME type from magic bytes in `prefix`, the first few hundred bytes in a file.
+pub fn infer_mime_type(prefix: &[u8]) -> ApiResult<MimeType> {
+    let kind = infer::get(prefix).ok_or(ApiError::MissingContentType)?;
+    let mime_type = kind.mime_type();
+    MimeType::from_str(mime_type).map_err(|_| ApiError::UnsupportedContentType(Cow::Borrowed(mime_type)))
+}
+
 const DEFAULT_FFMPEG_PATH: &str = "/opt/app/ffmpeg";
 const ERROR_SEPARATOR: &str = "; ";
+const FFMPEG_TIMEOUT_MESSAGE: &str = "FFmpeg timed out decoding file";
 
-/// RAII guard that kills the `FFmpeg` subprocess when dropped.
-struct FfmpegSubprocess(FfmpegChild);
+struct FfmpegChildState {
+    child: FfmpegChild,
+    timed_out: bool,
+}
+
+/// RAII guard that kills the `FFmpeg` subprocess when dropped, with a watchdog
+/// task that kills it early if it runs longer than the configured timeout. This
+/// kill is intended to unblock the event iterator if the subprocess stalls for
+/// whatever reason.
+struct FfmpegSubprocess {
+    state: Arc<Mutex<FfmpegChildState>>,
+    watchdog_disarm: Option<SyncSender<()>>,
+}
 
 impl FfmpegSubprocess {
     fn new<const N: usize>(config: &Config, input: &Path, args: [&str; N]) -> std::io::Result<Self> {
@@ -103,50 +129,107 @@ impl FfmpegSubprocess {
             .ffmpeg_path
             .as_deref()
             .unwrap_or(Path::new(DEFAULT_FFMPEG_PATH));
+
         // Lossy conversion is fine here since filenames are ASCII upload tokens
         let input_str = input.to_string_lossy();
-        FfmpegCommand::new_with_path(ffmpeg_path)
+        let child = FfmpegCommand::new_with_path(ffmpeg_path)
+            .args(["-nostdin", "-threads", "1"])
             .input(&input_str)
             .args(args)
-            .spawn()
-            .map(Self)
+            .spawn()?;
+
+        let state = Arc::new(Mutex::new(FfmpegChildState {
+            child,
+            timed_out: false,
+        }));
+        let (disarm_tx, disarm_rx) = std::sync::mpsc::sync_channel::<()>(1);
+
+        std::thread::spawn({
+            let state = Arc::clone(&state);
+            let ffmpeg_timeout = Duration::from_secs(config.limits.ffmpeg_timeout_seconds);
+            move || {
+                // Blocks until disarmed (sender dropped or timeout)
+                if disarm_rx.recv_timeout(ffmpeg_timeout) == Err(RecvTimeoutError::Timeout) {
+                    warn!("Killing FFmpeg subprocess after {}s", ffmpeg_timeout.as_secs());
+
+                    let mut guard = state.lock().unwrap_or_else(PoisonError::into_inner);
+                    guard.timed_out = true;
+                    guard.child.kill().ok(); // Ignore errors as the process may have already exited
+                }
+            }
+        });
+        Ok(Self {
+            state,
+            watchdog_disarm: Some(disarm_tx),
+        })
     }
 
     fn events(&mut self) -> ApiResult<FfmpegIterator> {
-        self.0
+        self.state
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .child
             .iter()
             .map_err(|err| ApiError::FfmpegError(err.into_boxed_dyn_error()))
+    }
+
+    /// Returns whether the watchdog killed the process.
+    /// Only meaningful after the event iterator has been exhausted.
+    fn timed_out(&self) -> bool {
+        self.state.lock().unwrap_or_else(PoisonError::into_inner).timed_out
     }
 }
 
 impl Drop for FfmpegSubprocess {
     fn drop(&mut self) {
+        // Disarm the watchdog by dropping the sender. This causes recv_timeout
+        // to return Err(Disconnected), letting the watchdog thread exit early.
+        self.watchdog_disarm.take();
+
+        let mut guard = self.state.lock().unwrap_or_else(PoisonError::into_inner);
         // Ignore errors as the process may have already exited
-        self.0.kill().ok();
-        self.0.wait().ok();
+        guard.child.kill().ok();
+        guard.child.wait().ok();
     }
 }
 
 /// Decodes a raw array of bytes into pixel data.
-fn image(file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
+fn image(config: &Config, file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
     let file = content::map_read_result(File::open(file_path))?;
 
     let mut reader = ImageReader::new(BufReader::new(file));
     reader.set_format(format);
-    reader.limits(image_reader_limits());
+    reader.limits(image_reader_limits(config));
     reader.decode().map_err(ApiError::from)
 }
 
 /// Decodes a representative frame of the image or video at the given `path`.
 fn ffmpeg_frame(config: &Config, path: &Path, post_type: PostType) -> ApiResult<Option<DynamicImage>> {
     let is_video_format = matches!(post_type, PostType::Video | PostType::Flash);
-    let filter = if is_video_format {
-        "thumbnail,format=rgb24"
+    let (filter, format) = if is_video_format {
+        ("thumbnail", "rgb24")
     } else {
-        "format=rgba"
+        ("null", "rgba")
     };
 
-    let mut process = FfmpegSubprocess::new(config, path, ["-vf", filter, "-frames:v", "1", "-f", "rawvideo", "-"])?;
+    let mut process = FfmpegSubprocess::new(
+        config,
+        path,
+        [
+            "-an",
+            "-sn",
+            "-dn",
+            "-vf",
+            filter,
+            "-pix_fmt",
+            format,
+            "-frames:v",
+            "1",
+            "-f",
+            "rawvideo",
+            "-",
+        ],
+    )?;
 
     let mut errors = Vec::new();
     for event in process.events()? {
@@ -165,7 +248,9 @@ fn ffmpeg_frame(config: &Config, path: &Path, post_type: PostType) -> ApiResult<
             _ => {}
         }
     }
-    if errors.is_empty() {
+    if process.timed_out() {
+        Err(ApiError::FfmpegError(FFMPEG_TIMEOUT_MESSAGE.into()))
+    } else if errors.is_empty() {
         Ok(None)
     } else {
         Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
@@ -249,7 +334,9 @@ fn video_stream_count(config: &Config, path: &Path) -> ApiResult<usize> {
             _ => {}
         }
     }
-    if stream_count > 1 || errors.is_empty() {
+    if process.timed_out() {
+        Err(ApiError::FfmpegError(FFMPEG_TIMEOUT_MESSAGE.into()))
+    } else if stream_count > 1 || errors.is_empty() {
         Ok(stream_count)
     } else {
         Err(ApiError::FfmpegError(errors.join(ERROR_SEPARATOR).into()))
@@ -268,6 +355,9 @@ fn avif_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
             [
                 "-map",
                 &format!("0:v:{stream_index}"),
+                "-an",
+                "-sn",
+                "-dn",
                 "-frames:v",
                 "2",
                 "-vf",
@@ -290,6 +380,8 @@ fn avif_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
         }
         if frames > 1 {
             return Ok(true);
+        } else if process.timed_out() {
+            return Err(ApiError::FfmpegError(FFMPEG_TIMEOUT_MESSAGE.into()));
         }
     }
     if errors.is_empty() {
@@ -299,10 +391,10 @@ fn avif_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
     }
 }
 
-fn gif_is_animated(path: &Path) -> ApiResult<bool> {
+fn gif_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
     let file = content::map_read_result(File::open(path))?;
     let mut decoder = GifDecoder::new(BufReader::new(file))?;
-    decoder.set_limits(image_reader_limits())?;
+    decoder.set_limits(image_reader_limits(config))?;
 
     // GIF doesn't store a frame count, so just check for a second frame.
     let mut frames = decoder.into_frames();
@@ -313,20 +405,20 @@ fn gif_is_animated(path: &Path) -> ApiResult<bool> {
         .map_err(ApiError::from)
 }
 
-fn webp_is_animated(path: &Path) -> ApiResult<bool> {
+fn webp_is_animated(config: &Config, path: &Path) -> ApiResult<bool> {
     let file = content::map_read_result(File::open(path))?;
     let mut decoder = WebPDecoder::new(BufReader::new(file))?;
-    decoder.set_limits(image_reader_limits())?;
+    decoder.set_limits(image_reader_limits(config))?;
     Ok(decoder.has_animation())
 }
 
 /// Returns maximum decoded image size.
-fn image_reader_limits() -> Limits {
-    const MB: u64 = 1024_u64.pow(2);
+fn image_reader_limits(config: &Config) -> Limits {
+    let max_allocation = u64::try_from(config.limits.max_image_allocation).unwrap_or(u64::MAX);
 
     let mut limits = Limits::no_limits();
-    limits.max_alloc = Some(256 * MB);
-    limits.max_image_width = Some(16384);
-    limits.max_image_height = Some(16384);
+    limits.max_alloc = Some(max_allocation);
+    limits.max_image_width = Some(config.limits.max_image_width);
+    limits.max_image_height = Some(config.limits.max_image_height);
     limits
 }

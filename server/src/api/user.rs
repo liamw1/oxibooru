@@ -4,7 +4,7 @@ use crate::app::AppState;
 use crate::auth::password;
 use crate::config::{Action, RegexType};
 use crate::content::thumbnail::ThumbnailType;
-use crate::content::upload::{MAX_UPLOAD_SIZE, PartName, UploadToken};
+use crate::content::upload::{PartName, UploadToken};
 use crate::content::{Content, upload};
 use crate::extract::{Ctx, DeleteBody, Json, JsonOrMultipart, PageParams, PagedResponse, Path, Query, ResourceParams};
 use crate::model::enums::{AvatarStyle, ResourceProperty, ResourceType, UserRank};
@@ -25,11 +25,11 @@ use utoipa::ToSchema;
 use utoipa_axum::router::OpenApiRouter;
 use utoipa_axum::routes;
 
-pub fn routes() -> OpenApiRouter<AppState> {
+pub fn routes(upload_limit: DefaultBodyLimit) -> OpenApiRouter<AppState> {
     let upload_capable_routes = OpenApiRouter::new()
         .routes(routes!(create))
         .routes(routes!(update))
-        .route_layer(DefaultBodyLimit::max(MAX_UPLOAD_SIZE));
+        .route_layer(upload_limit);
     OpenApiRouter::new()
         .routes(routes!(list))
         .routes(routes!(get, delete))
@@ -461,6 +461,7 @@ struct UserUpdateBody {
     /// New password. Must match `password_regex` from server's configuration.
     password: Option<SecretString>,
     /// Email address. Set to null to remove.
+    #[schema(nullable)]
     #[serde(default, deserialize_with = "api::deserialize_some")]
     email: Option<Option<SecretString>>,
     /// User rank.
@@ -744,6 +745,7 @@ mod test {
         verify_response("PUT /user/fake_user", "user/edit/nonexistent").await?;
         verify_response("DELETE /user/fake_user", "user/delete/nonexistent").await?;
 
+        simulate_upload("gradient.png", "image.png")?;
         verify_response("POST /users", "user/create/anonymous").await?;
         verify_response("POST /users", "user/create/name_clash").await?;
         verify_response("POST /users", "user/create/email_clash").await?;
@@ -753,6 +755,9 @@ mod test {
         verify_response("POST /users", "user/create/invalid_password").await?;
         verify_response("POST /users", "user/create/invalid_avatar_token").await?;
         verify_response("POST /users", "user/create/missing_custom_avatar").await?;
+        verify_response("POST /users", "user/create/avatar_too_wide").await?;
+        verify_response("POST /users", "user/create/avatar_too_tall").await?;
+        verify_response("POST /users", "user/create/avatar_too_large").await?;
 
         verify_response("PUT /user/regular_user", "user/edit/anonymous").await?;
         verify_response("PUT /user/regular_user", "user/edit/name_clash").await?;
@@ -763,6 +768,9 @@ mod test {
         verify_response("PUT /user/regular_user", "user/edit/invalid_password").await?;
         verify_response("PUT /user/regular_user", "user/edit/invalid_avatar_token").await?;
         verify_response("PUT /user/regular_user", "user/edit/missing_custom_avatar").await?;
+        verify_response("PUT /user/regular_user", "user/edit/avatar_too_wide").await?;
+        verify_response("PUT /user/regular_user", "user/edit/avatar_too_tall").await?;
+        verify_response("PUT /user/regular_user", "user/edit/avatar_too_large").await?;
 
         // Check user can't create or promote another user to higher rank
         verify_response_with_user(UserRank::Regular, "POST /users", "user/create/higher_rank").await?;

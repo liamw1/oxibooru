@@ -16,6 +16,7 @@ use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
 use mime::{APPLICATION, FORM_DATA, JSON, MULTIPART};
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::num::NonZeroU64;
 use std::ops::Deref;
 use std::str::FromStr;
@@ -97,8 +98,10 @@ where
                     .map(Self::Multipart)
                     .map_err(ApiError::from);
             }
+            Err(ApiError::UnsupportedContentType(Cow::Owned(mime.essence_str().to_owned())))
+        } else {
+            Err(ApiError::MissingContentType)
         }
-        Err(ApiError::UnsupportedContentType)
     }
 }
 

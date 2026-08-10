@@ -1,18 +1,13 @@
-use crate::api::error::{ApiError, ApiResult};
+use crate::api::error::ApiResult;
 use crate::app::Context;
-use crate::config::Action;
-use crate::content::upload::MAX_UPLOAD_SIZE;
+use crate::config::{Action, Config};
 use crate::content::upload::UploadToken;
-use crate::model::enums::MimeType;
-use crate::{content, filesystem};
-use futures::TryStreamExt;
-use mime::Mime;
+use crate::filesystem;
 use reqwest::dns::{Name, Resolve, Resolving};
 use reqwest::header::{HeaderMap, HeaderValue, REFERER};
 use reqwest::redirect::Policy;
 use reqwest::{Client, StatusCode};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 use thiserror::Error;
@@ -31,18 +26,19 @@ pub enum UrlValidationError {
     MissingHost,
 }
 
-pub fn create_client() -> reqwest::Result<Client> {
+pub fn create_client(config: &Config) -> reqwest::Result<Client> {
     // Some websites expect a user-agent
     const FAKE_USER_AGENT: &str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:135.0) Gecko/20100101 Firefox/135.0";
-    const DOWNLOAD_TIMEOUT: Duration = Duration::from_mins(10);
-    const CONNECTION_TIMEOUT: Duration = Duration::from_secs(10);
 
+    let max_redirects = config.limits.max_download_redirects;
+    let download_timeout = Duration::from_mins(config.limits.download_timeout_minutes);
+    let connect_timeout = Duration::from_secs(config.limits.download_connect_timeout_seconds);
     Client::builder()
         .user_agent(FAKE_USER_AGENT)
         .no_proxy() // Ignore HTTP_PROXY/HTTPS_PROXY etc. A configured proxy would make connections bypass PublicOnlyResolver entirely.
         .dns_resolver(Arc::new(PublicOnlyResolver))
-        .redirect(Policy::custom(|attempt| {
-            if attempt.previous().len() >= MAX_REDIRECTS {
+        .redirect(Policy::custom(move |attempt| {
+            if attempt.previous().len() >= max_redirects {
                 return attempt.error("too many redirects");
             }
             // Redirect targets must also be https and not literal private IPs.
@@ -51,8 +47,8 @@ pub fn create_client() -> reqwest::Result<Client> {
                 Err(_) => attempt.error("redirect to disallowed URL"),
             }
         }))
-        .timeout(DOWNLOAD_TIMEOUT)
-        .connect_timeout(CONNECTION_TIMEOUT)
+        .timeout(download_timeout)
+        .connect_timeout(connect_timeout)
         .build()
 }
 
@@ -71,26 +67,8 @@ pub async fn from_url(ctx: &Context, url: Url) -> ApiResult<UploadToken> {
         response = ctx.downloader.get(url).headers(headers).send().await?;
     }
     let response = response.error_for_status()?;
-
-    let mime = content::parse_header(response.headers())?;
-    let mime_essence = mime.as_ref().map_or("", Mime::essence_str);
-    let mime_type = MimeType::from_str(mime_essence).map_err(Box::from)?;
-
-    // Cap total bytes read; Content-Length can lie or be absent. Exceeding the cap aborts
-    // the stream with an error instead of silently truncating the file.
-    let mut total = 0usize;
-    let limited_stream = response.bytes_stream().map_err(ApiError::from).and_then(move |chunk| {
-        total += chunk.len();
-        futures::future::ready(if total > MAX_UPLOAD_SIZE {
-            Err(ApiError::DownloadTooLarge)
-        } else {
-            Ok(chunk)
-        })
-    });
-    filesystem::save_uploaded_file(&ctx.config, limited_stream, mime_type).await
+    filesystem::save_uploaded_file(&ctx.config, response.bytes_stream()).await
 }
-
-const MAX_REDIRECTS: usize = 5;
 
 /// DNS resolver that filters out non-public addresses.
 /// Because filtering happens *inside* resolution, redirect hops are

@@ -1,5 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
+use crate::content::hash::Checksum;
 use crate::model::enums::{PostFlags, PostSafety, ResourceOperation, ResourceType};
 use crate::model::post::{Post, PostNote};
 use crate::model::snapshot::NewSnapshot;
@@ -17,7 +18,7 @@ use serde_json::json;
 #[derive(Clone, Serialize)]
 pub struct SnapshotData {
     pub safety: PostSafety,
-    pub checksum: String,
+    pub checksum: Checksum,
     pub flags: PostFlags,
     pub source: LargeString,
     pub description: LargeString,
@@ -50,7 +51,7 @@ impl SnapshotData {
             .optional()?;
         Ok(Self {
             safety: post.safety,
-            checksum: hex::encode(&post.checksum),
+            checksum: post.checksum,
             flags: post.flags,
             source: post.source,
             description: post.description,

@@ -40,8 +40,8 @@ use serde_json::Value;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
-use tower::layer::Layer;
 use tower_http::normalize_path::NormalizePathLayer;
+use tower_layer::Layer;
 use uuid::Uuid;
 
 pub const TEST_PASSWORD: &str = "test_password";
@@ -491,7 +491,7 @@ fn recreate_database() -> AdminResult<AppState> {
     let mut conn = test_connection_pool.get_blocking()?;
     populate_database(&mut conn, &test_config)?;
 
-    let downloader = download::create_client().expect("Must be able to create downloader client");
+    let downloader = download::create_client(&test_config).expect("Must be able to create downloader client");
     Ok(AppState::new(downloader, test_connection_pool, env, Arc::new(test_config)))
 }
 

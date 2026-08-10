@@ -101,11 +101,11 @@ pub fn is_multivalued(condition: &str) -> bool {
 }
 
 #[derive(Clone, Copy, PartialEq)]
-enum CharKind {
-    Normal,  // Unquoted, unescaped — splittable, `*` is a wildcard
-    Literal, // Inside quotes or after `\` — never split, never wildcard
-    Quote,   // An unescaped `"` — syntax, dropped on unescape
-    Escape,  // An unescaped `\` — syntax, dropped on unescape
+enum ParsedChar {
+    Normal(char),  // Unquoted, unescaped
+    Literal(char), // Inside quotes or after `\`
+    Quote,         // An unescaped `"`
+    Escape,        // An unescaped `\`
 }
 
 /// A general iterator over patterns that are not escaped with `\`.
@@ -145,44 +145,50 @@ impl<'a, P: Pattern> Iterator for SplitUnescaped<'a, P> {
     }
 }
 
-fn scan(text: &str) -> impl Iterator<Item = (usize, char, CharKind)> + '_ {
+fn scan(text: &str) -> impl Iterator<Item = (usize, ParsedChar)> {
     let mut quoted = false;
     let mut escaped = false;
     text.char_indices().map(move |(i, c)| {
-        let kind = if escaped {
+        let parsed_char = if escaped {
             escaped = false;
-            CharKind::Literal
+            ParsedChar::Literal(c)
         } else if c == '\\' {
             escaped = true;
-            CharKind::Escape
+            ParsedChar::Escape
         } else if c == '"' {
             quoted = !quoted;
-            CharKind::Quote
+            ParsedChar::Quote
         } else if quoted {
-            CharKind::Literal
+            ParsedChar::Literal(c)
         } else {
-            CharKind::Normal
+            ParsedChar::Normal(c)
         };
-        (i, c, kind)
+        (i, parsed_char)
     })
 }
 
-/// Finds the index of next unescaped character that matches `pattern` in `text`.
+/// Finds the byte index of next unescaped character that matches `pattern` in `text`.
 fn next_unescaped_split<P: Pattern>(text: &str, pattern: P) -> Option<usize> {
-    scan(text).find_map(|(i, c, kind)| (kind == CharKind::Normal && pattern.matches(c)).then_some(i))
+    scan(text)
+        .find_map(|(i, parsed_char)| matches!(parsed_char, ParsedChar::Normal(c) if pattern.matches(c)).then_some(i))
 }
 
 /// Splits `text` into two parts if it contains an unescaped ".." substring.
 fn range_split(text: &str) -> Option<(&str, &str)> {
-    scan(text)
-        .find_map(|(i, _, kind)| (kind == CharKind::Normal && text[i..].starts_with("..")).then_some(i))
-        .map(|i| (&text[..i], &text[i + 2..]))
+    const RANGE_SEPARATOR: &str = "..";
+    scan(text).find_map(|(i, pc)| {
+        (matches!(pc, ParsedChar::Normal(_)) && text[i..].starts_with(RANGE_SEPARATOR))
+            .then(|| (&text[..i], &text[i + RANGE_SEPARATOR.len()..]))
+    })
 }
 
 /// Replaces escaped characters with unescaped ones in `text`.
 fn unescape(text: &str) -> String {
     scan(text)
-        .filter_map(|(_, c, kind)| matches!(kind, CharKind::Normal | CharKind::Literal).then_some(c))
+        .filter_map(|(_, parsed_char)| match parsed_char {
+            ParsedChar::Normal(c) | ParsedChar::Literal(c) => Some(c),
+            ParsedChar::Escape | ParsedChar::Quote => None,
+        })
         .collect()
 }
 
@@ -190,11 +196,11 @@ fn unescape(text: &str) -> String {
 /// Unescaped `*` becomes `%`, literal `\`, `%`, and `_` are LIKE-escaped.
 fn to_like_pattern(text: &str) -> String {
     let mut pattern = String::with_capacity(text.len());
-    for (_, c, kind) in scan(text) {
-        match kind {
-            CharKind::Quote | CharKind::Escape => {}
-            CharKind::Normal if c == '*' => pattern.push('%'),
-            CharKind::Normal | CharKind::Literal => {
+    for parsed_char in scan(text).map(|(_, parsed_char)| parsed_char) {
+        match parsed_char {
+            ParsedChar::Quote | ParsedChar::Escape => {}
+            ParsedChar::Normal('*') => pattern.push('%'),
+            ParsedChar::Normal(c) | ParsedChar::Literal(c) => {
                 if matches!(c, '\\' | '%' | '_') {
                     pattern.push('\\');
                 }

@@ -186,6 +186,7 @@ struct UserTokenUpdateBody {
     /// Optional note describing the token's purpose.
     note: Option<LargeString>,
     /// Optional expiration time for the token. Set to null to remove expiration.
+    #[schema(nullable)]
     #[serde(default, deserialize_with = "api::deserialize_some")]
     expiration_time: Option<Option<DateTime>>,
 }

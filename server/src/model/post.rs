@@ -8,7 +8,6 @@ use crate::schema::{
 };
 use crate::string::LargeString;
 use crate::time::DateTime;
-use byteorder::{NetworkEndian, ReadBytesExt};
 use diesel::deserialize::{self, FromSql};
 use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, Output, ToSql};
@@ -280,30 +279,35 @@ fn deserialize_array<T, const N: usize, A>(value: PgValue<'_>) -> deserialize::R
 where
     T: Copy + Default + FromSql<A, Pg>,
 {
+    let read_i32 = |bytes: &mut &[u8]| -> deserialize::Result<i32> {
+        let (head, tail) = bytes.split_first_chunk().ok_or("unexpected end of array data")?;
+        *bytes = tail;
+        Ok(i32::from_be_bytes(*head))
+    };
     let mut bytes = value.as_bytes();
 
-    let num_dimensions = bytes.read_i32::<NetworkEndian>()?;
+    let num_dimensions = read_i32(&mut bytes)?;
     match num_dimensions {
         0 => return Err("array was zero dimensional".into()),
         1 => (),
         _ => return Err("multi-dimensional arrays are not supported".into()),
     }
 
-    let has_null = bytes.read_i32::<NetworkEndian>()? != 0;
+    let has_null = read_i32(&mut bytes)? != 0;
     if has_null {
         return Err("found NULL value".into());
     }
 
-    let _oid = bytes.read_i32::<NetworkEndian>()?;
-    let num_elements = bytes.read_u32::<NetworkEndian>()?;
-    let _lower_bound = bytes.read_i32::<NetworkEndian>()?;
+    let _oid = read_i32(&mut bytes)?;
+    let num_elements = read_i32(&mut bytes).map(i32::cast_unsigned)?;
+    let _lower_bound = read_i32(&mut bytes)?;
     if num_elements as usize != N {
         return Err(format!("expected array of length {N} but found array of length {num_elements}").into());
     }
 
     let mut deserialized_array = [T::default(); N];
     for element in &mut deserialized_array {
-        let elem_size = bytes.read_i32::<NetworkEndian>()?;
+        let elem_size = read_i32(&mut bytes)?;
         let (elem_bytes, new_bytes) = bytes.split_at(elem_size.try_into()?);
         bytes = new_bytes;
         *element = T::from_sql(PgValue::new(elem_bytes, &value))?;

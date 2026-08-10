@@ -1,7 +1,7 @@
 use crate::auth::header::AuthenticationError;
 use crate::config::RegexType;
 use crate::error::{ErrorKind, ErrorName};
-use crate::model::enums::{MimeType, ResourceProperty, ResourceType};
+use crate::model::enums::{ResourceProperty, ResourceType};
 use crate::string::SmallString;
 use axum::Json;
 use axum::http::StatusCode;
@@ -9,6 +9,7 @@ use axum::response::{IntoResponse, Response};
 use diesel::QueryResult;
 use image::error::{ImageError, LimitError, LimitErrorKind};
 use serde::Serialize;
+use std::borrow::Cow;
 use std::sync::Arc;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -21,14 +22,12 @@ pub type ApiResult<T> = Result<T, ApiError>;
 pub enum ApiError {
     #[error("{0} already exists")]
     AlreadyExists(ResourceProperty),
-    #[error("File of type {0} did not match request with content-type '{1}'")]
-    ContentTypeMismatch(MimeType, String),
+    #[error("Content exceeds maximum allowed size")]
+    ContentTooLarge,
     #[error("Cyclic dependency detected in {0}s")]
     CyclicDependency(ResourceType),
     #[error("Cannot delete default {0}")]
     DeleteDefault(ResourceType),
-    #[error("Downloaded content exceeds maximum allowed size")]
-    DownloadTooLarge,
     #[error("SWF has no decodable images")]
     EmptySwf,
     #[error("Video file has no frames")]
@@ -65,7 +64,7 @@ pub enum ApiError {
     JsonSerialization(#[from] serde_json::Error),
     #[error("Missing {0} content")]
     MissingContent(ResourceType),
-    #[error("Form is missing content-type")]
+    #[error("Failed to infer content type")]
     MissingContentType,
     #[error("Missing form data")]
     MissingFormData,
@@ -97,8 +96,8 @@ pub enum ApiError {
     TaskJoin(#[from] tokio::task::JoinError),
     #[error("Password reset token is invalid")]
     UnauthorizedPasswordReset,
-    #[error("Content-Type not supported")]
-    UnsupportedContentType,
+    #[error("Content type `{0}` not supported")]
+    UnsupportedContentType(Cow<'static, str>),
     UnsupportedExtension(#[from] crate::model::enums::ParseExtensionError),
     UrlValidation(#[from] crate::content::download::UrlValidationError),
 }
@@ -115,8 +114,7 @@ impl ApiError {
             Self::PathRejection(err) => err.status(),
             Self::Request(err) => err.status().unwrap_or(StatusCode::BAD_REQUEST),
             Self::QueryRejection(err) => err.status(),
-            Self::ContentTypeMismatch(..)
-            | Self::HeaderDeserialization(_)
+            Self::HeaderDeserialization(_)
             | Self::InvalidMime(_)
             | Self::MissingContent(_)
             | Self::MissingContentType
@@ -126,8 +124,8 @@ impl ApiError {
             Self::Hidden(_) | Self::InsufficientPrivileges => StatusCode::FORBIDDEN,
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::AlreadyExists(_) | Self::ResourceModified => StatusCode::CONFLICT,
-            Self::DownloadTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
-            Self::UnsupportedContentType | Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::ContentTooLarge => StatusCode::PAYLOAD_TOO_LARGE,
+            Self::UnsupportedContentType(_) | Self::UnsupportedExtension(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::CyclicDependency(_)
             | Self::DeleteDefault(_)
             | Self::EmptySwf
@@ -171,10 +169,9 @@ impl ApiError {
     fn category(&self) -> &'static str {
         match self {
             Self::AlreadyExists(_) => "Already Exists",
-            Self::ContentTypeMismatch(..) => "Content Type Mismatch",
+            Self::ContentTooLarge => "Content Too Large",
             Self::CyclicDependency(_) => "Cyclic Dependency",
             Self::DeleteDefault(_) => "Delete Default",
-            Self::DownloadTooLarge => "Download Too Large",
             Self::EmptySwf => "Empty SWF",
             Self::EmptyVideo => "Empty Video",
             Self::ExpressionFailsRegex(..) => "Expression Fails Regex",
@@ -222,7 +219,7 @@ impl ApiError {
             Self::SwfDecoding(_) => "SWF Decoding Error",
             Self::TaskJoin(_) => "Task Join Error",
             Self::UnauthorizedPasswordReset => "Unauthorized Password Reset",
-            Self::UnsupportedContentType => "Unsupported Content Type",
+            Self::UnsupportedContentType(_) => "Unsupported Content Type",
             Self::UnsupportedExtension(_) => "Unsupported extension",
             Self::UrlValidation(_) => "URL Validation Error",
         }

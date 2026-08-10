@@ -153,7 +153,7 @@ URIs with a snapshot resource generated with anonymous user privileges as the
 message body, in JSON format.
 ";
 
-const SEARCH_DESCRIPTION: &str = r"
+const SEARCH_DESCRIPTION: &str = r#"
 Search queries are built of tokens that are separated by spaces. Each token can
 be of following form:
 
@@ -190,7 +190,10 @@ Sort style token values can be appended with ,asc or ,desc to control the sort
 direction, which can be also controlled by negating the whole token.
 
 You can escape special characters such as `:`, `*`, and `,` by prepending them with a
-backslash: `\\`.
+backslash: `\`.
+
+String literals are supported using double quotes (`"`). Inside a string literal, only
+the `"` character can be escaped with `\`.
 
 **Example**
 
@@ -205,7 +208,7 @@ Searching for posts with `re:zero` will show an error message about unknown
 named token.
 
 Searching for posts with `re\:zero` will show posts tagged with `re:zero`.
-";
+"#;
 
 const ERROR_DESCRIPTION: &str = r#"
 All errors (except for unhandled fatal server errors) send relevant HTTP status

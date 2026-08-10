@@ -17,7 +17,7 @@ pub enum ErrorName {
     ConnectionAborted,
     ConnectionRefused,
     ConnectionReset,
-    ContentTypeMismatch,
+    ContentTooLarge,
     CrossesDevices,
     CryptoError,
     CyclicDependency,
@@ -28,7 +28,6 @@ pub enum ErrorName {
     DimensionMismatch,
     DirectoryNotEmpty,
     DisabledToken,
-    DownloadTooLarge,
     DuplicatePost,
     EmailAddressInvalidDomain,
     EmailAddressInvalidInput,
@@ -613,10 +612,9 @@ impl ErrorKind for crate::api::error::ApiError {
     fn kind(&self) -> ErrorName {
         match self {
             Self::AlreadyExists(err) => err.kind(),
-            Self::ContentTypeMismatch(..) => ErrorName::ContentTypeMismatch,
+            Self::ContentTooLarge => ErrorName::ContentTooLarge,
             Self::CyclicDependency(_) => ErrorName::CyclicDependency,
             Self::DeleteDefault(_) => ErrorName::DeleteDefault,
-            Self::DownloadTooLarge => ErrorName::DownloadTooLarge,
             Self::EmptySwf => ErrorName::EmptySwf,
             Self::EmptyVideo => ErrorName::EmptyVideo,
             Self::ExpressionFailsRegex(..) => ErrorName::ExpressionFailsRegex,
@@ -664,7 +662,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::SwfDecoding(err) => err.kind(),
             Self::TaskJoin(err) => err.kind(),
             Self::UnauthorizedPasswordReset => ErrorName::UnauthorizedPasswordReset,
-            Self::UnsupportedContentType => ErrorName::UnsupportedContentType,
+            Self::UnsupportedContentType(_) => ErrorName::UnsupportedContentType,
             Self::UnsupportedExtension(_) => ErrorName::UnsupportedExtension,
             Self::UrlValidation(_) => ErrorName::UrlValidationError,
         }
