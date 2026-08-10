@@ -5,7 +5,7 @@ use hayro::hayro_interpret::InterpreterSettings;
 use hayro::hayro_syntax::Pdf;
 use hayro::hayro_syntax::page::Page;
 use hayro::vello_cpu::color::palette::css::WHITE;
-use hayro::vello_cpu::color::{AlphaColor, Srgb};
+use hayro::vello_cpu::color::{AlphaColor, PremulRgba8, Srgb};
 use hayro::{RenderCache, RenderSettings};
 use image::error::LimitErrorKind;
 use image::{DynamicImage, RgbaImage};
@@ -25,17 +25,12 @@ pub fn pdf_preview_image(config: &Config, file_path: &Path) -> ApiResult<Dynamic
     let width = u32::from(pixmap.width());
     let height = u32::from(pixmap.height());
 
-    // There should be some way to do this without reallocating,
-    // Vec<PreMulRgba8> is the same bitwise as Vec<u8> (except for num elements)
-    let rgba_vec = pixmap
-        .take()
-        .into_iter()
-        .flat_map(hayro::vello_cpu::color::PremulRgba8::to_u8_array)
-        .collect::<Vec<u8>>();
-    let size = rgba_vec.len();
-
-    RgbaImage::from_raw(width, height, rgba_vec)
-        .ok_or(ApiError::FrameBufferMismatch(width, height, size))
+    // NOTE: Using the premultipied RGBA8 pixels here for the image buffer is only correct because the
+    //       the background color is opaque. If this changes, `take_unpremultiplied` should be used instead.
+    let rgba_buffer = into_bytes(pixmap.take());
+    let buffer_size = rgba_buffer.len();
+    RgbaImage::from_raw(width, height, rgba_buffer)
+        .ok_or(ApiError::FrameBufferMismatch(width, height, buffer_size))
         .map(DynamicImage::ImageRgba8)
 }
 
@@ -73,4 +68,16 @@ impl PdfRenderDimensions {
             bg_color: background_color,
         }
     }
+}
+
+/// Converts a `Vec<PremulRgba8>` to `Vec<u8>` without copying.
+fn into_bytes(rgba_buffer: Vec<PremulRgba8>) -> Vec<u8> {
+    const _: () = assert!(size_of::<PremulRgba8>() == 4 * size_of::<u8>(), "PremulRgba8 must be 4 bytes");
+    const _: () = assert!(align_of::<PremulRgba8>() == align_of::<u8>(), "PremulRgba8 must have same alignment as u8");
+    const _: () = assert!(!std::mem::needs_drop::<PremulRgba8>(), "PremulRgba8 must be trivially destructible");
+
+    let (ptr, len, capacity) = rgba_buffer.into_raw_parts();
+    // SAFETY: PremulRgba8 is repr(C), size 4, align 1, and has no padding,
+    //         so the transmuted buffer is safe to read and deallocate.
+    unsafe { Vec::from_raw_parts(ptr.cast::<u8>(), 4 * len, 4 * capacity) }
 }
