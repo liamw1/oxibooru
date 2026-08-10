@@ -28,6 +28,14 @@
             'Your browser doesn\'t support HTML5 videos.')
         %>
 
+    <% } else if (ctx.post.type === 'document' && ctx.post.mimeType === 'application/pdf') { %>
+
+        <object class='resize-listener'
+            data='<%- ctx.post.contentUrl %>'
+            type='application/pdf'
+            width='<%- ctx.post.canvasWidth %>' height='<%- ctx.post.canvasHeight %>'>
+        </object>
+
     <% } else { console.log(new Error('Unknown post type')); } %>
 
     <div class='post-overlay resize-listener'>

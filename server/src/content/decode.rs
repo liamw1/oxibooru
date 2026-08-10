@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::config::Config;
-use crate::content::{self, flash};
+use crate::content::{self, flash, pdf};
 use crate::model::enums::{MimeType, PostType};
 use ffmpeg_sidecar::child::FfmpegChild;
 use ffmpeg_sidecar::command::FfmpegCommand;
@@ -30,6 +30,7 @@ pub fn representative_image(config: &Config, file_path: &Path, mime_type: MimeTy
         MimeType::Jpeg => image(config, file_path, ImageFormat::Jpeg),
         MimeType::Png => image(config, file_path, ImageFormat::Png),
         MimeType::Webp => image(config, file_path, ImageFormat::WebP),
+        MimeType::Pdf => pdf::preview_image(config, file_path),
         MimeType::Swf => flash_image(config, file_path).and_then(|frame| frame.ok_or(ApiError::EmptySwf)),
         MimeType::Avif => ffmpeg_frame(config, file_path, PostType::Image)
             .and_then(|frame| frame.ok_or(ApiError::FfmpegError("Unable to decode AVIF image with FFmpeg".into()))),
@@ -94,6 +95,7 @@ pub fn detect_post_type(config: &Config, file_path: &Path, mime_type: MimeType) 
         MimeType::Bmp | MimeType::Jpeg | MimeType::Png => Ok(PostType::Image),
         MimeType::Mp4 | MimeType::Mov | MimeType::Webm => Ok(PostType::Video),
         MimeType::Swf => Ok(PostType::Flash),
+        MimeType::Pdf => Ok(PostType::Document),
     }
 }
 

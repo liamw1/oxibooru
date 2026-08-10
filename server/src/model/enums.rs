@@ -65,6 +65,7 @@ pub enum PostType {
     Animation,
     Video,
     Flash,
+    Document,
 }
 
 impl ToSql<SmallInt, Pg> for PostType {
@@ -105,6 +106,8 @@ pub enum MimeType {
     Swf,
     #[serde(rename = "image/avif")]
     Avif,
+    #[serde(rename = "application/pdf")]
+    Pdf,
 }
 
 impl MimeType {
@@ -122,6 +125,7 @@ impl MimeType {
             "webm" => Ok(Self::Webm),
             "webp" => Ok(Self::Webp),
             "swf" => Ok(Self::Swf),
+            "pdf" => Ok(Self::Pdf),
             _ => Err(ParseExtensionError(extension.into())),
         }
     }
@@ -146,6 +150,7 @@ impl MimeType {
             Self::Mov => "mov",
             Self::Webm => "webm",
             Self::Swf => "swf",
+            Self::Pdf => "pdf",
         }
     }
 
@@ -160,6 +165,7 @@ impl FromStr for MimeType {
         let content_type = s.split(';').next().unwrap_or(s).trim().to_ascii_lowercase();
         match content_type.as_str() {
             "application/x-shockwave-flash" | "application/vnd.adobe.flash.movie" => Ok(MimeType::Swf),
+            "application/pdf" => Ok(MimeType::Pdf),
             "image/avif" => Ok(MimeType::Avif),
             "image/bmp" => Ok(MimeType::Bmp),
             "image/gif" => Ok(MimeType::Gif),
