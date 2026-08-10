@@ -7,9 +7,11 @@ use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use diesel::QueryResult;
+use hayro::hayro_syntax::LoadPdfError;
 use image::error::{ImageError, LimitError, LimitErrorKind};
 use serde::Serialize;
 use std::borrow::Cow;
+use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -87,7 +89,7 @@ pub enum ApiError {
     NotLoggedIn,
     Password(#[from] argon2::password_hash::Error),
     PathRejection(#[from] axum::extract::rejection::PathRejection),
-    PdfLoadError(#[from] crate::model::enums::PdfLoadError),
+    PdfLoadError(#[from] PdfLoadError),
     QueryRejection(#[from] axum::extract::rejection::QueryRejection),
     Request(#[from] reqwest::Error),
     #[error("Someone else modified this in the meantime. Please try again.")]
@@ -247,11 +249,30 @@ impl From<LimitErrorKind> for ApiError {
     }
 }
 
+impl From<LoadPdfError> for ApiError {
+    fn from(value: LoadPdfError) -> Self {
+        Self::PdfLoadError(PdfLoadError(value))
+    }
+}
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
         let mut response = (self.status_code(), Json(self.response())).into_response();
         response.extensions_mut().insert(Arc::new(self));
         response
+    }
+}
+
+/// [`LoadPdfError`] doesn't impl Error, Display so we wrap it here
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Error)]
+pub struct PdfLoadError(pub LoadPdfError);
+
+impl Display for PdfLoadError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.0 {
+            LoadPdfError::Decryption(e) => write!(f, "PDF decryption error: {e:?}"),
+            LoadPdfError::Invalid => f.write_str("Invalid PDF file"),
+        }
     }
 }
 
