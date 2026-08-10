@@ -39,7 +39,7 @@ class PostContentControl {
         this._currentFitFunction = this.fitWidth;
         const mul = this._post.canvasHeight / this._post.canvasWidth;
         let width = this._viewportWidth;
-        if (!settings.get().upscaleSmallPosts) {
+        if (!this._shouldUpscale) {
             width = Math.min(this._post.canvasWidth, width);
         }
         this._resize(width, width * mul);
@@ -49,7 +49,7 @@ class PostContentControl {
         this._currentFitFunction = this.fitHeight;
         const mul = this._post.canvasWidth / this._post.canvasHeight;
         let height = this._viewportHeight;
-        if (!settings.get().upscaleSmallPosts) {
+        if (!this._shouldUpscale) {
             height = Math.min(this._post.canvasHeight, height);
         }
         this._resize(height * mul, height);
@@ -60,13 +60,13 @@ class PostContentControl {
         let mul = this._post.canvasHeight / this._post.canvasWidth;
         if (this._viewportWidth * mul < this._viewportHeight) {
             let width = this._viewportWidth;
-            if (!settings.get().upscaleSmallPosts) {
+            if (!this._shouldUpscale) {
                 width = Math.min(this._post.canvasWidth, width);
             }
             this._resize(width, width * mul);
         } else {
             let height = this._viewportHeight;
-            if (!settings.get().upscaleSmallPosts) {
+            if (!this._shouldUpscale) {
                 height = Math.min(this._post.canvasHeight, height);
             }
             this._resize(height / mul, height);
@@ -84,6 +84,10 @@ class PostContentControl {
 
     get _viewportHeight() {
         return this._viewportSizeCalculator()[1];
+    }
+
+    get _shouldUpscale() {
+        return settings.get().upscaleSmallPosts || this._post.type === "document";
     }
 
     _evtPostContentChange(e) {

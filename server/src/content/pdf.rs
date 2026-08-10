@@ -11,7 +11,7 @@ use image::error::LimitErrorKind;
 use image::{DynamicImage, RgbaImage};
 use std::path::Path;
 
-pub fn pdf_preview_image(config: &Config, file_path: &Path) -> ApiResult<DynamicImage> {
+pub fn preview_image(config: &Config, file_path: &Path) -> ApiResult<DynamicImage> {
     let pdf = {
         let file_contents = content::map_read_result(std::fs::read(file_path))?;
         Pdf::new(file_contents)
@@ -35,9 +35,9 @@ pub fn pdf_preview_image(config: &Config, file_path: &Path) -> ApiResult<Dynamic
 }
 
 struct PdfRenderDimensions {
-    pub width: u16,  // Width (in pixels) of the rendered PDF page.
-    pub height: u16, // Height (in pixels) of the rendered PDF page.
-    pub scale: f32,  // Scale applied to the original PDF page dimensions to fit within width/height.
+    width: u16,  // Width (in pixels) of the rendered PDF page.
+    height: u16, // Height (in pixels) of the rendered PDF page.
+    scale: f32,  // Scale applied to the original PDF page dimensions to fit within width/height.
 }
 
 impl PdfRenderDimensions {
