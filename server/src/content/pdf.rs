@@ -12,9 +12,14 @@ use image::{DynamicImage, RgbaImage};
 use std::path::Path;
 
 struct PdfRenderDimensions {
+    // Width (in pixels) of the rendered PDF page.
     pub width: f32,
+
+    // Height (in pixels) of the rendered PDF page.
     pub height: f32,
-    pub ratio: f32,
+
+    // Scale applied to the original PDF page dimensions to fit within width/height.
+    pub scale: f32,
 }
 
 impl PdfRenderDimensions {
@@ -23,31 +28,31 @@ impl PdfRenderDimensions {
         let (width, height) = page.render_dimensions();
 
         // find the min ratio to scale down the image while maintaining aspect ratio
-        let ratio = {
+        let scale = {
             let max_width = f32::from(config.limits.max_pdf_width);
             let max_height = f32::from(config.limits.max_pdf_height);
 
-            let width_ratio = max_width / width;
-            let height_ratio = max_height / height;
+            let width_scale = max_width / width;
+            let height_scale = max_height / height;
 
-            f32::min(width_ratio, height_ratio)
+            f32::min(width_scale, height_scale)
         };
 
-        // ensure ratio is at most 1.0. We only want to downscale, not upscale.
-        let ratio = f32::min(1.0, ratio);
+        // ensure scale is at most 1.0. We only want to downscale, not upscale.
+        let scale = f32::min(1.0, scale);
 
         Self {
-            width: width * ratio,
-            height: height * ratio,
-            ratio: ratio,
+            width: width * scale,
+            height: height * scale,
+            scale,
         }
     }
 
     // Returns the render settings for rendering a PDF page at the dimensions specified by this struct.
     fn render_settings(&self, background_color: AlphaColor<Srgb>) -> ApiResult<RenderSettings> {
         Ok(RenderSettings {
-            x_scale: self.ratio,
-            y_scale: self.ratio,
+            x_scale: self.scale,
+            y_scale: self.scale,
             width: Some(num_traits::cast(self.width).ok_or(LimitErrorKind::DimensionError)?),
             height: Some(num_traits::cast(self.height).ok_or(LimitErrorKind::DimensionError)?),
             bg_color: background_color,
