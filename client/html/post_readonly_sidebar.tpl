@@ -55,12 +55,14 @@
             </section>
         <% } %>
 
-        <section class='search'>
-            Search on
-            <a href='http://iqdb.org/?url=<%- encodeURIComponent(ctx.post.fullContentUrl) %>'>IQDB</a> &middot;
-            <a href='https://danbooru.donmai.us/posts?tags=md5:<%- ctx.post.checksumMD5 %>'>Danbooru</a> &middot;
-            <a href='https://lens.google.com/uploadbyurl?url=<%- encodeURIComponent(ctx.post.fullContentUrl) %>'>Google Images</a>
-        </section>
+        <% if (ctx.post.type !== 'document') { %>
+            <section class='search'>
+                Search on
+                <a href='http://iqdb.org/?url=<%- encodeURIComponent(ctx.post.fullContentUrl) %>'>IQDB</a> &middot;
+                <a href='https://danbooru.donmai.us/posts?tags=md5:<%- ctx.post.checksumMD5 %>'>Danbooru</a> &middot;
+                <a href='https://lens.google.com/uploadbyurl?url=<%- encodeURIComponent(ctx.post.fullContentUrl) %>'>Google Images</a>
+            </section>
+        <% } %>
 
         <section class='social'>
             <div class='score-container'></div>
