@@ -195,12 +195,18 @@ impl Drop for FfmpegSubprocess {
 
 /// Decodes a raw array of bytes into pixel data.
 fn image(config: &Config, file_path: &Path, format: ImageFormat) -> ApiResult<DynamicImage> {
-    let file = content::map_read_result(File::open(file_path))?;
-
-    let mut reader = ImageReader::new(BufReader::new(file));
+    let mut reader = content::map_read_result(File::open(file_path))
+        .map(BufReader::new)
+        .map(ImageReader::new)?;
     reader.set_format(format);
     reader.limits(image_reader_limits(config));
-    reader.decode().map_err(ApiError::from)
+
+    let mut decoder = reader.into_decoder()?;
+    let orientation = decoder.orientation()?;
+
+    let mut image = DynamicImage::from_decoder(decoder)?;
+    image.apply_orientation(orientation);
+    Ok(image)
 }
 
 /// Decodes a representative frame of the image or video at the given `path`.
