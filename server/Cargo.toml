@@ -55,6 +55,9 @@ utoipa-swagger-ui = { version = "9.0.2", features = ["axum", "vendored"] }
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
 walkdir = "2.5.0"
 
+[patch.crates-io]
+infer = { git = "https://github.com/liamw1/infer" }
+
 [target.'cfg(target_env = "musl")'.dependencies]
 mimalloc = "0.1.48"
 
