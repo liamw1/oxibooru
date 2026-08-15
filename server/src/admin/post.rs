@@ -10,7 +10,7 @@ use crate::schema::{database_statistics, post, post_signature};
 use crate::search::Builder;
 use crate::search::post::{QueryBuilder, Token};
 use crate::time::{DateTime, Timer};
-use crate::{admin, update};
+use crate::{admin, filesystem};
 use diesel::dsl::exists;
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -375,8 +375,18 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
             return Ok(());
         }
     };
-    if let Err(err) = update::post::thumbnail(&mut conn, &post_hash, thumbnail, ThumbnailCategory::Generated) {
-        error!("Cannot save thumbnail for post {post_id} for reason: {err}");
+    let thumbnail_size = match filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Generated) {
+        Ok(size) => size,
+        Err(err) => {
+            error!("Cannot save thumbnail for post {post_id} for reason: {err}");
+            return Ok(());
+        }
+    };
+    if let Err(err) = diesel::update(post::table.find(post_id))
+        .set(post::generated_thumbnail_size.eq(thumbnail_size))
+        .execute(&mut conn)
+    {
+        error!("Cannot update generated thumbnail size for post {post_id} for reason: {err}");
     } else {
         progress.increment();
     }

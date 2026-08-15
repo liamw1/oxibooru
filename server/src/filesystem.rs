@@ -126,19 +126,11 @@ pub fn save_post_thumbnail(
         ThumbnailCategory::Generated => post.generated_thumbnail_path(),
         ThumbnailCategory::Custom => post.custom_thumbnail_path(),
     };
+    remove_if_exists(&thumbnail_path)?;
     std::fs::create_dir_all(thumbnail_path.parent().unwrap_or(Path::new("")))?;
 
     thumbnail.into_rgb8().save(&thumbnail_path)?;
     file_size(&thumbnail_path).map_err(ImageError::from)
-}
-
-/// Deletes thumbnail of `post` from disk, if it exists.
-pub fn delete_post_thumbnail(post: &PostHash, thumbnail_type: ThumbnailCategory) -> std::io::Result<()> {
-    let thumbnail_path = match thumbnail_type {
-        ThumbnailCategory::Generated => post.generated_thumbnail_path(),
-        ThumbnailCategory::Custom => post.custom_thumbnail_path(),
-    };
-    remove_if_exists(&thumbnail_path)
 }
 
 /// Deletes `post` content from disk.
@@ -149,8 +141,8 @@ pub fn delete_content(post: &PostHash, mime_type: MimeType) -> std::io::Result<(
 
 /// Deletes `post` thumbnails and content from disk.
 pub fn delete_post(post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
-    delete_post_thumbnail(post, ThumbnailCategory::Generated)?;
-    delete_post_thumbnail(post, ThumbnailCategory::Custom)?;
+    remove_if_exists(&post.generated_thumbnail_path())?;
+    remove_if_exists(&post.custom_thumbnail_path())?;
     delete_content(post, mime_type)
 }
 

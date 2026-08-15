@@ -679,9 +679,19 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
             // Create thumbnails
             if let Some(thumbnail) = custom_thumbnail {
                 ctx.verify_privilege(Action::PostEditThumbnail)?;
-                update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
+                let thumbnail_size = filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
+                diesel::update(post::table.find(post.id))
+                    .set(post::custom_thumbnail_size.eq(thumbnail_size))
+                    .execute(conn)?;
             }
-            update::post::thumbnail(conn, &post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
+            let thumbnail_size = filesystem::save_post_thumbnail(
+                &post_hash,
+                content_properties.thumbnail,
+                ThumbnailCategory::Generated,
+            )?;
+            diesel::update(post::table.find(post.id))
+                .set(post::generated_thumbnail_size.eq(thumbnail_size))
+                .execute(conn)?;
 
             let post_data = SnapshotData {
                 safety: post.safety,
@@ -1082,11 +1092,17 @@ async fn update_impl(
                 filesystem::move_file(&temp_path, &post_hash.content_path(content_properties.mime_type))?;
 
                 // Replace generated thumbnail
-                update::post::thumbnail(conn, &post_hash, content_properties.thumbnail, ThumbnailCategory::Generated)?;
+                filesystem::save_post_thumbnail(
+                    &post_hash,
+                    content_properties.thumbnail,
+                    ThumbnailCategory::Generated,
+                )?;
             }
             if let Some(thumbnail) = custom_thumbnail {
                 ctx.verify_privilege(Action::PostEditThumbnail)?;
-                update::post::thumbnail(conn, &post_hash, thumbnail, ThumbnailCategory::Custom)?;
+
+                let thumbnail_size = filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
+                new_post.custom_thumbnail_size = thumbnail_size;
             }
 
             new_post.last_edit_time = DateTime::now();

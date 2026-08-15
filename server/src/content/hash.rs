@@ -46,10 +46,6 @@ impl<'a> PostHash<'a> {
         }
     }
 
-    pub fn id(&self) -> i64 {
-        self.post_id
-    }
-
     /// Returns URL to post content.
     pub fn content_url(&self, content_type: MimeType) -> String {
         const POSTS_DIRECTORY: Directory = Directory::Posts;

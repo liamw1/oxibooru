@@ -2,7 +2,6 @@ use crate::api::error::{self, ApiResult};
 use crate::app::Context;
 use crate::config::Config;
 use crate::content::hash::PostHash;
-use crate::content::thumbnail::ThumbnailCategory;
 use crate::filesystem;
 use crate::model::comment::OrphanedComment;
 use crate::model::enums::{ResourceProperty, ResourceType};
@@ -18,7 +17,6 @@ use crate::schema::{
 use crate::time::DateTime;
 use diesel::dsl::exists;
 use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
-use image::DynamicImage;
 use std::collections::HashSet;
 
 /// Updates `last_edit_time` of post associated with `post_id`.
@@ -26,26 +24,6 @@ pub fn last_edit_time(conn: &mut PgConnection, post_id: i64) -> ApiResult<()> {
     diesel::update(post::table.find(post_id))
         .set(post::last_edit_time.eq(DateTime::now()))
         .execute(conn)?;
-    Ok(())
-}
-
-/// Updates thumbnail for post.
-pub fn thumbnail(
-    conn: &mut PgConnection,
-    post_hash: &PostHash,
-    thumbnail: DynamicImage,
-    thumbnail_type: ThumbnailCategory,
-) -> ApiResult<()> {
-    filesystem::delete_post_thumbnail(post_hash, thumbnail_type)?;
-    let thumbnail_size = filesystem::save_post_thumbnail(post_hash, thumbnail, thumbnail_type)?;
-    match thumbnail_type {
-        ThumbnailCategory::Generated => diesel::update(post::table.find(post_hash.id()))
-            .set(post::generated_thumbnail_size.eq(thumbnail_size))
-            .execute(conn)?,
-        ThumbnailCategory::Custom => diesel::update(post::table.find(post_hash.id()))
-            .set(post::custom_thumbnail_size.eq(thumbnail_size))
-            .execute(conn)?,
-    };
     Ok(())
 }
 
