@@ -988,7 +988,8 @@ async fn update_impl(
         None => None,
     };
 
-    let custom_thumbnail = match Content::new(body.thumbnail_token, body.thumbnail_url) {
+    let remove_custom_thumbnail = body.thumbnail_token.as_ref().is_some_and(Option::is_none);
+    let custom_thumbnail = match Content::new(body.thumbnail_token.flatten(), body.thumbnail_url) {
         Some(content) => Some(content.thumbnail(ctx.clone(), ThumbnailType::Post).await?),
         None => None,
     };
@@ -1103,6 +1104,11 @@ async fn update_impl(
 
                 let thumbnail_size = filesystem::save_post_thumbnail(&post_hash, thumbnail, ThumbnailCategory::Custom)?;
                 new_post.custom_thumbnail_size = thumbnail_size;
+            } else if remove_custom_thumbnail {
+                ctx.verify_privilege(Action::PostEditThumbnail)?;
+
+                filesystem::delete_custom_thumbnail(&post_hash)?;
+                new_post.custom_thumbnail_size = 0;
             }
 
             new_post.last_edit_time = DateTime::now();
@@ -1143,9 +1149,10 @@ struct PostUpdateBody {
     content_token: Option<UploadToken>,
     /// URL to fetch content from.
     content_url: Option<Url>,
-    /// Token referencing previously uploaded thumbnail.
+    /// Token referencing previously uploaded custom thumbnail. Set to null to remove.
     #[schema(value_type = Option<String>)]
-    thumbnail_token: Option<UploadToken>,
+    #[serde(default, deserialize_with = "api::deserialize_some")]
+    thumbnail_token: Option<Option<UploadToken>>,
     /// URL to fetch thumbnail from.
     thumbnail_url: Option<Url>,
 }
@@ -1204,7 +1211,7 @@ async fn update(
             let [content_token, thumbnail_token] = decoded_body.files;
 
             post_update.content_token = content_token;
-            post_update.thumbnail_token = thumbnail_token;
+            post_update.thumbnail_token = thumbnail_token.map(Some);
             update_impl(ctx, post_id, params, post_update).await
         }
     }
@@ -1599,6 +1606,7 @@ mod test {
         let mut conn = get_connection()?;
         let (post, tag_count, relation_count) = get_post_info(&mut conn)?;
 
+        simulate_upload("1_pixel.png", "thumbnail.png")?;
         verify_response(&format!("PUT /post/{POST_ID}/?{FIELDS}"), "post/edit/typical").await?;
 
         let (new_post, new_tag_count, new_relation_count) = get_post_info(&mut conn)?;

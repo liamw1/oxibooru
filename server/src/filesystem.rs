@@ -133,6 +133,11 @@ pub fn save_post_thumbnail(
     file_size(&thumbnail_path).map_err(ImageError::from)
 }
 
+/// Delete custom thumbnail of `post` from disk.
+pub fn delete_custom_thumbnail(post: &PostHash) -> std::io::Result<()> {
+    remove_if_exists(&post.custom_thumbnail_path())
+}
+
 /// Deletes `post` content from disk.
 pub fn delete_content(post: &PostHash, mime_type: MimeType) -> std::io::Result<()> {
     let content_path = post.content_path(mime_type);

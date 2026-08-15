@@ -15,5 +15,6 @@
     "flags": [
         "loop",
         "sound"
-    ]
+    ],
+    "thumbnailToken": "thumbnail.png"
 }

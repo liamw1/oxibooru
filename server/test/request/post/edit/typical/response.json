@@ -16,7 +16,7 @@
     "source": "",
     "description": "",
     "contentUrl": "data/posts/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.mp4",
-    "thumbnailUrl": "data/generated-thumbnails/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.jpg",
+    "thumbnailUrl": "data/custom-thumbnails/000000/00/5_XS2ZX-uHHTLh3wlyUa6flx3l0Mfp35ZVt1kbbBKFCsA.jpg",
     "tags": [
         {
             "names": [
@@ -87,5 +87,5 @@
             "avatarUrl": "https://gravatar.com/avatar/0911f7898fb33c121bdc89400182a48cf16c704ae826da05a12fa222a54406d0?d=retro&s=300"
         }
     ],
-    "hasCustomThumbnail": false
+    "hasCustomThumbnail": true
 }

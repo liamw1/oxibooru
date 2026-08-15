@@ -152,30 +152,6 @@ pub fn reset_thumbnail_sizes_impl(state: &AppState) -> AdminResult<()> {
             progress.increment();
         }
     }
-    if state.config.path(Directory::GeneratedThumbnails).try_exists()? {
-        let progress = ProgressReporter::new("Generated thumbnail sizes cached", PRINT_INTERVAL);
-        for entry in WalkDir::new(state.config.path(Directory::GeneratedThumbnails)) {
-            admin::is_cancelled()?;
-
-            let entry = entry?;
-            let path = entry.path();
-            if path.is_dir() {
-                continue;
-            }
-
-            let Some(post_id) = admin::get_post_id(path) else {
-                error!("Could not find post_id of {}", path.display());
-                continue;
-            };
-
-            let file_size = filesystem::file_size(path)?;
-            diesel::update(post::table)
-                .set(post::generated_thumbnail_size.eq(file_size))
-                .filter(post::id.eq(post_id))
-                .execute(&mut conn)?;
-            progress.increment();
-        }
-    }
     if state.config.path(Directory::CustomThumbnails).try_exists()? {
         let progress = ProgressReporter::new("Custom thumbnails sizes cached", PRINT_INTERVAL);
         for entry in WalkDir::new(state.config.path(Directory::CustomThumbnails)) {
@@ -195,6 +171,30 @@ pub fn reset_thumbnail_sizes_impl(state: &AppState) -> AdminResult<()> {
             let file_size = filesystem::file_size(path)?;
             diesel::update(post::table)
                 .set(post::custom_thumbnail_size.eq(file_size))
+                .filter(post::id.eq(post_id))
+                .execute(&mut conn)?;
+            progress.increment();
+        }
+    }
+    if state.config.path(Directory::GeneratedThumbnails).try_exists()? {
+        let progress = ProgressReporter::new("Generated thumbnail sizes cached", PRINT_INTERVAL);
+        for entry in WalkDir::new(state.config.path(Directory::GeneratedThumbnails)) {
+            admin::is_cancelled()?;
+
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                continue;
+            }
+
+            let Some(post_id) = admin::get_post_id(path) else {
+                error!("Could not find post_id of {}", path.display());
+                continue;
+            };
+
+            let file_size = filesystem::file_size(path)?;
+            diesel::update(post::table)
+                .set(post::generated_thumbnail_size.eq(file_size))
                 .filter(post::id.eq(post_id))
                 .execute(&mut conn)?;
             progress.increment();
