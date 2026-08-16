@@ -268,12 +268,14 @@ class PostEditSidebarControl extends events.EventTarget {
 
     _evtPostThumbnailChange(e) {
         this._thumbnailFileDropper.reset();
+        this._newPostThumbnail = undefined;
+        this._thumbnailRemovalLinkNode.style.display = this._post.hasCustomThumbnail ? "block" : "none";
     }
 
     _evtRemoveThumbnailClick(e) {
         e.preventDefault();
         this._thumbnailFileDropper.reset();
-        this._newPostThumbnail = null;
+        this._newPostThumbnail = this._post.hasCustomThumbnail ? null : undefined;
         this._thumbnailRemovalLinkNode.style.display = "none";
     }
 
@@ -439,10 +441,7 @@ class PostEditSidebarControl extends events.EventTarget {
                         ? this._newPostContent
                         : undefined,
 
-                    thumbnail:
-                        this._newPostThumbnail !== undefined && this._newPostThumbnail !== null
-                            ? this._newPostThumbnail
-                            : undefined,
+                    thumbnail: this._newPostThumbnail,
 
                     source: this._sourceInputNode
                         ? this._sourceInputNode.value

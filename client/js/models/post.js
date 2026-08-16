@@ -286,8 +286,12 @@ class Post extends events.EventTarget {
         if (this._newContent) {
             files.content = this._newContent;
         }
-        if (this._newThumbnail !== undefined && this._newThumbnail !== null) {
-            files.thumbnail = this._newThumbnail;
+        if (this._newThumbnail !== undefined) {
+            if (this._newThumbnail === null) {
+                detail.thumbnailToken = null;
+            } else {
+                files.thumbnail = this._newThumbnail;
+            }
         }
         if (this._source !== this._orig._source) {
             detail.source = this._source;
@@ -322,12 +326,13 @@ class Post extends events.EventTarget {
                             })
                         );
                     }
-                    if (this._newThumbnail) {
+                    if (this._newThumbnail !== undefined) {
                         this.dispatchEvent(
                             new CustomEvent("changeThumbnail", {
                                 detail: { post: this },
                             })
                         );
+                        this._newThumbnail = undefined;
                     }
 
                     return Promise.resolve();

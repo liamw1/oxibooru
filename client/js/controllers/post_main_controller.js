@@ -204,7 +204,7 @@ class PostMainController extends BasePostController {
         if (e.detail.content !== undefined && e.detail.content !== null) {
             post.newContent = e.detail.content;
         }
-        if (e.detail.thumbnail !== undefined && e.detail.thumbnail !== null) {
+        if (e.detail.thumbnail !== undefined) {
             post.newThumbnail = e.detail.thumbnail;
         }
         if (e.detail.source !== undefined && e.detail.source !== null) {
