@@ -97,6 +97,7 @@ pub enum Field {
     Type,
     MimeType,
     Checksum,
+    #[strum(serialize = "checksumMd5", serialize = "checksumMD5")]
     ChecksumMd5,
     Flags,
     Source,
