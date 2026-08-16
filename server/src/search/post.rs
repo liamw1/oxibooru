@@ -11,6 +11,7 @@ use crate::search::{
     Builder, CacheState, Condition, Order, ParsedSort, SearchCriteria, StrCondition, UnparsedFilter, parse,
 };
 use crate::string::lower;
+use crate::unit::ByteCount;
 use crate::{
     apply_cache_filters, apply_distinct_if_multivalued, apply_filter, apply_random_sort, apply_sort, apply_str_filter,
     apply_time_filter, update_filter_cache, update_nonmatching_filter_cache,
@@ -129,7 +130,7 @@ impl<'a> Builder<'a> for QueryBuilder<'a> {
             .iter()
             .try_fold(base_query, |query, &filter| match filter.kind {
                 Token::Id => apply_filter!(query, post::id, filter, i64),
-                Token::FileSize => apply_filter!(query, post::file_size, filter, i64),
+                Token::FileSize => apply_filter!(query, post::file_size, filter, ByteCount),
                 Token::Width => apply_filter!(query, post::width, filter, i32),
                 Token::Height => apply_filter!(query, post::height, filter, i32),
                 Token::Area => apply_filter!(query, post::width * post::height, filter, i32),
@@ -528,7 +529,7 @@ fn apply_special_filter(
 pub fn filter_table() -> TokenTable<&'static str> {
     TokenTable {
         _id: "-3..4",
-        _file_size: "-..1000",
+        _file_size: "-..1kB",
         _width: "1",
         _height: "-1,2,3",
         _area: "1,1000",

@@ -141,7 +141,7 @@ where
 /// | `content-checksum`                                           | having given BLAKE3 checksum                                            |
 /// | `flag`                                                       | having given flag (can be either `loop` or `sound`)                     |
 /// | `source`                                                     | having given source                                                     |
-/// | `file-size`                                                  | having given file size (in bytes)                                       |
+/// | `file-size`                                                  | having given file size (in byte units B, kB, MB, GB, etc.)              |
 /// | `image-width`, `width`                                       | having given image width (where applicable)                             |
 /// | `image-height`, `height`                                     | having given image height (where applicable)                            |
 /// | `image-area`, `area`                                         | having given number of pixels (image width * image height)              |

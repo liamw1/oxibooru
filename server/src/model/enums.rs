@@ -49,7 +49,7 @@ impl ToSql<SmallInt, Pg> for AvatarStyle {
 impl FromSql<SmallInt, Pg> for AvatarStyle {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(value)?;
-        AvatarStyle::from_repr(database_value).ok_or("Failed to deserialize avatar style".into())
+        Self::from_repr(database_value).ok_or("Failed to deserialize avatar style".into())
     }
 }
 
@@ -77,7 +77,7 @@ impl ToSql<SmallInt, Pg> for PostType {
 impl FromSql<SmallInt, Pg> for PostType {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(value)?;
-        PostType::from_repr(database_value).ok_or("Failed to deserialize post type".into())
+        Self::from_repr(database_value).ok_or("Failed to deserialize post type".into())
     }
 }
 
@@ -184,7 +184,7 @@ impl ToSql<SmallInt, Pg> for MimeType {
 impl FromSql<SmallInt, Pg> for MimeType {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(value)?;
-        MimeType::from_repr(database_value).ok_or("Failed to deserialize mime type".into())
+        Self::from_repr(database_value).ok_or("Failed to deserialize mime type".into())
     }
 }
 
@@ -224,7 +224,7 @@ impl ToSql<SmallInt, Pg> for PostSafety {
 impl FromSql<SmallInt, Pg> for PostSafety {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(value)?;
-        PostSafety::from_repr(database_value).ok_or("Failed to deserialize post safety".into())
+        Self::from_repr(database_value).ok_or("Failed to deserialize post safety".into())
     }
 }
 
@@ -367,7 +367,7 @@ impl ToSql<SmallInt, Pg> for UserRank {
 impl FromSql<SmallInt, Pg> for UserRank {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(value)?;
-        UserRank::from_repr(database_value).ok_or("Failed to deserialize user privilege".into())
+        Self::from_repr(database_value).ok_or("Failed to deserialize user privilege".into())
     }
 }
 
@@ -436,7 +436,7 @@ impl ToSql<SmallInt, Pg> for Score {
 impl FromSql<SmallInt, Pg> for Score {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(value)?;
-        Score::from_repr(database_value).ok_or("Failed to deserialize score".into())
+        Self::from_repr(database_value).ok_or("Failed to deserialize score".into())
     }
 }
 
@@ -461,7 +461,7 @@ impl ToSql<SmallInt, Pg> for ResourceOperation {
 impl FromSql<SmallInt, Pg> for ResourceOperation {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(value)?;
-        ResourceOperation::from_repr(database_value).ok_or("Failed to deserialize resource operation".into())
+        Self::from_repr(database_value).ok_or("Failed to deserialize resource operation".into())
     }
 }
 
@@ -493,7 +493,7 @@ impl ToSql<SmallInt, Pg> for ResourceType {
 impl FromSql<SmallInt, Pg> for ResourceType {
     fn from_sql(value: PgValue<'_>) -> deserialize::Result<Self> {
         let database_value = i16::from_sql(value)?;
-        ResourceType::from_repr(database_value).ok_or("Failed to deserialize resource type".into())
+        Self::from_repr(database_value).ok_or("Failed to deserialize resource type".into())
     }
 }
 

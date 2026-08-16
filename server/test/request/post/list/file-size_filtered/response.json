@@ -1,7 +1,7 @@
 {
     "limit": 40,
     "offset": 0,
-    "query": "-file-size:..1000 -sort:id",
+    "query": "-file-size:..1kB -sort:id",
     "results": [
         {
             "id": 1

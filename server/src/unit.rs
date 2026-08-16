@@ -1,12 +1,35 @@
+use diesel::AsExpression;
+use diesel::pg::Pg;
+use diesel::serialize::{self, IsNull, Output, ToSql};
+use diesel::sql_types::BigInt;
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
-use std::num::{NonZeroU128, TryFromIntError};
+use std::io::Write;
+use std::num::{NonZeroU128, ParseIntError, TryFromIntError};
 use std::str::FromStr;
 use std::time::Duration;
+use thiserror::Error;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub enum ParseByteCountError {
+    #[error("Missing digits")]
+    MissingDigits,
+    #[error("Missing unit `B`")]
+    MissingUnit,
+    #[error("Overflow")]
+    Overflow,
+    ParseInt(#[from] ParseIntError),
+    #[error("Too many digits")]
+    TooManyDigits,
+    #[error("Unknown SI prefix `{0}`")]
+    UnknownPrefix(char),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, AsExpression)]
+#[diesel(sql_type = BigInt)]
 pub struct ByteCount(u128);
 
 impl TryFrom<ByteCount> for u64 {
@@ -30,11 +53,11 @@ impl Display for ByteCount {
 }
 
 impl FromStr for ByteCount {
-    type Err = String;
+    type Err = ParseByteCountError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         const PREFIX_COUNT: u32 = SI_PREFIXES.len() as u32;
 
-        let s = s.trim().strip_suffix('B').ok_or("missing unit `B`")?;
+        let s = s.trim().strip_suffix('B').ok_or(ParseByteCountError::MissingUnit)?;
         let (digits, exp) = SI_PREFIXES
             .into_iter()
             .zip(0..PREFIX_COUNT)
@@ -45,33 +68,29 @@ impl FromStr for ByteCount {
             && !c.is_ascii_digit()
             && c != '.'
         {
-            return Err(format!("Unknown SI prefix `{c}`"));
+            return Err(ParseByteCountError::UnknownPrefix(c));
         }
 
         let (whole, fract) = digits.split_once('.').unwrap_or((digits, ""));
         if whole.is_empty() && fract.is_empty() {
-            return Err("Missing digits".into());
+            return Err(ParseByteCountError::MissingDigits);
         }
 
-        let whole = if whole.is_empty() {
-            0_u128
-        } else {
-            whole.parse().map_err(|err| format!("{err}"))?
-        };
+        let whole = if whole.is_empty() { 0_u128 } else { whole.parse()? };
         let unit = SI_BASE.get().pow(exp);
-        let mut total = whole.checked_mul(unit).ok_or("Overflow")?;
+        let mut total = whole.checked_mul(unit).ok_or(ParseByteCountError::Overflow)?;
 
         if !fract.is_empty() {
             let scale = 10_u128
                 .checked_pow(fract.len() as u32)
-                .ok_or("Too many fractional digits")?;
-            let fract: u128 = fract.parse().map_err(|e| format!("{e}"))?;
+                .ok_or(ParseByteCountError::TooManyDigits)?;
+            let fract: u128 = fract.parse()?;
             let contribution = fract
                 .checked_mul(unit)
                 .and_then(|n| n.checked_add(scale / 2))
-                .ok_or("Overflow")?
+                .ok_or(ParseByteCountError::Overflow)?
                 / scale;
-            total = total.checked_add(contribution).ok_or("Overflow")?;
+            total = total.checked_add(contribution).ok_or(ParseByteCountError::Overflow)?;
         }
 
         Ok(ByteCount(total))
@@ -81,6 +100,14 @@ impl FromStr for ByteCount {
 impl<'de> Deserialize<'de> for ByteCount {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Cow::<str>::deserialize(deserializer).and_then(|s| s.parse().map_err(serde::de::Error::custom))
+    }
+}
+
+impl ToSql<BigInt, Pg> for ByteCount {
+    fn to_sql<'a>(&'a self, out: &mut Output<'a, '_, Pg>) -> serialize::Result {
+        let byte_count_i64 = i64::try_from(self.0)?;
+        out.write_all(&byte_count_i64.to_be_bytes())?;
+        Ok(IsNull::No)
     }
 }
 
