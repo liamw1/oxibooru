@@ -237,6 +237,8 @@ impl From<Field> for u64 {
 #[skip_serializing_none]
 #[derive(Serialize, ToSchema)]
 pub struct SnapshotInfo {
+    #[serde(skip)]
+    pub id: i64,
     #[schema(nullable)]
     user: Option<Option<MicroUser>>,
     operation: Option<ResourceOperation>,
@@ -262,6 +264,7 @@ impl SnapshotInfo {
             .into_iter()
             .rev()
             .map(|snapshot| Self {
+                id: snapshot.id,
                 user: users.pop(),
                 operation: fields[Field::Operation].then_some(snapshot.operation),
                 resource_type: fields[Field::Type].then_some(snapshot.resource_type),

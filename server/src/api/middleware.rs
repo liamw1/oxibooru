@@ -2,7 +2,8 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::auth::{Client as AuthClient, header};
 use crate::model::enums::UserRank;
-use crate::model::snapshot::Snapshot;
+use crate::resource::field::Mask;
+use crate::resource::snapshot::{Field, SnapshotInfo};
 use crate::schema::snapshot;
 use crate::update;
 use axum::extract::{Request, State};
@@ -10,9 +11,7 @@ use axum::http::Method;
 use axum::http::header::AUTHORIZATION;
 use axum::middleware::Next;
 use axum::response::Response;
-use diesel::{
-    ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, QueryResult, RunQueryDsl, SelectableHelper,
-};
+use diesel::{ExpressionMethods, OptionalExtension, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use reqwest::Client;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, REFERER};
 use std::sync::Arc;
@@ -59,17 +58,26 @@ pub async fn auth(State(state): State<AppState>, mut request: Request, next: Nex
 
 /// Sends snapshot data to webhook URLs after modifying requests.
 pub async fn post_to_webhooks(State(state): State<AppState>, request: Request, next: Next) -> ApiResult<Response> {
+    const FIELDS: Mask<Field> = Mask::<Field>::all();
+
     let can_modify_database = matches!(request.method(), &Method::POST | &Method::PUT | &Method::DELETE);
     let response = next.run(request).await;
 
     if can_modify_database {
-        let mut conn = state.connection_pool.get().await?;
-        let last_posted_snapshot = LAST_POSTED_SNAPSHOT.load(Ordering::SeqCst);
-        let new_snapshots = snapshot::table
-            .select(Snapshot::as_select())
-            .filter(snapshot::id.gt(last_posted_snapshot))
-            .order(snapshot::id)
-            .load(conn.as_mut())?;
+        let new_snapshots = state
+            .connection_pool
+            .transaction({
+                let config = Arc::clone(&state.config);
+                move |conn| {
+                    let last_posted_snapshot = LAST_POSTED_SNAPSHOT.load(Ordering::SeqCst);
+                    let new_snapshots = snapshot::table
+                        .filter(snapshot::id.gt(last_posted_snapshot))
+                        .order(snapshot::id)
+                        .load(conn)?;
+                    SnapshotInfo::new_batch(conn, &config, new_snapshots, FIELDS)
+                }
+            })
+            .await?;
 
         for snapshot in new_snapshots {
             post_snapshot(&state, snapshot);
@@ -94,7 +102,7 @@ pub fn initialize_snapshot_counter(conn: &mut PgConnection) -> QueryResult<()> {
 static LAST_POSTED_SNAPSHOT: AtomicI64 = AtomicI64::new(i64::MAX);
 
 /// Sends `snapshot` data to webhooks if it hasn't already been posted by another thread.
-fn post_snapshot(state: &AppState, snapshot: Snapshot) {
+fn post_snapshot(state: &AppState, snapshot: SnapshotInfo) {
     loop {
         let last_posted_snapshot = LAST_POSTED_SNAPSHOT.load(Ordering::SeqCst);
         if snapshot.id <= last_posted_snapshot {
@@ -116,7 +124,7 @@ fn post_snapshot(state: &AppState, snapshot: Snapshot) {
 }
 
 /// Sends `snapshot` data to given `url`.
-async fn post_to_webhook(url: Url, snapshot: Arc<Snapshot>) {
+async fn post_to_webhook(url: Url, snapshot: Arc<SnapshotInfo>) {
     const APPLICATION_JSON: HeaderValue = HeaderValue::from_static("application/json");
     let post = async || {
         let mut headers = HeaderMap::new();

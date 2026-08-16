@@ -14,6 +14,10 @@ impl<F> Mask<F>
 where
     u64: From<F>,
 {
+    pub const fn all() -> Self {
+        Self::from_u64(u64::MAX)
+    }
+
     const fn none() -> Self {
         Self::from_u64(0)
     }
