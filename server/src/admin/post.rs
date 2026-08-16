@@ -14,7 +14,7 @@ use crate::{admin, filesystem};
 use diesel::dsl::exists;
 use diesel::{Connection, ExpressionMethods, Insertable, OptionalExtension, QueryDsl, RunQueryDsl};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
-use tracing::{error, info, warn};
+use tracing::{Level, error, info, warn};
 
 /// Checks the integrity of all posts on the filesystem by comparing the stored
 /// checksum with the checksum of the post content in its current state.
@@ -24,12 +24,11 @@ pub fn check_integrity(state: &AppState, editor: &mut PostEditor) {
         let post_ids = user_query(state, editor)?;
 
         let _timer = Timer::new("check_integrity");
-        let progress = ProgressReporter::new("Posts checked", PRINT_INTERVAL);
-        let failures = ProgressReporter::new("Integrity checks failed", None);
+        let progress = ProgressReporter::new(Level::INFO, "Posts checked", PRINT_INTERVAL);
+        let failures = ProgressReporter::new(Level::WARN, "Integrity checks failed", None);
         post_ids
             .into_par_iter()
             .try_for_each(|post_id| check_integrity_in_parallel(state, post_id, &progress, &failures))?;
-        failures.report();
         Ok(())
     });
 }
@@ -41,12 +40,11 @@ pub fn recompute_checksums(state: &AppState, editor: &mut PostEditor) {
         let post_ids = user_query(state, editor)?;
 
         let _timer = Timer::new("recompute_checksums");
-        let progress = ProgressReporter::new("Checksums computed", PRINT_INTERVAL);
-        let duplicate_count = ProgressReporter::new("Duplicates found", PRINT_INTERVAL);
+        let progress = ProgressReporter::new(Level::INFO, "Checksums computed", PRINT_INTERVAL);
+        let duplicate_count = ProgressReporter::new(Level::WARN, "Duplicates found", PRINT_INTERVAL);
         post_ids
             .into_par_iter()
             .try_for_each(|post_id| recompute_checksum_in_parallel(state, post_id, &progress, &duplicate_count))?;
-        duplicate_count.report();
         Ok(())
     });
 }
@@ -65,7 +63,7 @@ pub fn recompute_signatures(state: &AppState, editor: &mut PostEditor) {
             .execute(&mut state.connection_pool.get_blocking()?)?;
 
         let _timer = Timer::new("recompute_signatures");
-        let progress = ProgressReporter::new("Signatures computed", PRINT_INTERVAL);
+        let progress = ProgressReporter::new(Level::INFO, "Signatures computed", PRINT_INTERVAL);
         post_ids
             .into_par_iter()
             .try_for_each(|post_id| recompute_signature_in_parallel(state, post_id, &progress))
@@ -82,7 +80,7 @@ pub fn recompute_indexes(state: &AppState, editor: &mut PostEditor) {
         let post_ids = user_query(state, editor)?;
 
         let _timer = Timer::new("recompute_indexes");
-        let progress = ProgressReporter::new("Indexes computed", PRINT_INTERVAL);
+        let progress = ProgressReporter::new(Level::INFO, "Indexes computed", PRINT_INTERVAL);
         post_ids
             .into_par_iter()
             .try_for_each(|post_id| recompute_index_in_parallel(state, post_id, &progress))
@@ -96,7 +94,7 @@ pub fn recompute_post_types(state: &AppState, editor: &mut PostEditor) {
         let post_ids = user_query(state, editor)?;
 
         let _timer = Timer::new("recompute_post_types");
-        let progress = ProgressReporter::new("Post types computed", PRINT_INTERVAL);
+        let progress = ProgressReporter::new(Level::INFO, "Post types computed", PRINT_INTERVAL);
         post_ids
             .into_par_iter()
             .try_for_each(|post_id| recompute_post_type_in_parallel(state, post_id, &progress))
@@ -108,7 +106,7 @@ pub fn regenerate_thumbnails(state: &AppState, editor: &mut PostEditor) {
         let post_ids = user_query(state, editor)?;
 
         let _timer = Timer::new("regenerate_thumbnails");
-        let progress = ProgressReporter::new("Thumbnails regenerated", PRINT_INTERVAL);
+        let progress = ProgressReporter::new(Level::INFO, "Thumbnails regenerated", PRINT_INTERVAL);
         post_ids
             .into_par_iter()
             .try_for_each(|post_id| regenerate_thumbnail_in_parallel(state, post_id, &progress))

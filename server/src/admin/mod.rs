@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, LazyLock};
 use strum::{EnumIter, EnumMessage, EnumString, IntoEnumIterator, IntoStaticStr};
 use thiserror::Error;
-use tracing::{error, info};
+use tracing::{Level, debug, error, info, trace, warn};
 
 pub mod database;
 mod input;
@@ -137,6 +137,7 @@ static CANCELLED: LazyLock<Arc<AtomicBool>> = LazyLock::new(|| Arc::new(AtomicBo
 
 /// An atomic counter that prints message with the current count at regular intervals.
 struct ProgressReporter {
+    level: Level,
     message: &'static str,
     print_interval: Option<u64>,
     count: AtomicU64,
@@ -145,8 +146,9 @@ struct ProgressReporter {
 impl ProgressReporter {
     /// Creates a new [`ProgressReporter`] that will print "`message`: {count}"
     /// to the info logs every `print_interval` increments.
-    fn new(message: &'static str, print_interval: Option<u64>) -> Self {
+    fn new(level: Level, message: &'static str, print_interval: Option<u64>) -> Self {
         Self {
+            level,
             message,
             print_interval,
             count: AtomicU64::new(0),
@@ -165,7 +167,23 @@ impl ProgressReporter {
 
     /// Immediately prints "{message}: {count}" to the info logs.
     fn report(&self) {
-        info!("{}: {}", self.message, self.count.load(Ordering::SeqCst));
+        let message = self.message;
+        let count = self.count.load(Ordering::SeqCst);
+        match self.level {
+            Level::TRACE => trace!("{message}: {count}"),
+            Level::DEBUG => debug!("{message}: {count}"),
+            Level::INFO => info!("{message}: {count}"),
+            Level::WARN => warn!("{message}: {count}"),
+            Level::ERROR => error!("{message}: {count}"),
+        }
+    }
+}
+
+impl Drop for ProgressReporter {
+    fn drop(&mut self) {
+        if self.level >= Level::INFO || self.count.load(Ordering::SeqCst) != 0 {
+            self.report();
+        }
     }
 }
 
