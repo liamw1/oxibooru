@@ -1493,6 +1493,7 @@ data.
     | `post`                                                       | specific post ID                               |
     | `user`, `author`                                             | created by given user (accepts wildcards)      |
     | `text`                                                       | containing given text (accepts wildcards)      |
+    | `score`                                                      | having given score                             |
     | `creation-date`, `creation-time`                             | created at given date                          |
     | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | whose most recent edit date matches given date |
 
@@ -1503,6 +1504,7 @@ data.
     | `random`                                                     | as random as it can get   |
     | `user`, `author`                                             | author name, A to Z       |
     | `post`                                                       | post ID, newest to oldest |
+    | `score`                                                      | highest to lowest         |
     | `creation-date`, `creation-time`                             | newest to oldest          |
     | `last-edit-date`, `last-edit-time`, `edit-date`, `edit-time` | recently edited first     |
 
