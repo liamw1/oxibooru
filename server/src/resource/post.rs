@@ -49,10 +49,11 @@ pub struct Note {
 impl Note {
     pub fn new(note: PostNote) -> Self {
         const PANIC_MESSAGE: &str = "Polygon array should not contain NULL values";
-        let polygon = note
-            .polygon
-            .chunks_exact(2)
-            .map(|vertex| [vertex[0].expect(PANIC_MESSAGE), vertex[1].expect(PANIC_MESSAGE)])
+
+        let (vertices, _) = note.polygon.as_chunks();
+        let polygon = vertices
+            .iter()
+            .map(|&[x, y]| [x.expect(PANIC_MESSAGE), y.expect(PANIC_MESSAGE)])
             .collect();
         Self {
             id: note.id,
