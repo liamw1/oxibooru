@@ -2,11 +2,18 @@
 
 #help
     width: 100%
-    max-width: 45em
+    max-width: 60em
     nav
         margin-bottom: 1.5em
+    table
+        border-collapse: collapse
+    tr
+        border-bottom: 1px solid rgba(0, 0, 0, 0.1)
+        &:nth-child(even)
+            background: rgba(0, 0, 0, 0.03)
     td, th
-        padding: 0 0.5em
+        padding: 0.3em 0.5em
+        vertical-align: top
         &:first-child
             white-space: pre
     .section
@@ -34,5 +41,6 @@
             display: block
         tr
             margin-bottom: 0.8em
+            padding-bottom: 0.5em
         pre
             white-space: pre-wrap
