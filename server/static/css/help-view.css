@@ -1,15 +1,28 @@
 #help {
     width: 100%;
-    max-width: 45em;
+    max-width: 60em;
 }
 
 #help nav {
     margin-bottom: 1.5em;
 }
 
+#help table {
+    border-collapse: collapse;
+}
+
+#help tr {
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+#help tr:nth-child(even) {
+    background: rgba(0, 0, 0, 0.03);
+}
+
 #help td,
 #help th {
-    padding: 0 .5em;
+    padding: .3em .5em;
+    vertical-align: top;
 }
 
 #help td:first-child,
@@ -65,6 +78,7 @@
 
     #help tr {
         margin-bottom: .8em;
+        padding-bottom: .5em;
     }
 
     #help pre {
