@@ -426,7 +426,7 @@ fn get_comments(conn: &mut PgConnection, ctx: &Context, posts: &[Post]) -> Query
             comment_statistics::score,
             (user::name, lower(user::name), user::avatar_style).nullable(),
         ))
-        .order(comment::creation_time)
+        .order(comment::creation_time.desc())
         .load(conn)?;
     let comment_ids: Vec<i64> = comments.iter().map(|(comment, ..)| comment.id).collect();
 

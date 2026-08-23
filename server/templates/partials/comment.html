@@ -1,0 +1,98 @@
+<div class="comment-container">
+    <div class="avatar">
+        {% if let Some(user) = comment.user()? %}
+        <a {% if ctx.has_privilege(Action::UserView) %} href="user/{{ user.name }}" {% endif %}>
+            <span class="thumbnail" style="background-image: url('{{ user.avatar_url }}')">
+                <img alt="thumbnail" src="{{ user.avatar_url }}">
+            </span>
+        </a>
+        {% else %}
+        <span class="thumbnail empty"></span>
+        {% endif %}
+    </div>
+
+    <div class="comment">
+        <header>
+            <nav class="edit tabs">
+                <ul>
+                    <li class="edit">Write</li>
+                    <li class="preview">Preview</li>
+                </ul>
+            </nav>
+            <nav class="readonly active">
+                <strong>
+                    <span class="nickname">
+                        {% if let Some(user) = comment.user()? %}
+                        <a {% if ctx.has_privilege(Action::UserView) %} href="user/{{ user.name }}" {% endif %}>
+                            {{ user.name }}
+                        </a>
+                        {% else %}
+                        Anonymous
+                        {% endif %}
+                    </span>
+                </strong>
+
+                <span class="date">
+                    {% let creation_time = comment.creation_time()? %}
+                    <time datetime="{{ creation_time }}">commented {{ time::since(creation_time) }}</time>
+                </span>
+
+                <wbr>
+
+                {% if ctx.has_privilege(Action::CommentScore) %}
+                <span class="score-container">
+                    <a class="upvote">
+                        <i class="fa fa-thumbs-o-up"></i>
+                        <span class="vim-nav-hint">upvote</span>
+                        <span class="vim-nav-hint">like</span>
+                    </a>
+                    <span class="value">{{ comment.score()? }}</span>
+                    <a class="downvote">
+                        <i class="fa fa-thumbs-o-down"></i>
+                        <span class="vim-nav-hint">downvote</span>
+                        <span class="vim-nav-hint">dislike</span>
+                    </a>
+                </span>
+                {% endif %}
+
+                {% let can_edit_comment = true %}{# TODO #}
+                {% let can_delete_comment = true %}{# TODO #}
+                {% if can_edit_comment || can_delete_comment %}
+                <span class="action-container">
+                    {% if can_edit_comment %}
+                    <a href class="edit">
+                        <i class="fa fa-pencil"></i>&nbsp;edit
+                    </a>
+                    {% endif %}
+                    {% if can_delete_comment %}
+                    <a href class="delete">
+                        <i class="fa fa-remove"></i>&nbsp;delete
+                    </a>
+                    {% endif %}
+                </span>
+                {% endif %}
+            </nav>
+        </header>
+
+        <form class="body">
+            <div class="keep-height">
+                <div class="tab preview active">
+                    <div class="comment-content">
+                        {# TODO: Markdown #}
+                        <p>{{ comment.text()? }}</p>
+                    </div>
+                </div>
+
+                <div class="tab edit">
+                    {# TODO #}
+                    {# <textarea required minlength=1>comment.text()?</textarea> #}
+                </div>
+            </div>
+
+            <nav class="edit">
+                <div class="messages"></div>
+                {# TODO #}
+            </nav>
+        </form>
+    </div>
+</div>

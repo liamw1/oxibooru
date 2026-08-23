@@ -11,7 +11,7 @@
 .global-comment-list>ul>li {
     margin-top: 2em;
     padding-top: 2em;
-    border-top: 3px solid var(--comment-border-color);
+    border-top: 3px solid var(--comment-list-separator-color);
 }
 
 .global-comment-list>ul>li:first-child {

@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}{{ ctx.site_name() }} - Tag #{{ tag.primary_name()? }}{% endblock %}
+{% block title %}{{ ctx.site_name() }} &ndash; Tag #{{ tag.primary_name()? }}{% endblock %}
 
 {% block content %}
 {% if ctx.has_privilege(Action::TagView) %}
