@@ -67,4 +67,9 @@
     --snapshot-modified-background-color: #E0F5FF;
     --snapshot-deleted-background-color: #FDE5E5;
     --snapshot-merged-background-color: #FEC;
+    --comment-border-color: #DDD;
+    --comment-list-separator-color: var(--top-navigation-color);
+    --comment-header-background-color: var(--top-navigation-color);
+    --comment-header-background-color-darktheme: var(--top-navigation-color-darktheme);
+    --comment-border-color-darktheme: var(--top-navigation-color-darktheme);
 }

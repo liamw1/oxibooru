@@ -52,7 +52,7 @@
     <title>{% block title %}{{ ctx.site_name() }}{% endblock %}</title>
 </head>
 
-<body>
+<body hx-boost="true">
     {% include "partials/top_navigation.html" %}
 
     <main id="content-holder">

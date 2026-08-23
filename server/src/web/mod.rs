@@ -4,6 +4,7 @@ use axum::Router;
 use serde::Serialize;
 use tower_http::services::ServeDir;
 
+mod comment;
 mod help;
 mod home;
 mod pager;
@@ -25,6 +26,7 @@ pub fn routes(state: AppState) -> Router {
     let static_dir = format!("{PROJECT_ROOT}/static");
 
     help::routes()
+        .merge(comment::routes())
         .merge(home::routes())
         .merge(pool::routes())
         .merge(pool_category::routes())
