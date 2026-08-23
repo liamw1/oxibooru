@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}{{ ctx.site_name() }} - Posts{% endblock %}
+{% block title %}{{ ctx.site_name() }} &ndash; Posts{% endblock %}
 
 {% block content %}
 {% if ctx.has_privilege(Action::PostList) %}
@@ -16,8 +16,8 @@
             {% for post in posts %}
             <li data-post-id="{{ post.id()? }}">
                 <a class="thumbnail-wrapper {% if post.tags()?.is_empty() %}no-tags{% else %}tags{% endif %}"
-                    title="{{ post.title()? }}"
-                    href="{% if ctx.has_privilege(Action::PostView) %}{{ post.url(params)? }}{% endif %}">
+                    title="{{ post.title()? }}" {% if ctx.has_privilege(Action::PostView) %}
+                    href="{{ post.url(params)? }}" {% endif %}>
                     <span class="thumbnail" style="background-image: url({{ post.thumbnail_url()? }})">
                         <img alt="thumbnail" src="{{ post.thumbnail_url()? }}">
                     </span>

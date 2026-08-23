@@ -1,0 +1,40 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} &ndash; Listing comments{% endblock %}
+
+{% block content %}
+{% if ctx.has_privilege(Action::CommentList) %}
+<div class="pager">
+    <div class="global-comment-list">
+        {% if !posts.is_empty() %}
+        <ul>
+            {% for post in posts %}
+            <li>
+                <div class="post-thumbnail">
+                    <a {% if ctx.has_privilege(Action::PostView) %} href="post/{{ post.id()? }}" {% endif %}>
+                        <span class="thumbnail" style="background-image: url({{ post.thumbnail_url()? }})">
+                            <img alt="thumbnail" src="{{ post.thumbnail_url()? }}">
+                        </span>
+                    </a>
+                </div>
+                <div class="comments-container">
+                    <div class="comments">
+                        <ul>
+                            {% for comment in post.comments()? %}
+                            <li>
+                                {% include "partials/comment.html" %}
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+
+    {% include "partials/manual_pager.html" %}
+</div>
+{% endif %}
+{% endblock %}
