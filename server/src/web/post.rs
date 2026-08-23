@@ -1,6 +1,6 @@
 use crate::app::{AppState, Context};
 use crate::config::Action;
-use crate::extract::{Ctx, Json, PageParams, Path, Query, ResourceParams};
+use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostSafety, PostType};
 use crate::resource::NotRequested;
 use crate::resource::post::{Field, PostInfo};
@@ -12,6 +12,7 @@ use askama::Template;
 use axum::response::Html;
 use axum::{Router, routing};
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU64;
 use strum::{Display, IntoEnumIterator};
 
 pub fn routes() -> Router<AppState> {
@@ -32,6 +33,8 @@ pub enum EditMode {
 const SAFE_DEFAULT: bool = true;
 const SKETCHY_DEFAULT: bool = true;
 const UNSAFE_DEFAULT: bool = false;
+
+const LIMIT: NonZeroU64 = NonZeroU64::new(42).unwrap();
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -106,7 +109,7 @@ struct GalleryTemplate<'a> {
     params: &'a Params,
 }
 
-async fn gallery(ctx: Ctx, Query(params): Query<Params>, page_params: Query<PageParams>) -> Html<String> {
+async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> Html<String> {
     let fields = [
         Field::Id,
         Field::Tags,
@@ -121,6 +124,7 @@ async fn gallery(ctx: Ctx, Query(params): Query<Params>, page_params: Query<Page
 
     let query = params.query();
     let resource_params = Query(ResourceParams { query, fields });
+    let page_params = Query(offset.to_page_params(LIMIT));
     let Json(response) = api::post::list(ctx.clone(), resource_params, page_params)
         .await
         .unwrap();
