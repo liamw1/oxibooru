@@ -39,6 +39,8 @@ pub fn routes(state: AppState) -> Router {
         .with_state(state)
 }
 
+const PROJECT_ROOT: &str = env!("CARGO_MANIFEST_DIR");
+
 #[derive(PartialEq, Eq)]
 enum Tab {
     Home,
@@ -53,8 +55,6 @@ enum Tab {
     Help,
     Settings,
 }
-
-const PROJECT_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 
 fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
     serde_urlencoded::to_string(params).map(|query_string| {
