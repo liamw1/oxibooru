@@ -1,6 +1,6 @@
 use crate::app::{AppState, Context};
 use crate::config::Action;
-use crate::extract::{Ctx, Json, PageParams, Path, Query, ResourceParams};
+use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::resource::pool::{Field, PoolInfo};
 use crate::resource::pool_category::PoolCategoryInfo;
 use crate::web::Tab;
@@ -10,6 +10,7 @@ use askama::Template;
 use axum::response::Html;
 use axum::{Router, routing};
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroU64;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -19,6 +20,8 @@ pub fn routes() -> Router<AppState> {
         .route("/pool/{id}/merge", routing::get(merge))
         .route("/pool/{id}/delete", routing::get(delete))
 }
+
+const LIMIT: NonZeroU64 = NonZeroU64::new(50).unwrap();
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -50,7 +53,7 @@ struct ListTemplate<'a> {
     params: &'a Params,
 }
 
-async fn list(ctx: Ctx, Query(params): Query<Params>, page_params: Query<PageParams>) -> Html<String> {
+async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> Html<String> {
     let fields = [
         Field::Id,
         Field::CreationTime,
@@ -62,6 +65,7 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, page_params: Query<PagePar
 
     let query = params.search_text.clone();
     let resource_params = Query(ResourceParams { query, fields });
+    let page_params = Query(offset.to_page_params(LIMIT));
     let Json(response) = api::pool::list(ctx.clone(), resource_params, page_params)
         .await
         .unwrap();

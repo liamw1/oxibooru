@@ -200,6 +200,20 @@ impl<F: ToSchema> ResourceParams<F> {
     }
 }
 
+#[derive(Clone, Copy, Deserialize)]
+pub struct Offset {
+    offset: Option<u64>,
+}
+
+impl Offset {
+    pub fn to_page_params(self, limit: NonZeroU64) -> PageParams {
+        PageParams {
+            offset: self.offset,
+            limit: Some(limit),
+        }
+    }
+}
+
 /// Represents parameters of a request to retrieve multiple resources, paged.
 #[derive(Clone, Copy, Deserialize, IntoParams)]
 pub struct PageParams {
@@ -213,7 +227,7 @@ pub struct PageParams {
 
 impl PageParams {
     pub fn limit(&self) -> u64 {
-        const DEFAULT_LIMIT: u64 = 42;
+        const DEFAULT_LIMIT: u64 = 100;
         const MAX_LIMIT: u64 = 1000;
         std::cmp::min(self.limit.map_or(DEFAULT_LIMIT, NonZeroU64::get), MAX_LIMIT)
     }
