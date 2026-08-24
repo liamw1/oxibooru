@@ -130,7 +130,7 @@ pub async fn list(
         (status = 404, description = "User does not exist"),
     ),
 )]
-async fn get(
+pub async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(username): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,

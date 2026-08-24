@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} &ndash; User {{ user.name()? }}{% endblock %}
+
+{% block content %}
+{% if ctx.has_privilege(Action::UserView) %}
+<div class="content-wrapper" id="user">
+    <h1>{{ user.name()? }}</h1>
+    <nav class="buttons">
+        <ul>
+            <li data-name="summary" {% if active_user_tab==UserTab::Summary %} class="active" {% endif %}>
+                <a href="user/{{ user.name()? }}">Summary</a>
+            </li>
+            <li data-name="edit" {% if active_user_tab==UserTab::Edit %} class="active" {% endif %}>
+                <a href="user/{{ user.name()? }}/edit">Settings</a>
+            </li>
+            <li data-name="list-tokens" {% if active_user_tab==UserTab::Tokens %} class="active" {% endif %}>
+                <a href="user/{{ user.name()? }}/list-tokens">Login Tokens</a>
+            </li>
+            <li data-name="delete" {% if active_user_tab==UserTab::Delete %} class="active" {% endif %}>
+                <a href="user/{{ user.name()? }}/delete">Delete</a>
+            </li>
+        </ul>
+    </nav>
+
+    {# TODO: Make it so that client can navigate without a page reload #}
+    <div class="content">
+        {% match active_user_tab %}
+        {% when UserTab::Summary %}{% include "partials/user_summary.html" %}
+        {% when UserTab::Edit %}{% include "partials/user_edit.html" %}
+        {% when UserTab::Tokens %}{% include "partials/user_tokens.html" %}
+        {% when UserTab::Delete %}{% include "partials/user_delete.html" %}
+        {% endmatch %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

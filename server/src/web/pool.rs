@@ -98,7 +98,7 @@ enum PoolTab {
 
 #[derive(Template)]
 #[template(path = "pages/pool.html")]
-struct TagTemplate {
+struct PoolTemplate {
     ctx: Context,
     active_tab: Tab,
     active_pool_tab: PoolTab,
@@ -121,9 +121,9 @@ async fn view(ctx: Ctx, path: Path<i64>, active_pool_tab: PoolTab) -> Html<Strin
     let categories = web::pool_category::get_categories(ctx.clone()).await.unwrap();
 
     let Ctx(ctx, _) = ctx;
-    TagTemplate {
+    PoolTemplate {
         ctx,
-        active_tab: Tab::Tag,
+        active_tab: Tab::Pool,
         active_pool_tab,
         pool,
         categories,
