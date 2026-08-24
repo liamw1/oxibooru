@@ -12,8 +12,9 @@
 
         <section class="upload-info">
             {% let user = post.user()? %}
-            {% include "partials/user_link.html"%},
-            <time datetime="{{ post.creation_time()? }}">{{ time::since(post.creation_time()?) }}</time>
+            {% include "partials/user_link.html"%}
+            {% let creation_time = post.creation_time()? %}
+            <time datetime="{{ creation_time }}" title="{{ creation_time }}">{{ time::since(creation_time) }}</time>
         </section>
 
         {% if ctx.safety_enabled() %}

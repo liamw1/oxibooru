@@ -99,7 +99,8 @@
                     </td>
                     <td class="creation-time">
                         {% let creation_time = tag.creation_time()? %}
-                        <time datetime="{{ creation_time }}">{{ time::since(creation_time) }}</time>
+                        <time datetime="{{ creation_time }}" title="{{ creation_time }}">{{ time::since(creation_time)
+                            }}</time>
                     </td>
                 </tr>
                 {% endfor %}

@@ -13,6 +13,7 @@ mod pool_category;
 mod post;
 mod tag;
 mod tag_category;
+mod user;
 
 pub fn post_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
     let base = format!("/post/{post_id}");
@@ -33,6 +34,7 @@ pub fn routes(state: AppState) -> Router {
         .merge(post::routes())
         .merge(tag::routes())
         .merge(tag_category::routes())
+        .merge(user::routes())
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
         .nest_service("/data", ServeDir::new(&data_dir))
         .nest_service("/static", ServeDir::new(&static_dir))

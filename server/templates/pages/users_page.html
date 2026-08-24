@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} &ndash; Listing users{% endblock %}
+
+{% block content %}
+{% if ctx.has_privilege(Action::UserList) %}
+<div class="pager">
+    {% include "partials/users_header.html" %}
+
+    <div class="messages"></div>
+
+    <div class="user-list">
+        <ul>
+            {% for user in users %}
+            <li>
+                <div class="wrapper">
+                    <a class="image" {% if ctx.has_privilege(Action::UserView) %} href="user/{{ user.name()? }}" {%
+                        endif %}>
+                        <span class="thumbnail" style="background-image: url('{{ user.avatar_url()? }}')">
+                            <img alt="thumbnail" src="{{ user.avatar_url()? }}">
+                        </span>
+                    </a>
+                    <div class="details">
+                        <a {% if ctx.has_privilege(Action::UserView) %} href="user/{{ user.name()? }}" {% endif %}>
+                            {{ user.name()? }}
+                        </a>
+                        <br>
+                        {% let creation_time = user.creation_time()? %}
+                        Registered: <time datetime="{{ creation_time }}" title="{{ creation_time }}">{{
+                            time::since(creation_time) }}</time>
+                        <br>
+                        {% let last_login_time = user.last_login_time()? %}
+                        Last seen: <time datetime="{{ last_login_time }}" title="{{ last_login_time }}">{{
+                            time::since(last_login_time) }}</time>
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+
+            {% for _ in 0..20 %}
+            <li class="flexbox-dummy"></li>
+            {% endfor %}
+        </ul>
+    </div>
+
+    {% include "partials/manual_pager.html" %}
+</div>
+{% endif %}
+{% endblock %}

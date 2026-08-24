@@ -6,9 +6,10 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::Timestamptz;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::ops::{Deref, DerefMut, Sub};
 use time::error::ComponentRange;
+use time::format_description::well_known::Rfc3339;
 use time::serde::rfc3339;
 use time::{Date, Duration, Month, OffsetDateTime, PrimitiveDateTime};
 use tracing::info;
@@ -111,8 +112,9 @@ impl Sub for DateTime {
 }
 
 impl Display for DateTime {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let formatted_datetime = self.0.format(&Rfc3339).map_err(|_| std::fmt::Error)?;
+        f.write_str(&formatted_datetime)
     }
 }
 
