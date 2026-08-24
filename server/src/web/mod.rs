@@ -7,12 +7,15 @@ use tower_http::services::ServeDir;
 mod comment;
 mod help;
 mod home;
+mod login;
 mod pager;
 mod pool;
 mod pool_category;
 mod post;
+mod settings;
 mod tag;
 mod tag_category;
+mod upload;
 mod user;
 
 pub fn post_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
@@ -29,11 +32,14 @@ pub fn routes(state: AppState) -> Router {
     help::routes()
         .merge(comment::routes())
         .merge(home::routes())
+        .merge(login::routes())
         .merge(pool::routes())
         .merge(pool_category::routes())
         .merge(post::routes())
+        .merge(settings::routes())
         .merge(tag::routes())
         .merge(tag_category::routes())
+        .merge(upload::routes())
         .merge(user::routes())
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
         .nest_service("/data", ServeDir::new(&data_dir))
