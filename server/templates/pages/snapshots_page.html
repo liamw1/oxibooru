@@ -1,0 +1,35 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} &ndash; History{% endblock %}
+
+{% block content %}
+{% if ctx.has_privilege(Action::SnapshotList) %}
+<div class="pager">
+    <div class="snapshot-list">
+        {% if !snapshots.is_empty() %}
+        <ul>
+            {% for snapshot in snapshots %}
+            <li>
+                <div class="header operation-{{ snapshot.operation()? }}">
+                    <span class="time">
+                        {% let time = snapshot.time()? %}
+                        <time datetime="{{ time }}" title="{{ time }}">{{ time::since(time) }}</time>
+                    </span>
+                    {% let user = snapshot.user()? %}
+                    {% include "partials/user_link.html"%}
+                    {{ snapshot.operation()? }}
+                    {# TODO: Resource link #}
+                </div>
+                <div class="details">
+                    {# TODO: Details #}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+
+    {% include "partials/manual_pager.html" %}
+</div>
+{% endif %}
+{% endblock %}

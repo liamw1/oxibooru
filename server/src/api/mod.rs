@@ -25,7 +25,7 @@ mod password_reset;
 pub mod pool;
 pub mod pool_category;
 pub mod post;
-mod snapshot;
+pub mod snapshot;
 pub mod tag;
 pub mod tag_category;
 mod upload;
