@@ -29,7 +29,7 @@ mod snapshot;
 pub mod tag;
 pub mod tag_category;
 mod upload;
-mod user;
+pub mod user;
 mod user_token;
 
 pub fn routes(state: AppState) -> OpenApiRouter {
