@@ -13,6 +13,7 @@ mod pool;
 mod pool_category;
 mod post;
 mod settings;
+mod snapshot;
 mod tag;
 mod tag_category;
 mod upload;
@@ -37,6 +38,7 @@ pub fn routes(state: AppState) -> Router {
         .merge(pool_category::routes())
         .merge(post::routes())
         .merge(settings::routes())
+        .merge(snapshot::routes())
         .merge(tag::routes())
         .merge(tag_category::routes())
         .merge(upload::routes())
@@ -62,6 +64,7 @@ enum Tab {
     Login,
     Help,
     Settings,
+    History,
 }
 
 fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
