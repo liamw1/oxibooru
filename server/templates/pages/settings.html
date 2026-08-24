@@ -3,5 +3,108 @@
 {% block title %}{{ ctx.site_name() }} &ndash; Browsing settings{% endblock %}
 
 {% block content %}
-{# TODO #}
+<div class="content-wrapper" id="settings">
+    <form>
+        <strong>Browsing settings</strong>
+        <p>
+            These settings are saved to the browser's local storage and are not coupled to the user account,
+            so they don't apply to other devices or browsers alike.
+        </p>
+        <ul class="input">
+            <li>
+                <label>
+                    <input id="keyboard-shortcuts" name="keyboard-shortcuts" type="checkbox" {% if
+                        settings.keyboard_shortcuts %} checked {% endif %}>
+                    <span class="checkbox">
+                        Enable keyboard shortcuts
+                        <a class="append icon" href="help/keyboard"><i class="fa fa-question-circle-o"></i></a>
+                    </span>
+                </label>
+            </li>
+
+            <li>
+                <label>Number of posts per page</label>
+                <input type="number" name="posts-per-page" min="10" max="100" value="{{ settings.posts_per_page }}">
+            </li>
+
+            <li>
+                <label>
+                    <input id="dark-theme" name="dark-theme" type="checkbox" {% if settings.dark_theme %} checked {%
+                        endif %}>
+                    <span class="checkbox">Use dark theme</span>
+                </label>
+            </li>
+
+            <li>
+                <label>
+                    <input id="upscale-small-posts" name="upscale-small-posts" type="checkbox" {% if
+                        settings.upscale_small_posts %} checked {% endif %}>
+                    <span class="checkbox">Upscale small posts</span>
+                </label>
+            </li>
+
+            <li>
+                <label>
+                    <input id="endless-scroll" name="endless-scroll" type="checkbox" {% if settings.endless_scroll %}
+                        checked {% endif %}>
+                    <span class="checkbox">Enable endless scroll</span>
+                </label>
+                <p class="hint">Rather than using a paged navigation, smoothly scrolls through the content.</p>
+            </li>
+
+            <li>
+                <label>
+                    <input id="post-flow" name="post-flow" type="checkbox" {% if settings.post_flow %} checked {% endif
+                        %}>
+                    <span class="checkbox">Use post flow</span>
+                </label>
+                <p class='hint'>Use a content-aware flow for thumbnails on the post search page.</p>
+            </li>
+
+            <li>
+                <label>
+                    <input id="transparency-grid" name="transparency-grid" type="checkbox" {% if
+                        settings.transparency_grid %} checked {% endif %}>
+                    <span class="checkbox">Enable transparency grid</span>
+                </label>
+                <p class='hint'>Renders a checkered pattern behind posts with transparent background.</p>
+            </li>
+
+            <li>
+                <label>
+                    <input id="tag-suggestions" name="tag-suggestions" type="checkbox" {% if settings.tag_suggestions %}
+                        checked {% endif %}>
+                    <span class="checkbox">Show tag suggestions</span>
+                </label>
+                <p class='hint'>Shows a popup with suggested tags in edit forms.</p>
+            </li>
+
+            <li>
+                <label>
+                    <input id="autoplay-videos" name="autoplay-videos" type="checkbox" {% if settings.autoplay_videos %}
+                        checked {% endif %}>
+                    <span class="checkbox">Automatically play video posts</span>
+                </label>
+            </li>
+
+            <li>
+                <label>
+                    <input id="underscores-as-spaces" name="underscores-as-spaces" type="checkbox" {% if
+                        settings.underscores_as_spaces %} checked {% endif %}>
+                    <span class="checkbox">Display underscores as spaces</span>
+                </label>
+                <p class='hint'>
+                    Display all underscores as if they were spaces. This is only a visual change,
+                    which means that you'll still have to use underscores when searching or editing tags.
+                </p>
+            </li>
+        </ul>
+
+        <div class="messages"></div>
+
+        <div class="buttons">
+            <input type="submit" value="Save settings">
+        </div>
+    </form>
+</div>
 {% endblock %}
