@@ -34,7 +34,8 @@
 
                 <span class="date">
                     {% let creation_time = comment.creation_time()? %}
-                    <time datetime="{{ creation_time }}">commented {{ time::since(creation_time) }}</time>
+                    <time datetime="{{ creation_time }}" title="{{ creation_time }}">commented {{
+                        time::since(creation_time) }}</time>
                 </span>
 
                 <wbr>
