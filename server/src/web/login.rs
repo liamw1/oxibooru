@@ -1,5 +1,5 @@
 use crate::app::{AppState, Context};
-use crate::config::Action;
+use crate::config::{Action, RegexType};
 use crate::extract::Ctx;
 use crate::web::Tab;
 use askama::Template;
@@ -39,7 +39,7 @@ struct RegistrationTemplate {
 
 async fn register(ctx: Ctx) -> Html<String> {
     let Ctx(ctx, _) = ctx;
-    LoginTemplate {
+    RegistrationTemplate {
         ctx,
         active_tab: Tab::Account,
     }
