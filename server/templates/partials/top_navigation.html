@@ -71,11 +71,13 @@
             </a>
         </li>
         {% else %}
+        {% if ctx.has_privilege(Action::UserCreateSelf) %}
         <li data-name="register" {% if active_tab==Tab::Account %} class="active" {% endif %}>
             <a href="register">
                 <span class="text">Register</span>
             </a>
         </li>
+        {% endif %}
         <li data-name="login" {% if active_tab==Tab::Login %} class="active" {% endif %}>
             <a href="login">
                 <span class="text">Log in</span>

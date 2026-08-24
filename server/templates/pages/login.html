@@ -3,5 +3,32 @@
 {% block title %}{{ ctx.site_name() }} &ndash; Login{% endblock %}
 
 {% block content %}
-{# TODO #}
+<div class="content-wrapper" id="login">
+    <h1>Log in</h1>
+    <form>
+        <ul class="input">
+            <li>
+                <label>User name</label>
+                <input type="text" name="name" required pattern="{{ ctx.config.regex(RegexType::Username) }}">
+            </li>
+            <li>
+                <label>Password</label>
+                <input type="password" name="password" required pattern="{{ ctx.config.regex(RegexType::Password) }}">
+            </li>
+            <li>
+                <label>
+                    <input id="remember-user" name="remember-user" type="checkbox">
+                    <span class="checkbox">Remember me</span>
+                </label>
+            </li>
+        </ul>
+
+        <div class="messages"></div>
+
+        <div class="buttons">
+            <input type="submit" value="Log in">
+            <a class="append" href="password-reset">Forgot the password?</a>
+        </div>
+    </form>
+</div>
 {% endblock %}
