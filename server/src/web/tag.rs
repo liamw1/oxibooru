@@ -1,5 +1,5 @@
 use crate::app::{AppState, Context};
-use crate::config::Action;
+use crate::config::{Action, RegexType};
 use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::resource::tag::{Field, TagInfo};
 use crate::resource::tag_category::TagCategoryInfo;
@@ -16,10 +16,10 @@ use std::num::NonZeroU64;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/tags", routing::get(list))
-        .route("/tag/{name}", routing::get(summary))
-        .route("/tag/{name}/edit", routing::get(edit))
-        .route("/tag/{name}/merge", routing::get(merge))
-        .route("/tag/{name}/delete", routing::get(delete))
+        .route("/tag/{name}", routing::get(summary_tab))
+        .route("/tag/{name}/edit", routing::get(edit_tab))
+        .route("/tag/{name}/merge", routing::get(merge_tab))
+        .route("/tag/{name}/delete", routing::get(delete_tab))
 }
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(50).unwrap();
@@ -134,18 +134,18 @@ async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> Html
     .unwrap()
 }
 
-async fn summary(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn summary_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
     view(ctx, path, TagTab::Summary).await
 }
 
-async fn edit(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn edit_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
     view(ctx, path, TagTab::Edit).await
 }
 
-async fn merge(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn merge_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
     view(ctx, path, TagTab::Merge).await
 }
 
-async fn delete(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn delete_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
     view(ctx, path, TagTab::Delete).await
 }

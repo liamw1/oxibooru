@@ -84,6 +84,18 @@ impl TagInfo {
         self.names().map(|names| names[0].as_ref())
     }
 
+    pub fn joined_names(&self) -> Result<String, NotRequested> {
+        self.names().map(|names| {
+            let total_len = names.iter().map(|name| name.len()).sum::<usize>() + names.len();
+            let mut joined = String::with_capacity(total_len);
+            for name in names {
+                joined.push_str(name);
+                joined.push(' ');
+            }
+            joined
+        })
+    }
+
     pub fn new(conn: &mut PgConnection, tag: Tag, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch(conn, vec![tag], fields).map(resource::single)
     }

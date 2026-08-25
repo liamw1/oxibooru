@@ -1,13 +1,14 @@
 <div class="tag-delete">
     <form>
         <p>
-            This tag has <a href="posts?search-text={{ tag.primary_name()? }}">{{ tag.usages()? }} usages(s)</a>.
+            This tag has <a href="posts?search-text={{ tag.primary_name()? }}">{{ tag.usages()? }} usage{% if
+                tag.usages()? != 1 %}s{% endif %}</a>.
         </p>
 
         <ul class="input">
             <li>
-                {# TODO: <%= ctx.makeCheckbox({ name: 'confirm-deletion' ,
-                    text: 'I confirm that I want to delete this tag.' , required: true, }) %> #}
+                <input id="confirm-deletion" type="checkbox" required>
+                <span class="checkbox">I confirm that I want to delete this tag.</span>
             </li>
         </ul>
 
