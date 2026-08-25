@@ -11,6 +11,7 @@ use askama::Template;
 use axum::response::Html;
 use axum::{Router, routing};
 use serde::{Deserialize, Serialize};
+use server_macros::Deref;
 use std::num::NonZeroU64;
 
 pub fn routes() -> Router<AppState> {
@@ -96,9 +97,12 @@ enum TagTab {
     Delete,
 }
 
-#[derive(Template)]
-#[template(path = "pages/tag.html")]
-struct TagTemplate {
+struct PageFragment {
+    active_tag_tab: TagTab,
+    tag: TagInfo,
+}
+
+struct FullTagPage {
     ctx: Context,
     active_tab: Tab,
     active_tag_tab: TagTab,
@@ -106,7 +110,7 @@ struct TagTemplate {
     categories: Vec<TagCategoryInfo>,
 }
 
-async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> Html<String> {
+async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> FullTagPage {
     let fields = [
         Field::Description,
         Field::Category,
@@ -122,30 +126,59 @@ async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> Html
     let categories = web::tag_category::get_categories(ctx.clone()).await.unwrap();
 
     let Ctx(ctx, _) = ctx;
-    TagTemplate {
+    FullTagPage {
         ctx,
         active_tab: Tab::Tag,
         active_tag_tab,
         tag,
         categories,
     }
-    .render()
-    .map(Html)
-    .unwrap()
 }
+
+#[derive(Deref, Template)]
+#[template(path = "pages/tag_summary.html")]
+struct SummaryTemplate(FullTagPage);
 
 async fn summary_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
-    view(ctx, path, TagTab::Summary).await
+    SummaryTemplate(view(ctx, path, TagTab::Summary).await)
+        .render()
+        .map(Html)
+        .unwrap()
 }
+
+#[derive(Deref, Template)]
+#[template(path = "pages/tag_edit.html")]
+struct EditTemplate(FullTagPage);
 
 async fn edit_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
-    view(ctx, path, TagTab::Edit).await
+    EditTemplate(view(ctx, path, TagTab::Edit).await)
+        .render()
+        .map(Html)
+        .unwrap()
 }
+
+#[derive(Deref, Template)]
+#[template(path = "pages/tag_merge.html")]
+struct MergeTemplate(FullTagPage);
 
 async fn merge_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
-    view(ctx, path, TagTab::Merge).await
+    MergeTemplate(view(ctx, path, TagTab::Merge).await)
+        .render()
+        .map(Html)
+        .unwrap()
 }
 
+#[derive(Deref, Template)]
+#[template(path = "pages/tag_delete.html", block = "tag")]
+struct DeleteFragment(PageFragment);
+
+#[derive(Deref, Template)]
+#[template(path = "pages/tag_delete.html")]
+struct DeleteTemplate(FullTagPage);
+
 async fn delete_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
-    view(ctx, path, TagTab::Delete).await
+    DeleteTemplate(view(ctx, path, TagTab::Delete).await)
+        .render()
+        .map(Html)
+        .unwrap()
 }
