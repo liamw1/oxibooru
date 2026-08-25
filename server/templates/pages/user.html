@@ -2,8 +2,7 @@
 
 {% block title %}{{ ctx.site_name() }} &ndash; User {{ user.name()? }}{% endblock %}
 
-{% block content %}
-{% if ctx.has_privilege(Action::UserView) %}
+{% block main %}
 <div class="content-wrapper" id="user">
     <h1>{{ user.name()? }}</h1>
     <nav class="buttons">
@@ -33,5 +32,4 @@
         {% endmatch %}
     </div>
 </div>
-{% endif %}
 {% endblock %}

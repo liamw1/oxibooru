@@ -2,8 +2,7 @@
 
 {% block title %}{{ ctx.site_name() }} &ndash; History{% endblock %}
 
-{% block content %}
-{% if ctx.has_privilege(Action::SnapshotList) %}
+{% block main %}
 <div class="pager">
     <div class="snapshot-list">
         {% if !snapshots.is_empty() %}
@@ -31,5 +30,4 @@
 
     {% include "partials/manual_pager.html" %}
 </div>
-{% endif %}
 {% endblock %}

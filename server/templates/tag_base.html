@@ -2,15 +2,15 @@
 
 {% block title %}{{ ctx.site_name() }} &ndash; Tag #{{ tag.primary_name()? }}{% endblock %}
 
-{% block content %}
-{% if ctx.has_privilege(Action::TagView) %}
-<div class="content-wrapper" id="tag">
-    <style>
-        {% for category in categories %}
-        .tag-{{ category.name()? }} { color: {{ category.color()? }}; }
-        {% endfor %}
-    </style>
+{% block main %}
+<style>
+    {% for category in categories %}
+    .tag-{{ category.name()? }} { color: {{ category.color()? }}; }
+    {% endfor %}
+</style>
 
+<div class="content-wrapper" id="tag">
+    {% block tag %}
     <h1>{{ tag.primary_name()? }}</h1>
     <nav class="buttons">
         <ul>
@@ -28,16 +28,9 @@
             </li>
         </ul>
     </nav>
-
-    {# TODO: Make it so that client can navigate without a page reload #}
     <div class="content">
-        {% match active_tag_tab %}
-        {% when TagTab::Summary %}{% include "partials/tag_summary.html" %}
-        {% when TagTab::Edit %}{% include "partials/tag_edit.html" %}
-        {% when TagTab::Merge %}{% include "partials/tag_merge.html" %}
-        {% when TagTab::Delete %}{% include "partials/tag_delete.html" %}
-        {% endmatch %}
+        {% block content %}{% endblock %}
     </div>
+    {% endblock %}
 </div>
-{% endif %}
 {% endblock %}
