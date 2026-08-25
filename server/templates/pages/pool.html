@@ -2,8 +2,7 @@
 
 {% block title %}{{ ctx.site_name() }} &ndash; Pool #{{ pool.primary_name()? }}{% endblock %}
 
-{% block content %}
-{% if ctx.has_privilege(Action::PoolView) %}
+{% block main %}
 <div class="content-wrapper" id="pool">
     <style>
         {% for category in categories %}
@@ -39,5 +38,4 @@
         {% endmatch %}
     </div>
 </div>
-{% endif %}
 {% endblock %}

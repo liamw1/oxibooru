@@ -2,8 +2,7 @@
 
 {% block title %}{{ ctx.site_name() }} &ndash; Listing tags{% endblock %}
 
-{% block content %}
-{% if ctx.has_privilege(Action::TagCategoryList) %}
+{% block main %}
 <div class="content-wrapper tag-categories">
     <form>
         <h1>Tag categories</h1>
@@ -59,5 +58,4 @@
         {% endif %}
     </form>
 </div>
-{% endif %}
 {% endblock %}

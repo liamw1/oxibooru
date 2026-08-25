@@ -173,3 +173,28 @@ pub fn resource(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
     TokenStream::from(expanded)
 }
+
+#[proc_macro_derive(Deref)]
+pub fn derive_deref(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+    let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+    let inner = match &input.data {
+        Data::Struct(s) => match &s.fields {
+            Fields::Unnamed(f) if f.unnamed.len() == 1 => &f.unnamed[0].ty,
+            _ => panic!("Deref requires a single-field tuple struct"),
+        },
+        _ => panic!("Deref can only be derived for structs"),
+    };
+
+    quote! {
+        impl #impl_generics ::core::ops::Deref for #name #ty_generics #where_clause {
+            type Target = #inner;
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    }
+    .into()
+}
