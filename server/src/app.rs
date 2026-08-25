@@ -130,6 +130,14 @@ impl Context {
             || self.has_privilege(Action::PoolCategorySetDefault)
     }
 
+    pub fn can_edit_tags(&self) -> bool {
+        self.has_privilege(Action::TagEditName)
+            | self.has_privilege(Action::TagEditCategory)
+            | self.has_privilege(Action::TagEditDescription)
+            | self.has_privilege(Action::TagEditImplication)
+            | self.has_privilege(Action::TagEditSuggestion)
+    }
+
     pub fn can_edit_tag_categories(&self) -> bool {
         self.has_privilege(Action::TagCategoryCreate)
             || self.has_privilege(Action::TagCategoryEditName)

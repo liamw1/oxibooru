@@ -15,10 +15,10 @@ use std::num::NonZeroU64;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/users", routing::get(list))
-        .route("/user/{name}", routing::get(summary))
-        .route("/user/{name}/edit", routing::get(edit))
-        .route("/user/{name}/list-tokens", routing::get(tokens))
-        .route("/user/{name}/delete", routing::get(delete))
+        .route("/user/{name}", routing::get(summary_tab))
+        .route("/user/{name}/edit", routing::get(edit_tab))
+        .route("/user/{name}/list-tokens", routing::get(tokens_tab))
+        .route("/user/{name}/delete", routing::get(delete_tab))
 }
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(30).unwrap();
@@ -113,18 +113,18 @@ async fn view(ctx: Ctx, path: Path<SmallString>, active_user_tab: UserTab) -> Ht
     .unwrap()
 }
 
-async fn summary(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn summary_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
     view(ctx, path, UserTab::Summary).await
 }
 
-async fn edit(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn edit_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
     view(ctx, path, UserTab::Edit).await
 }
 
-async fn tokens(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn tokens_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
     view(ctx, path, UserTab::Tokens).await
 }
 
-async fn delete(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn delete_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
     view(ctx, path, UserTab::Delete).await
 }

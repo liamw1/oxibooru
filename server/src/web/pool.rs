@@ -15,10 +15,10 @@ use std::num::NonZeroU64;
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/pools", routing::get(list))
-        .route("/pool/{id}", routing::get(summary))
-        .route("/pool/{id}/edit", routing::get(edit))
-        .route("/pool/{id}/merge", routing::get(merge))
-        .route("/pool/{id}/delete", routing::get(delete))
+        .route("/pool/{id}", routing::get(summary_tab))
+        .route("/pool/{id}/edit", routing::get(edit_tab))
+        .route("/pool/{id}/merge", routing::get(merge_tab))
+        .route("/pool/{id}/delete", routing::get(delete_tab))
 }
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(50).unwrap();
@@ -133,18 +133,18 @@ async fn view(ctx: Ctx, path: Path<i64>, active_pool_tab: PoolTab) -> Html<Strin
     .unwrap()
 }
 
-async fn summary(ctx: Ctx, path: Path<i64>) -> Html<String> {
+async fn summary_tab(ctx: Ctx, path: Path<i64>) -> Html<String> {
     view(ctx, path, PoolTab::Summary).await
 }
 
-async fn edit(ctx: Ctx, path: Path<i64>) -> Html<String> {
+async fn edit_tab(ctx: Ctx, path: Path<i64>) -> Html<String> {
     view(ctx, path, PoolTab::Edit).await
 }
 
-async fn merge(ctx: Ctx, path: Path<i64>) -> Html<String> {
+async fn merge_tab(ctx: Ctx, path: Path<i64>) -> Html<String> {
     view(ctx, path, PoolTab::Merge).await
 }
 
-async fn delete(ctx: Ctx, path: Path<i64>) -> Html<String> {
+async fn delete_tab(ctx: Ctx, path: Path<i64>) -> Html<String> {
     view(ctx, path, PoolTab::Delete).await
 }
