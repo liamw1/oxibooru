@@ -1,4 +1,4 @@
-use crate::app::{AppState, Context};
+use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Query, ResourceParams};
 use crate::resource::post::{Field, PostInfo};
@@ -18,7 +18,7 @@ const LIMIT: NonZeroU64 = NonZeroU64::new(10).unwrap();
 #[derive(Template)]
 #[template(path = "pages/comments_page.html")]
 struct ListTemplate<'a> {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     posts: Vec<PostInfo>,
     pager: Pager<'a, ()>,
@@ -33,8 +33,6 @@ async fn list(ctx: Ctx, Query(offset): Query<Offset>) -> WebResult<Html> {
     let Json(response) = api::post::list(ctx.clone(), resource_params, page_params).await?;
 
     let pager = Pager::build("comments", &(), page_params, response.total);
-
-    let Ctx(ctx, _) = ctx;
     ListTemplate {
         ctx,
         active_tab: Tab::Comment,

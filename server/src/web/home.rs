@@ -1,6 +1,6 @@
 use crate::api;
 use crate::api::info::InfoResponse;
-use crate::app::{AppState, Context};
+use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostType};
@@ -20,7 +20,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 #[derive(Template)]
 #[template(path = "pages/home.html")]
 struct HomeTemplate {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     info: InfoResponse,
 }
@@ -42,7 +42,6 @@ async fn home(ctx: Ctx) -> WebResult<Html> {
     let resource_params = Query(ResourceParams { query: None, fields });
     let Json(info) = api::info::get(ctx.clone(), resource_params).await?;
 
-    let Ctx(ctx, _) = ctx;
     let active_tab = Tab::Home;
     HomeTemplate { ctx, active_tab, info }
         .render()

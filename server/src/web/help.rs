@@ -1,5 +1,4 @@
 use crate::app::AppState;
-use crate::app::Context;
 use crate::config::Action;
 use crate::extract::Ctx;
 use crate::web::WebError;
@@ -46,13 +45,13 @@ enum SearchTab {
 #[derive(Template)]
 #[template(path = "pages/help.html")]
 struct Help {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     active_help_tab: HelpTab,
     active_search_tab: SearchTab,
 }
 
-fn regular_page(ctx: Context, active_help_tab: HelpTab) -> WebResult<Html> {
+fn regular_page(ctx: Ctx, active_help_tab: HelpTab) -> WebResult<Html> {
     Help {
         ctx,
         active_tab: Tab::Help,
@@ -64,7 +63,7 @@ fn regular_page(ctx: Context, active_help_tab: HelpTab) -> WebResult<Html> {
     .map_err(WebError::from)
 }
 
-fn search_page(ctx: Context, active_search_tab: SearchTab) -> WebResult<Html> {
+fn search_page(ctx: Ctx, active_search_tab: SearchTab) -> WebResult<Html> {
     Help {
         ctx,
         active_tab: Tab::Help,
@@ -76,38 +75,38 @@ fn search_page(ctx: Context, active_search_tab: SearchTab) -> WebResult<Html> {
     .map_err(WebError::from)
 }
 
-async fn about(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+async fn about(ctx: Ctx) -> WebResult<Html> {
     regular_page(ctx, HelpTab::About)
 }
 
-async fn keyboard(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+async fn keyboard(ctx: Ctx) -> WebResult<Html> {
     regular_page(ctx, HelpTab::Keyboard)
 }
 
-async fn comments(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+async fn comments(ctx: Ctx) -> WebResult<Html> {
     regular_page(ctx, HelpTab::Comments)
 }
 
-async fn tos(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+async fn tos(ctx: Ctx) -> WebResult<Html> {
     regular_page(ctx, HelpTab::Tos)
 }
 
-async fn search_general(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+async fn search_general(ctx: Ctx) -> WebResult<Html> {
     search_page(ctx, SearchTab::General)
 }
 
-async fn search_posts(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+async fn search_posts(ctx: Ctx) -> WebResult<Html> {
     search_page(ctx, SearchTab::Posts)
 }
 
-async fn search_users(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+async fn search_users(ctx: Ctx) -> WebResult<Html> {
     search_page(ctx, SearchTab::Users)
 }
 
-async fn search_tags(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+async fn search_tags(ctx: Ctx) -> WebResult<Html> {
     search_page(ctx, SearchTab::Tags)
 }
 
-async fn search_pools(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+async fn search_pools(ctx: Ctx) -> WebResult<Html> {
     search_page(ctx, SearchTab::Pools)
 }

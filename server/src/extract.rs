@@ -271,20 +271,16 @@ pub struct PagedResponse<T> {
 }
 
 /// Extracts the HTMX request headers relevant to the full-page vs fragment decision.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct HxRequest {
     htmx: bool,
-    boosted: bool,
     history_restore: bool,
+    target: Option<String>,
 }
 
 impl HxRequest {
-    pub fn full_page(self) -> bool {
-        !self.htmx || self.boosted || self.history_restore
-    }
-
-    pub fn fragment(self) -> bool {
-        !self.full_page()
+    pub fn full_page(&self) -> bool {
+        !self.htmx || self.history_restore || self.target.is_none()
     }
 }
 
@@ -301,11 +297,16 @@ where
                 .get(name)
                 .is_some_and(|val| val.as_bytes().eq_ignore_ascii_case(b"true"))
         };
+        let target = parts
+            .headers
+            .get("hx-target")
+            .and_then(|val| val.to_str().ok())
+            .map(str::to_owned);
 
         Ok(HxRequest {
             htmx: flag("hx-request"),
-            boosted: flag("hx-boosted"),
             history_restore: flag("hx-history-restore-request"),
+            target,
         })
     }
 }

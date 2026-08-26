@@ -1,4 +1,4 @@
-use crate::app::{AppState, Context};
+use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::resource::pool::{Field, PoolInfo};
@@ -44,7 +44,7 @@ impl Params {
 #[derive(Template)]
 #[template(path = "pages/pools_page.html")]
 struct ListTemplate<'a> {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     pools: Vec<PoolInfo>,
     categories: Vec<PoolCategoryInfo>,
@@ -70,8 +70,6 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offse
 
     let params = params.simplify();
     let pager = Pager::build("pools", &params, page_params, response.total);
-
-    let Ctx(ctx, _) = ctx;
     ListTemplate {
         ctx,
         active_tab: Tab::Pool,
@@ -96,7 +94,7 @@ enum PoolTab {
 #[derive(Template)]
 #[template(path = "pages/pool.html")]
 struct PoolTemplate {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     active_pool_tab: PoolTab,
     pool: PoolInfo,
@@ -116,8 +114,6 @@ async fn view(ctx: Ctx, path: Path<i64>, active_pool_tab: PoolTab) -> WebResult<
     let resource_params = Query(ResourceParams { query: None, fields });
     let Json(pool) = api::pool::get(ctx.clone(), path, resource_params).await?;
     let categories = web::pool_category::get_categories(ctx.clone()).await?;
-
-    let Ctx(ctx, _) = ctx;
     PoolTemplate {
         ctx,
         active_tab: Tab::Pool,

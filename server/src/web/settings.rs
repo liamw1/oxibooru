@@ -1,4 +1,4 @@
-use crate::app::{AppState, Context};
+use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::Ctx;
 use crate::web::{Html, Tab, WebError, WebResult};
@@ -26,7 +26,7 @@ struct Settings {
 #[derive(Template)]
 #[template(path = "pages/settings.html")]
 struct SettingsTemplate {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     settings: Settings,
 }
@@ -39,8 +39,6 @@ async fn settings(ctx: Ctx) -> WebResult<Html> {
         tag_suggestions: true,
         ..Default::default()
     };
-
-    let Ctx(ctx, _) = ctx;
     SettingsTemplate {
         ctx,
         active_tab: Tab::Settings,
