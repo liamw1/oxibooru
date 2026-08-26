@@ -1,13 +1,19 @@
-use crate::api::middleware;
+use crate::api;
 use crate::app::AppState;
 use axum::Router;
+use axum::http::StatusCode;
+use axum::http::header::VARY;
+use axum::response::{Html as AxumHtml, IntoResponse, Response};
 use serde::Serialize;
+use std::sync::Arc;
+use thiserror::Error;
 use tower_http::services::ServeDir;
 
 mod comment;
 mod help;
 mod home;
 mod login;
+mod middleware;
 mod pager;
 mod pool;
 mod pool_category;
@@ -43,11 +49,14 @@ pub fn routes(state: AppState) -> Router {
         .merge(tag_category::routes())
         .merge(upload::routes())
         .merge(user::routes())
-        .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::auth))
+        .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::convert_error))
+        .route_layer(axum::middleware::from_fn_with_state(state.clone(), api::middleware::auth))
         .nest_service("/data", ServeDir::new(&data_dir))
         .nest_service("/static", ServeDir::new(&static_dir))
         .with_state(state)
 }
+
+type WebResult<T> = Result<T, WebError>;
 
 const PROJECT_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 
@@ -64,7 +73,39 @@ enum Tab {
     Login,
     Help,
     Settings,
-    History,
+    None,
+}
+
+struct Html(String);
+
+impl IntoResponse for Html {
+    fn into_response(self) -> Response {
+        ([(VARY, "HX-Request")], AxumHtml(self.0)).into_response()
+    }
+}
+
+#[derive(Debug, Error)]
+#[error(transparent)]
+enum WebError {
+    Api(#[from] crate::api::error::ApiError),
+    Template(#[from] askama::Error),
+}
+
+impl WebError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::Api(err) => err.status_code(),
+            Self::Template(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
+impl IntoResponse for WebError {
+    fn into_response(self) -> Response {
+        let mut response = self.status_code().into_response();
+        response.extensions_mut().insert(Arc::new(self));
+        response
+    }
 }
 
 fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded::ser::Error> {

@@ -1,9 +1,8 @@
 use crate::app::{AppState, Context};
 use crate::config::{Action, RegexType};
 use crate::extract::Ctx;
-use crate::web::Tab;
+use crate::web::{Html, Tab, WebError, WebResult};
 use askama::Template;
-use axum::response::Html;
 use axum::{Router, routing};
 
 pub fn routes() -> Router<AppState> {
@@ -20,7 +19,7 @@ struct RegistrationTemplate {
     active_tab: Tab,
 }
 
-async fn register(ctx: Ctx) -> Html<String> {
+async fn register(ctx: Ctx) -> WebResult<Html> {
     let Ctx(ctx, _) = ctx;
     RegistrationTemplate {
         ctx,
@@ -28,7 +27,7 @@ async fn register(ctx: Ctx) -> Html<String> {
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }
 
 #[derive(Template)]
@@ -38,7 +37,7 @@ struct LoginTemplate {
     active_tab: Tab,
 }
 
-async fn login(ctx: Ctx) -> Html<String> {
+async fn login(ctx: Ctx) -> WebResult<Html> {
     let Ctx(ctx, _) = ctx;
     LoginTemplate {
         ctx,
@@ -46,7 +45,7 @@ async fn login(ctx: Ctx) -> Html<String> {
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }
 
 #[derive(Template)]
@@ -56,7 +55,7 @@ struct PasswordResetTemplate {
     active_tab: Tab,
 }
 
-async fn password_reset(ctx: Ctx) -> Html<String> {
+async fn password_reset(ctx: Ctx) -> WebResult<Html> {
     let Ctx(ctx, _) = ctx;
     PasswordResetTemplate {
         ctx,
@@ -64,5 +63,5 @@ async fn password_reset(ctx: Ctx) -> Html<String> {
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }

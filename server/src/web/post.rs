@@ -5,11 +5,10 @@ use crate::model::enums::{PostFlag, PostSafety, PostType};
 use crate::resource::NotRequested;
 use crate::resource::post::{Field, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
-use crate::web::Tab;
 use crate::web::pager::{Page, Pager};
+use crate::web::{Html, Tab, WebError, WebResult};
 use crate::{api, time, unit, web};
 use askama::Template;
-use axum::response::Html;
 use axum::{Router, routing};
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroU64;
@@ -109,7 +108,7 @@ struct GalleryTemplate<'a> {
     params: &'a Params,
 }
 
-async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> Html<String> {
+async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> WebResult<Html> {
     let fields = [
         Field::Id,
         Field::Tags,
@@ -125,9 +124,7 @@ async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Of
     let query = params.query();
     let resource_params = Query(ResourceParams { query, fields });
     let page_params = Query(offset.to_page_params(LIMIT));
-    let Json(response) = api::post::list(ctx.clone(), resource_params, page_params)
-        .await
-        .unwrap();
+    let Json(response) = api::post::list(ctx.clone(), resource_params, page_params).await?;
 
     let params = params.simplify();
     let pager = Pager::build("posts", &params, page_params, response.total);
@@ -142,7 +139,7 @@ async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Of
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }
 
 #[derive(Template)]
@@ -164,7 +161,7 @@ impl MainTemplate {
     }
 }
 
-async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> Html<String> {
+async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> WebResult<Html> {
     let fields = [
         Field::Id,
         Field::User,
@@ -188,13 +185,9 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> Htm
 
     let query = params.query();
     let resource_params = Query(ResourceParams { query, fields });
-    let Json(post) = api::post::get(ctx.clone(), post_id, resource_params.clone())
-        .await
-        .unwrap();
-    let Json(neighbors) = api::post::get_neighbors(ctx.clone(), post_id, resource_params)
-        .await
-        .unwrap();
-    let tag_categories = web::tag_category::get_categories(ctx.clone()).await.unwrap();
+    let Json(post) = api::post::get(ctx.clone(), post_id, resource_params.clone()).await?;
+    let Json(neighbors) = api::post::get_neighbors(ctx.clone(), post_id, resource_params).await?;
+    let tag_categories = web::tag_category::get_categories(ctx.clone()).await?;
 
     let Ctx(ctx, _) = ctx;
     MainTemplate {
@@ -209,5 +202,5 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> Htm
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }

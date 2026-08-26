@@ -1,9 +1,8 @@
 use crate::app::{AppState, Context};
 use crate::config::Action;
 use crate::extract::Ctx;
-use crate::web::Tab;
+use crate::web::{Html, Tab, WebError, WebResult};
 use askama::Template;
-use axum::response::Html;
 use axum::{Router, routing};
 
 pub fn routes() -> Router<AppState> {
@@ -17,7 +16,7 @@ struct UploadTemplate {
     active_tab: Tab,
 }
 
-async fn upload(ctx: Ctx) -> Html<String> {
+async fn upload(ctx: Ctx) -> WebResult<Html> {
     let Ctx(ctx, _) = ctx;
     UploadTemplate {
         ctx,
@@ -25,5 +24,5 @@ async fn upload(ctx: Ctx) -> Html<String> {
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }

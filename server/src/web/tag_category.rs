@@ -4,9 +4,8 @@ use crate::app::{AppState, Context};
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Query, ResourceParams};
 use crate::resource::tag_category::{Field, TagCategoryInfo};
-use crate::web::Tab;
+use crate::web::{Html, Tab, WebError, WebResult};
 use askama::Template;
-use axum::response::Html;
 use axum::{Router, routing};
 
 pub fn routes() -> Router<AppState> {
@@ -29,11 +28,11 @@ struct ListTemplate {
     categories: Vec<TagCategoryInfo>,
 }
 
-async fn list(ctx: Ctx) -> Html<String> {
+async fn list(ctx: Ctx) -> WebResult<Html> {
     let fields = [Field::Name, Field::Color, Field::Usages, Field::Order, Field::Default].into();
 
     let resource_params = Query(ResourceParams { query: None, fields });
-    let Json(response) = api::tag_category::list(ctx.clone(), resource_params).await.unwrap();
+    let Json(response) = api::tag_category::list(ctx.clone(), resource_params).await?;
 
     let Ctx(ctx, _) = ctx;
     ListTemplate {
@@ -43,5 +42,5 @@ async fn list(ctx: Ctx) -> Html<String> {
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }
