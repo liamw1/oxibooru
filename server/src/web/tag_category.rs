@@ -1,6 +1,6 @@
 use crate::api;
 use crate::api::error::ApiResult;
-use crate::app::{AppState, Context};
+use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Query, ResourceParams};
 use crate::resource::tag_category::{Field, TagCategoryInfo};
@@ -23,7 +23,7 @@ pub async fn get_categories(ctx: Ctx) -> ApiResult<Vec<TagCategoryInfo>> {
 #[derive(Template)]
 #[template(path = "pages/tag_categories.html")]
 struct ListTemplate {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     categories: Vec<TagCategoryInfo>,
 }
@@ -34,7 +34,6 @@ async fn list(ctx: Ctx) -> WebResult<Html> {
     let resource_params = Query(ResourceParams { query: None, fields });
     let Json(response) = api::tag_category::list(ctx.clone(), resource_params).await?;
 
-    let Ctx(ctx, _) = ctx;
     ListTemplate {
         ctx,
         active_tab: Tab::Tag,

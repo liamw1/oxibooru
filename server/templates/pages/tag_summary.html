@@ -47,8 +47,10 @@
                 (none)
                 {% else %}
                 {% for suggestion in tag.suggestions()? %}
-                {% let name = suggestion.primary_name() %}
-                <a class="tag-{{ suggestion.category }}" href="tag/{{ name }}">{{ name }}</a>
+                <li>
+                    {% let name = suggestion.primary_name() %}
+                    <a class="tag-{{ suggestion.category }}" href="tag/{{ name }}">{{ name }}</a>
+                </li>
                 {% endfor %}
                 {% endif %}
             </ul>

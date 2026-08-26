@@ -1,4 +1,4 @@
-use crate::app::{AppState, Context};
+use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Query, ResourceParams};
 use crate::resource::snapshot::{Field, SnapshotInfo};
@@ -18,7 +18,7 @@ const LIMIT: NonZeroU64 = NonZeroU64::new(25).unwrap();
 #[derive(Template)]
 #[template(path = "pages/snapshots_page.html")]
 struct ListTemplate<'a> {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     snapshots: Vec<SnapshotInfo>,
     pager: Pager<'a, ()>,
@@ -32,8 +32,6 @@ async fn history(ctx: Ctx, Query(offset): Query<Offset>) -> WebResult<Html> {
     let Json(response) = api::snapshot::list(ctx.clone(), resource_params, page_params).await?;
 
     let pager = Pager::build("history", &(), page_params, response.total);
-
-    let Ctx(ctx, _) = ctx;
     ListTemplate {
         ctx,
         active_tab: Tab::None,

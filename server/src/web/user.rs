@@ -1,4 +1,4 @@
-use crate::app::{AppState, Context};
+use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::resource::user::{Field, UserInfo};
@@ -44,7 +44,7 @@ impl Params {
 #[derive(Template)]
 #[template(path = "pages/users_page.html")]
 struct ListTemplate<'a> {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     users: Vec<UserInfo>,
     pager: Pager<'a, Params>,
@@ -61,8 +61,6 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offse
 
     let params = params.simplify();
     let pager = Pager::build("users", &params, page_params, response.total);
-
-    let Ctx(ctx, _) = ctx;
     ListTemplate {
         ctx,
         active_tab: Tab::Post,
@@ -86,7 +84,7 @@ enum UserTab {
 #[derive(Template)]
 #[template(path = "pages/user.html")]
 struct PoolTemplate {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     active_user_tab: UserTab,
     user: UserInfo,
@@ -97,8 +95,6 @@ async fn view(ctx: Ctx, path: Path<SmallString>, active_user_tab: UserTab) -> We
 
     let resource_params = Query(ResourceParams { query: None, fields });
     let Json(user) = api::user::get(ctx.clone(), path, resource_params).await?;
-
-    let Ctx(ctx, _) = ctx;
     PoolTemplate {
         ctx,
         active_tab: Tab::User,
