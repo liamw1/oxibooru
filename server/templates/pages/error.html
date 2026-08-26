@@ -1,0 +1,9 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} &ndash; Error{% endblock %}
+
+{% block main %}
+<div class="messages">
+    <div class="message error">{{ error }}</div>
+</div>
+{% endblock %}

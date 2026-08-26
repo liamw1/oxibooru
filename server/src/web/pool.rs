@@ -3,11 +3,10 @@ use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::resource::pool::{Field, PoolInfo};
 use crate::resource::pool_category::PoolCategoryInfo;
-use crate::web::Tab;
 use crate::web::pager::{Page, Pager};
+use crate::web::{Html, Tab, WebError, WebResult};
 use crate::{api, time, web};
 use askama::Template;
-use axum::response::Html;
 use axum::{Router, routing};
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroU64;
@@ -53,7 +52,7 @@ struct ListTemplate<'a> {
     params: &'a Params,
 }
 
-async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> Html<String> {
+async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> WebResult<Html> {
     let fields = [
         Field::Id,
         Field::CreationTime,
@@ -66,10 +65,8 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offse
     let query = params.search_text.clone();
     let resource_params = Query(ResourceParams { query, fields });
     let page_params = Query(offset.to_page_params(LIMIT));
-    let Json(response) = api::pool::list(ctx.clone(), resource_params, page_params)
-        .await
-        .unwrap();
-    let categories = web::pool_category::get_categories(ctx.clone()).await.unwrap();
+    let Json(response) = api::pool::list(ctx.clone(), resource_params, page_params).await?;
+    let categories = web::pool_category::get_categories(ctx.clone()).await?;
 
     let params = params.simplify();
     let pager = Pager::build("pools", &params, page_params, response.total);
@@ -85,7 +82,7 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offse
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }
 
 #[derive(PartialEq, Eq)]
@@ -106,7 +103,7 @@ struct PoolTemplate {
     categories: Vec<PoolCategoryInfo>,
 }
 
-async fn view(ctx: Ctx, path: Path<i64>, active_pool_tab: PoolTab) -> Html<String> {
+async fn view(ctx: Ctx, path: Path<i64>, active_pool_tab: PoolTab) -> WebResult<Html> {
     let fields = [
         Field::Id,
         Field::Description,
@@ -117,8 +114,8 @@ async fn view(ctx: Ctx, path: Path<i64>, active_pool_tab: PoolTab) -> Html<Strin
     .into();
 
     let resource_params = Query(ResourceParams { query: None, fields });
-    let Json(pool) = api::pool::get(ctx.clone(), path, resource_params).await.unwrap();
-    let categories = web::pool_category::get_categories(ctx.clone()).await.unwrap();
+    let Json(pool) = api::pool::get(ctx.clone(), path, resource_params).await?;
+    let categories = web::pool_category::get_categories(ctx.clone()).await?;
 
     let Ctx(ctx, _) = ctx;
     PoolTemplate {
@@ -130,21 +127,21 @@ async fn view(ctx: Ctx, path: Path<i64>, active_pool_tab: PoolTab) -> Html<Strin
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }
 
-async fn summary_tab(ctx: Ctx, path: Path<i64>) -> Html<String> {
+async fn summary_tab(ctx: Ctx, path: Path<i64>) -> WebResult<Html> {
     view(ctx, path, PoolTab::Summary).await
 }
 
-async fn edit_tab(ctx: Ctx, path: Path<i64>) -> Html<String> {
+async fn edit_tab(ctx: Ctx, path: Path<i64>) -> WebResult<Html> {
     view(ctx, path, PoolTab::Edit).await
 }
 
-async fn merge_tab(ctx: Ctx, path: Path<i64>) -> Html<String> {
+async fn merge_tab(ctx: Ctx, path: Path<i64>) -> WebResult<Html> {
     view(ctx, path, PoolTab::Merge).await
 }
 
-async fn delete_tab(ctx: Ctx, path: Path<i64>) -> Html<String> {
+async fn delete_tab(ctx: Ctx, path: Path<i64>) -> WebResult<Html> {
     view(ctx, path, PoolTab::Delete).await
 }

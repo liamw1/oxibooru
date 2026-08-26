@@ -2,9 +2,10 @@ use crate::app::AppState;
 use crate::app::Context;
 use crate::config::Action;
 use crate::extract::Ctx;
-use crate::web::Tab;
+use crate::web::WebError;
+use crate::web::WebResult;
+use crate::web::{Html, Tab};
 use askama::Template;
-use axum::response::Html;
 use axum::{Router, routing};
 
 pub fn routes() -> Router<AppState> {
@@ -51,58 +52,62 @@ struct Help {
     active_search_tab: SearchTab,
 }
 
-impl Help {
-    fn regular(ctx: Context, active_help_tab: HelpTab) -> Self {
-        Self {
-            ctx,
-            active_tab: Tab::Help,
-            active_help_tab,
-            active_search_tab: SearchTab::General,
-        }
+fn regular_page(ctx: Context, active_help_tab: HelpTab) -> WebResult<Html> {
+    Help {
+        ctx,
+        active_tab: Tab::Help,
+        active_help_tab,
+        active_search_tab: SearchTab::General,
     }
+    .render()
+    .map(Html)
+    .map_err(WebError::from)
+}
 
-    fn search(ctx: Context, active_search_tab: SearchTab) -> Self {
-        Self {
-            ctx,
-            active_tab: Tab::Help,
-            active_help_tab: HelpTab::Search,
-            active_search_tab,
-        }
+fn search_page(ctx: Context, active_search_tab: SearchTab) -> WebResult<Html> {
+    Help {
+        ctx,
+        active_tab: Tab::Help,
+        active_help_tab: HelpTab::Search,
+        active_search_tab,
     }
+    .render()
+    .map(Html)
+    .map_err(WebError::from)
 }
 
-async fn about(Ctx(ctx, _): Ctx) -> Html<String> {
-    Help::regular(ctx, HelpTab::About).render().map(Html).unwrap()
+async fn about(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+    regular_page(ctx, HelpTab::About)
 }
 
-async fn keyboard(Ctx(ctx, _): Ctx) -> Html<String> {
-    Help::regular(ctx, HelpTab::Keyboard).render().map(Html).unwrap()
+async fn keyboard(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+    regular_page(ctx, HelpTab::Keyboard)
 }
 
-async fn comments(Ctx(ctx, _): Ctx) -> Html<String> {
-    Help::regular(ctx, HelpTab::Comments).render().map(Html).unwrap()
+async fn comments(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+    regular_page(ctx, HelpTab::Comments)
 }
 
-async fn tos(Ctx(ctx, _): Ctx) -> Html<String> {
-    Help::regular(ctx, HelpTab::Tos).render().map(Html).unwrap()
+async fn tos(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+    regular_page(ctx, HelpTab::Tos)
 }
 
-async fn search_general(Ctx(ctx, _): Ctx) -> Html<String> {
-    Help::search(ctx, SearchTab::General).render().map(Html).unwrap()
+async fn search_general(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+    search_page(ctx, SearchTab::General)
 }
 
-async fn search_posts(Ctx(ctx, _): Ctx) -> Html<String> {
-    Help::search(ctx, SearchTab::Posts).render().map(Html).unwrap()
+async fn search_posts(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+    search_page(ctx, SearchTab::Posts)
 }
 
-async fn search_users(Ctx(ctx, _): Ctx) -> Html<String> {
-    Help::search(ctx, SearchTab::Users).render().map(Html).unwrap()
+async fn search_users(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+    search_page(ctx, SearchTab::Users)
 }
 
-async fn search_tags(Ctx(ctx, _): Ctx) -> Html<String> {
-    Help::search(ctx, SearchTab::Tags).render().map(Html).unwrap()
+async fn search_tags(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+    search_page(ctx, SearchTab::Tags)
 }
 
-async fn search_pools(Ctx(ctx, _): Ctx) -> Html<String> {
-    Help::search(ctx, SearchTab::Pools).render().map(Html).unwrap()
+async fn search_pools(Ctx(ctx, _): Ctx) -> WebResult<Html> {
+    search_page(ctx, SearchTab::Pools)
 }

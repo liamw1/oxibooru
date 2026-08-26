@@ -17,6 +17,7 @@ use axum::response::{IntoResponse, Response};
 use mime::{APPLICATION, FORM_DATA, JSON, MULTIPART};
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
+use std::convert::Infallible;
 use std::num::NonZeroU64;
 use std::ops::Deref;
 use std::str::FromStr;
@@ -267,4 +268,44 @@ pub struct PagedResponse<T> {
     #[schema(examples(1729))]
     pub total: u64,
     pub results: Vec<T>,
+}
+
+/// Extracts the HTMX request headers relevant to the full-page vs fragment decision.
+#[derive(Clone, Copy)]
+pub struct HxRequest {
+    htmx: bool,
+    boosted: bool,
+    history_restore: bool,
+}
+
+impl HxRequest {
+    pub fn full_page(self) -> bool {
+        !self.htmx || self.boosted || self.history_restore
+    }
+
+    pub fn fragment(self) -> bool {
+        !self.full_page()
+    }
+}
+
+impl<S> FromRequestParts<S> for HxRequest
+where
+    S: Send + Sync,
+{
+    type Rejection = Infallible;
+
+    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+        let flag = |name: &str| {
+            parts
+                .headers
+                .get(name)
+                .is_some_and(|val| val.as_bytes().eq_ignore_ascii_case(b"true"))
+        };
+
+        Ok(HxRequest {
+            htmx: flag("hx-request"),
+            boosted: flag("hx-boosted"),
+            history_restore: flag("hx-history-restore-request"),
+        })
+    }
 }

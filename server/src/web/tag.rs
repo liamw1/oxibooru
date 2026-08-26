@@ -4,11 +4,10 @@ use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::resource::tag::{Field, TagInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::string::SmallString;
-use crate::web::Tab;
 use crate::web::pager::{Page, Pager};
+use crate::web::{Html, Tab, WebError, WebResult};
 use crate::{api, time, web};
 use askama::Template;
-use axum::response::Html;
 use axum::{Router, routing};
 use serde::{Deserialize, Serialize};
 use server_macros::Deref;
@@ -55,7 +54,7 @@ struct ListTemplate<'a> {
     params: &'a Params,
 }
 
-async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> Html<String> {
+async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> WebResult<Html> {
     let fields = [
         Field::CreationTime,
         Field::Category,
@@ -69,8 +68,8 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offse
     let query = params.search_text.clone();
     let resource_params = Query(ResourceParams { query, fields });
     let page_params = Query(offset.to_page_params(LIMIT));
-    let Json(response) = api::tag::list(ctx.clone(), resource_params, page_params).await.unwrap();
-    let categories = web::tag_category::get_categories(ctx.clone()).await.unwrap();
+    let Json(response) = api::tag::list(ctx.clone(), resource_params, page_params).await?;
+    let categories = web::tag_category::get_categories(ctx.clone()).await?;
 
     let params = params.simplify();
     let pager = Pager::build("tags", &params, page_params, response.total);
@@ -86,7 +85,7 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offse
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }
 
 #[derive(PartialEq, Eq)]
@@ -97,11 +96,6 @@ enum TagTab {
     Delete,
 }
 
-struct PageFragment {
-    active_tag_tab: TagTab,
-    tag: TagInfo,
-}
-
 struct FullTagPage {
     ctx: Context,
     active_tab: Tab,
@@ -110,7 +104,7 @@ struct FullTagPage {
     categories: Vec<TagCategoryInfo>,
 }
 
-async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> FullTagPage {
+async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> WebResult<FullTagPage> {
     let fields = [
         Field::Description,
         Field::Category,
@@ -122,63 +116,61 @@ async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> Full
     .into();
 
     let resource_params = Query(ResourceParams { query: None, fields });
-    let Json(tag) = api::tag::get(ctx.clone(), path, resource_params).await.unwrap();
-    let categories = web::tag_category::get_categories(ctx.clone()).await.unwrap();
+    let Json(tag) = api::tag::get(ctx.clone(), path, resource_params).await?;
+    let categories = web::tag_category::get_categories(ctx.clone()).await?;
 
     let Ctx(ctx, _) = ctx;
-    FullTagPage {
+    Ok(FullTagPage {
         ctx,
         active_tab: Tab::Tag,
         active_tag_tab,
         tag,
         categories,
-    }
+    })
 }
 
 #[derive(Deref, Template)]
 #[template(path = "pages/tag_summary.html")]
-struct SummaryTemplate(FullTagPage);
+struct SummaryPageTemplate(FullTagPage);
 
-async fn summary_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
-    SummaryTemplate(view(ctx, path, TagTab::Summary).await)
+#[derive(Template)]
+#[template(path = "pages/tag_summary.html", block = "tag")]
+struct SummaryFragmentTemplate {
+    active_tag_tab: TagTab,
+    tag: TagInfo,
+}
+
+async fn summary_tab(ctx: Ctx, path: Path<SmallString>) -> WebResult<Html> {
+    let page_info = view(ctx, path, TagTab::Summary).await?;
+    SummaryPageTemplate(page_info)
         .render()
         .map(Html)
-        .unwrap()
+        .map_err(WebError::from)
 }
 
 #[derive(Deref, Template)]
 #[template(path = "pages/tag_edit.html")]
-struct EditTemplate(FullTagPage);
+struct EditPageTemplate(FullTagPage);
 
-async fn edit_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
-    EditTemplate(view(ctx, path, TagTab::Edit).await)
-        .render()
-        .map(Html)
-        .unwrap()
+async fn edit_tab(ctx: Ctx, path: Path<SmallString>) -> WebResult<Html> {
+    let page_info = view(ctx, path, TagTab::Edit).await?;
+    EditPageTemplate(page_info).render().map(Html).map_err(WebError::from)
 }
 
 #[derive(Deref, Template)]
 #[template(path = "pages/tag_merge.html")]
-struct MergeTemplate(FullTagPage);
+struct MergePageTemplate(FullTagPage);
 
-async fn merge_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
-    MergeTemplate(view(ctx, path, TagTab::Merge).await)
-        .render()
-        .map(Html)
-        .unwrap()
+async fn merge_tab(ctx: Ctx, path: Path<SmallString>) -> WebResult<Html> {
+    let page_info = view(ctx, path, TagTab::Merge).await?;
+    MergePageTemplate(page_info).render().map(Html).map_err(WebError::from)
 }
 
 #[derive(Deref, Template)]
-#[template(path = "pages/tag_delete.html", block = "tag")]
-struct DeleteFragment(PageFragment);
-
-#[derive(Deref, Template)]
 #[template(path = "pages/tag_delete.html")]
-struct DeleteTemplate(FullTagPage);
+struct DeletePageTemplate(FullTagPage);
 
-async fn delete_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
-    DeleteTemplate(view(ctx, path, TagTab::Delete).await)
-        .render()
-        .map(Html)
-        .unwrap()
+async fn delete_tab(ctx: Ctx, path: Path<SmallString>) -> WebResult<Html> {
+    let page_info = view(ctx, path, TagTab::Delete).await?;
+    DeletePageTemplate(page_info).render().map(Html).map_err(WebError::from)
 }

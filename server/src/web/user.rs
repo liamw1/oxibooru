@@ -3,11 +3,10 @@ use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::resource::user::{Field, UserInfo};
 use crate::string::SmallString;
-use crate::web::Tab;
 use crate::web::pager::{Page, Pager};
+use crate::web::{Html, Tab, WebError, WebResult};
 use crate::{api, time};
 use askama::Template;
-use axum::response::Html;
 use axum::{Router, routing};
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroU64;
@@ -52,15 +51,13 @@ struct ListTemplate<'a> {
     params: &'a Params,
 }
 
-async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> Html<String> {
+async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> WebResult<Html> {
     let fields = [Field::Name, Field::LastLoginTime, Field::CreationTime, Field::AvatarUrl].into();
 
     let query = params.search_text.clone();
     let resource_params = Query(ResourceParams { query, fields });
     let page_params = Query(offset.to_page_params(LIMIT));
-    let Json(response) = api::user::list(ctx.clone(), resource_params, page_params)
-        .await
-        .unwrap();
+    let Json(response) = api::user::list(ctx.clone(), resource_params, page_params).await?;
 
     let params = params.simplify();
     let pager = Pager::build("users", &params, page_params, response.total);
@@ -75,7 +72,7 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offse
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }
 
 #[derive(PartialEq, Eq)]
@@ -95,11 +92,11 @@ struct PoolTemplate {
     user: UserInfo,
 }
 
-async fn view(ctx: Ctx, path: Path<SmallString>, active_user_tab: UserTab) -> Html<String> {
+async fn view(ctx: Ctx, path: Path<SmallString>, active_user_tab: UserTab) -> WebResult<Html> {
     let fields = [Field::Name].into();
 
     let resource_params = Query(ResourceParams { query: None, fields });
-    let Json(user) = api::user::get(ctx.clone(), path, resource_params).await.unwrap();
+    let Json(user) = api::user::get(ctx.clone(), path, resource_params).await?;
 
     let Ctx(ctx, _) = ctx;
     PoolTemplate {
@@ -110,21 +107,21 @@ async fn view(ctx: Ctx, path: Path<SmallString>, active_user_tab: UserTab) -> Ht
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }
 
-async fn summary_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn summary_tab(ctx: Ctx, path: Path<SmallString>) -> WebResult<Html> {
     view(ctx, path, UserTab::Summary).await
 }
 
-async fn edit_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn edit_tab(ctx: Ctx, path: Path<SmallString>) -> WebResult<Html> {
     view(ctx, path, UserTab::Edit).await
 }
 
-async fn tokens_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn tokens_tab(ctx: Ctx, path: Path<SmallString>) -> WebResult<Html> {
     view(ctx, path, UserTab::Tokens).await
 }
 
-async fn delete_tab(ctx: Ctx, path: Path<SmallString>) -> Html<String> {
+async fn delete_tab(ctx: Ctx, path: Path<SmallString>) -> WebResult<Html> {
     view(ctx, path, UserTab::Delete).await
 }
