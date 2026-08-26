@@ -1,4 +1,3 @@
-use crate::app::Context;
 use crate::config::Action;
 use crate::extract::Ctx;
 use crate::web::{Html, Tab, WebError};
@@ -8,7 +7,7 @@ use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use std::sync::Arc;
 
-pub async fn convert_error(Ctx(ctx, _): Ctx, req: Request, next: Next) -> Response {
+pub async fn convert_error(ctx: Ctx, req: Request, next: Next) -> Response {
     let response = next.run(req).await;
 
     if let Some(err) = response.extensions().get::<Arc<WebError>>() {
@@ -29,7 +28,7 @@ pub async fn convert_error(Ctx(ctx, _): Ctx, req: Request, next: Next) -> Respon
 #[derive(Template)]
 #[template(path = "pages/error.html")]
 struct ErrorTemplate<'a> {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     error: &'a WebError,
 }

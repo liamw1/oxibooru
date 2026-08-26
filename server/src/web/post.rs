@@ -1,4 +1,4 @@
-use crate::app::{AppState, Context};
+use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostSafety, PostType};
@@ -101,7 +101,7 @@ impl Params {
 #[derive(Template)]
 #[template(path = "pages/post_gallery.html")]
 struct GalleryTemplate<'a> {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     posts: Vec<PostInfo>,
     pager: Pager<'a, Params>,
@@ -128,8 +128,6 @@ async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Of
 
     let params = params.simplify();
     let pager = Pager::build("posts", &params, page_params, response.total);
-
-    let Ctx(ctx, _) = ctx;
     GalleryTemplate {
         ctx,
         active_tab: Tab::Post,
@@ -145,7 +143,7 @@ async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Of
 #[derive(Template)]
 #[template(path = "pages/post_main.html")]
 struct MainTemplate {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
     is_editing: bool,
     post: PostInfo,
@@ -189,7 +187,6 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> Web
     let Json(neighbors) = api::post::get_neighbors(ctx.clone(), post_id, resource_params).await?;
     let tag_categories = web::tag_category::get_categories(ctx.clone()).await?;
 
-    let Ctx(ctx, _) = ctx;
     MainTemplate {
         ctx,
         active_tab: Tab::Post,

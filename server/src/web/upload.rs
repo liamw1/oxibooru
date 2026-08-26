@@ -1,4 +1,4 @@
-use crate::app::{AppState, Context};
+use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::Ctx;
 use crate::web::{Html, Tab, WebError, WebResult};
@@ -12,12 +12,11 @@ pub fn routes() -> Router<AppState> {
 #[derive(Template)]
 #[template(path = "pages/upload.html")]
 struct UploadTemplate {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
 }
 
 async fn upload(ctx: Ctx) -> WebResult<Html> {
-    let Ctx(ctx, _) = ctx;
     UploadTemplate {
         ctx,
         active_tab: Tab::Upload,

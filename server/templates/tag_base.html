@@ -12,7 +12,7 @@
 <div class="content-wrapper" id="tag">
     {% block tag %}
     <h1>{{ tag.primary_name()? }}</h1>
-    <nav class="buttons">
+    <nav class="buttons" hx-target="#tag" hx-swap="show:none focus-scroll:false">
         <ul>
             <li data-name="summary" {% if active_tag_tab==TagTab::Summary %} class="active" {% endif %}>
                 <a href="tag/{{ tag.primary_name()? }}">Summary</a>

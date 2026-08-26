@@ -1,4 +1,4 @@
-use crate::app::{AppState, Context};
+use crate::app::AppState;
 use crate::config::{Action, RegexType};
 use crate::extract::Ctx;
 use crate::web::{Html, Tab, WebError, WebResult};
@@ -15,12 +15,11 @@ pub fn routes() -> Router<AppState> {
 #[derive(Template)]
 #[template(path = "pages/registration.html")]
 struct RegistrationTemplate {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
 }
 
 async fn register(ctx: Ctx) -> WebResult<Html> {
-    let Ctx(ctx, _) = ctx;
     RegistrationTemplate {
         ctx,
         active_tab: Tab::Account,
@@ -33,12 +32,11 @@ async fn register(ctx: Ctx) -> WebResult<Html> {
 #[derive(Template)]
 #[template(path = "pages/login.html")]
 struct LoginTemplate {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
 }
 
 async fn login(ctx: Ctx) -> WebResult<Html> {
-    let Ctx(ctx, _) = ctx;
     LoginTemplate {
         ctx,
         active_tab: Tab::Login,
@@ -51,12 +49,11 @@ async fn login(ctx: Ctx) -> WebResult<Html> {
 #[derive(Template)]
 #[template(path = "pages/password_reset.html")]
 struct PasswordResetTemplate {
-    ctx: Context,
+    ctx: Ctx,
     active_tab: Tab,
 }
 
 async fn password_reset(ctx: Ctx) -> WebResult<Html> {
-    let Ctx(ctx, _) = ctx;
     PasswordResetTemplate {
         ctx,
         active_tab: Tab::Login,
