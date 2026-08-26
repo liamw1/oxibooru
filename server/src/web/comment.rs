@@ -2,11 +2,10 @@ use crate::app::{AppState, Context};
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Query, ResourceParams};
 use crate::resource::post::{Field, PostInfo};
-use crate::web::Tab;
 use crate::web::pager::{Page, Pager};
+use crate::web::{Html, Tab, WebError, WebResult};
 use crate::{api, time};
 use askama::Template;
-use axum::response::Html;
 use axum::{Router, routing};
 use std::num::NonZeroU64;
 
@@ -25,15 +24,13 @@ struct ListTemplate<'a> {
     pager: Pager<'a, ()>,
 }
 
-async fn list(ctx: Ctx, Query(offset): Query<Offset>) -> Html<String> {
+async fn list(ctx: Ctx, Query(offset): Query<Offset>) -> WebResult<Html> {
     let fields = [Field::Id, Field::ThumbnailUrl, Field::Comments].into();
 
     let query = Some("sort:comment-date comment-count:1..".to_owned());
     let resource_params = Query(ResourceParams { query, fields });
     let page_params = Query(offset.to_page_params(LIMIT));
-    let Json(response) = api::post::list(ctx.clone(), resource_params, page_params)
-        .await
-        .unwrap();
+    let Json(response) = api::post::list(ctx.clone(), resource_params, page_params).await?;
 
     let pager = Pager::build("comments", &(), page_params, response.total);
 
@@ -46,5 +43,5 @@ async fn list(ctx: Ctx, Query(offset): Query<Offset>) -> Html<String> {
     }
     .render()
     .map(Html)
-    .unwrap()
+    .map_err(WebError::from)
 }

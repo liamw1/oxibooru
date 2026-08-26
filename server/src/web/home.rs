@@ -6,10 +6,9 @@ use crate::extract::{Ctx, Json, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostType};
 use crate::resource::post::Field;
 use crate::time::BUILD_DATE;
-use crate::web::Tab;
+use crate::web::{Html, Tab, WebError, WebResult};
 use crate::{time, unit};
 use askama::Template;
-use axum::response::Html;
 use axum::{Router, routing};
 
 pub fn routes() -> Router<AppState> {
@@ -26,7 +25,7 @@ struct HomeTemplate {
     info: InfoResponse,
 }
 
-async fn home(ctx: Ctx) -> Html<String> {
+async fn home(ctx: Ctx) -> WebResult<Html> {
     let fields = [
         Field::Id,
         Field::User,
@@ -41,9 +40,12 @@ async fn home(ctx: Ctx) -> Html<String> {
     ]
     .into();
     let resource_params = Query(ResourceParams { query: None, fields });
-    let Json(info) = api::info::get(ctx.clone(), resource_params).await.unwrap();
+    let Json(info) = api::info::get(ctx.clone(), resource_params).await?;
 
     let Ctx(ctx, _) = ctx;
     let active_tab = Tab::Home;
-    HomeTemplate { ctx, active_tab, info }.render().map(Html).unwrap()
+    HomeTemplate { ctx, active_tab, info }
+        .render()
+        .map(Html)
+        .map_err(WebError::from)
 }
