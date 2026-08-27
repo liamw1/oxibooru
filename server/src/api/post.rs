@@ -57,60 +57,6 @@ pub fn routes(upload_limit: DefaultBodyLimit) -> OpenApiRouter<AppState> {
         .merge(upload_capable_routes)
 }
 
-static POST_TAG_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
-
-#[allow(dead_code)]
-#[derive(ToSchema)]
-struct Multipart<T> {
-    /// JSON metadata (same structure as JSON request body).
-    metadata: T,
-    /// Content file (image, video, etc.).
-    #[schema(format = Binary)]
-    content: Option<String>,
-    /// Thumbnail file.
-    #[schema(format = Binary)]
-    thumbnail: Option<String>,
-}
-
-fn verify_visibility(conn: &mut PgConnection, ctx: &Context, post_id: i64) -> ApiResult<()> {
-    let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
-    if !post_exists {
-        return Err(ApiError::NotFound(ResourceType::Post));
-    }
-
-    if let Some(hidden_posts) = ctx.preferences().hidden_posts(post_statistics::post_id) {
-        let post_lookup = hidden_posts.filter(post_statistics::post_id.eq(post_id));
-        let post_hidden: bool = diesel::select(exists(post_lookup)).first(conn)?;
-        if post_hidden {
-            return Err(ApiError::Hidden(ResourceType::Post));
-        }
-    }
-    Ok(())
-}
-
-/// Runs an `update` that may add `tags` to a post as a transaction.
-///
-/// Tagging multiple posts simultaneously can cause issues if two updates share tags.
-/// If two updates share a new tag, a uniqueness violation can occur.
-/// If two updates share an existing tag, a deadlock can occur due to statistics updating.
-/// Therefore, we lock an asynchronous mutex whenever updating post tags. This is a bit
-/// more pessimistic than necessary, as parallel updates are safe if the sets of tags are
-/// disjoint. However, allowing disjoint tagging introduces additional complexity so it
-/// isn't being done as of now.
-async fn tagging_update<T, F>(connection_pool: &AsyncConnectionPool, tags_updated: bool, update: F) -> ApiResult<T>
-where
-    T: Send + 'static,
-    F: FnOnce(&mut db::Connection) -> ApiResult<T> + Send + 'static,
-{
-    let _lock;
-    if tags_updated {
-        _lock = POST_TAG_MUTEX.lock().await;
-    }
-
-    // Get a fresh connection here so that connection isn't being held while waiting on lock
-    connection_pool.transaction(update).await
-}
-
 /// Searches for posts.
 ///
 /// **Anonymous tokens**
@@ -386,7 +332,7 @@ pub async fn get_neighbors(
         (status = 403, description = "Privileges are too low"),
     ),
 )]
-async fn get_featured(
+pub async fn get_featured(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
 ) -> ApiResult<Json<Option<PostInfo>>> {
@@ -416,9 +362,9 @@ async fn get_featured(
 
 /// Request body for featuring a post.
 #[derive(Deserialize, ToSchema)]
-struct FeatureBody {
+pub struct FeatureBody {
     /// ID of the post to feature.
-    id: i64,
+    pub id: i64,
 }
 
 /// Features a post on the main page in web client.
@@ -434,7 +380,7 @@ struct FeatureBody {
         (status = 409, description = "Trying to feature a post that is currently featured"),
     ),
 )]
-async fn feature(
+pub async fn feature(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<FeatureBody>,
@@ -474,6 +420,603 @@ async fn feature(
         .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, body.id, params.fields))
         .await
         .map(Json)
+}
+
+/// Request body for reverse image search.
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReverseSearchBody {
+    /// Token referencing previously uploaded content.
+    #[schema(value_type = Option<String>)]
+    pub content_token: Option<UploadToken>,
+    /// URL to fetch image content from.
+    pub content_url: Option<Url>,
+}
+
+/// A post with its visual similarity distance.
+#[derive(Serialize, ToSchema)]
+pub struct SimilarPost {
+    /// Visual similarity distance. Lower is more similar.
+    #[schema(minimum = 0.0, maximum = 1.0)]
+    pub distance: f64,
+    /// The similar post.
+    pub post: PostInfo,
+}
+
+/// Response from reverse image search.
+#[derive(Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ReverseSearchResponse {
+    /// Exact match if found (same checksum).
+    pub exact_post: Option<PostInfo>,
+    /// Posts that are visually similar to the input image.
+    pub similar_posts: Vec<SimilarPost>,
+}
+
+/// Retrieves posts that look like the input image.
+#[utoipa::path(
+    post,
+    path = "/posts/reverse-search",
+    tag = POST_TAG,
+    params(ResourceParams),
+    request_body(
+        content(
+            (ReverseSearchBody = "application/json"),
+            (Multipart<ReverseSearchBody> = "multipart/form-data"),
+        )
+    ),
+    responses(
+        (status = 200, body = ReverseSearchResponse),
+        (status = 400, description = "Reverse search content is missing"),
+        (status = 403, description = "Privileges are too low"),
+    ),
+)]
+pub async fn reverse_search(
+    ctx: Ctx,
+    Query(params): Query<ResourceParams<Field>>,
+    body: JsonOrMultipart<ReverseSearchBody>,
+) -> ApiResult<Json<ReverseSearchResponse>> {
+    ctx.verify_privilege(Action::PostView)?;
+    ctx.verify_privilege(Action::PostReverseSearch)?;
+
+    match body {
+        JsonOrMultipart::Json(payload) => reverse_search_impl(ctx, params, payload).await,
+        JsonOrMultipart::Multipart(payload) => {
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content]).await?;
+            let reverse_search_body = if let [Some(content_token)] = decoded_body.files {
+                ReverseSearchBody {
+                    content_token: Some(content_token),
+                    content_url: None,
+                }
+            } else if let Some(metadata) = decoded_body.metadata {
+                serde_json::from_slice(&metadata)?
+            } else {
+                return Err(ApiError::MissingFormData);
+            };
+            reverse_search_impl(ctx, params, reverse_search_body).await
+        }
+    }
+}
+
+/// Request body for creating a post.
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PostCreateBody {
+    /// Post safety rating.
+    pub safety: PostSafety,
+    /// Token referencing previously uploaded content.
+    #[schema(value_type = Option<String>)]
+    pub content_token: Option<UploadToken>,
+    /// URL to fetch content from.
+    pub content_url: Option<Url>,
+    /// Token referencing previously uploaded thumbnail.
+    #[schema(value_type = Option<String>)]
+    pub thumbnail_token: Option<UploadToken>,
+    /// URL to fetch thumbnail from.
+    pub thumbnail_url: Option<Url>,
+    /// Source URL or description.
+    pub source: Option<String>,
+    /// Post description.
+    pub description: Option<String>,
+    /// IDs of related posts.
+    pub relations: Option<Vec<i64>>,
+    /// If true, the uploader name won't be recorded.
+    pub anonymous: Option<bool>,
+    /// Tags to apply. Non-existent tags will be created automatically.
+    pub tags: Option<Vec<SmallString>>,
+    /// Post annotations.
+    pub notes: Option<Vec<Note>>,
+    /// Post flags: `loop` or `sound`.
+    pub flags: Option<Vec<PostFlag>>,
+}
+
+/// Creates a new post.
+///
+/// If specified tags do not exist yet, they will be automatically created.
+/// Tags created automatically have no implications, no suggestions, one name
+/// and their category is set to the first tag category found. Safety must be
+/// any of `safe`, `sketchy` or `unsafe`. Relations must contain valid post IDs.
+/// If `flags` is omitted, they will be defined by default (`loop` will be set
+/// for all video posts, and `sound` will be auto-detected). Sending empty
+/// `thumbnail` will cause the post to use default thumbnail. If `anonymous` is
+/// set to truthy value, the uploader name won't be recorded (privilege
+/// verification still applies; it's possible to disallow anonymous uploads
+/// completely from config.) For details on how to pass `content` and
+/// `thumbnail`, see [file uploads](#Upload).
+#[utoipa::path(
+    post,
+    path = "/posts",
+    tag = POST_TAG,
+    params(ResourceParams),
+    request_body(
+        content(
+            (PostCreateBody = "application/json"),
+            (Multipart<PostCreateBody> = "multipart/form-data"),
+        )
+    ),
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 400, description = "Post content is missing"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Relations refer to non-existing posts"),
+        (status = 409, description = "Post content already exists"),
+        (status = 422, description = "A Tag has an invalid name"),
+        (status = 422, description = "Safety is invalid"),
+        (status = 422, description = "Notes are invalid"),
+        (status = 422, description = "Flags are invalid"),
+    ),
+)]
+pub async fn create(
+    ctx: Ctx,
+    Query(params): Query<ResourceParams<Field>>,
+    body: JsonOrMultipart<PostCreateBody>,
+) -> ApiResult<Json<PostInfo>> {
+    match body {
+        JsonOrMultipart::Json(payload) => create_impl(ctx, params, payload).await,
+        JsonOrMultipart::Multipart(payload) => {
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
+            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
+            let mut new_post: PostCreateBody = serde_json::from_slice(&metadata)?;
+            let [content_token, thumbnail_token] = decoded_body.files;
+
+            new_post.content_token = content_token;
+            new_post.thumbnail_token = thumbnail_token;
+            create_impl(ctx, params, new_post).await
+        }
+    }
+}
+
+/// Request body for merging posts.
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PostMergeBody {
+    #[schema(inline)]
+    #[serde(flatten)]
+    pub post_info: MergeBody<i64>,
+    /// If true, replace target post content with source post content.
+    pub replace_content: bool,
+}
+
+/// Removes source post and merges all of its data to the target post.
+///
+/// Merges all tags, relations, scores, favorites and comments from the source
+/// to the target post. If `replaceContent` is set to true, content of the
+/// target post is replaced using the content of the source post; otherwise it
+/// remains unchanged. Source post properties such as its safety, source,
+/// whether to loop the video and other scalar values do not get transferred
+/// and are discarded.
+#[utoipa::path(
+    post,
+    path = "/post-merge",
+    tag = POST_TAG,
+    params(ResourceParams),
+    request_body = PostMergeBody,
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Source or target post does not exist"),
+        (status = 409, description = "Version of either post is outdated"),
+        (status = 422, description = "Source post is the same as the target post"),
+    ),
+)]
+pub async fn merge(
+    Ctx(ctx, connection_pool): Ctx,
+    Query(params): Query<ResourceParams<Field>>,
+    Json(body): Json<PostMergeBody>,
+) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
+    ctx.verify_privilege(Action::PostMerge)?;
+
+    let absorbed_id = body.post_info.remove;
+    let merge_to_id = body.post_info.merge_to;
+    if absorbed_id == merge_to_id {
+        return Err(ApiError::SelfMerge(ResourceType::Post));
+    }
+
+    tagging_update(&connection_pool, true, {
+        let ctx = ctx.clone();
+        move |conn| {
+            let absorbed_post: Post = post::table
+                .find(absorbed_id)
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::Post))?;
+            let merge_to_post: Post = post::table
+                .find(merge_to_id)
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::Post))?;
+            verify_visibility(conn, &ctx, absorbed_id)?;
+            verify_visibility(conn, &ctx, merge_to_id)?;
+            api::verify_version(absorbed_post.last_edit_time, body.post_info.remove_version)?;
+            api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
+
+            update::post::merge(conn, &ctx.config, &absorbed_post, &merge_to_post, body.replace_content)?;
+            snapshot::post::merge_snapshot(conn, ctx.client, absorbed_id, merge_to_id)?;
+            Ok(())
+        }
+    })
+    .await?;
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, body.post_info.merge_to, params.fields))
+        .await
+        .map(Json)
+}
+
+/// Marks the post as favorite for authenticated user.
+#[utoipa::path(
+    post,
+    path = "/post/{id}/favorite",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+    ),
+)]
+pub async fn favorite(
+    Ctx(ctx, connection_pool): Ctx,
+    Path(post_id): Path<i64>,
+    Query(params): Query<ResourceParams<Field>>,
+) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
+    ctx.verify_privilege(Action::PostFavorite)?;
+
+    let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
+    let new_post_favorite = NewPostFavorite { post_id, user_id };
+    connection_pool
+        .transaction({
+            let ctx = ctx.clone();
+            move |conn| {
+                verify_visibility(conn, &ctx, post_id)?;
+
+                diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
+                let insert_result = new_post_favorite.insert_into(post_favorite::table).execute(conn);
+                error::map_foreign_key_violation(insert_result, ResourceType::Post)
+            }
+        })
+        .await?;
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
+        .await
+        .map(Json)
+}
+
+/// Updates score of authenticated user for given post.
+#[utoipa::path(
+    put,
+    path = "/post/{id}/score",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+        ResourceParams,
+    ),
+    request_body = RatingBody,
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+        (status = 422, description = "Score is invalid"),
+    ),
+)]
+pub async fn rate(
+    Ctx(ctx, connection_pool): Ctx,
+    Path(post_id): Path<i64>,
+    Query(params): Query<ResourceParams<Field>>,
+    Json(body): Json<RatingBody>,
+) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
+    ctx.verify_privilege(Action::PostScore)?;
+
+    let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
+    connection_pool
+        .transaction({
+            let ctx = ctx.clone();
+            move |conn| {
+                verify_visibility(conn, &ctx, post_id)?;
+                diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
+
+                if let Ok(score) = Score::try_from(*body) {
+                    let insert_result = NewPostScore {
+                        post_id,
+                        user_id,
+                        score,
+                    }
+                    .insert_into(post_score::table)
+                    .execute(conn);
+                    error::map_foreign_key_violation(insert_result, ResourceType::Post)?;
+                }
+                Ok::<_, ApiError>(())
+            }
+        })
+        .await?;
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
+        .await
+        .map(Json)
+}
+
+/// Request body for updating a post.
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PostUpdateBody {
+    // Resource version. See [versioning](#Versioning).
+    pub version: DateTime,
+    /// Post safety rating.
+    pub safety: Option<PostSafety>,
+    /// Source URL or description.
+    pub source: Option<LargeString>,
+    /// Post description.
+    pub description: Option<LargeString>,
+    /// IDs of related posts.
+    pub relations: Option<Vec<i64>>,
+    /// Tags to apply. Non-existent tags will be created automatically.
+    pub tags: Option<Vec<SmallString>>,
+    /// Post annotations.
+    pub notes: Option<Vec<Note>>,
+    /// Post flags: `loop` or `sound`.
+    pub flags: Option<Vec<PostFlag>>,
+    /// Token referencing previously uploaded content.
+    #[schema(value_type = Option<String>)]
+    pub content_token: Option<UploadToken>,
+    /// URL to fetch content from.
+    pub content_url: Option<Url>,
+    /// Token referencing previously uploaded custom thumbnail. Set to null to remove.
+    #[schema(value_type = Option<String>)]
+    #[serde(default, deserialize_with = "api::deserialize_some")]
+    pub thumbnail_token: Option<Option<UploadToken>>,
+    /// URL to fetch thumbnail from.
+    pub thumbnail_url: Option<Url>,
+}
+
+/// Updates existing post.
+///
+/// If specified tags do not exist yet, they will be automatically created.
+/// Tags created automatically have no implications, no suggestions, one name
+/// and their category is set to the first tag category found. Safety must be
+/// any of `safe`, `sketchy` or `unsafe`. Relations must contain valid post IDs.
+/// `flag` can be either `loop` to enable looping for video posts or `sound` to
+/// indicate sound. For details how to pass `content` and `thumbnail`, see
+/// [file uploads](#Upload). All fields except `version` are optional -
+/// update concerns only provided fields.
+#[utoipa::path(
+    put,
+    path = "/post/{id}",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+        ResourceParams,
+    ),
+    request_body(
+        content(
+            (PostUpdateBody = "application/json"),
+            (Multipart<PostUpdateBody> = "multipart/form-data"),
+        )
+    ),
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+        (status = 404, description = "Relations refer to non-existing posts"),
+        (status = 409, description = "Version is outdated"),
+        (status = 409, description = "Post content already exists"),
+        (status = 422, description = "A tag has an invalid name"),
+        (status = 422, description = "Safety is invalid"),
+        (status = 422, description = "Notes are invalid"),
+        (status = 422, description = "Flags are invalid"),
+    ),
+)]
+pub async fn update(
+    ctx: Ctx,
+    Path(post_id): Path<i64>,
+    Query(params): Query<ResourceParams<Field>>,
+    body: JsonOrMultipart<PostUpdateBody>,
+) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
+
+    match body {
+        JsonOrMultipart::Json(payload) => update_impl(ctx, post_id, params, payload).await,
+        JsonOrMultipart::Multipart(payload) => {
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
+            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
+            let mut post_update: PostUpdateBody = serde_json::from_slice(&metadata)?;
+            let [content_token, thumbnail_token] = decoded_body.files;
+
+            post_update.content_token = content_token;
+            post_update.thumbnail_token = thumbnail_token.map(Some);
+            update_impl(ctx, post_id, params, post_update).await
+        }
+    }
+}
+
+/// Deletes existing post.
+///
+/// Related posts and tags are kept.
+#[utoipa::path(
+    delete,
+    path = "/post/{id}",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = Object),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+        (status = 409, description = "Version is outdated"),
+    ),
+)]
+pub async fn delete(
+    Ctx(ctx, connection_pool): Ctx,
+    Path(post_id): Path<i64>,
+    Json(client_version): Json<DeleteBody>,
+) -> ApiResult<Json<()>> {
+    // Post relation cascade deletion can cause deadlocks when deleting related posts in quick
+    // succession, so we lock an aysnchronous mutex when deleting if the post has any relations.
+    static ANTI_DEADLOCK_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
+
+    ctx.verify_privilege(Action::PostDelete)?;
+
+    let relation_count: i64 = post_statistics::table
+        .find(post_id)
+        .select(post_statistics::relation_count)
+        .first(connection_pool.get().await?.as_mut())
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::Post))?;
+
+    let _lock;
+    if relation_count > 0 {
+        _lock = ANTI_DEADLOCK_MUTEX.lock().await;
+    }
+
+    let (mime_type, custom_thumbnail_size) = connection_pool
+        .transaction({
+            let ctx = ctx.clone();
+            move |conn| {
+                verify_visibility(conn, &ctx, post_id)?;
+
+                let post: Post = post::table
+                    .find(post_id)
+                    .first(conn)
+                    .optional()?
+                    .ok_or(ApiError::NotFound(ResourceType::Post))?;
+                api::verify_version(post.last_edit_time, *client_version)?;
+
+                let mime_type = post.mime_type;
+                let custom_thumbnail_size = post.custom_thumbnail_size;
+                let post_data = SnapshotData::retrieve(conn, post)?;
+                snapshot::post::deletion_snapshot(conn, ctx.client, post_id, post_data)?;
+
+                diesel::delete(post::table.find(post_id)).execute(conn)?;
+                Ok::<_, ApiError>((mime_type, custom_thumbnail_size))
+            }
+        })
+        .await?;
+    if ctx.config.delete_source_files {
+        let post_hash = PostHash::new(&ctx.config, post_id, Some(custom_thumbnail_size));
+        filesystem::delete_post(&post_hash, mime_type)?;
+    }
+    Ok(Json(()))
+}
+
+/// Unmarks the post as favorite for authenticated user.
+#[utoipa::path(
+    delete,
+    path = "/post/{id}/favorite",
+    tag = POST_TAG,
+    params(
+        ("id" = i64, Path, description = "Post ID"),
+        ResourceParams,
+    ),
+    responses(
+        (status = 200, body = PostInfo),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "Post does not exist"),
+    ),
+)]
+pub async fn unfavorite(
+    Ctx(ctx, connection_pool): Ctx,
+    Path(post_id): Path<i64>,
+    Query(params): Query<ResourceParams<Field>>,
+) -> ApiResult<Json<PostInfo>> {
+    ctx.verify_privilege(Action::PostView)?;
+    ctx.verify_privilege(Action::PostFavorite)?;
+
+    let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
+    connection_pool
+        .transaction({
+            let ctx = ctx.clone();
+            move |conn| {
+                verify_visibility(conn, &ctx, post_id)?;
+                diesel::delete(post_favorite::table.find((post_id, user_id)))
+                    .execute(conn)
+                    .map_err(ApiError::from)
+            }
+        })
+        .await?;
+    connection_pool
+        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
+        .await
+        .map(Json)
+}
+
+static POST_TAG_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
+
+#[allow(dead_code)]
+#[derive(ToSchema)]
+struct Multipart<T> {
+    /// JSON metadata (same structure as JSON request body).
+    metadata: T,
+    /// Content file (image, video, etc.).
+    #[schema(format = Binary)]
+    content: Option<String>,
+    /// Thumbnail file.
+    #[schema(format = Binary)]
+    thumbnail: Option<String>,
+}
+
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, post_id: i64) -> ApiResult<()> {
+    let post_exists: bool = diesel::select(exists(post::table.find(post_id))).first(conn)?;
+    if !post_exists {
+        return Err(ApiError::NotFound(ResourceType::Post));
+    }
+
+    if let Some(hidden_posts) = ctx.preferences().hidden_posts(post_statistics::post_id) {
+        let post_lookup = hidden_posts.filter(post_statistics::post_id.eq(post_id));
+        let post_hidden: bool = diesel::select(exists(post_lookup)).first(conn)?;
+        if post_hidden {
+            return Err(ApiError::Hidden(ResourceType::Post));
+        }
+    }
+    Ok(())
+}
+
+/// Runs an `update` that may add `tags` to a post as a transaction.
+///
+/// Tagging multiple posts simultaneously can cause issues if two updates share tags.
+/// If two updates share a new tag, a uniqueness violation can occur.
+/// If two updates share an existing tag, a deadlock can occur due to statistics updating.
+/// Therefore, we lock an asynchronous mutex whenever updating post tags. This is a bit
+/// more pessimistic than necessary, as parallel updates are safe if the sets of tags are
+/// disjoint. However, allowing disjoint tagging introduces additional complexity so it
+/// isn't being done as of now.
+async fn tagging_update<T, F>(connection_pool: &AsyncConnectionPool, tags_updated: bool, update: F) -> ApiResult<T>
+where
+    T: Send + 'static,
+    F: FnOnce(&mut db::Connection) -> ApiResult<T> + Send + 'static,
+{
+    let _lock;
+    if tags_updated {
+        _lock = POST_TAG_MUTEX.lock().await;
+    }
+
+    // Get a fresh connection here so that connection isn't being held while waiting on lock
+    connection_pool.transaction(update).await
 }
 
 async fn reverse_search_impl(
@@ -530,82 +1073,6 @@ async fn reverse_search_impl(
         })
         .await
         .map(Json)
-}
-
-/// Request body for reverse image search.
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct ReverseSearchBody {
-    /// Token referencing previously uploaded content.
-    #[schema(value_type = Option<String>)]
-    content_token: Option<UploadToken>,
-    /// URL to fetch image content from.
-    content_url: Option<Url>,
-}
-
-/// A post with its visual similarity distance.
-#[derive(Serialize, ToSchema)]
-struct SimilarPost {
-    /// Visual similarity distance. Lower is more similar.
-    #[schema(minimum = 0.0, maximum = 1.0)]
-    distance: f64,
-    /// The similar post.
-    post: PostInfo,
-}
-
-/// Response from reverse image search.
-#[derive(Serialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct ReverseSearchResponse {
-    /// Exact match if found (same checksum).
-    exact_post: Option<PostInfo>,
-    /// Posts that are visually similar to the input image.
-    similar_posts: Vec<SimilarPost>,
-}
-
-/// Retrieves posts that look like the input image.
-#[utoipa::path(
-    post,
-    path = "/posts/reverse-search",
-    tag = POST_TAG,
-    params(ResourceParams),
-    request_body(
-        content(
-            (ReverseSearchBody = "application/json"),
-            (Multipart<ReverseSearchBody> = "multipart/form-data"),
-        )
-    ),
-    responses(
-        (status = 200, body = ReverseSearchResponse),
-        (status = 400, description = "Reverse search content is missing"),
-        (status = 403, description = "Privileges are too low"),
-    ),
-)]
-async fn reverse_search(
-    ctx: Ctx,
-    Query(params): Query<ResourceParams<Field>>,
-    body: JsonOrMultipart<ReverseSearchBody>,
-) -> ApiResult<Json<ReverseSearchResponse>> {
-    ctx.verify_privilege(Action::PostView)?;
-    ctx.verify_privilege(Action::PostReverseSearch)?;
-
-    match body {
-        JsonOrMultipart::Json(payload) => reverse_search_impl(ctx, params, payload).await,
-        JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content]).await?;
-            let reverse_search_body = if let [Some(content_token)] = decoded_body.files {
-                ReverseSearchBody {
-                    content_token: Some(content_token),
-                    content_url: None,
-                }
-            } else if let Some(metadata) = decoded_body.metadata {
-                serde_json::from_slice(&metadata)?
-            } else {
-                return Err(ApiError::MissingFormData);
-            };
-            reverse_search_impl(ctx, params, reverse_search_body).await
-        }
-    }
 }
 
 async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBody) -> ApiResult<Json<PostInfo>> {
@@ -709,268 +1176,6 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
         }
     })
     .await?;
-    connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
-        .await
-        .map(Json)
-}
-
-/// Request body for creating a post.
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct PostCreateBody {
-    /// Post safety rating.
-    safety: PostSafety,
-    /// Token referencing previously uploaded content.
-    #[schema(value_type = Option<String>)]
-    content_token: Option<UploadToken>,
-    /// URL to fetch content from.
-    content_url: Option<Url>,
-    /// Token referencing previously uploaded thumbnail.
-    #[schema(value_type = Option<String>)]
-    thumbnail_token: Option<UploadToken>,
-    /// URL to fetch thumbnail from.
-    thumbnail_url: Option<Url>,
-    /// Source URL or description.
-    source: Option<String>,
-    /// Post description.
-    description: Option<String>,
-    /// IDs of related posts.
-    relations: Option<Vec<i64>>,
-    /// If true, the uploader name won't be recorded.
-    anonymous: Option<bool>,
-    /// Tags to apply. Non-existent tags will be created automatically.
-    tags: Option<Vec<SmallString>>,
-    /// Post annotations.
-    notes: Option<Vec<Note>>,
-    /// Post flags: `loop` or `sound`.
-    flags: Option<Vec<PostFlag>>,
-}
-
-/// Creates a new post.
-///
-/// If specified tags do not exist yet, they will be automatically created.
-/// Tags created automatically have no implications, no suggestions, one name
-/// and their category is set to the first tag category found. Safety must be
-/// any of `safe`, `sketchy` or `unsafe`. Relations must contain valid post IDs.
-/// If `flags` is omitted, they will be defined by default (`loop` will be set
-/// for all video posts, and `sound` will be auto-detected). Sending empty
-/// `thumbnail` will cause the post to use default thumbnail. If `anonymous` is
-/// set to truthy value, the uploader name won't be recorded (privilege
-/// verification still applies; it's possible to disallow anonymous uploads
-/// completely from config.) For details on how to pass `content` and
-/// `thumbnail`, see [file uploads](#Upload).
-#[utoipa::path(
-    post,
-    path = "/posts",
-    tag = POST_TAG,
-    params(ResourceParams),
-    request_body(
-        content(
-            (PostCreateBody = "application/json"),
-            (Multipart<PostCreateBody> = "multipart/form-data"),
-        )
-    ),
-    responses(
-        (status = 200, body = PostInfo),
-        (status = 400, description = "Post content is missing"),
-        (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Relations refer to non-existing posts"),
-        (status = 409, description = "Post content already exists"),
-        (status = 422, description = "A Tag has an invalid name"),
-        (status = 422, description = "Safety is invalid"),
-        (status = 422, description = "Notes are invalid"),
-        (status = 422, description = "Flags are invalid"),
-    ),
-)]
-async fn create(
-    ctx: Ctx,
-    Query(params): Query<ResourceParams<Field>>,
-    body: JsonOrMultipart<PostCreateBody>,
-) -> ApiResult<Json<PostInfo>> {
-    match body {
-        JsonOrMultipart::Json(payload) => create_impl(ctx, params, payload).await,
-        JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
-            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
-            let mut new_post: PostCreateBody = serde_json::from_slice(&metadata)?;
-            let [content_token, thumbnail_token] = decoded_body.files;
-
-            new_post.content_token = content_token;
-            new_post.thumbnail_token = thumbnail_token;
-            create_impl(ctx, params, new_post).await
-        }
-    }
-}
-
-/// Request body for merging posts.
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct PostMergeBody {
-    #[schema(inline)]
-    #[serde(flatten)]
-    post_info: MergeBody<i64>,
-    /// If true, replace target post content with source post content.
-    replace_content: bool,
-}
-
-/// Removes source post and merges all of its data to the target post.
-///
-/// Merges all tags, relations, scores, favorites and comments from the source
-/// to the target post. If `replaceContent` is set to true, content of the
-/// target post is replaced using the content of the source post; otherwise it
-/// remains unchanged. Source post properties such as its safety, source,
-/// whether to loop the video and other scalar values do not get transferred
-/// and are discarded.
-#[utoipa::path(
-    post,
-    path = "/post-merge",
-    tag = POST_TAG,
-    params(ResourceParams),
-    request_body = PostMergeBody,
-    responses(
-        (status = 200, body = PostInfo),
-        (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Source or target post does not exist"),
-        (status = 409, description = "Version of either post is outdated"),
-        (status = 422, description = "Source post is the same as the target post"),
-    ),
-)]
-async fn merge(
-    Ctx(ctx, connection_pool): Ctx,
-    Query(params): Query<ResourceParams<Field>>,
-    Json(body): Json<PostMergeBody>,
-) -> ApiResult<Json<PostInfo>> {
-    ctx.verify_privilege(Action::PostView)?;
-    ctx.verify_privilege(Action::PostMerge)?;
-
-    let absorbed_id = body.post_info.remove;
-    let merge_to_id = body.post_info.merge_to;
-    if absorbed_id == merge_to_id {
-        return Err(ApiError::SelfMerge(ResourceType::Post));
-    }
-
-    tagging_update(&connection_pool, true, {
-        let ctx = ctx.clone();
-        move |conn| {
-            let absorbed_post: Post = post::table
-                .find(absorbed_id)
-                .first(conn)
-                .optional()?
-                .ok_or(ApiError::NotFound(ResourceType::Post))?;
-            let merge_to_post: Post = post::table
-                .find(merge_to_id)
-                .first(conn)
-                .optional()?
-                .ok_or(ApiError::NotFound(ResourceType::Post))?;
-            verify_visibility(conn, &ctx, absorbed_id)?;
-            verify_visibility(conn, &ctx, merge_to_id)?;
-            api::verify_version(absorbed_post.last_edit_time, body.post_info.remove_version)?;
-            api::verify_version(merge_to_post.last_edit_time, body.post_info.merge_to_version)?;
-
-            update::post::merge(conn, &ctx.config, &absorbed_post, &merge_to_post, body.replace_content)?;
-            snapshot::post::merge_snapshot(conn, ctx.client, absorbed_id, merge_to_id)?;
-            Ok(())
-        }
-    })
-    .await?;
-    connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, body.post_info.merge_to, params.fields))
-        .await
-        .map(Json)
-}
-
-/// Marks the post as favorite for authenticated user.
-#[utoipa::path(
-    post,
-    path = "/post/{id}/favorite",
-    tag = POST_TAG,
-    params(
-        ("id" = i64, Path, description = "Post ID"),
-        ResourceParams,
-    ),
-    responses(
-        (status = 200, body = PostInfo),
-        (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Post does not exist"),
-    ),
-)]
-async fn favorite(
-    Ctx(ctx, connection_pool): Ctx,
-    Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams<Field>>,
-) -> ApiResult<Json<PostInfo>> {
-    ctx.verify_privilege(Action::PostView)?;
-    ctx.verify_privilege(Action::PostFavorite)?;
-
-    let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
-    let new_post_favorite = NewPostFavorite { post_id, user_id };
-    connection_pool
-        .transaction({
-            let ctx = ctx.clone();
-            move |conn| {
-                verify_visibility(conn, &ctx, post_id)?;
-
-                diesel::delete(post_favorite::table.find((post_id, user_id))).execute(conn)?;
-                let insert_result = new_post_favorite.insert_into(post_favorite::table).execute(conn);
-                error::map_foreign_key_violation(insert_result, ResourceType::Post)
-            }
-        })
-        .await?;
-    connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
-        .await
-        .map(Json)
-}
-
-/// Updates score of authenticated user for given post.
-#[utoipa::path(
-    put,
-    path = "/post/{id}/score",
-    tag = POST_TAG,
-    params(
-        ("id" = i64, Path, description = "Post ID"),
-        ResourceParams,
-    ),
-    request_body = RatingBody,
-    responses(
-        (status = 200, body = PostInfo),
-        (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Post does not exist"),
-        (status = 422, description = "Score is invalid"),
-    ),
-)]
-async fn rate(
-    Ctx(ctx, connection_pool): Ctx,
-    Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams<Field>>,
-    Json(body): Json<RatingBody>,
-) -> ApiResult<Json<PostInfo>> {
-    ctx.verify_privilege(Action::PostView)?;
-    ctx.verify_privilege(Action::PostScore)?;
-
-    let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
-    connection_pool
-        .transaction({
-            let ctx = ctx.clone();
-            move |conn| {
-                verify_visibility(conn, &ctx, post_id)?;
-                diesel::delete(post_score::table.find((post_id, user_id))).execute(conn)?;
-
-                if let Ok(score) = Score::try_from(*body) {
-                    let insert_result = NewPostScore {
-                        post_id,
-                        user_id,
-                        score,
-                    }
-                    .insert_into(post_score::table)
-                    .execute(conn);
-                    error::map_foreign_key_violation(insert_result, ResourceType::Post)?;
-                }
-                Ok::<_, ApiError>(())
-            }
-        })
-        .await?;
     connection_pool
         .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await
@@ -1118,211 +1323,6 @@ async fn update_impl(
         }
     })
     .await?;
-    connection_pool
-        .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
-        .await
-        .map(Json)
-}
-
-/// Request body for updating a post.
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct PostUpdateBody {
-    // Resource version. See [versioning](#Versioning).
-    version: DateTime,
-    /// Post safety rating.
-    safety: Option<PostSafety>,
-    /// Source URL or description.
-    source: Option<LargeString>,
-    /// Post description.
-    description: Option<LargeString>,
-    /// IDs of related posts.
-    relations: Option<Vec<i64>>,
-    /// Tags to apply. Non-existent tags will be created automatically.
-    tags: Option<Vec<SmallString>>,
-    /// Post annotations.
-    notes: Option<Vec<Note>>,
-    /// Post flags: `loop` or `sound`.
-    flags: Option<Vec<PostFlag>>,
-    /// Token referencing previously uploaded content.
-    #[schema(value_type = Option<String>)]
-    content_token: Option<UploadToken>,
-    /// URL to fetch content from.
-    content_url: Option<Url>,
-    /// Token referencing previously uploaded custom thumbnail. Set to null to remove.
-    #[schema(value_type = Option<String>)]
-    #[serde(default, deserialize_with = "api::deserialize_some")]
-    thumbnail_token: Option<Option<UploadToken>>,
-    /// URL to fetch thumbnail from.
-    thumbnail_url: Option<Url>,
-}
-
-/// Updates existing post.
-///
-/// If specified tags do not exist yet, they will be automatically created.
-/// Tags created automatically have no implications, no suggestions, one name
-/// and their category is set to the first tag category found. Safety must be
-/// any of `safe`, `sketchy` or `unsafe`. Relations must contain valid post IDs.
-/// `flag` can be either `loop` to enable looping for video posts or `sound` to
-/// indicate sound. For details how to pass `content` and `thumbnail`, see
-/// [file uploads](#Upload). All fields except `version` are optional -
-/// update concerns only provided fields.
-#[utoipa::path(
-    put,
-    path = "/post/{id}",
-    tag = POST_TAG,
-    params(
-        ("id" = i64, Path, description = "Post ID"),
-        ResourceParams,
-    ),
-    request_body(
-        content(
-            (PostUpdateBody = "application/json"),
-            (Multipart<PostUpdateBody> = "multipart/form-data"),
-        )
-    ),
-    responses(
-        (status = 200, body = PostInfo),
-        (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Post does not exist"),
-        (status = 404, description = "Relations refer to non-existing posts"),
-        (status = 409, description = "Version is outdated"),
-        (status = 409, description = "Post content already exists"),
-        (status = 422, description = "A tag has an invalid name"),
-        (status = 422, description = "Safety is invalid"),
-        (status = 422, description = "Notes are invalid"),
-        (status = 422, description = "Flags are invalid"),
-    ),
-)]
-async fn update(
-    ctx: Ctx,
-    Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams<Field>>,
-    body: JsonOrMultipart<PostUpdateBody>,
-) -> ApiResult<Json<PostInfo>> {
-    ctx.verify_privilege(Action::PostView)?;
-
-    match body {
-        JsonOrMultipart::Json(payload) => update_impl(ctx, post_id, params, payload).await,
-        JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Content, PartName::Thumbnail]).await?;
-            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
-            let mut post_update: PostUpdateBody = serde_json::from_slice(&metadata)?;
-            let [content_token, thumbnail_token] = decoded_body.files;
-
-            post_update.content_token = content_token;
-            post_update.thumbnail_token = thumbnail_token.map(Some);
-            update_impl(ctx, post_id, params, post_update).await
-        }
-    }
-}
-
-/// Deletes existing post.
-///
-/// Related posts and tags are kept.
-#[utoipa::path(
-    delete,
-    path = "/post/{id}",
-    tag = POST_TAG,
-    params(
-        ("id" = i64, Path, description = "Post ID"),
-    ),
-    request_body = DeleteBody,
-    responses(
-        (status = 200, body = Object),
-        (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Post does not exist"),
-        (status = 409, description = "Version is outdated"),
-    ),
-)]
-async fn delete(
-    Ctx(ctx, connection_pool): Ctx,
-    Path(post_id): Path<i64>,
-    Json(client_version): Json<DeleteBody>,
-) -> ApiResult<Json<()>> {
-    // Post relation cascade deletion can cause deadlocks when deleting related posts in quick
-    // succession, so we lock an aysnchronous mutex when deleting if the post has any relations.
-    static ANTI_DEADLOCK_MUTEX: LazyLock<AsyncMutex<()>> = LazyLock::new(|| AsyncMutex::new(()));
-
-    ctx.verify_privilege(Action::PostDelete)?;
-
-    let relation_count: i64 = post_statistics::table
-        .find(post_id)
-        .select(post_statistics::relation_count)
-        .first(connection_pool.get().await?.as_mut())
-        .optional()?
-        .ok_or(ApiError::NotFound(ResourceType::Post))?;
-
-    let _lock;
-    if relation_count > 0 {
-        _lock = ANTI_DEADLOCK_MUTEX.lock().await;
-    }
-
-    let (mime_type, custom_thumbnail_size) = connection_pool
-        .transaction({
-            let ctx = ctx.clone();
-            move |conn| {
-                verify_visibility(conn, &ctx, post_id)?;
-
-                let post: Post = post::table
-                    .find(post_id)
-                    .first(conn)
-                    .optional()?
-                    .ok_or(ApiError::NotFound(ResourceType::Post))?;
-                api::verify_version(post.last_edit_time, *client_version)?;
-
-                let mime_type = post.mime_type;
-                let custom_thumbnail_size = post.custom_thumbnail_size;
-                let post_data = SnapshotData::retrieve(conn, post)?;
-                snapshot::post::deletion_snapshot(conn, ctx.client, post_id, post_data)?;
-
-                diesel::delete(post::table.find(post_id)).execute(conn)?;
-                Ok::<_, ApiError>((mime_type, custom_thumbnail_size))
-            }
-        })
-        .await?;
-    if ctx.config.delete_source_files {
-        let post_hash = PostHash::new(&ctx.config, post_id, Some(custom_thumbnail_size));
-        filesystem::delete_post(&post_hash, mime_type)?;
-    }
-    Ok(Json(()))
-}
-
-/// Unmarks the post as favorite for authenticated user.
-#[utoipa::path(
-    delete,
-    path = "/post/{id}/favorite",
-    tag = POST_TAG,
-    params(
-        ("id" = i64, Path, description = "Post ID"),
-        ResourceParams,
-    ),
-    responses(
-        (status = 200, body = PostInfo),
-        (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "Post does not exist"),
-    ),
-)]
-async fn unfavorite(
-    Ctx(ctx, connection_pool): Ctx,
-    Path(post_id): Path<i64>,
-    Query(params): Query<ResourceParams<Field>>,
-) -> ApiResult<Json<PostInfo>> {
-    ctx.verify_privilege(Action::PostView)?;
-    ctx.verify_privilege(Action::PostFavorite)?;
-
-    let user_id = ctx.client.id.ok_or(ApiError::NotLoggedIn)?;
-    connection_pool
-        .transaction({
-            let ctx = ctx.clone();
-            move |conn| {
-                verify_visibility(conn, &ctx, post_id)?;
-                diesel::delete(post_favorite::table.find((post_id, user_id)))
-                    .execute(conn)
-                    .map_err(ApiError::from)
-            }
-        })
-        .await?;
     connection_pool
         .transaction(move |conn| PostInfo::new_from_id(conn, &ctx, post_id, params.fields))
         .await

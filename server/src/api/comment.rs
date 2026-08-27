@@ -25,22 +25,6 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(rate))
 }
 
-fn verify_visibility(conn: &mut PgConnection, ctx: &Context, comment_id: i64) -> ApiResult<()> {
-    let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).first(conn)?;
-    if !comment_exists {
-        return Err(ApiError::NotFound(ResourceType::Comment));
-    }
-
-    if let Some(hidden_posts) = ctx.preferences().hidden_posts(comment::post_id) {
-        let comment_lookup = comment::table.find(comment_id).filter(exists(hidden_posts));
-        let comment_hidden: bool = diesel::select(exists(comment_lookup)).first(conn)?;
-        if comment_hidden {
-            return Err(ApiError::Hidden(ResourceType::Comment));
-        }
-    }
-    Ok(())
-}
-
 /// Lists comments.
 ///
 /// **Anonymous tokens**
@@ -83,7 +67,7 @@ fn verify_visibility(conn: &mut PgConnection, ctx: &Context, comment_id: i64) ->
         (status = 403, description = "Privileges are too low"),
     )
 )]
-async fn list(
+pub async fn list(
     Ctx(ctx, connection_pool): Ctx,
     Query(resource): Query<ResourceParams<Field>>,
     Query(page): Query<PageParams>,
@@ -126,7 +110,7 @@ async fn list(
         (status = 404, description = "Comment does not exist"),
     ),
 )]
-async fn get(
+pub async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(comment_id): Path<i64>,
     Query(params): Query<ResourceParams<Field>>,
@@ -146,11 +130,11 @@ async fn get(
 /// Request body for creating a comment.
 #[derive(Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
-struct CommentCreateBody {
+pub struct CommentCreateBody {
     /// ID of the post to comment on.
-    post_id: i64,
+    pub post_id: i64,
     /// Comment text.
-    text: String,
+    pub text: String,
 }
 
 /// Creates a new comment under given post.
@@ -166,7 +150,7 @@ struct CommentCreateBody {
         (status = 404, description = "Post does not exist"),
     ),
 )]
-async fn create(
+pub async fn create(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<CommentCreateBody>,
@@ -193,11 +177,11 @@ async fn create(
 
 /// Request body for updating a comment.
 #[derive(Deserialize, ToSchema)]
-struct CommentUpdateBody {
+pub struct CommentUpdateBody {
     /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
+    pub version: DateTime,
     /// New comment text.
-    text: String,
+    pub text: String,
 }
 
 /// Updates an existing comment.
@@ -217,7 +201,7 @@ struct CommentUpdateBody {
         (status = 409, description = "Version is outdated"),
     ),
 )]
-async fn update(
+pub async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path(comment_id): Path<i64>,
     Query(params): Query<ResourceParams<Field>>,
@@ -276,7 +260,7 @@ async fn update(
         (status = 404, description = "Comment does not exist"),
     ),
 )]
-async fn rate(
+pub async fn rate(
     Ctx(ctx, connection_pool): Ctx,
     Path(comment_id): Path<i64>,
     Query(params): Query<ResourceParams<Field>>,
@@ -329,7 +313,7 @@ async fn rate(
         (status = 409, description = "Version is outdated"),
     ),
 )]
-async fn delete(
+pub async fn delete(
     Ctx(ctx, connection_pool): Ctx,
     Path(comment_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,
@@ -356,6 +340,22 @@ async fn delete(
             Ok::<_, ApiError>(Json(()))
         })
         .await
+}
+
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, comment_id: i64) -> ApiResult<()> {
+    let comment_exists: bool = diesel::select(exists(comment::table.find(comment_id))).first(conn)?;
+    if !comment_exists {
+        return Err(ApiError::NotFound(ResourceType::Comment));
+    }
+
+    if let Some(hidden_posts) = ctx.preferences().hidden_posts(comment::post_id) {
+        let comment_lookup = comment::table.find(comment_id).filter(exists(hidden_posts));
+        let comment_hidden: bool = diesel::select(exists(comment_lookup)).first(conn)?;
+        if comment_hidden {
+            return Err(ApiError::Hidden(ResourceType::Comment));
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
