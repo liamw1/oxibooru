@@ -99,7 +99,7 @@ impl Params {
 }
 
 #[derive(Template)]
-#[template(path = "pages/post_gallery.html")]
+#[template(path = "pages/post/gallery.html")]
 struct GalleryTemplate<'a> {
     ctx: Ctx,
     active_tab: Tab,
@@ -141,7 +141,7 @@ async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Of
 }
 
 #[derive(Template)]
-#[template(path = "pages/post_main.html")]
+#[template(path = "pages/post/main.html")]
 struct MainTemplate {
     ctx: Ctx,
     active_tab: Tab,

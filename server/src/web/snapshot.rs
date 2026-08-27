@@ -16,7 +16,7 @@ pub fn routes() -> Router<AppState> {
 const LIMIT: NonZeroU64 = NonZeroU64::new(25).unwrap();
 
 #[derive(Template)]
-#[template(path = "pages/snapshots_page.html")]
+#[template(path = "pages/snapshot/list.html")]
 struct ListTemplate<'a> {
     ctx: Ctx,
     active_tab: Tab,
