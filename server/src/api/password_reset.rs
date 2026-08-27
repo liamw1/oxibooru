@@ -26,18 +26,6 @@ pub fn routes() -> OpenApiRouter<AppState> {
     OpenApiRouter::new().routes(routes!(request_reset, reset_password))
 }
 
-fn get_user_info(
-    conn: &mut PgConnection,
-    identifier: &str,
-) -> ApiResult<(i64, SmallString, Option<SmallString>, String)> {
-    user::table
-        .select((user::id, user::name, user::email, user::password_salt))
-        .filter(user::name.eq(identifier).or(user::email.eq(identifier)))
-        .first(conn)
-        .optional()?
-        .ok_or(ApiError::NotFound(ResourceType::User))
-}
-
 /// Sends a confirmation email to given user.
 ///
 /// The email contains a link containing a token. The token cannot be guessed,
@@ -57,7 +45,7 @@ fn get_user_info(
         (status = 422, description = "User hasn't provided an email address"),
     ),
 )]
-async fn request_reset(Ctx(ctx, connection_pool): Ctx, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
+pub async fn request_reset(Ctx(ctx, connection_pool): Ctx, Path(identifier): Path<SmallString>) -> ApiResult<Json<()>> {
     let smtp_info = ctx.config.smtp().ok_or(ApiError::MissingSmtpInfo)?;
 
     let mut conn = connection_pool.get().await?;
@@ -104,14 +92,14 @@ async fn request_reset(Ctx(ctx, connection_pool): Ctx, Path(identifier): Path<Sm
 
 /// Token from password reset email.
 #[derive(Deserialize, ToSchema)]
-struct ResetToken {
-    token: String,
+pub struct ResetToken {
+    pub token: String,
 }
 
 /// Response containing the new temporary password. Sent as plain-text.
 #[derive(ToSchema)]
-struct NewPassword {
-    password: SecretString,
+pub struct NewPassword {
+    pub password: SecretString,
 }
 
 impl Serialize for NewPassword {
@@ -120,17 +108,6 @@ impl Serialize for NewPassword {
         state.serialize_field("password", self.password.read())?;
         state.end()
     }
-}
-
-/// Creates a random sequence of printable ASCII characters of the given `length`.
-fn generate_temporary_password(length: u8) -> SecretString {
-    const NUM_CHARACTERS: u8 = b'~' - b'!';
-
-    let rng = &mut OsRng;
-    (0..length)
-        .map(|_| b'!' + u8::try_from(rng.next_u32() % u32::from(NUM_CHARACTERS)).expect("NUM_CHARACTERS is <= u8::MAX"))
-        .map(char::from)
-        .collect()
 }
 
 /// Generates a new password for given user.
@@ -150,7 +127,7 @@ fn generate_temporary_password(length: u8) -> SecretString {
         (status = 404, description = "User does not exist"),
     ),
 )]
-async fn reset_password(
+pub async fn reset_password(
     Ctx(ctx, connection_pool): Ctx,
     Path(username): Path<SmallString>,
     Json(confirmation): Json<ResetToken>,
@@ -176,6 +153,29 @@ async fn reset_password(
             }))
         })
         .await
+}
+
+/// Creates a random sequence of printable ASCII characters of the given `length`.
+fn generate_temporary_password(length: u8) -> SecretString {
+    const NUM_CHARACTERS: u8 = b'~' - b'!';
+
+    let rng = &mut OsRng;
+    (0..length)
+        .map(|_| b'!' + u8::try_from(rng.next_u32() % u32::from(NUM_CHARACTERS)).expect("NUM_CHARACTERS is <= u8::MAX"))
+        .map(char::from)
+        .collect()
+}
+
+fn get_user_info(
+    conn: &mut PgConnection,
+    identifier: &str,
+) -> ApiResult<(i64, SmallString, Option<SmallString>, String)> {
+    user::table
+        .select((user::id, user::name, user::email, user::password_salt))
+        .filter(user::name.eq(identifier).or(user::email.eq(identifier)))
+        .first(conn)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::User))
 }
 
 #[cfg(test)]

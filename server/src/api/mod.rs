@@ -15,13 +15,13 @@ use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_axum::router::OpenApiRouter;
 
-mod comment;
+pub mod comment;
 mod doc;
 pub mod error;
 pub mod info;
 mod legacy;
 pub mod middleware;
-mod password_reset;
+pub mod password_reset;
 pub mod pool;
 pub mod pool_category;
 pub mod post;

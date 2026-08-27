@@ -23,20 +23,6 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(set_default))
 }
 
-fn verify_visibility(conn: &mut PgConnection, ctx: &Context, category_name: &SmallString) -> ApiResult<TagCategory> {
-    let category = tag_category::table
-        .filter(tag_category::name.eq(category_name))
-        .first(conn)
-        .optional()?
-        .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
-
-    if ctx.preferences().category_hidden(conn, category_name)? {
-        Err(ApiError::Hidden(ResourceType::TagCategory))
-    } else {
-        Ok(category)
-    }
-}
-
 /// Lists all tag categories.
 ///
 /// Doesn't use paging.
@@ -80,7 +66,7 @@ pub async fn list(
         (status = 404, description = "Tag category does not exist"),
     ),
 )]
-async fn get(
+pub async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,
@@ -99,13 +85,13 @@ async fn get(
 
 /// Request body for creating a tag category.
 #[derive(Deserialize, ToSchema)]
-struct TagCategoryCreateBody {
+pub struct TagCategoryCreateBody {
     /// Display order for the category.
-    order: i32,
+    pub order: i32,
     /// Category name. Must match `tag_category_name_regex` from server's configuration.
-    name: SmallString,
+    pub name: SmallString,
     /// Category color.
-    color: SmallString,
+    pub color: SmallString,
 }
 
 /// Creates a new tag category using specified parameters.
@@ -125,7 +111,7 @@ struct TagCategoryCreateBody {
         (status = 422, description = "Color is invalid or missing"),
     ),
 )]
-async fn create(
+pub async fn create(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<TagCategoryCreateBody>,
@@ -158,15 +144,15 @@ async fn create(
 
 /// Request body for updating a tag category.
 #[derive(Deserialize, ToSchema)]
-struct TagCategoryUpdateBody {
+pub struct TagCategoryUpdateBody {
     /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
+    pub version: DateTime,
     /// Display order for the category.
-    order: Option<i32>,
+    pub order: Option<i32>,
     /// New category name. Must match `tag_category_name_regex` from server's configuration.
-    name: Option<SmallString>,
+    pub name: Option<SmallString>,
     /// New category color.
-    color: Option<SmallString>,
+    pub color: Option<SmallString>,
 }
 
 /// Updates an existing tag category using specified parameters.
@@ -193,7 +179,7 @@ struct TagCategoryUpdateBody {
         (status = 422, description = "Color is invalid"),
     ),
 )]
-async fn update(
+pub async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,
@@ -255,7 +241,7 @@ async fn update(
         (status = 404, description = "Tag category does not exist"),
     ),
 )]
-async fn set_default(
+pub async fn set_default(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,
@@ -329,7 +315,7 @@ async fn set_default(
         (status = 422, description = "Tag category is the default category"),
     ),
 )]
-async fn delete(
+pub async fn delete(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
@@ -350,6 +336,20 @@ async fn delete(
             Ok(Json(()))
         })
         .await
+}
+
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, category_name: &SmallString) -> ApiResult<TagCategory> {
+    let category = tag_category::table
+        .filter(tag_category::name.eq(category_name))
+        .first(conn)
+        .optional()?
+        .ok_or(ApiError::NotFound(ResourceType::TagCategory))?;
+
+    if ctx.preferences().category_hidden(conn, category_name)? {
+        Err(ApiError::Hidden(ResourceType::TagCategory))
+    } else {
+        Ok(category)
+    }
 }
 
 #[cfg(test)]

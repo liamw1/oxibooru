@@ -36,16 +36,6 @@ pub fn routes(upload_limit: DefaultBodyLimit) -> OpenApiRouter<AppState> {
         .merge(upload_capable_routes)
 }
 
-#[allow(dead_code)]
-#[derive(ToSchema)]
-struct Multipart<T> {
-    /// JSON metadata (same structure as JSON request body).
-    metadata: T,
-    /// Avatar file.
-    #[schema(format = Binary)]
-    avatar: Option<String>,
-}
-
 /// Searches for users.
 ///
 /// **Anonymous tokens**
@@ -161,6 +151,220 @@ pub async fn get(
         .await
 }
 
+/// Request body for creating a user.
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserCreateBody {
+    /// Username. Must match `user_name_regex` from server's configuration.
+    pub name: SmallString,
+    /// Password. Must match `password_regex` from server's configuration.
+    pub password: SecretString,
+    /// Email address.
+    pub email: Option<SecretString>,
+    /// User rank. Defaults to `default_rank` from server's configuration.
+    pub rank: Option<UserRank>,
+    /// Avatar style.
+    pub avatar_style: Option<AvatarStyle>,
+    /// Token referencing previously uploaded avatar.
+    #[schema(value_type = Option<String>)]
+    pub avatar_token: Option<UploadToken>,
+    /// URL to fetch avatar from.
+    pub avatar_url: Option<Url>,
+}
+
+/// Creates a new user using specified parameters.
+///
+/// Names and passwords must match `user_name_regex` and `password_regex` from
+/// server's configuration, respectively. Email address, rank and avatar fields
+/// are optional. Avatar style can be either `gravatar` or `manual`. `manual`
+/// avatar style requires client to pass also `avatar` file - see
+/// [file uploads](#Upload) for details. If the rank is empty and the
+/// user happens to be the first user ever created, become an administrator,
+/// whereas subsequent users will be given the rank indicated by `default_rank`
+/// in the server's configuration.
+#[utoipa::path(
+    post,
+    path = "/users",
+    tag = USER_TAG,
+    params(ResourceParams),
+    request_body(
+        content(
+            (UserCreateBody = "application/json"),
+            (Multipart<UserCreateBody> = "multipart/form-data"),
+        )
+    ),
+    responses(
+        (status = 200, body = UserInfo),
+        (status = 400, description = "Avatar is missing for manual avatar style"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 403, description = "Trying to set rank higher than own rank"),
+        (status = 409, description = "A user with such name already exists"),
+        (status = 422, description = "User name is missing or invalid"),
+        (status = 422, description = "Password is missing or invalid"),
+        (status = 422, description = "Email is invalid"),
+        (status = 422, description = "Rank is invalid"),
+    ),
+)]
+pub async fn create(
+    ctx: Ctx,
+    Query(params): Query<ResourceParams<Field>>,
+    body: JsonOrMultipart<UserCreateBody>,
+) -> ApiResult<Json<UserInfo>> {
+    match body {
+        JsonOrMultipart::Json(payload) => create_impl(ctx, params, payload).await,
+        JsonOrMultipart::Multipart(payload) => {
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Avatar]).await?;
+            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
+            let mut new_user: UserCreateBody = serde_json::from_slice(&metadata)?;
+            if let [Some(avatar_token)] = decoded_body.files {
+                new_user.avatar_token = Some(avatar_token);
+                create_impl(ctx, params, new_user).await
+            } else {
+                Err(ApiError::MissingFormData)
+            }
+        }
+    }
+}
+
+/// Request body for updating a user.
+#[derive(Deserialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct UserUpdateBody {
+    /// Resource version. See [versioning](#Versioning).
+    pub version: DateTime,
+    /// New username. Must match `user_name_regex` from server's configuration.
+    pub name: Option<SmallString>,
+    /// New password. Must match `password_regex` from server's configuration.
+    pub password: Option<SecretString>,
+    /// Email address. Set to null to remove.
+    #[schema(nullable)]
+    #[serde(default, deserialize_with = "api::deserialize_some")]
+    pub email: Option<Option<SecretString>>,
+    /// User rank.
+    pub rank: Option<UserRank>,
+    /// Avatar style.
+    pub avatar_style: Option<AvatarStyle>,
+    /// Token referencing previously uploaded avatar.
+    #[schema(value_type = Option<String>)]
+    pub avatar_token: Option<UploadToken>,
+    /// URL to fetch avatar from.
+    pub avatar_url: Option<Url>,
+}
+
+/// Updates an existing user using specified parameters.
+///
+/// Names and passwords must match `user_name_regex` and `password_regex` from
+/// server's configuration, respectively. Avatar style can be either `gravatar`
+/// or `manual`. `manual` avatar style requires client to pass also `avatar`
+/// file - see [file uploads](#Upload) for details. All fields except
+/// `version` are optional - update concerns only provided fields. To update
+/// last login time, see [authentication](#Authentication).
+#[utoipa::path(
+    put,
+    path = "/user/{name}",
+    tag = USER_TAG,
+    params(
+        ("name" = String, Path, description = "Username"),
+        ResourceParams,
+    ),
+    request_body(
+        content(
+            (UserUpdateBody = "application/json"),
+            (Multipart<UserUpdateBody> = "multipart/form-data"),
+        )
+    ),
+    responses(
+        (status = 200, body = UserInfo),
+        (status = 400, description = "Avatar is missing for manual avatar style"),
+        (status = 403, description = "Privileges are too low"),
+        (status = 403, description = "Trying to set rank higher than own rank"),
+        (status = 404, description = "User does not exist"),
+        (status = 409, description = "Version is outdated"),
+        (status = 409, description = "A user with new name already exists"),
+        (status = 422, description = "User name is invalid"),
+        (status = 422, description = "Password is invalid"),
+        (status = 422, description = "Email is invalid"),
+        (status = 422, description = "Rank is invalid"),
+    ),
+)]
+pub async fn update(
+    ctx: Ctx,
+    Path(username): Path<SmallString>,
+    Query(params): Query<ResourceParams<Field>>,
+    body: JsonOrMultipart<UserUpdateBody>,
+) -> ApiResult<Json<UserInfo>> {
+    ctx.verify_privilege(Action::UserView)?;
+
+    match body {
+        JsonOrMultipart::Json(payload) => update_impl(ctx, username, params, payload).await,
+        JsonOrMultipart::Multipart(payload) => {
+            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Avatar]).await?;
+            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
+            let mut user_update: UserUpdateBody = serde_json::from_slice(&metadata)?;
+            if let [Some(avatar_token)] = decoded_body.files {
+                user_update.avatar_token = Some(avatar_token);
+                update_impl(ctx, username, params, user_update).await
+            } else {
+                Err(ApiError::MissingFormData)
+            }
+        }
+    }
+}
+
+/// Deletes existing user.
+#[utoipa::path(
+    delete,
+    path = "/user/{name}",
+    tag = USER_TAG,
+    params(
+        ("name" = String, Path, description = "Username"),
+    ),
+    request_body = DeleteBody,
+    responses(
+        (status = 200, body = Object),
+        (status = 403, description = "Privileges are too low"),
+        (status = 404, description = "User does not exist"),
+        (status = 409, description = "Version is outdated"),
+    ),
+)]
+pub async fn delete(
+    Ctx(ctx, connection_pool): Ctx,
+    Path(username): Path<SmallString>,
+    Json(client_version): Json<DeleteBody>,
+) -> ApiResult<Json<()>> {
+    ctx.verify_privilege(Action::UserDeleteSelf)?;
+
+    connection_pool
+        .transaction(move |conn| {
+            let (user_id, user_version, target_rank) = user::table
+                .select((user::id, user::last_edit_time, user::rank))
+                .filter(user::name.eq(username))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::User))?;
+
+            if ctx.client.id != Some(user_id) {
+                ctx.verify_privilege(Action::UserDeleteAny)?;
+                api::verify_rank(ctx.client, target_rank)?;
+            }
+            api::verify_version(user_version, *client_version)?;
+
+            diesel::delete(user::table.find(user_id)).execute(conn)?;
+            Ok::<_, ApiError>(Json(()))
+        })
+        .await
+}
+
+#[allow(dead_code)]
+#[derive(ToSchema)]
+struct Multipart<T> {
+    /// JSON metadata (same structure as JSON request body).
+    metadata: T,
+    /// Avatar file.
+    #[schema(format = Binary)]
+    avatar: Option<String>,
+}
+
 async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBody) -> ApiResult<Json<UserInfo>> {
     ctx.verify_privilege(Action::UserCreateSelf)?;
 
@@ -248,81 +452,6 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: UserCreateBo
         .transaction(move |conn| UserInfo::new_from_id(conn, &ctx.config, user_id, params.fields, Visibility::Full))
         .await
         .map(Json)
-}
-
-/// Request body for creating a user.
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct UserCreateBody {
-    /// Username. Must match `user_name_regex` from server's configuration.
-    name: SmallString,
-    /// Password. Must match `password_regex` from server's configuration.
-    password: SecretString,
-    /// Email address.
-    email: Option<SecretString>,
-    /// User rank. Defaults to `default_rank` from server's configuration.
-    rank: Option<UserRank>,
-    /// Avatar style.
-    avatar_style: Option<AvatarStyle>,
-    /// Token referencing previously uploaded avatar.
-    #[schema(value_type = Option<String>)]
-    avatar_token: Option<UploadToken>,
-    /// URL to fetch avatar from.
-    avatar_url: Option<Url>,
-}
-
-/// Creates a new user using specified parameters.
-///
-/// Names and passwords must match `user_name_regex` and `password_regex` from
-/// server's configuration, respectively. Email address, rank and avatar fields
-/// are optional. Avatar style can be either `gravatar` or `manual`. `manual`
-/// avatar style requires client to pass also `avatar` file - see
-/// [file uploads](#Upload) for details. If the rank is empty and the
-/// user happens to be the first user ever created, become an administrator,
-/// whereas subsequent users will be given the rank indicated by `default_rank`
-/// in the server's configuration.
-#[utoipa::path(
-    post,
-    path = "/users",
-    tag = USER_TAG,
-    params(ResourceParams),
-    request_body(
-        content(
-            (UserCreateBody = "application/json"),
-            (Multipart<UserCreateBody> = "multipart/form-data"),
-        )
-    ),
-    responses(
-        (status = 200, body = UserInfo),
-        (status = 400, description = "Avatar is missing for manual avatar style"),
-        (status = 403, description = "Privileges are too low"),
-        (status = 403, description = "Trying to set rank higher than own rank"),
-        (status = 409, description = "A user with such name already exists"),
-        (status = 422, description = "User name is missing or invalid"),
-        (status = 422, description = "Password is missing or invalid"),
-        (status = 422, description = "Email is invalid"),
-        (status = 422, description = "Rank is invalid"),
-    ),
-)]
-async fn create(
-    ctx: Ctx,
-    Query(params): Query<ResourceParams<Field>>,
-    body: JsonOrMultipart<UserCreateBody>,
-) -> ApiResult<Json<UserInfo>> {
-    match body {
-        JsonOrMultipart::Json(payload) => create_impl(ctx, params, payload).await,
-        JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Avatar]).await?;
-            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
-            let mut new_user: UserCreateBody = serde_json::from_slice(&metadata)?;
-            if let [Some(avatar_token)] = decoded_body.files {
-                new_user.avatar_token = Some(avatar_token);
-                create_impl(ctx, params, new_user).await
-            } else {
-                Err(ApiError::MissingFormData)
-            }
-        }
-    }
 }
 
 async fn update_impl(
@@ -448,135 +577,6 @@ async fn update_impl(
         .transaction(move |conn| UserInfo::new_from_id(conn, &ctx.config, user_id, params.fields, visibility))
         .await
         .map(Json)
-}
-
-/// Request body for updating a user.
-#[derive(Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-struct UserUpdateBody {
-    /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
-    /// New username. Must match `user_name_regex` from server's configuration.
-    name: Option<SmallString>,
-    /// New password. Must match `password_regex` from server's configuration.
-    password: Option<SecretString>,
-    /// Email address. Set to null to remove.
-    #[schema(nullable)]
-    #[serde(default, deserialize_with = "api::deserialize_some")]
-    email: Option<Option<SecretString>>,
-    /// User rank.
-    rank: Option<UserRank>,
-    /// Avatar style.
-    avatar_style: Option<AvatarStyle>,
-    /// Token referencing previously uploaded avatar.
-    #[schema(value_type = Option<String>)]
-    avatar_token: Option<UploadToken>,
-    /// URL to fetch avatar from.
-    avatar_url: Option<Url>,
-}
-
-/// Updates an existing user using specified parameters.
-///
-/// Names and passwords must match `user_name_regex` and `password_regex` from
-/// server's configuration, respectively. Avatar style can be either `gravatar`
-/// or `manual`. `manual` avatar style requires client to pass also `avatar`
-/// file - see [file uploads](#Upload) for details. All fields except
-/// `version` are optional - update concerns only provided fields. To update
-/// last login time, see [authentication](#Authentication).
-#[utoipa::path(
-    put,
-    path = "/user/{name}",
-    tag = USER_TAG,
-    params(
-        ("name" = String, Path, description = "Username"),
-        ResourceParams,
-    ),
-    request_body(
-        content(
-            (UserUpdateBody = "application/json"),
-            (Multipart<UserUpdateBody> = "multipart/form-data"),
-        )
-    ),
-    responses(
-        (status = 200, body = UserInfo),
-        (status = 400, description = "Avatar is missing for manual avatar style"),
-        (status = 403, description = "Privileges are too low"),
-        (status = 403, description = "Trying to set rank higher than own rank"),
-        (status = 404, description = "User does not exist"),
-        (status = 409, description = "Version is outdated"),
-        (status = 409, description = "A user with new name already exists"),
-        (status = 422, description = "User name is invalid"),
-        (status = 422, description = "Password is invalid"),
-        (status = 422, description = "Email is invalid"),
-        (status = 422, description = "Rank is invalid"),
-    ),
-)]
-async fn update(
-    ctx: Ctx,
-    Path(username): Path<SmallString>,
-    Query(params): Query<ResourceParams<Field>>,
-    body: JsonOrMultipart<UserUpdateBody>,
-) -> ApiResult<Json<UserInfo>> {
-    ctx.verify_privilege(Action::UserView)?;
-
-    match body {
-        JsonOrMultipart::Json(payload) => update_impl(ctx, username, params, payload).await,
-        JsonOrMultipart::Multipart(payload) => {
-            let decoded_body = upload::extract(&ctx.config, payload, [PartName::Avatar]).await?;
-            let metadata = decoded_body.metadata.ok_or(ApiError::MissingMetadata)?;
-            let mut user_update: UserUpdateBody = serde_json::from_slice(&metadata)?;
-            if let [Some(avatar_token)] = decoded_body.files {
-                user_update.avatar_token = Some(avatar_token);
-                update_impl(ctx, username, params, user_update).await
-            } else {
-                Err(ApiError::MissingFormData)
-            }
-        }
-    }
-}
-
-/// Deletes existing user.
-#[utoipa::path(
-    delete,
-    path = "/user/{name}",
-    tag = USER_TAG,
-    params(
-        ("name" = String, Path, description = "Username"),
-    ),
-    request_body = DeleteBody,
-    responses(
-        (status = 200, body = Object),
-        (status = 403, description = "Privileges are too low"),
-        (status = 404, description = "User does not exist"),
-        (status = 409, description = "Version is outdated"),
-    ),
-)]
-async fn delete(
-    Ctx(ctx, connection_pool): Ctx,
-    Path(username): Path<SmallString>,
-    Json(client_version): Json<DeleteBody>,
-) -> ApiResult<Json<()>> {
-    ctx.verify_privilege(Action::UserDeleteSelf)?;
-
-    connection_pool
-        .transaction(move |conn| {
-            let (user_id, user_version, target_rank) = user::table
-                .select((user::id, user::last_edit_time, user::rank))
-                .filter(user::name.eq(username))
-                .first(conn)
-                .optional()?
-                .ok_or(ApiError::NotFound(ResourceType::User))?;
-
-            if ctx.client.id != Some(user_id) {
-                ctx.verify_privilege(Action::UserDeleteAny)?;
-                api::verify_rank(ctx.client, target_rank)?;
-            }
-            api::verify_version(user_version, *client_version)?;
-
-            diesel::delete(user::table.find(user_id)).execute(conn)?;
-            Ok::<_, ApiError>(Json(()))
-        })
-        .await
 }
 
 #[cfg(test)]
