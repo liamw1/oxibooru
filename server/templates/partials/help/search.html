@@ -20,10 +20,10 @@
 
 <div class="subcontent">
     {% match active_search_tab %}
-    {% when SearchTab::General %}{% include "partials/help_search_general.html" %}
-    {% when SearchTab::Posts %}{% include "partials/help_search_posts.html" %}
-    {% when SearchTab::Users %}{% include "partials/help_search_users.html" %}
-    {% when SearchTab::Tags %}{% include "partials/help_search_tags.html" %}
-    {% when SearchTab::Pools %}{% include "partials/help_search_pools.html" %}
+    {% when SearchTab::General %}{% include "partials/help/search_general.html" %}
+    {% when SearchTab::Posts %}{% include "partials/help/search_posts.html" %}
+    {% when SearchTab::Users %}{% include "partials/help/search_users.html" %}
+    {% when SearchTab::Tags %}{% include "partials/help/search_tags.html" %}
+    {% when SearchTab::Pools %}{% include "partials/help/search_pools.html" %}
     {% endmatch %}
 </div>

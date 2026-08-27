@@ -21,7 +21,7 @@ pub async fn get_categories(ctx: Ctx) -> ApiResult<Vec<PoolCategoryInfo>> {
 }
 
 #[derive(Template)]
-#[template(path = "pages/pool_categories.html")]
+#[template(path = "pages/pool/categories.html")]
 struct ListTemplate {
     ctx: Ctx,
     active_tab: Tab,

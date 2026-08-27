@@ -16,7 +16,7 @@ pub fn routes() -> Router<AppState> {
 const LIMIT: NonZeroU64 = NonZeroU64::new(10).unwrap();
 
 #[derive(Template)]
-#[template(path = "pages/comments_page.html")]
+#[template(path = "pages/comment/list.html")]
 struct ListTemplate<'a> {
     ctx: Ctx,
     active_tab: Tab,
