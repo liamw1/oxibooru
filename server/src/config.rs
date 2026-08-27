@@ -22,6 +22,7 @@ use utoipa::{PartialSchema, ToSchema};
 
 #[derive(Debug, Default)]
 pub struct Args {
+    pub slow: bool,
     pub admin_mode: bool,
     pub config_path: Option<String>,
     pub ffmpeg_path: Option<PathBuf>,
@@ -360,12 +361,14 @@ impl Config {
 
 /// Reads commandline args.
 pub fn read_args() -> Args {
+    let slow = std::env::args().any(|arg| arg == "--slow");
     let admin_mode = std::env::args().any(|arg| arg == "--admin");
     let config_path = std::env::args().find_map(|arg| arg.strip_prefix("--config-path=").map(String::from));
     let ffmpeg_path = std::env::args().find_map(|arg| arg.strip_prefix("--ffmpeg-path=").map(PathBuf::from));
     #[cfg(feature = "load_env")]
     let env_path = std::env::args().find_map(|arg| arg.strip_prefix("--env-path=").map(PathBuf::from));
     Args {
+        slow,
         admin_mode,
         config_path,
         ffmpeg_path,
