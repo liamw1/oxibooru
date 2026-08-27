@@ -42,12 +42,29 @@
     <link rel="stylesheet" type="text/css" href="static/css/user-registration.css">
     <link rel="stylesheet" type="text/css" href="static/css/user-view.css">
 
-    {# Temporary. TODO: Remove #}
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    {# TODO: Extract only the SVGs that client actually uses #}
+    <link rel="stylesheet" type="text/css" href="static/css/font-awesome.min.css">
 
     <link rel="icon" href="static/img/favicon.png">
 
+    <script src="static/js/nprogress.js"></script>
     <script src="static/js/htmx-2.0.10.min.js"></script>
+
+    <script>
+        NProgress.configure({ showSpinner: false, trickleSpeed: 200 });
+
+        let pending = 0, timer = null;
+        const DELAY_MS = 150;   // Only show progress bar if request takes longer than this duration
+
+        document.addEventListener('htmx:beforeRequest', () => {
+            if (pending++ === 0) timer = setTimeout(() => { timer = null; NProgress.start(); }, DELAY);
+        });
+        document.addEventListener('htmx:afterRequest', () => {
+            if (--pending > 0) return;
+            if (timer) { clearTimeout(timer); timer = null; }
+            else NProgress.done();
+        });
+    </script>
 
     <title>{% block title %}{{ ctx.site_name() }}{% endblock %}</title>
 </head>

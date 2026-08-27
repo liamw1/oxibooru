@@ -51,6 +51,7 @@ pub fn routes(state: AppState) -> Router {
         .merge(user::routes())
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::convert_error))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), api::middleware::auth))
+        .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::slow))
         .nest_service("/data", ServeDir::new(&data_dir))
         .nest_service("/static", ServeDir::new(&static_dir))
         .with_state(state)
