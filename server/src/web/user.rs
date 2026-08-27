@@ -63,7 +63,7 @@ async fn list(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offse
     let pager = Pager::build("users", &params, page_params, response.total);
     ListTemplate {
         ctx,
-        active_tab: Tab::Post,
+        active_tab: Tab::User,
         users: response.results,
         pager,
         params: &params,
