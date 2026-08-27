@@ -65,7 +65,7 @@ pub async fn list(
         (status = 404, description = "Pool category does not exist"),
     ),
 )]
-async fn get(
+pub async fn get(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,
@@ -88,11 +88,11 @@ async fn get(
 
 /// Request body for creating a pool category.
 #[derive(Deserialize, ToSchema)]
-struct PoolCategoryCreateBody {
+pub struct PoolCategoryCreateBody {
     /// Category name. Must match `pool_category_name_regex` from server's configuration.
-    name: SmallString,
+    pub name: SmallString,
     /// Category color.
-    color: SmallString,
+    pub color: SmallString,
 }
 
 /// Creates a new pool category using specified parameters.
@@ -113,7 +113,7 @@ struct PoolCategoryCreateBody {
         (status = 422, description = "Color is invalid or missing"),
     ),
 )]
-async fn create(
+pub async fn create(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<PoolCategoryCreateBody>,
@@ -145,13 +145,13 @@ async fn create(
 
 /// Request body for updating a pool category.
 #[derive(Deserialize, ToSchema)]
-struct PoolCategoryUpdateBody {
+pub struct PoolCategoryUpdateBody {
     /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
+    pub version: DateTime,
     /// New category name. Must match `pool_category_name_regex` from server's configuration.
-    name: Option<SmallString>,
+    pub name: Option<SmallString>,
     /// New category color.
-    color: Option<SmallString>,
+    pub color: Option<SmallString>,
 }
 
 /// Updates an existing pool category using specified parameters.
@@ -178,7 +178,7 @@ struct PoolCategoryUpdateBody {
         (status = 422, description = "Color is invalid"),
     ),
 )]
-async fn update(
+pub async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,
@@ -236,7 +236,7 @@ async fn update(
         (status = 404, description = "Pool category does not exist"),
     ),
 )]
-async fn set_default(
+pub async fn set_default(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,
@@ -314,7 +314,7 @@ async fn set_default(
         (status = 422, description = "Pool category is the default category"),
     ),
 )]
-async fn delete(
+pub async fn delete(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,

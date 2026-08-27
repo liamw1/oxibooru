@@ -133,15 +133,15 @@ pub async fn get(
 
 /// Request body for creating a pool.
 #[derive(Deserialize, ToSchema)]
-struct PoolCreateBody {
+pub struct PoolCreateBody {
     /// Pool names. Must match `pool_name_regex` from server's configuration.
-    names: Vec<SmallString>,
+    pub names: Vec<SmallString>,
     /// Category name. Must match an existing pool category.
-    category: SmallString,
+    pub category: SmallString,
     /// Pool description.
-    description: Option<LargeString>,
+    pub description: Option<LargeString>,
     /// List of post IDs to include in the pool.
-    posts: Option<Vec<i64>>,
+    pub posts: Option<Vec<i64>>,
 }
 
 /// Creates a new pool using specified parameters.
@@ -167,7 +167,7 @@ struct PoolCreateBody {
         (status = 422, description = "Category is missing or invalid"),
     ),
 )]
-async fn create(
+pub async fn create(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<PoolCreateBody>,
@@ -235,7 +235,7 @@ async fn create(
         (status = 422, description = "Source pool is the same as the target pool"),
     ),
 )]
-async fn merge(
+pub async fn merge(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<MergeBody<i64>>,
@@ -277,17 +277,17 @@ async fn merge(
 
 /// Request body for updating a pool.
 #[derive(Deserialize, ToSchema)]
-struct PoolUpdateBody {
+pub struct PoolUpdateBody {
     /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
+    pub version: DateTime,
     /// Category name. Must match an existing pool category.
-    category: Option<SmallString>,
+    pub category: Option<SmallString>,
     /// Pool description.
-    description: Option<LargeString>,
+    pub description: Option<LargeString>,
     /// Pool names. Must match `pool_name_regex` from server's configuration.
-    names: Option<Vec<SmallString>>,
+    pub names: Option<Vec<SmallString>>,
     /// List of post IDs. Replaces the previous list.
-    posts: Option<Vec<i64>>,
+    pub posts: Option<Vec<i64>>,
 }
 
 /// Updates an existing pool using specified parameters.
@@ -321,7 +321,7 @@ struct PoolUpdateBody {
         (status = 422, description = "Category is invalid"),
     ),
 )]
-async fn update(
+pub async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path(pool_id): Path<i64>,
     Query(params): Query<ResourceParams<Field>>,
@@ -408,7 +408,7 @@ async fn update(
         (status = 409, description = "Version is outdated"),
     ),
 )]
-async fn delete(
+pub async fn delete(
     Ctx(ctx, connection_pool): Ctx,
     Path(pool_id): Path<i64>,
     Json(client_version): Json<DeleteBody>,

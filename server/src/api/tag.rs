@@ -29,34 +29,6 @@ pub fn routes() -> OpenApiRouter<AppState> {
         .routes(routes!(merge))
 }
 
-const MAX_TAG_SIBLINGS: i64 = 50;
-
-fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &str) -> ApiResult<i64> {
-    if ctx.preferences().is_empty() {
-        tag_name::table
-            .select(tag_name::tag_id)
-            .filter(tag_name::name.eq(tag_name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Tag))
-    } else {
-        let (tag_id, category_name): (_, SmallString) = tag::table
-            .inner_join(tag_name::table)
-            .inner_join(tag_category::table)
-            .select((tag::id, tag_category::name))
-            .filter(tag_name::name.eq(tag_name))
-            .first(conn)
-            .optional()?
-            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
-
-        if ctx.preferences().tag_hidden(conn, tag_name, &category_name)? {
-            Err(ApiError::Hidden(ResourceType::Tag))
-        } else {
-            Ok(tag_id)
-        }
-    }
-}
-
 /// Searches for tags.
 ///
 /// **Anonymous tokens**
@@ -167,18 +139,18 @@ pub async fn get(
 
 /// A sibling tag with its co-occurrence count.
 #[derive(Serialize, ToSchema)]
-struct TagSibling {
+pub struct TagSibling {
     /// The sibling tag.
-    tag: TagInfo,
+    pub tag: TagInfo,
     /// Number of times this tag appears with the queried tag.
-    occurrences: i64,
+    pub occurrences: i64,
 }
 
 /// Response containing tag siblings.
 #[derive(Serialize, ToSchema)]
-struct TagSiblings {
+pub struct TagSiblings {
     /// List of sibling tags sorted by occurrence count.
-    results: Vec<TagSibling>,
+    pub results: Vec<TagSibling>,
 }
 
 /// Lists siblings of given tag.
@@ -202,7 +174,7 @@ struct TagSiblings {
         (status = 404, description = "Tag does not exist"),
     ),
 )]
-async fn get_siblings(
+pub async fn get_siblings(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,
@@ -245,17 +217,17 @@ async fn get_siblings(
 
 /// Request body for creating a tag.
 #[derive(Deserialize, ToSchema)]
-struct TagCreateBody {
+pub struct TagCreateBody {
     /// Category name. Must match an existing tag category.
-    category: SmallString,
+    pub category: SmallString,
     /// Tag description.
-    description: Option<LargeString>,
+    pub description: Option<LargeString>,
     /// Tag names. Must match `tag_name_regex` from server's configuration.
-    names: Vec<SmallString>,
+    pub names: Vec<SmallString>,
     /// Implied tags. Non-existent tags will be created automatically.
-    implications: Option<Vec<SmallString>>,
+    pub implications: Option<Vec<SmallString>>,
     /// Suggested tags. Non-existent tags will be created automatically.
-    suggestions: Option<Vec<SmallString>>,
+    pub suggestions: Option<Vec<SmallString>>,
 }
 
 /// Creates a new tag using specified parameters.
@@ -283,7 +255,7 @@ struct TagCreateBody {
         (status = 422, description = "Implications or suggestions create a cyclic dependency"),
     ),
 )]
-async fn create(
+pub async fn create(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<TagCreateBody>,
@@ -354,7 +326,7 @@ async fn create(
         (status = 422, description = "Source tag is the same as the target tag"),
     ),
 )]
-async fn merge(
+pub async fn merge(
     Ctx(ctx, connection_pool): Ctx,
     Query(params): Query<ResourceParams<Field>>,
     Json(body): Json<MergeBody<SmallString>>,
@@ -399,19 +371,19 @@ async fn merge(
 
 /// Request body for updating a tag.
 #[derive(Deserialize, ToSchema)]
-struct TagUpdateBody {
+pub struct TagUpdateBody {
     /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
+    pub version: DateTime,
     /// Category name. Must match an existing tag category.
-    category: Option<SmallString>,
+    pub category: Option<SmallString>,
     /// Tag description.
-    description: Option<LargeString>,
+    pub description: Option<LargeString>,
     /// Tag names. Must match `tag_name_regex` from server's configuration.
-    names: Option<Vec<SmallString>>,
+    pub names: Option<Vec<SmallString>>,
     /// Implied tags. Non-existent tags will be created automatically.
-    implications: Option<Vec<SmallString>>,
+    pub implications: Option<Vec<SmallString>>,
     /// Suggested tags. Non-existent tags will be created automatically.
-    suggestions: Option<Vec<SmallString>>,
+    pub suggestions: Option<Vec<SmallString>>,
 }
 
 /// Updates an existing tag using specified parameters.
@@ -443,7 +415,7 @@ struct TagUpdateBody {
         (status = 422, description = "Implications or suggestions create a cyclic dependency"),
     ),
 )]
-async fn update(
+pub async fn update(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Query(params): Query<ResourceParams<Field>>,
@@ -541,7 +513,7 @@ async fn update(
         (status = 409, description = "Version is outdated"),
     ),
 )]
-async fn delete(
+pub async fn delete(
     Ctx(ctx, connection_pool): Ctx,
     Path(name): Path<SmallString>,
     Json(client_version): Json<DeleteBody>,
@@ -566,6 +538,34 @@ async fn delete(
             Ok::<_, ApiError>(Json(()))
         })
         .await
+}
+
+const MAX_TAG_SIBLINGS: i64 = 50;
+
+fn verify_visibility(conn: &mut PgConnection, ctx: &Context, tag_name: &str) -> ApiResult<i64> {
+    if ctx.preferences().is_empty() {
+        tag_name::table
+            .select(tag_name::tag_id)
+            .filter(tag_name::name.eq(tag_name))
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))
+    } else {
+        let (tag_id, category_name): (_, SmallString) = tag::table
+            .inner_join(tag_name::table)
+            .inner_join(tag_category::table)
+            .select((tag::id, tag_category::name))
+            .filter(tag_name::name.eq(tag_name))
+            .first(conn)
+            .optional()?
+            .ok_or(ApiError::NotFound(ResourceType::Tag))?;
+
+        if ctx.preferences().tag_hidden(conn, tag_name, &category_name)? {
+            Err(ApiError::Hidden(ResourceType::Tag))
+        } else {
+            Ok(tag_id)
+        }
+    }
 }
 
 #[cfg(test)]
