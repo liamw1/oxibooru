@@ -62,7 +62,7 @@ impl Params {
 }
 
 #[derive(Template)]
-#[template(path = "pages/tags_page.html")]
+#[template(path = "pages/tag/list.html")]
 struct ListTemplate<'a> {
     ctx: Ctx,
     active_tab: Tab,
@@ -136,11 +136,11 @@ async fn view(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> WebR
 }
 
 #[derive(Deref, Template)]
-#[template(path = "pages/tag_summary.html")]
+#[template(path = "pages/tag/summary.html")]
 struct SummaryPageTemplate(TagPageInfo);
 
 #[derive(Template)]
-#[template(path = "pages/tag_summary.html", block = "tag")]
+#[template(path = "pages/tag/summary.html", block = "tag")]
 struct SummaryFragmentTemplate {
     active_tag_tab: TagTab,
     tag: TagInfo,
@@ -163,11 +163,11 @@ async fn summary_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebRes
 }
 
 #[derive(Deref, Template)]
-#[template(path = "pages/tag_edit.html")]
+#[template(path = "pages/tag/edit.html")]
 struct EditPageTemplate(TagPageInfo);
 
 #[derive(Deref, Template)]
-#[template(path = "pages/tag_edit.html", block = "tag")]
+#[template(path = "pages/tag/edit.html", block = "tag")]
 struct EditFragmentTemplate(TagPageInfo);
 
 async fn edit_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult<Html> {
@@ -182,11 +182,11 @@ async fn edit_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult
 }
 
 #[derive(Deref, Template)]
-#[template(path = "pages/tag_merge.html")]
+#[template(path = "pages/tag/merge.html")]
 struct MergePageTemplate(TagPageInfo);
 
 #[derive(Template)]
-#[template(path = "pages/tag_merge.html", block = "tag")]
+#[template(path = "pages/tag/merge.html", block = "tag")]
 struct MergeFragmentTemplate {
     ctx: Ctx,
     active_tag_tab: TagTab,
@@ -211,11 +211,11 @@ async fn merge_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResul
 }
 
 #[derive(Deref, Template)]
-#[template(path = "pages/tag_delete.html")]
+#[template(path = "pages/tag/delete.html")]
 struct DeletePageTemplate(TagPageInfo);
 
 #[derive(Template)]
-#[template(path = "pages/tag_delete.html", block = "tag")]
+#[template(path = "pages/tag/delete.html", block = "tag")]
 struct DeleteFragmentTemplate {
     active_tag_tab: TagTab,
     tag: TagInfo,

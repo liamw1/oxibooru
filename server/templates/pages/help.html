@@ -27,11 +27,11 @@
     {# TODO: Make it so that client can navigate without a page reload #}
     <div class="content">
         {% match active_help_tab %}
-        {% when HelpTab::About %}{% include "partials/help_about.html" %}
-        {% when HelpTab::Keyboard %}{% include "partials/help_keyboard.html" %}
-        {% when HelpTab::Search %}{% include "partials/help_search.html" %}
-        {% when HelpTab::Comments %}{% include "partials/help_comments.html" %}
-        {% when HelpTab::Tos %}{% include "partials/help_tos.html" %}
+        {% when HelpTab::About %}{% include "partials/help/about.html" %}
+        {% when HelpTab::Keyboard %}{% include "partials/help/keyboard.html" %}
+        {% when HelpTab::Search %}{% include "partials/help/search.html" %}
+        {% when HelpTab::Comments %}{% include "partials/help/comments.html" %}
+        {% when HelpTab::Tos %}{% include "partials/help/tos.html" %}
         {% endmatch %}
     </div>
 </div>

@@ -42,7 +42,7 @@ impl Params {
 }
 
 #[derive(Template)]
-#[template(path = "pages/users_page.html")]
+#[template(path = "pages/user/list.html")]
 struct ListTemplate<'a> {
     ctx: Ctx,
     active_tab: Tab,
@@ -82,7 +82,7 @@ enum UserTab {
 }
 
 #[derive(Template)]
-#[template(path = "pages/user.html")]
+#[template(path = "pages/user/base.html")]
 struct PoolTemplate {
     ctx: Ctx,
     active_tab: Tab,
