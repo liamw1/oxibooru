@@ -21,15 +21,17 @@ pub async fn convert_error(ctx: Ctx, req: Request, next: Next) -> Response {
     let response = next.run(req).await;
 
     if let Some(err) = response.extensions().get::<Arc<WebError>>() {
-        ErrorTemplate {
+        let html = ErrorTemplate {
             ctx,
             active_tab: Tab::None,
-            error: &err,
+            error: err,
         }
         .render()
         .map(Html)
-        .expect("Error template should never fail")
-        .into_response()
+        .expect("Error template should never fail");
+
+        // Override target in case error happens when client expects HTML fragment
+        ([("HX-Retarget", "body"), ("HX-Reswap", "innerHTML")], html).into_response()
     } else {
         response
     }

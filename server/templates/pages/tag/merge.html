@@ -3,6 +3,8 @@
 {% block content %}
 <div class="tag-merge">
     <form>
+        <input type="hidden" name="version" value="{{ tag.version()? }}">
+
         <ul class="input">
             <li class="target">
                 <label>Target tag</label>

@@ -57,7 +57,7 @@
         const DELAY_MS = 150;   // Only show progress bar if request takes longer than this duration
 
         document.addEventListener('htmx:beforeRequest', () => {
-            if (pending++ === 0) timer = setTimeout(() => { timer = null; NProgress.start(); }, DELAY);
+            if (pending++ === 0) timer = setTimeout(() => { timer = null; NProgress.start(); }, DELAY_MS);
         });
         document.addEventListener('htmx:afterRequest', () => {
             if (--pending > 0) return;

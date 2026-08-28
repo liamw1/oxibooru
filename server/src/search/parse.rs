@@ -1,45 +1,21 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::search::{Condition, StrCondition, TimeParsingError};
+use crate::string::{self, ParsedChar, Pattern, SplitUnescaped};
 use crate::time::DateTime;
 use std::ops::Range;
 use std::str::FromStr;
 use time::{Date, Duration, Month, OffsetDateTime, Time};
 
-/// NOTE: This can be replaced by official Pattern trait when stabilized.
-pub trait Pattern: Copy {
-    fn matches(self, c: char) -> bool;
-}
-
-impl Pattern for char {
-    fn matches(self, c: char) -> bool {
-        self == c
-    }
-}
-
-#[derive(Clone, Copy)]
-pub struct IsWhitespace;
-
-impl Pattern for IsWhitespace {
-    fn matches(self, c: char) -> bool {
-        c.is_whitespace()
-    }
-}
-
-/// Like [`str::split_whitespace`], but ignores whitespace escaped with `\`.
-pub fn split_unescaped_whitespace(text: &str) -> impl Iterator<Item = &str> {
-    SplitUnescaped::new(text, IsWhitespace).filter(|term| !term.is_empty())
-}
-
 /// Splits `text` into two parts by an unescaped character matching given `pattern`.
 pub fn split_once<P: Pattern>(text: &str, pattern: P) -> Option<(&str, &str)> {
-    next_unescaped_split(text, pattern)
+    string::next_unescaped_split(text, pattern)
         .map(|index| text.split_at(index))
         .map(|(left, right)| (left, right.strip_prefix(|c| pattern.matches(c)).unwrap_or_default()))
 }
 
 /// Parses string-based `condition`.
 pub fn str_condition(condition: &str) -> StrCondition {
-    if next_unescaped_split(condition, '*').is_some() {
+    if string::next_unescaped_split(condition, '*').is_some() {
         StrCondition::WildCard(to_like_pattern(condition))
     } else {
         StrCondition::Regular(parse_regular_str(condition))
@@ -95,88 +71,15 @@ where
 
 // Checks if condition represents multiple values (i.e. a list, range, or wildcard pattern).
 pub fn is_multivalued(condition: &str) -> bool {
-    next_unescaped_split(condition, ',').is_some()
-        || next_unescaped_split(condition, '*').is_some()
+    string::next_unescaped_split(condition, ',').is_some()
+        || string::next_unescaped_split(condition, '*').is_some()
         || range_split(condition).is_some()
-}
-
-#[derive(Clone, Copy, PartialEq)]
-enum ParsedChar {
-    Normal(char),  // Unquoted, unescaped
-    Literal(char), // Inside quotes or after `\`
-    Quote,         // An unescaped `"`
-    Escape,        // An unescaped `\`
-}
-
-/// A general iterator over patterns that are not escaped with `\`.
-struct SplitUnescaped<'a, P> {
-    text: &'a str,
-    start: usize,
-    pattern: P,
-}
-
-impl<'a, P: Pattern> SplitUnescaped<'a, P> {
-    fn new(text: &'a str, pattern: P) -> Self {
-        Self {
-            text,
-            start: 0,
-            pattern,
-        }
-    }
-}
-
-impl<'a, P: Pattern> Iterator for SplitUnescaped<'a, P> {
-    type Item = &'a str;
-    fn next(&mut self) -> Option<Self::Item> {
-        let remainder = self.text.get(self.start..)?;
-        if remainder.is_empty() {
-            return None;
-        }
-
-        if let Some(index) = next_unescaped_split(remainder, self.pattern) {
-            // Advance past the delimiter by its actual byte width
-            let delimiter_len = remainder[index..].chars().next().map_or(1, char::len_utf8);
-            self.start += index + delimiter_len;
-            Some(&remainder[..index])
-        } else {
-            self.start = self.text.len() + 1; // Terminate
-            Some(remainder)
-        }
-    }
-}
-
-fn scan(text: &str) -> impl Iterator<Item = (usize, ParsedChar)> {
-    let mut quoted = false;
-    let mut escaped = false;
-    text.char_indices().map(move |(i, c)| {
-        let parsed_char = if escaped {
-            escaped = false;
-            ParsedChar::Literal(c)
-        } else if c == '\\' {
-            escaped = true;
-            ParsedChar::Escape
-        } else if c == '"' {
-            quoted = !quoted;
-            ParsedChar::Quote
-        } else if quoted {
-            ParsedChar::Literal(c)
-        } else {
-            ParsedChar::Normal(c)
-        };
-        (i, parsed_char)
-    })
-}
-
-/// Finds the byte index of next unescaped character that matches `pattern` in `text`.
-fn next_unescaped_split<P: Pattern>(text: &str, pattern: P) -> Option<usize> {
-    scan(text)
-        .find_map(|(i, parsed_char)| matches!(parsed_char, ParsedChar::Normal(c) if pattern.matches(c)).then_some(i))
 }
 
 /// Splits `text` into two parts if it contains an unescaped ".." substring.
 fn range_split(text: &str) -> Option<(&str, &str)> {
     const RANGE_SEPARATOR: &str = "..";
-    scan(text).find_map(|(i, pc)| {
+    string::scan(text).find_map(|(i, pc)| {
         (matches!(pc, ParsedChar::Normal(_)) && text[i..].starts_with(RANGE_SEPARATOR))
             .then(|| (&text[..i], &text[i + RANGE_SEPARATOR.len()..]))
     })
@@ -184,7 +87,7 @@ fn range_split(text: &str) -> Option<(&str, &str)> {
 
 /// Replaces escaped characters with unescaped ones in `text`.
 fn unescape(text: &str) -> String {
-    scan(text)
+    string::scan(text)
         .filter_map(|(_, parsed_char)| match parsed_char {
             ParsedChar::Normal(c) | ParsedChar::Literal(c) => Some(c),
             ParsedChar::Escape | ParsedChar::Quote => None,
@@ -196,7 +99,7 @@ fn unescape(text: &str) -> String {
 /// Unescaped `*` becomes `%`, literal `\`, `%`, and `_` are LIKE-escaped.
 fn to_like_pattern(text: &str) -> String {
     let mut pattern = String::with_capacity(text.len());
-    for parsed_char in scan(text).map(|(_, parsed_char)| parsed_char) {
+    for parsed_char in string::scan(text).map(|(_, parsed_char)| parsed_char) {
         match parsed_char {
             ParsedChar::Quote | ParsedChar::Escape => {}
             ParsedChar::Normal('*') => pattern.push('%'),
@@ -265,6 +168,7 @@ fn parse_month(text: &str) -> Result<Month, TimeParsingError> {
 mod test {
     use super::*;
     use crate::model::enums::PostSafety;
+    use crate::string::IsWhitespace;
 
     #[test]
     fn time_parsing() -> Result<(), TimeParsingError> {
