@@ -1,14 +1,16 @@
+use crate::api::tag::TagUpdateBody;
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
+use crate::resource::NotRequested;
 use crate::resource::field::{Batcher, Mask};
-use crate::resource::{self, NotRequested};
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
+use crate::{resource, string};
 use diesel::{
     BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, JoinOnDsl, PgConnection, QueryDsl, QueryResult,
     RunQueryDsl, SelectableHelper,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use server_macros::resource;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -16,7 +18,7 @@ use strum::EnumString;
 use utoipa::ToSchema;
 
 /// A tag resource stripped down to `names`, `category` and `usages` fields.
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroTag {
     /// A list of tag names (aliases). Tagging a post with any name will automatically assign the first name from this list.
@@ -56,7 +58,7 @@ impl From<Field> for u64 {
 
 /// A single tag. Tags are used to let users search for posts.
 #[resource]
-#[derive(Serialize, ToSchema)]
+#[derive(Default, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TagInfo {
     /// Resource version. See [versioning](#Versioning).
@@ -135,6 +137,47 @@ impl TagInfo {
         let unordered_tags = tag::table.filter(tag::id.eq_any(tag_ids)).load(conn)?;
         let tags = resource::order_as(unordered_tags, tag_ids);
         Self::new_batch(conn, tags, fields)
+    }
+}
+
+#[derive(Deserialize)]
+pub struct EditForm {
+    version: DateTime,
+    category: Option<SmallString>,
+    description: Option<LargeString>,
+    names: Option<String>,
+    implications: Option<Vec<MicroTag>>,
+    suggestions: Option<Vec<MicroTag>>,
+}
+
+impl EditForm {
+    pub fn to_body(&self) -> TagUpdateBody {
+        TagUpdateBody {
+            version: self.version,
+            category: self.category.clone(),
+            description: self.description.clone(),
+            names: self.names.as_deref().map(string::split_into_list),
+            implications: self
+                .implications
+                .as_deref()
+                .map(|tags| tags.iter().map(MicroTag::primary_name).map(SmallString::from).collect()),
+            suggestions: self
+                .suggestions
+                .as_deref()
+                .map(|tags| tags.iter().map(MicroTag::primary_name).map(SmallString::from).collect()),
+        }
+    }
+
+    pub fn into_info(self) -> TagInfo {
+        TagInfo {
+            version: Some(self.version),
+            category: self.category,
+            description: self.description,
+            names: self.names.as_deref().map(string::split_into_list),
+            implications: self.implications,
+            suggestions: self.suggestions,
+            ..Default::default()
+        }
     }
 }
 

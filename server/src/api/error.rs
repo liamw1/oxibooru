@@ -40,6 +40,7 @@ pub enum ApiError {
     FailedEmailTransport(#[from] lettre::transport::smtp::Error),
     FailedQuery(#[from] diesel::result::Error),
     FfmpegError(Box<dyn std::error::Error + Send + Sync + 'static>),
+    FormRejection(#[from] axum::extract::rejection::FormRejection),
     #[error("Image buffer of length {2} does not match dimensions {0}x{1}")]
     FrameBufferMismatch(u32, u32, usize),
     FromStr(#[from] Box<dyn std::error::Error + Send + Sync>),
@@ -108,6 +109,7 @@ impl ApiError {
 
         match self {
             Self::ExtensionRejection(err) => err.status(),
+            Self::FormRejection(err) => err.status(),
             Self::JsonRejection(err) => err.status(),
             Self::Multipart(err) => err.status(),
             Self::MultipartRejection(err) => err.status(),
@@ -181,6 +183,7 @@ impl ApiError {
             Self::FailedEmailTransport(_) => "Failed Email Transport",
             Self::FailedQuery(_) => "Failed Query",
             Self::FfmpegError(_) => "FFmpeg Error",
+            Self::FormRejection(_) => "Form Rejection",
             Self::FrameBufferMismatch(..) => "Frame Buffer Mismatch",
             Self::FromStr(_) => "FromStr Error",
             Self::HeaderDeserialization(_) => "Header Deserialization",

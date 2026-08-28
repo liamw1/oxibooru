@@ -7,10 +7,10 @@ use crate::resource::field::Mask;
 use crate::time::DateTime;
 use axum::RequestPartsExt;
 use axum::extract::multipart::{Multipart as AxumMultipart, MultipartRejection};
-use axum::extract::rejection::{JsonRejection, PathRejection, QueryRejection};
+use axum::extract::rejection::{FormRejection, JsonRejection, PathRejection, QueryRejection};
 use axum::extract::{
-    Extension, FromRef, FromRequest, FromRequestParts, Json as AxumJson, Path as AxumPath, Query as AxumQuery, Request,
-    State,
+    Extension, Form as AxumForm, FromRef, FromRequest, FromRequestParts, Json as AxumJson, Path as AxumPath,
+    Query as AxumQuery, Request, State,
 };
 use axum::http::request::Parts;
 use axum::response::{IntoResponse, Response};
@@ -103,6 +103,23 @@ where
         } else {
             Err(ApiError::MissingContentType)
         }
+    }
+}
+
+pub struct Form<T>(pub T);
+
+impl<S, T> FromRequest<S> for Form<T>
+where
+    AxumForm<T>: FromRequest<S, Rejection = FormRejection>,
+    S: Send + Sync,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        AxumForm::<T>::from_request(req, state)
+            .await
+            .map(|value| Self(value.0))
+            .map_err(ApiError::from)
     }
 }
 
@@ -290,7 +307,7 @@ where
 {
     type Rejection = Infallible;
 
-    async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
+    fn from_request_parts(parts: &mut Parts, _state: &S) -> impl Future<Output = Result<Self, Self::Rejection>> {
         let flag = |name: &str| {
             parts
                 .headers
@@ -303,10 +320,10 @@ where
             .and_then(|val| val.to_str().ok())
             .map(str::to_owned);
 
-        Ok(HxRequest {
+        std::future::ready(Ok(HxRequest {
             htmx: flag("hx-request"),
             history_restore: flag("hx-history-restore-request"),
             target,
-        })
+        }))
     }
 }

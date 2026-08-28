@@ -3,6 +3,8 @@
 {% block content %}
 <div class="tag-delete">
     <form>
+        <input type="hidden" name="version" value="{{ tag.version()? }}">
+
         <p>
             This tag has <a href="posts?search-text={{ tag.primary_name()? }}">{{ tag.usages()? }} usage{% if
                 tag.usages()? != 1 %}s{% endif %}</a>.

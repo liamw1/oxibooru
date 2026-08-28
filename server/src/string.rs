@@ -198,3 +198,105 @@ impl<'de> Deserialize<'de> for LargeString {
             .map(Self)
     }
 }
+
+/// NOTE: This can be replaced by official Pattern trait when stabilized.
+pub trait Pattern: Copy {
+    fn matches(self, c: char) -> bool;
+}
+
+impl Pattern for char {
+    fn matches(self, c: char) -> bool {
+        self == c
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct IsWhitespace;
+
+impl Pattern for IsWhitespace {
+    fn matches(self, c: char) -> bool {
+        c.is_whitespace()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum ParsedChar {
+    Normal(char),  // Unquoted, unescaped
+    Literal(char), // Inside quotes or after `\`
+    Quote,         // An unescaped `"`
+    Escape,        // An unescaped `\`
+}
+
+/// A general iterator over patterns that are not escaped with `\`.
+pub struct SplitUnescaped<'a, P> {
+    text: &'a str,
+    start: usize,
+    pattern: P,
+}
+
+impl<'a, P: Pattern> SplitUnescaped<'a, P> {
+    pub fn new(text: &'a str, pattern: P) -> Self {
+        Self {
+            text,
+            start: 0,
+            pattern,
+        }
+    }
+}
+
+impl<'a, P: Pattern> Iterator for SplitUnescaped<'a, P> {
+    type Item = &'a str;
+    fn next(&mut self) -> Option<Self::Item> {
+        let remainder = self.text.get(self.start..)?;
+        if remainder.is_empty() {
+            return None;
+        }
+
+        if let Some(index) = next_unescaped_split(remainder, self.pattern) {
+            // Advance past the delimiter by its actual byte width
+            let delimiter_len = remainder[index..].chars().next().map_or(1, char::len_utf8);
+            self.start += index + delimiter_len;
+            Some(&remainder[..index])
+        } else {
+            self.start = self.text.len() + 1; // Terminate
+            Some(remainder)
+        }
+    }
+}
+
+/// Like [`str::split_whitespace`], but ignores whitespace escaped with `\`.
+pub fn split_unescaped_whitespace(text: &str) -> impl Iterator<Item = &str> {
+    SplitUnescaped::new(text, IsWhitespace).filter(|term| !term.is_empty())
+}
+
+pub fn split_into_list(text: &str) -> Vec<SmallString> {
+    split_unescaped_whitespace(text).map(SmallString::from).collect()
+}
+
+/// Finds the byte index of next unescaped character that matches `pattern` in `text`.
+pub fn next_unescaped_split<P: Pattern>(text: &str, pattern: P) -> Option<usize> {
+    scan(text)
+        .find_map(|(i, parsed_char)| matches!(parsed_char, ParsedChar::Normal(c) if pattern.matches(c)).then_some(i))
+}
+
+pub fn scan(text: &str) -> impl Iterator<Item = (usize, ParsedChar)> {
+    let mut quoted = false;
+    let mut escaped = false;
+    text.char_indices().map(move |(i, c)| {
+        let parsed_char = if escaped {
+            escaped = false;
+            ParsedChar::Literal(c)
+        } else if c == '\\' {
+            escaped = true;
+            ParsedChar::Escape
+        } else if c == '"' {
+            quoted = !quoted;
+            ParsedChar::Quote
+        } else if quoted {
+            ParsedChar::Literal(c)
+        } else {
+            ParsedChar::Normal(c)
+        };
+        (i, parsed_char)
+    })
+}
