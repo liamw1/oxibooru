@@ -1,6 +1,7 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::Context;
 use crate::auth::Client;
+use crate::string;
 use argon2::password_hash::rand_core::{OsRng, RngCore};
 use diesel::sql_types::Float;
 use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl, declare_sql_function};
@@ -110,7 +111,7 @@ where
         };
 
         // Terms are separated by whitespace
-        for term in parse::split_unescaped_whitespace(search_criteria) {
+        for term in string::split_unescaped_whitespace(search_criteria) {
             let (term, negated) = match term.strip_prefix('-') {
                 Some(unnegated_term) => (unnegated_term, true),
                 None => (term, false),

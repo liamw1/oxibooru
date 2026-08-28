@@ -3,6 +3,8 @@
 {% block content %}
 <div class="content-wrapper tag-edit">
     <form>
+        <input type="hidden" name="version" value="{{ tag.version()? }}">
+
         <ul class="input">
             <li class="names">
                 {% if ctx.has_privilege(Action::TagEditName) %}
@@ -27,7 +29,25 @@
                 {% if ctx.has_privilege(Action::TagEditImplication) %}
                 <label>Implications</label>
                 <div class="tag-input">
-                    <input type="text" placeholder="type to add…">
+                    <div class="main-control">
+                        <input type="text" placeholder="type to add…">
+                        <button>Add</button>
+                    </div>
+                    <ul class="compact-tags">
+                        {% for implication in tag.implications()? %}
+                        {% let implication_name = implication.primary_name() %}
+                        <li>
+                            <a class="remove-tag" data-pseudo-content="&times;"></a>
+                            <a class="tag-{{ implication.category }}" href="tag/{{ implication_name }}">
+                                <i class="fa fa-tag"></i>
+                            </a>
+                            <a class="tag-{{ implication.category }}" href="posts/search-text={{ implication_name }}">{{
+                                implication_name
+                                }}</a>
+                            <span class="tag-usages" data-pseudo-content="{{ implication.usages }}"></span>
+                        </li>
+                        {% endfor %}
+                    </ul>
                 </div>
                 {% endif %}
             </li>
@@ -35,7 +55,25 @@
                 {% if ctx.has_privilege(Action::TagEditSuggestion) %}
                 <label>Suggestions</label>
                 <div class="tag-input">
-                    <input type="text" placeholder="type to add…">
+                    <div class="main-control">
+                        <input type="text" placeholder="type to add…">
+                        <button>Add</button>
+                    </div>
+                    <ul class="compact-tags">
+                        {% for suggestion in tag.suggestions()? %}
+                        {% let suggestion_name = suggestion.primary_name() %}
+                        <li>
+                            <a class="remove-tag" data-pseudo-content="&times;"></a>
+                            <a class="tag-{{ suggestion.category }}" href="tag/{{ suggestion_name }}">
+                                <i class="fa fa-tag"></i>
+                            </a>
+                            <a class="tag-{{ suggestion.category }}" href="posts/search-text={{ suggestion_name }}">{{
+                                suggestion_name
+                                }}</a>
+                            <span class="tag-usages" data-pseudo-content="{{ suggestion.usages }}"></span>
+                        </li>
+                        {% endfor %}
+                    </ul>
                 </div>
                 {% endif %}
             </li>
@@ -48,7 +86,11 @@
         </ul>
 
         {% if ctx.can_edit_tags() %}
-        <div class="messages"></div>
+        <div class="messages">
+            {% if let Some(err) = error %}
+            <div class="message error">{{ err }}</div>
+            {% endif %}
+        </div>
         <div class="buttons">
             <input type="submit" class="save" value="Save changes">
         </div>
