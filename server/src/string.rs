@@ -6,7 +6,7 @@ use diesel::serialize::{self, Output, ToSql};
 use diesel::sql_types::{SingleValue, Text};
 use diesel::{AsExpression, declare_sql_function};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
@@ -93,7 +93,19 @@ impl FromSql<Citext, Pg> for SecretString {
 /// Implements Small String Optimization (SSO), so it doesn't allocate if the length is 24 bytes or less.
 /// Ideal for strings that are typically short, such as tag names.
 #[derive(
-    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, AsExpression, FromSqlRow, ToSchema,
+    Debug,
+    Clone,
+    Default,
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Hash,
+    Serialize,
+    Deserialize,
+    AsExpression,
+    FromSqlRow,
+    ToSchema,
 )]
 #[diesel(sql_type = Text, sql_type = Citext)]
 #[schema(value_type = String, description = "")]
@@ -102,6 +114,12 @@ pub struct SmallString(CompactString);
 impl Deref for SmallString {
     type Target = str;
     fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Borrow<str> for SmallString {
+    fn borrow(&self) -> &str {
         &self.0
     }
 }

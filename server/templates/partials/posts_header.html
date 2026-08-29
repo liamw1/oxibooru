@@ -21,7 +21,7 @@
         {% call carry(params, "search-text") %}{% endcall %}
         <input type="text" id="search-text" name="search-text" value="{{ params.search_text() }}">
         <wbr>
-        <button type="submit">Search</button>
+        <button>Search</button>
     </form>
 
     {% if ctx.safety_enabled() %}
