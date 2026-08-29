@@ -13,7 +13,7 @@
     {% if ctx.has_privilege(Action::PostList) %}
     <form class="horizontal" action="posts" method="get">
         <input type="text" name="search-text" placeholder="enter some tags">
-        <button type="submit">Search</button>
+        <button>Search</button>
         <span class=sep>or</span>
         <a href="posts">browse all posts</a>
     </form>

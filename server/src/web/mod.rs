@@ -1,8 +1,10 @@
 use crate::api;
+use crate::api::error::ApiError;
 use crate::app::AppState;
+use crate::resource::NotRequested;
 use axum::Router;
 use axum::http::StatusCode;
-use axum::http::header::VARY;
+use axum::http::header::{CACHE_CONTROL, VARY};
 use axum::response::{Html as AxumHtml, IntoResponse, Response};
 use serde::Serialize;
 use std::sync::Arc;
@@ -10,6 +12,7 @@ use thiserror::Error;
 use tower_http::services::ServeDir;
 
 mod comment;
+pub mod form;
 mod help;
 mod home;
 mod login;
@@ -81,7 +84,7 @@ struct Html(String);
 
 impl IntoResponse for Html {
     fn into_response(self) -> Response {
-        ([(VARY, "HX-Request")], AxumHtml(self.0)).into_response()
+        ([(CACHE_CONTROL, "no-store"), (VARY, "HX-Request")], AxumHtml(self.0)).into_response()
     }
 }
 
@@ -101,6 +104,12 @@ impl WebError {
     }
 }
 
+impl From<NotRequested> for WebError {
+    fn from(value: NotRequested) -> Self {
+        WebError::Template(value.into())
+    }
+}
+
 impl IntoResponse for WebError {
     fn into_response(self) -> Response {
         let mut response = self.status_code().into_response();
@@ -117,4 +126,10 @@ fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded:
             format!("{base}?{query_string}")
         }
     })
+}
+
+enum Message {
+    None,
+    Success,
+    Error(ApiError),
 }

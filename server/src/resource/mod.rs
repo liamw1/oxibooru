@@ -1,6 +1,8 @@
 use crate::string::SmallString;
 use diesel::Identifiable;
+use serde::Deserialize;
 use std::collections::HashMap;
+use std::ops::Deref;
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -28,6 +30,62 @@ pub struct NotRequested(&'static str);
 impl From<NotRequested> for askama::Error {
     fn from(value: NotRequested) -> Self {
         askama::Error::Custom(Box::new(value))
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FormField<T> {
+    #[serde(default)]
+    current: T,
+    original: Option<T>,
+}
+
+impl<T> FormField<T> {
+    pub fn current(&self) -> &T {
+        &self.current
+    }
+
+    pub fn original(&self) -> &T {
+        self.original.as_ref().unwrap_or(&self.current)
+    }
+}
+
+impl<T: Eq> FormField<T> {
+    fn form_value(&self) -> Option<&T> {
+        self.original
+            .as_ref()
+            .is_none_or(|original| self.current != *original)
+            .then_some(&self.current)
+    }
+
+    fn form_value_cloned(&self) -> Option<T>
+    where
+        T: Clone,
+    {
+        self.original
+            .as_ref()
+            .is_none_or(|original| self.current != *original)
+            .then_some(self.current.clone())
+    }
+
+    fn form_value_deref<R>(&self) -> Option<&R>
+    where
+        T: Deref<Target = R>,
+        R: ?Sized,
+    {
+        self.original
+            .as_ref()
+            .is_none_or(|original| self.current != *original)
+            .then_some(self.current.deref())
+    }
+}
+
+impl<T> From<T> for FormField<T> {
+    fn from(value: T) -> Self {
+        Self {
+            current: value,
+            original: None,
+        }
     }
 }
 
