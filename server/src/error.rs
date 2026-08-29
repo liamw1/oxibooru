@@ -65,8 +65,6 @@ pub enum ErrorName {
     FailedDecoding,
     FailedEmailTransport,
     FailedEncoding,
-    FailedToDeserializeForm,
-    FailedToDeserializeFormBody,
     FailedToDeserializeQueryString,
     FFmpegError,
     FileAlreadyExists,
@@ -74,6 +72,7 @@ pub enum ErrorName {
     FileTooLarge,
     FloatNaNOrInf,
     ForeignKeyViolation,
+    FormRejection,
     FrameBufferMismatch,
     FromStrError,
     GenericImageError,
@@ -126,8 +125,8 @@ pub enum ErrorName {
     InvalidEncryption,
     InvalidFilename,
     InvalidFormat,
-    InvalidGamma,
     InvalidFormContentType,
+    InvalidGamma,
     InvalidHeader,
     InvalidHistogramIndex,
     InvalidHuffman,
@@ -315,7 +314,6 @@ pub enum ErrorName {
     UnknownDatabaseConnectionError,
     UnknownDatabaseError,
     UnknownEmailAddressError,
-    UnknownFormRejectionError,
     UnknownImageLimitError,
     UnknownImageParameterError,
     UnknownImageUnsupportedError,
@@ -421,18 +419,6 @@ impl ErrorKind for axum::extract::path::ErrorKind {
             Self::DeserializeError { .. } => ErrorName::PathDeserializeError,
             Self::Message(_) => ErrorName::OtherPathError,
             _ => ErrorName::UnknownPathDeserializeError,
-        }
-    }
-}
-
-impl ErrorKind for axum::extract::rejection::FormRejection {
-    fn kind(&self) -> ErrorName {
-        match self {
-            Self::BytesRejection(_) => ErrorName::BytesRejection,
-            Self::FailedToDeserializeForm(_) => ErrorName::FailedToDeserializeForm,
-            Self::FailedToDeserializeFormBody(_) => ErrorName::FailedToDeserializeFormBody,
-            Self::InvalidFormContentType(_) => ErrorName::InvalidFormContentType,
-            _ => ErrorName::UnknownFormRejectionError,
         }
     }
 }
@@ -927,7 +913,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::FailedEmailTransport(_) => ErrorName::FailedEmailTransport,
             Self::FailedQuery(err) => err.kind(),
             Self::FfmpegError(_) => ErrorName::FFmpegError,
-            Self::FormRejection(err) => err.kind(),
+            Self::FormRejection(_) => ErrorName::FormRejection,
             Self::FrameBufferMismatch(..) => ErrorName::FrameBufferMismatch,
             Self::FromStr(_) => ErrorName::FromStrError,
             Self::HeaderDeserialization(_) => ErrorName::HeaderDeserialization,

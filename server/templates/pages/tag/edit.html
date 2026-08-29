@@ -2,31 +2,44 @@
 
 {% block content %}
 <div class="content-wrapper tag-edit">
-    <form>
+    <form method="post" action="tag/{{ tag.primary_name()? }}/edit" hx-post="tag/{{ tag.primary_name()? }}/edit"
+        hx-target="#tag" hx-swap="show:none">
         <input type="hidden" name="version" value="{{ tag.version()? }}">
+        <input type="hidden" name="primary-name" value="{{ tag.primary_name()? }}">
 
         <ul class="input">
             <li class="names">
-                {% if ctx.has_privilege(Action::TagEditName) %}
+                {% if let Some(names) = tag.names && ctx.has_privilege(Action::TagEditName) %}
+                <input type="hidden" name="names[original]" value="{{ names.original() }}">
+
                 <label>Names</label>
-                <input type="text" value="{{ tag.joined_names()? }}" required>
+                <input type="text" name="names[current]" value="{{ names.current() }}" required>
                 {% endif %}
             </li>
             <li class="category">
-                {% if ctx.has_privilege(Action::TagEditCategory) %}
+                {% if let Some(category) = tag.category %}
+                <input type="hidden" name="category[original]" value="{{ category.original() }}">
+
                 <label>Category</label>
-                <select required>
-                    {% for category in categories %}
-                    <option value="{{ category.name()? }}" {% if category.name()?==tag.category()? %} selected {% endif
-                        %}>
-                        {{ category.name()? }}
+                <select name="category[current]" required>
+                    {% for c in categories %}
+                    <option value="{{ c.name()? }}" {% if c.name()?==category.current() %} selected {% endif %}>
+                        {{ c.name()? }}
                     </option>
                     {% endfor %}
                 </select>
                 {% endif %}
             </li>
             <li class="implications">
-                {% if ctx.has_privilege(Action::TagEditImplication) %}
+                {% if let Some(implications) = tag.implications %}
+                {% for (i, implication) in implications.original().iter() %}
+                <input type="hidden" name="implications[original][{{ i }}][names][0]"
+                    value="{{ implication.primary_name() }}">
+                <input type="hidden" name="implications[original][{{ i }}][category]"
+                    value="{{ implication.category }}">
+                <input type="hidden" name="implications[original][{{ i }}][usages]" value="{{ implication.usages }}">
+                {% endfor %}
+
                 <label>Implications</label>
                 <div class="tag-input">
                     <div class="main-control">
@@ -34,14 +47,24 @@
                         <button>Add</button>
                     </div>
                     <ul class="compact-tags">
-                        {% for implication in tag.implications()? %}
+                        {% for (i, implication) in implications.current().iter() %}
                         {% let implication_name = implication.primary_name() %}
                         <li>
-                            <a class="remove-tag" data-pseudo-content="&times;"></a>
+                            <input type="hidden" name="implications[current][{{ i }}][names][0]"
+                                value="{{ implication_name }}">
+                            <input type="hidden" name="implications[current][{{ i }}][category]"
+                                value="{{ implication.category }}">
+                            <input type="hidden" name="implications[current][{{ i }}][usages]"
+                                value="{{ implication.usages }}">
+
+                            <button class="remove-tag" data-pseudo-content="&times;"
+                                onclick="if (this.form) { this.closest('li').remove(); return false; }" name="operation"
+                                value="remove-implication-{{ i }}"></button>
                             <a class="tag-{{ implication.category }}" href="tag/{{ implication_name }}">
                                 <i class="fa fa-tag"></i>
                             </a>
-                            <a class="tag-{{ implication.category }}" href="posts/search-text={{ implication_name }}">{{
+                            <a class="tag-{{ implication.category }}" href="posts?search-text={{ implication_name }}"
+                                hx-target="body">{{
                                 implication_name
                                 }}</a>
                             <span class="tag-usages" data-pseudo-content="{{ implication.usages }}"></span>
@@ -52,7 +75,14 @@
                 {% endif %}
             </li>
             <li class="suggestions">
-                {% if ctx.has_privilege(Action::TagEditSuggestion) %}
+                {% if let Some(suggestions) = tag.suggestions %}
+                {% for (i, suggestion) in suggestions.original().iter() %}
+                <input type="hidden" name="suggestions[original][{{ i }}][names][0]"
+                    value="{{ suggestion.primary_name() }}">
+                <input type="hidden" name="suggestions[original][{{ i }}][category]" value="{{ suggestion.category }}">
+                <input type="hidden" name="suggestions[original][{{ i }}][usages]" value="{{ suggestion.usages }}">
+                {% endfor %}
+
                 <label>Suggestions</label>
                 <div class="tag-input">
                     <div class="main-control">
@@ -60,14 +90,24 @@
                         <button>Add</button>
                     </div>
                     <ul class="compact-tags">
-                        {% for suggestion in tag.suggestions()? %}
+                        {% for (i, suggestion) in suggestions.current().iter() %}
                         {% let suggestion_name = suggestion.primary_name() %}
                         <li>
-                            <a class="remove-tag" data-pseudo-content="&times;"></a>
+                            <input type="hidden" name="suggestions[current][{{ i }}][names][0]"
+                                value="{{ suggestion_name }}">
+                            <input type="hidden" name="suggestions[current][{{ i }}][category]"
+                                value="{{ suggestion.category }}">
+                            <input type="hidden" name="suggestions[current][{{ i }}][usages]"
+                                value="{{ suggestion.usages }}">
+
+                            <button class="remove-tag" data-pseudo-content="&times;"
+                                onclick="if (this.form) { this.closest('li').remove(); return false; }" name="operation"
+                                value="remove-suggestion-{{ i }}"></button>
                             <a class="tag-{{ suggestion.category }}" href="tag/{{ suggestion_name }}">
                                 <i class="fa fa-tag"></i>
                             </a>
-                            <a class="tag-{{ suggestion.category }}" href="posts/search-text={{ suggestion_name }}">{{
+                            <a class="tag-{{ suggestion.category }}" href="posts?search-text={{ suggestion_name }}"
+                                hx-target="body">{{
                                 suggestion_name
                                 }}</a>
                             <span class="tag-usages" data-pseudo-content="{{ suggestion.usages }}"></span>
@@ -77,22 +117,28 @@
                 </div>
                 {% endif %}
             </li>
-            <li class="suggestions">
-                {% if ctx.has_privilege(Action::TagEditDescription) %}
+            <li class="description">
+                {% if let Some(description) = tag.description %}
+                <input type="hidden" name="description[original]" value="{{ description.original() }}">
+
                 <label>Description</label>
-                <textarea>{{ tag.description()? }}</textarea>
+                <textarea name="description[current]">{{ description.current() }}</textarea>
                 {% endif %}
             </li>
         </ul>
 
         {% if ctx.can_edit_tags() %}
         <div class="messages">
-            {% if let Some(err) = error %}
+            {% match message %}
+            {% when Message::None %}
+            {% when Message::Success %}
+            <div class="message success">Tag saved.</div>
+            {% when Message::Error(err) %}
             <div class="message error">{{ err }}</div>
-            {% endif %}
+            {% endmatch %}
         </div>
         <div class="buttons">
-            <input type="submit" class="save" value="Save changes">
+            <button class="save" name="operation" value="save">Save changes</button>
         </div>
         {% endif %}
     </form>

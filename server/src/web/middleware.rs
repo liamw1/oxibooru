@@ -1,3 +1,4 @@
+use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::Ctx;
@@ -20,11 +21,18 @@ pub async fn slow(State(state): State<AppState>, req: Request, next: Next) -> Re
 pub async fn convert_error(ctx: Ctx, req: Request, next: Next) -> Response {
     let response = next.run(req).await;
 
-    if let Some(err) = response.extensions().get::<Arc<WebError>>() {
+    let error_string = if let Some(err) = response.extensions().get::<Arc<ApiError>>() {
+        Some(err.to_string())
+    } else if let Some(err) = response.extensions().get::<Arc<WebError>>() {
+        Some(err.to_string())
+    } else {
+        None
+    };
+    if let Some(error) = error_string {
         let html = ErrorTemplate {
             ctx,
             active_tab: Tab::None,
-            error: err,
+            error,
         }
         .render()
         .map(Html)
@@ -39,8 +47,8 @@ pub async fn convert_error(ctx: Ctx, req: Request, next: Next) -> Response {
 
 #[derive(Template)]
 #[template(path = "pages/error.html")]
-struct ErrorTemplate<'a> {
+struct ErrorTemplate {
     ctx: Ctx,
     active_tab: Tab,
-    error: &'a WebError,
+    error: String,
 }
