@@ -237,6 +237,19 @@ where
     }
 }
 
+impl<F, const N: usize> From<[F; N]> for ResourceParams<F>
+where
+    F: Copy + FromStr,
+    u64: From<F>,
+{
+    fn from(field_array: [F; N]) -> Self {
+        Self {
+            query: None,
+            fields: field_array.into(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Deserialize)]
 pub struct Offset {
     offset: Option<u64>,

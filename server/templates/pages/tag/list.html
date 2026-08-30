@@ -12,7 +12,13 @@
 
     {% include "partials/tags_header.html" %}
 
-    <div class="messages"></div>
+    <div class="messages">
+        {% match message %}
+        {% when Message::AfterDelete %}
+        <div class="message success">Tag deleted.</div>
+        {% when Message::None | Message::Success | Message::Error(_) %}
+        {% endmatch %}
+    </div>
 
     <div class="tag-list table-wrap">
         {% if !tags.is_empty() %}

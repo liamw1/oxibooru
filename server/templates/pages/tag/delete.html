@@ -2,8 +2,11 @@
 
 {% block content %}
 <div class="tag-delete">
-    <form>
+    <form method="post" action="tag/{{ tag.primary_name()? }}/delete" hx-post="tag/{{ tag.primary_name()? }}/delete"
+        hx-target="#tag" hx-swap="show:none">
         <input type="hidden" name="version" value="{{ tag.version()? }}">
+        <input type="hidden" name="primary-name" value="{{ tag.primary_name()? }}">
+        <input type="hidden" name="usages" value="{{ tag.usages()? }}">
 
         <p>
             This tag has <a href="posts?search-text={{ tag.primary_name()? }}">{{ tag.usages()? }} usage{% if
@@ -12,15 +15,23 @@
 
         <ul class="input">
             <li>
-                <input id="confirm-deletion" type="checkbox" required>
-                <span class="checkbox">I confirm that I want to delete this tag.</span>
+                <label>
+                    <input type="checkbox" name="confirmed" required>
+                    <span class="checkbox">I confirm that I want to delete this tag.</span>
+                </label>
             </li>
         </ul>
 
-        <div class="messages"></div>
+        <div class="messages">
+            {% match message %}
+            {% when Message::Error(err) %}
+            <div class="message error">{{ err }}</div>
+            {% when Message::None | Message::Success | Message::AfterDelete %}
+            {% endmatch %}
+        </div>
 
         <div class="buttons">
-            <input type="submit" value="Delete tag">
+            <button>Delete tag</button>
         </div>
     </form>
 </div>
