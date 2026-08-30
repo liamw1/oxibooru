@@ -191,18 +191,19 @@ async fn get_tag_info(
     joined_names: &str,
     existing_tags: &BTreeMap<i64, MicroTag>,
 ) -> WebResult<Vec<MicroTag>> {
+    let fields: Mask<_> = [Field::Category, Field::Names, Field::Usages].into();
+
     let tag_names = string::split_unescaped_whitespace(joined_names)
         .map(SmallString::from)
         .collect();
-    let tags = connection_pool
+    let (tag_ids, _) = connection_pool
         .transaction({
             let ctx = ctx.clone();
-            move |conn| {
-                let fields: Mask<_> = [Field::Category, Field::Names, Field::Usages].into();
-                let (tag_ids, _) = update::tag::get_or_create_tags(conn, &ctx, tag_names, FetchMode::Deep)?;
-                TagInfo::new_batch_from_ids(conn, &tag_ids, fields).map_err(ApiError::from)
-            }
+            move |conn| update::tag::get_or_create_tags(conn, &ctx, tag_names, FetchMode::Deep)
         })
+        .await?;
+    let tags = connection_pool
+        .transaction(move |conn| TagInfo::new_batch_from_ids(conn, &tag_ids, fields).map_err(ApiError::from))
         .await?;
 
     let mut micro_tags = Vec::new();
