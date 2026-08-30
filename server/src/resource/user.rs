@@ -77,35 +77,35 @@ impl From<Field> for u64 {
 #[serde(rename_all = "camelCase")]
 pub struct UserInfo {
     /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
+    pub version: DateTime,
     /// The user name.
-    name: SmallString,
+    pub name: SmallString,
     /// The user email. It is available only if the request is authenticated by the same user,
     /// or the authenticated user can change the email. If it's unavailable, the server returns `false`.
     /// If the user hasn't specified an email, the server returns `null`.
-    email: PrivateData<Option<String>>,
+    pub email: PrivateData<Option<String>>,
     /// The user rank, which effectively affects their privileges.
-    rank: UserRank,
+    pub rank: UserRank,
     /// The last login time.
-    last_login_time: DateTime,
+    pub last_login_time: DateTime,
     /// The user registration time.
-    creation_time: DateTime,
+    pub creation_time: DateTime,
     /// How to render the user avatar.
-    avatar_style: AvatarStyle,
+    pub avatar_style: AvatarStyle,
     /// The URL to the avatar.
-    avatar_url: String,
+    pub avatar_url: String,
     /// Number of comments.
-    comment_count: i64,
+    pub comment_count: i64,
     /// Number of uploaded posts.
-    uploaded_post_count: i64,
+    pub uploaded_post_count: i64,
     /// Nubmer of liked posts. It is available only if the request is authenticated by the same user.
     /// If it's unavailable, the server returns `false`.
-    liked_post_count: PrivateData<i64>,
+    pub liked_post_count: PrivateData<i64>,
     /// Number of disliked posts. It is available only if the request is authenticated by the same user.
     /// If it's unavailable, the server returns `false`.
-    disliked_post_count: PrivateData<i64>,
+    pub disliked_post_count: PrivateData<i64>,
     /// Number of favorited posts.
-    favorite_post_count: i64,
+    pub favorite_post_count: i64,
 }
 
 impl UserInfo {

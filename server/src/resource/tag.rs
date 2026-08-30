@@ -1,12 +1,9 @@
-use crate::api::tag::TagUpdateBody;
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
 use crate::resource::field::{Batcher, Mask};
-use crate::resource::{FormField, NotRequested};
+use crate::resource::{self, NotRequested};
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::web::form::{TagMap, TagOperation};
-use crate::{resource, string};
 use diesel::{
     BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, JoinOnDsl, PgConnection, QueryDsl, QueryResult,
     RunQueryDsl, SelectableHelper,
@@ -71,23 +68,23 @@ impl From<Field> for u64 {
 #[serde(rename_all = "camelCase")]
 pub struct TagInfo {
     /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
+    pub version: DateTime,
     /// The tag description (instructions how to use, history etc.). The client should render is as Markdown.
-    description: LargeString,
+    pub description: LargeString,
     /// Time the tag was created.
-    creation_time: DateTime,
+    pub creation_time: DateTime,
     /// Time the tag was last edited.
-    last_edit_time: DateTime,
+    pub last_edit_time: DateTime,
     /// The name of the category the given tag belongs to.
-    category: SmallString,
+    pub category: SmallString,
     /// A list of tag names (aliases). Tagging a post with any name will automatically assign the first name from this list.
-    names: Vec<SmallString>,
+    pub names: Vec<SmallString>,
     /// A list of implied tags. Implied tags are automatically appended by the web client on usage.
-    implications: Vec<MicroTag>,
+    pub implications: Vec<MicroTag>,
     /// A list of suggested tags. Suggested tags are shown to the user by the web client on usage.
-    suggestions: Vec<MicroTag>,
+    pub suggestions: Vec<MicroTag>,
     /// The number of posts the tag was used in.
-    usages: i64,
+    pub usages: i64,
 }
 
 impl TagInfo {
@@ -138,89 +135,6 @@ impl TagInfo {
         let unordered_tags = tag::table.filter(tag::id.eq_any(tag_ids)).load(conn)?;
         let tags = resource::order_as(unordered_tags, tag_ids);
         Self::new_batch(conn, tags, fields)
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct EditForm {
-    pub version: DateTime,
-    pub primary_name: SmallString,
-    pub category: Option<FormField<SmallString>>,
-    pub description: Option<FormField<LargeString>>,
-    pub names: Option<FormField<String>>,
-    pub implications: Option<FormField<TagMap>>,
-    pub suggestions: Option<FormField<TagMap>>,
-    operation: TagOperation,
-}
-
-impl EditForm {
-    pub fn initialize(info: TagInfo) -> Result<Self, NotRequested> {
-        let version = info.version()?;
-        let primary_name = info.primary_name().map(SmallString::from)?;
-        let names = info.joined_names().ok().map(FormField::from);
-        let implications = info.implications.map(TagMap::from);
-        let suggestions = info.suggestions.map(TagMap::from);
-
-        Ok(Self {
-            operation: TagOperation::Init,
-            version,
-            primary_name,
-            category: info.category.map(FormField::from),
-            description: info.description.map(FormField::from),
-            names,
-            implications: implications.map(FormField::from),
-            suggestions: suggestions.map(FormField::from),
-        })
-    }
-
-    pub fn version(&self) -> Result<DateTime, NotRequested> {
-        Ok(self.version)
-    }
-
-    pub fn primary_name(&self) -> Result<&str, NotRequested> {
-        Ok(&self.primary_name)
-    }
-
-    pub fn operation(&self) -> TagOperation {
-        self.operation
-    }
-
-    pub fn to_body(&self) -> TagUpdateBody {
-        TagUpdateBody {
-            version: self.version,
-            category: self.category.as_ref().and_then(FormField::form_value_cloned),
-            description: self.description.as_ref().and_then(FormField::form_value_cloned),
-            names: self
-                .names
-                .as_ref()
-                .and_then(FormField::form_value_deref)
-                .map(string::split_into_list),
-            implications: self
-                .implications
-                .as_ref()
-                .and_then(FormField::form_value)
-                .map(TagMap::names),
-            suggestions: self
-                .suggestions
-                .as_ref()
-                .and_then(FormField::form_value)
-                .map(TagMap::names),
-        }
-    }
-
-    pub fn with_implication_removed(mut self, index: usize) -> Self {
-        if let Some(implications) = &mut self.implications {
-            implications.current.remove(&index);
-        }
-        self
-    }
-
-    pub fn with_suggestion_removed(mut self, index: usize) -> Self {
-        if let Some(suggestions) = &mut self.suggestions {
-            suggestions.current.remove(&index);
-        }
-        self
     }
 }
 

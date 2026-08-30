@@ -12,7 +12,7 @@ use thiserror::Error;
 use tower_http::services::ServeDir;
 
 mod comment;
-pub mod form;
+mod form;
 mod help;
 mod home;
 mod login;
