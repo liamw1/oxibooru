@@ -5,7 +5,6 @@
     <form method="post" action="tag/{{ tag.primary_name()? }}/edit" hx-post="tag/{{ tag.primary_name()? }}/edit"
         hx-target="#tag" hx-swap="show:none">
         <input type="hidden" name="version" value="{{ tag.version()? }}">
-        <input type="hidden" name="primary-name" value="{{ tag.primary_name()? }}">
 
         {# Invisible button at top of form for when user presses Enter #}
         <button class="visually-hidden" name="operation" value="auto" tabindex="-1" aria-hidden="true"></button>

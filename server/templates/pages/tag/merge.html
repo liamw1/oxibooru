@@ -5,17 +5,18 @@
     <form method="post" action="tag/{{ tag.primary_name()? }}/merge" hx-post="tag/{{ tag.primary_name()? }}/merge"
         hx-target="#tag" hx-swap="show:none">
         <input type="hidden" name="version" value="{{ tag.version()? }}">
-        <input type="hidden" name="primary-name" value="{{ tag.primary_name()? }}">
 
         <ul class="input">
             <li class="target">
                 <label>Target tag</label>
-                <input type="text" name="target-tag" required pattern="{{ ctx.config.regex(RegexType::Tag) }}">
+                <input type="text" name="target-tag" value="{{ tag.target_tag }}" required
+                    pattern="{{ ctx.config.regex(RegexType::Tag) }}">
             </li>
 
             <li>
                 <p>
-                    Usages in posts, suggestions and implications will be merged. Category needs to be handled manually.
+                    Names, usages in posts, suggestions and implications will be merged. Category needs to be handled
+                    manually.
                 </p>
 
                 <label>
