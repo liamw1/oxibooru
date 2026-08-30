@@ -2,8 +2,10 @@
 
 {% block content %}
 <div class="tag-merge">
-    <form>
+    <form method="post" action="tag/{{ tag.primary_name()? }}/merge" hx-post="tag/{{ tag.primary_name()? }}/merge"
+        hx-target="#tag" hx-swap="show:none">
         <input type="hidden" name="version" value="{{ tag.version()? }}">
+        <input type="hidden" name="primary-name" value="{{ tag.primary_name()? }}">
 
         <ul class="input">
             <li class="target">
@@ -17,16 +19,24 @@
                 </p>
 
                 <label>
-                    <input id="confirm-merge" type="checkbox" required>
+                    <input type="checkbox" name="confirmed" required>
                     <span class="checkbox">I confirm that I want to merge this tag.</span>
                 </label>
             </li>
         </ul>
 
-        <div class="messages"></div>
+        <div class="messages">
+            {% match message %}
+            {% when Message::Success %}
+            <div class="message success">Tag merged.</div>
+            {% when Message::Error(err) %}
+            <div class="message error">{{ err }}</div>
+            {% when Message::None | Message::AfterDelete %}
+            {% endmatch %}
+        </div>
 
         <div class="buttons">
-            <input type="submit" value="Merge tag">
+            <button>Merge tag</button>
         </div>
     </form>
 </div>

@@ -6,6 +6,8 @@
         hx-target="#tag" hx-swap="show:none">
         <input type="hidden" name="version" value="{{ tag.version()? }}">
         <input type="hidden" name="primary-name" value="{{ tag.primary_name()? }}">
+
+        {# Invisible button at top of form for when user presses Enter #}
         <button class="visually-hidden" name="operation" value="auto" tabindex="-1" aria-hidden="true"></button>
 
         <ul class="input">
@@ -129,11 +131,11 @@
         {% if ctx.can_edit_tags() %}
         <div class="messages">
             {% match message %}
-            {% when Message::None %}
             {% when Message::Success %}
             <div class="message success">Tag saved.</div>
             {% when Message::Error(err) %}
             <div class="message error">{{ err }}</div>
+            {% when Message::None | Message::AfterDelete %}
             {% endmatch %}
         </div>
         <div class="buttons">

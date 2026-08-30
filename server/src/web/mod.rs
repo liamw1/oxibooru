@@ -131,5 +131,6 @@ fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded:
 enum Message {
     None,
     Success,
+    AfterDelete,
     Error(ApiError),
 }
