@@ -3,10 +3,10 @@ use crate::app::AppState;
 use crate::config::{Action, RegexType};
 use crate::extract::{Ctx, Form, HxRequest, Json, Offset, Path, Query, ResourceParams};
 use crate::resource::field::Mask;
-use crate::resource::tag::{EditForm, Field, TagInfo};
+use crate::resource::tag::{Field, TagInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::string::SmallString;
-use crate::web::form::TagOperation;
+use crate::web::form::{EditForm, TagOperation};
 use crate::web::pager::{Page, Pager};
 use crate::web::{Html, Message, Tab, WebError, WebResult};
 use crate::{api, time, web};
@@ -56,7 +56,6 @@ fn edit_response_fields(ctx: &Ctx) -> Mask<Field> {
 }
 
 async fn get_tag(ctx: Ctx, path: Path<SmallString>, fields: Mask<Field>) -> ApiResult<TagInfo> {
-    let fields = fields.into();
     let resource_params = Query(ResourceParams { query: None, fields });
     api::tag::get(ctx, path, resource_params).await.map(|Json(tag)| tag)
 }
@@ -234,8 +233,8 @@ async fn edit_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult
 async fn edit_submit(ctx: Ctx, path: Path<SmallString>, hx: HxRequest, Form(form): Form<EditForm>) -> WebResult<Html> {
     let (tag, message) = match form.operation() {
         TagOperation::Init => unreachable!(),
-        TagOperation::AddImplication => todo!(),
-        TagOperation::AddSuggestion => todo!(),
+        TagOperation::AddImplication => (form.with_new_implication(ctx.clone()).await?, Message::None),
+        TagOperation::AddSuggestion => (form.with_new_suggestion(ctx.clone()).await?, Message::None),
         TagOperation::RemoveImplication(index) => (form.with_implication_removed(index), Message::None),
         TagOperation::RemoveSuggestion(index) => (form.with_suggestion_removed(index), Message::None),
         TagOperation::Save => {

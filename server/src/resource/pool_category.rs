@@ -32,15 +32,15 @@ impl From<Field> for u64 {
 #[derive(Serialize, ToSchema)]
 pub struct PoolCategoryInfo {
     /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
+    pub version: DateTime,
     /// The category name.
-    name: SmallString,
+    pub name: SmallString,
     /// The category color.
-    color: SmallString,
+    pub color: SmallString,
     /// How many pools is the given category used with.
-    usages: i64,
+    pub usages: i64,
     /// Whether the pool category is the default one.
-    default: bool,
+    pub default: bool,
 }
 
 impl PoolCategoryInfo {

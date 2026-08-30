@@ -21,13 +21,11 @@ pub async fn slow(State(state): State<AppState>, req: Request, next: Next) -> Re
 pub async fn convert_error(ctx: Ctx, req: Request, next: Next) -> Response {
     let response = next.run(req).await;
 
-    let error_string = if let Some(err) = response.extensions().get::<Arc<ApiError>>() {
-        Some(err.to_string())
-    } else if let Some(err) = response.extensions().get::<Arc<WebError>>() {
-        Some(err.to_string())
-    } else {
-        None
-    };
+    let error_string = response
+        .extensions()
+        .get::<Arc<ApiError>>()
+        .map(ToString::to_string)
+        .or_else(|| response.extensions().get::<Arc<WebError>>().map(ToString::to_string));
     if let Some(error) = error_string {
         let html = ErrorTemplate {
             ctx,
