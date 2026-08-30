@@ -1,12 +1,12 @@
 use crate::resource::tag::MicroTag;
 use crate::string::SmallString;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::collections::BTreeMap;
 use std::ops::{Deref, DerefMut};
 
 pub mod tag;
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 pub struct FormField<T> {
     #[serde(default)]
     current: T,
@@ -72,7 +72,7 @@ impl<T> From<T> for FormField<T> {
     }
 }
 
-#[derive(Debug, Default, PartialEq, Eq, Deserialize)]
+#[derive(Default, PartialEq, Eq, Deserialize)]
 pub struct TagMap(BTreeMap<i64, MicroTag>);
 
 impl TagMap {
@@ -121,4 +121,8 @@ impl<'a> IntoIterator for &'a TagMap {
 
 fn some_default<T: Default>() -> Option<T> {
     Some(T::default())
+}
+
+fn checkbox<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    Option::<&str>::deserialize(deserializer).map(|v| v.is_some())
 }

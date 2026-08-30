@@ -1,8 +1,7 @@
 use crate::api::error::ApiError;
 use crate::api::tag::TagUpdateBody;
-use crate::extract::Ctx;
+use crate::extract::{Ctx, DeleteBody};
 use crate::resource::NotRequested;
-use crate::resource::field::Mask;
 use crate::resource::tag::{Field, MicroTag, TagInfo};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
@@ -63,17 +62,17 @@ impl<'de> Deserialize<'de> for Operation {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct EditForm {
-    pub version: DateTime,
-    pub primary_name: SmallString,
+    pub operation: Operation,
     pub category: Option<FormField<SmallString>>,
     pub description: Option<FormField<LargeString>>,
     pub names: Option<FormField<String>>,
     pub implications: Option<FormField<TagMap>>,
     pub suggestions: Option<FormField<TagMap>>,
-    operation: Operation,
+    version: DateTime,
+    primary_name: SmallString,
     new_implications: Option<SmallString>,
     new_suggestions: Option<SmallString>,
 }
@@ -87,6 +86,7 @@ impl EditForm {
         let suggestions = info.suggestions.map(TagMap::from);
 
         Ok(Self {
+            operation: Operation::Init,
             version,
             primary_name,
             category: info.category.map(FormField::from),
@@ -94,7 +94,6 @@ impl EditForm {
             names,
             implications: implications.map(FormField::from),
             suggestions: suggestions.map(FormField::from),
-            operation: Operation::Init,
             new_implications: None,
             new_suggestions: None,
         })
@@ -106,10 +105,6 @@ impl EditForm {
 
     pub fn primary_name(&self) -> Result<&str, Infallible> {
         Ok(&self.primary_name)
-    }
-
-    pub fn operation(&self) -> Operation {
-        self.operation
     }
 
     pub fn to_body(&self) -> TagUpdateBody {
@@ -186,12 +181,46 @@ impl EditForm {
     }
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct DeleteForm {
+    version: DateTime,
+    primary_name: SmallString,
+    usages: i64,
+}
+
+impl DeleteForm {
+    pub fn initialize(info: TagInfo) -> Result<Self, NotRequested> {
+        Ok(Self {
+            version: info.version()?,
+            primary_name: info.primary_name().map(SmallString::from)?,
+            usages: info.usages()?,
+        })
+    }
+
+    pub fn version(&self) -> Result<DateTime, Infallible> {
+        Ok(self.version)
+    }
+
+    pub fn primary_name(&self) -> Result<&str, Infallible> {
+        Ok(&self.primary_name)
+    }
+
+    pub fn usages(&self) -> Result<i64, Infallible> {
+        Ok(self.usages)
+    }
+
+    pub fn to_body(&self) -> DeleteBody {
+        DeleteBody { version: self.version }
+    }
+}
+
 async fn get_tag_info(
     Ctx(ctx, connection_pool): &Ctx,
     joined_names: &str,
     existing_tags: &BTreeMap<i64, MicroTag>,
 ) -> WebResult<Vec<MicroTag>> {
-    let fields: Mask<_> = [Field::Category, Field::Names, Field::Usages].into();
+    const FIELDS: [Field; 3] = [Field::Category, Field::Names, Field::Usages];
 
     let tag_names = string::split_unescaped_whitespace(joined_names)
         .map(SmallString::from)
@@ -203,7 +232,7 @@ async fn get_tag_info(
         })
         .await?;
     let tags = connection_pool
-        .transaction(move |conn| TagInfo::new_batch_from_ids(conn, &tag_ids, fields).map_err(ApiError::from))
+        .transaction(move |conn| TagInfo::new_batch_from_ids(conn, &tag_ids, FIELDS.into()).map_err(ApiError::from))
         .await?;
 
     let mut micro_tags = Vec::new();

@@ -13,9 +13,8 @@ pub fn routes() -> Router<AppState> {
 }
 
 pub async fn get_categories(ctx: Ctx) -> ApiResult<Vec<TagCategoryInfo>> {
-    let fields = [Field::Name, Field::Color].into();
-    let resource_params = Query(ResourceParams { query: None, fields });
-    api::tag_category::list(ctx, resource_params)
+    const FIELDS: [Field; 2] = [Field::Name, Field::Color];
+    api::tag_category::list(ctx, Query(FIELDS.into()))
         .await
         .map(|Json(response)| response.results)
 }
