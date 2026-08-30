@@ -1,6 +1,6 @@
 {% extends "layout.html" %}
 
-{% block title %}{{ ctx.site_name() }} &ndash; Tag #{{ tag.primary_name()? }}{% endblock %}
+{% block title %}{{ ctx.site_name() }} – Tag #{{ tag.primary_name()? }}{% endblock %}
 
 {% block main %}
 <style>
@@ -21,7 +21,7 @@
                 <a href="tag/{{ tag.primary_name()? }}/edit">Edit</a>
             </li>
             <li data-name="merge" {% if active_tag_tab==TagTab::Merge %} class="active" {% endif %}>
-                <a href="tag/{{ tag.primary_name()? }}/merge">Merge with&hellip;</a>
+                <a href="tag/{{ tag.primary_name()? }}/merge">Merge with…</a>
             </li>
             <li data-name="delete" {% if active_tag_tab==TagTab::Delete %} class="active" {% endif %}>
                 <a href="tag/{{ tag.primary_name()? }}/delete">Delete</a>
