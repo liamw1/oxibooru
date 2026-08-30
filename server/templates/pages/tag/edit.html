@@ -6,6 +6,7 @@
         hx-target="#tag" hx-swap="show:none">
         <input type="hidden" name="version" value="{{ tag.version()? }}">
         <input type="hidden" name="primary-name" value="{{ tag.primary_name()? }}">
+        <button class="visually-hidden" name="operation" value="auto" tabindex="-1" aria-hidden="true"></button>
 
         <ul class="input">
             <li class="names">
@@ -31,8 +32,8 @@
                 {% endif %}
             </li>
             <li class="implications">
-                {% if let Some(implications) = tag.implications %}
-                {% for (i, implication) in implications.original().iter() %}
+                {% if ctx.has_privilege(Action::TagEditImplication) %}
+                {% for (i, implication) in tag.implications.iter().flat_map(FormField::original) %}
                 <input type="hidden" name="implications[original][{{ i }}][names][0]"
                     value="{{ implication.primary_name() }}">
                 <input type="hidden" name="implications[original][{{ i }}][category]"
@@ -43,11 +44,12 @@
                 <label>Implications</label>
                 <div class="tag-input">
                     <div class="main-control">
-                        <input type="text" name="new-implication" placeholder="type to add…">
+                        <input type="text" name="new-implications" placeholder="type to add…" {% if
+                            focus==Focus::Implication %} autofocus {% endif %}>
                         <button name="operation" value="add-implication">Add</button>
                     </div>
                     <ul class="compact-tags">
-                        {% for (i, implication) in implications.current().iter() %}
+                        {% for (i, implication) in tag.implications.iter().flat_map(FormField::current) %}
                         {% let implication_name = implication.primary_name() %}
                         <li>
                             <input type="hidden" name="implications[current][{{ i }}][names][0]"
@@ -64,9 +66,7 @@
                                 <i class="fa fa-tag"></i>
                             </a>
                             <a class="tag-{{ implication.category }}" href="posts?search-text={{ implication_name }}"
-                                hx-target="body">{{
-                                implication_name
-                                }}</a>
+                                hx-target="body">{{ implication_name }}</a>
                             <span class="tag-usages" data-pseudo-content="{{ implication.usages }}"></span>
                         </li>
                         {% endfor %}
@@ -75,8 +75,8 @@
                 {% endif %}
             </li>
             <li class="suggestions">
-                {% if let Some(suggestions) = tag.suggestions %}
-                {% for (i, suggestion) in suggestions.original().iter() %}
+                {% if ctx.has_privilege(Action::TagEditSuggestion) %}
+                {% for (i, suggestion) in tag.suggestions.iter().flat_map(FormField::original) %}
                 <input type="hidden" name="suggestions[original][{{ i }}][names][0]"
                     value="{{ suggestion.primary_name() }}">
                 <input type="hidden" name="suggestions[original][{{ i }}][category]" value="{{ suggestion.category }}">
@@ -86,11 +86,12 @@
                 <label>Suggestions</label>
                 <div class="tag-input">
                     <div class="main-control">
-                        <input type="text" name="new-suggestion" placeholder="type to add…">
+                        <input type="text" name="new-suggestions" placeholder="type to add…" {% if
+                            focus==Focus::Suggestion %} autofocus {% endif %}>
                         <button name="operation" value="add-suggestion">Add</button>
                     </div>
                     <ul class="compact-tags">
-                        {% for (i, suggestion) in suggestions.current().iter() %}
+                        {% for (i, suggestion) in tag.suggestions.iter().flat_map(FormField::current) %}
                         {% let suggestion_name = suggestion.primary_name() %}
                         <li>
                             <input type="hidden" name="suggestions[current][{{ i }}][names][0]"
@@ -107,9 +108,7 @@
                                 <i class="fa fa-tag"></i>
                             </a>
                             <a class="tag-{{ suggestion.category }}" href="posts?search-text={{ suggestion_name }}"
-                                hx-target="body">{{
-                                suggestion_name
-                                }}</a>
+                                hx-target="body">{{ suggestion_name }}</a>
                             <span class="tag-usages" data-pseudo-content="{{ suggestion.usages }}"></span>
                         </li>
                         {% endfor %}

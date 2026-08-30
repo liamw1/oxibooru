@@ -1,21 +1,31 @@
+use crate::api::error::ApiError;
 use crate::api::tag::TagUpdateBody;
-use crate::extract::{Ctx, Json, Path, Query};
+use crate::extract::Ctx;
 use crate::resource::NotRequested;
 use crate::resource::field::Mask;
 use crate::resource::tag::{Field, MicroTag, TagInfo};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::web::WebResult;
-use crate::{api, string};
+use crate::update::tag::FetchMode;
+use crate::web::{Message, WebResult};
+use crate::{string, update};
 use serde::{Deserialize, Deserializer};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use std::sync::Arc;
 
+#[derive(PartialEq, Eq)]
+pub enum Focus {
+    Implication,
+    Suggestion,
+    None,
+}
+
 #[derive(Debug, Clone, Copy)]
-pub enum TagOperation {
+pub enum Operation {
+    Auto,
     Save,
     AddImplication,
     AddSuggestion,
@@ -24,10 +34,11 @@ pub enum TagOperation {
     Init, // For initializing form: cannot be deserialized into
 }
 
-impl FromStr for TagOperation {
+impl FromStr for Operation {
     type Err = &'static str;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
+            "auto" => Some(Self::Auto),
             "save" => Some(Self::Save),
             "add-implication" => Some(Self::AddImplication),
             "add-suggestion" => Some(Self::AddSuggestion),
@@ -45,7 +56,7 @@ impl FromStr for TagOperation {
     }
 }
 
-impl<'de> Deserialize<'de> for TagOperation {
+impl<'de> Deserialize<'de> for Operation {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let s = <&str>::deserialize(deserializer)?;
         s.parse().map_err(serde::de::Error::custom)
@@ -56,6 +67,7 @@ impl<'de> Deserialize<'de> for TagOperation {
 pub struct FormField<T> {
     #[serde(default)]
     current: T,
+    #[serde(default = "some_default")]
     original: Option<T>,
 }
 
@@ -99,6 +111,15 @@ impl<T: Eq> FormField<T> {
     }
 }
 
+impl<T: Default> Default for FormField<T> {
+    fn default() -> Self {
+        Self {
+            current: T::default(),
+            original: Some(T::default()),
+        }
+    }
+}
+
 impl<T> From<T> for FormField<T> {
     fn from(value: T) -> Self {
         Self {
@@ -118,6 +139,13 @@ impl TagMap {
             .map(MicroTag::primary_name)
             .map(SmallString::from)
             .collect()
+    }
+
+    fn append_tags(&mut self, tags: Vec<MicroTag>) {
+        let lowest_current_index = self.first_key_value().map_or(0, |(lowest_index, _)| *lowest_index);
+        for (offset, micro_tag) in (1..).zip(tags) {
+            self.insert(lowest_current_index - offset, micro_tag);
+        }
     }
 }
 
@@ -140,6 +168,14 @@ impl From<Vec<MicroTag>> for TagMap {
     }
 }
 
+impl<'a> IntoIterator for &'a TagMap {
+    type Item = (&'a i64, &'a MicroTag);
+    type IntoIter = std::collections::btree_map::Iter<'a, i64, MicroTag>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct EditForm {
@@ -150,9 +186,9 @@ pub struct EditForm {
     pub names: Option<FormField<String>>,
     pub implications: Option<FormField<TagMap>>,
     pub suggestions: Option<FormField<TagMap>>,
-    operation: TagOperation,
-    new_implication: Option<SmallString>,
-    new_suggestion: Option<SmallString>,
+    operation: Operation,
+    new_implications: Option<SmallString>,
+    new_suggestions: Option<SmallString>,
 }
 
 impl EditForm {
@@ -171,9 +207,9 @@ impl EditForm {
             names,
             implications: implications.map(FormField::from),
             suggestions: suggestions.map(FormField::from),
-            operation: TagOperation::Init,
-            new_implication: None,
-            new_suggestion: None,
+            operation: Operation::Init,
+            new_implications: None,
+            new_suggestions: None,
         })
     }
 
@@ -185,7 +221,7 @@ impl EditForm {
         Ok(&self.primary_name)
     }
 
-    pub fn operation(&self) -> TagOperation {
+    pub fn operation(&self) -> Operation {
         self.operation
     }
 
@@ -212,59 +248,92 @@ impl EditForm {
         }
     }
 
-    pub fn with_implication_removed(mut self, index: i64) -> Self {
+    pub fn with_implication_removed(mut self, index: i64) -> (Self, Focus, Message) {
         if let Some(implications) = &mut self.implications {
             implications.current.remove(&index);
         }
-        self
+        (self, Focus::None, Message::None)
     }
 
-    pub fn with_suggestion_removed(mut self, index: i64) -> Self {
+    pub fn with_suggestion_removed(mut self, index: i64) -> (Self, Focus, Message) {
         if let Some(suggestions) = &mut self.suggestions {
             suggestions.current.remove(&index);
         }
-        self
+        (self, Focus::None, Message::None)
     }
 
-    pub async fn with_new_implication(mut self, ctx: Ctx) -> WebResult<Self> {
-        if let Some(tag_name) = self.new_implication.take()
-            && let Some(implications) = &mut self.implications
+    pub async fn with_new_implications(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+        if let Some(new_names) = self.new_implications.take()
+            && !new_names.is_empty()
         {
-            let fields: Mask<_> = [Field::Category, Field::Names, Field::Usages].into();
-            let Json(tag_info) = api::tag::get(ctx, Path(tag_name), Query(fields.into())).await?;
-            let micro_tag = MicroTag {
-                names: tag_info.names().map(Vec::as_slice).map(Arc::from)?,
-                category: tag_info.category().cloned()?,
-                usages: tag_info.usages()?,
-            };
-
-            let index = implications
-                .current
-                .first_key_value()
-                .map_or(0, |(first_index, _)| first_index - 1);
-            implications.current.insert(index, micro_tag);
+            let implications = self.implications.get_or_insert_default();
+            let new_tags = get_tag_info(&ctx, &new_names, implications.original()).await?;
+            implications.current.append_tags(new_tags);
         }
-        Ok(self)
+        Ok((self, Focus::None, Message::None))
     }
 
-    pub async fn with_new_suggestion(mut self, ctx: Ctx) -> WebResult<Self> {
-        if let Some(tag_name) = self.new_suggestion.take()
-            && let Some(suggestions) = &mut self.suggestions
+    pub async fn with_new_suggestions(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+        if let Some(new_names) = self.new_suggestions.take()
+            && !new_names.is_empty()
         {
-            let fields: Mask<_> = [Field::Category, Field::Names, Field::Usages].into();
-            let Json(tag_info) = api::tag::get(ctx, Path(tag_name), Query(fields.into())).await?;
-            let micro_tag = MicroTag {
-                names: tag_info.names().map(Vec::as_slice).map(Arc::from)?,
-                category: tag_info.category().cloned()?,
-                usages: tag_info.usages()?,
-            };
-
-            let index = suggestions
-                .current
-                .first_key_value()
-                .map_or(0, |(first_index, _)| first_index - 1);
-            suggestions.current.insert(index, micro_tag);
+            let suggestions = self.suggestions.get_or_insert_default();
+            let new_tags = get_tag_info(&ctx, &new_names, suggestions.original()).await?;
+            suggestions.current.append_tags(new_tags);
         }
-        Ok(self)
+        Ok((self, Focus::None, Message::None))
     }
+
+    pub async fn auto_modify(self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+        let has_implication_input = !self.new_implications.as_deref().is_none_or(str::is_empty);
+        let has_suggestion_input = !self.new_suggestions.as_deref().is_none_or(str::is_empty);
+        let focus = match (has_implication_input, has_suggestion_input) {
+            (false | true, true) => Focus::Suggestion,
+            (true, false) => Focus::Implication,
+            (false, false) => Focus::None,
+        };
+
+        let (form, ..) = self.with_new_implications(ctx.clone()).await?;
+        let (form, ..) = form.with_new_suggestions(ctx).await?;
+        Ok((form, focus, Message::None))
+    }
+}
+
+fn some_default<T: Default>() -> Option<T> {
+    Some(T::default())
+}
+
+async fn get_tag_info(
+    Ctx(ctx, connection_pool): &Ctx,
+    joined_names: &str,
+    existing_tags: &BTreeMap<i64, MicroTag>,
+) -> WebResult<Vec<MicroTag>> {
+    let tag_names = string::split_unescaped_whitespace(joined_names)
+        .map(SmallString::from)
+        .collect();
+    let tags = connection_pool
+        .transaction({
+            let ctx = ctx.clone();
+            move |conn| {
+                let fields: Mask<_> = [Field::Category, Field::Names, Field::Usages].into();
+                let (tag_ids, _) = update::tag::get_or_create_tags(conn, &ctx, tag_names, FetchMode::Deep)?;
+                TagInfo::new_batch_from_ids(conn, &tag_ids, fields).map_err(ApiError::from)
+            }
+        })
+        .await?;
+
+    let mut micro_tags = Vec::new();
+    let existing_names: HashSet<_> = existing_tags.iter().map(|(_, tag)| tag.primary_name()).collect();
+    for tag in tags {
+        if existing_names.contains(tag.primary_name()?) {
+            continue;
+        }
+
+        micro_tags.push(MicroTag {
+            names: tag.names().map(Vec::as_slice).map(Arc::from)?,
+            category: tag.category().cloned()?,
+            usages: tag.usages()?,
+        })
+    }
+    Ok(micro_tags)
 }
