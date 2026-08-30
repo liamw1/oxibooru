@@ -128,7 +128,7 @@ fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded:
     })
 }
 
-enum Message {
+pub enum Message {
     None,
     Success,
     AfterDelete,
