@@ -1,13 +1,16 @@
-use crate::api::error::ApiResult;
+use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
 use crate::config::{Action, RegexType};
-use crate::extract::{Ctx, Form, HxRequest, Json, Offset, Path, Query, ResourceParams};
+use crate::extract::{Ctx, HxRequest, Json, MergeBody, Offset, Path, Query, ResourceParams};
+use crate::model::enums::ResourceType;
 use crate::resource::field::Mask;
 use crate::resource::tag::{Field, TagInfo};
 use crate::resource::tag_category::TagCategoryInfo;
+use crate::schema::{tag, tag_name};
 use crate::string::SmallString;
+use crate::time::DateTime;
 use crate::web::form::FormField;
-use crate::web::form::tag::{DeleteForm, EditForm, Focus, Operation};
+use crate::web::form::tag::{DeletePathForm, EditPathForm, Focus, MergePathForm, Operation};
 use crate::web::pager::{Page, Pager};
 use crate::web::{Html, Message, Tab, WebError, WebResult};
 use crate::{api, time, web};
@@ -15,6 +18,7 @@ use askama::Template;
 use axum::response::{IntoResponse, Redirect, Response};
 use axum::{Router, routing};
 use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use server_macros::Deref;
 use std::num::NonZeroU64;
@@ -25,13 +29,12 @@ pub fn routes() -> Router<AppState> {
         .route("/tags", routing::get(list))
         .route("/tag/{name}", routing::get(summary_tab))
         .route("/tag/{name}/edit", routing::get(edit_tab).post(edit_submit))
-        .route("/tag/{name}/merge", routing::get(merge_tab))
+        .route("/tag/{name}/merge", routing::get(merge_tab).post(merge_submit))
         .route("/tag/{name}/delete", routing::get(delete_tab).post(delete_submit))
 }
 
-const DELETION_FLAG: &str = "tag-deleted";
-
 const LIMIT: NonZeroU64 = NonZeroU64::new(50).unwrap();
+const DELETION_FLAG: &str = "tag-deleted";
 
 const SUMMARY_FIELDS: [Field; 7] = [
     Field::Version,
@@ -42,7 +45,7 @@ const SUMMARY_FIELDS: [Field; 7] = [
     Field::Suggestions,
     Field::Usages,
 ];
-
+const MERGE_FIELDS: [Field; 2] = [Field::Version, Field::Names];
 const DELETE_FIELDS: [Field; 3] = [Field::Version, Field::Names, Field::Usages];
 
 fn edit_response_fields(ctx: &Ctx) -> Mask<Field> {
@@ -161,16 +164,17 @@ enum TagTab {
     Delete,
 }
 
-struct TagSummaryInfo {
+struct TagPage<T> {
     ctx: Ctx,
     active_tab: Tab,
     active_tag_tab: TagTab,
-    tag: TagInfo,
+    tag: T,
     categories: Vec<TagCategoryInfo>,
+    focus: Focus,
     message: Message,
 }
 
-impl TagSummaryInfo {
+impl TagPage<TagInfo> {
     async fn new(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> WebResult<Self> {
         get_tag_and_categories(ctx.clone(), path, SUMMARY_FIELDS.into())
             .await
@@ -180,6 +184,7 @@ impl TagSummaryInfo {
                 active_tag_tab,
                 tag,
                 categories,
+                focus: Focus::None,
                 message: Message::None,
             })
             .map_err(WebError::from)
@@ -188,7 +193,7 @@ impl TagSummaryInfo {
 
 #[derive(Deref, Template)]
 #[template(path = "pages/tag/summary.html")]
-struct SummaryPageTemplate(TagSummaryInfo);
+struct SummaryPageTemplate(TagPage<TagInfo>);
 
 #[derive(Template)]
 #[template(path = "pages/tag/summary.html", block = "tag")]
@@ -199,7 +204,7 @@ struct SummaryFragmentTemplate {
 
 async fn summary_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult<Html> {
     if hx.full_page() {
-        let page_info = TagSummaryInfo::new(ctx, path, TagTab::Summary).await?;
+        let page_info = TagPage::new(ctx, path, TagTab::Summary).await?;
         SummaryPageTemplate(page_info).render()
     } else {
         let tag = get_tag(ctx.clone(), path, SUMMARY_FIELDS.into()).await?;
@@ -213,42 +218,27 @@ async fn summary_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebRes
     .map_err(WebError::from)
 }
 
-struct TagEditInfo {
-    ctx: Ctx,
-    active_tab: Tab,
-    active_tag_tab: TagTab,
-    tag: EditForm,
-    categories: Vec<TagCategoryInfo>,
-    focus: Focus,
-    message: Message,
-}
-
-impl TagEditInfo {
-    async fn new(ctx: Ctx, path: Path<SmallString>) -> WebResult<Self> {
-        let fields = edit_response_fields(&ctx);
-        let (tag, categories) = get_tag_and_categories(ctx.clone(), path, fields).await?;
-        Ok(Self {
-            ctx,
-            active_tab: Tab::Tag,
-            active_tag_tab: TagTab::Edit,
-            tag: EditForm::initialize(tag)?,
-            categories,
-            focus: Focus::None,
-            message: Message::None,
-        })
-    }
-}
-
 #[derive(Deref, Template)]
 #[template(path = "pages/tag/edit.html")]
-struct EditPageTemplate(TagEditInfo);
+struct EditPageTemplate(TagPage<EditPathForm>);
 
 #[derive(Deref, Template)]
 #[template(path = "pages/tag/edit.html", block = "tag")]
-struct EditFragmentTemplate(TagEditInfo);
+struct EditFragmentTemplate(TagPage<EditPathForm>);
 
 async fn edit_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult<Html> {
-    let page_info = TagEditInfo::new(ctx, path).await?;
+    let fields = edit_response_fields(&ctx);
+    let (tag, categories) = get_tag_and_categories(ctx.clone(), path, fields).await?;
+    let page_info = TagPage {
+        ctx,
+        active_tab: Tab::Tag,
+        active_tag_tab: TagTab::Edit,
+        tag: EditPathForm::initialize(tag)?,
+        categories,
+        focus: Focus::None,
+        message: Message::None,
+    };
+
     if hx.full_page() {
         EditPageTemplate(page_info).render()
     } else {
@@ -258,7 +248,7 @@ async fn edit_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult
     .map_err(WebError::from)
 }
 
-async fn edit_submit(ctx: Ctx, path: Path<SmallString>, hx: HxRequest, Form(form): Form<EditForm>) -> WebResult<Html> {
+async fn edit_submit(ctx: Ctx, hx: HxRequest, form: EditPathForm) -> WebResult<Html> {
     let (form, focus, message) = match form.operation {
         Operation::Init => unreachable!(),
         Operation::Auto => form.auto_modify(ctx.clone()).await?,
@@ -269,15 +259,15 @@ async fn edit_submit(ctx: Ctx, path: Path<SmallString>, hx: HxRequest, Form(form
         Operation::Save => {
             let focus = Focus::None;
             let fields = edit_response_fields(&ctx);
-            match api::tag::update(ctx.clone(), path.clone(), Query(fields.into()), Json(form.to_body())).await {
-                Ok(Json(tag)) => (EditForm::initialize(tag)?, focus, Message::Success),
+            match api::tag::update(ctx.clone(), form.path(), Query(fields.into()), Json(form.to_body())).await {
+                Ok(Json(tag)) => (EditPathForm::initialize(tag)?, focus, Message::Success),
                 Err(err) => (form, focus, Message::Error(err)),
             }
         }
     };
 
     let categories = web::tag_category::get_categories(ctx.clone()).await?;
-    let page_info = TagEditInfo {
+    let page_info = TagPage {
         ctx,
         active_tab: Tab::Tag,
         active_tag_tab: TagTab::Edit,
@@ -297,27 +287,36 @@ async fn edit_submit(ctx: Ctx, path: Path<SmallString>, hx: HxRequest, Form(form
 
 #[derive(Deref, Template)]
 #[template(path = "pages/tag/merge.html")]
-struct MergePageTemplate(TagSummaryInfo);
+struct MergePageTemplate(TagPage<MergePathForm>);
 
 #[derive(Template)]
 #[template(path = "pages/tag/merge.html", block = "tag")]
 struct MergeFragmentTemplate {
     ctx: Ctx,
     active_tag_tab: TagTab,
-    tag: TagInfo,
+    tag: MergePathForm,
     message: Message,
 }
 
 async fn merge_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult<Html> {
     if hx.full_page() {
-        let page_info = TagSummaryInfo::new(ctx, path, TagTab::Merge).await?;
+        let (tag, categories) = get_tag_and_categories(ctx.clone(), path, MERGE_FIELDS.into()).await?;
+        let page_info = TagPage {
+            ctx,
+            active_tab: Tab::Tag,
+            active_tag_tab: TagTab::Merge,
+            tag: MergePathForm::initialize(&tag)?,
+            categories,
+            focus: Focus::None,
+            message: Message::None,
+        };
         MergePageTemplate(page_info).render()
     } else {
-        let tag = get_tag(ctx.clone(), path, SUMMARY_FIELDS.into()).await?;
+        let tag = get_tag(ctx.clone(), path, MERGE_FIELDS.into()).await?;
         MergeFragmentTemplate {
             ctx,
             active_tag_tab: TagTab::Merge,
-            tag,
+            tag: MergePathForm::initialize(&tag)?,
             message: Message::None,
         }
         .render()
@@ -326,36 +325,88 @@ async fn merge_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResul
     .map_err(WebError::from)
 }
 
-struct TagDeleteInfo {
-    ctx: Ctx,
-    active_tab: Tab,
-    active_tag_tab: TagTab,
-    tag: DeleteForm,
-    categories: Vec<TagCategoryInfo>,
-    message: Message,
+async fn merge_submit(ctx: Ctx, hx: HxRequest, form: MergePathForm) -> WebResult<Html> {
+    let try_merge = {
+        let remove = form.path.clone();
+        let remove_version = form.version;
+        let target_tag = form.target_tag.clone();
+        async move |Ctx(ctx, connection_pool): Ctx| {
+            let target_version: DateTime = connection_pool
+                .transaction({
+                    let target_name = target_tag.clone();
+                    move |conn| {
+                        tag::table
+                            .inner_join(tag_name::table)
+                            .select(tag::last_edit_time)
+                            .filter(tag_name::name.eq(target_name))
+                            .first(conn)
+                            .optional()?
+                            .ok_or(ApiError::NotFound(ResourceType::Tag))
+                    }
+                })
+                .await?;
+
+            let body = MergeBody {
+                remove,
+                merge_to: target_tag,
+                remove_version,
+                merge_to_version: target_version,
+            };
+            api::tag::merge(Ctx(ctx, connection_pool), Query(MERGE_FIELDS.into()), Json(body)).await
+        }
+    };
+
+    let (form, message) = match try_merge(ctx.clone()).await {
+        Ok(Json(tag)) => (MergePathForm::initialize(&tag)?, Message::Success),
+        Err(err) => (form, Message::Error(err)),
+    };
+    if hx.full_page() {
+        let categories = web::tag_category::get_categories(ctx.clone()).await?;
+        let page_info = TagPage {
+            ctx,
+            active_tab: Tab::Tag,
+            active_tag_tab: TagTab::Merge,
+            tag: form,
+            categories,
+            focus: Focus::None,
+            message,
+        };
+        MergePageTemplate(page_info).render()
+    } else {
+        MergeFragmentTemplate {
+            ctx,
+            active_tag_tab: TagTab::Merge,
+            tag: form,
+            message,
+        }
+        .render()
+    }
+    .map(Html)
+    .map_err(WebError::from)
 }
 
 #[derive(Deref, Template)]
 #[template(path = "pages/tag/delete.html")]
-struct DeletePageTemplate(TagDeleteInfo);
+struct DeletePageTemplate(TagPage<DeletePathForm>);
 
 #[derive(Template)]
 #[template(path = "pages/tag/delete.html", block = "tag")]
 struct DeleteFragmentTemplate {
     active_tag_tab: TagTab,
-    tag: DeleteForm,
+    tag: DeletePathForm,
     message: Message,
 }
 
 async fn delete_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult<Html> {
     if hx.full_page() {
         let (tag, categories) = get_tag_and_categories(ctx.clone(), path, DELETE_FIELDS.into()).await?;
-        let page_info = TagDeleteInfo {
+        let page_info = TagPage {
             ctx,
             active_tab: Tab::Tag,
             active_tag_tab: TagTab::Delete,
-            tag: DeleteForm::initialize(tag)?,
+            tag: DeletePathForm::initialize(&tag)?,
             categories,
+            focus: Focus::None,
             message: Message::None,
         };
         DeletePageTemplate(page_info).render()
@@ -363,7 +414,7 @@ async fn delete_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResu
         let tag = get_tag(ctx.clone(), path, DELETE_FIELDS.into()).await?;
         DeleteFragmentTemplate {
             active_tag_tab: TagTab::Delete,
-            tag: DeleteForm::initialize(tag)?,
+            tag: DeletePathForm::initialize(&tag)?,
             message: Message::None,
         }
         .render()
@@ -372,14 +423,8 @@ async fn delete_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResu
     .map_err(WebError::from)
 }
 
-async fn delete_submit(
-    ctx: Ctx,
-    path: Path<SmallString>,
-    hx: HxRequest,
-    jar: CookieJar,
-    Form(form): Form<DeleteForm>,
-) -> WebResult<Response> {
-    match api::tag::delete(ctx.clone(), path.clone(), Json(form.to_body())).await {
+async fn delete_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: DeletePathForm) -> WebResult<Response> {
+    match api::tag::delete(ctx.clone(), form.path(), Json(form.to_body())).await {
         Ok(Json(())) => {
             let flash = Cookie::build(("flash", DELETION_FLAG))
                 .path("/") // TODO: Adjust to base URL
@@ -400,12 +445,13 @@ async fn delete_submit(
             let message = Message::Error(err);
             if hx.full_page() {
                 let categories = web::tag_category::get_categories(ctx.clone()).await?;
-                let page_info = TagDeleteInfo {
+                let page_info = TagPage {
                     ctx,
                     active_tab: Tab::Tag,
                     active_tag_tab: TagTab::Delete,
                     tag: form,
                     categories,
+                    focus: Focus::None,
                     message,
                 };
                 DeletePageTemplate(page_info).render()

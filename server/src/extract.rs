@@ -20,7 +20,7 @@ use serde_qs::axum::{QsForm, QsQueryRejection};
 use std::borrow::Cow;
 use std::convert::Infallible;
 use std::num::NonZeroU64;
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
 use utoipa::{IntoParams, ToSchema};
 
@@ -81,7 +81,7 @@ pub enum JsonOrMultipart<T> {
 
 impl<S, T> FromRequest<S> for JsonOrMultipart<T>
 where
-    AxumJson<T>: FromRequest<S, Rejection = JsonRejection>,
+    Json<T>: FromRequest<S, Rejection = ApiError>,
     AxumMultipart: FromRequest<S, Rejection = MultipartRejection>,
     S: Send + Sync,
 {
@@ -90,10 +90,9 @@ where
     async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
         if let Some(mime) = content::parse_header(req.headers())? {
             if mime.type_() == APPLICATION && (mime.subtype() == JSON || mime.suffix() == Some(JSON)) {
-                return AxumJson::from_request(req, state)
+                return Json::from_request(req, state)
                     .await
-                    .map(|AxumJson(value)| Self::Json(value))
-                    .map_err(ApiError::from);
+                    .map(|Json(value)| Self::Json(value));
             } else if mime.type_() == MULTIPART && mime.subtype() == FORM_DATA {
                 return AxumMultipart::from_request(req, state)
                     .await
@@ -139,6 +138,49 @@ where
             .await
             .map(|value| Self(value.0))
             .map_err(ApiError::from)
+    }
+}
+
+pub struct PathForm<P, F> {
+    pub path: P,
+    pub form: F,
+}
+
+impl<P: Clone, F> PathForm<P, F> {
+    pub fn path(&self) -> Path<P> {
+        Path(self.path.clone())
+    }
+}
+
+impl<P, F> Deref for PathForm<P, F> {
+    type Target = F;
+    fn deref(&self) -> &Self::Target {
+        &self.form
+    }
+}
+
+impl<P, F> DerefMut for PathForm<P, F> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.form
+    }
+}
+
+impl<S, P, F> FromRequest<S> for PathForm<P, F>
+where
+    S: Send + Sync,
+    P: Send,
+    Path<P>: FromRequestParts<S, Rejection = ApiError>,
+    Form<F>: FromRequest<S, Rejection = ApiError>,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let (mut parts, body) = req.into_parts();
+        let Path(path) = Path::from_request_parts(&mut parts, state).await?;
+
+        let req = Request::from_parts(parts, body);
+        let Form(form) = Form::from_request(req, state).await?;
+        Ok(Self { path, form })
     }
 }
 

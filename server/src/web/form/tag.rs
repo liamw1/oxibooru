@@ -1,6 +1,6 @@
 use crate::api::error::ApiError;
 use crate::api::tag::TagUpdateBody;
-use crate::extract::{Ctx, DeleteBody};
+use crate::extract::{Ctx, DeleteBody, PathForm};
 use crate::resource::NotRequested;
 use crate::resource::tag::{Field, MicroTag, TagInfo};
 use crate::string::{LargeString, SmallString};
@@ -62,6 +62,8 @@ impl<'de> Deserialize<'de> for Operation {
     }
 }
 
+pub type EditPathForm = PathForm<SmallString, EditForm>;
+
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct EditForm {
@@ -72,31 +74,29 @@ pub struct EditForm {
     pub implications: Option<FormField<TagMap>>,
     pub suggestions: Option<FormField<TagMap>>,
     version: DateTime,
-    primary_name: SmallString,
     new_implications: Option<SmallString>,
     new_suggestions: Option<SmallString>,
 }
 
-impl EditForm {
+impl EditPathForm {
     pub fn initialize(info: TagInfo) -> Result<Self, NotRequested> {
+        let path = info.primary_name().map(SmallString::from)?;
         let version = info.version()?;
-        let primary_name = info.primary_name().map(SmallString::from)?;
         let names = info.joined_names().ok().map(FormField::from);
         let implications = info.implications.map(TagMap::from);
         let suggestions = info.suggestions.map(TagMap::from);
-
-        Ok(Self {
+        let form = EditForm {
             operation: Operation::Init,
-            version,
-            primary_name,
             category: info.category.map(FormField::from),
             description: info.description.map(FormField::from),
             names,
             implications: implications.map(FormField::from),
             suggestions: suggestions.map(FormField::from),
+            version,
             new_implications: None,
             new_suggestions: None,
-        })
+        };
+        Ok(Self { path, form })
     }
 
     pub fn version(&self) -> Result<DateTime, Infallible> {
@@ -104,7 +104,7 @@ impl EditForm {
     }
 
     pub fn primary_name(&self) -> Result<&str, Infallible> {
-        Ok(&self.primary_name)
+        Ok(&self.path)
     }
 
     pub fn to_body(&self) -> TagUpdateBody {
@@ -144,7 +144,7 @@ impl EditForm {
         (self, Focus::None, Message::None)
     }
 
-    pub async fn with_new_implications(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+    pub(in crate::web) async fn with_new_implications(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
         if let Some(new_names) = self.new_implications.take()
             && !new_names.is_empty()
         {
@@ -155,7 +155,7 @@ impl EditForm {
         Ok((self, Focus::None, Message::None))
     }
 
-    pub async fn with_new_suggestions(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+    pub(in crate::web) async fn with_new_suggestions(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
         if let Some(new_names) = self.new_suggestions.take()
             && !new_names.is_empty()
         {
@@ -166,7 +166,7 @@ impl EditForm {
         Ok((self, Focus::None, Message::None))
     }
 
-    pub async fn auto_modify(self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+    pub(in crate::web) async fn auto_modify(self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
         let has_implication_input = !self.new_implications.as_deref().is_none_or(str::is_empty);
         let has_suggestion_input = !self.new_suggestions.as_deref().is_none_or(str::is_empty);
         let focus = match (has_implication_input, has_suggestion_input) {
@@ -181,21 +181,23 @@ impl EditForm {
     }
 }
 
+pub type MergePathForm = PathForm<SmallString, MergeForm>;
+
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
-pub struct DeleteForm {
-    version: DateTime,
-    primary_name: SmallString,
-    usages: i64,
+pub struct MergeForm {
+    pub version: DateTime,
+    pub target_tag: SmallString,
 }
 
-impl DeleteForm {
-    pub fn initialize(info: TagInfo) -> Result<Self, NotRequested> {
-        Ok(Self {
+impl MergePathForm {
+    pub fn initialize(info: &TagInfo) -> Result<Self, NotRequested> {
+        let path = info.primary_name().map(SmallString::from)?;
+        let form = MergeForm {
             version: info.version()?,
-            primary_name: info.primary_name().map(SmallString::from)?,
-            usages: info.usages()?,
-        })
+            target_tag: SmallString::default(),
+        };
+        Ok(Self { path, form })
     }
 
     pub fn version(&self) -> Result<DateTime, Infallible> {
@@ -203,7 +205,35 @@ impl DeleteForm {
     }
 
     pub fn primary_name(&self) -> Result<&str, Infallible> {
-        Ok(&self.primary_name)
+        Ok(&self.path)
+    }
+}
+
+pub type DeletePathForm = PathForm<SmallString, DeleteForm>;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct DeleteForm {
+    version: DateTime,
+    usages: i64,
+}
+
+impl DeletePathForm {
+    pub fn initialize(info: &TagInfo) -> Result<Self, NotRequested> {
+        let path = info.primary_name().map(SmallString::from)?;
+        let form = DeleteForm {
+            version: info.version()?,
+            usages: info.usages()?,
+        };
+        Ok(Self { path, form })
+    }
+
+    pub fn version(&self) -> Result<DateTime, Infallible> {
+        Ok(self.version)
+    }
+
+    pub fn primary_name(&self) -> Result<&str, Infallible> {
+        Ok(&self.path)
     }
 
     pub fn usages(&self) -> Result<i64, Infallible> {
@@ -236,7 +266,7 @@ async fn get_tag_info(
         .await?;
 
     let mut micro_tags = Vec::new();
-    let existing_names: HashSet<_> = existing_tags.iter().map(|(_, tag)| tag.primary_name()).collect();
+    let existing_names: HashSet<_> = existing_tags.values().map(MicroTag::primary_name).collect();
     for tag in tags {
         if existing_names.contains(tag.primary_name()?) {
             continue;
@@ -246,7 +276,7 @@ async fn get_tag_info(
             names: tag.names().map(Vec::as_slice).map(Arc::from)?,
             category: tag.category().cloned()?,
             usages: tag.usages()?,
-        })
+        });
     }
     Ok(micro_tags)
 }
