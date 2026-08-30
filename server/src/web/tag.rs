@@ -6,7 +6,7 @@ use crate::resource::field::Mask;
 use crate::resource::tag::{Field, TagInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::string::SmallString;
-use crate::web::form::{EditForm, TagOperation};
+use crate::web::form::{EditForm, Focus, FormField, Operation};
 use crate::web::pager::{Page, Pager};
 use crate::web::{Html, Message, Tab, WebError, WebResult};
 use crate::{api, time, web};
@@ -191,6 +191,7 @@ struct TagEditInfo {
     active_tag_tab: TagTab,
     tag: EditForm,
     categories: Vec<TagCategoryInfo>,
+    focus: Focus,
     message: Message,
 }
 
@@ -206,6 +207,7 @@ impl TagEditInfo {
             active_tag_tab: TagTab::Edit,
             tag: EditForm::initialize(tag)?,
             categories,
+            focus: Focus::None,
             message: Message::None,
         })
     }
@@ -231,19 +233,21 @@ async fn edit_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult
 }
 
 async fn edit_submit(ctx: Ctx, path: Path<SmallString>, hx: HxRequest, Form(form): Form<EditForm>) -> WebResult<Html> {
-    let (tag, message) = match form.operation() {
-        TagOperation::Init => unreachable!(),
-        TagOperation::AddImplication => (form.with_new_implication(ctx.clone()).await?, Message::None),
-        TagOperation::AddSuggestion => (form.with_new_suggestion(ctx.clone()).await?, Message::None),
-        TagOperation::RemoveImplication(index) => (form.with_implication_removed(index), Message::None),
-        TagOperation::RemoveSuggestion(index) => (form.with_suggestion_removed(index), Message::None),
-        TagOperation::Save => {
+    let (tag, focus, message) = match form.operation() {
+        Operation::Init => unreachable!(),
+        Operation::Auto => form.auto_modify(ctx.clone()).await?,
+        Operation::AddImplication => form.with_new_implications(ctx.clone()).await?,
+        Operation::AddSuggestion => form.with_new_suggestions(ctx.clone()).await?,
+        Operation::RemoveImplication(index) => form.with_implication_removed(index),
+        Operation::RemoveSuggestion(index) => form.with_suggestion_removed(index),
+        Operation::Save => {
+            let focus = Focus::None;
             let fields = edit_response_fields(&ctx);
             let query = Query(ResourceParams { query: None, fields });
             let json = Json(form.to_body());
             match api::tag::update(ctx.clone(), path.clone(), query, json).await {
-                Ok(Json(tag)) => (EditForm::initialize(tag)?, Message::Success),
-                Err(err) => (form, Message::Error(err)),
+                Ok(Json(tag)) => (EditForm::initialize(tag)?, focus, Message::Success),
+                Err(err) => (form, focus, Message::Error(err)),
             }
         }
     };
@@ -255,6 +259,7 @@ async fn edit_submit(ctx: Ctx, path: Path<SmallString>, hx: HxRequest, Form(form
         active_tag_tab: TagTab::Edit,
         tag,
         categories,
+        focus,
         message,
     };
     if hx.full_page() {
