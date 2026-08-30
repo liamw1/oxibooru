@@ -227,6 +227,16 @@ where
     }
 }
 
+impl<F> From<Mask<F>> for ResourceParams<F>
+where
+    F: FromStr,
+    u64: From<F>,
+{
+    fn from(fields: Mask<F>) -> Self {
+        Self { query: None, fields }
+    }
+}
+
 #[derive(Clone, Copy, Deserialize)]
 pub struct Offset {
     offset: Option<u64>,

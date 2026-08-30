@@ -145,76 +145,76 @@ impl From<Field> for u64 {
 #[serde(rename_all = "camelCase")]
 pub struct PostInfo {
     /// Resource version. See [versioning](#Versioning).
-    version: DateTime,
+    pub version: DateTime,
     /// The post identifier.
-    id: i64,
+    pub id: i64,
     /// Who created the post.
-    user: Option<MicroUser>,
+    pub user: Option<MicroUser>,
     /// The size of the file in bytes.
-    file_size: i64,
+    pub file_size: i64,
     /// The original width of the post content.
-    canvas_width: i32,
+    pub canvas_width: i32,
     /// The original height of the post content.
-    canvas_height: i32,
+    pub canvas_height: i32,
     /// Whether the post is safe for work.
-    safety: PostSafety,
+    pub safety: PostSafety,
     /// The type of the post.
-    type_: PostType,
+    pub type_: PostType,
     /// Subsidiary to `<type>`, used to tell exact content format. Useful for `<video>` tags for instance.
-    mime_type: MimeType,
+    pub mime_type: MimeType,
     /// The BLAKE3 file checksum.
-    checksum: Checksum,
+    pub checksum: Checksum,
     /// The MD5 file checksum.
     #[serde(rename = "checksumMD5")]
-    checksum_md5: Md5Checksum,
+    pub checksum_md5: Md5Checksum,
     /// Various flags such as whether the post is looped.
-    flags: PostFlags,
+    pub flags: PostFlags,
     /// Where the post was grabbed form, supplied by the user.
-    source: LargeString,
+    pub source: LargeString,
     /// Text description for the post. The client should render is as Markdown.
-    description: LargeString,
+    pub description: LargeString,
     /// Time the tag was created.
-    creation_time: DateTime,
+    pub creation_time: DateTime,
     /// Time the tag was last edited.
-    last_edit_time: DateTime,
+    pub last_edit_time: DateTime,
     /// Where the post content is located.
-    content_url: String,
+    pub content_url: String,
     /// Where the post thumbnail is located.
-    thumbnail_url: String,
+    pub thumbnail_url: String,
     /// List of tags the post is tagged with.
-    tags: Vec<MicroTag>,
+    pub tags: Vec<MicroTag>,
     /// List of comments under the post.
-    comments: Vec<CommentInfo>,
+    pub comments: Vec<CommentInfo>,
     /// List of related posts. Links to related posts are shown to the user by the web client.
-    relations: Vec<MicroPost>,
+    pub relations: Vec<MicroPost>,
     /// List of pools the post is a member of.
-    pools: Vec<MicroPool>,
+    pub pools: Vec<MicroPool>,
     /// List of post annotations.
-    notes: Vec<Note>,
+    pub notes: Vec<Note>,
     /// The collective score (+1/-1 rating) of the given post.
-    score: i64,
+    pub score: i64,
     /// The score (+1/-1 rating) of the given post by the authenticated user.
-    own_score: Rating,
+    pub own_score: Rating,
     /// Whether the authenticated user has given post in their favorites.
-    own_favorite: bool,
+    pub own_favorite: bool,
     /// How many tags the post is tagged with.
-    tag_count: i64,
+    pub tag_count: i64,
     /// How many comments are filed under the post.
-    comment_count: i64,
+    pub comment_count: i64,
     /// How many posts are related to this post.
-    relation_count: i64,
+    pub relation_count: i64,
     /// How many notes the post has.
-    note_count: i64,
+    pub note_count: i64,
     /// How many users have the post in their favorites.
-    favorite_count: i64,
+    pub favorite_count: i64,
     /// How many times has the post been featured.
-    feature_count: i64,
+    pub feature_count: i64,
     /// The last time the post was featured.
-    last_feature_time: Option<DateTime>,
+    pub last_feature_time: Option<DateTime>,
     /// List of users that favorited the post.
-    favorited_by: Vec<MicroUser>,
+    pub favorited_by: Vec<MicroUser>,
     /// Whether the post uses custom thumbnail.
-    has_custom_thumbnail: bool,
+    pub has_custom_thumbnail: bool,
 }
 
 impl PostInfo {
@@ -358,7 +358,6 @@ fn get_owners(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> Query
         })
 }
 
-#[allow(clippy::unnecessary_wraps)]
 fn get_content_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infallible> {
     Ok(posts
         .iter()
@@ -366,7 +365,6 @@ fn get_content_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infa
         .collect())
 }
 
-#[allow(clippy::unnecessary_wraps)]
 fn get_thumbnail_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infallible> {
     Ok(posts
         .iter()

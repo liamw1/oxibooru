@@ -76,10 +76,11 @@ strip = true
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }
-too_many_arguments = "allow"        # Gives warnings on derives
 cast_possible_truncation = "allow"  # Gives warnings for integer casts in const context
 cast_possible_wrap = "allow"        # Gives warnings for integer casts in const context
-option_option = "allow"             # Option<Option<T>> is convenient for deserializing optional nullable JSON fields
 float_cmp = "allow"                 # Buggy: Fires when using assert_eq! to compare to 0.0
-unreadable_literal = "allow"        # Don't like how separated form looks for decimal literals
+option_option = "allow"             # Option<Option<T>> is convenient for deserializing optional nullable JSON fields
 too_many_lines = "allow"            # Too subjective
+too_many_arguments = "allow"        # Gives warnings on derives
+unnecessary_wraps = "allow"         # Fires on Result<T, Infallible>
+unreadable_literal = "allow"        # Don't like how separated form looks for decimal literals
