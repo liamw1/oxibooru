@@ -80,6 +80,21 @@ async fn get_tag_and_categories(
     try_join!(tag_future, categories_future)
 }
 
+async fn fetch_target_version(ctx: &Ctx, target_tag: SmallString) -> ApiResult<DateTime> {
+    let Ctx(_, connection_pool) = ctx;
+    connection_pool
+        .transaction(|conn| {
+            tag::table
+                .inner_join(tag_name::table)
+                .select(tag::last_edit_time)
+                .filter(tag_name::name.eq(target_tag))
+                .first(conn)
+                .optional()?
+                .ok_or(ApiError::NotFound(ResourceType::Tag))
+        })
+        .await
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct Params {
@@ -326,37 +341,19 @@ async fn merge_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResul
 }
 
 async fn merge_submit(ctx: Ctx, hx: HxRequest, form: MergePathForm) -> WebResult<Html> {
-    let try_merge = {
-        let remove = form.path.clone();
-        let remove_version = form.version;
-        let target_tag = form.target_tag.clone();
-        async move |Ctx(ctx, connection_pool): Ctx| {
-            let target_version: DateTime = connection_pool
-                .transaction({
-                    let target_name = target_tag.clone();
-                    move |conn| {
-                        tag::table
-                            .inner_join(tag_name::table)
-                            .select(tag::last_edit_time)
-                            .filter(tag_name::name.eq(target_name))
-                            .first(conn)
-                            .optional()?
-                            .ok_or(ApiError::NotFound(ResourceType::Tag))
-                    }
-                })
-                .await?;
+    let merge_result = async {
+        let merge_to_version = fetch_target_version(&ctx, form.target_tag.clone()).await?;
+        let body = MergeBody {
+            remove: form.path.clone(),
+            merge_to: form.target_tag.clone(),
+            remove_version: form.version,
+            merge_to_version,
+        };
+        api::tag::merge(ctx.clone(), Query(MERGE_FIELDS.into()), Json(body)).await
+    }
+    .await;
 
-            let body = MergeBody {
-                remove,
-                merge_to: target_tag,
-                remove_version,
-                merge_to_version: target_version,
-            };
-            api::tag::merge(Ctx(ctx, connection_pool), Query(MERGE_FIELDS.into()), Json(body)).await
-        }
-    };
-
-    let (form, message) = match try_merge(ctx.clone()).await {
+    let (form, message) = match merge_result {
         Ok(Json(tag)) => (MergePathForm::initialize(&tag)?, Message::Success),
         Err(err) => (form, Message::Error(err)),
     };
