@@ -1,11 +1,14 @@
 use crate::api;
 use crate::api::error::ApiError;
 use crate::app::AppState;
+use crate::extract::HxRequest;
 use crate::resource::NotRequested;
 use axum::Router;
 use axum::http::StatusCode;
 use axum::http::header::{CACHE_CONTROL, VARY};
-use axum::response::{Html as AxumHtml, IntoResponse, Response};
+use axum::response::{Html as AxumHtml, IntoResponse, Redirect, Response};
+use axum_extra::extract::CookieJar;
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use serde::Serialize;
 use std::sync::Arc;
 use thiserror::Error;
@@ -61,6 +64,8 @@ pub fn routes(state: AppState) -> Router {
 }
 
 type WebResult<T> = Result<T, WebError>;
+
+const REDIRECT_COOKIE_VALUE: &str = "success";
 
 const PROJECT_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 
@@ -128,9 +133,32 @@ fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded:
     })
 }
 
-pub enum Message {
+enum Message {
     None,
     Success,
-    AfterDelete,
     Error(ApiError),
+}
+
+fn redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Response {
+    let flash = Cookie::build(("flash", REDIRECT_COOKIE_VALUE))
+        .path("/") // TODO: Adjust to base URL
+        .http_only(true)
+        .same_site(SameSite::Strict)
+        .build();
+    let jar = jar.add(flash);
+
+    // TODO: Generate using base URL
+    if hx.full_page() {
+        (jar, Redirect::to(relative_url)).into_response()
+    } else {
+        (jar, [("HX-Redirect", relative_url)], "").into_response()
+    }
+}
+
+fn redirect_message(jar: CookieJar) -> (CookieJar, Message) {
+    let message = match jar.get("flash").map(Cookie::value) {
+        Some(REDIRECT_COOKIE_VALUE) => Message::Success,
+        _ => Message::None,
+    };
+    (jar.remove(Cookie::build("flash").path("/")), message) // TODO: Adjust to base URL
 }
