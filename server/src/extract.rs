@@ -362,6 +362,10 @@ pub struct HxRequest {
 }
 
 impl HxRequest {
+    pub fn htmx(&self) -> bool {
+        self.htmx
+    }
+
     pub fn full_page(&self) -> bool {
         !self.htmx || self.history_restore || self.target.is_none()
     }

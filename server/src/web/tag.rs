@@ -15,9 +15,9 @@ use crate::web::pager::{Page, Pager};
 use crate::web::{Html, Message, Tab, WebError, WebResult};
 use crate::{api, time, web};
 use askama::Template;
-use axum::response::{IntoResponse, Redirect, Response};
+use axum::response::{IntoResponse, Response};
 use axum::{Router, routing};
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use axum_extra::extract::cookie::CookieJar;
 use diesel::{ExpressionMethods, OptionalExtension, QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Serialize};
 use server_macros::Deref;
@@ -34,7 +34,6 @@ pub fn routes() -> Router<AppState> {
 }
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(50).unwrap();
-const DELETION_FLAG: &str = "tag-deleted";
 
 const SUMMARY_FIELDS: [Field; 7] = [
     Field::Version,
@@ -151,12 +150,7 @@ async fn list(
     let params = params.simplify();
     let pager = Pager::build("tags", &params, page_params, response.total);
 
-    let message = match jar.get("flash").map(Cookie::value) {
-        Some(DELETION_FLAG) => Message::AfterDelete,
-        _ => Message::None,
-    };
-    let jar = jar.remove(Cookie::build("flash").path("/")); // TODO: Adjust to base URL
-
+    let (jar, message) = web::redirect_message(jar);
     ListTemplate {
         ctx,
         active_tab: Tab::Tag,
@@ -241,9 +235,11 @@ struct EditPageTemplate(TagPage<EditPathForm>);
 #[template(path = "pages/tag/edit.html", block = "tag")]
 struct EditFragmentTemplate(TagPage<EditPathForm>);
 
-async fn edit_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult<Html> {
+async fn edit_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest, jar: CookieJar) -> WebResult<Response> {
     let fields = edit_response_fields(&ctx);
     let (tag, categories) = get_tag_and_categories(ctx.clone(), path, fields).await?;
+
+    let (jar, message) = web::redirect_message(jar);
     let page_info = TagPage {
         ctx,
         active_tab: Tab::Tag,
@@ -251,7 +247,7 @@ async fn edit_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult
         tag: EditPathForm::initialize(tag)?,
         categories,
         focus: Focus::None,
-        message: Message::None,
+        message,
     };
 
     if hx.full_page() {
@@ -259,12 +255,12 @@ async fn edit_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult
     } else {
         EditFragmentTemplate(page_info).render()
     }
-    .map(Html)
+    .map(|html| (jar, Html(html)).into_response())
     .map_err(WebError::from)
 }
 
-async fn edit_submit(ctx: Ctx, hx: HxRequest, form: EditPathForm) -> WebResult<Html> {
-    let (form, focus, message) = match form.operation {
+async fn edit_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: EditPathForm) -> WebResult<Response> {
+    let (updated_form, focus, message) = match form.operation {
         Operation::Init => unreachable!(),
         Operation::Auto => form.auto_modify(ctx.clone()).await?,
         Operation::AddImplication => form.with_new_implications(ctx.clone()).await?,
@@ -272,10 +268,18 @@ async fn edit_submit(ctx: Ctx, hx: HxRequest, form: EditPathForm) -> WebResult<H
         Operation::RemoveImplication(index) => form.with_implication_removed(index),
         Operation::RemoveSuggestion(index) => form.with_suggestion_removed(index),
         Operation::Save => {
+            let Ok(primary_name) = form.primary_name();
             let focus = Focus::None;
             let fields = edit_response_fields(&ctx);
             match api::tag::update(ctx.clone(), form.path(), Query(fields.into()), Json(form.to_body())).await {
-                Ok(Json(tag)) => (EditPathForm::initialize(tag)?, focus, Message::Success),
+                Ok(Json(tag)) => {
+                    let new_primary_name = tag.primary_name()?;
+                    if !hx.htmx() || new_primary_name != primary_name {
+                        let new_url = format!("/tag/{new_primary_name}/edit");
+                        return Ok(web::redirect(&new_url, &hx, jar));
+                    }
+                    (EditPathForm::initialize(tag)?, focus, Message::Success)
+                }
                 Err(err) => (form, focus, Message::Error(err)),
             }
         }
@@ -286,7 +290,7 @@ async fn edit_submit(ctx: Ctx, hx: HxRequest, form: EditPathForm) -> WebResult<H
         ctx,
         active_tab: Tab::Tag,
         active_tag_tab: TagTab::Edit,
-        tag: form,
+        tag: updated_form,
         categories,
         focus,
         message,
@@ -297,6 +301,7 @@ async fn edit_submit(ctx: Ctx, hx: HxRequest, form: EditPathForm) -> WebResult<H
         EditFragmentTemplate(page_info).render()
     }
     .map(Html)
+    .map(Html::into_response)
     .map_err(WebError::from)
 }
 
@@ -313,7 +318,8 @@ struct MergeFragmentTemplate {
     message: Message,
 }
 
-async fn merge_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResult<Html> {
+async fn merge_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest, jar: CookieJar) -> WebResult<Response> {
+    let (jar, message) = web::redirect_message(jar);
     if hx.full_page() {
         let (tag, categories) = get_tag_and_categories(ctx.clone(), path, MERGE_FIELDS.into()).await?;
         let page_info = TagPage {
@@ -323,7 +329,7 @@ async fn merge_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResul
             tag: MergePathForm::initialize(&tag)?,
             categories,
             focus: Focus::None,
-            message: Message::None,
+            message,
         };
         MergePageTemplate(page_info).render()
     } else {
@@ -332,15 +338,15 @@ async fn merge_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResul
             ctx,
             active_tag_tab: TagTab::Merge,
             tag: MergePathForm::initialize(&tag)?,
-            message: Message::None,
+            message,
         }
         .render()
     }
-    .map(Html)
+    .map(|html| (jar, Html(html)).into_response())
     .map_err(WebError::from)
 }
 
-async fn merge_submit(ctx: Ctx, hx: HxRequest, form: MergePathForm) -> WebResult<Html> {
+async fn merge_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: MergePathForm) -> WebResult<Response> {
     let merge_result = async {
         let merge_to_version = fetch_target_version(&ctx, form.target_tag.clone()).await?;
         let body = MergeBody {
@@ -354,7 +360,14 @@ async fn merge_submit(ctx: Ctx, hx: HxRequest, form: MergePathForm) -> WebResult
     .await;
 
     let (form, message) = match merge_result {
-        Ok(Json(tag)) => (MergePathForm::initialize(&tag)?, Message::Success),
+        Ok(Json(tag)) => {
+            if !hx.htmx() {
+                let Ok(primary_name) = form.primary_name();
+                let url = format!("/tag/{primary_name}/merge");
+                return Ok(web::redirect(&url, &hx, jar));
+            }
+            (MergePathForm::initialize(&tag)?, Message::Success)
+        }
         Err(err) => (form, Message::Error(err)),
     };
     if hx.full_page() {
@@ -379,6 +392,7 @@ async fn merge_submit(ctx: Ctx, hx: HxRequest, form: MergePathForm) -> WebResult
         .render()
     }
     .map(Html)
+    .map(Html::into_response)
     .map_err(WebError::from)
 }
 
@@ -422,22 +436,7 @@ async fn delete_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResu
 
 async fn delete_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: DeletePathForm) -> WebResult<Response> {
     match api::tag::delete(ctx.clone(), form.path(), Json(form.to_body())).await {
-        Ok(Json(())) => {
-            let flash = Cookie::build(("flash", DELETION_FLAG))
-                .path("/") // TODO: Adjust to base URL
-                .http_only(true)
-                .same_site(SameSite::Strict)
-                .build();
-            let jar = jar.add(flash);
-
-            // TODO: Generate using base URL
-            let location = "/tags";
-            Ok(if hx.full_page() {
-                (jar, Redirect::to(location)).into_response()
-            } else {
-                (jar, [("HX-Redirect", location)], "").into_response()
-            })
-        }
+        Ok(Json(())) => Ok(web::redirect("/tags", &hx, jar)),
         Err(err) => {
             let message = Message::Error(err);
             if hx.full_page() {

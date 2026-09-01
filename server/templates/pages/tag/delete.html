@@ -25,7 +25,7 @@
             {% match message %}
             {% when Message::Error(err) %}
             <div class="message error">{{ err }}</div>
-            {% when Message::None | Message::Success | Message::AfterDelete %}
+            {% when Message::None | Message::Success %}
             {% endmatch %}
         </div>
 
