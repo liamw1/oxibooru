@@ -14,9 +14,9 @@
 
     <div class="messages">
         {% match message %}
-        {% when Message::AfterDelete %}
+        {% when Message::Success %}
         <div class="message success">Tag deleted.</div>
-        {% when Message::None | Message::Success | Message::Error(_) %}
+        {% when Message::None | Message::Error(_) %}
         {% endmatch %}
     </div>
 

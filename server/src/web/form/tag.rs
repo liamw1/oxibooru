@@ -130,14 +130,14 @@ impl EditPathForm {
         }
     }
 
-    pub fn with_implication_removed(mut self, index: i64) -> (Self, Focus, Message) {
+    pub(in crate::web) fn with_implication_removed(mut self, index: i64) -> (Self, Focus, Message) {
         if let Some(implications) = &mut self.implications {
             implications.current.remove(&index);
         }
         (self, Focus::None, Message::None)
     }
 
-    pub fn with_suggestion_removed(mut self, index: i64) -> (Self, Focus, Message) {
+    pub(in crate::web) fn with_suggestion_removed(mut self, index: i64) -> (Self, Focus, Message) {
         if let Some(suggestions) = &mut self.suggestions {
             suggestions.current.remove(&index);
         }
