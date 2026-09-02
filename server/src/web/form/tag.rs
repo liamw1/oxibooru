@@ -1,19 +1,15 @@
-use crate::api::error::ApiError;
 use crate::api::tag::TagUpdateBody;
-use crate::extract::{Ctx, DeleteBody, PathForm};
+use crate::extract::{Ctx, DeleteBody};
 use crate::resource::NotRequested;
-use crate::resource::tag::{Field, MicroTag, TagInfo};
-use crate::string::{LargeString, SmallString};
+use crate::resource::tag::TagInfo;
+use crate::string::{self, LargeString, SmallString};
 use crate::time::DateTime;
 use crate::update::tag::FetchMode;
 use crate::web::form::{FormField, TagMap};
-use crate::web::{Message, WebResult};
-use crate::{string, update};
+use crate::web::{Message, PathForm, WebResult};
 use serde::{Deserialize, Deserializer};
-use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
 use std::str::FromStr;
-use std::sync::Arc;
 
 #[derive(PartialEq, Eq)]
 pub enum Focus {
@@ -130,43 +126,47 @@ impl EditPathForm {
         }
     }
 
-    pub(in crate::web) fn with_implication_removed(mut self, index: i64) -> (Self, Focus, Message) {
+    pub fn with_implication_removed(mut self, index: i64) -> (Self, Focus, Message) {
         if let Some(implications) = &mut self.implications {
             implications.current.remove(&index);
         }
         (self, Focus::None, Message::None)
     }
 
-    pub(in crate::web) fn with_suggestion_removed(mut self, index: i64) -> (Self, Focus, Message) {
+    pub fn with_suggestion_removed(mut self, index: i64) -> (Self, Focus, Message) {
         if let Some(suggestions) = &mut self.suggestions {
             suggestions.current.remove(&index);
         }
         (self, Focus::None, Message::None)
     }
 
-    pub(in crate::web) async fn with_new_implications(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+    pub async fn with_new_implications(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
         if let Some(new_names) = self.new_implications.take()
             && !new_names.is_empty()
         {
-            let implications = self.implications.get_or_insert_default();
-            let new_tags = get_tag_info(&ctx, &new_names, implications.original()).await?;
-            implications.current.append_tags(new_tags);
+            self.implications
+                .get_or_insert_default()
+                .current
+                .append_tags(&ctx, &new_names, FetchMode::Deep)
+                .await?;
         }
         Ok((self, Focus::None, Message::None))
     }
 
-    pub(in crate::web) async fn with_new_suggestions(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+    pub async fn with_new_suggestions(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
         if let Some(new_names) = self.new_suggestions.take()
             && !new_names.is_empty()
         {
-            let suggestions = self.suggestions.get_or_insert_default();
-            let new_tags = get_tag_info(&ctx, &new_names, suggestions.original()).await?;
-            suggestions.current.append_tags(new_tags);
+            self.suggestions
+                .get_or_insert_default()
+                .current
+                .append_tags(&ctx, &new_names, FetchMode::Deep)
+                .await?;
         }
         Ok((self, Focus::None, Message::None))
     }
 
-    pub(in crate::web) async fn auto_modify(self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+    pub async fn auto_modify(self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
         let has_implication_input = !self.new_implications.as_deref().is_none_or(str::is_empty);
         let has_suggestion_input = !self.new_suggestions.as_deref().is_none_or(str::is_empty);
         let focus = match (has_implication_input, has_suggestion_input) {
@@ -243,40 +243,4 @@ impl DeletePathForm {
     pub fn to_body(&self) -> DeleteBody {
         DeleteBody { version: self.version }
     }
-}
-
-async fn get_tag_info(
-    Ctx(ctx, connection_pool): &Ctx,
-    joined_names: &str,
-    existing_tags: &BTreeMap<i64, MicroTag>,
-) -> WebResult<Vec<MicroTag>> {
-    const FIELDS: [Field; 3] = [Field::Category, Field::Names, Field::Usages];
-
-    let tag_names = string::split_unescaped_whitespace(joined_names)
-        .map(SmallString::from)
-        .collect();
-    let (tag_ids, _) = connection_pool
-        .transaction({
-            let ctx = ctx.clone();
-            move |conn| update::tag::get_or_create_tags(conn, &ctx, tag_names, FetchMode::Deep)
-        })
-        .await?;
-    let tags = connection_pool
-        .transaction(move |conn| TagInfo::new_batch_from_ids(conn, &tag_ids, FIELDS.into()).map_err(ApiError::from))
-        .await?;
-
-    let mut micro_tags = Vec::new();
-    let existing_names: HashSet<_> = existing_tags.values().map(MicroTag::primary_name).collect();
-    for tag in tags {
-        if existing_names.contains(tag.primary_name()?) {
-            continue;
-        }
-
-        micro_tags.push(MicroTag {
-            names: tag.names().map(Vec::as_slice).map(Arc::from)?,
-            category: tag.category().cloned()?,
-            usages: tag.usages()?,
-        });
-    }
-    Ok(micro_tags)
 }

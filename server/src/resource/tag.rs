@@ -34,14 +34,6 @@ impl MicroTag {
     }
 }
 
-impl PartialEq for MicroTag {
-    fn eq(&self, other: &Self) -> bool {
-        self.primary_name() == other.primary_name()
-    }
-}
-
-impl Eq for MicroTag {}
-
 #[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {

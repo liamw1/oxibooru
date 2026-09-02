@@ -72,7 +72,7 @@ div.tag-input .tag-suggestions .wrapper ul {
     list-style-type: none;
     margin: 0;
     overflow-y: auto;
-    overflow-x: none;
+    overflow-x: hidden;
     max-height: 20em;
     padding: .5em 1em 0 1em;
 }
@@ -142,7 +142,7 @@ ul.compact-tags li {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: background-color .5s linear;
+    --highlight: transparent
 }
 
 ul.compact-tags li a {
@@ -154,25 +154,30 @@ ul.compact-tags li a:focus {
     box-shadow: inset 0 0 0 2px var(--main-color);
 }
 
-ul.compact-tags li.added,
-ul.compact-tags li.new,
-ul.compact-tags li.implication {
-    animation: tag-added-to-post 1s ease forwards;
-}
-
 ul.compact-tags li.implication {
     color: var(--implied-tag-text-color);
-    background-color: var(--implied-tag-background-color);
+    --highlight: var(--implied-tag-background-color);
 }
 
 ul.compact-tags li.new {
     color: var(--new-tag-text-color);
-    background-color: var(--new-tag-background-color);
+    --highlight: var(--new-tag-background-color);
 }
 
 ul.compact-tags li.duplicate {
     color: var(--duplicate-tag-text-color);
-    background-color: var(--duplicate-tag-background-color);
+    --highlight: var(--duplicate-tag-background-color);
+}
+
+ul.compact-tags li.added,
+ul.compact-tags li.new,
+ul.compact-tags li.implication {
+    animation: tag-added-to-post 1s ease forwards,
+        tag-fade 2s ease forwards;
+}
+
+ul.compact-tags li.duplicate {
+    animation: tag-fade 2s ease-out forwards;
 }
 
 ul.compact-tags i {
@@ -180,15 +185,15 @@ ul.compact-tags i {
 }
 
 .darktheme ul.compact-tags li.new {
-    background-color: oklch(from var(--new-tag-background-color) calc(l - 80%) c h);
+    --highlight: oklch(from var(--new-tag-background-color) calc(l - 80%) c h);
 }
 
 .darktheme ul.compact-tags li.implication {
-    background-color: oklch(from var(--implied-tag-background-color) calc(l - 85%) c h);
+    --highlight: oklch(from var(--implied-tag-background-color) calc(l - 80%) c h);
 }
 
 .darktheme ul.compact-tags li.duplicate {
-    background-color: oklch(from var(--duplicate-tag-background-color) calc(l - 80%) c h);
+    --highlight: oklch(from var(--duplicate-tag-background-color) calc(l - 80%) c h);
 }
 
 div.tag-input .tag-usages,
@@ -285,5 +290,16 @@ ul.compact-tags .remove-tag {
 
     to {
         max-height: 5em;
+    }
+}
+
+
+@keyframes tag-fade {
+    from {
+        background-color: var(--highlight);
+    }
+
+    to {
+        background-color: transparent;
     }
 }
