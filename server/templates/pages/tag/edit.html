@@ -52,7 +52,7 @@
                     <ul class="compact-tags">
                         {% for (i, implication) in tag.implications.iter().flat_map(FormField::current) %}
                         {% let implication_name = implication.primary_name() %}
-                        <li>
+                        <li class="{{ implication.class() }}">
                             <input type="hidden" name="implications[current][{{ i }}][names][0]"
                                 value="{{ implication_name }}">
                             <input type="hidden" name="implications[current][{{ i }}][category]"
@@ -94,7 +94,7 @@
                     <ul class="compact-tags">
                         {% for (i, suggestion) in tag.suggestions.iter().flat_map(FormField::current) %}
                         {% let suggestion_name = suggestion.primary_name() %}
-                        <li>
+                        <li class="{{ suggestion.class() }}">
                             <input type="hidden" name="suggestions[current][{{ i }}][names][0]"
                                 value="{{ suggestion_name }}">
                             <input type="hidden" name="suggestions[current][{{ i }}][category]"

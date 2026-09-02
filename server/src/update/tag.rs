@@ -97,6 +97,41 @@ pub fn get_or_create_tags(
     names: Vec<SmallString>,
     mode: FetchMode,
 ) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
+    let (mut tag_ids, new_names) = fetch_tags(conn, ctx, names, mode)?;
+
+    // Create new tags if given unique names
+    if !new_names.is_empty() {
+        ctx.verify_privilege(Action::TagCreate)?;
+
+        let new_tag_ids: Vec<i64> = vec![NewTag::default(); new_names.len()]
+            .insert_into(tag::table)
+            .returning(tag::id)
+            .get_results(conn)?;
+        let new_tag_names: Vec<_> = new_tag_ids
+            .iter()
+            .zip(new_names.iter())
+            .map(|(&tag_id, name)| NewTagName { tag_id, order: 0, name })
+            .collect();
+        new_tag_names.insert_into(tag_name::table).execute(conn)?;
+
+        snapshot::tag::new_name_snapshots(conn, ctx.client, new_names)?;
+        tag_ids.extend(new_tag_ids);
+    }
+
+    let primary_tag_names = tag_name::table
+        .select(tag_name::name)
+        .filter(tag_name::tag_id.eq_any(&tag_ids))
+        .filter(TagName::is_primary())
+        .load(conn)?;
+    Ok((tag_ids, primary_tag_names))
+}
+
+pub fn fetch_tags(
+    conn: &mut PgConnection,
+    ctx: &Context,
+    names: Vec<SmallString>,
+    mode: FetchMode,
+) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
     let mut implied_ids: Vec<i64> = tag_name::table
         .select(tag_name::tag_id)
         .filter(tag_name::name.eq_any(&names))
@@ -128,7 +163,7 @@ pub fn get_or_create_tags(
             return Err(ApiError::CyclicDependency(ResourceType::TagImplication));
         }
     }
-    let mut tag_ids: Vec<_> = dependency_graph.into_nodes().collect();
+    let tag_ids: Vec<_> = dependency_graph.into_nodes().collect();
 
     // Gather names that are case-fold distinct from existing names in database.
     // We use a query here because CITEXT semantics differ from comparing
@@ -150,32 +185,7 @@ pub fn get_or_create_tags(
     new_names
         .iter()
         .try_for_each(|name| api::verify_matches_regex(&ctx.config, name, RegexType::Tag))?;
-
-    // Create new tags if given unique names
-    if !new_names.is_empty() {
-        ctx.verify_privilege(Action::TagCreate)?;
-
-        let new_tag_ids: Vec<i64> = vec![NewTag::default(); new_names.len()]
-            .insert_into(tag::table)
-            .returning(tag::id)
-            .get_results(conn)?;
-        let new_tag_names: Vec<_> = new_tag_ids
-            .iter()
-            .zip(new_names.iter())
-            .map(|(&tag_id, name)| NewTagName { tag_id, order: 0, name })
-            .collect();
-        new_tag_names.insert_into(tag_name::table).execute(conn)?;
-
-        snapshot::tag::new_name_snapshots(conn, ctx.client, new_names)?;
-        tag_ids.extend(new_tag_ids);
-    }
-
-    let primary_tag_names = tag_name::table
-        .select(tag_name::name)
-        .filter(tag_name::tag_id.eq_any(&tag_ids))
-        .filter(TagName::is_primary())
-        .load(conn)?;
-    Ok((tag_ids, primary_tag_names))
+    Ok((tag_ids, new_names))
 }
 
 /// Merges tag associated with `absorbed_id` to one associated with `merge_to_id`.

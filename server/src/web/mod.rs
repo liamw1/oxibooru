@@ -1,15 +1,17 @@
 use crate::api;
 use crate::api::error::ApiError;
 use crate::app::AppState;
-use crate::extract::HxRequest;
+use crate::extract::{Form, HxRequest, Path};
 use crate::resource::NotRequested;
 use axum::Router;
+use axum::extract::{FromRequest, FromRequestParts, Request};
 use axum::http::StatusCode;
 use axum::http::header::{CACHE_CONTROL, VARY};
 use axum::response::{Html as AxumHtml, IntoResponse, Redirect, Response};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use serde::Serialize;
+use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use thiserror::Error;
 use tower_http::services::ServeDir;
@@ -137,6 +139,49 @@ enum Message {
     None,
     Success,
     Error(ApiError),
+}
+
+struct PathForm<P, F> {
+    path: P,
+    form: F,
+}
+
+impl<P: Clone, F> PathForm<P, F> {
+    pub fn path(&self) -> Path<P> {
+        Path(self.path.clone())
+    }
+}
+
+impl<P, F> Deref for PathForm<P, F> {
+    type Target = F;
+    fn deref(&self) -> &Self::Target {
+        &self.form
+    }
+}
+
+impl<P, F> DerefMut for PathForm<P, F> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.form
+    }
+}
+
+impl<S, P, F> FromRequest<S> for PathForm<P, F>
+where
+    S: Send + Sync,
+    P: Send,
+    Path<P>: FromRequestParts<S, Rejection = ApiError>,
+    Form<F>: FromRequest<S, Rejection = ApiError>,
+{
+    type Rejection = ApiError;
+
+    async fn from_request(req: Request, state: &S) -> Result<Self, Self::Rejection> {
+        let (mut parts, body) = req.into_parts();
+        let Path(path) = Path::from_request_parts(&mut parts, state).await?;
+
+        let req = Request::from_parts(parts, body);
+        let Form(form) = Form::from_request(req, state).await?;
+        Ok(Self { path, form })
+    }
 }
 
 fn redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Response {
