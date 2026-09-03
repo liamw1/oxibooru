@@ -12,7 +12,13 @@
 
     {% include "partials/pools_header.html" %}
 
-    <div class="messages"></div>
+    <div class="messages">
+        {% match message %}
+        {% when Message::Success %}
+        <div class="message success">Pool deleted.</div>
+        {% when Message::None | Message::Error(_) %}
+        {% endmatch %}
+    </div>
 
     <div class="pool-list table-wrap">
         {% if !pools.is_empty() %}
@@ -47,7 +53,8 @@
                     <td class="names">
                         <ul>
                             {% for name in pool.names()? %}
-                            <li><a class="pool-{{ pool.category()? }}" href="pool/{{ pool.id()? }}">{{ name }}</a></li>
+                            <li><a class="pool-{{ pool.category()? }}" href="pool/{{ pool.primary_name()? }}">{{ name
+                                    }}</a></li>
                             {% endfor %}
                         </ul>
                     </td>

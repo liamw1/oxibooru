@@ -65,8 +65,9 @@ fn edit_response_fields(ctx: &Ctx) -> Mask<Field> {
 }
 
 async fn get_tag(ctx: Ctx, path: Path<SmallString>, fields: Mask<Field>) -> ApiResult<TagInfo> {
-    let resource_params = Query(ResourceParams { query: None, fields });
-    api::tag::get(ctx, path, resource_params).await.map(|Json(tag)| tag)
+    api::tag::get(ctx, path, Query(fields.into()))
+        .await
+        .map(|Json(tag)| tag)
 }
 
 async fn get_tag_and_categories(

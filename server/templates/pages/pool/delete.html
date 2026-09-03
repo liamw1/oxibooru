@@ -1,0 +1,37 @@
+{% extends "pages/pool/base.html" %}
+
+{% block content %}
+<div class="pool-delete">
+    <form method="post" action="pool/{{ pool.primary_name()? }}/delete" hx-post="pool/{{ pool.primary_name()? }}/delete"
+        hx-target="#pool" hx-swap="show:none">
+        <input type="hidden" name="version" value="{{ pool.version()? }}">
+        <input type="hidden" name="post-count" value="{{ pool.post_count()? }}"> {# Needed for re-render #}
+
+        <p>
+            This pool has <a href="posts?search-text=pool:{{ pool.primary_name()? }}">{{ pool.post_count()? }} post{% if
+                pool.post_count()? != 1 %}s{% endif %}</a>.
+        </p>
+
+        <ul class="input">
+            <li>
+                <label>
+                    <input type="checkbox" required>
+                    <span class="checkbox">I confirm that I want to delete this pool.</span>
+                </label>
+            </li>
+        </ul>
+
+        <div class="messages">
+            {% match message %}
+            {% when Message::Error(err) %}
+            <div class="message error">{{ err }}</div>
+            {% when Message::None | Message::Success %}
+            {% endmatch %}
+        </div>
+
+        <div class="buttons">
+            <button>Delete pool</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

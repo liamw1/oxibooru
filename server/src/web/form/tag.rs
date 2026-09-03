@@ -4,7 +4,6 @@ use crate::resource::NotRequested;
 use crate::resource::tag::TagInfo;
 use crate::string::{self, LargeString, SmallString};
 use crate::time::DateTime;
-use crate::update::tag::FetchMode;
 use crate::web::form::{FormField, TagMap};
 use crate::web::{Message, PathForm, WebResult};
 use serde::{Deserialize, Deserializer};
@@ -64,11 +63,11 @@ pub type EditPathForm = PathForm<SmallString, EditForm>;
 #[serde(rename_all = "kebab-case")]
 pub struct EditForm {
     pub operation: Operation,
-    pub category: Option<FormField<SmallString>>,
-    pub description: Option<FormField<LargeString>>,
     pub names: Option<FormField<String>>,
+    pub category: Option<FormField<SmallString>>,
     pub implications: Option<FormField<TagMap>>,
     pub suggestions: Option<FormField<TagMap>>,
+    pub description: Option<FormField<LargeString>>,
     version: DateTime,
     new_implications: Option<SmallString>,
     new_suggestions: Option<SmallString>,
@@ -83,11 +82,11 @@ impl EditPathForm {
         let suggestions = info.suggestions.map(TagMap::from);
         let form = EditForm {
             operation: Operation::Init,
-            category: info.category.map(FormField::from),
-            description: info.description.map(FormField::from),
             names,
+            category: info.category.map(FormField::from),
             implications: implications.map(FormField::from),
             suggestions: suggestions.map(FormField::from),
+            description: info.description.map(FormField::from),
             version,
             new_implications: None,
             new_suggestions: None,
@@ -147,7 +146,7 @@ impl EditPathForm {
             self.implications
                 .get_or_insert_default()
                 .current
-                .append_tags(&ctx, &new_names, FetchMode::Deep)
+                .append_tags(&ctx, &new_names)
                 .await?;
         }
         Ok((self, Focus::None, Message::None))
@@ -160,7 +159,7 @@ impl EditPathForm {
             self.suggestions
                 .get_or_insert_default()
                 .current
-                .append_tags(&ctx, &new_names, FetchMode::Deep)
+                .append_tags(&ctx, &new_names)
                 .await?;
         }
         Ok((self, Focus::None, Message::None))
