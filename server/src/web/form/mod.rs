@@ -14,6 +14,7 @@ use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use strum::Display;
 
+pub mod pool;
 pub mod tag;
 
 #[derive(Deserialize)]
@@ -140,12 +141,7 @@ impl TagMap {
             .collect()
     }
 
-    async fn append_tags(
-        &mut self,
-        Ctx(ctx, connection_pool): &Ctx,
-        joined_names: &str,
-        fetch_mode: FetchMode,
-    ) -> WebResult<()> {
+    async fn append_tags(&mut self, Ctx(ctx, connection_pool): &Ctx, joined_names: &str) -> WebResult<()> {
         const FIELDS: [Field; 3] = [Field::Category, Field::Names, Field::Usages];
 
         let added_names: HashSet<_> = string::split_unescaped_whitespace(joined_names).collect();
@@ -158,7 +154,7 @@ impl TagMap {
                         .select(tag_category::name)
                         .filter(TagCategory::is_default())
                         .first(conn)?;
-                    let (tag_ids, new_names) = update::tag::fetch_tags(conn, &ctx, tag_names, fetch_mode)?;
+                    let (tag_ids, new_names) = update::tag::fetch_tags(conn, &ctx, tag_names, FetchMode::Deep)?;
                     let tags = TagInfo::new_batch_from_ids(conn, &tag_ids, FIELDS.into())?;
                     Ok::<_, ApiError>((tags, new_names, default_category))
                 }

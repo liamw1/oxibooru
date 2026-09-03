@@ -14,6 +14,7 @@ use diesel::{
 use serde::Serialize;
 use server_macros::resource;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write;
 use std::sync::Arc;
 use strum::EnumString;
 use utoipa::ToSchema;
@@ -83,6 +84,24 @@ pub struct PoolInfo {
 impl PoolInfo {
     pub fn primary_name(&self) -> Result<&str, NotRequested> {
         self.names().map(|names| names[0].as_ref())
+    }
+
+    pub fn joined_names(&self) -> Result<String, NotRequested> {
+        self.names().map(|names| names.join(" "))
+    }
+
+    pub fn joined_post_ids(&self) -> Result<String, NotRequested> {
+        const MAX_I64_DIGITS: usize = i64::MAX.ilog10() as usize + 1;
+        self.posts().map(|posts| {
+            let mut s = String::with_capacity((MAX_I64_DIGITS + 1) * posts.len() - 1);
+            for (i, post_id) in posts.iter().map(|post| post.id).enumerate() {
+                if i > 0 {
+                    s.push(' ');
+                }
+                write!(s, "{post_id}").expect("Write to String is infallible");
+            }
+            s
+        })
     }
 
     pub fn new(conn: &mut PgConnection, ctx: &Context, pool: Pool, fields: Mask<Field>) -> QueryResult<Self> {
