@@ -122,6 +122,13 @@ impl Context {
             || self.has_privilege(Action::PostMerge)
     }
 
+    pub fn can_edit_pools(&self) -> bool {
+        self.has_privilege(Action::PoolEditName)
+            | self.has_privilege(Action::PoolEditCategory)
+            | self.has_privilege(Action::PoolEditDescription)
+            | self.has_privilege(Action::PoolEditPost)
+    }
+
     pub fn can_edit_pool_categories(&self) -> bool {
         self.has_privilege(Action::PoolCategoryCreate)
             || self.has_privilege(Action::PoolCategoryEditName)

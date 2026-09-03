@@ -1,0 +1,43 @@
+{% extends "pages/pool/base.html" %}
+
+{% block content %}
+<div class="pool-merge">
+    <form method="post" action="pool/{{ pool.primary_name()? }}/merge" hx-post="pool/{{ pool.primary_name()? }}/merge"
+        hx-target="#pool" hx-swap="show:none">
+        <input type="hidden" name="version" value="{{ pool.version()? }}">
+
+        <ul class="input">
+            <li class="target">
+                <label>Target pool</label>
+                <input type="text" name="target-pool" value="{{ pool.target_pool }}" required
+                    pattern="{{ ctx.config.regex(RegexType::Pool) }}">
+            </li>
+
+            <li>
+                <p>
+                    Names, and posts in the two pools will be combined. Category needs to be handled manually.
+                </p>
+
+                <label>
+                    <input type="checkbox" required>
+                    <span class="checkbox">I confirm that I want to merge this pool.</span>
+                </label>
+            </li>
+        </ul>
+
+        <div class="messages">
+            {% match message %}
+            {% when Message::Success %}
+            <div class="message success">Pool merged.</div>
+            {% when Message::Error(err) %}
+            <div class="message error">{{ err }}</div>
+            {% when Message::None %}
+            {% endmatch %}
+        </div>
+
+        <div class="buttons">
+            <button>Merge pool</button>
+        </div>
+    </form>
+</div>
+{% endblock %}

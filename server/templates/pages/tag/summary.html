@@ -67,7 +67,8 @@
         {{ tag.description()? }}
         {% endif %}
         <p>
-            This tag has <a href="posts?search-text={{ tag.primary_name()? }}">{{ tag.usages()? }} usage(s)</a>.
+            This tag has <a href="posts?search-text={{ tag.primary_name()? }}">{{ tag.usages()? }} usage{% if
+                tag.usages()? != 1 %}s{% endif %}</a>.
         </p>
     </section>
 </div>

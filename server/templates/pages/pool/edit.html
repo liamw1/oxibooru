@@ -1,0 +1,66 @@
+{% extends "pages/pool/base.html" %}
+
+{% block content %}
+<div class="content-wrapper pool-edit">
+    <form method="post" action="pool/{{ pool.primary_name()? }}/edit" hx-post="pool/{{ pool.primary_name()? }}/edit"
+        hx-target="#pool" hx-swap="show:none">
+        <input type="hidden" name="version" value="{{ pool.version()? }}">
+
+        <ul class="input">
+            <li class="names">
+                {% if let Some(names) = pool.names && ctx.has_privilege(Action::PoolEditName) %}
+                <input type="hidden" name="names[original]" value="{{ names.original() }}">
+
+                <label>Names</label>
+                <input type="text" name="names[current]" value="{{ names.current() }}" required>
+                {% endif %}
+            </li>
+            <li class="category">
+                {% if let Some(category) = pool.category %}
+                <input type="hidden" name="category[original]" value="{{ category.original() }}">
+
+                <label>Category</label>
+                <select name="category[current]" required>
+                    {% for c in categories %}
+                    <option value="{{ c.name()? }}" {% if c.name()?==category.current() %} selected {% endif %}>
+                        {{ c.name()? }}
+                    </option>
+                    {% endfor %}
+                </select>
+                {% endif %}
+            </li>
+            <li class="description">
+                {% if let Some(description) = pool.description %}
+                <input type="hidden" name="description[original]" value="{{ description.original() }}">
+
+                <label>Description</label>
+                <textarea name="description[current]">{{ description.current() }}</textarea>
+                {% endif %}
+            </li>
+            <li class="posts">
+                {% if let Some(post_ids) = pool.post_ids && ctx.has_privilege(Action::PoolEditName) %}
+                <input type="hidden" name="post-ids[original]" value="{{ post_ids.original() }}">
+
+                <label>Names</label>
+                <input type="text" name="post-ids[current]" value="{{ post_ids.current() }}" required>
+                {% endif %}
+            </li>
+        </ul>
+
+        {% if ctx.can_edit_pools() %}
+        <div class="messages">
+            {% match message %}
+            {% when Message::Success %}
+            <div class="message success">Pool saved.</div>
+            {% when Message::Error(err) %}
+            <div class="message error">{{ err }}</div>
+            {% when Message::None %}
+            {% endmatch %}
+        </div>
+        <div class="buttons">
+            <button class="save">Save changes</button>
+        </div>
+        {% endif %}
+    </form>
+</div>
+{% endblock %}

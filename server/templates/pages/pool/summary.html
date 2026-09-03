@@ -1,3 +1,6 @@
+{% extends "pages/pool/base.html" %}
+
+{% block content %}
 <div class="content-wrapper pool-summary">
     <section class="details">
         <section>
@@ -13,7 +16,7 @@
                 (none)
                 {% else %}
                 {% for alias in names.iter().skip(1) %}
-                <li><a class="pool-{{ pool.category()? }}" href="pool/{{ pool.id()? }}">{{ alias }}</a></li>
+                <li><a class="pool-{{ pool.category()? }}" href="pool/{{ pool.primary_name()? }}">{{ alias }}</a></li>
                 {% endfor %}
                 {% endif %}
             </ul>
@@ -30,8 +33,9 @@
         {{ pool.description()? }}
         {% endif %}
         <p>
-            This pool has <a href="posts?search-text=pool:{{ pool.primary_name()? }}">{{ pool.post_count()? }}
-                post(s)</a>.
+            This pool has <a href="posts?search-text=pool:{{ pool.primary_name()? }}">{{ pool.post_count()? }} post{% if
+                pool.post_count()? != 1 %}s{% endif %}</a>.
         </p>
     </section>
 </div>
+{% endblock %}
