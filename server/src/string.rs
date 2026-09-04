@@ -17,6 +17,9 @@ use utoipa::ToSchema;
 #[declare_sql_function]
 extern "SQL" {
     fn lower<T: SingleValue>(text: T) -> Text;
+
+    #[sql_name = "lower"]
+    fn lower_pattern(pattern: Text) -> Text;
 }
 
 /// A wrapper over a [`String`] that's meant to contain sensitive data.
