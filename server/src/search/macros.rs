@@ -47,17 +47,21 @@ macro_rules! apply_str_filter {
             $crate::search::StrCondition::Regular(condition) => {
                 $crate::apply_condition!($query, $expression, $filter, condition)
             }
-            $crate::search::StrCondition::WildCard(pattern) => match $filter.negated {
+            $crate::search::StrCondition::WildCard(pattern) => {
                 // Even though most text-based columns are CITEXT, we cast to lower
                 // here to get PostgreSQL to use TEXT index. We do this because CITEXT
-                // indexes do not work with patterns.
-                false => $query.filter($crate::string::lower($expression).like(pattern)),
-                true => $query.filter(
-                    $crate::string::lower($expression)
-                        .not_like(pattern)
-                        .or($expression.is_null()),
-                ),
-            },
+                // indexes do not work with patterns. The pattern has to be lowered as
+                // well, and it's done in SQL so that it matches the column exactly.
+                let pattern = $crate::string::lower_pattern(pattern);
+                match $filter.negated {
+                    false => $query.filter($crate::string::lower($expression).like(pattern)),
+                    true => $query.filter(
+                        $crate::string::lower($expression)
+                            .not_like(pattern)
+                            .or($expression.is_null()),
+                    ),
+                }
+            }
         }
     }};
 }
