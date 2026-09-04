@@ -204,7 +204,9 @@ fn to_like_pattern(text: &str) -> String {
                 if matches!(c, '\\' | '%' | '_') {
                     pattern.push('\\');
                 }
-                pattern.push(c);
+                // The pattern is lowercased because `apply_str_filter` matches it against
+                // `lower(column)`, which it does to make patterns use the TEXT indexes.
+                pattern.extend(c.to_lowercase());
             }
         }
     }
@@ -345,7 +347,14 @@ mod test {
 
         assert_eq!(str_condition("🦀*"), StrCondition::WildCard("🦀%".into()));
         assert_eq!(str_condition("*日本語*"), StrCondition::WildCard("%日本語%".into()));
-        assert_eq!(str_condition("ÉCLAIR*"), StrCondition::WildCard("ÉCLAIR%".into()));
+        assert_eq!(str_condition("ÉCLAIR*"), StrCondition::WildCard("éclair%".into()));
+    }
+
+    #[test]
+    fn wildcard_lowercasing() {
+        assert_eq!(str_condition("*MiXeDcAsE*"), StrCondition::WildCard("%mixedcase%".into()));
+        // Multibyte lowercasing can lengthen the string, so capacity is a hint only.
+        assert_eq!(str_condition("İ*"), StrCondition::WildCard("i\u{307}%".into()));
     }
 
     #[test]
