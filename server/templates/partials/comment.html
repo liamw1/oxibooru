@@ -41,19 +41,19 @@
                 <wbr>
 
                 {% if ctx.has_privilege(Action::CommentScore) %}
-                <span class="score-container">
+                <div class="score-container">
                     <a class="upvote">
-                        <i class="fa fa-thumbs-o-up"></i>
+                        <i class="fa fa-thumbs{% if comment.own_score()? != Rating::Like %}-o{% endif %}-up"></i>
                         <span class="vim-nav-hint">upvote</span>
                         <span class="vim-nav-hint">like</span>
                     </a>
                     <span class="value">{{ comment.score()? }}</span>
                     <a class="downvote">
-                        <i class="fa fa-thumbs-o-down"></i>
+                        <i class="fa fa-thumbs{% if comment.own_score()? != Rating::Like %}-o{% endif %}-down"></i>
                         <span class="vim-nav-hint">downvote</span>
                         <span class="vim-nav-hint">dislike</span>
                     </a>
-                </span>
+                </div>
                 {% endif %}
 
                 {% let can_edit_comment = true %}{# TODO #}

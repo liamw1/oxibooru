@@ -12,7 +12,7 @@
 
         <section class="upload-info">
             {% let user = post.user()? %}
-            {% include "partials/user_link.html"%}
+            {% include "partials/user_link.html"%},
             {% let creation_time = post.creation_time()? %}
             <time datetime="{{ creation_time }}" title="{{ creation_time }}">{{ time::since(creation_time) }}</time>
         </section>
@@ -33,7 +33,11 @@
 
         {% if !post.source()?.is_empty() %}
         <section class="source">
-            Source: {# TODO: Source #}
+            Source:
+            {% for (i, source) in post.sources()?.enumerate() %}
+            {% if i != 0 %}·{% endif %}
+            <a href="{{ source.text() }}" title="{{ source.text() }}">{{ source.domain() }}</a>
+            {% endfor %}
         </section>
         {% endif %}
 
@@ -46,10 +50,26 @@
 
         <section class="social">
             <div class="score-container">
-                {# TODO: score #}
+                <a class="upvote">
+                    <i class="fa fa-thumbs{% if post.own_score()? != Rating::Like %}-o{% endif %}-up"></i>
+                    <span class="vim-nav-hint">upvote</span>
+                    <span class="vim-nav-hint">like</span>
+                </a>
+                <span class="value">{{ post.score()? }}</span>
+                <a class="downvote">
+                    <i class="fa fa-thumbs{% if post.own_score()? != Rating::Dislike %}-o{% endif %}-down"></i>
+                    <span class="vim-nav-hint">downvote</span>
+                    <span class="vim-nav-hint">dislike</span>
+                </a>
             </div>
 
-            {# TODO: fav-container #}
+            <div class="fav-container">
+                <a class="add-favorite">
+                    <i class="fa fa-heart{% if !post.own_favorite()? %}-o{% endif %}"></i>
+                    <span class="vim-nav-hint">add to favorites</span>
+                </a>
+                <span class="value">{{ post.favorite_count()? }}</span>
+            </div>
         </section>
     </article>
 
@@ -95,7 +115,7 @@
             No tags yet!
             {% if ctx.can_edit_posts() %}
             {# TODO: Edit mode #}
-            <a href="{{ post.url(params)? }}">Add some.</a>
+            <a href="{{ post.url(Mode::Edit, params)? }}">Add some.</a>
             {% endif %}
         </p>
         {% endif %}
