@@ -33,7 +33,38 @@ use std::convert::Infallible;
 use std::fmt::Write;
 use std::sync::Arc;
 use strum::EnumString;
+use url::Url;
 use utoipa::ToSchema;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    View,
+    Edit,
+}
+
+pub struct Source<'a> {
+    text: &'a str,
+    url: Option<Url>,
+}
+
+impl<'a> Source<'a> {
+    pub fn new(text: &'a str) -> Self {
+        let url = Url::try_from(text).ok();
+        Source { text, url }
+    }
+
+    pub fn text(&self) -> &str {
+        self.text
+    }
+
+    pub fn domain(&self) -> &str {
+        self.url
+            .as_ref()
+            .and_then(Url::host_str)
+            .and_then(psl::domain_str)
+            .unwrap_or(self.text)
+    }
+}
 
 #[derive(Clone, Serialize, Deserialize, ToSchema)]
 pub struct Note {
@@ -233,10 +264,17 @@ impl PostInfo {
         Ok(format!("@{id} ({post_type})\n\nTags:{tag_list}"))
     }
 
-    pub fn url<T: Serialize>(&self, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
+    pub fn url<T: Serialize>(&self, mode: Mode, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
         self.id()
             .map_err(|err| serde_urlencoded::ser::Error::Custom(err.to_string().into()))
-            .and_then(|id| web::post_url(id, params))
+            .and_then(|id| match mode {
+                Mode::View => web::post_url(id, params),
+                Mode::Edit => web::post_edit_url(id, params),
+            })
+    }
+
+    pub fn sources(&self) -> Result<impl Iterator<Item = Source<'_>>, NotRequested> {
+        self.source().map(|source| source.split_whitespace().map(Source::new))
     }
 
     pub fn new(conn: &mut PgConnection, ctx: &Context, post: Post, fields: Mask<Field>) -> QueryResult<Self> {

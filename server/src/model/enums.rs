@@ -389,7 +389,7 @@ impl FromSql<SmallInt, Pg> for UserRank {
     }
 }
 
-#[derive(Debug, Default, Clone, Copy, Serialize_repr, Deserialize_repr)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize_repr, Deserialize_repr)]
 #[repr(i16)]
 pub enum Rating {
     Dislike = -1,
