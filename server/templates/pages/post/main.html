@@ -58,10 +58,7 @@
         {% let post = &post %}
         {% include "partials/post/content.html" %}
 
-        {% if mode == Mode::Edit && ctx.has_privilege(Action::PostEditDescription) %}
-        <h2>Description</h2>
-        <textarea id="post-description">{{ post.description()? }}</textarea>
-        {% else if !post.description()?.is_empty() %}
+        {% if !post.description()?.is_empty() %}
         <div class="description-container">
             <details open>
                 <summary>Description</summary>
