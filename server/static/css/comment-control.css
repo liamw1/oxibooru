@@ -117,7 +117,7 @@
 .comment-container .comment header .delete:not(.inactive),
 .comment-container .comment header .score-container a:not(.inactive),
 .comment-container .comment header .nickname a:not(.inactive) {
-    color: color-mix(in oklab var(--main-color), var(--inactive-link-color));
+    color: color-mix(in oklab, var(--main-color), var(--inactive-link-color));
 }
 
 .comment-container .comment header i {
@@ -181,7 +181,7 @@
 .darktheme .comment-container .comment header .delete:not(.inactive),
 .darktheme .comment-container .comment header .score-container a:not(.inactive),
 .darktheme .comment-container .comment header .nickname a:not(.inactive) {
-    color: color-mix(in oklab var(--main-color), var(--inactive-link-color-darktheme));
+    color: color-mix(in oklab, var(--main-color), var(--inactive-link-color-darktheme));
 }
 
 .darktheme .comment-container .comment header:before {

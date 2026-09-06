@@ -4,7 +4,7 @@
 
 {% block main %}
 <div class="pager">
-    {% include "partials/posts_header.html" %}
+    {% include "partials/post/header.html" %}
 
     <div class="messages"></div>
 
@@ -16,7 +16,7 @@
             <li data-post-id="{{ post.id()? }}">
                 <a class="thumbnail-wrapper {% if post.tags()?.is_empty() %}no-tags{% else %}tags{% endif %}"
                     title="{{ post.title()? }}" {% if ctx.has_privilege(Action::PostView) %}
-                    href="{{ post.url(params)? }}" {% endif %}>
+                    href="{{ post.url(Mode::View, params)? }}" {% endif %}>
                     <span class="thumbnail" style="background-image: url({{ post.thumbnail_url()? }})">
                         <img alt="thumbnail" src="{{ post.thumbnail_url()? }}">
                     </span>

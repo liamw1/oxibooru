@@ -20,7 +20,7 @@
     {% endif %}
 
     {% if let Some(post) = info.featured_post %}
-    {% include "partials/post_content.html" %}
+    {% include "partials/post/content.html" %}
     <aside>
         Featured&nbsp;post:&nbsp;<a href="post/{{ post.id()? }}">@{{ post.id()? }}</a>,<wbr>
         posted&nbsp;<time datetime="{{ post.creation_time()? }}" title="{{ post.creation_time()? }}">{{

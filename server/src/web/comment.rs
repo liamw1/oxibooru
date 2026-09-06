@@ -1,6 +1,7 @@
 use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Query, ResourceParams};
+use crate::model::enums::Rating;
 use crate::resource::post::{Field, PostInfo};
 use crate::web::pager::{Page, Pager};
 use crate::web::{Html, Tab, WebError, WebResult};

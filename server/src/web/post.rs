@@ -1,9 +1,9 @@
 use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
-use crate::model::enums::{PostFlag, PostSafety, PostType};
+use crate::model::enums::{PostFlag, PostSafety, PostType, Rating};
 use crate::resource::NotRequested;
-use crate::resource::post::{Field, PostInfo};
+use crate::resource::post::{Field, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::web::pager::{Page, Pager};
 use crate::web::{Html, Tab, WebError, WebResult};
@@ -17,7 +17,8 @@ use strum::{Display, IntoEnumIterator};
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/posts", routing::get(gallery))
-        .route("/post/{post_id}", routing::get(main))
+        .route("/post/{post_id}", routing::get(view))
+        .route("/post/{post_id}/edit", routing::get(edit))
 }
 
 #[derive(Clone, Copy, Display, PartialEq, Eq, Serialize, Deserialize)]
@@ -145,7 +146,7 @@ async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Of
 struct MainTemplate {
     ctx: Ctx,
     active_tab: Tab,
-    is_editing: bool,
+    mode: Mode,
     post: PostInfo,
     prev_post: Option<PostInfo>,
     next_post: Option<PostInfo>,
@@ -159,7 +160,7 @@ impl MainTemplate {
     }
 }
 
-async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> WebResult<Html> {
+async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>, mode: Mode) -> WebResult<Html> {
     let fields = [
         Field::Id,
         Field::User,
@@ -177,7 +178,12 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> Web
         Field::ContentUrl,
         Field::ThumbnailUrl,
         Field::Tags,
+        Field::Comments,
         Field::Relations,
+        Field::Score,
+        Field::OwnScore,
+        Field::OwnFavorite,
+        Field::FavoriteCount,
     ]
     .into();
 
@@ -190,7 +196,7 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> Web
     MainTemplate {
         ctx,
         active_tab: Tab::Post,
-        is_editing: false,
+        mode,
         post,
         prev_post: neighbors.prev,
         next_post: neighbors.next,
@@ -200,4 +206,12 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>) -> Web
     .render()
     .map(Html)
     .map_err(WebError::from)
+}
+
+async fn view(ctx: Ctx, post_id: Path<i64>, params: Query<Params>) -> WebResult<Html> {
+    main(ctx, post_id, params, Mode::View).await
+}
+
+async fn edit(ctx: Ctx, post_id: Path<i64>, params: Query<Params>) -> WebResult<Html> {
+    main(ctx, post_id, params, Mode::Edit).await
 }

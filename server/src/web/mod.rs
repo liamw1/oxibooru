@@ -38,6 +38,11 @@ pub fn post_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_
     url(&base, params)
 }
 
+pub fn post_edit_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
+    let base = format!("/post/{post_id}/edit");
+    url(&base, params)
+}
+
 pub fn routes(state: AppState) -> Router {
     // TODO: Remove
     dotenvy::from_filename("../.env").unwrap();
