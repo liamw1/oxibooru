@@ -3,7 +3,7 @@ use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostSafety, PostType, Rating};
 use crate::resource::NotRequested;
-use crate::resource::post::{Field, Mode, PostInfo};
+use crate::resource::post::{Field, IdJoinExt, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::web::pager::{Page, Pager};
 use crate::web::{Html, Tab, WebError, WebResult};
@@ -214,6 +214,7 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<MainParams>, mo
         Field::Score,
         Field::OwnScore,
         Field::OwnFavorite,
+        Field::TagCount,
         Field::FavoriteCount,
     ]
     .into();

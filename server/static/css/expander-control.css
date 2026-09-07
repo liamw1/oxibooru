@@ -1,46 +1,43 @@
-.expander.collapsed {
+.expander:not([open]) {
     margin-bottom: 1em;
 }
 
-.expander.collapsed>* {
+.expander summary {
+    background: var(--active-tab-background-color);
+    line-height: 2em;
+    padding: 0 .5em;
+    display: block;
+    cursor: pointer;
+    color: color-mix(in oklab var(--text-color), var(--inactive-link-color));
+    font-size: 120%;
+    list-style: none;
+}
+
+.expander summary::-webkit-details-marker {
     display: none;
 }
 
-.expander.collapsed>header {
-    display: block;
-}
-
-.expander header {
-    background: var(--active-tab-background-color);
-    line-height: 2em;
-}
-
-.expander header a {
-    padding: 0 .5em;
-    display: block;
-    color: color-mix(in oklab var(--text-color), var(--inactive-link-color));
-    font-size: 120%;
-}
-
-.expander header a i {
+.expander summary i {
     font-size: 1em;
     color: var(--inactive-link-color);
     float: right;
     line-height: 2em;
+    transition: transform .1s linear;
+}
+
+.expander:not([open]) summary i {
+    transform: rotate(-90deg);
 }
 
 .expander .expander-content {
     padding: .5em .5em 2em .5em;
 }
 
-.darktheme .expander header {
+.darktheme .expander summary {
     background: var(--active-tab-background-color-darktheme);
-}
-
-.darktheme .expander header a {
     color: color-mix(in oklab var(--text-color-darktheme), var(--inactive-link-color-darktheme));
 }
 
-.darktheme .expander header a i {
+.darktheme .expander summary i {
     color: var(--inactive-link-color-darktheme);
 }
