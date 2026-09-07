@@ -21,24 +21,24 @@ pub fn routes() -> Router<AppState> {
         .route("/post/{post_id}/edit", routing::get(edit))
 }
 
-#[derive(Clone, Copy, Display, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "lowercase")]
-pub enum EditMode {
-    Tag,
-    Safety,
-    Delete,
-}
-
 const SAFE_DEFAULT: bool = true;
 const SKETCHY_DEFAULT: bool = true;
 const UNSAFE_DEFAULT: bool = false;
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(42).unwrap();
 
+#[derive(Clone, Copy, Display, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+enum EditMode {
+    Tag,
+    Safety,
+    Delete,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
-struct Params {
+struct ListParams {
     safe: Option<bool>,
     sketchy: Option<bool>,
     #[serde(rename = "unsafe")]
@@ -47,7 +47,7 @@ struct Params {
     search_text: Option<String>,
 }
 
-impl Params {
+impl ListParams {
     fn safe_enabled(&self) -> bool {
         self.safe.unwrap_or(SAFE_DEFAULT)
     }
@@ -97,6 +97,13 @@ impl Params {
         }
         self
     }
+
+    fn to_main_params(&self) -> MainParams {
+        MainParams {
+            search_text: self.search_text.clone(),
+            fit: None,
+        }
+    }
 }
 
 #[derive(Template)]
@@ -105,11 +112,11 @@ struct GalleryTemplate<'a> {
     ctx: Ctx,
     active_tab: Tab,
     posts: Vec<PostInfo>,
-    pager: Pager<'a, Params>,
-    params: &'a Params,
+    pager: Pager<'a, ListParams>,
+    params: &'a ListParams,
 }
 
-async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Offset>) -> WebResult<Html> {
+async fn gallery(ctx: Ctx, Query(params): Query<ListParams>, Query(offset): Query<Offset>) -> WebResult<Html> {
     let fields = [
         Field::Id,
         Field::Tags,
@@ -141,6 +148,30 @@ async fn gallery(ctx: Ctx, Query(params): Query<Params>, Query(offset): Query<Of
     .map_err(WebError::from)
 }
 
+#[derive(Clone, Copy, Default, Display, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+enum Fit {
+    Original,
+    Width,
+    Height,
+    #[default]
+    Both,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+struct MainParams {
+    fit: Option<Fit>,
+    search_text: Option<String>,
+}
+
+impl MainParams {
+    fn fit(&self) -> Fit {
+        self.fit.unwrap_or_default()
+    }
+}
+
 #[derive(Template)]
 #[template(path = "pages/post/main.html")]
 struct MainTemplate {
@@ -151,7 +182,7 @@ struct MainTemplate {
     prev_post: Option<PostInfo>,
     next_post: Option<PostInfo>,
     tag_categories: Vec<TagCategoryInfo>,
-    params: Params,
+    params: MainParams,
 }
 
 impl MainTemplate {
@@ -160,7 +191,7 @@ impl MainTemplate {
     }
 }
 
-async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>, mode: Mode) -> WebResult<Html> {
+async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<MainParams>, mode: Mode) -> WebResult<Html> {
     let fields = [
         Field::Id,
         Field::User,
@@ -187,7 +218,7 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>, mode: 
     ]
     .into();
 
-    let query = params.query();
+    let query = params.search_text.clone();
     let resource_params = Query(ResourceParams { query, fields });
     let Json(post) = api::post::get(ctx.clone(), post_id, resource_params.clone()).await?;
     let Json(neighbors) = api::post::get_neighbors(ctx.clone(), post_id, resource_params).await?;
@@ -208,10 +239,10 @@ async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<Params>, mode: 
     .map_err(WebError::from)
 }
 
-async fn view(ctx: Ctx, post_id: Path<i64>, params: Query<Params>) -> WebResult<Html> {
+async fn view(ctx: Ctx, post_id: Path<i64>, params: Query<MainParams>) -> WebResult<Html> {
     main(ctx, post_id, params, Mode::View).await
 }
 
-async fn edit(ctx: Ctx, post_id: Path<i64>, params: Query<Params>) -> WebResult<Html> {
+async fn edit(ctx: Ctx, post_id: Path<i64>, params: Query<MainParams>) -> WebResult<Html> {
     main(ctx, post_id, params, Mode::Edit).await
 }
