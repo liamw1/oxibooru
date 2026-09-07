@@ -36,6 +36,10 @@ use strum::EnumString;
 use url::Url;
 use utoipa::ToSchema;
 
+pub trait IdJoinExt {
+    fn joined(&self) -> String;
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     View,
@@ -120,6 +124,21 @@ pub struct MicroPost {
 impl MicroPost {
     pub fn url<T: Serialize>(&self, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
         web::post_url(self.id, params)
+    }
+}
+
+impl IdJoinExt for Vec<MicroPost> {
+    fn joined(&self) -> String {
+        const MAX_I64_DIGITS: usize = i64::MAX.ilog10() as usize + 1;
+
+        let mut s = String::with_capacity((MAX_I64_DIGITS + 1) * self.len());
+        for (i, post_id) in self.iter().map(|post| post.id).enumerate() {
+            if i > 0 {
+                s.push(' ');
+            }
+            write!(s, "{post_id}").expect("Write to String is infallible");
+        }
+        s
     }
 }
 

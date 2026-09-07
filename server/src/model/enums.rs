@@ -242,7 +242,7 @@ impl FromSql<SmallInt, Pg> for PostSafety {
     }
 }
 
-#[derive(Clone, Copy, EnumCount, EnumIter, EnumString, FromRepr, IntoStaticStr, Deserialize, ToSchema)]
+#[derive(Clone, Copy, Display, EnumCount, EnumIter, EnumString, FromRepr, IntoStaticStr, Deserialize, ToSchema)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum PostFlag {

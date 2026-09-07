@@ -3,6 +3,7 @@ use crate::api::pool::PoolUpdateBody;
 use crate::extract::DeleteBody;
 use crate::resource::NotRequested;
 use crate::resource::pool::PoolInfo;
+use crate::resource::post::IdJoinExt;
 use crate::string::{self, LargeString, SmallString};
 use crate::time::DateTime;
 use crate::web::PathForm;
@@ -26,8 +27,8 @@ impl EditPathForm {
     pub fn initialize(info: PoolInfo) -> Result<Self, NotRequested> {
         let path = info.primary_name().map(SmallString::from)?;
         let version = info.version()?;
-        let names = info.joined_names().ok().map(FormField::from);
-        let post_ids = info.joined_post_ids().ok().map(FormField::from);
+        let names = info.joined_names().map(FormField::from).ok();
+        let post_ids = info.posts().as_deref().map(IdJoinExt::joined).map(FormField::from).ok();
         let form = EditForm {
             names,
             category: info.category.map(FormField::from),
