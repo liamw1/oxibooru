@@ -11,7 +11,7 @@
     </header>
 
     {% if ctx.has_privilege(Action::PostList) %}
-    <form class="horizontal" action="posts" method="get">
+    <form class="horizontal" method="get" action="posts">
         <input type="text" name="search-text" placeholder="enter some tags">
         <button>Search</button>
         <span class=sep>or</span>
@@ -20,7 +20,9 @@
     {% endif %}
 
     {% if let Some(post) = info.featured_post %}
-    {% include "partials/post/content.html" %}
+    <div class="post-container">
+        {% include "partials/post/content.html" %}
+    </div>
     <aside>
         Featured&nbsp;post:&nbsp;<a href="post/{{ post.id()? }}">@{{ post.id()? }}</a>,<wbr>
         posted&nbsp;<time datetime="{{ post.creation_time()? }}" title="{{ post.creation_time()? }}">{{

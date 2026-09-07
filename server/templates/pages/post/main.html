@@ -56,7 +56,9 @@
 
     <div class="content">
         {% let post = &post %}
-        {% include "partials/post/content.html" %}
+        <div class="post-container fit-{{ params.fit() }}">
+            {% include "partials/post/content.html" %}
+        </div>
 
         {% if !post.description()?.is_empty() %}
         <div class="description-container">
