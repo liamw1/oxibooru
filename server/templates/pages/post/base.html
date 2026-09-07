@@ -3,13 +3,16 @@
 {% block title %}{{ ctx.site_name() }} – Post #{{ post.id()? }}{% endblock %}
 
 {% block main %}
-<div class="content-wrapper transparent-container post-view">
-    <style>
-        {% for category in tag_categories %}
-        .tag-{{ category.name()? }} { color: {{ category.color()? }}; }
-        {% endfor %}
-    </style>
+<style>
+    {% for category in tag_categories %}
+    .tag-{{ category.name()? }} { color: {{ category.color()? }}; }
+    {% endfor %}
+    {% for category in pool_categories %}
+    .pool-{{ category.name()? }} { color: {{ category.color()? }}; }
+    {% endfor %}
+</style>
 
+<div class="content-wrapper transparent-container post-view">
     <aside class="sidebar">
         <nav class="buttons">
             <article class="previous-post">
@@ -46,12 +49,7 @@
             {% endif %}
         </nav>
 
-        {% match mode %}
-        {% when Mode::View %}
-        {% include "partials/post/readonly_sidebar.html" %}
-        {% when Mode::Edit %}
-        {% include "partials/post/edit_sidebar.html" %}
-        {% endmatch %}
+        {% block sidebar %}{% endblock %}
     </aside>
 
     <div class="content">

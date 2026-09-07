@@ -185,7 +185,7 @@ struct TagPage<T> {
 }
 
 impl TagPage<TagInfo> {
-    async fn new(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> WebResult<Self> {
+    async fn new(ctx: Ctx, path: Path<SmallString>, active_tag_tab: TagTab) -> ApiResult<Self> {
         get_tag_and_categories(ctx.clone(), path, SUMMARY_FIELDS.into())
             .await
             .map(|(tag, categories)| Self {
@@ -197,7 +197,6 @@ impl TagPage<TagInfo> {
                 focus: Focus::None,
                 message: Message::None,
             })
-            .map_err(WebError::from)
     }
 }
 

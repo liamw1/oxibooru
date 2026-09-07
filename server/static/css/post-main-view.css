@@ -259,13 +259,13 @@
 
 .post-view .edit-sidebar input[type=submit],
 .post-view .edit-sidebar input[type=button],
-.post-view .edit-sidebar button {
+.post-view .edit-sidebar form>button {
     width: 100%;
 }
 
 .post-view .edit-sidebar input[type=submit]:focus,
 .post-view .edit-sidebar input[type=button]:focus,
-.post-view .edit-sidebar button:focus {
+.post-view .edit-sidebar form>button:focus {
     border: 2px solid var(--text-color) !important;
 }
 
