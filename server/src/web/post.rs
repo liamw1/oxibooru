@@ -1,8 +1,10 @@
+use crate::api::error::ApiResult;
 use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostSafety, PostType, Rating};
 use crate::resource::NotRequested;
+use crate::resource::pool_category::PoolCategoryInfo;
 use crate::resource::post::{Field, IdJoinExt, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::web::pager::{Page, Pager};
@@ -11,6 +13,7 @@ use crate::{api, time, unit, web};
 use askama::Template;
 use axum::{Router, routing};
 use serde::{Deserialize, Serialize};
+use server_macros::Deref;
 use std::num::NonZeroU64;
 use strum::{Display, IntoEnumIterator};
 
@@ -172,78 +175,89 @@ impl MainParams {
     }
 }
 
-#[derive(Template)]
-#[template(path = "pages/post/main.html")]
-struct MainTemplate {
+struct PostPage<T> {
     ctx: Ctx,
     active_tab: Tab,
     mode: Mode,
-    post: PostInfo,
+    post: T,
     prev_post: Option<PostInfo>,
     next_post: Option<PostInfo>,
     tag_categories: Vec<TagCategoryInfo>,
+    pool_categories: Vec<PoolCategoryInfo>,
     params: MainParams,
 }
 
-impl MainTemplate {
+impl PostPage<PostInfo> {
+    async fn new(ctx: Ctx, path: Path<i64>, Query(params): Query<MainParams>, mode: Mode) -> ApiResult<Self> {
+        let fields = [
+            Field::Id,
+            Field::User,
+            Field::FileSize,
+            Field::CanvasWidth,
+            Field::CanvasHeight,
+            Field::Safety,
+            Field::Type,
+            Field::MimeType,
+            Field::ChecksumMd5,
+            Field::Flags,
+            Field::Source,
+            Field::Description,
+            Field::CreationTime,
+            Field::ContentUrl,
+            Field::ThumbnailUrl,
+            Field::Tags,
+            Field::Comments,
+            Field::Relations,
+            Field::Pools,
+            Field::Notes,
+            Field::Score,
+            Field::OwnScore,
+            Field::OwnFavorite,
+            Field::FavoriteCount,
+        ]
+        .into();
+
+        let query = params.search_text.clone();
+        let resource_params = Query(ResourceParams { query, fields });
+        let Json(post) = api::post::get(ctx.clone(), path, resource_params.clone()).await?;
+        let Json(neighbors) = api::post::get_neighbors(ctx.clone(), path, resource_params).await?;
+        let tag_categories = web::tag_category::get_categories(ctx.clone()).await?;
+        let pool_categories = web::pool_category::get_categories(ctx.clone()).await?;
+
+        Ok(Self {
+            ctx,
+            active_tab: Tab::Post,
+            mode,
+            post,
+            prev_post: neighbors.prev,
+            next_post: neighbors.next,
+            tag_categories,
+            pool_categories,
+            params,
+        })
+    }
+}
+
+#[derive(Deref, Template)]
+#[template(path = "pages/post/view.html")]
+struct ViewTemplate(PostPage<PostInfo>);
+
+impl ViewTemplate {
     fn full_content_url(&self) -> Result<String, NotRequested> {
         self.post.content_url().map(|url| self.ctx.full_url(url))
     }
 }
 
-async fn main(ctx: Ctx, post_id: Path<i64>, Query(params): Query<MainParams>, mode: Mode) -> WebResult<Html> {
-    let fields = [
-        Field::Id,
-        Field::User,
-        Field::FileSize,
-        Field::CanvasWidth,
-        Field::CanvasHeight,
-        Field::Safety,
-        Field::Type,
-        Field::MimeType,
-        Field::ChecksumMd5,
-        Field::Flags,
-        Field::Source,
-        Field::Description,
-        Field::CreationTime,
-        Field::ContentUrl,
-        Field::ThumbnailUrl,
-        Field::Tags,
-        Field::Comments,
-        Field::Relations,
-        Field::Score,
-        Field::OwnScore,
-        Field::OwnFavorite,
-        Field::TagCount,
-        Field::FavoriteCount,
-    ]
-    .into();
-
-    let query = params.search_text.clone();
-    let resource_params = Query(ResourceParams { query, fields });
-    let Json(post) = api::post::get(ctx.clone(), post_id, resource_params.clone()).await?;
-    let Json(neighbors) = api::post::get_neighbors(ctx.clone(), post_id, resource_params).await?;
-    let tag_categories = web::tag_category::get_categories(ctx.clone()).await?;
-
-    MainTemplate {
-        ctx,
-        active_tab: Tab::Post,
-        mode,
-        post,
-        prev_post: neighbors.prev,
-        next_post: neighbors.next,
-        tag_categories,
-        params,
-    }
-    .render()
-    .map(Html)
-    .map_err(WebError::from)
+async fn view(ctx: Ctx, path: Path<i64>, params: Query<MainParams>) -> WebResult<Html> {
+    let page_info = PostPage::new(ctx, path, params, Mode::View).await?;
+    ViewTemplate(page_info).render().map(Html).map_err(WebError::from)
 }
 
-async fn view(ctx: Ctx, post_id: Path<i64>, params: Query<MainParams>) -> WebResult<Html> {
-    main(ctx, post_id, params, Mode::View).await
-}
+#[derive(Deref, Template)]
+#[template(path = "pages/post/edit.html")]
+struct EditTemplate(PostPage<PostInfo>);
 
-async fn edit(ctx: Ctx, post_id: Path<i64>, params: Query<MainParams>) -> WebResult<Html> {
-    main(ctx, post_id, params, Mode::Edit).await
+async fn edit(ctx: Ctx, path: Path<i64>, params: Query<MainParams>) -> WebResult<Html> {
+    let page_info = PostPage::new(ctx, path, params, Mode::Edit).await?;
+    EditTemplate(page_info).render().map(Html).map_err(WebError::from)
 }

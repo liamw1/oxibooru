@@ -1,3 +1,5 @@
+{% extends "pages/post/base.html" %}
+
 {% macro carry(params, except) %}
 {% if except != "fit" && let Some(fit) = params.fit %}
 <input type="hidden" name="fit" value="{{ fit }}">
@@ -7,6 +9,7 @@
 {% endif %}
 {% endmacro %}
 
+{% block sidebar %}
 <div class="readonly-sidebar">
     <article class="details">
         <section class="download">
@@ -136,3 +139,4 @@
         {% endif %}
     </nav>
 </div>
+{% endblock %}

@@ -35,6 +35,12 @@ pub struct MicroPool {
     pub post_count: i64,
 }
 
+impl MicroPool {
+    pub fn primary_name(&self) -> &str {
+        &self.names[0]
+    }
+}
+
 #[derive(Clone, Copy, EnumString)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
