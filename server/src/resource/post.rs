@@ -8,12 +8,12 @@ use crate::model::pool::PoolPost;
 use crate::model::post::{NewPostNote, Post, PostFavorite, PostNote, PostRelation, PostScore, PostTag};
 use crate::model::tag::TagName;
 use crate::post_stats;
-use crate::resource::NotRequested;
 use crate::resource::comment::CommentInfo;
 use crate::resource::field::{Batcher, Mask};
 use crate::resource::pool::MicroPool;
 use crate::resource::tag::MicroTag;
 use crate::resource::user::MicroUser;
+use crate::resource::{JoinExt, NotRequested};
 use crate::schema::{
     comment, comment_score, comment_statistics, pool, pool_category, pool_name, pool_statistics, post, post_favorite,
     post_note, post_relation, post_score, tag, tag_category, tag_name, tag_statistics, user,
@@ -35,10 +35,6 @@ use std::sync::Arc;
 use strum::EnumString;
 use url::Url;
 use utoipa::ToSchema;
-
-pub trait IdJoinExt {
-    fn joined(&self) -> String;
-}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
@@ -127,7 +123,7 @@ impl MicroPost {
     }
 }
 
-impl IdJoinExt for Vec<MicroPost> {
+impl JoinExt for Vec<MicroPost> {
     fn joined(&self) -> String {
         const MAX_I64_DIGITS: usize = i64::MAX.ilog10() as usize + 1;
 

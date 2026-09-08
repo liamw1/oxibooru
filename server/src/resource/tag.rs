@@ -84,10 +84,6 @@ impl TagInfo {
         self.names().map(|names| names[0].as_ref())
     }
 
-    pub fn joined_names(&self) -> Result<String, NotRequested> {
-        self.names().map(|names| names.join(" "))
-    }
-
     pub fn new(conn: &mut PgConnection, tag: Tag, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch(conn, vec![tag], fields).map(resource::single)
     }

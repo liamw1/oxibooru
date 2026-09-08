@@ -1,14 +1,24 @@
+use crate::api::error::ApiError;
 use crate::api::tag::TagUpdateBody;
 use crate::extract::{Ctx, DeleteBody};
-use crate::resource::NotRequested;
-use crate::resource::tag::TagInfo;
-use crate::string::{self, LargeString, SmallString};
+use crate::model::tag_category::TagCategory;
+use crate::resource::tag::{Field, MicroTag, TagInfo};
+use crate::resource::{JoinExt, NotRequested};
+use crate::schema::tag_category;
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::web::form::{FormField, TagMap};
+use crate::update::tag::FetchMode;
+use crate::web::form::{self, FormField};
 use crate::web::{Message, PathForm, WebResult};
+use crate::{string, update};
+use diesel::{QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Deserializer};
+use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
+use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
+use std::sync::Arc;
+use strum::Display;
 
 #[derive(PartialEq, Eq)]
 pub enum Focus {
@@ -57,45 +67,193 @@ impl<'de> Deserialize<'de> for Operation {
     }
 }
 
+#[derive(Clone, Copy, Display)]
+pub enum ElementClass {
+    New,
+    Added,
+    Duplicate,
+    Implication,
+    #[strum(serialize = "")]
+    None,
+}
+
+#[derive(Deserialize)]
+#[serde(from = "MicroTag")]
+pub struct Element {
+    tag: MicroTag,
+    class: ElementClass,
+}
+
+impl Element {
+    pub fn class(&self) -> ElementClass {
+        self.class
+    }
+}
+
+impl Deref for Element {
+    type Target = MicroTag;
+    fn deref(&self) -> &Self::Target {
+        &self.tag
+    }
+}
+
+impl From<MicroTag> for Element {
+    fn from(tag: MicroTag) -> Self {
+        Self {
+            tag,
+            class: ElementClass::None,
+        }
+    }
+}
+
+impl PartialEq for Element {
+    fn eq(&self, other: &Self) -> bool {
+        self.primary_name() == other.primary_name()
+    }
+}
+
+impl Eq for Element {}
+
+#[derive(Default, PartialEq, Eq, Deserialize)]
+pub struct ElementMap(BTreeMap<i64, Element>);
+
+impl ElementMap {
+    pub fn names(&self) -> Vec<SmallString> {
+        self.0
+            .values()
+            .map(|tag| SmallString::from(tag.primary_name()))
+            .collect()
+    }
+
+    async fn append_tags(&mut self, Ctx(ctx, connection_pool): &Ctx, joined_names: &str) -> WebResult<()> {
+        const FIELDS: [Field; 3] = [Field::Category, Field::Names, Field::Usages];
+
+        let added_names: HashSet<_> = string::split_unescaped_whitespace(joined_names).collect();
+        let tag_names = added_names.iter().copied().map(SmallString::from).collect();
+        let (tags, new_names, default_category) = connection_pool
+            .transaction({
+                let ctx = ctx.clone();
+                move |conn| {
+                    let default_category: SmallString = tag_category::table
+                        .select(tag_category::name)
+                        .filter(TagCategory::is_default())
+                        .first(conn)?;
+                    let (tag_ids, new_names) = update::tag::fetch_tags(conn, &ctx, tag_names, FetchMode::Deep)?;
+                    let tags = TagInfo::new_batch_from_ids(conn, &tag_ids, FIELDS.into())?;
+                    Ok::<_, ApiError>((tags, new_names, default_category))
+                }
+            })
+            .await?;
+
+        let mut micro_tags = Vec::with_capacity(tags.len());
+        for tag in tags {
+            micro_tags.push(MicroTag {
+                names: tag.names().map(Vec::as_slice).map(Arc::from)?,
+                category: tag.category().cloned()?,
+                usages: tag.usages()?,
+            });
+        }
+
+        let tag_names: HashSet<_> = micro_tags
+            .iter()
+            .map(MicroTag::primary_name)
+            .chain(new_names.iter().map(|name| name.deref()))
+            .collect();
+        for element in self.values_mut() {
+            if tag_names.contains(element.primary_name()) {
+                element.class = ElementClass::Duplicate;
+            }
+        }
+
+        let existing_tags: HashSet<_> = self.values().map(|tag| tag.primary_name()).collect();
+        let new_elements: Vec<_> = micro_tags
+            .into_iter()
+            .map(|tag| {
+                let class = if added_names.contains(tag.primary_name()) {
+                    ElementClass::Added
+                } else {
+                    ElementClass::Implication
+                };
+                Element { tag, class }
+            })
+            .chain(new_names.into_iter().map(|name| {
+                let tag = MicroTag {
+                    names: Arc::from([name]),
+                    category: default_category.clone(),
+                    usages: 0,
+                };
+                Element {
+                    tag,
+                    class: ElementClass::New,
+                }
+            }))
+            .filter(|tag| !existing_tags.contains(tag.primary_name()))
+            .collect();
+
+        let lowest_current_index = self.first_key_value().map_or(0, |(lowest_index, _)| *lowest_index);
+        self.extend((1..).map(|offset| lowest_current_index - offset).zip(new_elements));
+        Ok(())
+    }
+}
+
+impl Deref for ElementMap {
+    type Target = BTreeMap<i64, Element>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ElementMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<Vec<MicroTag>> for ElementMap {
+    fn from(value: Vec<MicroTag>) -> Self {
+        Self((0..).zip(value.into_iter().map(Element::from)).collect())
+    }
+}
+
+impl<'a> IntoIterator for &'a ElementMap {
+    type Item = (&'a i64, &'a Element);
+    type IntoIter = std::collections::btree_map::Iter<'a, i64, Element>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
+
 pub type EditPathForm = PathForm<SmallString, EditForm>;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct EditForm {
     pub operation: Operation,
+    pub version: DateTime,
     pub names: Option<FormField<String>>,
     pub category: Option<FormField<SmallString>>,
-    pub implications: Option<FormField<TagMap>>,
-    pub suggestions: Option<FormField<TagMap>>,
+    pub implications: Option<FormField<ElementMap>>,
+    pub suggestions: Option<FormField<ElementMap>>,
     pub description: Option<FormField<LargeString>>,
-    version: DateTime,
-    new_implications: Option<SmallString>,
-    new_suggestions: Option<SmallString>,
+    new_implications: Option<String>,
+    new_suggestions: Option<String>,
 }
 
 impl EditPathForm {
     pub fn initialize(info: TagInfo) -> Result<Self, NotRequested> {
         let path = info.primary_name().map(SmallString::from)?;
-        let version = info.version()?;
-        let names = info.joined_names().ok().map(FormField::from);
-        let implications = info.implications.map(TagMap::from);
-        let suggestions = info.suggestions.map(TagMap::from);
         let form = EditForm {
             operation: Operation::Init,
-            names,
+            version: info.version()?,
+            names: info.names.as_ref().map(JoinExt::joined).map(FormField::from),
             category: info.category.map(FormField::from),
-            implications: implications.map(FormField::from),
-            suggestions: suggestions.map(FormField::from),
+            implications: info.implications.map(ElementMap::from).map(FormField::from),
+            suggestions: info.suggestions.map(ElementMap::from).map(FormField::from),
             description: info.description.map(FormField::from),
-            version,
             new_implications: None,
             new_suggestions: None,
         };
         Ok(Self { path, form })
-    }
-
-    pub fn version(&self) -> Result<DateTime, Infallible> {
-        Ok(self.version)
     }
 
     pub fn primary_name(&self) -> Result<&str, Infallible> {
@@ -111,17 +269,17 @@ impl EditPathForm {
                 .names
                 .as_ref()
                 .and_then(FormField::form_value_deref)
-                .map(string::split_into_list),
+                .map(form::split_into_names),
             implications: self
                 .implications
                 .as_ref()
                 .and_then(FormField::form_value)
-                .map(TagMap::names),
+                .map(ElementMap::names),
             suggestions: self
                 .suggestions
                 .as_ref()
                 .and_then(FormField::form_value)
-                .map(TagMap::names),
+                .map(ElementMap::names),
         }
     }
 
@@ -190,17 +348,13 @@ pub struct MergeForm {
 }
 
 impl MergePathForm {
-    pub fn initialize(info: &TagInfo) -> Result<Self, NotRequested> {
-        let path = info.primary_name().map(SmallString::from)?;
+    pub fn initialize(tag: &TagInfo) -> Result<Self, NotRequested> {
+        let path = tag.primary_name().map(SmallString::from)?;
         let form = MergeForm {
-            version: info.version()?,
+            version: tag.version()?,
             target_tag: SmallString::default(),
         };
         Ok(Self { path, form })
-    }
-
-    pub fn version(&self) -> Result<DateTime, Infallible> {
-        Ok(self.version)
     }
 
     pub fn primary_name(&self) -> Result<&str, Infallible> {
@@ -213,7 +367,7 @@ pub type DeletePathForm = PathForm<SmallString, DeleteForm>;
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct DeleteForm {
-    version: DateTime,
+    pub version: DateTime,
     usages: i64,
 }
 
@@ -225,10 +379,6 @@ impl DeletePathForm {
             usages: info.usages()?,
         };
         Ok(Self { path, form })
-    }
-
-    pub fn version(&self) -> Result<DateTime, Infallible> {
-        Ok(self.version)
     }
 
     pub fn primary_name(&self) -> Result<&str, Infallible> {

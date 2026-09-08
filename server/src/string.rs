@@ -1,3 +1,4 @@
+use crate::resource::JoinExt;
 use compact_str::{CompactString, ToCompactString};
 use diesel::deserialize::{self, FromSql, FromSqlRow};
 use diesel::pg::sql_types::Citext;
@@ -173,6 +174,12 @@ impl FromSql<Citext, Pg> for SmallString {
     }
 }
 
+impl JoinExt for Vec<SmallString> {
+    fn joined(&self) -> String {
+        self.join(" ")
+    }
+}
+
 /// A wrapper over [`Arc<str>`] that can be serialized to or deserialized from the database.
 /// It's immutable, but can be cheaply cloned and sent across threads.
 /// Meant for potentially large string, like post descriptions.
@@ -285,10 +292,6 @@ impl<'a, P: Pattern> Iterator for SplitUnescaped<'a, P> {
 /// Like [`str::split_whitespace`], but ignores whitespace escaped with `\`.
 pub fn split_unescaped_whitespace(text: &str) -> impl Iterator<Item = &str> {
     SplitUnescaped::new(text, IsWhitespace).filter(|term| !term.is_empty())
-}
-
-pub fn split_into_list(text: &str) -> Vec<SmallString> {
-    split_unescaped_whitespace(text).map(SmallString::from).collect()
 }
 
 /// Finds the byte index of next unescaped character that matches `pattern` in `text`.

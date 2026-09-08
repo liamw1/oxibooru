@@ -4,7 +4,7 @@
 <div class="tag-delete">
     <form method="post" action="tag/{{ tag.primary_name()? }}/delete" hx-post="tag/{{ tag.primary_name()? }}/delete"
         hx-target="#tag" hx-swap="show:none">
-        <input type="hidden" name="version" value="{{ tag.version()? }}">
+        <input type="hidden" name="version" value="{{ tag.version }}">
         <input type="hidden" name="usages" value="{{ tag.usages()? }}"> {# Needed for re-render #}
 
         <p>
