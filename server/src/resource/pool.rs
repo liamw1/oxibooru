@@ -11,7 +11,7 @@ use diesel::dsl::{exists, not};
 use diesel::{
     BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use server_macros::resource;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -19,7 +19,7 @@ use strum::EnumString;
 use utoipa::ToSchema;
 
 /// A pool resource stripped down to `id`, `names`, `category`, `description` and `postCount` fields.
-#[derive(Serialize, ToSchema)]
+#[derive(Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroPool {
     /// Resource version. See [versioning](#Versioning).
@@ -89,10 +89,6 @@ pub struct PoolInfo {
 impl PoolInfo {
     pub fn primary_name(&self) -> Result<&str, NotRequested> {
         self.names().map(|names| names[0].as_ref())
-    }
-
-    pub fn joined_names(&self) -> Result<String, NotRequested> {
-        self.names().map(|names| names.join(" "))
     }
 
     pub fn new(conn: &mut PgConnection, ctx: &Context, pool: Pool, fields: Mask<Field>) -> QueryResult<Self> {

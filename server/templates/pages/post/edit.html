@@ -3,9 +3,29 @@
 {% block sidebar %}
 <div class="edit-sidebar">
     <form>
-        <button>Save</button>
+        <input type="hidden" name="version" value="{{ post.version }}">
+        <input type="hidden" name="type_" value="{{ post.type_()? }}">
+        <input type="hidden" name="mime_type" value="{{ post.mime_type()? }}">
+        <input type="hidden" name="canvas_width" value="{{ post.canvas_width()? }}">
+        <input type="hidden" name="canvas_height" value="{{ post.canvas_height()? }}">
+        <input type="hidden" name="content_url" value="{{ post.content_url()? }}">
+        <input type="hidden" name="thumbnail_url" value="{{ post.thumbnail_url()? }}">
+        {% for (i, flag) in post.original_flags.iter().enumerate() %}
+        <input type="hidden" name="original_flags[{{ i }}]" value="{{ flag }}">
+        {% endfor %}
 
-        <div class="messages"></div>
+        {% if ctx.can_edit_posts() %}
+        <button name="operation" value="save">Save</button>
+        <div class="messages">
+            {% match message %}
+            {% when Message::Success %}
+            <div class="message success">Post saved.</div>
+            {% when Message::Error(err) %}
+            <div class="message error">{{ err }}</div>
+            {% when Message::None %}
+            {% endmatch %}
+        </div>
+        {% endif %}
 
         <details class="expander" open>
             <summary>
@@ -13,57 +33,77 @@
                 <i class="fa fa-chevron-down"></i>
             </summary>
             <div class="expander-content">
-                {% if ctx.safety_enabled() && ctx.has_privilege(Action::PostEditSafety) %}
+                {% if let Some(safety) = post.safety && ctx.safety_enabled() &&
+                ctx.has_privilege(Action::PostEditSafety) %}
                 <section class="safety">
+                    <input type="hidden" name="safety[original]" value="{{ safety.original() }}">
+
                     <label>Safety</label>
                     <div class="radio-wrapper">
-                        {% for safety in PostSafety::iter() %}
+                        {% for s in PostSafety::iter() %}
                         <label>
-                            <input type="radio" name="safety" value="{{ safety }}" {% if safety==post.safety()? %}
+                            <input type="radio" name="safety[current]" value="{{ s }}" {% if s==*safety.current() %}
                                 checked {% endif %}>
-                            <span class="radio">{{ safety | capitalize }}</span>
+                            <span class="radio">{{ s | capitalize }}</span>
                         </label>
                         {% endfor %}
                     </div>
                 </section>
                 {% endif %}
-                {% if ctx.has_privilege(Action::PostEditRelation) %}
+                {% if let Some(relations) = post.relations && ctx.has_privilege(Action::PostEditRelation) %}
                 <section class="relations">
+                    <input type="hidden" name="relations[original]" value="{{ relations.original() }}">
+
                     <label>Relations</label>
-                    <input type="text" name="relations" value="{{ post.relations()?.joined() }}" pattern="^[0-9 ]*$"
+                    <input type="text" name="relations[current]" value="{{ relations.current() }}" pattern="^[0-9 ]*$"
                         placeholder="space-separated post IDs">
                 </section>
                 {% endif %}
-                {% if ctx.has_privilege(Action::PostEditFlag) && post.type_()? == PostType::Video %}
+                {% if let Some(flags) = post.flags && ctx.has_privilege(Action::PostEditFlag) && post.type_()? ==
+                PostType::Video %}
                 <section class="flags">
+                    {% for (i, flag) in flags.original().iter().enumerate() %}
+                    <input type="hidden" name="flags[original][{{ i }}]" value="{{ flag }}">
+                    {% endfor %}
+
                     <label>Miscellaneous</label>
-                    {% for flag in PostFlag::iter() %}
+                    {% for (i, flag) in PostFlag::iter().enumerate() %}
                     <label>
-                        <input type="checkbox" name="{{ flag }}-flag" {% if post.flags()?.contains(*flag) %} checked {%
-                            endif %}>
+                        <input type="checkbox" name="flags[current][{{ i }}]" value="{{ flag }}" {% if
+                            flags.current().contains(flag) %} checked {% endif %}>
                         <span class="checkbox">{{ flag | capitalize }}</span>
                     </label>
                     {% endfor %}
                 </section>
                 {% endif %}
-                {% if ctx.has_privilege(Action::PostEditSource) %}
+                {% if let Some(source) = post.source && ctx.has_privilege(Action::PostEditSource) %}
                 <section class="post-source">
+                    <input type="hidden" name="source[original]" value="{{ source.original() }}">
+
                     <label>Source</label>
-                    <textarea>{{ post.source()? }}</textarea>
+                    <textarea name="source[current]">{{ source.current() }}</textarea>
                 </section>
                 {% endif %}
-                {% if ctx.has_privilege(Action::PostEditDescription) %}
+                {% if let Some(description) = post.description && ctx.has_privilege(Action::PostEditDescription) %}
                 <section class="post-description">
+                    <input type="hidden" name="description[original]" value="{{ description.original() }}">
+
                     <label>Description</label>
-                    <textarea>{{ post.description()? }}</textarea>
+                    <textarea name="description[current]">{{ description.current() }}</textarea>
                 </section>
                 {% endif %}
             </div>
         </details>
         {% if ctx.has_privilege(Action::PostEditTag) %}
         <details class="expander" open>
+            {% for (i, tag) in post.tags.iter().flat_map(FormField::original) %}
+            <input type="hidden" name="tags[original][{{ i }}][names][0]" value="{{ tag.primary_name() }}">
+            <input type="hidden" name="tags[original][{{ i }}][category]" value="{{ tag.category }}">
+            <input type="hidden" name="tags[original][{{ i }}][usages]" value="{{ tag.usages }}">
+            {% endfor %}
+
             <summary>
-                <span>Tags ({{ post.tags()?.len() }})</span>
+                <span>Tags ({{ post.tag_count() }})</span>
                 <i class="fa fa-chevron-down"></i>
             </summary>
             <div class="expander-content">
@@ -74,10 +114,16 @@
                             <button>Add</button>
                         </div>
                         <ul class="compact-tags">
-                            {% for tag in post.tags()? %}
+                            {% for (i, tag) in post.tags.iter().flat_map(FormField::current) %}
                             {% let tag_name = tag.primary_name() %}
-                            <li>
-                                <button class="remove-tag" data-pseudo-content="×"></button>
+                            <li class="{{ tag.class() }}">
+                                <input type="hidden" name="tags[current][{{ i }}][names][0]" value="{{ tag_name }}">
+                                <input type="hidden" name="tags[current][{{ i }}][category]" value="{{ tag.category }}">
+                                <input type="hidden" name="tags[current][{{ i }}][usages]" value="{{ tag.usages }}">
+
+                                <button class="remove-tag" data-pseudo-content="×"
+                                    onclick="if (this.form) { this.closest('li').remove(); return false; }"
+                                    name="operation" value="remove-tag-{{ i }}"></button>
                                 <a class="tag-{{ tag.category }}" href="tag/{{ tag_name }}">
                                     <i class="fa fa-tag"></i>
                                 </a>
@@ -94,8 +140,16 @@
         {% endif %}
         {% if ctx.has_privilege(Action::PoolEditPost) %}
         <details class="expander" open>
+            {% for (i, pool) in post.pools.iter().flat_map(FormField::original) %}
+            <input type="hidden" name="pools[original][{{ i }}][id]" value="{{ pool.id }}">
+            <input type="hidden" name="pools[original][{{ i }}][names][0]" value="{{ pool.primary_name() }}">
+            <input type="hidden" name="pools[original][{{ i }}][category]" value="{{ pool.category }}">
+            <input type="hidden" name="pools[original][{{ i }}][description]" value="">
+            <input type="hidden" name="pools[original][{{ i }}][post_count]" value="{{ pool.post_count }}">
+            {% endfor %}
+
             <summary>
-                <span>Pools ({{ post.pools()?.len() }})</span>
+                <span>Pools ({{ post.pool_count() }})</span>
                 <i class="fa fa-chevron-down"></i>
             </summary>
             <div class="expander-content">
@@ -106,10 +160,19 @@
                             <button>Add</button>
                         </div>
                         <ul class="compact-pools">
-                            {% for pool in post.pools()? %}
+                            {% for (i, pool) in post.pools.iter().flat_map(FormField::current) %}
                             {% let pool_name = pool.primary_name() %}
-                            <li>
-                                <button class="remove-pool" data-pseudo-content="×"></button>
+                            <input type="hidden" name="pools[current][{{ i }}][id]" value="{{ pool.id }}">
+                            <input type="hidden" name="pools[current][{{ i }}][names][0]" value="{{ pool_name }}">
+                            <input type="hidden" name="pools[current][{{ i }}][category]" value="{{ pool.category }}">
+                            <input type="hidden" name="pools[current][{{ i }}][description]" value="">
+                            <input type="hidden" name="pools[current][{{ i }}][post_count]"
+                                value="{{ pool.post_count }}">
+
+                            <li class="{{ pool.class() }}">
+                                <button class="remove-pool" data-pseudo-content="×"
+                                    onclick="if (this.form) { this.closest('li').remove(); return false; }"
+                                    name="operation" value="remove-pool-{{ i }}"></button>
                                 <a class="pool-{{ pool.category }}" href="pool/{{ pool_name }}">
                                     <i class="fa fa-list-ul"></i>
                                 </a>
@@ -127,7 +190,7 @@
         {% if ctx.has_privilege(Action::PostEditNote) %}
         <details class="expander">
             <summary>
-                <span>Notes ({{ post.notes()?.len() }})</span>
+                <span>Notes ({{ post.note_count() }})</span>
                 <i class="fa fa-chevron-down"></i>
             </summary>
             <div class="expander-content">

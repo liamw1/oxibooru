@@ -21,6 +21,10 @@ pub mod user_token;
 // but I don't see this as a guarantee anywhere in the documentation. If this changes, I'll need
 // to reimplement a similar function with this behavior.
 
+pub trait JoinExt {
+    fn joined(&self) -> String;
+}
+
 #[derive(Debug, Error)]
 #[error("{0} field not requested")]
 pub struct NotRequested(&'static str);

@@ -1,21 +1,28 @@
 use crate::api::error::ApiResult;
+use crate::api::post::PostNeighbors;
 use crate::app::AppState;
 use crate::config::Action;
 use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostSafety, PostType, Rating};
 use crate::resource::NotRequested;
+use crate::resource::field::Mask;
 use crate::resource::pool_category::PoolCategoryInfo;
-use crate::resource::post::{Field, IdJoinExt, Mode, PostInfo};
+use crate::resource::post::{Field, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
+use crate::web::form::FormField;
+use crate::web::form::post::EditPathForm;
 use crate::web::pager::{Page, Pager};
-use crate::web::{Html, Tab, WebError, WebResult};
+use crate::web::{Html, Message, Tab, WebError, WebResult};
 use crate::{api, time, unit, web};
 use askama::Template;
+use axum::response::{IntoResponse, Response};
 use axum::{Router, routing};
+use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
 use server_macros::Deref;
 use std::num::NonZeroU64;
 use strum::{Display, IntoEnumIterator};
+use tokio::try_join;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -29,6 +36,53 @@ const SKETCHY_DEFAULT: bool = true;
 const UNSAFE_DEFAULT: bool = false;
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(42).unwrap();
+
+const VIEW_FIELDS: [Field; 24] = [
+    Field::Id,
+    Field::User,
+    Field::FileSize,
+    Field::CanvasWidth,
+    Field::CanvasHeight,
+    Field::Safety,
+    Field::Type,
+    Field::MimeType,
+    Field::ChecksumMd5,
+    Field::Flags,
+    Field::Source,
+    Field::Description,
+    Field::CreationTime,
+    Field::ContentUrl,
+    Field::ThumbnailUrl,
+    Field::Tags,
+    Field::Comments,
+    Field::Relations,
+    Field::Pools,
+    Field::Notes,
+    Field::Score,
+    Field::OwnScore,
+    Field::OwnFavorite,
+    Field::FavoriteCount,
+];
+
+async fn get_posts_and_categories(
+    ctx: Ctx,
+    path: Path<i64>,
+    params: &MainParams,
+    fields: Mask<Field>,
+) -> ApiResult<(PostInfo, PostNeighbors, Vec<TagCategoryInfo>, Vec<PoolCategoryInfo>)> {
+    let query = params.search_text.clone();
+    let resource_params = Query(ResourceParams { query, fields });
+
+    let post_future = api::post::get(ctx.clone(), path, resource_params.clone());
+    let neighbors_future = api::post::get_neighbors(ctx.clone(), path, resource_params);
+    let tag_categories_future = web::tag_category::get_categories(ctx.clone());
+    let pool_categories_future = web::pool_category::get_categories(ctx.clone());
+    try_join!(post_future, neighbors_future, tag_categories_future, pool_categories_future).map(
+        |(Json(post), Json(neighbors), tag_categories, pool_categories)| {
+            (post, neighbors, tag_categories, pool_categories)
+        },
+    )
+}
 
 #[derive(Clone, Copy, Display, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -185,56 +239,25 @@ struct PostPage<T> {
     tag_categories: Vec<TagCategoryInfo>,
     pool_categories: Vec<PoolCategoryInfo>,
     params: MainParams,
+    message: Message,
 }
 
 impl PostPage<PostInfo> {
     async fn new(ctx: Ctx, path: Path<i64>, Query(params): Query<MainParams>, mode: Mode) -> ApiResult<Self> {
-        let fields = [
-            Field::Id,
-            Field::User,
-            Field::FileSize,
-            Field::CanvasWidth,
-            Field::CanvasHeight,
-            Field::Safety,
-            Field::Type,
-            Field::MimeType,
-            Field::ChecksumMd5,
-            Field::Flags,
-            Field::Source,
-            Field::Description,
-            Field::CreationTime,
-            Field::ContentUrl,
-            Field::ThumbnailUrl,
-            Field::Tags,
-            Field::Comments,
-            Field::Relations,
-            Field::Pools,
-            Field::Notes,
-            Field::Score,
-            Field::OwnScore,
-            Field::OwnFavorite,
-            Field::FavoriteCount,
-        ]
-        .into();
-
-        let query = params.search_text.clone();
-        let resource_params = Query(ResourceParams { query, fields });
-        let Json(post) = api::post::get(ctx.clone(), path, resource_params.clone()).await?;
-        let Json(neighbors) = api::post::get_neighbors(ctx.clone(), path, resource_params).await?;
-        let tag_categories = web::tag_category::get_categories(ctx.clone()).await?;
-        let pool_categories = web::pool_category::get_categories(ctx.clone()).await?;
-
-        Ok(Self {
-            ctx,
-            active_tab: Tab::Post,
-            mode,
-            post,
-            prev_post: neighbors.prev,
-            next_post: neighbors.next,
-            tag_categories,
-            pool_categories,
-            params,
-        })
+        get_posts_and_categories(ctx.clone(), path, &params, VIEW_FIELDS.into())
+            .await
+            .map(|(post, neighbors, tag_categories, pool_categories)| Self {
+                ctx,
+                active_tab: Tab::Post,
+                mode,
+                post,
+                prev_post: neighbors.prev,
+                next_post: neighbors.next,
+                tag_categories,
+                pool_categories,
+                params,
+                message: Message::None,
+            })
     }
 }
 
@@ -255,9 +278,28 @@ async fn view(ctx: Ctx, path: Path<i64>, params: Query<MainParams>) -> WebResult
 
 #[derive(Deref, Template)]
 #[template(path = "pages/post/edit.html")]
-struct EditTemplate(PostPage<PostInfo>);
+struct EditTemplate(PostPage<EditPathForm>);
 
-async fn edit(ctx: Ctx, path: Path<i64>, params: Query<MainParams>) -> WebResult<Html> {
-    let page_info = PostPage::new(ctx, path, params, Mode::Edit).await?;
-    EditTemplate(page_info).render().map(Html).map_err(WebError::from)
+async fn edit(ctx: Ctx, path: Path<i64>, Query(params): Query<MainParams>, jar: CookieJar) -> WebResult<Response> {
+    let fields = Mask::from(VIEW_FIELDS) | Field::Version;
+    let (post, neighbors, tag_categories, pool_categories) =
+        get_posts_and_categories(ctx.clone(), path, &params, fields).await?;
+
+    let (jar, message) = web::redirect_message(jar);
+    let page_info = PostPage {
+        ctx,
+        active_tab: Tab::Post,
+        mode: Mode::Edit,
+        post: EditPathForm::initialize(post)?,
+        prev_post: neighbors.prev,
+        next_post: neighbors.next,
+        tag_categories,
+        pool_categories,
+        params,
+        message,
+    };
+    EditTemplate(page_info)
+        .render()
+        .map(|html| (jar, Html(html)).into_response())
+        .map_err(WebError::from)
 }

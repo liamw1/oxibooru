@@ -28,6 +28,7 @@
 }
 
 /* Fit modes */
+/* TODO: Apply upscale-small-posts setting */
 
 .post-container.fit-original :is(img, video) {
     width: auto;

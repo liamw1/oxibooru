@@ -4,7 +4,7 @@
 <div class="pool-merge">
     <form method="post" action="pool/{{ pool.primary_name()? }}/merge" hx-post="pool/{{ pool.primary_name()? }}/merge"
         hx-target="#pool" hx-swap="show:none">
-        <input type="hidden" name="version" value="{{ pool.version()? }}">
+        <input type="hidden" name="version" value="{{ pool.version }}">
 
         <ul class="input">
             <li class="target">

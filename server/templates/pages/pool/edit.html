@@ -4,7 +4,7 @@
 <div class="content-wrapper pool-edit">
     <form method="post" action="pool/{{ pool.primary_name()? }}/edit" hx-post="pool/{{ pool.primary_name()? }}/edit"
         hx-target="#pool" hx-swap="show:none">
-        <input type="hidden" name="version" value="{{ pool.version()? }}">
+        <input type="hidden" name="version" value="{{ pool.version }}">
 
         <ul class="input">
             <li class="names">
@@ -16,7 +16,7 @@
                 {% endif %}
             </li>
             <li class="category">
-                {% if let Some(category) = pool.category %}
+                {% if let Some(category) = pool.category && ctx.has_privilege(Action::PoolEditCategory) %}
                 <input type="hidden" name="category[original]" value="{{ category.original() }}">
 
                 <label>Category</label>
@@ -30,7 +30,7 @@
                 {% endif %}
             </li>
             <li class="description">
-                {% if let Some(description) = pool.description %}
+                {% if let Some(description) = pool.description && ctx.has_privilege(Action::PoolEditDescription) %}
                 <input type="hidden" name="description[original]" value="{{ description.original() }}">
 
                 <label>Description</label>
@@ -41,8 +41,8 @@
                 {% if let Some(post_ids) = pool.post_ids && ctx.has_privilege(Action::PoolEditName) %}
                 <input type="hidden" name="post-ids[original]" value="{{ post_ids.original() }}">
 
-                <label>Names</label>
-                <input type="text" name="post-ids[current]" value="{{ post_ids.current() }}" required>
+                <label>Posts</label>
+                <input type="text" name="post-ids[current]" value="{{ post_ids.current() }}" pattern="^[0-9 ]*$">
                 {% endif %}
             </li>
         </ul>

@@ -4,7 +4,7 @@
 <div class="pool-delete">
     <form method="post" action="pool/{{ pool.primary_name()? }}/delete" hx-post="pool/{{ pool.primary_name()? }}/delete"
         hx-target="#pool" hx-swap="show:none">
-        <input type="hidden" name="version" value="{{ pool.version()? }}">
+        <input type="hidden" name="version" value="{{ pool.version }}">
         <input type="hidden" name="post-count" value="{{ pool.post_count()? }}"> {# Needed for re-render #}
 
         <p>

@@ -1,46 +1,117 @@
 use crate::api::error::ApiResult;
 use crate::api::pool::PoolUpdateBody;
 use crate::extract::DeleteBody;
-use crate::resource::NotRequested;
-use crate::resource::pool::PoolInfo;
-use crate::resource::post::IdJoinExt;
-use crate::string::{self, LargeString, SmallString};
+use crate::resource::pool::{MicroPool, PoolInfo};
+use crate::resource::{JoinExt, NotRequested};
+use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::web::PathForm;
-use crate::web::form::FormField;
+use crate::web::form::{self, FormField};
 use serde::Deserialize;
+use std::collections::BTreeMap;
 use std::convert::Infallible;
+use std::ops::{Deref, DerefMut};
+use strum::Display;
+
+#[derive(Clone, Copy, Display)]
+pub enum ElementClass {
+    Added,
+    Duplicate,
+    #[strum(serialize = "")]
+    None,
+}
+
+#[derive(Deserialize)]
+#[serde(from = "MicroPool")]
+pub struct Element {
+    pool: MicroPool,
+    class: ElementClass,
+}
+
+impl Element {
+    pub fn class(&self) -> ElementClass {
+        self.class
+    }
+}
+
+impl Deref for Element {
+    type Target = MicroPool;
+    fn deref(&self) -> &Self::Target {
+        &self.pool
+    }
+}
+
+impl From<MicroPool> for Element {
+    fn from(pool: MicroPool) -> Self {
+        Self {
+            pool,
+            class: ElementClass::None,
+        }
+    }
+}
+
+impl PartialEq for Element {
+    fn eq(&self, other: &Self) -> bool {
+        self.primary_name() == other.primary_name()
+    }
+}
+
+impl Eq for Element {}
+
+#[derive(Default, PartialEq, Eq, Deserialize)]
+pub struct ElementMap(BTreeMap<i64, Element>);
+
+impl From<Vec<MicroPool>> for ElementMap {
+    fn from(value: Vec<MicroPool>) -> Self {
+        Self((0..).zip(value.into_iter().map(Element::from)).collect())
+    }
+}
+
+impl Deref for ElementMap {
+    type Target = BTreeMap<i64, Element>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ElementMap {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<'a> IntoIterator for &'a ElementMap {
+    type Item = (&'a i64, &'a Element);
+    type IntoIter = std::collections::btree_map::Iter<'a, i64, Element>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}
 
 pub type EditPathForm = PathForm<SmallString, EditForm>;
 
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct EditForm {
+    pub version: DateTime,
     pub names: Option<FormField<String>>,
     pub category: Option<FormField<SmallString>>,
     pub description: Option<FormField<LargeString>>,
     pub post_ids: Option<FormField<String>>,
-    version: DateTime,
 }
 
 impl EditPathForm {
-    pub fn initialize(info: PoolInfo) -> Result<Self, NotRequested> {
-        let path = info.primary_name().map(SmallString::from)?;
-        let version = info.version()?;
-        let names = info.joined_names().map(FormField::from).ok();
-        let post_ids = info.posts().as_deref().map(IdJoinExt::joined).map(FormField::from).ok();
+    pub fn initialize(pool: PoolInfo) -> Result<Self, NotRequested> {
+        let path = pool.primary_name().map(SmallString::from)?;
+        let post_ids = pool.posts().as_deref().map(JoinExt::joined).map(FormField::from).ok();
         let form = EditForm {
-            names,
-            category: info.category.map(FormField::from),
-            description: info.description.map(FormField::from),
+            version: pool.version()?,
+            names: pool.names.as_ref().map(JoinExt::joined).map(FormField::from),
+            category: pool.category.map(FormField::from),
+            description: pool.description.map(FormField::from),
             post_ids,
-            version,
         };
         Ok(Self { path, form })
-    }
-
-    pub fn version(&self) -> Result<DateTime, Infallible> {
-        Ok(self.version)
     }
 
     pub fn primary_name(&self) -> Result<&str, Infallible> {
@@ -56,16 +127,12 @@ impl EditPathForm {
                 .names
                 .as_ref()
                 .and_then(FormField::form_value_deref)
-                .map(string::split_into_list),
+                .map(form::split_into_names),
             posts: self
                 .post_ids
                 .as_ref()
                 .and_then(FormField::form_value_deref)
-                .map(|joined_ids| {
-                    string::split_unescaped_whitespace(joined_ids)
-                        .map(|id| id.parse())
-                        .collect::<Result<_, _>>()
-                })
+                .map(form::split_into_ids)
                 .transpose()?,
         })
     }
@@ -90,10 +157,6 @@ impl MergePathForm {
         Ok(Self { path, form })
     }
 
-    pub fn version(&self) -> Result<DateTime, Infallible> {
-        Ok(self.version)
-    }
-
     pub fn primary_name(&self) -> Result<&str, Infallible> {
         Ok(&self.path)
     }
@@ -104,7 +167,7 @@ pub type DeletePathForm = PathForm<SmallString, DeleteForm>;
 #[derive(Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct DeleteForm {
-    version: DateTime,
+    pub version: DateTime,
     post_count: i64,
 }
 
@@ -116,10 +179,6 @@ impl DeletePathForm {
             post_count: info.post_count()?,
         };
         Ok(Self { path, form })
-    }
-
-    pub fn version(&self) -> Result<DateTime, Infallible> {
-        Ok(self.version)
     }
 
     pub fn primary_name(&self) -> Result<&str, Infallible> {

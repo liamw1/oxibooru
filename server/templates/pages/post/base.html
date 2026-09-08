@@ -58,36 +58,8 @@
             {% include "partials/post/content.html" %}
         </div>
 
-        {% if !post.description()?.is_empty() %}
-        <div class="description-container">
-            <details open>
-                <summary>Description</summary>
-                {# TODO: Markdown #}
-                <p>{{ post.description()? }}</p>
-            </details>
-        </div>
-        {% endif %}
-
-        <div class="after-mobile-controls">
-            {% if ctx.has_privilege(Action::CommentCreate) %}
-            <h2>Add comment</h2>
-            {# TODO: comment-form-container #}
-            {% endif %}
-
-            {% if ctx.has_privilege(Action::CommentList) %}
-            <div class="comments-container">
-                <div class="comments">
-                    <ul>
-                        {% for comment in post.comments()?.iter().rev() %}
-                        <li>
-                            {% include "partials/comment.html" %}
-                        </li>
-                        {% endfor %}
-                    </ul>
-                </div>
-            </div>
-            {% endif %}
-        </div>
+        {% block description %}{% endblock %}
+        {% block comments %}{% endblock %}
     </div>
 </div>
 {% endblock %}
