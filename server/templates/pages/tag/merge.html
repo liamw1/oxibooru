@@ -4,7 +4,7 @@
 <div class="tag-merge">
     <form method="post" action="tag/{{ tag.primary_name()? }}/merge" hx-post="tag/{{ tag.primary_name()? }}/merge"
         hx-target="#tag" hx-swap="show:none">
-        <input type="hidden" name="version" value="{{ tag.version()? }}">
+        <input type="hidden" name="version" value="{{ tag.version }}">
 
         <ul class="input">
             <li class="target">

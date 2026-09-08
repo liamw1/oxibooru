@@ -94,7 +94,9 @@ impl FromSql<SmallInt, Pg> for PostType {
     }
 }
 
-#[derive(Debug, Display, Copy, Clone, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, ToSchema)]
+#[derive(
+    Debug, Display, Copy, Clone, PartialEq, Eq, FromRepr, AsExpression, FromSqlRow, Serialize, Deserialize, ToSchema,
+)]
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
 pub enum MimeType {
@@ -216,6 +218,7 @@ impl FromSql<SmallInt, Pg> for MimeType {
     Display,
     Copy,
     Clone,
+    Default,
     PartialEq,
     Eq,
     PartialOrd,
@@ -234,6 +237,7 @@ impl FromSql<SmallInt, Pg> for MimeType {
 #[diesel(sql_type = SmallInt)]
 #[repr(i16)]
 pub enum PostSafety {
+    #[default]
     Safe,
     Sketchy,
     Unsafe,
@@ -253,7 +257,9 @@ impl FromSql<SmallInt, Pg> for PostSafety {
     }
 }
 
-#[derive(Clone, Copy, Display, EnumCount, EnumIter, EnumString, FromRepr, IntoStaticStr, Deserialize, ToSchema)]
+#[derive(
+    Clone, Copy, Display, PartialEq, Eq, EnumCount, EnumIter, EnumString, FromRepr, IntoStaticStr, Deserialize, ToSchema,
+)]
 #[serde(rename_all = "lowercase")]
 #[strum(serialize_all = "lowercase")]
 pub enum PostFlag {
@@ -290,6 +296,10 @@ impl PostFlags {
 
     pub fn contains(self, flag: PostFlag) -> bool {
         (self & flag).0 != 0
+    }
+
+    pub fn to_vec(self) -> Vec<PostFlag> {
+        PostFlag::iter().filter(|&flag| self.contains(flag)).collect()
     }
 }
 

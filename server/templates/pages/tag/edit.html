@@ -4,7 +4,7 @@
 <div class="content-wrapper tag-edit">
     <form method="post" action="tag/{{ tag.primary_name()? }}/edit" hx-post="tag/{{ tag.primary_name()? }}/edit"
         hx-target="#tag" hx-swap="show:none">
-        <input type="hidden" name="version" value="{{ tag.version()? }}">
+        <input type="hidden" name="version" value="{{ tag.version }}">
 
         {# Invisible button at top of form for when user presses Enter #}
         <button class="visually-hidden" name="operation" value="auto" tabindex="-1" aria-hidden="true"></button>
@@ -19,7 +19,7 @@
                 {% endif %}
             </li>
             <li class="category">
-                {% if let Some(category) = tag.category %}
+                {% if let Some(category) = tag.category && ctx.has_privilege(Action::TagEditCategory) %}
                 <input type="hidden" name="category[original]" value="{{ category.original() }}">
 
                 <label>Category</label>
@@ -118,7 +118,7 @@
                 {% endif %}
             </li>
             <li class="description">
-                {% if let Some(description) = tag.description %}
+                {% if let Some(description) = tag.description && ctx.has_privilege(Action::TagEditDescription) %}
                 <input type="hidden" name="description[original]" value="{{ description.original() }}">
 
                 <label>Description</label>
@@ -138,7 +138,7 @@
             {% endmatch %}
         </div>
         <div class="buttons">
-            <button class="save" name="operation" value="save">Save changes</button>
+            <button name="operation" value="save">Save changes</button>
         </div>
         {% endif %}
     </form>
