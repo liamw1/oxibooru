@@ -8,7 +8,7 @@ use diesel::{
     BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, JoinOnDsl, PgConnection, QueryDsl, QueryResult,
     RunQueryDsl, SelectableHelper,
 };
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use server_macros::resource;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
@@ -16,7 +16,7 @@ use strum::EnumString;
 use utoipa::ToSchema;
 
 /// A tag resource stripped down to `names`, `category` and `usages` fields.
-#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroTag {
     /// A list of tag names (aliases). Tagging a post with any name will automatically assign the first name from this list.
