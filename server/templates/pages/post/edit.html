@@ -97,7 +97,7 @@
         {% if ctx.has_privilege(Action::PostEditTag) %}
         <details class="expander" open>
             {% for (i, tag) in post.tags.iter().flat_map(FormField::original) %}
-            <input type="hidden" name="tags[original][{{ i }}][names][0]" value="{{ tag.primary_name() }}">
+            <input type="hidden" name="tags[original][{{ i }}][primary_name]" value="{{ tag.primary_name() }}">
             <input type="hidden" name="tags[original][{{ i }}][category]" value="{{ tag.category }}">
             <input type="hidden" name="tags[original][{{ i }}][usages]" value="{{ tag.usages }}">
             {% endfor %}
@@ -117,7 +117,7 @@
                             {% for (i, tag) in post.tags.iter().flat_map(FormField::current) %}
                             {% let tag_name = tag.primary_name() %}
                             <li class="{{ tag.class() }}">
-                                <input type="hidden" name="tags[current][{{ i }}][names][0]" value="{{ tag_name }}">
+                                <input type="hidden" name="tags[current][{{ i }}][primary_name]" value="{{ tag_name }}">
                                 <input type="hidden" name="tags[current][{{ i }}][category]" value="{{ tag.category }}">
                                 <input type="hidden" name="tags[current][{{ i }}][usages]" value="{{ tag.usages }}">
 
@@ -141,10 +141,8 @@
         {% if ctx.has_privilege(Action::PoolEditPost) %}
         <details class="expander" open>
             {% for (i, pool) in post.pools.iter().flat_map(FormField::original) %}
-            <input type="hidden" name="pools[original][{{ i }}][id]" value="{{ pool.id }}">
-            <input type="hidden" name="pools[original][{{ i }}][names][0]" value="{{ pool.primary_name() }}">
+            <input type="hidden" name="pools[original][{{ i }}][primary_name]" value="{{ pool.primary_name() }}">
             <input type="hidden" name="pools[original][{{ i }}][category]" value="{{ pool.category }}">
-            <input type="hidden" name="pools[original][{{ i }}][description]" value="">
             <input type="hidden" name="pools[original][{{ i }}][post_count]" value="{{ pool.post_count }}">
             {% endfor %}
 
@@ -162,10 +160,8 @@
                         <ul class="compact-pools">
                             {% for (i, pool) in post.pools.iter().flat_map(FormField::current) %}
                             {% let pool_name = pool.primary_name() %}
-                            <input type="hidden" name="pools[current][{{ i }}][id]" value="{{ pool.id }}">
-                            <input type="hidden" name="pools[current][{{ i }}][names][0]" value="{{ pool_name }}">
+                            <input type="hidden" name="pools[current][{{ i }}][primary_name]" value="{{ pool_name }}">
                             <input type="hidden" name="pools[current][{{ i }}][category]" value="{{ pool.category }}">
-                            <input type="hidden" name="pools[current][{{ i }}][description]" value="">
                             <input type="hidden" name="pools[current][{{ i }}][post_count]"
                                 value="{{ pool.post_count }}">
 
