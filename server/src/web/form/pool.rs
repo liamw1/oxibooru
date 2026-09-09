@@ -13,46 +13,52 @@ use std::convert::Infallible;
 use std::ops::{Deref, DerefMut};
 use strum::Display;
 
-#[derive(Clone, Copy, Display)]
+#[derive(Clone, Copy, Default, Display)]
 pub enum ElementClass {
     Added,
     Duplicate,
+    #[default]
     #[strum(serialize = "")]
     None,
 }
 
 #[derive(Deserialize)]
-#[serde(from = "MicroPool")]
 pub struct Element {
-    pool: MicroPool,
-    class: ElementClass,
+    primary_name: SmallString,
+    pub category: SmallString,
+    pub post_count: i64,
+    #[serde(skip)]
+    pub class: ElementClass,
 }
 
 impl Element {
+    pub fn from_micropool(pool: MicroPool, class: ElementClass) -> Self {
+        Self {
+            primary_name: pool.names[0].clone(),
+            category: pool.category,
+            post_count: pool.post_count,
+            class,
+        }
+    }
+
+    pub fn primary_name(&self) -> &str {
+        &self.primary_name
+    }
+
     pub fn class(&self) -> ElementClass {
         self.class
     }
 }
 
-impl Deref for Element {
-    type Target = MicroPool;
-    fn deref(&self) -> &Self::Target {
-        &self.pool
-    }
-}
-
 impl From<MicroPool> for Element {
     fn from(pool: MicroPool) -> Self {
-        Self {
-            pool,
-            class: ElementClass::None,
-        }
+        Self::from_micropool(pool, ElementClass::None)
     }
 }
 
 impl PartialEq for Element {
     fn eq(&self, other: &Self) -> bool {
-        self.primary_name() == other.primary_name()
+        self.primary_name == other.primary_name
     }
 }
 

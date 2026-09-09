@@ -67,48 +67,54 @@ impl<'de> Deserialize<'de> for Operation {
     }
 }
 
-#[derive(Clone, Copy, Display)]
+#[derive(Clone, Copy, Default, Display)]
 pub enum ElementClass {
     New,
     Added,
     Duplicate,
     Implication,
+    #[default]
     #[strum(serialize = "")]
     None,
 }
 
 #[derive(Deserialize)]
-#[serde(from = "MicroTag")]
 pub struct Element {
-    tag: MicroTag,
-    class: ElementClass,
+    primary_name: SmallString,
+    pub category: SmallString,
+    pub usages: i64,
+    #[serde(skip)]
+    pub class: ElementClass,
 }
 
 impl Element {
+    pub fn from_microtag(tag: MicroTag, class: ElementClass) -> Self {
+        Self {
+            primary_name: tag.names[0].clone(),
+            category: tag.category,
+            usages: tag.usages,
+            class,
+        }
+    }
+
+    pub fn primary_name(&self) -> &str {
+        &self.primary_name
+    }
+
     pub fn class(&self) -> ElementClass {
         self.class
     }
 }
 
-impl Deref for Element {
-    type Target = MicroTag;
-    fn deref(&self) -> &Self::Target {
-        &self.tag
-    }
-}
-
 impl From<MicroTag> for Element {
     fn from(tag: MicroTag) -> Self {
-        Self {
-            tag,
-            class: ElementClass::None,
-        }
+        Self::from_microtag(tag, ElementClass::None)
     }
 }
 
 impl PartialEq for Element {
     fn eq(&self, other: &Self) -> bool {
-        self.primary_name() == other.primary_name()
+        self.primary_name == other.primary_name
     }
 }
 
@@ -119,10 +125,7 @@ pub struct ElementMap(BTreeMap<i64, Element>);
 
 impl ElementMap {
     pub fn names(&self) -> Vec<SmallString> {
-        self.0
-            .values()
-            .map(|tag| SmallString::from(tag.primary_name()))
-            .collect()
+        self.values().map(|element| element.primary_name.clone()).collect()
     }
 
     async fn append_tags(&mut self, Ctx(ctx, connection_pool): &Ctx, joined_names: &str) -> WebResult<()> {
@@ -165,7 +168,7 @@ impl ElementMap {
             }
         }
 
-        let existing_tags: HashSet<_> = self.values().map(|tag| tag.primary_name()).collect();
+        let existing_tags: HashSet<_> = self.values().map(Element::primary_name).collect();
         let new_elements: Vec<_> = micro_tags
             .into_iter()
             .map(|tag| {
@@ -174,7 +177,7 @@ impl ElementMap {
                 } else {
                     ElementClass::Implication
                 };
-                Element { tag, class }
+                Element::from_microtag(tag, class)
             })
             .chain(new_names.into_iter().map(|name| {
                 let tag = MicroTag {
@@ -182,10 +185,7 @@ impl ElementMap {
                     category: default_category.clone(),
                     usages: 0,
                 };
-                Element {
-                    tag,
-                    class: ElementClass::New,
-                }
+                Element::from_microtag(tag, ElementClass::New)
             }))
             .filter(|tag| !existing_tags.contains(tag.primary_name()))
             .collect();
