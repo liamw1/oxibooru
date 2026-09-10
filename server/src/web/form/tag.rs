@@ -10,7 +10,7 @@ use crate::time::DateTime;
 use crate::update::tag::FetchMode;
 use crate::web::form::{self, FormField};
 use crate::web::{Message, PathForm, WebResult};
-use crate::{string, update};
+use crate::{string, update, web};
 use diesel::{QueryDsl, RunQueryDsl};
 use serde::{Deserialize, Deserializer};
 use std::collections::{BTreeMap, HashSet};
@@ -99,6 +99,14 @@ impl Element {
 
     pub fn primary_name(&self) -> &str {
         &self.primary_name
+    }
+
+    pub fn url(&self) -> String {
+        web::tag_url(&self.primary_name)
+    }
+
+    pub fn search_url(&self) -> String {
+        web::tag_search_url(&self.primary_name)
     }
 
     pub fn class(&self) -> ElementClass {
@@ -260,6 +268,10 @@ impl EditPathForm {
         Ok(&self.path)
     }
 
+    pub fn url(&self) -> Result<String, Infallible> {
+        Ok(web::tag_url(&self.path))
+    }
+
     pub fn to_body(&self) -> TagUpdateBody {
         TagUpdateBody {
             version: self.version,
@@ -360,6 +372,10 @@ impl MergePathForm {
     pub fn primary_name(&self) -> Result<&str, Infallible> {
         Ok(&self.path)
     }
+
+    pub fn url(&self) -> Result<String, Infallible> {
+        Ok(web::tag_url(&self.path))
+    }
 }
 
 pub type DeletePathForm = PathForm<SmallString, DeleteForm>;
@@ -383,6 +399,14 @@ impl DeletePathForm {
 
     pub fn primary_name(&self) -> Result<&str, Infallible> {
         Ok(&self.path)
+    }
+
+    pub fn url(&self) -> Result<String, Infallible> {
+        Ok(web::tag_url(&self.path))
+    }
+
+    pub fn search_url(&self) -> Result<String, Infallible> {
+        Ok(web::tag_search_url(&self.path))
     }
 
     pub fn usages(&self) -> Result<i64, Infallible> {

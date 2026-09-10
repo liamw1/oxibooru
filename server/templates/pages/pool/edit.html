@@ -2,8 +2,8 @@
 
 {% block content %}
 <div class="content-wrapper pool-edit">
-    <form method="post" action="pool/{{ pool.primary_name()? }}/edit" hx-post="pool/{{ pool.primary_name()? }}/edit"
-        hx-target="#pool" hx-swap="show:none">
+    <form method="post" action="{{ pool.url()? }}/edit" hx-post="{{ pool.url()? }}/edit" hx-target="#pool"
+        hx-swap="show:none">
         <input type="hidden" name="version" value="{{ pool.version }}">
 
         <ul class="input">

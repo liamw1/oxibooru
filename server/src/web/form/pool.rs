@@ -5,8 +5,8 @@ use crate::resource::pool::{MicroPool, PoolInfo};
 use crate::resource::{JoinExt, NotRequested};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::web::PathForm;
 use crate::web::form::{self, FormField};
+use crate::web::{self, PathForm};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::convert::Infallible;
@@ -43,6 +43,14 @@ impl Element {
 
     pub fn primary_name(&self) -> &str {
         &self.primary_name
+    }
+
+    pub fn url(&self) -> String {
+        web::pool_url(&self.primary_name)
+    }
+
+    pub fn search_url(&self) -> String {
+        web::pool_search_url(&self.primary_name)
     }
 
     pub fn class(&self) -> ElementClass {
@@ -124,6 +132,10 @@ impl EditPathForm {
         Ok(&self.path)
     }
 
+    pub fn url(&self) -> Result<String, Infallible> {
+        Ok(web::pool_url(&self.path))
+    }
+
     pub fn to_body(&self) -> ApiResult<PoolUpdateBody> {
         Ok(PoolUpdateBody {
             version: self.version,
@@ -166,6 +178,10 @@ impl MergePathForm {
     pub fn primary_name(&self) -> Result<&str, Infallible> {
         Ok(&self.path)
     }
+
+    pub fn url(&self) -> Result<String, Infallible> {
+        Ok(web::pool_url(&self.path))
+    }
 }
 
 pub type DeletePathForm = PathForm<SmallString, DeleteForm>;
@@ -189,6 +205,14 @@ impl DeletePathForm {
 
     pub fn primary_name(&self) -> Result<&str, Infallible> {
         Ok(&self.path)
+    }
+
+    pub fn url(&self) -> Result<String, Infallible> {
+        Ok(web::pool_url(&self.path))
+    }
+
+    pub fn search_url(&self) -> Result<String, Infallible> {
+        Ok(web::pool_search_url(&self.path))
     }
 
     pub fn post_count(&self) -> Result<i64, Infallible> {

@@ -15,16 +15,16 @@
     <nav class="buttons">
         <ul>
             <li data-name="summary" {% if active_pool_tab==PoolTab::Summary %} class="active" {% endif %}>
-                <a href="pool/{{ pool.primary_name()? }}">Summary</a>
+                <a href="{{ pool.url()? }}">Summary</a>
             </li>
             <li data-name="edit" {% if active_pool_tab==PoolTab::Edit %} class="active" {% endif %}>
-                <a href="pool/{{ pool.primary_name()? }}/edit">Edit</a>
+                <a href="{{ pool.url()? }}/edit">Edit</a>
             </li>
             <li data-name="merge" {% if active_pool_tab==PoolTab::Merge %} class="active" {% endif %}>
-                <a href="pool/{{ pool.primary_name()? }}/merge">Merge with…</a>
+                <a href="{{ pool.url()? }}/merge">Merge with…</a>
             </li>
             <li data-name="delete" {% if active_pool_tab==PoolTab::Delete %} class="active" {% endif %}>
-                <a href="pool/{{ pool.primary_name()? }}/delete">Delete</a>
+                <a href="{{ pool.url()? }}/delete">Delete</a>
             </li>
         </ul>
     </nav>

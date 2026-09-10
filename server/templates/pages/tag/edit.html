@@ -2,8 +2,8 @@
 
 {% block content %}
 <div class="content-wrapper tag-edit">
-    <form method="post" action="tag/{{ tag.primary_name()? }}/edit" hx-post="tag/{{ tag.primary_name()? }}/edit"
-        hx-target="#tag" hx-swap="show:none">
+    <form method="post" action="{{ tag.url()? }}/edit" hx-post="{{ tag.url()? }}/edit" hx-target="#tag"
+        hx-swap="show:none">
         <input type="hidden" name="version" value="{{ tag.version }}">
 
         {# Invisible button at top of form for when user presses Enter #}
@@ -63,10 +63,10 @@
                             <button class="remove-tag" data-pseudo-content="×"
                                 onclick="if (this.form) { this.closest('li').remove(); return false; }" name="operation"
                                 value="remove-implication-{{ i }}"></button>
-                            <a class="tag-{{ implication.category }}" href="tag/{{ implication_name }}">
+                            <a class="tag-{{ implication.category }}" href="{{ implication.url() }}">
                                 <i class="fa fa-tag"></i>
                             </a>
-                            <a class="tag-{{ implication.category }}" href="posts?search-text={{ implication_name }}"
+                            <a class="tag-{{ implication.category }}" href="{{ implication.search_url() }}"
                                 hx-target="body">{{ implication_name }}</a>
                             <span class="tag-usages" data-pseudo-content="{{ implication.usages }}"></span>
                         </li>
@@ -105,10 +105,10 @@
                             <button class="remove-tag" data-pseudo-content="×"
                                 onclick="if (this.form) { this.closest('li').remove(); return false; }" name="operation"
                                 value="remove-suggestion-{{ i }}"></button>
-                            <a class="tag-{{ suggestion.category }}" href="tag/{{ suggestion_name }}">
+                            <a class="tag-{{ suggestion.category }}" href="{{ suggestion.url() }}">
                                 <i class="fa fa-tag"></i>
                             </a>
-                            <a class="tag-{{ suggestion.category }}" href="posts?search-text={{ suggestion_name }}"
+                            <a class="tag-{{ suggestion.category }}" href="{{ suggestion.search_url() }}"
                                 hx-target="body">{{ suggestion_name }}</a>
                             <span class="tag-usages" data-pseudo-content="{{ suggestion.usages }}"></span>
                         </li>

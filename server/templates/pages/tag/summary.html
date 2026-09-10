@@ -16,7 +16,7 @@
                 (none)
                 {% else %}
                 {% for alias in names.iter().skip(1) %}
-                <li><a class="tag-{{ tag.category()? }}" href="tag/{{ alias }}">{{ alias }}</a></li>
+                <li><a class="tag-{{ tag.category()? }}" href="{{ tag.url()? }}">{{ alias }}</a></li>
                 {% endfor %}
                 {% endif %}
             </ul>
@@ -32,7 +32,7 @@
                 {% for implication in tag.implications()? %}
                 <li>
                     {% let name = implication.primary_name() %}
-                    <a class="tag-{{ implication.category }}" href="tag/{{ name }}">{{ name }}</a>
+                    <a class="tag-{{ implication.category }}" href="{{ implication.url() }}">{{ name }}</a>
                 </li>
                 {% endfor %}
                 {% endif %}
@@ -49,7 +49,7 @@
                 {% for suggestion in tag.suggestions()? %}
                 <li>
                     {% let name = suggestion.primary_name() %}
-                    <a class="tag-{{ suggestion.category }}" href="tag/{{ name }}">{{ name }}</a>
+                    <a class="tag-{{ suggestion.category }}" href="{{ suggestion.url() }}">{{ name }}</a>
                 </li>
                 {% endfor %}
                 {% endif %}
@@ -67,8 +67,8 @@
         {{ tag.description()? }}
         {% endif %}
         <p>
-            This tag has <a href="posts?search-text={{ tag.primary_name()? }}">{{ tag.usages()? }} usage{% if
-                tag.usages()? != 1 %}s{% endif %}</a>.
+            This tag has <a href="{{ tag.search_url()? }}">{{ tag.usages()? }} usage{% if tag.usages()? != 1 %}s{% endif
+                %}</a>.
         </p>
     </section>
 </div>
