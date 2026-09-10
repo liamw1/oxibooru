@@ -2,8 +2,8 @@
 
 {% block content %}
 <div class="tag-merge">
-    <form method="post" action="tag/{{ tag.primary_name()? }}/merge" hx-post="tag/{{ tag.primary_name()? }}/merge"
-        hx-target="#tag" hx-swap="show:none">
+    <form method="post" action="{{ tag.url()? }}/merge" hx-post="{{ tag.url()? }}/merge" hx-target="#tag"
+        hx-swap="show:none">
         <input type="hidden" name="version" value="{{ tag.version }}">
 
         <ul class="input">

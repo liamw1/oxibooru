@@ -2,13 +2,13 @@
 
 {% block content %}
 <div class="tag-delete">
-    <form method="post" action="tag/{{ tag.primary_name()? }}/delete" hx-post="tag/{{ tag.primary_name()? }}/delete"
-        hx-target="#tag" hx-swap="show:none">
+    <form method="post" action="{{ tag.url()? }}/delete" hx-post="{{ tag.url()? }}/delete" hx-target="#tag"
+        hx-swap="show:none">
         <input type="hidden" name="version" value="{{ tag.version }}">
         <input type="hidden" name="usages" value="{{ tag.usages()? }}"> {# Needed for re-render #}
 
         <p>
-            This tag has <a href="posts?search-text={{ tag.primary_name()? }}">{{ tag.usages()? }} usage{% if
+            This tag has <a href="{{ tag.search_url()? }}">{{ tag.usages()? }} usage{% if
                 tag.usages()? != 1 %}s{% endif %}</a>.
         </p>
 

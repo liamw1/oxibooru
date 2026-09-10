@@ -1,9 +1,10 @@
 use crate::model::tag::{Tag, TagImplication, TagName, TagSuggestion};
+use crate::resource::NotRequested;
 use crate::resource::field::{Batcher, Mask};
-use crate::resource::{self, NotRequested};
 use crate::schema::{tag, tag_category, tag_implication, tag_name, tag_statistics, tag_suggestion};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
+use crate::{resource, web};
 use diesel::{
     BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, JoinOnDsl, PgConnection, QueryDsl, QueryResult,
     RunQueryDsl, SelectableHelper,
@@ -31,6 +32,14 @@ pub struct MicroTag {
 impl MicroTag {
     pub fn primary_name(&self) -> &str {
         &self.names[0]
+    }
+
+    pub fn url(&self) -> String {
+        web::tag_url(self.primary_name())
+    }
+
+    pub fn search_url(&self) -> String {
+        web::tag_search_url(self.primary_name())
     }
 }
 
@@ -82,6 +91,14 @@ pub struct TagInfo {
 impl TagInfo {
     pub fn primary_name(&self) -> Result<&str, NotRequested> {
         self.names().map(|names| names[0].as_ref())
+    }
+
+    pub fn url(&self) -> Result<String, NotRequested> {
+        self.primary_name().map(web::tag_url)
+    }
+
+    pub fn search_url(&self) -> Result<String, NotRequested> {
+        self.primary_name().map(web::tag_search_url)
     }
 
     pub fn new(conn: &mut PgConnection, tag: Tag, fields: Mask<Field>) -> QueryResult<Self> {

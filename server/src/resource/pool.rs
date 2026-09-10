@@ -1,12 +1,13 @@
 use crate::app::Context;
 use crate::content::hash::PostHash;
 use crate::model::pool::{Pool, PoolName, PoolPost};
+use crate::resource::NotRequested;
 use crate::resource::field::{Batcher, Mask};
 use crate::resource::post::MicroPost;
-use crate::resource::{self, NotRequested};
 use crate::schema::{pool, pool_category, pool_name, pool_post, pool_statistics};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
+use crate::{resource, web};
 use diesel::dsl::{exists, not};
 use diesel::{
     BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
@@ -38,6 +39,14 @@ pub struct MicroPool {
 impl MicroPool {
     pub fn primary_name(&self) -> &str {
         &self.names[0]
+    }
+
+    pub fn url(&self) -> String {
+        web::pool_url(self.primary_name())
+    }
+
+    pub fn search_url(&self) -> String {
+        web::pool_search_url(self.primary_name())
     }
 }
 
@@ -89,6 +98,14 @@ pub struct PoolInfo {
 impl PoolInfo {
     pub fn primary_name(&self) -> Result<&str, NotRequested> {
         self.names().map(|names| names[0].as_ref())
+    }
+
+    pub fn url(&self) -> Result<String, NotRequested> {
+        self.primary_name().map(web::pool_url)
+    }
+
+    pub fn search_url(&self) -> Result<String, NotRequested> {
+        self.primary_name().map(web::pool_search_url)
     }
 
     pub fn new(conn: &mut PgConnection, ctx: &Context, pool: Pool, fields: Mask<Field>) -> QueryResult<Self> {

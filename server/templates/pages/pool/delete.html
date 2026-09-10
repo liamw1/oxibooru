@@ -2,13 +2,13 @@
 
 {% block content %}
 <div class="pool-delete">
-    <form method="post" action="pool/{{ pool.primary_name()? }}/delete" hx-post="pool/{{ pool.primary_name()? }}/delete"
-        hx-target="#pool" hx-swap="show:none">
+    <form method="post" action="{{ pool.url()? }}/delete" hx-post="{{ pool.url()? }}/delete" hx-target="#pool"
+        hx-swap="show:none">
         <input type="hidden" name="version" value="{{ pool.version }}">
         <input type="hidden" name="post-count" value="{{ pool.post_count()? }}"> {# Needed for re-render #}
 
         <p>
-            This pool has <a href="posts?search-text=pool:{{ pool.primary_name()? }}">{{ pool.post_count()? }} post{% if
+            This pool has <a href="{{ pool.search_url()? }}">{{ pool.post_count()? }} post{% if
                 pool.post_count()? != 1 %}s{% endif %}</a>.
         </p>
 

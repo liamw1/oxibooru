@@ -1,8 +1,8 @@
-use crate::api;
 use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::extract::{Form, HxRequest, Path};
 use crate::resource::NotRequested;
+use crate::{api, string};
 use axum::Router;
 use axum::extract::{FromRequest, FromRequestParts, Request};
 use axum::http::StatusCode;
@@ -10,6 +10,7 @@ use axum::http::header::{CACHE_CONTROL, VARY};
 use axum::response::{Html as AxumHtml, IntoResponse, Redirect, Response};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
+use percent_encoding::NON_ALPHANUMERIC;
 use serde::Serialize;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
@@ -34,13 +35,35 @@ mod upload;
 mod user;
 
 pub fn post_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
-    let base = format!("/post/{post_id}");
+    let base = format!("post/{post_id}");
     url(&base, params)
 }
 
 pub fn post_edit_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
-    let base = format!("/post/{post_id}/edit");
+    let base = format!("post/{post_id}/edit");
     url(&base, params)
+}
+
+pub fn pool_url(name: &str) -> String {
+    let encoded_name = percent_encoding::utf8_percent_encode(name, NON_ALPHANUMERIC);
+    format!("pool/{encoded_name}")
+}
+
+pub fn pool_search_url(name: &str) -> String {
+    let escaped_name = string::escape(name);
+    let encoded_name = percent_encoding::utf8_percent_encode(&escaped_name, NON_ALPHANUMERIC);
+    format!("posts?search-text=pool:{encoded_name}")
+}
+
+pub fn tag_url(name: &str) -> String {
+    let encoded_name = percent_encoding::utf8_percent_encode(name, NON_ALPHANUMERIC);
+    format!("tag/{encoded_name}")
+}
+
+pub fn tag_search_url(name: &str) -> String {
+    let escaped_name = string::escape(name);
+    let encoded_name = percent_encoding::utf8_percent_encode(&escaped_name, NON_ALPHANUMERIC);
+    format!("posts?search-text={encoded_name}")
 }
 
 pub fn routes(state: AppState) -> Router {

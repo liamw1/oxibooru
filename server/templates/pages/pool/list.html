@@ -53,13 +53,13 @@
                     <td class="names">
                         <ul>
                             {% for name in pool.names()? %}
-                            <li><a class="pool-{{ pool.category()? }}" href="pool/{{ pool.primary_name()? }}">{{ name
+                            <li><a class="pool-{{ pool.category()? }}" href="{{ pool.url()? }}">{{ name
                                     }}</a></li>
                             {% endfor %}
                         </ul>
                     </td>
                     <td class="post-count">
-                        <a href="posts?search-text={{ pool.primary_name()? }}">{{ pool.post_count()? }}</a>
+                        <a href="{{ pool.search_url()? }}">{{ pool.post_count()? }}</a>
                     </td>
                     <td class="creation-time">
                         {% let creation_time = pool.creation_time()? %}
