@@ -16,7 +16,7 @@
                 (none)
                 {% else %}
                 {% for alias in names.iter().skip(1) %}
-                <li><a class="pool-{{ pool.category()? }}" href="pool/{{ pool.primary_name()? }}">{{ alias }}</a></li>
+                <li><a class="pool-{{ pool.category()? }}" href="{{ pool.url()? }}">{{ alias }}</a></li>
                 {% endfor %}
                 {% endif %}
             </ul>
@@ -33,8 +33,8 @@
         {{ pool.description()? }}
         {% endif %}
         <p>
-            This pool has <a href="posts?search-text=pool:{{ pool.primary_name()? }}">{{ pool.post_count()? }} post{% if
-                pool.post_count()? != 1 %}s{% endif %}</a>.
+            This pool has <a href="{{ pool.search_url()? }}">{{ pool.post_count()? }} post{% if pool.post_count()? != 1
+                %}s{% endif %}</a>.
         </p>
     </section>
 </div>

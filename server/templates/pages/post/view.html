@@ -115,10 +115,10 @@
             {% for tag in post.tags()? %}
             <li>
                 {% if ctx.has_privilege(Action::TagView) %}
-                <a class="tag-{{ tag.category }}" href="tag/{{ tag.primary_name() }}"><i class="fa fa-tag"></i></a>
+                <a class="tag-{{ tag.category }}" href="{{ tag.url() }}"><i class="fa fa-tag"></i></a>
                 {% endif %}
                 {% if ctx.has_privilege(Action::PostList) %}
-                <a class="tag-{{ tag.category }}" href="posts?search-text={{ tag.primary_name() }}">{{
+                <a class="tag-{{ tag.category }}" href="{{ tag.search_url() }}">{{
                     tag.primary_name() }}</a>
                 {% else %}
                 <span class="tag-{{ tag.category }}">{{ tag.primary_name() }}</span>

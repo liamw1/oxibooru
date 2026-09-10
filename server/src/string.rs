@@ -321,3 +321,14 @@ pub fn scan(text: &str) -> impl Iterator<Item = (usize, ParsedChar)> {
         (i, parsed_char)
     })
 }
+
+pub fn escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c.is_whitespace() || matches!(c, '"' | '\'' | '*' | ',' | '.' | '\\' | ':') {
+            out.push('\\');
+        }
+        out.push(c);
+    }
+    out
+}
