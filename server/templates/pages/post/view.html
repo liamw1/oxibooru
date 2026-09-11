@@ -9,8 +9,8 @@
 {% endif %}
 {% endmacro %}
 
-{% block sidebar %}
-<div class="readonly-sidebar">
+{% block sidebar_content %}
+<div id="sidebar-content" class="readonly-sidebar">
     <article class="details">
         <section class="download">
             <a href="{{ post.content_url()? }}" download>

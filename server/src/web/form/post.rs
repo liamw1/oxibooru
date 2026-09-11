@@ -8,10 +8,17 @@ use crate::time::DateTime;
 use crate::web::form::pool::ElementMap as PoolElementMap;
 use crate::web::form::tag::ElementMap as TagElementMap;
 use crate::web::form::{self, FormField};
-use crate::web::{self, PathForm};
+use crate::web::{self, Message, PathForm};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::Infallible;
 use std::str::FromStr;
+
+#[derive(PartialEq, Eq)]
+pub enum Focus {
+    Tag,
+    Pool,
+    None,
+}
 
 #[derive(Debug, Clone, Copy)]
 pub enum Operation {
@@ -179,5 +186,19 @@ impl EditPathForm {
             thumbnail_token: None,
             thumbnail_url: None,
         })
+    }
+
+    pub fn with_tag_removed(mut self, index: i64) -> (Self, Focus, Message) {
+        if let Some(tags) = &mut self.tags {
+            tags.current.remove(&index);
+        }
+        (self, Focus::None, Message::None)
+    }
+
+    pub fn with_pool_removed(mut self, index: i64) -> (Self, Focus, Message) {
+        if let Some(pools) = &mut self.pools {
+            pools.current.remove(&index);
+        }
+        (self, Focus::None, Message::None)
     }
 }

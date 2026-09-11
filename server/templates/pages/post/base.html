@@ -29,27 +29,9 @@
                     <span class="vim-nav-hint">Next post &gt;</span>
                 </a>
             </article>
-
-            {% if ctx.can_edit_posts() || ctx.has_privilege(Action::PostDelete) ||
-            ctx.has_privilege(Action::PostFeature) %}
-            <article class="edit-post">
-                {% match mode %}
-                {% when Mode::View %}
-                <a href="{{ post.url(Mode::Edit, params)? }}">
-                    <i class="fa fa-pencil"></i>
-                    <span class="vim-nav-hint">Edit posts</span>
-                </a>
-                {% when Mode::Edit %}
-                <a href="{{ post.url(Mode::View, params)? }}">
-                    <i class="fa fa-reply"></i>
-                    <span class="vim-nav-hint">Back to view mode</span>
-                </a>
-                {% endmatch %}
-            </article>
-            {% endif %}
+            {% include "partials/post/edit_toggle.html"%}
         </nav>
-
-        {% block sidebar %}{% endblock %}
+        {% block sidebar_content %}{% endblock %}
     </aside>
 
     <div class="content">
