@@ -1,8 +1,9 @@
 {% extends "pages/post/base.html" %}
 
-{% block sidebar %}
-<div class="edit-sidebar">
-    <form>
+{% block sidebar_content %}
+<div id="sidebar-content" class="edit-sidebar">
+    <form method="post" action="{{ post.url(Mode::Edit, params)? }}" hx-post="{{ post.url(Mode::Edit, params)? }}"
+        hx-target="#sidebar">
         <input type="hidden" name="version" value="{{ post.version }}">
 
         {# Extra fields needed for re-render #}
@@ -112,7 +113,7 @@
                     <div class="tag-input">
                         <div class="main-control">
                             <input type="text" name="new-tags" placeholder="type to add…">
-                            <button>Add</button>
+                            <button name="operation" value="add-tag">Add</button>
                         </div>
                         <ul class="compact-tags">
                             {% for (i, tag) in post.tags.iter().flat_map(FormField::current) %}
@@ -155,7 +156,7 @@
                     <div class="pool-input">
                         <div class="main-control">
                             <input type="text" name="new-pools" placeholder="type to add…">
-                            <button>Add</button>
+                            <button name="operation" value="add-pool">Add</button>
                         </div>
                         <ul class="compact-pools">
                             {% for (i, pool) in post.pools.iter().flat_map(FormField::current) %}
