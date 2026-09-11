@@ -2,7 +2,7 @@ use crate::api::error::ApiResult;
 use crate::api::post::PostNeighbors;
 use crate::app::AppState;
 use crate::config::Action;
-use crate::extract::{Ctx, Json, Offset, Path, Query, ResourceParams};
+use crate::extract::{Ctx, HxRequest, Json, Offset, Path, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostSafety, PostType, Rating};
 use crate::resource::NotRequested;
 use crate::resource::field::Mask;
@@ -10,7 +10,7 @@ use crate::resource::pool_category::PoolCategoryInfo;
 use crate::resource::post::{Field, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::web::form::FormField;
-use crate::web::form::post::EditPathForm;
+use crate::web::form::post::{EditPathForm, Focus, Operation};
 use crate::web::pager::{Page, Pager};
 use crate::web::{Html, Message, Tab, WebError, WebResult};
 use crate::{api, time, unit, web};
@@ -28,7 +28,7 @@ pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/posts", routing::get(gallery))
         .route("/post/{post_id}", routing::get(view))
-        .route("/post/{post_id}/edit", routing::get(edit))
+        .route("/post/{post_id}/edit", routing::get(edit).post(edit_submit))
 }
 
 const SAFE_DEFAULT: bool = true;
@@ -63,6 +63,12 @@ const VIEW_FIELDS: [Field; 24] = [
     Field::OwnFavorite,
     Field::FavoriteCount,
 ];
+
+async fn get_post(ctx: Ctx, path: Path<i64>, params: &MainParams, fields: Mask<Field>) -> ApiResult<PostInfo> {
+    let query = params.search_text.clone();
+    let resource_params = Query(ResourceParams { query, fields });
+    api::post::get(ctx, path, resource_params).await.map(|Json(post)| post)
+}
 
 async fn get_posts_and_categories(
     ctx: Ctx,
@@ -243,7 +249,7 @@ struct PostPage<T> {
 }
 
 impl PostPage<PostInfo> {
-    async fn new(ctx: Ctx, path: Path<i64>, Query(params): Query<MainParams>, mode: Mode) -> ApiResult<Self> {
+    async fn new(ctx: Ctx, path: Path<i64>, params: MainParams, mode: Mode) -> ApiResult<Self> {
         get_posts_and_categories(ctx.clone(), path, &params, VIEW_FIELDS.into())
             .await
             .map(|(post, neighbors, tag_categories, pool_categories)| Self {
@@ -261,6 +267,15 @@ impl PostPage<PostInfo> {
     }
 }
 
+#[derive(Template)]
+#[template(path = "partials/post/edit_toggle.html")]
+struct EditToggleTemplate<'a> {
+    ctx: &'a Ctx,
+    post: &'a PostInfo,
+    params: &'a MainParams,
+    mode: Mode,
+}
+
 #[derive(Deref, Template)]
 #[template(path = "pages/post/view.html")]
 struct ViewTemplate(PostPage<PostInfo>);
@@ -271,35 +286,119 @@ impl ViewTemplate {
     }
 }
 
-async fn view(ctx: Ctx, path: Path<i64>, params: Query<MainParams>) -> WebResult<Html> {
-    let page_info = PostPage::new(ctx, path, params, Mode::View).await?;
-    ViewTemplate(page_info).render().map(Html).map_err(WebError::from)
+#[derive(Template)]
+#[template(path = "pages/post/view.html", block = "sidebar_content")]
+struct ViewFragmentTemplate {
+    ctx: Ctx,
+    post: PostInfo,
+    params: MainParams,
+}
+
+impl ViewFragmentTemplate {
+    fn full_content_url(&self) -> Result<String, NotRequested> {
+        self.post.content_url().map(|url| self.ctx.full_url(url))
+    }
+}
+
+async fn view(ctx: Ctx, path: Path<i64>, Query(params): Query<MainParams>, hx: HxRequest) -> WebResult<Html> {
+    if hx.full_page() {
+        let page_info = PostPage::new(ctx, path, params, Mode::View).await?;
+        ViewTemplate(page_info).render()
+    } else {
+        let post = get_post(ctx.clone(), path, &params, VIEW_FIELDS.into()).await?;
+
+        let edit_toggle = EditToggleTemplate {
+            ctx: &ctx,
+            post: &post,
+            params: &params,
+            mode: Mode::View,
+        }
+        .render()?;
+        ViewFragmentTemplate { ctx, post, params }
+            .render()
+            .map(|sidebar| sidebar + &edit_toggle)
+    }
+    .map(Html)
+    .map_err(WebError::from)
 }
 
 #[derive(Deref, Template)]
 #[template(path = "pages/post/edit.html")]
 struct EditTemplate(PostPage<EditPathForm>);
 
-async fn edit(ctx: Ctx, path: Path<i64>, Query(params): Query<MainParams>, jar: CookieJar) -> WebResult<Response> {
-    let fields = Mask::from(VIEW_FIELDS) | Field::Version;
-    let (post, neighbors, tag_categories, pool_categories) =
-        get_posts_and_categories(ctx.clone(), path, &params, fields).await?;
+#[derive(Template)]
+#[template(path = "pages/post/edit.html", block = "sidebar_content")]
+struct EditFragmentTemplate {
+    ctx: Ctx,
+    post: EditPathForm,
+    params: MainParams,
+    message: Message,
+}
 
+async fn edit(
+    ctx: Ctx,
+    path: Path<i64>,
+    Query(params): Query<MainParams>,
+    hx: HxRequest,
+    jar: CookieJar,
+) -> WebResult<Response> {
+    let fields = Mask::from(VIEW_FIELDS) | Field::Version;
     let (jar, message) = web::redirect_message(jar);
-    let page_info = PostPage {
-        ctx,
-        active_tab: Tab::Post,
-        mode: Mode::Edit,
-        post: EditPathForm::initialize(post)?,
-        prev_post: neighbors.prev,
-        next_post: neighbors.next,
-        tag_categories,
-        pool_categories,
-        params,
-        message,
-    };
-    EditTemplate(page_info)
+    if hx.full_page() {
+        let (post, neighbors, tag_categories, pool_categories) =
+            get_posts_and_categories(ctx.clone(), path, &params, fields).await?;
+        let page_info = PostPage {
+            ctx,
+            active_tab: Tab::Post,
+            mode: Mode::Edit,
+            post: EditPathForm::initialize(post)?,
+            prev_post: neighbors.prev,
+            next_post: neighbors.next,
+            tag_categories,
+            pool_categories,
+            params,
+            message,
+        };
+        EditTemplate(page_info).render()
+    } else {
+        let post = get_post(ctx.clone(), path, &params, fields).await?;
+
+        let edit_toggle = EditToggleTemplate {
+            ctx: &ctx,
+            post: &post,
+            params: &params,
+            mode: Mode::Edit,
+        }
+        .render()?;
+        EditFragmentTemplate {
+            ctx,
+            post: EditPathForm::initialize(post)?,
+            params,
+            message,
+        }
         .render()
-        .map(|html| (jar, Html(html)).into_response())
-        .map_err(WebError::from)
+        .map(|sidebar| sidebar + &edit_toggle)
+    }
+    .map(|html| (jar, Html(html)).into_response())
+    .map_err(WebError::from)
+}
+
+async fn edit_submit(
+    ctx: Ctx,
+    Query(params): Query<MainParams>,
+    hx: HxRequest,
+    jar: CookieJar,
+    form: EditPathForm,
+) -> WebResult<Response> {
+    let (updated_form, focus, message) = match form.operation {
+        Operation::Init => unreachable!(),
+        Operation::Auto => todo!(),
+        Operation::AddTag => todo!(),
+        Operation::AddPool => todo!(),
+        Operation::RemoveTag(index) => form.with_tag_removed(index),
+        Operation::RemovePool(index) => form.with_pool_removed(index),
+        Operation::Save => todo!(),
+    };
+
+    todo!()
 }
