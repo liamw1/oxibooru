@@ -119,7 +119,7 @@ struct Html(String);
 
 impl IntoResponse for Html {
     fn into_response(self) -> Response {
-        ([(CACHE_CONTROL, "no-store"), (VARY, "HX-Request")], AxumHtml(self.0)).into_response()
+        ([(CACHE_CONTROL, "private, max-age=300"), (VARY, "HX-Request-Type")], AxumHtml(self.0)).into_response()
     }
 }
 
