@@ -313,18 +313,16 @@ pub struct PagedResponse<T> {
 /// Extracts the HTMX request headers relevant to the full-page vs fragment decision.
 #[derive(Clone)]
 pub struct HxRequest {
-    htmx: bool,
-    history_restore: bool,
-    target: Option<String>,
+    request_type: Option<HxRequestType>,
 }
 
 impl HxRequest {
     pub fn htmx(&self) -> bool {
-        self.htmx
+        self.request_type.is_some()
     }
 
     pub fn full_page(&self) -> bool {
-        !self.htmx || self.history_restore || self.target.is_none()
+        self.request_type != Some(HxRequestType::Partial)
     }
 }
 
@@ -335,22 +333,20 @@ where
     type Rejection = Infallible;
 
     fn from_request_parts(parts: &mut Parts, _state: &S) -> impl Future<Output = Result<Self, Self::Rejection>> {
-        let flag = |name: &str| {
-            parts
-                .headers
-                .get(name)
-                .is_some_and(|val| val.as_bytes().eq_ignore_ascii_case(b"true"))
-        };
-        let target = parts
+        let request_type = parts
             .headers
-            .get("hx-target")
-            .and_then(|val| val.to_str().ok())
-            .map(str::to_owned);
-
-        std::future::ready(Ok(HxRequest {
-            htmx: flag("hx-request"),
-            history_restore: flag("hx-history-restore-request"),
-            target,
-        }))
+            .get("hx-request-type")
+            .and_then(|val| match val.as_bytes() {
+                b"full" => Some(HxRequestType::Full),
+                b"partial" => Some(HxRequestType::Partial),
+                _ => None,
+            });
+        std::future::ready(Ok(HxRequest { request_type }))
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HxRequestType {
+    Full,
+    Partial,
 }
