@@ -1,7 +1,7 @@
 {% if ctx.can_edit_posts() || ctx.has_privilege(Action::PostDelete) ||
 ctx.has_privilege(Action::PostFeature) %}
-<article id="edit-toggle" hx-target="#sidebar-content" {% if oob %} hx-swap-oob="true" {% endif %} hx-swap="outerHTML"
-    hx-replace-url="true">
+<article id="edit-toggle" hx-target:inherited="#sidebar-content" {% if oob %} hx-swap-oob="true" {% endif %}
+    hx-swap:inherited="outerHTML" hx-replace-url:inherited="true">
     {% match mode %}
     {% when Mode::View %}
     <a href="{{ post.url(Mode::Edit, params)? }}">
