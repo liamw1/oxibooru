@@ -68,6 +68,7 @@ impl<'de> Deserialize<'de> for Operation {
 }
 
 #[derive(Clone, Copy, Default, Display)]
+#[strum(serialize_all = "lowercase")]
 pub enum ElementClass {
     New,
     Added,

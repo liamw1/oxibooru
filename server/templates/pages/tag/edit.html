@@ -60,14 +60,14 @@
                             <input type="hidden" name="implications[current][{{ i }}][usages]"
                                 value="{{ implication.usages }}">
 
-                            <button class="remove-tag" data-pseudo-content="×"
-                                onclick="if (this.form) { this.closest('li').remove(); return false; }" name="operation"
-                                value="remove-implication-{{ i }}"></button>
+                            <button class="remove-tag" data-pseudo-content="×" name="operation"
+                                value="remove-implication-{{ i }}"
+                                onclick="if (this.form) { this.closest('li').remove(); return false; }"></button>
                             <a class="tag-{{ implication.category }}" href="{{ implication.url() }}">
                                 <i class="fa fa-tag"></i>
                             </a>
-                            <a class="tag-{{ implication.category }}" href="{{ implication.search_url() }}"
-                                hx-target="body">{{ implication_name }}</a>
+                            <a class="tag-{{ implication.category }}" href="{{ implication.search_url() }}">{{
+                                implication_name }}</a>
                             <span class="tag-usages" data-pseudo-content="{{ implication.usages }}"></span>
                         </li>
                         {% endfor %}
@@ -102,14 +102,14 @@
                             <input type="hidden" name="suggestions[current][{{ i }}][usages]"
                                 value="{{ suggestion.usages }}">
 
-                            <button class="remove-tag" data-pseudo-content="×"
-                                onclick="if (this.form) { this.closest('li').remove(); return false; }" name="operation"
-                                value="remove-suggestion-{{ i }}"></button>
+                            <button class="remove-tag" data-pseudo-content="×" name="operation"
+                                value="remove-suggestion-{{ i }}"
+                                onclick="if (this.form) { this.closest('li').remove(); return false; }"></button>
                             <a class="tag-{{ suggestion.category }}" href="{{ suggestion.url() }}">
                                 <i class="fa fa-tag"></i>
                             </a>
-                            <a class="tag-{{ suggestion.category }}" href="{{ suggestion.search_url() }}"
-                                hx-target="body">{{ suggestion_name }}</a>
+                            <a class="tag-{{ suggestion.category }}" href="{{ suggestion.search_url() }}">{{
+                                suggestion_name }}</a>
                             <span class="tag-usages" data-pseudo-content="{{ suggestion.usages }}"></span>
                         </li>
                         {% endfor %}

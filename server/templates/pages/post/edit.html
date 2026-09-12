@@ -123,9 +123,9 @@
                                 <input type="hidden" name="tags[current][{{ i }}][category]" value="{{ tag.category }}">
                                 <input type="hidden" name="tags[current][{{ i }}][usages]" value="{{ tag.usages }}">
 
-                                <button class="remove-tag" data-pseudo-content="×"
-                                    onclick="if (this.form) { this.closest('li').remove(); return false; }"
-                                    name="operation" value="remove-tag-{{ i }}"></button>
+                                <button class="remove-tag" data-pseudo-content="×" name="operation"
+                                    value="remove-tag-{{ i }}"
+                                    onclick="if (this.form) { this.closest('li').remove(); return false; }"></button>
                                 <a class="tag-{{ tag.category }}" href="{{ tag.url() }}">
                                     <i class="fa fa-tag"></i>
                                 </a>
@@ -167,9 +167,9 @@
                                 value="{{ pool.post_count }}">
 
                             <li class="{{ pool.class() }}">
-                                <button class="remove-pool" data-pseudo-content="×"
-                                    onclick="if (this.form) { this.closest('li').remove(); return false; }"
-                                    name="operation" value="remove-pool-{{ i }}"></button>
+                                <button class="remove-pool" data-pseudo-content="×" name="operation"
+                                    value="remove-pool-{{ i }}"
+                                    onclick="if (this.form) { this.closest('li').remove(); return false; }"></button>
                                 <a class="pool-{{ pool.category }}" href="{{ pool.url() }}">
                                     <i class="fa fa-list-ul"></i>
                                 </a>
