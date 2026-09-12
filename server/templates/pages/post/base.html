@@ -16,15 +16,15 @@
     <aside class="sidebar">
         <nav class="buttons">
             <article class="previous-post">
-                <a rel="prev" {% if let Some(post)=prev_post %} href="{{ post.url(*mode, params)? }}" {% else %}
-                    class="inactive" hx-boost="false" {% endif %}>
+                <a {% if let Some(post)=prev_post %} href="{{ post.url(*mode, params)? }}" {% else %} class="inactive"
+                    hx-boost="false" {% endif %}>
                     <i class="fa fa-chevron-left"></i>
                     <span class="vim-nav-hint">&lt; Previous post</span>
                 </a>
             </article>
             <article class="next-post">
-                <a rel="next" {% if let Some(post)=next_post %} href="{{ post.url(*mode, params)? }}" {% else %}
-                    class="inactive" hx-boost="false" {% endif %}>
+                <a {% if let Some(post)=next_post %} href="{{ post.url(*mode, params)? }}" {% else %} class="inactive"
+                    hx-boost="false" {% endif %}>
                     <i class="fa fa-chevron-right"></i>
                     <span class="vim-nav-hint">Next post &gt;</span>
                 </a>
