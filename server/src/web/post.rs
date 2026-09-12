@@ -274,6 +274,7 @@ struct EditToggleTemplate<'a> {
     post: &'a PostInfo,
     params: &'a MainParams,
     mode: Mode,
+    oob: bool,
 }
 
 #[derive(Deref, Template)]
@@ -312,6 +313,7 @@ async fn view(ctx: Ctx, path: Path<i64>, Query(params): Query<MainParams>, hx: H
             post: &post,
             params: &params,
             mode: Mode::View,
+            oob: true,
         }
         .render()?;
         ViewFragmentTemplate { ctx, post, params }
@@ -368,6 +370,7 @@ async fn edit(
             post: &post,
             params: &params,
             mode: Mode::Edit,
+            oob: true,
         }
         .render()?;
         EditFragmentTemplate {
