@@ -2,11 +2,12 @@ use crate::api::error::{ApiError, ApiResult};
 use crate::auth::Client;
 use crate::model::enums::{ResourceOperation, ResourceType};
 use crate::model::pool::Pool;
+use crate::model::pool_category::PoolCategory;
 use crate::model::snapshot::NewSnapshot;
 use crate::schema::{pool_category, pool_name, pool_post};
 use crate::snapshot;
 use crate::string::{LargeString, SmallString};
-use diesel::{ExpressionMethods, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
+use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use serde::Serialize;
 use serde_json::json;
 
@@ -54,6 +55,40 @@ pub fn creation_snapshot(
     pool_data: SnapshotData,
 ) -> ApiResult<()> {
     unary_snapshot(conn, client, pool_id, pool_data, ResourceOperation::Created)
+}
+
+pub fn new_name_snapshots(conn: &mut PgConnection, client: Client, new_names: Vec<SmallString>) -> ApiResult<usize> {
+    let default_category_name: SmallString = pool_category::table
+        .select(pool_category::name)
+        .filter(PoolCategory::is_default())
+        .first(conn)?;
+    let new_snapshots: Vec<NewSnapshot> = new_names
+        .into_iter()
+        .map(|name| SnapshotData {
+            description: LargeString::default(),
+            category: default_category_name.clone(),
+            names: vec![name],
+            posts: Vec::new(),
+        })
+        .map(|pool_data| {
+            let resource_id = pool_data
+                .names
+                .first()
+                .expect("A pool must have at least one name")
+                .clone();
+            serde_json::to_value(pool_data).map(|data| NewSnapshot {
+                user_id: client.id,
+                operation: ResourceOperation::Created,
+                resource_type: ResourceType::Pool,
+                resource_id,
+                data,
+            })
+        })
+        .collect::<Result<_, _>>()?;
+    new_snapshots
+        .insert_into(crate::schema::snapshot::table)
+        .execute(conn)
+        .map_err(ApiError::from)
 }
 
 pub fn merge_snapshot(

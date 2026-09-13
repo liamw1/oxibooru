@@ -8,7 +8,7 @@ use crate::schema::tag_category;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
 use crate::update::tag::FetchMode;
-use crate::web::form::{self, FormField};
+use crate::web::form::{self, ElementClass, FormField};
 use crate::web::{Message, PathForm, WebResult};
 use crate::{string, update, web};
 use diesel::{QueryDsl, RunQueryDsl};
@@ -17,8 +17,6 @@ use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
 use std::ops::{Deref, DerefMut};
 use std::str::FromStr;
-use std::sync::Arc;
-use strum::Display;
 
 #[derive(PartialEq, Eq)]
 pub enum Focus {
@@ -67,19 +65,8 @@ impl<'de> Deserialize<'de> for Operation {
     }
 }
 
-#[derive(Clone, Copy, Default, Display)]
-#[strum(serialize_all = "lowercase")]
-pub enum ElementClass {
-    New,
-    Added,
-    Duplicate,
-    Implication,
-    #[default]
-    #[strum(serialize = "")]
-    None,
-}
-
 #[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Element {
     primary_name: SmallString,
     pub category: SmallString,
@@ -137,66 +124,59 @@ impl ElementMap {
         self.values().map(|element| element.primary_name.clone()).collect()
     }
 
-    async fn append_tags(&mut self, Ctx(ctx, connection_pool): &Ctx, joined_names: &str) -> WebResult<()> {
+    pub async fn append_tags(&mut self, Ctx(ctx, connection_pool): Ctx, joined_names: &str) -> WebResult<()> {
         const FIELDS: [Field; 3] = [Field::Category, Field::Names, Field::Usages];
 
-        let added_names: HashSet<_> = string::split_unescaped_whitespace(joined_names).collect();
-        let tag_names = added_names.iter().copied().map(SmallString::from).collect();
-        let (tags, new_names, default_category) = connection_pool
-            .transaction({
-                let ctx = ctx.clone();
-                move |conn| {
-                    let default_category: SmallString = tag_category::table
-                        .select(tag_category::name)
-                        .filter(TagCategory::is_default())
-                        .first(conn)?;
-                    let (tag_ids, new_names) = update::tag::fetch_tags(conn, &ctx, tag_names, FetchMode::Deep)?;
-                    let tags = TagInfo::new_batch_from_ids(conn, &tag_ids, FIELDS.into())?;
-                    Ok::<_, ApiError>((tags, new_names, default_category))
-                }
+        let input_names: HashSet<_> = string::split_unescaped_whitespace(joined_names).collect();
+        let input_names_vec = input_names.iter().copied().map(SmallString::from).collect();
+        let (added_tags, new_names, default_category) = connection_pool
+            .transaction(move |conn| {
+                let default_category: SmallString = tag_category::table
+                    .select(tag_category::name)
+                    .filter(TagCategory::is_default())
+                    .first(conn)?;
+                let (tag_ids, new_names) = update::tag::fetch_tags(conn, &ctx, input_names_vec, FetchMode::Deep)?;
+                let tags = TagInfo::new_batch_from_ids(conn, &tag_ids, FIELDS.into())?;
+                Ok::<_, ApiError>((tags, new_names, default_category))
             })
             .await?;
 
-        let mut micro_tags = Vec::with_capacity(tags.len());
-        for tag in tags {
-            micro_tags.push(MicroTag {
-                names: tag.names().map(Vec::as_slice).map(Arc::from)?,
+        let mut added_elements = Vec::with_capacity(added_tags.len());
+        for tag in added_tags {
+            let class = if input_names.contains(tag.primary_name()?) {
+                ElementClass::Added
+            } else {
+                ElementClass::Implication
+            };
+            added_elements.push(Element {
+                primary_name: tag.primary_name().map(SmallString::from)?,
                 category: tag.category().cloned()?,
                 usages: tag.usages()?,
+                class,
             });
         }
 
-        let tag_names: HashSet<_> = micro_tags
+        let added_element_names: HashSet<_> = added_elements
             .iter()
-            .map(MicroTag::primary_name)
+            .map(Element::primary_name)
             .chain(new_names.iter().map(|name| name.deref()))
             .collect();
         for element in self.values_mut() {
-            if tag_names.contains(element.primary_name()) {
+            if added_element_names.contains(element.primary_name()) {
                 element.class = ElementClass::Duplicate;
             }
         }
 
-        let existing_tags: HashSet<_> = self.values().map(Element::primary_name).collect();
-        let new_elements: Vec<_> = micro_tags
+        let existing_tag_names: HashSet<_> = self.values().map(Element::primary_name).collect();
+        let new_elements: Vec<_> = added_elements
             .into_iter()
-            .map(|tag| {
-                let class = if added_names.contains(tag.primary_name()) {
-                    ElementClass::Added
-                } else {
-                    ElementClass::Implication
-                };
-                Element::from_microtag(tag, class)
-            })
-            .chain(new_names.into_iter().map(|name| {
-                let tag = MicroTag {
-                    names: Arc::from([name]),
-                    category: default_category.clone(),
-                    usages: 0,
-                };
-                Element::from_microtag(tag, ElementClass::New)
+            .chain(new_names.into_iter().map(|name| Element {
+                primary_name: name,
+                category: default_category.clone(),
+                usages: 0,
+                class: ElementClass::New,
             }))
-            .filter(|tag| !existing_tags.contains(tag.primary_name()))
+            .filter(|tag| !existing_tag_names.contains(tag.primary_name()))
             .collect();
 
         let lowest_current_index = self.first_key_value().map_or(0, |(lowest_index, _)| *lowest_index);
@@ -317,7 +297,7 @@ impl EditPathForm {
             self.implications
                 .get_or_insert_default()
                 .current
-                .append_tags(&ctx, &new_names)
+                .append_tags(ctx, &new_names)
                 .await?;
         }
         Ok((self, Focus::None, Message::None))
@@ -330,7 +310,7 @@ impl EditPathForm {
             self.suggestions
                 .get_or_insert_default()
                 .current
-                .append_tags(&ctx, &new_names)
+                .append_tags(ctx, &new_names)
                 .await?;
         }
         Ok((self, Focus::None, Message::None))

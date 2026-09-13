@@ -1,5 +1,6 @@
 use crate::api::error::ApiResult;
 use crate::api::post::PostUpdateBody;
+use crate::extract::Ctx;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType};
 use crate::resource::post::{Mode, PostInfo};
 use crate::resource::{JoinExt, NotRequested};
@@ -8,7 +9,7 @@ use crate::time::DateTime;
 use crate::web::form::pool::ElementMap as PoolElementMap;
 use crate::web::form::tag::ElementMap as TagElementMap;
 use crate::web::form::{self, FormField};
-use crate::web::{self, Message, PathForm};
+use crate::web::{self, Message, PathForm, WebResult};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::Infallible;
 use std::str::FromStr;
@@ -67,6 +68,7 @@ pub type EditPathForm = PathForm<i64, EditForm>;
 pub struct EditForm {
     pub operation: Operation,
     pub version: DateTime,
+    #[serde(default)]
     pub original_flags: Vec<PostFlag>,
     pub safety: Option<FormField<PostSafety>>,
     pub relations: Option<FormField<String>>,
@@ -75,6 +77,7 @@ pub struct EditForm {
     pub description: Option<FormField<LargeString>>,
     pub tags: Option<FormField<TagElementMap>>,
     pub pools: Option<FormField<PoolElementMap>>,
+    #[serde(rename = "type")]
     type_: PostType,
     mime_type: MimeType,
     canvas_width: i32,
@@ -179,6 +182,11 @@ impl EditPathForm {
                 .as_ref()
                 .and_then(FormField::form_value)
                 .map(TagElementMap::names),
+            pools: self
+                .pools
+                .as_ref()
+                .and_then(FormField::form_value)
+                .map(PoolElementMap::names),
             notes: None,
             flags: self.flags.as_ref().and_then(FormField::form_value_cloned),
             content_token: None,
@@ -200,5 +208,45 @@ impl EditPathForm {
             pools.current.remove(&index);
         }
         (self, Focus::None, Message::None)
+    }
+
+    pub async fn with_new_tags(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+        if let Some(new_names) = self.new_tags.take()
+            && !new_names.is_empty()
+        {
+            self.tags
+                .get_or_insert_default()
+                .current
+                .append_tags(ctx, &new_names)
+                .await?;
+        }
+        Ok((self, Focus::None, Message::None))
+    }
+
+    pub async fn with_new_pools(mut self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+        if let Some(new_names) = self.new_pools.take()
+            && !new_names.is_empty()
+        {
+            self.pools
+                .get_or_insert_default()
+                .current
+                .append_pools(ctx, &new_names)
+                .await?;
+        }
+        Ok((self, Focus::None, Message::None))
+    }
+
+    pub async fn auto_modify(self, ctx: Ctx) -> WebResult<(Self, Focus, Message)> {
+        let has_tag_input = !self.new_tags.as_deref().is_none_or(str::is_empty);
+        let has_pool_input = !self.new_pools.as_deref().is_none_or(str::is_empty);
+        let focus = match (has_tag_input, has_pool_input) {
+            (false | true, true) => Focus::Pool,
+            (true, false) => Focus::Tag,
+            (false, false) => Focus::None,
+        };
+
+        let (form, ..) = self.with_new_tags(ctx.clone()).await?;
+        let (form, ..) = form.with_new_pools(ctx).await?;
+        Ok((form, focus, Message::None))
     }
 }

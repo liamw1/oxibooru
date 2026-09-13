@@ -2,7 +2,7 @@ use crate::api::error::ApiResult;
 use crate::api::post::PostNeighbors;
 use crate::app::AppState;
 use crate::config::Action;
-use crate::extract::{Ctx, HxRequest, Json, Offset, Path, Query, ResourceParams};
+use crate::extract::{Ctx, HxRequest, Json, JsonOrMultipart, Offset, Path, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostSafety, PostType, Rating};
 use crate::resource::NotRequested;
 use crate::resource::field::Mask;
@@ -70,24 +70,32 @@ async fn get_post(ctx: Ctx, path: Path<i64>, params: &MainParams, fields: Mask<F
     api::post::get(ctx, path, resource_params).await.map(|Json(post)| post)
 }
 
+async fn get_neighbors_and_categories(
+    ctx: Ctx,
+    path: Path<i64>,
+    params: &MainParams,
+    fields: Mask<Field>,
+) -> ApiResult<(PostNeighbors, Vec<TagCategoryInfo>, Vec<PoolCategoryInfo>)> {
+    let query = params.search_text.clone();
+    let resource_params = Query(ResourceParams { query, fields });
+
+    let neighbors_future = api::post::get_neighbors(ctx.clone(), path, resource_params);
+    let tag_categories_future = web::tag_category::get_categories(ctx.clone());
+    let pool_categories_future = web::pool_category::get_categories(ctx.clone());
+    try_join!(neighbors_future, tag_categories_future, pool_categories_future)
+        .map(|(Json(neighbors), tag_categories, pool_categories)| (neighbors, tag_categories, pool_categories))
+}
+
 async fn get_posts_and_categories(
     ctx: Ctx,
     path: Path<i64>,
     params: &MainParams,
     fields: Mask<Field>,
 ) -> ApiResult<(PostInfo, PostNeighbors, Vec<TagCategoryInfo>, Vec<PoolCategoryInfo>)> {
-    let query = params.search_text.clone();
-    let resource_params = Query(ResourceParams { query, fields });
-
-    let post_future = api::post::get(ctx.clone(), path, resource_params.clone());
-    let neighbors_future = api::post::get_neighbors(ctx.clone(), path, resource_params);
-    let tag_categories_future = web::tag_category::get_categories(ctx.clone());
-    let pool_categories_future = web::pool_category::get_categories(ctx.clone());
-    try_join!(post_future, neighbors_future, tag_categories_future, pool_categories_future).map(
-        |(Json(post), Json(neighbors), tag_categories, pool_categories)| {
-            (post, neighbors, tag_categories, pool_categories)
-        },
-    )
+    let post_future = get_post(ctx.clone(), path, params, fields);
+    let neighbors_and_categories_future = get_neighbors_and_categories(ctx, path, params, fields);
+    try_join!(post_future, neighbors_and_categories_future)
+        .map(|(post, (neighbors, tag_categories, pool_categories))| (post, neighbors, tag_categories, pool_categories))
 }
 
 #[derive(Clone, Copy, Display, PartialEq, Eq, Serialize, Deserialize)]
@@ -245,6 +253,7 @@ struct PostPage<T> {
     tag_categories: Vec<TagCategoryInfo>,
     pool_categories: Vec<PoolCategoryInfo>,
     params: MainParams,
+    focus: Focus,
     message: Message,
 }
 
@@ -262,20 +271,23 @@ impl PostPage<PostInfo> {
                 tag_categories,
                 pool_categories,
                 params,
+                focus: Focus::None,
                 message: Message::None,
             })
     }
 }
 
-#[derive(Template)]
-#[template(path = "partials/post/edit_toggle.html")]
-struct EditToggleTemplate<'a> {
+struct EditToggle<'a, T> {
     ctx: &'a Ctx,
-    post: &'a PostInfo,
+    post: &'a T,
     params: &'a MainParams,
     mode: Mode,
     oob: bool,
 }
+
+#[derive(Deref, Template)]
+#[template(path = "partials/post/edit_toggle.html")]
+struct EditToggleInfoTemplate<'a>(EditToggle<'a, PostInfo>);
 
 #[derive(Deref, Template)]
 #[template(path = "pages/post/view.html")]
@@ -307,15 +319,15 @@ async fn view(ctx: Ctx, path: Path<i64>, Query(params): Query<MainParams>, hx: H
         ViewTemplate(page_info).render()
     } else {
         let post = get_post(ctx.clone(), path, &params, VIEW_FIELDS.into()).await?;
-
-        let edit_toggle = EditToggleTemplate {
+        let toggle_info = EditToggle {
             ctx: &ctx,
             post: &post,
             params: &params,
             mode: Mode::View,
             oob: true,
-        }
-        .render()?;
+        };
+
+        let edit_toggle = EditToggleInfoTemplate(toggle_info).render()?;
         ViewFragmentTemplate { ctx, post, params }
             .render()
             .map(|sidebar| sidebar + &edit_toggle)
@@ -334,8 +346,13 @@ struct EditFragmentTemplate {
     ctx: Ctx,
     post: EditPathForm,
     params: MainParams,
+    focus: Focus,
     message: Message,
 }
+
+#[derive(Deref, Template)]
+#[template(path = "partials/post/edit_toggle.html")]
+struct EditToggleFormTemplate<'a>(EditToggle<'a, EditPathForm>);
 
 async fn edit(
     ctx: Ctx,
@@ -359,24 +376,26 @@ async fn edit(
             tag_categories,
             pool_categories,
             params,
+            focus: Focus::None,
             message,
         };
         EditTemplate(page_info).render()
     } else {
         let post = get_post(ctx.clone(), path, &params, fields).await?;
-
-        let edit_toggle = EditToggleTemplate {
+        let toggle_info = EditToggle {
             ctx: &ctx,
             post: &post,
             params: &params,
             mode: Mode::Edit,
             oob: true,
-        }
-        .render()?;
+        };
+
+        let edit_toggle = EditToggleInfoTemplate(toggle_info).render()?;
         EditFragmentTemplate {
             ctx,
             post: EditPathForm::initialize(post)?,
             params,
+            focus: Focus::None,
             message,
         }
         .render()
@@ -393,15 +412,68 @@ async fn edit_submit(
     jar: CookieJar,
     form: EditPathForm,
 ) -> WebResult<Response> {
+    let fields = Mask::from(VIEW_FIELDS) | Field::Version;
     let (updated_form, focus, message) = match form.operation {
         Operation::Init => unreachable!(),
-        Operation::Auto => todo!(),
-        Operation::AddTag => todo!(),
-        Operation::AddPool => todo!(),
+        Operation::Auto => form.auto_modify(ctx.clone()).await?,
+        Operation::AddTag => form.with_new_tags(ctx.clone()).await?,
+        Operation::AddPool => form.with_new_pools(ctx.clone()).await?,
         Operation::RemoveTag(index) => form.with_tag_removed(index),
         Operation::RemovePool(index) => form.with_pool_removed(index),
-        Operation::Save => todo!(),
+        Operation::Save => {
+            let focus = Focus::None;
+            let body = form.to_body().map(JsonOrMultipart::Json)?;
+            match api::post::update(ctx.clone(), form.path(), Query(fields.into()), body).await {
+                Ok(Json(post)) => {
+                    if !hx.htmx() {
+                        let new_url = post.url(Mode::Edit, &params)?;
+                        return Ok(web::redirect(&new_url, &hx, jar));
+                    }
+                    (EditPathForm::initialize(post)?, focus, Message::Success)
+                }
+                Err(err) => (form, focus, Message::Error(err)),
+            }
+        }
     };
 
-    todo!()
+    if hx.full_page() {
+        let (neighbors, tag_categories, pool_categories) =
+            get_neighbors_and_categories(ctx.clone(), updated_form.path(), &params, fields).await?;
+        let page_info = PostPage {
+            ctx,
+            active_tab: Tab::Post,
+            mode: Mode::Edit,
+            post: updated_form,
+            prev_post: neighbors.prev,
+            next_post: neighbors.next,
+            tag_categories,
+            pool_categories,
+            params,
+            focus,
+            message,
+        };
+        EditTemplate(page_info).render()
+    } else {
+        let toggle_info = EditToggle {
+            ctx: &ctx,
+            post: &updated_form,
+            params: &params,
+            mode: Mode::Edit,
+            oob: true,
+        };
+
+        let edit_toggle = EditToggleFormTemplate(toggle_info).render()?;
+        EditFragmentTemplate {
+            ctx,
+            post: updated_form,
+            params,
+            focus,
+            message,
+        }
+        .render()
+        .map(|sidebar| sidebar + &edit_toggle)
+    }
+    .map(Html)
+    .map(Html::into_response)
+    .map_err(WebError::from)
 }
