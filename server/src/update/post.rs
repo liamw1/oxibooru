@@ -17,7 +17,7 @@ use crate::schema::{
 use crate::time::DateTime;
 use diesel::dsl::{exists, max};
 use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 /// Updates `last_edit_time` of post associated with `post_id`.
 pub fn last_edit_time(conn: &mut PgConnection, post_id: i64) -> ApiResult<()> {
@@ -102,26 +102,26 @@ pub fn set_pools(conn: &mut PgConnection, post_id: i64, pools: &[i64]) -> QueryR
         .filter(pool_post::pool_id.ne_all(pools))
         .execute(conn)?;
 
-    let excluded_pools = pool_post::table
-        .select(pool_post::pool_id)
-        .filter(pool_post::post_id.eq(post_id))
-        .into_boxed();
-    let new_pool_post_info: Vec<(i64, Option<i64>)> = pool_post::table
+    let orders: HashMap<i64, Option<i64>> = pool_post::table
         .group_by(pool_post::pool_id)
         .select((pool_post::pool_id, max(pool_post::order) + 1))
         .filter(pool_post::pool_id.eq_any(pools))
-        .filter(pool_post::pool_id.ne_all(excluded_pools))
-        .load(conn)?;
+        .load(conn)?
+        .into_iter()
+        .collect();
 
-    let new_pool_posts: Vec<_> = new_pool_post_info
+    let new_pool_posts: Vec<_> = pools
         .iter()
-        .map(|&(pool_id, order)| PoolPost {
+        .map(|&pool_id| PoolPost {
             post_id,
             pool_id,
-            order: order.unwrap_or(0),
+            order: orders.get(&pool_id).copied().flatten().unwrap_or(0),
         })
         .collect();
-    new_pool_posts.insert_into(pool_post::table).execute(conn)?;
+    new_pool_posts
+        .insert_into(pool_post::table)
+        .on_conflict_do_nothing()
+        .execute(conn)?;
     Ok(())
 }
 
