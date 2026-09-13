@@ -10,12 +10,15 @@
             <li data-name="summary" {% if active_user_tab==UserTab::Summary %} class="active" {% endif %}>
                 <a href="user/{{ user.name()? }}">Summary</a>
             </li>
+            {#- -#}
             <li data-name="edit" {% if active_user_tab==UserTab::Edit %} class="active" {% endif %}>
                 <a href="user/{{ user.name()? }}/edit">Settings</a>
             </li>
+            {#- -#}
             <li data-name="list-tokens" {% if active_user_tab==UserTab::Tokens %} class="active" {% endif %}>
-                <a href="user/{{ user.name()? }}/list-tokens">Login Tokens</a>
+                <a href="user/{{ user.name()? }}/list-tokens">Login tokens</a>
             </li>
+            {#- -#}
             <li data-name="delete" {% if active_user_tab==UserTab::Delete %} class="active" {% endif %}>
                 <a href="user/{{ user.name()? }}/delete">Delete</a>
             </li>
