@@ -253,36 +253,6 @@ ul.compact-tags .remove-tag {
     color: var(--inactive-link-color-darktheme);
 }
 
-@-moz-keyframes tag-added-to-post {
-    from {
-        max-height: 0;
-    }
-
-    to {
-        max-height: 5em;
-    }
-}
-
-@-webkit-keyframes tag-added-to-post {
-    from {
-        max-height: 0;
-    }
-
-    to {
-        max-height: 5em;
-    }
-}
-
-@-o-keyframes tag-added-to-post {
-    from {
-        max-height: 0;
-    }
-
-    to {
-        max-height: 5em;
-    }
-}
-
 @keyframes tag-added-to-post {
     from {
         max-height: 0;
@@ -292,7 +262,6 @@ ul.compact-tags .remove-tag {
         max-height: 5em;
     }
 }
-
 
 @keyframes tag-fade {
     from {

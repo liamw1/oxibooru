@@ -13,7 +13,7 @@
 </style>
 
 <div class="content-wrapper transparent-container post-view">
-    <aside class="sidebar">
+    <aside class="sidebar" hx-on:htmx:after:swap="syncPostMode(this, ctx)">
         <nav class="buttons">
             <article class="previous-post">
                 <a {% if let Some(post)=prev_post %} href="{{ post.url(*mode, params)? }}" {% else %} class="inactive"
@@ -30,8 +30,22 @@
                 </a>
             </article>
 
-            {% let oob = false %}
-            {% include "partials/post/edit_toggle.html"%}
+            {% if ctx.can_edit_posts() || ctx.has_privilege(Action::PostDelete) ||
+            ctx.has_privilege(Action::PostFeature) %}
+            <article id="edit-toggle" hx-target:inherited="#sidebar-content" hx-swap:inherited="outerHTML"
+                hx-replace-url:inherited="true">
+                {% match mode %}
+                {% when Mode::View %}
+                <a href="{{ post.url(Mode::Edit, params)? }}">
+                    <i class="fa fa-pencil"></i>
+                </a>
+                {% when Mode::Edit %}
+                <a href="{{ post.url(Mode::View, params)? }}">
+                    <i class="fa fa-reply"></i>
+                </a>
+                {% endmatch %}
+            </article>
+            {% endif %}
         </nav>
         {% block sidebar_content %}{% endblock %}
     </aside>
