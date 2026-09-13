@@ -15,7 +15,7 @@ use crate::schema::{
     post_tag,
 };
 use crate::time::DateTime;
-use diesel::dsl::exists;
+use diesel::dsl::{exists, max};
 use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 use std::collections::HashSet;
 
@@ -83,12 +83,45 @@ pub fn add_relations(conn: &mut PgConnection, post_id: i64, new_related_posts: &
 
 /// Replaces the current set of tags with `tags` for post associated with `post_id`.
 pub fn set_tags(conn: &mut PgConnection, post_id: i64, tags: &[i64]) -> QueryResult<()> {
-    let new_post_tags: Vec<_> = tags.iter().map(|&tag_id| PostTag { post_id, tag_id }).collect();
-
     diesel::delete(post_tag::table)
         .filter(post_tag::post_id.eq(post_id))
+        .filter(post_tag::tag_id.ne_all(tags))
         .execute(conn)?;
-    new_post_tags.insert_into(post_tag::table).execute(conn)?;
+
+    let post_tags: Vec<_> = tags.iter().map(|&tag_id| PostTag { post_id, tag_id }).collect();
+    post_tags
+        .insert_into(post_tag::table)
+        .on_conflict_do_nothing()
+        .execute(conn)?;
+    Ok(())
+}
+
+pub fn set_pools(conn: &mut PgConnection, post_id: i64, pools: &[i64]) -> QueryResult<()> {
+    diesel::delete(pool_post::table)
+        .filter(pool_post::post_id.eq(post_id))
+        .filter(pool_post::pool_id.ne_all(pools))
+        .execute(conn)?;
+
+    let excluded_pools = pool_post::table
+        .select(pool_post::pool_id)
+        .filter(pool_post::post_id.eq(post_id))
+        .into_boxed();
+    let new_pool_post_info: Vec<(i64, Option<i64>)> = pool_post::table
+        .group_by(pool_post::pool_id)
+        .select((pool_post::pool_id, max(pool_post::order) + 1))
+        .filter(pool_post::pool_id.eq_any(pools))
+        .filter(pool_post::pool_id.ne_all(excluded_pools))
+        .load(conn)?;
+
+    let new_pool_posts: Vec<_> = new_pool_post_info
+        .iter()
+        .map(|&(pool_id, order)| PoolPost {
+            post_id,
+            pool_id,
+            order: order.unwrap_or(0),
+        })
+        .collect();
+    new_pool_posts.insert_into(pool_post::table).execute(conn)?;
     Ok(())
 }
 

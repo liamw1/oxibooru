@@ -1,28 +1,23 @@
-use crate::api::error::ApiResult;
+use crate::api::error::{ApiError, ApiResult};
 use crate::api::pool::PoolUpdateBody;
-use crate::extract::DeleteBody;
-use crate::resource::pool::{MicroPool, PoolInfo};
+use crate::extract::{Ctx, DeleteBody};
+use crate::model::pool_category::PoolCategory;
+use crate::resource::pool::{Field, MicroPool, PoolInfo};
 use crate::resource::{JoinExt, NotRequested};
+use crate::schema::pool_category;
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
-use crate::web::form::{self, FormField};
-use crate::web::{self, PathForm};
+use crate::web::form::{self, ElementClass, FormField};
+use crate::web::{PathForm, WebResult};
+use crate::{string, update, web};
+use diesel::{QueryDsl, RunQueryDsl};
 use serde::Deserialize;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::convert::Infallible;
 use std::ops::{Deref, DerefMut};
-use strum::Display;
-
-#[derive(Clone, Copy, Default, Display)]
-pub enum ElementClass {
-    Added,
-    Duplicate,
-    #[default]
-    #[strum(serialize = "")]
-    None,
-}
 
 #[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub struct Element {
     primary_name: SmallString,
     pub category: SmallString,
@@ -75,9 +70,64 @@ impl Eq for Element {}
 #[derive(Default, PartialEq, Eq, Deserialize)]
 pub struct ElementMap(BTreeMap<i64, Element>);
 
-impl From<Vec<MicroPool>> for ElementMap {
-    fn from(value: Vec<MicroPool>) -> Self {
-        Self((0..).zip(value.into_iter().map(Element::from)).collect())
+impl ElementMap {
+    pub fn names(&self) -> Vec<SmallString> {
+        self.values().map(|element| element.primary_name.clone()).collect()
+    }
+
+    pub async fn append_pools(&mut self, Ctx(ctx, connection_pool): Ctx, joined_names: &str) -> WebResult<()> {
+        const FIELDS: [Field; 3] = [Field::Category, Field::Names, Field::PostCount];
+
+        let input_names: HashSet<_> = string::split_unescaped_whitespace(joined_names).collect();
+        let input_names_vec = input_names.iter().copied().map(SmallString::from).collect();
+        let (added_pools, new_names, default_category) = connection_pool
+            .transaction(move |conn| {
+                let default_category: SmallString = pool_category::table
+                    .select(pool_category::name)
+                    .filter(PoolCategory::is_default())
+                    .first(conn)?;
+                let (pool_ids, new_names) = update::pool::fetch_pools(conn, &ctx, input_names_vec)?;
+                let pools = PoolInfo::new_batch_from_ids(conn, &ctx, &pool_ids, FIELDS.into())?;
+                Ok::<_, ApiError>((pools, new_names, default_category))
+            })
+            .await?;
+
+        let mut added_elements = Vec::with_capacity(added_pools.len());
+        for pool in added_pools {
+            added_elements.push(Element {
+                primary_name: pool.primary_name().map(SmallString::from)?,
+                category: pool.category().cloned()?,
+                post_count: pool.post_count()?,
+                class: ElementClass::Added,
+            });
+        }
+
+        let added_element_names: HashSet<_> = added_elements
+            .iter()
+            .map(Element::primary_name)
+            .chain(new_names.iter().map(|name| name.deref()))
+            .collect();
+        for element in self.values_mut() {
+            if added_element_names.contains(element.primary_name()) {
+                element.class = ElementClass::Duplicate;
+            }
+        }
+
+        let existing_tag_names: HashSet<_> = self.values().map(Element::primary_name).collect();
+        let new_elements: Vec<_> = added_elements
+            .into_iter()
+            .chain(new_names.into_iter().map(|name| Element {
+                primary_name: name,
+                category: default_category.clone(),
+                post_count: 0,
+                class: ElementClass::New,
+            }))
+            .filter(|tag| !existing_tag_names.contains(tag.primary_name()))
+            .collect();
+
+        let lowest_current_index = self.first_key_value().map_or(0, |(lowest_index, _)| *lowest_index);
+        self.extend((1..).map(|offset| lowest_current_index - offset).zip(new_elements));
+        Ok(())
     }
 }
 
@@ -91,6 +141,12 @@ impl Deref for ElementMap {
 impl DerefMut for ElementMap {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+impl From<Vec<MicroPool>> for ElementMap {
+    fn from(value: Vec<MicroPool>) -> Self {
+        Self((0..).zip(value.into_iter().map(Element::from)).collect())
     }
 }
 

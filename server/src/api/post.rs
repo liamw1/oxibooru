@@ -776,6 +776,10 @@ pub struct PostUpdateBody {
     pub relations: Option<Vec<i64>>,
     /// Tags to apply. Non-existent tags will be created automatically.
     pub tags: Option<Vec<SmallString>>,
+    /// Pools to add post to. Only used by hypermedia API.
+    #[schema(ignore)]
+    #[serde(skip)]
+    pub pools: Option<Vec<SmallString>>,
     /// Post annotations.
     pub notes: Option<Vec<Note>>,
     /// Post flags: `loop` or `sound`.
@@ -1261,6 +1265,13 @@ async fn update_impl(
                 let (updated_tag_ids, tags) = update::tag::get_or_create_tags(conn, &ctx, tags, fetch_mode)?;
                 update::post::set_tags(conn, post_id, &updated_tag_ids)?;
                 new_snapshot_data.tags = tags;
+            }
+            if let Some(pools) = body.pools {
+                ctx.verify_privilege(Action::PoolEditPost)?;
+
+                let updated_pool_ids = update::pool::get_or_create_pools(conn, &ctx, pools)?;
+                update::post::set_pools(conn, post_id, &updated_pool_ids)?;
+                // TODO: Create pool snapshots?
             }
             if let Some(notes) = body.notes {
                 ctx.verify_privilege(Action::PostEditNote)?;

@@ -34,6 +34,37 @@ mod tag_category;
 mod upload;
 mod user;
 
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub enum WebError {
+    Api(#[from] crate::api::error::ApiError),
+    Template(#[from] askama::Error),
+    Url(#[from] serde_urlencoded::ser::Error),
+}
+
+impl WebError {
+    fn status_code(&self) -> StatusCode {
+        match self {
+            Self::Api(err) => err.status_code(),
+            Self::Template(_) | Self::Url(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        }
+    }
+}
+
+impl From<NotRequested> for WebError {
+    fn from(value: NotRequested) -> Self {
+        WebError::Template(value.into())
+    }
+}
+
+impl IntoResponse for WebError {
+    fn into_response(self) -> Response {
+        let mut response = self.status_code().into_response();
+        response.extensions_mut().insert(Arc::new(self));
+        response
+    }
+}
+
 pub fn post_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
     let base = format!("post/{post_id}");
     url(&base, params)
@@ -120,36 +151,6 @@ struct Html(String);
 impl IntoResponse for Html {
     fn into_response(self) -> Response {
         ([(CACHE_CONTROL, "no-store"), (VARY, "HX-Request-Type")], AxumHtml(self.0)).into_response()
-    }
-}
-
-#[derive(Debug, Error)]
-#[error(transparent)]
-enum WebError {
-    Api(#[from] crate::api::error::ApiError),
-    Template(#[from] askama::Error),
-}
-
-impl WebError {
-    fn status_code(&self) -> StatusCode {
-        match self {
-            Self::Api(err) => err.status_code(),
-            Self::Template(_) => StatusCode::INTERNAL_SERVER_ERROR,
-        }
-    }
-}
-
-impl From<NotRequested> for WebError {
-    fn from(value: NotRequested) -> Self {
-        WebError::Template(value.into())
-    }
-}
-
-impl IntoResponse for WebError {
-    fn into_response(self) -> Response {
-        let mut response = self.status_code().into_response();
-        response.extensions_mut().insert(Arc::new(self));
-        response
     }
 }
 

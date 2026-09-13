@@ -9,7 +9,7 @@ use diesel::pg::Pg;
 use diesel::sql_types::Bool;
 use diesel::{AsChangeset, Associations, Identifiable, Insertable, Queryable, Selectable};
 
-#[derive(Insertable)]
+#[derive(Clone, Copy, Default, Insertable)]
 #[diesel(table_name = pool)]
 #[diesel(check_for_backend(Pg))]
 pub struct NewPool<'a> {
