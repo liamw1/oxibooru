@@ -3,7 +3,6 @@ use diesel::pg::{Pg, PgValue};
 use diesel::serialize::{self, IsNull, Output, ToSql};
 use diesel::sql_types::SmallInt;
 use diesel::{AsExpression, FromSqlRow};
-use mime::Mime;
 use serde::{Deserialize, Serialize, Serializer};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::io::Write;
@@ -100,24 +99,34 @@ impl FromSql<SmallInt, Pg> for PostType {
 #[repr(i16)]
 pub enum MimeType {
     #[serde(rename = "image/bmp")]
+    #[strum(serialize = "image/bmp")]
     Bmp,
     #[serde(rename = "image/gif")]
+    #[strum(serialize = "image/gif")]
     Gif,
     #[serde(rename = "image/jpeg")]
+    #[strum(serialize = "image/jpeg")]
     Jpeg,
     #[serde(rename = "image/png")]
+    #[strum(serialize = "image/png")]
     Png,
     #[serde(rename = "image/webp")]
+    #[strum(serialize = "image/webp")]
     Webp,
     #[serde(rename = "video/mp4")]
+    #[strum(serialize = "video/mp4")]
     Mp4,
     #[serde(rename = "video/quicktime")]
+    #[strum(serialize = "video/quicktime")]
     Mov,
     #[serde(rename = "video/webm")]
+    #[strum(serialize = "video/webm")]
     Webm,
     #[serde(rename = "application/x-shockwave-flash")]
+    #[strum(serialize = "application/x-shockwave-flash")]
     Swf,
     #[serde(rename = "image/avif")]
+    #[strum(serialize = "image/avif")]
     Avif,
 }
 
@@ -161,10 +170,6 @@ impl MimeType {
             Self::Webm => "webm",
             Self::Swf => "swf",
         }
-    }
-
-    pub fn to_mime(self) -> Mime {
-        Mime::from_str(&self.to_string()).expect("MimeType must be a valid MIME type")
     }
 }
 

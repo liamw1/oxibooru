@@ -7,15 +7,18 @@
         <input type="hidden" name="version" value="{{ post.version }}">
 
         {# Extra fields needed for re-render #}
-        <input type="hidden" name="type_" value="{{ post.type_()? }}">
-        <input type="hidden" name="mime_type" value="{{ post.mime_type()? }}">
-        <input type="hidden" name="canvas_width" value="{{ post.canvas_width()? }}">
-        <input type="hidden" name="canvas_height" value="{{ post.canvas_height()? }}">
-        <input type="hidden" name="content_url" value="{{ post.content_url()? }}">
-        <input type="hidden" name="thumbnail_url" value="{{ post.thumbnail_url()? }}">
+        <input type="hidden" name="type" value="{{ post.type_()? }}">
+        <input type="hidden" name="mime-type" value="{{ post.mime_type()? }}">
+        <input type="hidden" name="canvas-width" value="{{ post.canvas_width()? }}">
+        <input type="hidden" name="canvas-height" value="{{ post.canvas_height()? }}">
+        <input type="hidden" name="content-url" value="{{ post.content_url()? }}">
+        <input type="hidden" name="thumbnail-url" value="{{ post.thumbnail_url()? }}">
         {% for (i, flag) in post.original_flags.iter().enumerate() %}
-        <input type="hidden" name="original_flags[{{ i }}]" value="{{ flag }}">
+        <input type="hidden" name="original-flags[{{ i }}]" value="{{ flag }}">
         {% endfor %}
+
+        {# Invisible button at top of form for when user presses Enter #}
+        <button class="visually-hidden" name="operation" value="auto" tabindex="-1" aria-hidden="true"></button>
 
         <button name="operation" value="save">Save</button>
 
@@ -99,7 +102,7 @@
         {% if ctx.has_privilege(Action::PostEditTag) %}
         <details class="expander" open>
             {% for (i, tag) in post.tags.iter().flat_map(FormField::original) %}
-            <input type="hidden" name="tags[original][{{ i }}][primary_name]" value="{{ tag.primary_name() }}">
+            <input type="hidden" name="tags[original][{{ i }}][primary-name]" value="{{ tag.primary_name() }}">
             <input type="hidden" name="tags[original][{{ i }}][category]" value="{{ tag.category }}">
             <input type="hidden" name="tags[original][{{ i }}][usages]" value="{{ tag.usages }}">
             {% endfor %}
@@ -112,14 +115,15 @@
                 <section class="tags">
                     <div class="tag-input">
                         <div class="main-control">
-                            <input type="text" name="new-tags" placeholder="type to add…">
+                            <input type="text" name="new-tags" placeholder="type to add…" {% if focus==Focus::Tag %}
+                                autofocus {% endif %}>
                             <button name="operation" value="add-tag">Add</button>
                         </div>
                         <ul class="compact-tags">
                             {% for (i, tag) in post.tags.iter().flat_map(FormField::current) %}
                             {% let tag_name = tag.primary_name() %}
                             <li class="{{ tag.class() }}">
-                                <input type="hidden" name="tags[current][{{ i }}][primary_name]" value="{{ tag_name }}">
+                                <input type="hidden" name="tags[current][{{ i }}][primary-name]" value="{{ tag_name }}">
                                 <input type="hidden" name="tags[current][{{ i }}][category]" value="{{ tag.category }}">
                                 <input type="hidden" name="tags[current][{{ i }}][usages]" value="{{ tag.usages }}">
 
@@ -142,9 +146,9 @@
         {% if ctx.has_privilege(Action::PoolEditPost) %}
         <details class="expander" open>
             {% for (i, pool) in post.pools.iter().flat_map(FormField::original) %}
-            <input type="hidden" name="pools[original][{{ i }}][primary_name]" value="{{ pool.primary_name() }}">
+            <input type="hidden" name="pools[original][{{ i }}][primary-name]" value="{{ pool.primary_name() }}">
             <input type="hidden" name="pools[original][{{ i }}][category]" value="{{ pool.category }}">
-            <input type="hidden" name="pools[original][{{ i }}][post_count]" value="{{ pool.post_count }}">
+            <input type="hidden" name="pools[original][{{ i }}][post-count]" value="{{ pool.post_count }}">
             {% endfor %}
 
             <summary>
@@ -155,18 +159,21 @@
                 <section class="pools">
                     <div class="pool-input">
                         <div class="main-control">
-                            <input type="text" name="new-pools" placeholder="type to add…">
+                            <input type="text" name="new-pools" placeholder="type to add…" {% if focus==Focus::Pool %}
+                                autofocus {% endif %}>
                             <button name="operation" value="add-pool">Add</button>
                         </div>
                         <ul class="compact-pools">
                             {% for (i, pool) in post.pools.iter().flat_map(FormField::current) %}
                             {% let pool_name = pool.primary_name() %}
-                            <input type="hidden" name="pools[current][{{ i }}][primary_name]" value="{{ pool_name }}">
-                            <input type="hidden" name="pools[current][{{ i }}][category]" value="{{ pool.category }}">
-                            <input type="hidden" name="pools[current][{{ i }}][post_count]"
-                                value="{{ pool.post_count }}">
-
                             <li class="{{ pool.class() }}">
+                                <input type="hidden" name="pools[current][{{ i }}][primary-name]"
+                                    value="{{ pool_name }}">
+                                <input type="hidden" name="pools[current][{{ i }}][category]"
+                                    value="{{ pool.category }}">
+                                <input type="hidden" name="pools[current][{{ i }}][post-count]"
+                                    value="{{ pool.post_count }}">
+
                                 <button class="remove-pool" data-pseudo-content="×" name="operation"
                                     value="remove-pool-{{ i }}"
                                     onclick="if (this.form) { this.closest('li').remove(); return false; }"></button>

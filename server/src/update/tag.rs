@@ -8,10 +8,9 @@ use crate::schema::post_tag;
 use crate::schema::{tag, tag_implication, tag_name, tag_suggestion};
 use crate::string::SmallString;
 use crate::time::DateTime;
-use crate::{api, snapshot};
-use diesel::deserialize::QueryableByName;
+use crate::update::NameType;
+use crate::{api, snapshot, update};
 use diesel::dsl::max;
-use diesel::sql_types::{Array, Text};
 use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, RunQueryDsl};
 use std::collections::hash_map::{Entry, IntoKeys};
 use std::collections::{HashMap, HashSet};
@@ -165,23 +164,7 @@ pub fn fetch_tags(
     }
     let tag_ids: Vec<_> = dependency_graph.into_nodes().collect();
 
-    // Gather names that are case-fold distinct from existing names in database.
-    // We use a query here because CITEXT semantics differ from comparing
-    // `str::to_lowercased`-ed strings in certain cases.
-    let new_names: Vec<_> = diesel::sql_query(
-        "SELECT DISTINCT ON (unnest::CITEXT) unnest AS name
-        FROM unnest($1::text[]) WITH ORDINALITY
-        WHERE NOT EXISTS (
-            SELECT 1 FROM tag_name WHERE tag_name.name = unnest::CITEXT
-        )
-        ORDER BY unnest::CITEXT, ordinality",
-    )
-    .bind::<Array<Text>, _>(names)
-    .load::<NewName>(conn)?
-    .into_iter()
-    .map(|row| row.name)
-    .collect();
-
+    let new_names = update::get_new_names(conn, &names, NameType::Tag)?;
     new_names
         .iter()
         .try_for_each(|name| api::verify_matches_regex(&ctx.config, name, RegexType::Tag))?;
@@ -275,12 +258,6 @@ pub fn merge(conn: &mut PgConnection, absorbed_id: i64, merge_to_id: i64) -> Api
 
     diesel::delete(tag::table.find(absorbed_id)).execute(conn)?;
     last_edit_time(conn, merge_to_id)
-}
-
-#[derive(QueryableByName)]
-struct NewName {
-    #[diesel(sql_type = Text)]
-    name: SmallString,
 }
 
 enum TraversalState {

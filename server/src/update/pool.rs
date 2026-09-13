@@ -1,12 +1,13 @@
-use crate::api::error::{ApiError, ApiResult};
-use crate::api::{self, error};
+use crate::api::error::{self, ApiError, ApiResult};
 use crate::app::Context;
-use crate::config::{Config, RegexType};
+use crate::config::{Action, Config, RegexType};
 use crate::model::enums::{ResourceProperty, ResourceType};
-use crate::model::pool::{NewPoolName, PoolPost};
+use crate::model::pool::{NewPool, NewPoolName, PoolPost};
 use crate::schema::{pool, pool_name, pool_post};
 use crate::string::SmallString;
 use crate::time::DateTime;
+use crate::update::NameType;
+use crate::{api, snapshot, update};
 use diesel::dsl::{exists, max};
 use diesel::{ExpressionMethods, Insertable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
 
@@ -16,6 +17,57 @@ pub fn last_edit_time(conn: &mut PgConnection, pool_id: i64) -> QueryResult<()> 
         .set(pool::last_edit_time.eq(DateTime::now()))
         .execute(conn)?;
     Ok(())
+}
+
+/// Returns all pool ids implied from the given set of names.
+/// Returned ids will be distinct.
+///
+/// Requires pool creation privileges if new names are given.
+/// Checks that each new name matches on the Pool regex.
+pub fn get_or_create_pools(conn: &mut PgConnection, ctx: &Context, names: Vec<SmallString>) -> ApiResult<Vec<i64>> {
+    let (mut pool_ids, new_names) = fetch_pools(conn, ctx, names)?;
+
+    // Create new pools if given unique names
+    if !new_names.is_empty() {
+        ctx.verify_privilege(Action::PoolCreate)?;
+
+        let new_pool_ids: Vec<i64> = vec![NewPool::default(); new_names.len()]
+            .insert_into(pool::table)
+            .returning(pool::id)
+            .get_results(conn)?;
+        let new_pool_names: Vec<_> = new_pool_ids
+            .iter()
+            .zip(new_names.iter())
+            .map(|(&pool_id, name)| NewPoolName {
+                pool_id,
+                order: 0,
+                name,
+            })
+            .collect();
+        new_pool_names.insert_into(pool_name::table).execute(conn)?;
+
+        snapshot::pool::new_name_snapshots(conn, ctx.client, new_names)?;
+        pool_ids.extend(new_pool_ids);
+    }
+    Ok(pool_ids)
+}
+
+pub fn fetch_pools(
+    conn: &mut PgConnection,
+    ctx: &Context,
+    names: Vec<SmallString>,
+) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
+    let pool_ids: Vec<i64> = pool_name::table
+        .select(pool_name::pool_id)
+        .filter(pool_name::name.eq_any(&names))
+        .distinct()
+        .load(conn)?;
+
+    let new_names = update::get_new_names(conn, &names, NameType::Pool)?;
+    new_names
+        .iter()
+        .try_for_each(|name| api::verify_matches_regex(&ctx.config, name, RegexType::Pool))?;
+    Ok((pool_ids, new_names))
 }
 
 /// Replaces the current ordered list of names with `names` for pool associated with `pool_id`.

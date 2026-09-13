@@ -264,7 +264,7 @@ impl Offset {
 }
 
 /// Represents parameters of a request to retrieve multiple resources, paged.
-#[derive(Clone, Copy, Deserialize, IntoParams)]
+#[derive(Clone, Copy, Default, Deserialize, IntoParams)]
 pub struct PageParams {
     /// Starting position in the result set
     #[param(example = 0)]

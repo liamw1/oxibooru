@@ -35,7 +35,7 @@
             <li class="implications">
                 {% if ctx.has_privilege(Action::TagEditImplication) %}
                 {% for (i, implication) in tag.implications.iter().flat_map(FormField::original) %}
-                <input type="hidden" name="implications[original][{{ i }}][primary_name]"
+                <input type="hidden" name="implications[original][{{ i }}][primary-name]"
                     value="{{ implication.primary_name() }}">
                 <input type="hidden" name="implications[original][{{ i }}][category]"
                     value="{{ implication.category }}">
@@ -53,7 +53,7 @@
                         {% for (i, implication) in tag.implications.iter().flat_map(FormField::current) %}
                         {% let implication_name = implication.primary_name() %}
                         <li class="{{ implication.class() }}">
-                            <input type="hidden" name="implications[current][{{ i }}][primary_name]"
+                            <input type="hidden" name="implications[current][{{ i }}][primary-name]"
                                 value="{{ implication_name }}">
                             <input type="hidden" name="implications[current][{{ i }}][category]"
                                 value="{{ implication.category }}">
@@ -78,7 +78,7 @@
             <li class="suggestions">
                 {% if ctx.has_privilege(Action::TagEditSuggestion) %}
                 {% for (i, suggestion) in tag.suggestions.iter().flat_map(FormField::original) %}
-                <input type="hidden" name="suggestions[original][{{ i }}][primary_name]"
+                <input type="hidden" name="suggestions[original][{{ i }}][primary-name]"
                     value="{{ suggestion.primary_name() }}">
                 <input type="hidden" name="suggestions[original][{{ i }}][category]" value="{{ suggestion.category }}">
                 <input type="hidden" name="suggestions[original][{{ i }}][usages]" value="{{ suggestion.usages }}">
@@ -95,7 +95,7 @@
                         {% for (i, suggestion) in tag.suggestions.iter().flat_map(FormField::current) %}
                         {% let suggestion_name = suggestion.primary_name() %}
                         <li class="{{ suggestion.class() }}">
-                            <input type="hidden" name="suggestions[current][{{ i }}][primary_name]"
+                            <input type="hidden" name="suggestions[current][{{ i }}][primary-name]"
                                 value="{{ suggestion_name }}">
                             <input type="hidden" name="suggestions[current][{{ i }}][category]"
                                 value="{{ suggestion.category }}">

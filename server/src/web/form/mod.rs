@@ -2,10 +2,23 @@ use crate::string::{self, SmallString};
 use serde::Deserialize;
 use std::num::ParseIntError;
 use std::ops::Deref;
+use strum::Display;
 
 pub mod pool;
 pub mod post;
 pub mod tag;
+
+#[derive(Clone, Copy, Default, Display)]
+#[strum(serialize_all = "lowercase")]
+pub enum ElementClass {
+    New,
+    Added,
+    Duplicate,
+    Implication,
+    #[default]
+    #[strum(serialize = "")]
+    None,
+}
 
 #[derive(Deserialize)]
 pub struct FormField<T> {
