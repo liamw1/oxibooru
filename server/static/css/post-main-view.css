@@ -41,7 +41,7 @@
 
 .post-view>.sidebar>nav.buttons article a:not(.inactive):hover,
 .post-view>.content nav.buttons article a:not(.inactive):hover {
-    background: oklch(from var(--main-color) calc(l + 90%) c h);
+    background: color-mix(in oklch, var(--main-color), white 90%);
 }
 
 .post-view>.sidebar>nav.buttons article i,
