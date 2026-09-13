@@ -50,11 +50,12 @@
     <script src="static/js/nprogress.js"></script>
     <script src="static/js/htmx-4.0.min.js"></script>
 
+    {# Adds a loading bar for slower requests #}
     <script>
         NProgress.configure({ showSpinner: false, trickleSpeed: 200 });
 
         let pending = 0, timer = null;
-        const DELAY_MS = 150;   // Only show progress bar if request takes longer than this duration
+        const DELAY_MS = 150;
 
         document.addEventListener('htmx:before:request', () => {
             if (pending++ === 0) timer = setTimeout(() => { timer = null; NProgress.start(); }, DELAY_MS);
@@ -64,6 +65,27 @@
             if (timer) { clearTimeout(timer); timer = null; }
             else NProgress.done();
         });
+    </script>
+
+    {# Used for syncing post navigation buttons when toggling edit mode to avoid requerying post neighbors #}
+    <script>
+        function syncPostMode(aside, ctx) {
+            if (ctx.target.id !== 'sidebar-content') return;
+
+            const edit = /\/post\/[^/]+\/edit(\/|$)/.test(new URL(ctx.request.action, location.origin).pathname);
+            const setMode = (a, toEdit) => {
+                const url = new URL(a.getAttribute('href'), location.origin);
+                const base = url.pathname.replace(/\/edit\/?$/, '');
+                url.pathname = toEdit ? `${base}/edit` : base;
+                a.setAttribute('href', url.pathname + url.search + url.hash);
+            };
+
+            for (const a of aside.querySelectorAll('.previous-post a[href], .next-post a[href]')) setMode(a, edit);
+
+            const toggle = aside.querySelector('#edit-toggle a');
+            setMode(toggle, !edit);
+            toggle.querySelector('i').className = edit ? 'fa fa-reply' : 'fa fa-pencil';
+        }
     </script>
 
     <title>{% block title %}{{ ctx.site_name() }}{% endblock %}</title>

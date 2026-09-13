@@ -28,8 +28,9 @@ ul.compact-pools li {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    transition: background-color .5s linear;
+    --highlight: transparent;
 }
+
 
 ul.compact-pools li a {
     display: inline;
@@ -40,19 +41,32 @@ ul.compact-pools li a:focus {
     box-shadow: inset 0 0 0 2px var(--main-color);
 }
 
-ul.compact-pools li.implication {
-    background: var(--implied-pool-background-color);
-    color: var(--implied-pool-text-color);
-}
-
 ul.compact-pools li.new {
-    background: var(--new-pool-background-color);
     color: var(--new-pool-text-color);
+    --highlight: var(--new-pool-background-color);
 }
 
 ul.compact-pools li.duplicate {
-    background: var(--duplicate-pool-background-color);
     color: var(--duplicate-pool-text-color);
+    --highlight: var(--duplicate-pool-background-color);
+}
+
+ul.compact-pools li.added,
+ul.compact-pools li.new {
+    animation: tag-added-to-post 1s ease forwards,
+        tag-fade 2s ease forwards;
+}
+
+ul.compact-pools li.duplicate {
+    animation: tag-fade 2s ease-out forwards;
+}
+
+.darktheme ul.compact-pools li.new {
+    --highlight: oklch(from var(--new-pool-background-color) calc(l - 80%) c h);
+}
+
+.darktheme ul.compact-pools li.duplicate {
+    --highlight: oklch(from var(--duplicate-pool-background-color) calc(l - 80%) c h);
 }
 
 ul.compact-pools i {

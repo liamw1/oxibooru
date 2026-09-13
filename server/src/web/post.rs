@@ -277,18 +277,6 @@ impl PostPage<PostInfo> {
     }
 }
 
-struct EditToggle<'a, T> {
-    ctx: &'a Ctx,
-    post: &'a T,
-    params: &'a MainParams,
-    mode: Mode,
-    oob: bool,
-}
-
-#[derive(Deref, Template)]
-#[template(path = "partials/post/edit_toggle.html")]
-struct EditToggleInfoTemplate<'a>(EditToggle<'a, PostInfo>);
-
 #[derive(Deref, Template)]
 #[template(path = "pages/post/view.html")]
 struct ViewTemplate(PostPage<PostInfo>);
@@ -319,18 +307,7 @@ async fn view(ctx: Ctx, path: Path<i64>, Query(params): Query<MainParams>, hx: H
         ViewTemplate(page_info).render()
     } else {
         let post = get_post(ctx.clone(), path, &params, VIEW_FIELDS.into()).await?;
-        let toggle_info = EditToggle {
-            ctx: &ctx,
-            post: &post,
-            params: &params,
-            mode: Mode::View,
-            oob: true,
-        };
-
-        let edit_toggle = EditToggleInfoTemplate(toggle_info).render()?;
-        ViewFragmentTemplate { ctx, post, params }
-            .render()
-            .map(|sidebar| sidebar + &edit_toggle)
+        ViewFragmentTemplate { ctx, post, params }.render()
     }
     .map(Html)
     .map_err(WebError::from)
@@ -349,10 +326,6 @@ struct EditFragmentTemplate {
     focus: Focus,
     message: Message,
 }
-
-#[derive(Deref, Template)]
-#[template(path = "partials/post/edit_toggle.html")]
-struct EditToggleFormTemplate<'a>(EditToggle<'a, EditPathForm>);
 
 async fn edit(
     ctx: Ctx,
@@ -382,15 +355,6 @@ async fn edit(
         EditTemplate(page_info).render()
     } else {
         let post = get_post(ctx.clone(), path, &params, fields).await?;
-        let toggle_info = EditToggle {
-            ctx: &ctx,
-            post: &post,
-            params: &params,
-            mode: Mode::Edit,
-            oob: true,
-        };
-
-        let edit_toggle = EditToggleInfoTemplate(toggle_info).render()?;
         EditFragmentTemplate {
             ctx,
             post: EditPathForm::initialize(post)?,
@@ -399,7 +363,6 @@ async fn edit(
             message,
         }
         .render()
-        .map(|sidebar| sidebar + &edit_toggle)
     }
     .map(|html| (jar, Html(html)).into_response())
     .map_err(WebError::from)
@@ -454,15 +417,6 @@ async fn edit_submit(
         };
         EditTemplate(page_info).render()
     } else {
-        let toggle_info = EditToggle {
-            ctx: &ctx,
-            post: &updated_form,
-            params: &params,
-            mode: Mode::Edit,
-            oob: true,
-        };
-
-        let edit_toggle = EditToggleFormTemplate(toggle_info).render()?;
         EditFragmentTemplate {
             ctx,
             post: updated_form,
@@ -471,7 +425,6 @@ async fn edit_submit(
             message,
         }
         .render()
-        .map(|sidebar| sidebar + &edit_toggle)
     }
     .map(Html)
     .map(Html::into_response)

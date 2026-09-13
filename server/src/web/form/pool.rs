@@ -113,7 +113,7 @@ impl ElementMap {
             }
         }
 
-        let existing_tag_names: HashSet<_> = self.values().map(Element::primary_name).collect();
+        let existing_pool_names: HashSet<_> = self.values().map(Element::primary_name).collect();
         let new_elements: Vec<_> = added_elements
             .into_iter()
             .chain(new_names.into_iter().map(|name| Element {
@@ -122,7 +122,7 @@ impl ElementMap {
                 post_count: 0,
                 class: ElementClass::New,
             }))
-            .filter(|tag| !existing_tag_names.contains(tag.primary_name()))
+            .filter(|pool| !existing_pool_names.contains(pool.primary_name()))
             .collect();
 
         let lowest_current_index = self.first_key_value().map_or(0, |(lowest_index, _)| *lowest_index);

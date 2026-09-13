@@ -75,7 +75,7 @@ async fn get_pool(ctx: Ctx, path: Path<SmallString>, fields: Mask<Field>) -> Api
     let pool_id = get_id(&ctx, path).await?;
     api::pool::get(ctx, Path(pool_id), Query(fields.into()))
         .await
-        .map(|Json(tag)| tag)
+        .map(|Json(pool)| pool)
 }
 
 async fn get_pool_and_categories(
@@ -83,9 +83,9 @@ async fn get_pool_and_categories(
     path: Path<SmallString>,
     fields: Mask<Field>,
 ) -> ApiResult<(PoolInfo, Vec<PoolCategoryInfo>)> {
-    let tag_future = get_pool(ctx.clone(), path, fields);
+    let pool_future = get_pool(ctx.clone(), path, fields);
     let categories_future = web::pool_category::get_categories(ctx.clone());
-    try_join!(tag_future, categories_future)
+    try_join!(pool_future, categories_future)
 }
 
 async fn fetch_target_version(ctx: &Ctx, target_pool: SmallString) -> ApiResult<DateTime> {
@@ -98,7 +98,7 @@ async fn fetch_target_version(ctx: &Ctx, target_pool: SmallString) -> ApiResult<
                 .filter(pool_name::name.eq(target_pool))
                 .first(conn)
                 .optional()?
-                .ok_or(ApiError::NotFound(ResourceType::Tag))
+                .ok_or(ApiError::NotFound(ResourceType::Pool))
         })
         .await
 }
@@ -365,13 +365,13 @@ async fn merge_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: MergePathFo
     .await;
 
     let (form, message) = match merge_result {
-        Ok(Json(tag)) => {
+        Ok(Json(pool)) => {
             if !hx.htmx() {
                 let Ok(primary_name) = form.primary_name();
                 let url = format!("/pool/{primary_name}/merge");
                 return Ok(web::redirect(&url, &hx, jar));
             }
-            (MergePathForm::initialize(&tag)?, Message::Success)
+            (MergePathForm::initialize(&pool)?, Message::Success)
         }
         Err(err) => (form, Message::Error(err)),
     };
@@ -438,7 +438,8 @@ async fn delete_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResu
 }
 
 async fn delete_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: DeletePathForm) -> WebResult<Response> {
-    match api::tag::delete(ctx.clone(), form.path(), Json(form.to_body())).await {
+    let pool_id = get_id(&ctx, form.path()).await?;
+    match api::pool::delete(ctx.clone(), Path(pool_id), Json(form.to_body())).await {
         Ok(Json(())) => Ok(web::redirect("/pools", &hx, jar)),
         Err(err) => {
             let message = Message::Error(err);
@@ -446,7 +447,7 @@ async fn delete_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: DeletePath
                 let categories = web::pool_category::get_categories(ctx.clone()).await?;
                 let page_info = PoolPage {
                     ctx,
-                    active_tab: Tab::Tag,
+                    active_tab: Tab::Pool,
                     active_pool_tab: PoolTab::Delete,
                     pool: form,
                     categories,
