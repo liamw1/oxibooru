@@ -65,32 +65,33 @@
                 <span class="text">Account</span>
             </a>
         </li>
+        {#- -#}
         <li data-name="logout">
             <a href="logout">
                 <span class="text">Logout</span>
             </a>
         </li>
-        {% else %}
-        {% if ctx.has_privilege(Action::UserCreateSelf) %}
+        {%- else -%}
+        {%- if ctx.has_privilege(Action::UserCreateSelf) -%}
         <li data-name="register" {% if active_tab==Tab::Account %} class="active" {% endif %}>
             <a href="register">
                 <span class="text">Register</span>
             </a>
         </li>
-        {% endif %}
+        {%- endif -%}
         <li data-name="login" {% if active_tab==Tab::Login %} class="active" {% endif %}>
             <a href="login">
                 <span class="text">Log in</span>
             </a>
         </li>
-        {% endif %}
+        {%- endif -%}
 
         <li data-name="help" {% if active_tab==Tab::Help %} class="active" {% endif %}>
             <a href="help">
                 <span class="text">Help</span>
             </a>
         </li>
-
+        {#- -#}
         <li data-name="settings" {% if active_tab==Tab::Settings %} class="active" {% endif %}>
             <a href="settings">
                 <span class="text"><i class="fa fa-cog"></i></span>

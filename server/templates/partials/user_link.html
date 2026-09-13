@@ -1,15 +1,15 @@
 <span class="user">
-    {% if let Some(user) = user.as_ref() %}
+    {%- if let Some(user) = user.as_ref() -%}
     <a {% if ctx.has_privilege(Action::UserView) %} href="user/{{ user.name }}" {% endif %}>
         <span class="thumbnail" style="background-image: url('{{ user.avatar_url }}')">
             <img alt="thumbnail" src="{{ user.avatar_url }}">
         </span>
-        {{- user.name }}
+        {{- user.name -}}
     </a>
-    {% else %}
+    {%- else -%}
     <span class="thumbnail" style="background-image: url('static/img/favicon.png')">
         <img alt="thumbnail" src="static/img/favicon.png">
     </span>
-    Anonymous
-    {% endif %}
+    {{- "Anonymous" -}}
+    {%- endif -%}
 </span>
