@@ -65,7 +65,7 @@ const VIEW_FIELDS: [Field; 24] = [
 ];
 
 async fn get_post(ctx: Ctx, path: Path<i64>, params: &MainParams, fields: Mask<Field>) -> ApiResult<PostInfo> {
-    let query = params.search_text.clone();
+    let query = params.query.clone();
     let resource_params = Query(ResourceParams { query, fields });
     api::post::get(ctx, path, resource_params).await.map(|Json(post)| post)
 }
@@ -76,7 +76,7 @@ async fn get_neighbors_and_categories(
     params: &MainParams,
     fields: Mask<Field>,
 ) -> ApiResult<(PostNeighbors, Vec<TagCategoryInfo>, Vec<PoolCategoryInfo>)> {
-    let query = params.search_text.clone();
+    let query = params.query.clone();
     let resource_params = Query(ResourceParams { query, fields });
 
     let neighbors_future = api::post::get_neighbors(ctx.clone(), path, resource_params);
@@ -171,7 +171,7 @@ impl ListParams {
 
     fn to_main_params(&self) -> MainParams {
         MainParams {
-            search_text: self.search_text.clone(),
+            query: self.query(),
             fit: None,
         }
     }
@@ -234,7 +234,7 @@ enum Fit {
 #[serde(rename_all = "kebab-case")]
 struct MainParams {
     fit: Option<Fit>,
-    search_text: Option<String>,
+    query: Option<String>,
 }
 
 impl MainParams {

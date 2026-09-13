@@ -4,8 +4,8 @@
 {% if except != "fit" && let Some(fit) = params.fit %}
 <input type="hidden" name="fit" value="{{ fit }}">
 {% endif %}
-{% if except != "search-text" && let Some(search_text) = params.search_text.as_deref() %}
-<input type="hidden" name="search-text" value="{{ search_text }}">
+{% if except != "query" && let Some(query) = params.query.as_deref() %}
+<input type="hidden" name="query" value="{{ query }}">
 {% endif %}
 {% endmacro %}
 
