@@ -167,10 +167,8 @@ function formatMarkdown(text) {
         new FaviconWrapper(),
     ];
 
-    const turndownService = new TurndownService();
-    text = DOMPurify.sanitize(text);
+    const turndownService = createTurndownService();
     text = turndownService.turndown(text);
-    text = escapeHtml(text);
     for (let wrapper of wrappers) {
         text = wrapper.preprocess(text);
     }
@@ -179,7 +177,7 @@ function formatMarkdown(text) {
     for (let wrapper of wrappers) {
         text = wrapper.postprocess(text);
     }
-    return text;
+    return DOMPurify.sanitize(text);
 }
 
 function formatInlineMarkdown(text) {
@@ -199,9 +197,8 @@ function formatInlineMarkdown(text) {
         new StrikeThroughWrapper(),
         new FaviconWrapper(),
     ];
-    const turndownService = new TurndownService();
+    const turndownService = createTurndownService();
     text = turndownService.turndown(text);
-    text = escapeHtml(text);
     for (let wrapper of wrappers) {
         text = wrapper.preprocess(text);
     }
@@ -211,6 +208,12 @@ function formatInlineMarkdown(text) {
         text = wrapper.postprocess(text);
     }
     return DOMPurify.sanitize(text);
+}
+
+function createTurndownService() {
+    const service = new TurndownService();
+    service.escape = (s) => s;
+    return service;
 }
 
 module.exports = {
