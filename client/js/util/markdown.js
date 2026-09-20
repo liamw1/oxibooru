@@ -55,7 +55,7 @@ class TildeWrapper extends BaseMarkdownWrapper {
 // prevent ^#... from being treated as headers, due to tag permalinks
 class TagPermalinkFixWrapper extends BaseMarkdownWrapper {
     preprocess(text) {
-        return text.replace(/^#(?=[a-zA-Z0-9_-])/g, "%%%#");
+        return text.replace(/^#(?=[a-zA-Z0-9_-])/gm, "%%%#");
     }
 
     postprocess(text) {
@@ -158,7 +158,6 @@ function formatMarkdown(text) {
     let wrappers = [
         new SjisWrapper(),
         new TildeWrapper(),
-        new TagPermalinkFixWrapper(),
         new EntityPermalinkWrapper(),
         new SearchPermalinkWrapper(),
         new SpoilersWrapper(),
