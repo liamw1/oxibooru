@@ -196,19 +196,17 @@ fn decode_jpeg(jpeg_data: &[u8], alpha_data: Option<&[u8]>) -> Result<DynamicIma
         let decoded_data = jpeg.as_bytes();
         let alpha_data = decompress_zlib(alpha_data)?;
         if alpha_data.len() == decoded_data.len() / 3 {
-            let rgba = decoded_data
-                .chunks_exact(3)
+            let (chunks, _) = decoded_data.as_chunks();
+            let rgba = chunks
+                .iter()
                 .zip(alpha_data)
-                .flat_map(|(rgb, a)| {
+                .flat_map(|(&[r, g, b], a)| {
                     // The JPEG data should be premultiplied alpha, but it isn't in some incorrect
                     // SWFs (see #6893).
                     // This means 0% alpha pixels may have color and incorrectly show as visible.
                     // Flash Player clamps color to the alpha value to fix this case.
                     // Only applies to DefineBitsJPEG3; DefineBitsLossless does not seem to clamp.
-                    let r = rgb[0].min(a);
-                    let g = rgb[1].min(a);
-                    let b = rgb[2].min(a);
-                    [r, g, b, a]
+                    [r.min(a), g.min(a), b.min(a), a]
                 })
                 .collect();
             if let Some(image) = RgbaImage::from_vec(jpeg.width(), jpeg.height(), rgba) {
@@ -254,7 +252,8 @@ pub fn decode_define_bits_lossless(swf_tag: &swf::DefineBitsLossless) -> Result<
             out_data
         }
         (1 | 2, swf::BitmapFormat::Rgb32) => {
-            for rgba in decoded_data.chunks_exact_mut(4) {
+            let (chunks, _) = decoded_data.as_chunks_mut::<4>();
+            for rgba in chunks {
                 rgba.rotate_left(1);
                 if !has_alpha {
                     rgba[3] = u8::MAX;
