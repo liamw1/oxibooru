@@ -2,7 +2,7 @@
     <div class='messages'></div>
     <header>
         <img src="img/apple-touch-icon.png" style="text-align:center;">
-        <div style="letter-spacing: 3px;"><%- ctx.name %></div>
+        <div><%- ctx.name %></div>
     </header>
     <% if (ctx.canListPosts) { %>
         <form class='horizontal'>
