@@ -10,6 +10,9 @@ events {
 
 http {
     include /etc/nginx/mime.types;
+    types {
+        image/jxl jxl;
+    }
     default_type application/octet-stream;
 
     log_format main '$remote_addr -> $request [$status] - '
