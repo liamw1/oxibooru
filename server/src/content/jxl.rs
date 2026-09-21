@@ -40,22 +40,22 @@ pub fn image(file_path: &Path) -> ApiResult<DynamicImage> {
         color_data_format: Some(JxlDataFormat::U8 { bit_depth: 8 }),
         // None ignores non-color extra channels (depth, spot colors, ...)
         extra_channel_format: vec![None; info.extra_channels.len()],
-    });
+    })?;
 
     // Advance to the first frame
-    let decoder = match decoder.process(&mut input)? {
+    let decoder = match decoder.process(&mut input, None)? {
         ProcessingResult::Complete { result } => result,
         ProcessingResult::NeedsMoreInput { size_hint, .. } => {
             return Err(ApiError::JxlDecoding(Error::OutOfBounds(size_hint)));
         }
     };
 
-    let bytes_per_row = width * samples_per_pixel;
+    let bytes_per_row = width.saturating_mul(samples_per_pixel);
     let mut pixel_data = vec![0; bytes_per_row * height];
     // One buffer for the interleaved color channels; ignored extra channels need none
     let mut buffers = [JxlOutputBuffer::new(&mut pixel_data, height, bytes_per_row)];
     // Decode the frame's pixels; for animations this stops after the first frame
-    match decoder.process(&mut input, &mut buffers)? {
+    match decoder.process(&mut input, &mut buffers, None)? {
         ProcessingResult::Complete { .. } => {}
         ProcessingResult::NeedsMoreInput { size_hint, .. } => {
             return Err(ApiError::JxlDecoding(Error::OutOfBounds(size_hint)));
@@ -71,7 +71,7 @@ pub fn image(file_path: &Path) -> ApiResult<DynamicImage> {
         JxlColorType::GrayscaleAlpha => {
             GrayAlphaImage::from_raw(width, height, pixel_data).map(DynamicImage::ImageLumaA8)
         }
-        JxlColorType::Bgr | JxlColorType::Bgra => unreachable!("Unrequested JPEG XL color type"),
+        JxlColorType::Bgr | JxlColorType::Bgra | JxlColorType::Cmyk => unreachable!("Unrequested JPEG XL color type"),
     }
     .ok_or(ApiError::FrameBufferMismatch(width, height, buffer_len))
 }
@@ -89,7 +89,7 @@ const CAST_MESSAGE: &str = "JPEG XL level 10 caps dimensions at 2^30, so u32 can
 /// image info. Fails if the input ends before the header is complete.
 fn jxl_read_info<In: JxlBitstreamInput>(input: &mut In) -> ApiResult<JxlDecoder<WithImageInfo>> {
     let decoder = JxlDecoder::new(JxlDecoderOptions::default());
-    match decoder.process(input)? {
+    match decoder.process(input, None)? {
         ProcessingResult::Complete { result } => Ok(result),
         // The full file is available, so needing more input means it's truncated
         ProcessingResult::NeedsMoreInput { size_hint, .. } => Err(ApiError::JxlDecoding(Error::OutOfBounds(size_hint))),
