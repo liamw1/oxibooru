@@ -8,7 +8,7 @@ If you're interested in contributing, see the [development guide](docs/DEV.md).
 
 ## Features
 
-- Post content: images (JPG, PNG, BMP, GIF, WEBP, JPEGXL) and videos (MP4, MOV, WEBM), Flash animations
+- Post content: images (JPG, PNG, BMP, GIF, WEBP, JPEGXL), videos (MP4, MOV, WEBM), Flash animations, and documents (PDF)
 - Post comments
 - Post descriptions
 - Post notes / annotations, including arbitrary polygons

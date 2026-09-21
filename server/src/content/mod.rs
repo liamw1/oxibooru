@@ -14,6 +14,7 @@ pub mod download;
 mod flash;
 pub mod hash;
 mod jxl;
+mod pdf;
 pub mod signature;
 pub mod thumbnail;
 pub mod upload;

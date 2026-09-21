@@ -51,6 +51,7 @@ pub enum ErrorName {
     EmailMissingTo,
     EmailNonAsciiChars,
     EmailTooManyFrom,
+    EmptyPdf,
     EmptySwf,
     EmptyValue,
     EmptyVideo,
@@ -120,6 +121,7 @@ pub enum ErrorName {
     InvalidEnum,
     InvalidEpfValue,
     InvalidExponent,
+    InvalidEncryption,
     InvalidFilename,
     InvalidFormat,
     InvalidGamma,
@@ -143,6 +145,7 @@ pub enum ErrorName {
     InvalidPassword,
     InvalidPermutationLehmerCode,
     InvalidPermutationSize,
+    InvalidPDF,
     InvalidPhcStringField,
     InvalidPredictor,
     InvalidProperty,
@@ -180,6 +183,7 @@ pub enum ErrorName {
     MissingContent,
     MissingContentType,
     MissingFormData,
+    MissingIDEntry,
     MissingJsonContentType,
     MissingMetadata,
     MissingPathParams,
@@ -227,6 +231,7 @@ pub enum ErrorName {
     PatchesRefTooLarge,
     PatchesTooMany,
     PatchesUnsupportedMixedUpsampling,
+    PasswordProtected,
     PathDeserializeError,
     PathParseError,
     PathParseErrorAtIndex,
@@ -565,6 +570,26 @@ impl ErrorKind for diesel::ConnectionError {
     }
 }
 
+impl ErrorKind for hayro::hayro_syntax::DecryptionError {
+    fn kind(&self) -> ErrorName {
+        match self {
+            Self::MissingIDEntry => ErrorName::MissingIDEntry,
+            Self::PasswordProtected => ErrorName::PasswordProtected,
+            Self::InvalidEncryption => ErrorName::InvalidEncryption,
+            Self::UnsupportedAlgorithm => ErrorName::UnsupportedAlgorithm,
+        }
+    }
+}
+
+impl ErrorKind for hayro::hayro_syntax::LoadPdfError {
+    fn kind(&self) -> ErrorName {
+        match self {
+            Self::Decryption(err) => err.kind(),
+            Self::Invalid => ErrorName::InvalidPDF,
+        }
+    }
+}
+
 impl ErrorKind for image::error::LimitErrorKind {
     fn kind(&self) -> ErrorName {
         match self {
@@ -876,6 +901,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::ContentTooLarge => ErrorName::ContentTooLarge,
             Self::CyclicDependency(_) => ErrorName::CyclicDependency,
             Self::DeleteDefault(_) => ErrorName::DeleteDefault,
+            Self::EmptyPdf => ErrorName::EmptyPdf,
             Self::EmptySwf => ErrorName::EmptySwf,
             Self::EmptyVideo => ErrorName::EmptyVideo,
             Self::ExpressionFailsRegex(..) => ErrorName::ExpressionFailsRegex,
@@ -916,6 +942,7 @@ impl ErrorKind for crate::api::error::ApiError {
             Self::NotLoggedIn => ErrorName::NotLoggedIn,
             Self::Password(err) => err.kind(),
             Self::PathRejection(err) => err.kind(),
+            Self::PdfLoadError(err) => err.0.kind(),
             Self::QueryRejection(err) => err.kind(),
             Self::Request(_) => ErrorName::RequestError,
             Self::ResourceModified => ErrorName::ResourceModified,
