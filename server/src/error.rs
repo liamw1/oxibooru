@@ -125,7 +125,6 @@ pub enum ErrorName {
     InvalidEncryption,
     InvalidFilename,
     InvalidFormat,
-    InvalidFormContentType,
     InvalidGamma,
     InvalidHeader,
     InvalidHistogramIndex,
