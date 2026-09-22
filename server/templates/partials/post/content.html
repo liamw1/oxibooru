@@ -2,7 +2,7 @@
     {% if post.type_()?==PostType::Flash %} style="background-image: url({{ post.thumbnail_url()? }});" {% endif %}>
 
     {% match post.type_()? %}
-    {% when PostType::Image | PostType::Animation %}
+    {% when PostType::Image | PostType::Animation | PostType::Document %}
     <img alt="" src="{{ post.content_url()? }}" draggable="false" width="{{ post.canvas_width()? }}"
         height="{{ post.canvas_height()? }}"
         style="--aspect-ratio: {{ post.canvas_width()? }} / {{ post.canvas_height()? }};">
