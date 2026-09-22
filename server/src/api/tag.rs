@@ -283,10 +283,14 @@ pub async fn create(
 
             // Add names, implications, and suggestions
             update::tag::set_names(conn, &ctx.config, tag.id, &body.names)?;
-            let (implied_ids, implications) =
-                update::tag::get_or_create_tags(conn, &ctx, body.implications.unwrap_or_default(), FetchMode::Acyclic)?;
+            let (implied_ids, implications) = update::tag::get_or_create_tags(
+                conn,
+                &ctx,
+                &body.implications.unwrap_or_default(),
+                FetchMode::Acyclic,
+            )?;
             let (suggested_ids, suggestions) =
-                update::tag::get_or_create_tags(conn, &ctx, body.suggestions.unwrap_or_default(), FetchMode::Acyclic)?;
+                update::tag::get_or_create_tags(conn, &ctx, &body.suggestions.unwrap_or_default(), FetchMode::Acyclic)?;
             update::tag::set_implications(conn, tag.id, &implied_ids)?;
             update::tag::set_suggestions(conn, tag.id, &suggested_ids)?;
 
@@ -469,7 +473,7 @@ pub async fn update(
                     ctx.verify_privilege(Action::TagEditImplication)?;
 
                     let (implied_ids, implications) =
-                        update::tag::get_or_create_tags(conn, &ctx, implications, FetchMode::Acyclic)?;
+                        update::tag::get_or_create_tags(conn, &ctx, &implications, FetchMode::Acyclic)?;
                     update::tag::set_implications(conn, tag_id, &implied_ids)?;
                     new_snapshot_data.implications = implications;
                 }
@@ -477,7 +481,7 @@ pub async fn update(
                     ctx.verify_privilege(Action::TagEditSuggestion)?;
 
                     let (suggested_ids, suggestions) =
-                        update::tag::get_or_create_tags(conn, &ctx, suggestions, FetchMode::Acyclic)?;
+                        update::tag::get_or_create_tags(conn, &ctx, &suggestions, FetchMode::Acyclic)?;
                     update::tag::set_suggestions(conn, tag_id, &suggested_ids)?;
                     new_snapshot_data.suggestions = suggestions;
                 }

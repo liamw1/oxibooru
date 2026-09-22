@@ -147,11 +147,11 @@ impl EditPathForm {
     }
 
     pub fn tag_count(&self) -> usize {
-        self.tags.as_ref().map(|tags| tags.current().len()).unwrap_or(0)
+        self.tags.as_ref().map_or(0, |tags| tags.current().len())
     }
 
     pub fn pool_count(&self) -> usize {
-        self.pools.as_ref().map(|pools| pools.current().len()).unwrap_or(0)
+        self.pools.as_ref().map_or(0, |pools| pools.current().len())
     }
 
     pub fn note_count(&self) -> usize {

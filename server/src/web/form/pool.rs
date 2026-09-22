@@ -79,14 +79,14 @@ impl ElementMap {
         const FIELDS: [Field; 3] = [Field::Category, Field::Names, Field::PostCount];
 
         let input_names: HashSet<_> = string::split_unescaped_whitespace(joined_names).collect();
-        let input_names_vec = input_names.iter().copied().map(SmallString::from).collect();
+        let input_names_vec: Vec<_> = input_names.iter().copied().map(SmallString::from).collect();
         let (added_pools, new_names, default_category) = connection_pool
             .transaction(move |conn| {
                 let default_category: SmallString = pool_category::table
                     .select(pool_category::name)
                     .filter(PoolCategory::is_default())
                     .first(conn)?;
-                let (pool_ids, new_names) = update::pool::fetch_pools(conn, &ctx, input_names_vec)?;
+                let (pool_ids, new_names) = update::pool::fetch_pools(conn, &ctx, &input_names_vec)?;
                 let pools = PoolInfo::new_batch_from_ids(conn, &ctx, &pool_ids, FIELDS.into())?;
                 Ok::<_, ApiError>((pools, new_names, default_category))
             })
@@ -105,7 +105,7 @@ impl ElementMap {
         let added_element_names: HashSet<_> = added_elements
             .iter()
             .map(Element::primary_name)
-            .chain(new_names.iter().map(|name| name.deref()))
+            .chain(new_names.iter().map(Deref::deref))
             .collect();
         for element in self.values_mut() {
             if added_element_names.contains(element.primary_name()) {

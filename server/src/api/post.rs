@@ -1104,7 +1104,7 @@ async fn create_impl(ctx: Ctx, params: ResourceParams<Field>, body: PostCreateBo
         move |conn| {
             // We do this before post insertion so that the post sequence isn't incremented if it fails
             let (tag_ids, tags) =
-                update::tag::get_or_create_tags(conn, &ctx, body.tags.unwrap_or_default(), FetchMode::Deep)?;
+                update::tag::get_or_create_tags(conn, &ctx, &body.tags.unwrap_or_default(), FetchMode::Deep)?;
             let relations = body.relations.unwrap_or_default();
             let notes = body.notes.unwrap_or_default();
 
@@ -1262,14 +1262,14 @@ async fn update_impl(
                 } else {
                     FetchMode::Shallow
                 };
-                let (updated_tag_ids, tags) = update::tag::get_or_create_tags(conn, &ctx, tags, fetch_mode)?;
+                let (updated_tag_ids, tags) = update::tag::get_or_create_tags(conn, &ctx, &tags, fetch_mode)?;
                 update::post::set_tags(conn, post_id, &updated_tag_ids)?;
                 new_snapshot_data.tags = tags;
             }
             if let Some(pools) = body.pools {
                 ctx.verify_privilege(Action::PoolEditPost)?;
 
-                let updated_pool_ids = update::pool::get_or_create_pools(conn, &ctx, pools)?;
+                let updated_pool_ids = update::pool::get_or_create_pools(conn, &ctx, &pools)?;
                 update::post::set_pools(conn, post_id, &updated_pool_ids)?;
                 // TODO: Create pool snapshots?
             }

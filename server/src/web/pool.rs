@@ -53,7 +53,7 @@ fn edit_response_fields(ctx: &Ctx) -> Mask<Field> {
         fields |= Field::Description;
     }
     if ctx.has_privilege(Action::PoolEditPost) {
-        fields |= Field::Posts
+        fields |= Field::Posts;
     }
     fields
 }
