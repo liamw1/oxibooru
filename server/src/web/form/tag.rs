@@ -128,14 +128,14 @@ impl ElementMap {
         const FIELDS: [Field; 3] = [Field::Category, Field::Names, Field::Usages];
 
         let input_names: HashSet<_> = string::split_unescaped_whitespace(joined_names).collect();
-        let input_names_vec = input_names.iter().copied().map(SmallString::from).collect();
+        let input_names_vec: Vec<_> = input_names.iter().copied().map(SmallString::from).collect();
         let (added_tags, new_names, default_category) = connection_pool
             .transaction(move |conn| {
                 let default_category: SmallString = tag_category::table
                     .select(tag_category::name)
                     .filter(TagCategory::is_default())
                     .first(conn)?;
-                let (tag_ids, new_names) = update::tag::fetch_tags(conn, &ctx, input_names_vec, FetchMode::Deep)?;
+                let (tag_ids, new_names) = update::tag::fetch_tags(conn, &ctx, &input_names_vec, FetchMode::Deep)?;
                 let tags = TagInfo::new_batch_from_ids(conn, &tag_ids, FIELDS.into())?;
                 Ok::<_, ApiError>((tags, new_names, default_category))
             })
@@ -159,7 +159,7 @@ impl ElementMap {
         let added_element_names: HashSet<_> = added_elements
             .iter()
             .map(Element::primary_name)
-            .chain(new_names.iter().map(|name| name.deref()))
+            .chain(new_names.iter().map(Deref::deref))
             .collect();
         for element in self.values_mut() {
             if added_element_names.contains(element.primary_name()) {

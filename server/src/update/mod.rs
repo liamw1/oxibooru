@@ -13,7 +13,7 @@ pub mod user;
 // that the client has the required privileges to perform their respective actions.
 // Make sure to check for privileges before calling them, if necessary.
 
-#[derive(Display)]
+#[derive(Clone, Copy, Display)]
 #[strum(serialize_all = "lowercase")]
 enum NameType {
     Tag,

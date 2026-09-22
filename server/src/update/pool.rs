@@ -24,7 +24,7 @@ pub fn last_edit_time(conn: &mut PgConnection, pool_id: i64) -> QueryResult<()> 
 ///
 /// Requires pool creation privileges if new names are given.
 /// Checks that each new name matches on the Pool regex.
-pub fn get_or_create_pools(conn: &mut PgConnection, ctx: &Context, names: Vec<SmallString>) -> ApiResult<Vec<i64>> {
+pub fn get_or_create_pools(conn: &mut PgConnection, ctx: &Context, names: &[SmallString]) -> ApiResult<Vec<i64>> {
     let (mut pool_ids, new_names) = fetch_pools(conn, ctx, names)?;
 
     // Create new pools if given unique names
@@ -55,15 +55,15 @@ pub fn get_or_create_pools(conn: &mut PgConnection, ctx: &Context, names: Vec<Sm
 pub fn fetch_pools(
     conn: &mut PgConnection,
     ctx: &Context,
-    names: Vec<SmallString>,
+    names: &[SmallString],
 ) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
     let pool_ids: Vec<i64> = pool_name::table
         .select(pool_name::pool_id)
-        .filter(pool_name::name.eq_any(&names))
+        .filter(pool_name::name.eq_any(names))
         .distinct()
         .load(conn)?;
 
-    let new_names = update::get_new_names(conn, &names, NameType::Pool)?;
+    let new_names = update::get_new_names(conn, names, NameType::Pool)?;
     new_names
         .iter()
         .try_for_each(|name| api::verify_matches_regex(&ctx.config, name, RegexType::Pool))?;

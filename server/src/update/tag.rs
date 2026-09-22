@@ -93,7 +93,7 @@ pub fn set_suggestions(conn: &mut PgConnection, tag_id: i64, suggested_ids: &[i6
 pub fn get_or_create_tags(
     conn: &mut PgConnection,
     ctx: &Context,
-    names: Vec<SmallString>,
+    names: &[SmallString],
     mode: FetchMode,
 ) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
     let (mut tag_ids, new_names) = fetch_tags(conn, ctx, names, mode)?;
@@ -128,12 +128,12 @@ pub fn get_or_create_tags(
 pub fn fetch_tags(
     conn: &mut PgConnection,
     ctx: &Context,
-    names: Vec<SmallString>,
+    names: &[SmallString],
     mode: FetchMode,
 ) -> ApiResult<(Vec<i64>, Vec<SmallString>)> {
     let mut implied_ids: Vec<i64> = tag_name::table
         .select(tag_name::tag_id)
-        .filter(tag_name::name.eq_any(&names))
+        .filter(tag_name::name.eq_any(names))
         .distinct()
         .load(conn)?;
 
@@ -164,7 +164,7 @@ pub fn fetch_tags(
     }
     let tag_ids: Vec<_> = dependency_graph.into_nodes().collect();
 
-    let new_names = update::get_new_names(conn, &names, NameType::Tag)?;
+    let new_names = update::get_new_names(conn, names, NameType::Tag)?;
     new_names
         .iter()
         .try_for_each(|name| api::verify_matches_regex(&ctx.config, name, RegexType::Tag))?;

@@ -98,6 +98,6 @@ fn split_into_names(joined_names: &str) -> Vec<SmallString> {
 
 fn split_into_ids(joined_ids: &str) -> Result<Vec<i64>, ParseIntError> {
     string::split_unescaped_whitespace(joined_ids)
-        .map(|id| id.parse())
+        .map(str::parse)
         .collect::<Result<_, _>>()
 }
