@@ -2,7 +2,6 @@
 
 const marked = require("marked");
 const DOMPurify = require("dompurify");
-const TurndownService = require('turndown');
 
 class BaseMarkdownWrapper {
     preprocess(text) {
@@ -146,7 +145,6 @@ function createRenderer() {
     };
     return renderer;
 }
-
 function formatMarkdown(text) {
     const renderer = createRenderer();
     const options = {
@@ -166,8 +164,6 @@ function formatMarkdown(text) {
         new FaviconWrapper(),
     ];
 
-    const turndownService = createTurndownService();
-    text = turndownService.turndown(text);
     for (let wrapper of wrappers) {
         text = wrapper.preprocess(text);
     }
@@ -196,8 +192,7 @@ function formatInlineMarkdown(text) {
         new StrikeThroughWrapper(),
         new FaviconWrapper(),
     ];
-    const turndownService = createTurndownService();
-    text = turndownService.turndown(text);
+
     for (let wrapper of wrappers) {
         text = wrapper.preprocess(text);
     }
@@ -207,12 +202,6 @@ function formatInlineMarkdown(text) {
         text = wrapper.postprocess(text);
     }
     return DOMPurify.sanitize(text);
-}
-
-function createTurndownService() {
-    const service = new TurndownService();
-    service.escape = (s) => s;
-    return service;
 }
 
 module.exports = {

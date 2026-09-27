@@ -14,8 +14,7 @@
     "marked": "^4.0.10",
     "mousetrap": "^1.6.2",
     "nprogress": "^0.2.0",
-    "superagent": "^3.8.3",
-    "turndown": "^7.2.1"
+    "superagent": "^3.8.3"
   },
   "devDependencies": {
     "babel-core": "^6.26.3",
