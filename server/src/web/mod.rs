@@ -213,6 +213,15 @@ where
     }
 }
 
+fn plain_redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Response {
+    // TODO: Generate using base URL
+    if hx.full_page() {
+        (jar, Redirect::to(relative_url)).into_response()
+    } else {
+        (jar, [("HX-Redirect", relative_url)], "").into_response()
+    }
+}
+
 fn redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Response {
     let flash = Cookie::build(("flash", REDIRECT_COOKIE_VALUE))
         .path("/") // TODO: Adjust to base URL
@@ -221,12 +230,7 @@ fn redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Response {
         .build();
     let jar = jar.add(flash);
 
-    // TODO: Generate using base URL
-    if hx.full_page() {
-        (jar, Redirect::to(relative_url)).into_response()
-    } else {
-        (jar, [("HX-Redirect", relative_url)], "").into_response()
-    }
+    plain_redirect(relative_url, hx, jar)
 }
 
 fn redirect_message(jar: CookieJar) -> (CookieJar, Message) {

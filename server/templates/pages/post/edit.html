@@ -45,11 +45,11 @@
 
                     <label>Safety</label>
                     <div class="radio-wrapper">
-                        {% for s in PostSafety::iter() %}
+                        {% for level in PostSafety::iter() %}
                         <label>
-                            <input type="radio" name="safety[current]" value="{{ s }}" {% if s==*safety.current() %}
-                                checked {% endif %}>
-                            <span class="radio">{{ s | capitalize }}</span>
+                            <input type="radio" name="safety[current]" value="{{ level }}" {% if
+                                level==*safety.current() %} checked {% endif %}>
+                            <span class="radio">{{ level | capitalize }}</span>
                         </label>
                         {% endfor %}
                     </div>

@@ -1,8 +1,9 @@
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::ops::{BitOr, BitOrAssign, Index};
 use std::str::FromStr;
+use strum::IntoEnumIterator;
 
 #[derive(Clone, Copy)]
 pub struct Mask<F> {
@@ -18,8 +19,12 @@ where
         Self::from_u64(u64::MAX)
     }
 
-    const fn none() -> Self {
+    pub const fn none() -> Self {
         Self::from_u64(0)
+    }
+
+    pub fn toggle(&mut self, field: F) {
+        self.value ^= 1 << u64::from(field);
     }
 
     const fn from_u64(value: u64) -> Self {
@@ -83,20 +88,45 @@ where
     }
 }
 
+impl<F> FromStr for Mask<F>
+where
+    F: FromStr,
+    u64: From<F>,
+{
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if s.is_empty() {
+            Ok(Self::none())
+        } else {
+            s.split(',').try_fold(Self::none(), |fields, field_str| {
+                F::from_str(field_str.trim())
+                    .map(|field| fields | field)
+                    .map_err(|_| format!("Invalid field `{field_str}`"))
+            })
+        }
+    }
+}
+
+impl<F> Serialize for Mask<F>
+where
+    F: IntoEnumIterator + Into<&'static str> + Copy,
+    u64: From<F>,
+{
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        let fields: Vec<&str> = F::iter().filter(|&field| self[field]).map(Into::into).collect();
+        serializer.serialize_str(&fields.join(","))
+    }
+}
+
 impl<'de, F> Deserialize<'de> for Mask<F>
 where
     F: FromStr,
     u64: From<F>,
 {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        if let Some(field_list) = Option::<Cow<str>>::deserialize(deserializer)? {
-            field_list.split(',').try_fold(Self::none(), |fields, field_str| {
-                F::from_str(field_str.trim())
-                    .map(|field| fields | field)
-                    .map_err(|_| serde::de::Error::custom(format!("invalid field `{field_str}`")))
-            })
-        } else {
-            Ok(Self::from_u64(u64::MAX))
+        match Option::<Cow<str>>::deserialize(deserializer)? {
+            Some(field_list) => field_list.parse().map_err(serde::de::Error::custom),
+            None => Ok(Self::from_u64(u64::MAX)),
         }
     }
 }

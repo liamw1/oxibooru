@@ -2,7 +2,7 @@ use crate::api::error::ApiResult;
 use crate::api::post::PostNeighbors;
 use crate::app::AppState;
 use crate::config::Action;
-use crate::extract::{Ctx, HxRequest, Json, JsonOrMultipart, Offset, Path, Query, ResourceParams};
+use crate::extract::{Ctx, Form, HxRequest, Json, JsonOrMultipart, Offset, Path, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostSafety, PostType, Rating};
 use crate::resource::NotRequested;
 use crate::resource::field::Mask;
@@ -10,7 +10,7 @@ use crate::resource::pool_category::PoolCategoryInfo;
 use crate::resource::post::{Field, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::web::form::FormField;
-use crate::web::form::post::{EditPathForm, Focus, Operation};
+use crate::web::form::post::{EditMode, EditPathForm, Focus, Operation, SafetyToggleForm};
 use crate::web::pager::{Page, Pager};
 use crate::web::{Html, Message, Tab, WebError, WebResult};
 use crate::{api, time, unit, web};
@@ -18,22 +18,23 @@ use askama::Template;
 use axum::response::{IntoResponse, Response};
 use axum::{Router, routing};
 use axum_extra::extract::CookieJar;
+use axum_extra::extract::cookie::{Cookie, SameSite};
 use serde::{Deserialize, Serialize};
 use server_macros::Deref;
 use std::num::NonZeroU64;
+use std::ops::{Deref, DerefMut};
 use strum::{Display, IntoEnumIterator};
 use tokio::try_join;
 
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/posts", routing::get(gallery))
+        .route("/posts/safety", routing::post(toggle_safety))
         .route("/post/{post_id}", routing::get(view))
         .route("/post/{post_id}/edit", routing::get(edit).post(edit_submit))
 }
 
-const SAFE_DEFAULT: bool = true;
-const SKETCHY_DEFAULT: bool = true;
-const UNSAFE_DEFAULT: bool = false;
+const SAFETY_COOKIE: &str = "safety";
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(42).unwrap();
 
@@ -63,6 +64,63 @@ const VIEW_FIELDS: [Field; 24] = [
     Field::OwnFavorite,
     Field::FavoriteCount,
 ];
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+struct SafetyFilter {
+    enabled_safeties: Mask<PostSafety>,
+}
+
+impl SafetyFilter {
+    fn from_jar(jar: &CookieJar) -> Self {
+        jar.get(SAFETY_COOKIE)
+            .and_then(|cookie| serde_urlencoded::from_str(cookie.value()).ok())
+            .unwrap_or_default()
+    }
+
+    fn to_cookie(self) -> Cookie<'static> {
+        let value = serde_urlencoded::to_string(self).expect("SafetyFilter is urlencodable");
+        Cookie::build((SAFETY_COOKIE, value))
+            .path("/") // TODO: Adjust to base URL
+            .http_only(true)
+            .same_site(SameSite::Strict)
+            .permanent()
+            .build()
+    }
+
+    fn query_filter(self) -> Option<&'static str> {
+        match (self[PostSafety::Safe], self[PostSafety::Sketchy], self[PostSafety::Unsafe]) {
+            (false, false, false) => Some("-safety:safe,sketchy,unsafe"),
+            (false, false, true) => Some("safety:unsafe"),
+            (false, true, false) => Some("safety:sketchy"),
+            (false, true, true) => Some("-safety:safe"),
+            (true, false, false) => Some("safety:safe"),
+            (true, false, true) => Some("-safety:sketchy"),
+            (true, true, false) => Some("-safety:unsafe"),
+            (true, true, true) => None,
+        }
+    }
+}
+
+impl Default for SafetyFilter {
+    fn default() -> Self {
+        Self {
+            enabled_safeties: Mask::none() | PostSafety::Safe | PostSafety::Sketchy,
+        }
+    }
+}
+
+impl Deref for SafetyFilter {
+    type Target = Mask<PostSafety>;
+    fn deref(&self) -> &Self::Target {
+        &self.enabled_safeties
+    }
+}
+
+impl DerefMut for SafetyFilter {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.enabled_safeties
+    }
+}
 
 async fn get_post(ctx: Ctx, path: Path<i64>, params: &MainParams, fields: Mask<Field>) -> ApiResult<PostInfo> {
     let query = params.query.clone();
@@ -98,82 +156,48 @@ async fn get_posts_and_categories(
         .map(|(post, (neighbors, tag_categories, pool_categories))| (post, neighbors, tag_categories, pool_categories))
 }
 
-#[derive(Clone, Copy, Display, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-#[strum(serialize_all = "kebab-case")]
-enum EditMode {
-    Tag,
-    Safety,
-    Delete,
-}
-
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct ListParams {
-    safe: Option<bool>,
-    sketchy: Option<bool>,
-    #[serde(rename = "unsafe")]
-    unsafe_: Option<bool>,
     edit: Option<EditMode>,
     search_text: Option<String>,
 }
 
 impl ListParams {
-    fn safe_enabled(&self) -> bool {
-        self.safe.unwrap_or(SAFE_DEFAULT)
-    }
-
-    fn sketchy_enabled(&self) -> bool {
-        self.sketchy.unwrap_or(SKETCHY_DEFAULT)
-    }
-
-    fn unsafe_enabled(&self) -> bool {
-        self.unsafe_.unwrap_or(UNSAFE_DEFAULT)
-    }
-
     fn search_text(&self) -> &str {
         self.search_text.as_deref().unwrap_or("")
     }
 
-    fn query(&self) -> Option<String> {
-        let safety_filter = match (self.safe_enabled(), self.sketchy_enabled(), self.unsafe_enabled()) {
-            (false, false, false) => Some("-safety:safe,sketchy,unsafe"),
-            (false, false, true) => Some("safety:unsafe"),
-            (false, true, false) => Some("safety:sketchy"),
-            (false, true, true) => Some("-safety:safe"),
-            (true, false, false) => Some("safety:safe"),
-            (true, false, true) => Some("-safety:sketchy"),
-            (true, true, false) => Some("-safety:unsafe"),
-            (true, true, true) => None,
-        };
-        match (self.search_text.clone(), safety_filter) {
-            (None, safety_filter) => safety_filter.map(str::to_string),
-            (search_text, None) => search_text,
-            (Some(search_text), Some(safety_filter)) => Some(format!("{search_text} {safety_filter}")),
+    fn query(&self, safety: SafetyFilter) -> Option<String> {
+        match (self.search_text.clone(), safety.query_filter()) {
+            (Some(text), Some(filter)) => Some(format!("{text} {filter}")),
+            (None, filter) => filter.map(str::to_owned),
+            (text, None) => text,
         }
     }
 
     fn simplify(mut self) -> Self {
-        if self.safe == Some(SAFE_DEFAULT) {
-            self.safe = None;
-        }
-        if self.sketchy == Some(SKETCHY_DEFAULT) {
-            self.sketchy = None;
-        }
-        if self.unsafe_ == Some(UNSAFE_DEFAULT) {
-            self.unsafe_ = None;
-        }
         if self.search_text.as_ref().is_some_and(String::is_empty) {
             self.search_text = None;
         }
         self
     }
 
-    fn to_main_params(&self) -> MainParams {
+    fn to_main_params(&self, safety: SafetyFilter) -> MainParams {
         MainParams {
-            query: self.query(),
+            query: self.query(safety),
             fit: None,
         }
+    }
+}
+
+impl From<SafetyToggleForm> for ListParams {
+    fn from(value: SafetyToggleForm) -> Self {
+        Self {
+            edit: value.edit,
+            search_text: value.search_text,
+        }
+        .simplify()
     }
 }
 
@@ -185,9 +209,15 @@ struct GalleryTemplate<'a> {
     posts: Vec<PostInfo>,
     pager: Pager<'a, ListParams>,
     params: &'a ListParams,
+    safety: SafetyFilter,
 }
 
-async fn gallery(ctx: Ctx, Query(params): Query<ListParams>, Query(offset): Query<Offset>) -> WebResult<Html> {
+async fn gallery(
+    ctx: Ctx,
+    Query(params): Query<ListParams>,
+    Query(offset): Query<Offset>,
+    jar: CookieJar,
+) -> WebResult<Response> {
     let fields = [
         Field::Id,
         Field::Tags,
@@ -200,7 +230,8 @@ async fn gallery(ctx: Ctx, Query(params): Query<ListParams>, Query(offset): Quer
     ]
     .into();
 
-    let query = params.query();
+    let safety = SafetyFilter::from_jar(&jar);
+    let query = params.query(safety);
     let resource_params = Query(ResourceParams { query, fields });
     let page_params = Query(offset.to_page_params(LIMIT));
     let Json(response) = api::post::list(ctx.clone(), resource_params, page_params).await?;
@@ -213,10 +244,20 @@ async fn gallery(ctx: Ctx, Query(params): Query<ListParams>, Query(offset): Quer
         posts: response.results,
         pager,
         params: &params,
+        safety,
     }
     .render()
-    .map(Html)
+    .map(|html| Html(html).into_response())
     .map_err(WebError::from)
+}
+
+async fn toggle_safety(hx: HxRequest, jar: CookieJar, Form(form): Form<SafetyToggleForm>) -> WebResult<Response> {
+    let mut safety = SafetyFilter::from_jar(&jar);
+    safety.toggle(form.toggle);
+    let jar = jar.add(safety.to_cookie());
+
+    let url = web::url("/posts", &ListParams::from(form))?;
+    Ok(web::plain_redirect(&url, &hx, jar))
 }
 
 #[derive(Clone, Copy, Default, Display, PartialEq, Eq, Serialize, Deserialize)]

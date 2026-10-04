@@ -13,6 +13,16 @@ use crate::web::{self, Message, PathForm, WebResult};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::convert::Infallible;
 use std::str::FromStr;
+use strum::Display;
+
+#[derive(Clone, Copy, Display, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum EditMode {
+    Tag,
+    Safety,
+    Delete,
+}
 
 #[derive(PartialEq, Eq)]
 pub enum Focus {
@@ -59,6 +69,14 @@ impl<'de> Deserialize<'de> for Operation {
         let s = <&str>::deserialize(deserializer)?;
         s.parse().map_err(serde::de::Error::custom)
     }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct SafetyToggleForm {
+    pub edit: Option<EditMode>,
+    pub search_text: Option<String>,
+    pub toggle: PostSafety,
 }
 
 pub type EditPathForm = PathForm<i64, EditForm>;
