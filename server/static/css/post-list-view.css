@@ -265,8 +265,8 @@
         display: block;
     }
 
-    .post-list-header form.bulk-edit-tags:not(.opened),
-    .post-list-header form.bulk-edit-safety:not(.opened) {
+    .post-list-header .bulk-edit-tags:not(.opened),
+    .post-list-header .bulk-edit-safety:not(.opened) {
         float: left;
         margin-right: 1em;
     }

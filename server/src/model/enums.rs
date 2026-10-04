@@ -231,6 +231,7 @@ impl FromSql<SmallInt, Pg> for MimeType {
     EnumIter,
     EnumString,
     FromRepr,
+    IntoStaticStr,
     AsExpression,
     FromSqlRow,
     Serialize,
@@ -246,6 +247,12 @@ pub enum PostSafety {
     Safe,
     Sketchy,
     Unsafe,
+}
+
+impl From<PostSafety> for u64 {
+    fn from(value: PostSafety) -> Self {
+        value as u64
+    }
 }
 
 impl ToSql<SmallInt, Pg> for PostSafety {
