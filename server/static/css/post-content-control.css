@@ -1,6 +1,13 @@
 .post-container {
     text-align: left;
-    --fit-height: calc(100vh - 5em);
+    /* Viewport height minus the top navigation (2.3em) and the #content-holder padding above and below */
+    --fit-height: calc(100vh - 2.3em - 2 * 1.5em);
+}
+
+@media (max-width:1000px) {
+    .post-container {
+        --fit-height: calc(100vh - 2.3em - 2 * 1em);
+    }
 }
 
 .post-container .post-content.transparency-grid img {

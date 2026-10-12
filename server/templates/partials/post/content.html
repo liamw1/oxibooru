@@ -5,7 +5,7 @@
     {% when PostType::Image | PostType::Animation | PostType::Document %}
     <img alt="" src="{{ post.content_url()? }}" draggable="false" width="{{ post.canvas_width()? }}"
         height="{{ post.canvas_height()? }}"
-        style="--aspect-ratio: {{ post.canvas_width()? }} / {{ post.canvas_height()? }};">
+        style="--aspect-ratio: {{ post.canvas_width()? }} / {{ post.canvas_height()? }}; --canvas-width: {{ post.canvas_width()? }}px;">
 
     {% when PostType::Flash %}
     <object width="{{ post.canvas_width()? }}" height="{{ post.canvas_height()? }}" data="{{ post.content_url()? }}">
@@ -19,7 +19,8 @@
     {% when PostType::Video %}
     {# TODO: autoplay #}
     <video controls {% if post.flags()?.contains(PostFlag::Loop) %}loop{% endif %} playsinline
-        width="{{ post.canvas_width()? }}" height="{{ post.canvas_height()? }}">
+        width="{{ post.canvas_width()? }}" height="{{ post.canvas_height()? }}"
+        style="--aspect-ratio: {{ post.canvas_width()? }} / {{ post.canvas_height()? }}; --canvas-width: {{ post.canvas_width()? }}px;">
         <source type="{{ post.mime_type()? }}" src="{{ post.content_url()? }}">
         Your browser doesn't support HTML5 videos.
     </video>
