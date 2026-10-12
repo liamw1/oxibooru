@@ -95,7 +95,7 @@
     <nav class="relations">
         <h1>Relations ({{ post.relations()?.len() }})</h1>
         <ul>
-            {% for related_post in post.relations()? %}
+            {%- for related_post in post.relations()? -%}
             <li>
                 <a href="{{ related_post.url(params)? }}">
                     <span class="thumbnail" style="background-image: url({{ related_post.thumbnail_url }})">
@@ -103,7 +103,7 @@
                     </span>
                 </a>
             </li>
-            {% endfor %}
+            {%- endfor -%}
         </ul>
     </nav>
     {% endif %}

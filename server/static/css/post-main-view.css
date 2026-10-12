@@ -44,6 +44,11 @@
     background: color-mix(in oklch, var(--main-color), white 90%);
 }
 
+.post-view>.sidebar>nav.buttons article a:focus:not(:focus-visible),
+.post-view>.content nav.buttons article a:focus:not(:focus-visible) {
+    outline: 0;
+}
+
 .post-view>.sidebar>nav.buttons article i,
 .post-view>.content nav.buttons article i {
     font-size: 140%;
