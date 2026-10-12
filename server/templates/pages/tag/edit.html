@@ -63,9 +63,11 @@
                             <button class="remove-tag" data-pseudo-content="×" name="operation"
                                 value="remove-implication-{{ i }}"
                                 onclick="if (this.form) { this.closest('li').remove(); return false; }"></button>
+                            {#- -#}
                             <a class="tag-{{ implication.category }}" href="{{ implication.url() }}">
-                                <i class="fa fa-tag"></i>
+                                {#- -#}<i class="fa fa-tag"></i>{#- -#}
                             </a>
+                            {#- -#}
                             <a class="tag-{{ implication.category }}" href="{{ implication.search_url() }}">{{
                                 implication_name }}</a>
                             <span class="tag-usages" data-pseudo-content="{{ implication.usages }}"></span>
@@ -105,9 +107,11 @@
                             <button class="remove-tag" data-pseudo-content="×" name="operation"
                                 value="remove-suggestion-{{ i }}"
                                 onclick="if (this.form) { this.closest('li').remove(); return false; }"></button>
+                            {#- -#}
                             <a class="tag-{{ suggestion.category }}" href="{{ suggestion.url() }}">
-                                <i class="fa fa-tag"></i>
+                                {#- -#}<i class="fa fa-tag"></i>{#- -#}
                             </a>
+                            {#- -#}
                             <a class="tag-{{ suggestion.category }}" href="{{ suggestion.search_url() }}">{{
                                 suggestion_name }}</a>
                             <span class="tag-usages" data-pseudo-content="{{ suggestion.usages }}"></span>
