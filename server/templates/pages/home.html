@@ -34,20 +34,26 @@
 
     <footer>
         <ul>
+            {#- -#}
             <li>{{ info.post_count }} posts</li>
+            {#- -#}
             <li class="sep">&nbsp;</li>
+            {#- -#}
             <li>{{ unit::format_bytes(info.disk_usage) }}</li>
+            {#- -#}
             <li class="sep">&nbsp;</li>
+            {#- -#}
             <li>
+                {#- -#}
                 Version <a class="version" href="https://github.com/liamw1/oxibooru/commits/master">{{ VERSION }}</a>
                 from <time datetime="{{ BUILD_DATE }}" title="{{ BUILD_DATE }}">{{ time::since(BUILD_DATE) }}</time>
+                {#- -#}
             </li>
-            {% if ctx.has_privilege(Action::SnapshotList) %}
+            {%- if ctx.has_privilege(Action::SnapshotList) -%}
             <li class="sep">&nbsp;</li>
-            <li>
-                <a href="history">History</a>
-            </li>
-            {% endif %}
+            {#- -#}
+            <li><a href="history">History</a></li>
+            {%- endif -%}
         </ul>
     </footer>
 </div>
