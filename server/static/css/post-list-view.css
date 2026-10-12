@@ -260,6 +260,11 @@
     vertical-align: top;
 }
 
+.post-list-header form>button {
+    margin-right: .25em;
+    margin-bottom: .25em;
+}
+
 @media (max-width:1000px) {
     .post-list-header form {
         display: block;
@@ -393,4 +398,17 @@
 
 .post-list-header button.discourage:focus {
     border-color: var(--main-color);
+}
+
+.post-list-header button.append {
+    margin-left: 1em;
+    padding: 0;
+    border: 0;
+    background: none;
+    font-family: inherit;
+    line-height: inherit;
+}
+
+.post-list-header button.append:focus {
+    outline: 2px solid var(--main-color);
 }
