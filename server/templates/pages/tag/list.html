@@ -78,8 +78,9 @@
                         <ul>
                             {% for implication in tag.implications()? %}
                             <li>
-                                {% let name = implication.primary_name() %}
+                                {%- let name = implication.primary_name() -%}
                                 <a class="tag-{{ implication.category }}" href="{{ implication.url() }}">{{ name }}</a>
+                                {#- -#}
                             </li>
                             {% endfor %}
                         </ul>
@@ -92,8 +93,9 @@
                         <ul>
                             {% for suggestion in tag.suggestions()? %}
                             <li>
-                                {% let name = suggestion.primary_name() %}
+                                {%- let name = suggestion.primary_name() -%}
                                 <a class="tag-{{ suggestion.category }}" href="{{ suggestion.url() }}">{{ name }}</a>
+                                {#- -#}
                             </li>
                             {% endfor %}
                         </ul>
