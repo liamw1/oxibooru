@@ -30,6 +30,10 @@
     transform: rotate(-90deg);
 }
 
+.expander.restoring summary i {
+    transition: none;
+}
+
 .expander .expander-content {
     padding: .5em .5em 2em .5em;
 }
