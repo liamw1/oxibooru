@@ -4,11 +4,12 @@
 
 .expander summary {
     background: var(--active-tab-background-color);
-    line-height: 2em;
+    line-height: calc(2em / 1.2);
     padding: 0 .5em;
     display: block;
     cursor: pointer;
-    color: color-mix(in oklab var(--text-color), var(--inactive-link-color));
+    user-select: none;
+    color: color-mix(in srgb, var(--text-color), var(--inactive-link-color));
     font-size: 120%;
     list-style: none;
 }
@@ -35,7 +36,7 @@
 
 .darktheme .expander summary {
     background: var(--active-tab-background-color-darktheme);
-    color: color-mix(in oklab var(--text-color-darktheme), var(--inactive-link-color-darktheme));
+    color: color-mix(in srgb, var(--text-color-darktheme), var(--inactive-link-color-darktheme));
 }
 
 .darktheme .expander summary i {
