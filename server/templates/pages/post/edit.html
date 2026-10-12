@@ -130,9 +130,11 @@
                                 <button class="remove-tag" data-pseudo-content="×" name="operation"
                                     value="remove-tag-{{ i }}"
                                     onclick="if (this.form) { this.closest('li').remove(); return false; }"></button>
+                                {#- -#}
                                 <a class="tag-{{ tag.category }}" href="{{ tag.url() }}">
-                                    <i class="fa fa-tag"></i>
+                                    {#- -#}<i class="fa fa-tag"></i>{#- -#}
                                 </a>
+                                {#- -#}
                                 <a class="tag-{{ tag.category }}" href="{{ tag.search_url() }}">{{ tag_name }}</a>
                                 <span class="tag-usages" data-pseudo-content="{{ tag.usages }}"></span>
                             </li>
@@ -177,9 +179,11 @@
                                 <button class="remove-pool" data-pseudo-content="×" name="operation"
                                     value="remove-pool-{{ i }}"
                                     onclick="if (this.form) { this.closest('li').remove(); return false; }"></button>
+                                {#- -#}
                                 <a class="pool-{{ pool.category }}" href="{{ pool.url() }}">
-                                    <i class="fa fa-list-ul"></i>
+                                    {#- -#}<i class="fa fa-list-ul"></i>{#- -#}
                                 </a>
+                                {#- -#}
                                 <a class="pool-{{ pool.category }}" href="{{ pool.search_url() }}">{{ pool_name }}</a>
                                 <span class="pool-usages" data-pseudo-content="{{ pool.post_count }}"></span>
                             </li>
