@@ -57,14 +57,10 @@
     margin-bottom: 0;
 }
 
-#home .post-container .post-content {
-    width: auto;
-}
-
 /* Fit within 80% of the viewport width and 70% of its height without upscaling */
-#home .post-container :is(img, video) {
+#home .post-container .post-content {
     width: min(80vw, calc(70vh * var(--aspect-ratio)), var(--canvas-width));
-    height: auto;
+    max-width: none;
 }
 
 #home nav a {

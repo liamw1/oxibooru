@@ -93,16 +93,50 @@ impl Note {
         }
     }
 
+    pub fn id(&self) -> i64 {
+        self.id
+    }
+
+    pub fn centroid(&self) -> (f32, f32) {
+        let mut x = 0.0;
+        let mut y = 0.0;
+        let mut signed_area = 0.0; // Will actually end up being twice the signed area
+        for ([x0, y0], [x1, y1]) in self.polygon.iter().zip(self.polygon.iter().cycle().skip(1)) {
+            let determinant = x0 * y1 - x1 * y0;
+
+            x += (x0 + x1) * determinant;
+            y += (y0 + y1) * determinant;
+            signed_area += determinant;
+        }
+
+        if signed_area.abs() > f32::EPSILON {
+            (x / (3.0 * signed_area), y / (3.0 * signed_area))
+        } else {
+            // Polygon is degenerate: fall back to mean of vertices
+            let count = self.polygon.len().max(1) as f32;
+            let x_mean = self.polygon.iter().fold(0.0, |sum, [x, _]| sum + x);
+            let y_mean = self.polygon.iter().fold(0.0, |sum, [_, y]| sum + y);
+            (x_mean / count, y_mean / count)
+        }
+    }
+
+    pub fn points_string(&self) -> String {
+        let mut s = String::new();
+        for (i, [x, y]) in self.polygon.iter().enumerate() {
+            if i > 0 {
+                s.push(' ');
+            }
+            write!(s, "{x},{y}").expect("Write to String is infallible");
+        }
+        s
+    }
+
     pub fn to_new_post_note(&'_ self, post_id: i64) -> NewPostNote<'_> {
         NewPostNote {
             post_id,
             polygon: self.polygon.as_flattened(),
             text: &self.text,
         }
-    }
-
-    pub fn id(&self) -> i64 {
-        self.id
     }
 }
 

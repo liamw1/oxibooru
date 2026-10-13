@@ -25,39 +25,35 @@
     text-align: left;
     position: relative;
     margin: 0;
-    width: 100%;
+    width: var(--canvas-width);
+    max-width: 100%;
 }
 
-.post-container .post-content :is(img, video) {
+.post-container .post-content :is(img, video, object) {
     display: block;
     margin: 0;
+    width: 100%;
+    height: auto;
+    aspect-ratio: var(--aspect-ratio);
     image-orientation: from-image;
 }
 
 /* Fit modes */
 /* TODO: Apply upscale-small-posts setting */
 
-.post-container.fit-original :is(img, video) {
-    width: auto;
-    height: auto;
+.post-container.fit-original .post-content {
     max-width: none;
-    max-height: none;
 }
 
-.post-container.fit-width :is(img, video) {
+.post-container.fit-width .post-content {
     width: 100%;
-    height: auto;
 }
 
-.post-container.fit-height :is(img, video) {
-    height: var(--fit-height);
-    width: auto;
+.post-container.fit-height .post-content {
+    width: calc(var(--fit-height) * var(--aspect-ratio));
     max-width: none;
 }
 
-.post-container.fit-both :is(img, video) {
+.post-container.fit-both .post-content {
     width: min(100%, calc(var(--fit-height) * var(--aspect-ratio)));
-    height: auto;
-    max-width: 100%;
-    max-height: var(--fit-height);
 }

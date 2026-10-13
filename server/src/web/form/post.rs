@@ -2,7 +2,7 @@ use crate::api::error::ApiResult;
 use crate::api::post::PostUpdateBody;
 use crate::extract::Ctx;
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType};
-use crate::resource::post::{Mode, PostInfo};
+use crate::resource::post::{Mode, Note, PostInfo};
 use crate::resource::{JoinExt, NotRequested};
 use crate::string::{LargeString, SmallString};
 use crate::time::DateTime;
@@ -174,6 +174,10 @@ impl EditPathForm {
 
     pub fn note_count(&self) -> usize {
         0 // TODO
+    }
+
+    pub fn notes(&self) -> Result<&[Note], Infallible> {
+        Ok(&[]) // TODO
     }
 
     pub fn url<T: Serialize>(&self, mode: Mode, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
