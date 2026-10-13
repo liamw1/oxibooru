@@ -1,3 +1,13 @@
+.post-overlay,
+.post-overlay .note,
+.post-overlay .notes-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
 .post-overlay[data-state=ready-to-draw]:after,
 .post-overlay[data-state=drawing-rectangle]:after,
 .post-overlay[data-state=drawing-polygon]:after {
@@ -64,10 +74,42 @@
     fill: var(--hovered-first-note-point-color);
 }
 
+.note-anchor {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    anchor-name: var(--anchor);
+}
+
+/* Centered on the note's centroid */
 .note-text {
     position: absolute;
+    left: var(--x);
+    top: var(--y);
+    translate: -50% -50%;
+    z-index: 1;
+    width: max-content;
     max-width: 22.5em;
+    text-align: left;
     display: none;
+}
+
+/* Anchoring a fixed element keeps the text from being clipped by the post container */
+@supports (anchor-name: --note) {
+    .note-text {
+        position: fixed;
+        position-anchor: var(--anchor);
+        left: anchor(center);
+        top: anchor(center);
+    }
+}
+
+.note:hover .note-text {
+    display: block;
+}
+
+.note-text[data-state=read-only] {
+    pointer-events: auto;
 }
 
 .note-text:not([data-state=read-only]) {

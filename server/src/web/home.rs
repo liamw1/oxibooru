@@ -37,6 +37,7 @@ async fn home(ctx: Ctx) -> WebResult<Html> {
         Field::CreationTime,
         Field::ContentUrl,
         Field::ThumbnailUrl,
+        Field::Notes,
     ]
     .into();
     let resource_params = Query(ResourceParams { query: None, fields });

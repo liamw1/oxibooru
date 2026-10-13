@@ -1,11 +1,11 @@
 <div class="post-content{% if matches!(post.type_()?, PostType::Image | PostType::Animation) %} transparency-grid{% endif %}"
-    {% if post.type_()?==PostType::Flash %} style="background-image: url({{ post.thumbnail_url()? }});" {% endif %}>
+    style="--aspect-ratio: {{ post.canvas_width()? }} / {{ post.canvas_height()? }}; --canvas-width: {{ post.canvas_width()? }}px;
+        {%- if post.type_()?==PostType::Flash %} background-image: url({{ post.thumbnail_url()? }});{% endif %}">
 
     {% match post.type_()? %}
     {% when PostType::Image | PostType::Animation | PostType::Document %}
     <img alt="" src="{{ post.content_url()? }}" draggable="false" width="{{ post.canvas_width()? }}"
-        height="{{ post.canvas_height()? }}"
-        style="--aspect-ratio: {{ post.canvas_width()? }} / {{ post.canvas_height()? }}; --canvas-width: {{ post.canvas_width()? }}px;">
+        height="{{ post.canvas_height()? }}">
 
     {% when PostType::Flash %}
     <object width="{{ post.canvas_width()? }}" height="{{ post.canvas_height()? }}" data="{{ post.content_url()? }}">
@@ -19,12 +19,33 @@
     {% when PostType::Video %}
     {# TODO: autoplay #}
     <video controls {% if post.flags()?.contains(PostFlag::Loop) %}loop{% endif %} playsinline
-        width="{{ post.canvas_width()? }}" height="{{ post.canvas_height()? }}"
-        style="--aspect-ratio: {{ post.canvas_width()? }} / {{ post.canvas_height()? }}; --canvas-width: {{ post.canvas_width()? }}px;">
+        width="{{ post.canvas_width()? }}" height="{{ post.canvas_height()? }}">
         <source type="{{ post.mime_type()? }}" src="{{ post.content_url()? }}">
         Your browser doesn't support HTML5 videos.
     </video>
     {% endmatch %}
 
-    {# TODO: post-overlay and notes #}
+    {# Videos and flash are excluded so that the overlay doesn't cover their controls #}
+    {% if !post.notes()?.is_empty() && !matches!(post.type_()?, PostType::Video | PostType::Flash) %}
+    <div class="post-overlay" data-state="read-only">
+        {% for (i, note) in post.notes()?.iter().enumerate() %}
+        {% let (x, y) = note.centroid() %}
+        {# Hovering the polygon reveals the text, which is anchored to the polygon's centroid #}
+        <div class="note" style="--anchor: --note-{{ i }}; --x: {{ x * 100.0 }}%; --y: {{ y * 100.0 }}%;">
+            <svg class="notes-overlay" viewBox="0 0 1 1" preserveAspectRatio="none">
+                <g>
+                    <polygon vector-effect="non-scaling-stroke" points="{{ note.points_string() }}"></polygon>
+                </g>
+            </svg>
+            <div class="note-anchor"></div>
+            <div class="note-text" data-state="read-only">
+                {# TODO: Markdown #}
+                <div class="wrapper">
+                    <p>{{ note.text }}</p>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
 </div>
