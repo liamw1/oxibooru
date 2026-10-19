@@ -35,6 +35,10 @@ pub fn routes() -> Router<AppState> {
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(50).unwrap();
 
+const SAVED_MESSAGE: &str = "Tag saved.";
+const MERGED_MESSAGE: &str = "Tag merged.";
+const DELETED_MESSAGE: &str = "Tag deleted.";
+
 const SUMMARY_FIELDS: [Field; 7] = [
     Field::Version,
     Field::Description,
@@ -276,9 +280,9 @@ async fn edit_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: EditPathForm
                     let new_primary_name = tag.primary_name()?;
                     if !hx.htmx() || new_primary_name != primary_name {
                         let new_url = format!("/tag/{new_primary_name}/edit");
-                        return Ok(web::redirect(&new_url, &hx, jar));
+                        return Ok(web::redirect(&new_url, &hx, jar, SAVED_MESSAGE));
                     }
-                    (EditPathForm::initialize(tag)?, focus, Message::Success)
+                    (EditPathForm::initialize(tag)?, focus, Message::Success(SAVED_MESSAGE.into()))
                 }
                 Err(err) => (form, focus, Message::Error(err)),
             }
@@ -364,9 +368,9 @@ async fn merge_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: MergePathFo
             if !hx.htmx() {
                 let Ok(primary_name) = form.primary_name();
                 let url = format!("/tag/{primary_name}/merge");
-                return Ok(web::redirect(&url, &hx, jar));
+                return Ok(web::redirect(&url, &hx, jar, MERGED_MESSAGE));
             }
-            (MergePathForm::initialize(&tag)?, Message::Success)
+            (MergePathForm::initialize(&tag)?, Message::Success(MERGED_MESSAGE.into()))
         }
         Err(err) => (form, Message::Error(err)),
     };
@@ -436,7 +440,7 @@ async fn delete_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResu
 
 async fn delete_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: DeletePathForm) -> WebResult<Response> {
     match api::tag::delete(ctx.clone(), form.path(), Json(form.to_body())).await {
-        Ok(Json(())) => Ok(web::redirect("/tags", &hx, jar)),
+        Ok(Json(())) => Ok(web::redirect("/tags", &hx, jar, DELETED_MESSAGE)),
         Err(err) => {
             let message = Message::Error(err);
             if hx.full_page() {

@@ -286,13 +286,14 @@ async fn upload_queue(ctx: &Ctx, hx: &HxRequest, form: &mut UploadForm) -> WebRe
 
 fn posts_redirect(hx: &HxRequest, jar: CookieJar) -> Response {
     const POSTS_URL: &str = "/posts";
+    const UPLOADED_MESSAGE: &str = "Post uploaded.";
 
     // Uploads after the first are requested by an element that doesn't update the address bar,
     // so have HTMX navigate instead of following the redirect itself
     if hx.htmx() {
-        (web::with_flash(jar), [("HX-Location", POSTS_URL)], "").into_response()
+        (web::with_flash(jar, UPLOADED_MESSAGE), [("HX-Location", POSTS_URL)], "").into_response()
     } else {
-        web::redirect(POSTS_URL, hx, jar)
+        web::redirect(POSTS_URL, hx, jar, UPLOADED_MESSAGE)
     }
 }
 

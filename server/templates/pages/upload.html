@@ -77,7 +77,7 @@
                 ready.</div>
             {% when Message::Error(err) %}
             <div class="message error">{{ err }}</div>
-            {% when Message::None | Message::Success %}
+            {% when Message::None | Message::Success(_) %}
             {% endmatch %}
             {% endfor %}
         </div>

@@ -3,7 +3,7 @@
 {% block sidebar_content %}
 <div id="sidebar-content" class="edit-sidebar">
     <form method="post" action="{{ post.url(Mode::Edit, params)? }}" hx-post="{{ post.url(Mode::Edit, params)? }}"
-        hx-target="#sidebar">
+        hx-target="#sidebar-content">
         <input type="hidden" name="version" value="{{ post.version }}">
 
         {# Extra fields needed for re-render #}
@@ -24,8 +24,8 @@
 
         <div class="messages">
             {% match message %}
-            {% when Message::Success %}
-            <div class="message success">Post saved.</div>
+            {% when Message::Success(msg) %}
+            <div class="message success">{{ msg }}</div>
             {% when Message::Error(err) %}
             <div class="message error">{{ err }}</div>
             {% when Message::None | Message::Attention %}

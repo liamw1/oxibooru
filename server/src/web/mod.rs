@@ -12,6 +12,7 @@ use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use percent_encoding::NON_ALPHANUMERIC;
 use serde::Serialize;
+use std::borrow::Cow;
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use thiserror::Error;
@@ -129,7 +130,7 @@ pub fn routes(state: AppState) -> Router {
 
 type WebResult<T> = Result<T, WebError>;
 
-const REDIRECT_COOKIE_VALUE: &str = "success";
+const FLASH_COOKIE: &str = "flash";
 
 const PROJECT_ROOT: &str = env!("CARGO_MANIFEST_DIR");
 
@@ -169,7 +170,7 @@ fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded:
 
 enum Message {
     None,
-    Success,
+    Success(Cow<'static, str>),
     Attention,
     Error(ApiError),
 }
@@ -226,12 +227,13 @@ fn plain_redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Respons
     }
 }
 
-fn redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Response {
-    plain_redirect(relative_url, hx, with_flash(jar))
+fn redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar, message: &str) -> Response {
+    plain_redirect(relative_url, hx, with_flash(jar, message))
 }
 
-fn with_flash(jar: CookieJar) -> CookieJar {
-    let flash = Cookie::build(("flash", REDIRECT_COOKIE_VALUE))
+fn with_flash(jar: CookieJar, message: &str) -> CookieJar {
+    let value = percent_encoding::utf8_percent_encode(message, NON_ALPHANUMERIC).to_string();
+    let flash = Cookie::build((FLASH_COOKIE, value))
         .path("/") // TODO: Adjust to base URL
         .http_only(true)
         .same_site(SameSite::Strict)
@@ -240,9 +242,10 @@ fn with_flash(jar: CookieJar) -> CookieJar {
 }
 
 fn redirect_message(jar: CookieJar) -> (CookieJar, Message) {
-    let message = match jar.get("flash").map(Cookie::value) {
-        Some(REDIRECT_COOKIE_VALUE) => Message::Success,
-        _ => Message::None,
-    };
-    (jar.remove(Cookie::build("flash").path("/")), message) // TODO: Adjust to base URL
+    let message = jar
+        .get(FLASH_COOKIE)
+        .and_then(|cookie| percent_encoding::percent_decode_str(cookie.value()).decode_utf8().ok())
+        .filter(|message| !message.is_empty())
+        .map_or(Message::None, |message| Message::Success(Cow::Owned(message.into_owned())));
+    (jar.remove(Cookie::build(FLASH_COOKIE).path("/")), message) // TODO: Adjust to base URL
 }
