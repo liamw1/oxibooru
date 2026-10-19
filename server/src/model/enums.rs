@@ -130,8 +130,10 @@ pub enum MimeType {
     #[strum(serialize = "image/avif")]
     Avif,
     #[serde(rename = "application/pdf")]
+    #[strum(serialize = "application/pdf")]
     Pdf,
     #[serde(rename = "image/jxl")]
+    #[strum(serialize = "image/jxl")]
     Jxl,
 }
 

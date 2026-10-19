@@ -247,6 +247,36 @@
     padding: 0;
 }
 
+.post-view .edit-sidebar .management .delete {
+    user-select: none;
+}
+
+.post-view .edit-sidebar .management .delete label {
+    display: inline;
+    margin: 0;
+    cursor: pointer;
+    color: var(--main-color);
+    transition: color .1s linear;
+}
+
+.post-view .edit-sidebar .management .delete input:focus-visible+label {
+    outline: 2px solid var(--main-color);
+}
+
+.post-view .edit-sidebar .management .delete .delete-confirm {
+    display: none;
+    align-items: center;
+    gap: 1em;
+}
+
+.post-view .edit-sidebar .management .delete input:checked~.delete-prompt {
+    display: none;
+}
+
+.post-view .edit-sidebar .management .delete input:checked~.delete-confirm {
+    display: flex;
+}
+
 .post-view .edit-sidebar .post-source textarea {
     white-space: pre;
     overflow-wrap: normal;
