@@ -32,7 +32,7 @@
             <div class="message success">Tag merged.</div>
             {% when Message::Error(err) %}
             <div class="message error">{{ err }}</div>
-            {% when Message::None %}
+            {% when Message::None | Message::Attention %}
             {% endmatch %}
         </div>
 

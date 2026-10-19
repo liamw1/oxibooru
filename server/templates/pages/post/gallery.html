@@ -6,7 +6,15 @@
 <div class="pager">
     {% include "partials/post/header.html" %}
 
-    <div class="messages"></div>
+    <div class="messages">
+        {% match message %}
+        {% when Message::Success %}
+        <div class="message success">Post uploaded.</div>
+        {% when Message::Error(err) %}
+        <div class="message error">{{ err }}</div>
+        {% when Message::None | Message::Attention %}
+        {% endmatch %}
+    </div>
 
     {# TODO: Post flow #}
     <div class="post-list">

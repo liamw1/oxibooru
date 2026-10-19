@@ -54,7 +54,7 @@
             <div class="message success">Pool saved.</div>
             {% when Message::Error(err) %}
             <div class="message error">{{ err }}</div>
-            {% when Message::None %}
+            {% when Message::None | Message::Attention %}
             {% endmatch %}
         </div>
         <div class="buttons">

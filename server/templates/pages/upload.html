@@ -4,8 +4,249 @@
 
 {% block main %}
 <div id="post-upload">
-    <form>
-        <div class="dropper-container"></div>
+    {# Requests replace each other so that cancelling stops an upload that's in progress. #}
+    <form id="upload-form" method="post" action="upload" enctype="multipart/form-data" novalidate
+        hx-sync:inherited="#upload-form:replace" hx-swap="innerHTML show:none">
+        <div class="dropper-container">
+            <div class="file-dropper-holder">
+                <div class="file-dropper-wrapper">
+                    {# The input is marked as required only so that CSS can tell when files have been selected.
+                    This doesn't stop the form being submitted without files, as the form has novalidate. #}
+                    <input type="file" id="upload-content" name="content" multiple required>
+                    <label class="file-dropper" for="upload-content" role="button">
+                        <span class="prompt">Drop files here!<br>Or just click on this box.</span>
+                        <span class="selected">Files selected.<br>Click "Add" to add them to the queue.</span>
+                        <br>
+                        <small>Allowed extensions: .jpg, .png, .gif, .webm, .mp4, .swf, .avif, .heif, .heic, .jxl,
+                            .pdf</small>
+                    </label>
+                </div>
+                <div class="url-holder">
+                    <input type="text" name="urls" placeholder="Alternatively, paste an URL here.">
+                    <button name="operation" value="add">Add</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="held-files" hidden></div>
+
+        {% if !form.uploads.is_empty() %}
+        <div class="control-strip">
+            {% if state == QueueState::Uploading %}
+            <button class="cancel" name="operation" value="cancel">Cancel</button>
+
+            <input type="hidden" name="skip-duplicates" value="{{ form.skip_duplicates }}">
+            <input type="hidden" name="upload-similar" value="{{ form.upload_similar }}">
+            <input type="hidden" name="pause-on-error" value="{{ form.pause_on_error }}">
+
+            <div hx-post="upload" hx-trigger="load" hx-target="body" hx-vals='{"operation": "continue"}'></div>
+            {% else %}
+            <button name="operation" value="upload">
+                {%- if state == QueueState::Stopped %}Resume{% else %}Upload all{% endif -%}
+            </button>
+
+            <span class="skip-duplicates">
+                <label>
+                    <input type="checkbox" name="skip-duplicates" {% if form.skip_duplicates %} checked {% endif %}>
+                    <span class="checkbox">Skip duplicate</span>
+                </label>
+            </span>
+
+            <span class="upload-similar">
+                <label>
+                    <input type="checkbox" name="upload-similar" {% if form.upload_similar %} checked {% endif %}>
+                    <span class="checkbox">Force upload similar</span>
+                </label>
+            </span>
+
+            <span class="pause-on-error">
+                <label>
+                    <input type="checkbox" name="pause-on-error" {% if form.pause_on_error %} checked {% endif %}>
+                    <span class="checkbox">Pause on error</span>
+                </label>
+            </span>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        <div class="messages">
+            {% for message in messages %}
+            {% match message %}
+            {% when Message::Attention %}
+            <div class="message error">One or more posts needs your attention; click &quot;Resume&quot; when you&apos;re
+                ready.</div>
+            {% when Message::Error(err) %}
+            <div class="message error">{{ err }}</div>
+            {% when Message::None | Message::Success %}
+            {% endmatch %}
+            {% endfor %}
+        </div>
+
+        <ul class="uploadables-container">
+            {% for (i, uploadable) in form.uploads.iter() %}
+            <li class="uploadable-container">
+                <input type="hidden" name="uploads[{{ i }}][name]" value="{{ uploadable.name }}">
+                {% match uploadable.content %}
+                {% when Content::Token(token) %}
+                <input type="hidden" name="uploads[{{ i }}][content][token]" value="{{ token }}">
+                {% when Content::Error(error) %}
+                <input type="hidden" name="uploads[{{ i }}][content][error]" value="{{ error }}">
+                {% when Content::Url(url) %}
+                <input type="hidden" name="uploads[{{ i }}][content][url]" value="{{ url }}">
+                {% when Content::Held(key) %}
+                <input type="hidden" name="uploads[{{ i }}][content][held]" value="{{ key }}">
+                {# Replaced by the input holding the file, which is preserved across page updates #}
+                <input type="file" id="upload-file-{{ key }}" hidden hx-preserve>
+                {% endmatch %}
+                {% if let Some(source) = uploadable.source %}
+                <input type="hidden" name="uploads[{{ i }}][source]" value="{{ source }}">
+                {% endif %}
+                {% if let Some(message) = uploadable.message %}
+                <input type="hidden" name="uploads[{{ i }}][message]" value="{{ message }}">
+                {% endif %}
+                <input type="hidden" name="uploads[{{ i }}][has-similar]" value="{{ uploadable.has_similar }}">
+
+                {% if let Content::Held(key) = uploadable.content %}
+                <div class="thumbnail-wrapper" data-preview-key="{{ key }}">
+                    <span class="thumbnail empty"></span>
+                </div>
+                {% else %}
+                <div class="thumbnail-wrapper">
+                    {% match uploadable.preview() %}
+                    {% when Preview::Image %}
+                    <a href="{{ uploadable.preview_url() }}">
+                        <span class="thumbnail" style="background-image: url('{{ uploadable.preview_url() }}')">
+                            <img alt="thumbnail" src="{{ uploadable.preview_url() }}">
+                        </span>
+                    </a>
+                    {% when Preview::Video %}
+                    <div class="thumbnail">
+                        <a href="{{ uploadable.preview_url() }}">
+                            <video muted>
+                                <source {% if let Some(mime_type)=uploadable.preview_mime_type() %}
+                                    type="{{ mime_type }}" {% endif %} src="{{ uploadable.preview_url() }}">
+                            </video>
+                        </a>
+                    </div>
+                    {% when Preview::None %}
+                    <span class="thumbnail empty"></span>
+                    {% endmatch %}
+                </div>
+                {% endif %}
+
+                <div class="uploadable">
+                    <header>
+                        {% if state != QueueState::Uploading %}
+                        <div class="move">
+                            <button class="move-up" title="Move up" name="operation" value="move-up-{{ i }}">
+                                {#- -#}<i class="fa fa-chevron-up"></i>{#- -#}
+                            </button>
+                            <button class="move-down" title="Move down" name="operation" value="move-down-{{ i }}">
+                                {#- -#}<i class="fa fa-chevron-down"></i>{#- -#}
+                            </button>
+                        </div>
+                        <button class="remove" title="Remove" name="operation" value="remove-{{ i }}"
+                            onclick="if (this.form) { this.closest('.uploadable-container').remove(); return false; }">
+                            {#- -#}<i class="fa fa-remove"></i>{#- -#}
+                        </button>
+                        {% endif %}
+
+                        <span class="filename">{{ uploadable.name }}</span>
+                    </header>
+
+                    <div class="body">
+                        {% if ctx.safety_enabled() %}
+                        <div class="safety">
+                            {# Disabled inputs aren't submitted #}
+                            {% if state == QueueState::Uploading %}
+                            <input type="hidden" name="uploads[{{ i }}][safety]" value="{{ uploadable.safety }}">
+                            {% endif %}
+                            {% for level in PostSafety::iter() %}
+                            <label>
+                                <input type="radio" name="uploads[{{ i }}][safety]" value="{{ level }}" {% if
+                                    level==uploadable.safety %} checked {% endif %} {% if state==QueueState::Uploading
+                                    %} disabled {% endif %}>
+                                <span class="radio">{{ level | capitalize }}</span>
+                            </label>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+
+                        <div class="options">
+                            {% if ctx.has_privilege(Action::PostCreateAnonymous) %}
+                            <div class="anonymous">
+                                {% if state == QueueState::Uploading %}
+                                <input type="hidden" name="uploads[{{ i }}][anonymous]"
+                                    value="{{ uploadable.anonymous }}">
+                                {% endif %}
+                                <label>
+                                    <input type="checkbox" name="uploads[{{ i }}][anonymous]" {% if uploadable.anonymous
+                                        || ctx.client.id.is_none() %} checked {% endif %} {% if ctx.client.id.is_none()
+                                        || state==QueueState::Uploading %} disabled {% endif %}>
+                                    <span class="checkbox">Upload anonymously</span>
+                                </label>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="messages">
+                            {% if let Some(message) = uploadable.message %}
+                            <div class="message error">{{ message }}</div>
+                            {% endif %}
+                        </div>
+
+                        {% if !uploadable.similar_posts.is_empty() %}
+                        <ul class="similar-posts">
+                            {% for (j, similar_post) in uploadable.similar_posts.iter().enumerate() %}
+                            <li>
+                                <input type="hidden" name="uploads[{{ i }}][similar-posts][{{ j }}][post-id]"
+                                    value="{{ similar_post.post_id }}">
+                                <input type="hidden" name="uploads[{{ i }}][similar-posts][{{ j }}][thumbnail-url]"
+                                    value="{{ similar_post.thumbnail_url }}">
+                                <input type="hidden" name="uploads[{{ i }}][similar-posts][{{ j }}][distance]"
+                                    value="{{ similar_post.distance }}">
+
+                                <a class="thumbnail-wrapper" title="@{{ similar_post.post_id }}"
+                                    href="post/{{ similar_post.post_id }}">
+                                    <span class="thumbnail"
+                                        style="background-image: url('{{ similar_post.thumbnail_url }}')">
+                                        <img alt="thumbnail" src="{{ similar_post.thumbnail_url }}">
+                                    </span>
+                                </a>
+                                <div class="description">
+                                    Similar post: <a href="post/{{ similar_post.post_id }}">@{{ similar_post.post_id
+                                        }}</a>
+                                    <br>
+                                    {{ similar_post.match_percent() }}% match
+                                </div>
+                                <div class="controls">
+                                    {% if ctx.has_privilege(Action::PostEditTag) %}
+                                    <label>
+                                        <input type="checkbox"
+                                            name="uploads[{{ i }}][similar-posts][{{ j }}][copy-tags]" {% if
+                                            similar_post.copy_tags %} checked {% endif %}>
+                                        <span class="checkbox">Copy tags</span>
+                                    </label>
+                                    <br>
+                                    {% endif %}
+                                    {% if ctx.has_privilege(Action::PostEditRelation) %}
+                                    <label>
+                                        <input type="checkbox"
+                                            name="uploads[{{ i }}][similar-posts][{{ j }}][add-relation]" {% if
+                                            similar_post.add_relation %} checked {% endif %}>
+                                        <span class="checkbox">Add relation</span>
+                                    </label>
+                                    {% endif %}
+                                </div>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
     </form>
 </div>
 {% endblock %}

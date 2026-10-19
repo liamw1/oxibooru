@@ -4,7 +4,7 @@ use crate::extract::{Form, HxRequest, Path};
 use crate::resource::NotRequested;
 use crate::{api, string};
 use axum::Router;
-use axum::extract::{FromRequest, FromRequestParts, Request};
+use axum::extract::{DefaultBodyLimit, FromRequest, FromRequestParts, Request};
 use axum::http::StatusCode;
 use axum::http::header::{CACHE_CONTROL, VARY};
 use axum::response::{Html as AxumHtml, IntoResponse, Redirect, Response};
@@ -103,6 +103,9 @@ pub fn routes(state: AppState) -> Router {
     let data_dir = std::env::var("MOUNT_DATA").unwrap();
     let static_dir = format!("{PROJECT_ROOT}/static");
 
+    let max_upload_size = usize::try_from(state.config.limits.max_upload_size).unwrap_or(usize::MAX);
+    let upload_limit = DefaultBodyLimit::max(max_upload_size);
+
     help::routes()
         .merge(comment::routes())
         .merge(home::routes())
@@ -114,7 +117,7 @@ pub fn routes(state: AppState) -> Router {
         .merge(snapshot::routes())
         .merge(tag::routes())
         .merge(tag_category::routes())
-        .merge(upload::routes())
+        .merge(upload::routes(upload_limit))
         .merge(user::routes())
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), middleware::convert_error))
         .route_layer(axum::middleware::from_fn_with_state(state.clone(), api::middleware::auth))
@@ -167,6 +170,7 @@ fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded:
 enum Message {
     None,
     Success,
+    Attention,
     Error(ApiError),
 }
 
@@ -223,14 +227,16 @@ fn plain_redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Respons
 }
 
 fn redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Response {
+    plain_redirect(relative_url, hx, with_flash(jar))
+}
+
+fn with_flash(jar: CookieJar) -> CookieJar {
     let flash = Cookie::build(("flash", REDIRECT_COOKIE_VALUE))
         .path("/") // TODO: Adjust to base URL
         .http_only(true)
         .same_site(SameSite::Strict)
         .build();
-    let jar = jar.add(flash);
-
-    plain_redirect(relative_url, hx, jar)
+    jar.add(flash)
 }
 
 fn redirect_message(jar: CookieJar) -> (CookieJar, Message) {

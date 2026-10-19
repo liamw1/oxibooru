@@ -5,18 +5,6 @@
     text-align: left;
 }
 
-#post-upload form.inactive input[type=submit],
-#post-upload form.inactive .skip-duplicates,
-#post-upload form.inactive .always-upload-similar,
-#post-upload form.inactive .pause-remain-on-error,
-#post-upload form.uploading input[type=submit],
-#post-upload form.uploading .skip-duplicates,
-#post-upload form.uploading .always-upload-similar,
-#post-upload form.uploading .pause-remain-on-error,
-#post-upload form:not(.uploading) .cancel {
-    display: none;
-}
-
 #post-upload .dropper-container {
     margin: 0 auto;
 }
@@ -30,17 +18,16 @@
     font-size: 60%;
 }
 
-#post-upload input[type=submit] {
+#post-upload .control-strip button {
     margin-top: 1em;
 }
 
-#post-upload .cancel {
-    margin-top: 1em;
+#post-upload .control-strip .cancel {
     background: var(--cancel-button-color);
     border-color: var(--cancel-button-color);
 }
 
-#post-upload .cancel:focus {
+#post-upload .control-strip .cancel:focus {
     border: 2px solid var(--text-color);
 }
 
@@ -48,11 +35,11 @@
     margin-left: 1em;
 }
 
-#post-upload .always-upload-similar {
+#post-upload .upload-similar {
     margin-left: 1em;
 }
 
-#post-upload .pause-remain-on-error {
+#post-upload .pause-on-error {
     margin-left: 1em;
 }
 
@@ -108,31 +95,27 @@
     border-bottom: 1px solid var(--upload-border-color);
 }
 
-#post-upload .uploadables-container .uploadable-container .uploadable header nav:first-of-type {
+#post-upload .uploadables-container .uploadable-container .uploadable header .move {
     float: left;
 }
 
-#post-upload .uploadables-container .uploadable-container .uploadable header nav:first-of-type a {
+#post-upload .uploadables-container .uploadable-container .uploadable header .move button {
     margin: 0 .5em 0 0;
 }
 
-#post-upload .uploadables-container .uploadable-container .uploadable header nav:last-of-type {
+#post-upload .uploadables-container .uploadable-container .uploadable header .remove {
     float: right;
-}
-
-#post-upload .uploadables-container .uploadable-container .uploadable header nav:last-of-type a {
     margin: 0 0 0 .5em;
 }
 
-#post-upload .uploadables-container .uploadable-container .uploadable header nav ul {
-    list-style-type: none;
-}
-
-#post-upload .uploadables-container .uploadable-container .uploadable header nav ul,
-#post-upload .uploadables-container .uploadable-container .uploadable header nav li {
+#post-upload .uploadables-container .uploadable-container .uploadable header button {
+    color: var(--main-color);
+    background-color: transparent;
     display: inline-block;
-    margin: 0;
     padding: 0;
+    border: 0;
+    font: inherit;
+    line-height: inherit;
 }
 
 #post-upload .uploadables-container .uploadable-container .uploadable header span.filename {
@@ -173,13 +156,13 @@
     margin-bottom: 0;
 }
 
-#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes {
+#post-upload .uploadables-container .uploadable-container .uploadable .body .similar-posts {
     list-style-type: none;
     margin: 0;
     padding: 0;
 }
 
-#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes li {
+#post-upload .uploadables-container .uploadable-container .uploadable .body .similar-posts li {
     clear: both;
     margin: 1em 0 0 0;
     padding-left: 7em;
@@ -187,24 +170,24 @@
     font-size: 90%;
 }
 
-#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes li .thumbnail-wrapper {
+#post-upload .uploadables-container .uploadable-container .uploadable .body .similar-posts li .thumbnail-wrapper {
     float: left;
     width: 6em;
     height: 4em;
     margin: 0 0 0 -7em;
 }
 
-#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes li .thumbnail-wrapper .thumbnail {
+#post-upload .uploadables-container .uploadable-container .uploadable .body .similar-posts li .thumbnail-wrapper .thumbnail {
     width: 100%;
     height: 100%;
 }
 
-#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes .description {
+#post-upload .uploadables-container .uploadable-container .uploadable .body .similar-posts .description {
     margin-right: .5em;
     display: inline-block;
 }
 
-#post-upload .uploadables-container .uploadable-container .uploadable .body .lookalikes .controls {
+#post-upload .uploadables-container .uploadable-container .uploadable .body .similar-posts .controls {
     float: right;
     display: inline-block;
 }

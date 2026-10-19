@@ -210,6 +210,7 @@ struct GalleryTemplate<'a> {
     pager: Pager<'a, ListParams>,
     params: &'a ListParams,
     safety: SafetyFilter,
+    message: Message,
 }
 
 async fn gallery(
@@ -238,6 +239,7 @@ async fn gallery(
 
     let params = params.simplify();
     let pager = Pager::build("posts", &params, page_params, response.total);
+    let (jar, message) = web::redirect_message(jar);
     GalleryTemplate {
         ctx,
         active_tab: Tab::Post,
@@ -245,9 +247,10 @@ async fn gallery(
         pager,
         params: &params,
         safety,
+        message,
     }
     .render()
-    .map(|html| Html(html).into_response())
+    .map(|html| (jar, Html(html)).into_response())
     .map_err(WebError::from)
 }
 

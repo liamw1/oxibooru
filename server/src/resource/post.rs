@@ -97,26 +97,26 @@ impl Note {
         self.id
     }
 
-    pub fn centroid(&self) -> (f32, f32) {
+    pub fn centroid(&self) -> (f64, f64) {
         let mut x = 0.0;
         let mut y = 0.0;
         let mut signed_area = 0.0; // Will actually end up being twice the signed area
         for ([x0, y0], [x1, y1]) in self.polygon.iter().zip(self.polygon.iter().cycle().skip(1)) {
-            let determinant = x0 * y1 - x1 * y0;
+            let determinant = f64::from(x0 * y1 - x1 * y0);
 
-            x += (x0 + x1) * determinant;
-            y += (y0 + y1) * determinant;
+            x += f64::from(x0 + x1) * determinant;
+            y += f64::from(y0 + y1) * determinant;
             signed_area += determinant;
         }
 
-        if signed_area.abs() > f32::EPSILON {
+        if signed_area.abs() > f64::from(f32::EPSILON) {
             (x / (3.0 * signed_area), y / (3.0 * signed_area))
         } else {
             // Polygon is degenerate: fall back to mean of vertices
-            let count = self.polygon.len().max(1) as f32;
+            let count = f64::from(u32::try_from(self.polygon.len().max(1)).unwrap_or(u32::MAX));
             let x_mean = self.polygon.iter().fold(0.0, |sum, [x, _]| sum + x);
             let y_mean = self.polygon.iter().fold(0.0, |sum, [_, y]| sum + y);
-            (x_mean / count, y_mean / count)
+            (f64::from(x_mean) / count, f64::from(y_mean) / count)
         }
     }
 
