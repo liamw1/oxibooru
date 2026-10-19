@@ -38,6 +38,8 @@ const SAFETY_COOKIE: &str = "safety";
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(42).unwrap();
 
+const SAVED_MESSAGE: &str = "Post saved.";
+
 const VIEW_FIELDS: [Field; 24] = [
     Field::Id,
     Field::User,
@@ -434,9 +436,9 @@ async fn edit_submit(
                 Ok(Json(post)) => {
                     if !hx.htmx() {
                         let new_url = post.url(Mode::Edit, &params)?;
-                        return Ok(web::redirect(&new_url, &hx, jar));
+                        return Ok(web::redirect(&new_url, &hx, jar, SAVED_MESSAGE));
                     }
-                    (EditPathForm::initialize(post)?, focus, Message::Success)
+                    (EditPathForm::initialize(post)?, focus, Message::Success(SAVED_MESSAGE.into()))
                 }
                 Err(err) => (form, focus, Message::Error(err)),
             }

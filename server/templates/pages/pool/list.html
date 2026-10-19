@@ -14,8 +14,8 @@
 
     <div class="messages">
         {% match message %}
-        {% when Message::Success %}
-        <div class="message success">Pool deleted.</div>
+        {% when Message::Success(msg) %}
+        <div class="message success">{{ msg }}</div>
         {% when Message::None | Message::Attention | Message::Error(_) %}
         {% endmatch %}
     </div>
