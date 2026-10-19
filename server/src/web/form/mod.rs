@@ -1,5 +1,6 @@
 use crate::string::{self, SmallString};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
+use std::borrow::Cow;
 use std::num::ParseIntError;
 use std::ops::Deref;
 use strum::Display;
@@ -7,6 +8,7 @@ use strum::Display;
 pub mod pool;
 pub mod post;
 pub mod tag;
+pub mod upload;
 
 #[derive(Clone, Copy, Default, Display)]
 #[strum(serialize_all = "lowercase")]
@@ -100,4 +102,11 @@ fn split_into_ids(joined_ids: &str) -> Result<Vec<i64>, ParseIntError> {
     string::split_unescaped_whitespace(joined_ids)
         .map(str::parse)
         .collect::<Result<_, _>>()
+}
+
+fn checkbox_state<'de, D: Deserializer<'de>>(deserializer: D) -> Result<bool, D::Error> {
+    const OFF: [&str; 4] = ["false", "off", "0", ""];
+    Option::deserialize(deserializer).map(|value: Option<Cow<str>>| {
+        value.is_some_and(|value| !OFF.iter().any(|off| value.eq_ignore_ascii_case(off)))
+    })
 }

@@ -7,6 +7,7 @@ use axum::extract::multipart::Multipart;
 use axum::extract::rejection::{JsonRejection, MissingJsonContentType};
 use mime::{APPLICATION, JSON, Mime};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
 use std::str::FromStr;
 use strum::IntoStaticStr;
@@ -34,6 +35,12 @@ impl UploadToken {
 
     pub fn path(&self, config: &Config) -> PathBuf {
         config.path(Directory::TemporaryUploads).join(&self.token)
+    }
+}
+
+impl Display for UploadToken {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.token)
     }
 }
 

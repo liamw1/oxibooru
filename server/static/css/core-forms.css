@@ -441,6 +441,41 @@ input::-moz-focus-inner {
     word-wrap: break-word;
 }
 
+/* The file input is stretched invisibly over the dropper so that clicks and dropped files go to it */
+.file-dropper-holder .file-dropper-wrapper {
+    position: relative;
+}
+
+.file-dropper-holder .file-dropper-wrapper input[type=file] {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.file-dropper-holder .file-dropper .selected {
+    display: none;
+}
+
+/* A required file input is only valid once it has files, which lets the dropper show that without scripting.
+   With scripting the form is submitted as soon as files are selected, so there is nothing to show. */
+@media (scripting: none) {
+    .file-dropper-holder input[type=file]:valid+.file-dropper .prompt {
+        display: none;
+    }
+
+    .file-dropper-holder input[type=file]:valid+.file-dropper .selected {
+        display: inline;
+    }
+
+    .file-dropper-holder input[type=file]:valid+.file-dropper {
+        border-color: var(--main-color);
+    }
+}
+
 .file-dropper-holder .url-holder {
     display: flex;
     margin-top: .5em;
