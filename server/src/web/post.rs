@@ -39,6 +39,7 @@ const SAFETY_COOKIE: &str = "safety";
 const LIMIT: NonZeroU64 = NonZeroU64::new(42).unwrap();
 
 const SAVED_MESSAGE: &str = "Post saved.";
+const DELETED_MESSAGE: &str = "Post deleted.";
 
 const VIEW_FIELDS: [Field; 24] = [
     Field::Id,
@@ -443,6 +444,10 @@ async fn edit_submit(
                 Err(err) => (form, focus, Message::Error(err)),
             }
         }
+        Operation::Delete => match api::post::delete(ctx.clone(), form.path(), Json(form.to_delete_body())).await {
+            Ok(Json(())) => return Ok(web::redirect("/posts", &hx, jar, DELETED_MESSAGE)),
+            Err(err) => (form, Focus::None, Message::Error(err)),
+        },
     };
 
     if hx.full_page() {

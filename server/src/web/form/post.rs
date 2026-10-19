@@ -1,6 +1,6 @@
 use crate::api::error::ApiResult;
 use crate::api::post::PostUpdateBody;
-use crate::extract::Ctx;
+use crate::extract::{Ctx, DeleteBody};
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType};
 use crate::resource::post::{Mode, Note, PostInfo};
 use crate::resource::{JoinExt, NotRequested};
@@ -35,6 +35,7 @@ pub enum Focus {
 pub enum Operation {
     Auto,
     Save,
+    Delete,
     AddTag,
     AddPool,
     RemoveTag(i64),
@@ -48,6 +49,7 @@ impl FromStr for Operation {
         match s {
             "auto" => Some(Self::Auto),
             "save" => Some(Self::Save),
+            "delete" => Some(Self::Delete),
             "add-tag" => Some(Self::AddTag),
             "add-pool" => Some(Self::AddPool),
             _ => {
@@ -216,6 +218,10 @@ impl EditPathForm {
             thumbnail_token: None,
             thumbnail_url: None,
         })
+    }
+
+    pub fn to_delete_body(&self) -> DeleteBody {
+        DeleteBody { version: self.version }
     }
 
     pub fn with_tag_removed(mut self, index: i64) -> (Self, Focus, Message) {
