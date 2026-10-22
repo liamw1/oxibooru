@@ -8,9 +8,7 @@ use crate::extract::{Ctx, HxRequest, Json, JsonOrMultipart, Path, Query, Resourc
 use crate::model::enums::PostSafety;
 use crate::resource::NotRequested;
 use crate::resource::post::Field;
-use crate::web::form::upload::{
-    Content, Operation, PAUSE_ON_ERROR_DEFAULT, Preview, SimilarPost, UploadForm, Uploadable,
-};
+use crate::web::form::upload::{Content, Operation, Preview, SimilarPost, UploadForm, Uploadable};
 use crate::web::{Html, Message, Tab, WebError, WebResult};
 use crate::{api, filesystem, web};
 use askama::Template;
@@ -21,6 +19,10 @@ use axum_extra::extract::CookieJar;
 use std::collections::HashMap;
 use strum::IntoEnumIterator;
 use url::{Url, form_urlencoded};
+
+pub const COPY_TAGS_DEFAULT: bool = false;
+pub const ADD_RELATION_DEFAULT: bool = true;
+pub const PAUSE_ON_ERROR_DEFAULT: bool = true;
 
 pub fn routes(upload_limit: DefaultBodyLimit) -> Router<AppState> {
     let upload_capable_routes = Router::new()
@@ -200,8 +202,8 @@ async fn check_for_similar(
                 post_id: similar.post.id()?,
                 thumbnail_url: similar.post.thumbnail_url()?.clone(),
                 distance: similar.distance,
-                copy_tags: false,
-                add_relation: true,
+                copy_tags: COPY_TAGS_DEFAULT,
+                add_relation: ADD_RELATION_DEFAULT,
             })
         })
         .collect::<Result<_, NotRequested>>()?;

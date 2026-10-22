@@ -17,7 +17,7 @@ use strum::EnumString;
 use utoipa::ToSchema;
 
 /// A user resource stripped down to `name` and `avatarUrl` fields.
-#[derive(Serialize, ToSchema)]
+#[derive(Clone, Serialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MicroUser {
     /// The user name.

@@ -3,14 +3,13 @@ use crate::content::upload::UploadToken;
 use crate::filesystem::Directory;
 use crate::model::enums::{MimeType, PostSafety};
 use crate::web::form;
+use crate::web::upload::PAUSE_ON_ERROR_DEFAULT;
 use serde::{Deserialize, Deserializer};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::ops::Bound;
 use std::str::FromStr;
 use url::Url;
-
-pub const PAUSE_ON_ERROR_DEFAULT: bool = true;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum Operation {
