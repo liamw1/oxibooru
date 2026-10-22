@@ -76,6 +76,7 @@ RUN mkdir -p /data
 
 # Install system dependencies
 RUN apk add --no-cache build-base perl
+RUN apk add --no-cache --upgrade ca-certificates-bundle
 
 COPY --from=planner /opt/app/recipe.json recipe.json
 
