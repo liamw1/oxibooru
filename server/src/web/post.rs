@@ -5,10 +5,12 @@ use crate::config::Action;
 use crate::extract::{Ctx, Form, HxRequest, Json, JsonOrMultipart, Offset, Path, Query, ResourceParams};
 use crate::model::enums::{PostFlag, PostSafety, PostType, Rating};
 use crate::resource::NotRequested;
+use crate::resource::comment::CommentInfo;
 use crate::resource::field::Mask;
 use crate::resource::pool_category::PoolCategoryInfo;
 use crate::resource::post::{Field, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
+use crate::string::LargeString;
 use crate::web::form::FormField;
 use crate::web::form::post::{EditMode, EditPathForm, Focus, Operation, SafetyToggleForm};
 use crate::web::pager::{Page, Pager};
@@ -300,27 +302,31 @@ struct PostPage<T> {
     tag_categories: Vec<TagCategoryInfo>,
     pool_categories: Vec<PoolCategoryInfo>,
     params: MainParams,
+    description: LargeString,
+    comments: Vec<CommentInfo>,
     focus: Focus,
     message: Message,
 }
 
 impl PostPage<PostInfo> {
-    async fn new(ctx: Ctx, path: Path<i64>, params: MainParams, mode: Mode) -> ApiResult<Self> {
-        get_posts_and_categories(ctx.clone(), path, &params, VIEW_FIELDS.into())
-            .await
-            .map(|(post, neighbors, tag_categories, pool_categories)| Self {
-                ctx,
-                active_tab: Tab::Post,
-                mode,
-                post,
-                prev_post: neighbors.prev,
-                next_post: neighbors.next,
-                tag_categories,
-                pool_categories,
-                params,
-                focus: Focus::None,
-                message: Message::None,
-            })
+    async fn new(ctx: Ctx, path: Path<i64>, params: MainParams, mode: Mode) -> WebResult<Self> {
+        let (post, neighbors, tag_categories, pool_categories) =
+            get_posts_and_categories(ctx.clone(), path, &params, VIEW_FIELDS.into()).await?;
+        Ok(Self {
+            ctx,
+            active_tab: Tab::Post,
+            mode,
+            description: post.description().cloned()?,
+            comments: post.comments().cloned()?,
+            post,
+            prev_post: neighbors.prev,
+            next_post: neighbors.next,
+            tag_categories,
+            pool_categories,
+            params,
+            focus: Focus::None,
+            message: Message::None,
+        })
     }
 }
 
@@ -390,6 +396,8 @@ async fn edit(
             ctx,
             active_tab: Tab::Post,
             mode: Mode::Edit,
+            description: post.description().cloned()?,
+            comments: post.comments().cloned()?,
             post: EditPathForm::initialize(post)?,
             prev_post: neighbors.prev,
             next_post: neighbors.next,
@@ -451,12 +459,18 @@ async fn edit_submit(
     };
 
     if hx.full_page() {
-        let (neighbors, tag_categories, pool_categories) =
-            get_neighbors_and_categories(ctx.clone(), updated_form.path(), &params, fields).await?;
+        let saved_fields = [Field::Description, Field::Comments].into();
+        let saved_post_future = get_post(ctx.clone(), updated_form.path(), &params, saved_fields);
+        let neighbors_and_categories_future =
+            get_neighbors_and_categories(ctx.clone(), updated_form.path(), &params, fields);
+        let (saved_post, (neighbors, tag_categories, pool_categories)) =
+            try_join!(saved_post_future, neighbors_and_categories_future)?;
         let page_info = PostPage {
             ctx,
             active_tab: Tab::Post,
             mode: Mode::Edit,
+            description: saved_post.description().cloned()?,
+            comments: saved_post.comments().cloned()?,
             post: updated_form,
             prev_post: neighbors.prev,
             next_post: neighbors.next,
