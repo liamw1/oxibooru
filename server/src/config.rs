@@ -415,11 +415,14 @@ pub fn read_env(config: &Config) -> Result<Arc<Env>, Box<dyn Error>> {
 /// Deserializes the `config.toml`.
 /// Any values not present will default to the corresponding value in `config.toml.dist`.
 pub fn create(args: Args) -> Arc<Config> {
+    #[expect(
+        clippy::manual_assert,
+        reason = "assert! on a constant trips clippy::assertions_on_constants"
+    )]
     if cfg!(test) {
         panic!("Production config disallowed in test build!")
-    } else {
-        Arc::new(create_config(args))
     }
+    Arc::new(create_config(args))
 }
 
 /// Creates a test config with an optional `override_relative_path` to override the default config.
