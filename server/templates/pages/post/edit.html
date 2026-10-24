@@ -238,7 +238,7 @@
                         {% endif %}
                         {% if ctx.has_privilege(Action::PostMerge) %}
                         <li>
-                            {# TODO #}
+                            <a href="post/{{ post.id()? }}/merge">Merge</a>
                         </li>
                         {% endif %}
                         {% if ctx.has_privilege(Action::PostDelete) %}

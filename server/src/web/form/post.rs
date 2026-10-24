@@ -1,6 +1,6 @@
 use crate::api::error::ApiResult;
-use crate::api::post::PostUpdateBody;
-use crate::extract::{Ctx, DeleteBody};
+use crate::api::post::{PostMergeBody, PostUpdateBody};
+use crate::extract::{Ctx, DeleteBody, MergeBody};
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType};
 use crate::resource::post::{Mode, Note, PostInfo};
 use crate::resource::{JoinExt, NotRequested};
@@ -276,5 +276,56 @@ impl EditPathForm {
         let (form, ..) = self.with_new_tags(ctx.clone()).await?;
         let (form, ..) = form.with_new_pools(ctx).await?;
         Ok((form, focus, Message::None))
+    }
+}
+
+#[derive(Clone, Copy, Display, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+#[strum(serialize_all = "kebab-case")]
+pub enum Side {
+    Left,
+    Right,
+}
+
+pub type MergeSearchPathForm = PathForm<i64, MergeSearchForm>;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct MergeSearchForm {
+    pub target_id: i64,
+}
+
+pub type MergePathForm = PathForm<i64, MergeForm>;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct MergeForm {
+    pub version: DateTime,
+    pub target_id: i64,
+    pub target_version: DateTime,
+    pub merge_to: Side,
+    pub content: Side,
+}
+
+impl MergePathForm {
+    pub fn to_body(&self) -> PostMergeBody {
+        let post_info = match self.merge_to {
+            Side::Left => MergeBody {
+                remove: self.target_id,
+                merge_to: self.path,
+                remove_version: self.target_version,
+                merge_to_version: self.version,
+            },
+            Side::Right => MergeBody {
+                remove: self.path,
+                merge_to: self.target_id,
+                remove_version: self.version,
+                merge_to_version: self.target_version,
+            },
+        };
+        PostMergeBody {
+            post_info,
+            replace_content: self.content != self.merge_to,
+        }
     }
 }
