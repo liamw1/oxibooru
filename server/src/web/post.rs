@@ -12,7 +12,9 @@ use crate::resource::post::{Field, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::string::LargeString;
 use crate::web::form::FormField;
-use crate::web::form::post::{EditMode, EditPathForm, Focus, Operation, SafetyToggleForm};
+use crate::web::form::post::{
+    EditMode, EditPathForm, Focus, MergePathForm, MergeSearchPathForm, Operation, SafetyToggleForm, Side,
+};
 use crate::web::pager::{Page, Pager};
 use crate::web::{Html, Message, Tab, WebError, WebResult};
 use crate::{api, time, unit, web};
@@ -26,7 +28,7 @@ use server_macros::Deref;
 use std::num::NonZeroU64;
 use std::ops::{Deref, DerefMut};
 use strum::{Display, IntoEnumIterator};
-use tokio::try_join;
+use tokio::{join, try_join};
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -34,6 +36,8 @@ pub fn routes() -> Router<AppState> {
         .route("/posts/safety", routing::post(toggle_safety))
         .route("/post/{post_id}", routing::get(view))
         .route("/post/{post_id}/edit", routing::get(edit).post(edit_submit))
+        .route("/post/{post_id}/merge", routing::get(merge).post(merge_submit))
+        .route("/post/{post_id}/merge/search", routing::post(merge_search))
 }
 
 const SAFETY_COOKIE: &str = "safety";
@@ -42,6 +46,7 @@ const LIMIT: NonZeroU64 = NonZeroU64::new(42).unwrap();
 
 const SAVED_MESSAGE: &str = "Post saved.";
 const DELETED_MESSAGE: &str = "Post deleted.";
+const MERGED_MESSAGE: &str = "Post merged.";
 
 const VIEW_FIELDS: [Field; 24] = [
     Field::Id,
@@ -68,6 +73,19 @@ const VIEW_FIELDS: [Field; 24] = [
     Field::OwnScore,
     Field::OwnFavorite,
     Field::FavoriteCount,
+];
+
+const MERGE_FIELDS: [Field; 10] = [
+    Field::Id,
+    Field::Version,
+    Field::User,
+    Field::FileSize,
+    Field::CanvasWidth,
+    Field::CanvasHeight,
+    Field::MimeType,
+    Field::CreationTime,
+    Field::ContentUrl,
+    Field::ThumbnailUrl,
 ];
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -490,6 +508,119 @@ async fn edit_submit(
             message,
         }
         .render()
+    }
+    .map(Html)
+    .map(Html::into_response)
+    .map_err(WebError::from)
+}
+
+struct MergePage {
+    ctx: Ctx,
+    active_tab: Tab,
+    post: PostInfo,
+    target: Option<PostInfo>,
+    merge_to: Option<Side>,
+    content: Option<Side>,
+    message: Message,
+}
+
+impl MergePage {
+    fn sides(&self) -> [(Side, Option<&PostInfo>); 2] {
+        [(Side::Left, Some(&self.post)), (Side::Right, self.target.as_ref())]
+    }
+}
+
+#[derive(Deref, Template)]
+#[template(path = "pages/post/merge.html")]
+struct MergeTemplate(MergePage);
+
+#[derive(Deref, Template)]
+#[template(path = "pages/post/merge.html", block = "merge")]
+struct MergeFragmentTemplate(MergePage);
+
+async fn merge(ctx: Ctx, path: Path<i64>, hx: HxRequest, jar: CookieJar) -> WebResult<Response> {
+    let Json(post) = api::post::get(ctx.clone(), path, Query(MERGE_FIELDS.into())).await?;
+    let (jar, message) = web::redirect_message(jar);
+    let page = MergePage {
+        ctx,
+        active_tab: Tab::Post,
+        post,
+        target: None,
+        merge_to: None,
+        content: None,
+        message,
+    };
+
+    if hx.full_page() {
+        MergeTemplate(page).render()
+    } else {
+        MergeFragmentTemplate(page).render()
+    }
+    .map(|html| (jar, Html(html)).into_response())
+    .map_err(WebError::from)
+}
+
+async fn merge_search(ctx: Ctx, hx: HxRequest, form: MergeSearchPathForm) -> WebResult<Html> {
+    let post_future = api::post::get(ctx.clone(), form.path(), Query(MERGE_FIELDS.into()));
+    let target_future = api::post::get(ctx.clone(), Path(form.target_id), Query(MERGE_FIELDS.into()));
+    let (post, target) = join!(post_future, target_future);
+    let (target, message) = match target {
+        Ok(target) => (Some(target), Message::None),
+        Err(err) => (None, Message::Error(err)),
+    };
+
+    let page = MergePage {
+        ctx,
+        active_tab: Tab::Post,
+        post: post.map(|Json(post)| post)?,
+        target: target.map(|Json(target)| target),
+        merge_to: None,
+        content: None,
+        message,
+    };
+    if hx.full_page() {
+        MergeTemplate(page).render()
+    } else {
+        MergeFragmentTemplate(page).render()
+    }
+    .map(Html)
+    .map_err(WebError::from)
+}
+
+async fn merge_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: MergePathForm) -> WebResult<Response> {
+    let body = form.to_body();
+    let merge_result = api::post::merge(ctx.clone(), Query(MERGE_FIELDS.into()), Json(body)).await;
+    let merge_error = match merge_result {
+        Ok(Json(merged_post)) => {
+            let post_id = merged_post.id()?;
+            let url = format!("/post/{post_id}");
+            return Ok(web::redirect(&url, &hx, jar, MERGED_MESSAGE));
+        }
+        Err(err) => err,
+    };
+
+    let post_future = api::post::get(ctx.clone(), form.path(), Query(MERGE_FIELDS.into()));
+    let target_future = api::post::get(ctx.clone(), Path(form.target_id), Query(MERGE_FIELDS.into()));
+    let (post, target) = join!(post_future, target_future);
+    let (target, message) = match target {
+        Ok(target) => (Some(target), Message::Error(merge_error)),
+        Err(err) => (None, Message::Error(err)),
+    };
+
+    let page = MergePage {
+        ctx,
+        active_tab: Tab::Post,
+        post: post.map(|Json(post)| post)?,
+        target: target.map(|Json(post)| post),
+        merge_to: Some(form.merge_to),
+        content: Some(form.content),
+        message,
+    };
+
+    if hx.full_page() {
+        MergeTemplate(page).render()
+    } else {
+        MergeFragmentTemplate(page).render()
     }
     .map(Html)
     .map(Html::into_response)

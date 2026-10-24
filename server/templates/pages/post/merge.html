@@ -1,0 +1,127 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ ctx.site_name() }} – Post #{{ post.id()? }}{% endblock %}
+
+{% block main %}
+<div class="content-wrapper" id="post">
+    <h1>Post #{{ post.id()? }}</h1>
+    <nav class="buttons">
+        <ul>
+            <li>
+                <a href="post/{{ post.id()? }}"><i class="fa fa-reply"></i> Main view</a>
+            </li>
+            {#- -#}
+            <li data-name="merge" class="active">
+                <a href="post/{{ post.id()? }}/merge">Merge with…</a>
+            </li>
+        </ul>
+    </nav>
+    <div class="post-merge" id="post-merge">
+        {% block merge %}
+        {# Separate form so that searching only validates the search field #}
+        <form id="merge-search" method="post" action="post/{{ post.id()? }}/merge/search"
+            hx-post="post/{{ post.id()? }}/merge/search" hx-target="#post-merge">
+        </form>
+
+        <form method="post" action="post/{{ post.id()? }}/merge" hx-post="post/{{ post.id()? }}/merge"
+            hx-target="#post-merge">
+            <input type="hidden" name="version" value="{{ post.version()? }}">
+            {% if let Some(target) = target %}
+            <input type="hidden" name="target-id" value="{{ target.id()? }}">
+            <input type="hidden" name="target-version" value="{{ target.version()? }}">
+            {% endif %}
+
+            <ul class="input">
+                <li class="post-mirror">
+                    {% for (side, side_post) in sides() %}
+                    <div class="{{ side }}-post-container">
+                        <header>
+                            <label for="merge-id-{{ side }}">Post #</label>
+                            {% match side %}
+                            {% when Side::Left %}
+                            <input type="text" id="merge-id-{{ side }}" value="{{ post.id()? }}" readonly>
+                            {% when Side::Right %}
+                            <input type="text" id="merge-id-{{ side }}" form="merge-search" name="target-id" {% if let
+                                Some(target)=target %} value="{{ target.id()? }}" {% endif %} pattern="^[0-9]+$"
+                                required>
+                            <button form="merge-search">Search</button>
+                            {% endmatch %}
+                        </header>
+
+                        {% if let Some(side_post) = side_post %}
+                        <div class="post-thumbnail">
+                            <a href="{{ side_post.content_url()? }}" hx-boost="false">
+                                <span class="thumbnail" style="background-image: url({{ side_post.thumbnail_url()? }})">
+                                    <img alt="thumbnail" src="{{ side_post.thumbnail_url()? }}">
+                                </span>
+                            </a>
+                        </div>
+                        <div class="target-post">
+                            <label>
+                                <input type="radio" name="merge-to" value="{{ side }}" required {% if
+                                    merge_to==Some(*side) %} checked {% endif %}>
+                                <span class="radio">
+                                    Merge to this post<br>
+                                    <small>
+                                        {% let user = side_post.user()? %}
+                                        {% include "partials/user_link.html" %},
+                                        {% let creation_time = side_post.creation_time()? %}
+                                        <time datetime="{{ creation_time }}" title="{{ creation_time }}">
+                                            {{- time::since(creation_time) -}}
+                                        </time>
+                                    </small>
+                                </span>
+                            </label>
+                        </div>
+                        <div class="target-post-content">
+                            <label>
+                                <input type="radio" name="content" value="{{ side }}" required {% if
+                                    content==Some(*side) %} checked {% endif %}>
+                                <span class="radio">
+                                    Use this file<br>
+                                    <small>
+                                        {{ unit::format_bytes(side_post.file_size()?) }}
+                                        {{ side_post.mime_type()?.extension() | uppercase }}
+                                        ({{ side_post.canvas_width()? }}x{{ side_post.canvas_height()? }})
+                                    </small>
+                                </span>
+                            </label>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </li>
+
+                <li>
+                    <p>
+                        Tags, relations, scores, favorites and comments will be merged. All other properties need to be
+                        handled manually.
+                    </p>
+
+                    <label>
+                        <input type="checkbox" required>
+                        <span class="checkbox">I confirm that I want to merge these posts.</span>
+                    </label>
+                </li>
+            </ul>
+
+            <div class="messages">
+                {% match message %}
+                {% when Message::Success(msg) %}
+                <div class="message success">{{ msg }}</div>
+                {% when Message::Error(err) %}
+                <div class="message error">{{ err }}</div>
+                {% when Message::None | Message::Attention %}
+                {% endmatch %}
+            </div>
+
+            <div class="buttons">
+                <button {% if target.is_none() %} disabled {% endif %}>
+                    Merge posts
+                </button>
+            </div>
+        </form>
+        {% endblock %}
+    </div>
+</div>
+{% endblock %}
