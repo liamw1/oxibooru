@@ -232,8 +232,13 @@
                 <section class="management">
                     <ul>
                         {% if ctx.has_privilege(Action::PostFeature) %}
-                        <li>
-                            {# TODO #}
+                        <li class="confirmable">
+                            <input type="checkbox" id="feature-post-toggle">
+                            <label for="feature-post-toggle" class="prompt">Feature</label>
+                            <div class="confirm">
+                                <label for="feature-post-toggle">Cancel</label>
+                                <button name="operation" value="feature">Yes, feature on home page</button>
+                            </div>
                         </li>
                         {% endif %}
                         {% if ctx.has_privilege(Action::PostMerge) %}
@@ -242,10 +247,10 @@
                         </li>
                         {% endif %}
                         {% if ctx.has_privilege(Action::PostDelete) %}
-                        <li class="delete">
+                        <li class="confirmable">
                             <input type="checkbox" id="delete-post-toggle">
-                            <label for="delete-post-toggle" class="delete-prompt">Delete</label>
-                            <div class="delete-confirm">
+                            <label for="delete-post-toggle" class="prompt">Delete</label>
+                            <div class="confirm">
                                 <label for="delete-post-toggle">Cancel</label>
                                 <button name="operation" value="delete">Yes, delete post</button>
                             </div>
