@@ -191,6 +191,14 @@ impl UserInfo {
         let users = resource::order_as(unordered_users, user_ids);
         Self::new_batch(conn, config, users, fields, visibility)
     }
+
+    pub fn get_blocklist(&self) -> Option<&Vec<MicroTag>> {
+        if let Some(blocklist) = &self.blocklist {
+            Some(blocklist)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Clone, Serialize, ToSchema)]
