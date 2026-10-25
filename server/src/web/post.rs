@@ -45,6 +45,7 @@ const SAFETY_COOKIE: &str = "safety";
 const LIMIT: NonZeroU64 = NonZeroU64::new(42).unwrap();
 
 const SAVED_MESSAGE: &str = "Post saved.";
+const FEATURED_MESSAGE: &str = "Post featured.";
 const DELETED_MESSAGE: &str = "Post deleted.";
 const MERGED_MESSAGE: &str = "Post merged.";
 
@@ -468,6 +469,19 @@ async fn edit_submit(
                     (EditPathForm::initialize(post)?, focus, Message::Success(SAVED_MESSAGE.into()))
                 }
                 Err(err) => (form, focus, Message::Error(err)),
+            }
+        }
+        Operation::Feature => {
+            let feature_params = Query([Field::Id].into());
+            match api::post::feature(ctx.clone(), feature_params, Json(form.to_feature_body())).await {
+                Ok(Json(_)) => {
+                    if !hx.htmx() {
+                        let url = form.url(Mode::Edit, &params)?;
+                        return Ok(web::redirect(&url, &hx, jar, FEATURED_MESSAGE));
+                    }
+                    (form, Focus::None, Message::Success(FEATURED_MESSAGE.into()))
+                }
+                Err(err) => (form, Focus::None, Message::Error(err)),
             }
         }
         Operation::Delete => match api::post::delete(ctx.clone(), form.path(), Json(form.to_delete_body())).await {

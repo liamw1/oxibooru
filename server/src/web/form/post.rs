@@ -1,5 +1,5 @@
 use crate::api::error::ApiResult;
-use crate::api::post::{PostMergeBody, PostUpdateBody};
+use crate::api::post::{FeatureBody, PostMergeBody, PostUpdateBody};
 use crate::extract::{Ctx, DeleteBody, MergeBody};
 use crate::model::enums::{MimeType, PostFlag, PostFlags, PostSafety, PostType};
 use crate::resource::post::{Mode, Note, PostInfo};
@@ -35,6 +35,7 @@ pub enum Focus {
 pub enum Operation {
     Auto,
     Save,
+    Feature,
     Delete,
     AddTag,
     AddPool,
@@ -49,6 +50,7 @@ impl FromStr for Operation {
         match s {
             "auto" => Some(Self::Auto),
             "save" => Some(Self::Save),
+            "feature" => Some(Self::Feature),
             "delete" => Some(Self::Delete),
             "add-tag" => Some(Self::AddTag),
             "add-pool" => Some(Self::AddPool),
@@ -218,6 +220,10 @@ impl EditPathForm {
             thumbnail_token: None,
             thumbnail_url: None,
         })
+    }
+
+    pub fn to_feature_body(&self) -> FeatureBody {
+        FeatureBody { id: self.path }
     }
 
     pub fn to_delete_body(&self) -> DeleteBody {
