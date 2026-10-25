@@ -1,4 +1,8 @@
-use crate::model::enums::PostSafety;
+use crate::auth::Client;
+use crate::config::Config;
+use crate::model::enums::{PostSafety, UserRank};
+use crate::resource::field::Mask;
+use crate::resource::user::{Field, UserInfo};
 use crate::schema::{post, post_statistics, post_tag, tag, tag_category, tag_name};
 use crate::string::SmallString;
 use diesel::dsl::{InnerJoin, IntoBoxed, Select, exists, sql};
@@ -29,6 +33,36 @@ pub struct Preferences {
 }
 
 impl Preferences {
+    pub fn new_from_client(client: &Client, conn: &mut PgConnection, config: &Config) -> Option<Self> {
+        // Anonymous does not have a custom blocklist
+        if client.rank == UserRank::Anonymous {
+            return None;
+        }
+        if let Some(user_id) = client.id {
+            // Fetch the user info, but only the blocklist
+            let mut fields = Mask::<Field>::none();
+            fields |= Field::Blocklist;
+            let visibility = crate::resource::user::Visibility::Full;
+            let Ok(user_info) = UserInfo::new_from_id(conn, config, user_id, fields, visibility) else {
+                tracing::warn!("Unable to fetch user matching this id, returning default prefs");
+                return None;
+            };
+            let blocklist = user_info.get_blocklist()?;
+            // Transform the blocklist into a list of tag names
+            let tag_blacklist = blocklist
+                .iter()
+                .filter_map(|microtag| microtag.names.first().cloned())
+                .collect();
+
+            // Only the tag blocklist is used, the rest is default-constructed
+            return Some(Preferences {
+                tag_blacklist,
+                ..Default::default()
+            });
+        }
+        None
+    }
+
     pub fn is_empty(&self) -> bool {
         self.tag_blacklist.is_empty()
             && self.tag_category_blacklist.is_empty()

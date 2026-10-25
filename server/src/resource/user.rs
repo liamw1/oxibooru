@@ -2,18 +2,25 @@ use crate::config::Config;
 use crate::content::hash;
 use crate::model::enums::{AvatarStyle, Score, UserRank};
 use crate::model::post::PostScore;
-use crate::model::user::User;
+use crate::model::tag::TagName;
+use crate::model::user::{User, UserTagBlocklist};
 use crate::resource;
 use crate::resource::field::{Batcher, Mask};
-use crate::schema::{post_score, user};
+use crate::resource::tag::MicroTag;
+use crate::schema::{post_score, tag, tag_category, tag_name, tag_statistics, user};
 use crate::string::{SecretString, SmallString, lower};
 use crate::time::DateTime;
 use crate::user_stats;
 use diesel::dsl::count_star;
-use diesel::{BelongingToDsl, ExpressionMethods, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl};
+use diesel::{
+    BelongingToDsl, ExpressionMethods, GroupedBy, Identifiable, PgConnection, QueryDsl, QueryResult, RunQueryDsl,
+    SelectableHelper,
+};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
+use std::collections::{HashMap, HashSet};
+use std::sync::Arc;
 use strum::EnumString;
 use utoipa::ToSchema;
 
@@ -55,6 +62,7 @@ pub enum Field {
     Name,
     Email,
     Rank,
+    Blocklist,
     LastLoginTime,
     CreationTime,
     AvatarStyle,
@@ -88,6 +96,9 @@ pub struct UserInfo {
     email: Option<PrivateData<Option<String>>>,
     /// The user rank, which effectively affects their privileges.
     rank: Option<UserRank>,
+    /// The list of tags in user's blocklist.
+    /// It is available only if the request is authenticated by the same user,
+    blocklist: Option<Vec<MicroTag>>,
     /// The last login time.
     last_login_time: Option<DateTime>,
     /// The user registration time.
@@ -100,7 +111,7 @@ pub struct UserInfo {
     comment_count: Option<i64>,
     /// Number of uploaded posts.
     uploaded_post_count: Option<i64>,
-    /// Nubmer of liked posts. It is available only if the request is authenticated by the same user.
+    /// Number of liked posts. It is available only if the request is authenticated by the same user.
     /// If it's unavailable, the server returns `false`.
     liked_post_count: Option<PrivateData<i64>>,
     /// Number of disliked posts. It is available only if the request is authenticated by the same user.
@@ -132,6 +143,8 @@ impl UserInfo {
         use crate::schema::user_statistics::dsl::*;
 
         let f = Batcher::new(fields, users.len());
+        // TODO: Handle visibility
+        let mut blocklists = f.exec(Field::Blocklist, || get_tags_blocklists(conn, &users))?;
         let mut avatar_urls = f.exec(Field::AvatarUrl, || get_avatar_urls(conn, config, &users))?;
         let mut comment_counts = f.exec(Field::CommentCount, || user_stats!(conn, &users, comment_count))?;
         let mut upload_counts = f.exec(Field::UploadedPostCount, || user_stats!(conn, &users, upload_count))?;
@@ -151,6 +164,7 @@ impl UserInfo {
                     Visibility::PublicOnly => PrivateData::Visible(false),
                 }),
                 rank: fields[Field::Rank].then_some(user.rank),
+                blocklist: blocklists.pop(),
                 last_login_time: fields[Field::LastLoginTime].then_some(user.last_login_time),
                 creation_time: fields[Field::CreationTime].then_some(user.creation_time),
                 avatar_style: fields[Field::AvatarStyle].then_some(user.avatar_style),
@@ -176,6 +190,14 @@ impl UserInfo {
         let unordered_users = user::table.filter(user::id.eq_any(user_ids)).load(conn)?;
         let users = resource::order_as(unordered_users, user_ids);
         Self::new_batch(conn, config, users, fields, visibility)
+    }
+
+    pub fn get_blocklist(&self) -> Option<&Vec<MicroTag>> {
+        if let Some(blocklist) = &self.blocklist {
+            Some(blocklist)
+        } else {
+            None
+        }
     }
 }
 
@@ -222,6 +244,48 @@ fn get_ratings(
                 .map(PrivateData::Expose)
                 .collect()
         })
+}
+
+fn get_tags_blocklists(conn: &mut PgConnection, users: &[User]) -> QueryResult<Vec<Vec<MicroTag>>> {
+    let tag_info = tag::table
+        .inner_join(tag_statistics::table)
+        .inner_join(tag_category::table)
+        .inner_join(tag_name::table);
+    let user_tags: Vec<(UserTagBlocklist, i64, i64)> = UserTagBlocklist::belonging_to(users)
+        .inner_join(tag_info)
+        .select((UserTagBlocklist::as_select(), tag::category_id, tag_statistics::usage_count))
+        .filter(TagName::is_primary())
+        .order((tag_category::order, tag_name::name))
+        .load(conn)?;
+    let tag_ids: HashSet<i64> = user_tags.iter().map(|(user_tag, ..)| user_tag.tag_id).collect();
+
+    let tag_names: Vec<(i64, SmallString)> = tag_name::table
+        .select((tag_name::tag_id, tag_name::name))
+        .filter(tag_name::tag_id.eq_any(tag_ids))
+        .order((tag_name::tag_id, tag_name::order))
+        .load(conn)?;
+    let names_map = resource::collect_names(tag_names);
+
+    let category_names: HashMap<i64, SmallString> = tag_category::table
+        .select((tag_category::id, tag_category::name))
+        .load(conn)?
+        .into_iter()
+        .collect();
+
+    Ok(user_tags
+        .grouped_by(users)
+        .into_iter()
+        .map(|tags_in_blocklist| {
+            tags_in_blocklist
+                .into_iter()
+                .map(|(user_tag, category_id, usages)| MicroTag {
+                    names: Arc::clone(&names_map[&user_tag.tag_id]),
+                    category: category_names[&category_id].clone(),
+                    usages,
+                })
+                .collect()
+        })
+        .collect())
 }
 
 #[doc(hidden)]
