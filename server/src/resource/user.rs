@@ -100,7 +100,7 @@ pub struct UserInfo {
     comment_count: Option<i64>,
     /// Number of uploaded posts.
     uploaded_post_count: Option<i64>,
-    /// Nubmer of liked posts. It is available only if the request is authenticated by the same user.
+    /// Number of liked posts. It is available only if the request is authenticated by the same user.
     /// If it's unavailable, the server returns `false`.
     liked_post_count: Option<PrivateData<i64>>,
     /// Number of disliked posts. It is available only if the request is authenticated by the same user.
