@@ -18,7 +18,7 @@ where
         Self::from_u64(u64::MAX)
     }
 
-    const fn none() -> Self {
+    pub const fn none() -> Self {
         Self::from_u64(0)
     }
 
