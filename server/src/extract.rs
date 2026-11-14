@@ -218,11 +218,7 @@ impl<F: ToSchema> ResourceParams<F> {
     }
 }
 
-impl<F> From<Mask<F>> for ResourceParams<F>
-where
-    F: FromStr,
-    u64: From<F>,
-{
+impl<F: ToSchema> From<Mask<F>> for ResourceParams<F> {
     fn from(fields: Mask<F>) -> Self {
         Self { query: None, fields }
     }
@@ -230,7 +226,7 @@ where
 
 impl<F, const N: usize> From<[F; N]> for ResourceParams<F>
 where
-    F: Copy + FromStr,
+    F: Copy + ToSchema,
     u64: From<F>,
 {
     fn from(field_array: [F; N]) -> Self {

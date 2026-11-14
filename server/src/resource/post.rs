@@ -29,6 +29,7 @@ use diesel::{
 use serde::{Deserialize, Serialize};
 use server_macros::resource;
 use std::collections::{HashMap, HashSet};
+use std::fmt::Write;
 use std::sync::Arc;
 use strum::EnumString;
 use url::Url;
