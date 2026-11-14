@@ -7,7 +7,6 @@ use diesel::sql_types::{SingleValue, Text};
 use diesel::{AsExpression, declare_sql_function};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::borrow::Cow;
-use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
 use std::ops::Deref;
 use std::str::FromStr;
@@ -110,7 +109,7 @@ impl Deref for SmallString {
 }
 
 impl FromStr for SmallString {
-    type Err = Infallible;
+    type Err = !;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         CompactString::from_str(s).map(Self)
     }

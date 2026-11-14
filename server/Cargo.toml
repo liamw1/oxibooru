@@ -81,6 +81,5 @@ cast_possible_truncation = "allow"  # Gives warnings for integer casts in const 
 cast_possible_wrap = "allow"        # Gives warnings for integer casts in const context
 redundant_field_names = "allow"     # Gives warnings when using QueryableByName derive
 option_option = "allow"             # Option<Option<T>> is convenient for deserializing optional nullable JSON fields
-float_cmp = "allow"                 # Buggy: Fires when using assert_eq! to compare to 0.0
 unreadable_literal = "allow"        # Don't like how separated form looks for decimal literals
 too_many_lines = "allow"            # Too subjective

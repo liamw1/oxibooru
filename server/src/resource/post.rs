@@ -29,7 +29,6 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use server_macros::non_nullable_options;
 use std::collections::{HashMap, HashSet};
-use std::convert::Infallible;
 use std::sync::Arc;
 use strum::EnumString;
 use utoipa::ToSchema;
@@ -333,7 +332,7 @@ fn get_owners(conn: &mut PgConnection, config: &Config, posts: &[Post]) -> Query
 }
 
 #[allow(clippy::unnecessary_wraps)]
-fn get_content_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infallible> {
+fn get_content_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, !> {
     Ok(posts
         .iter()
         .map(|post| PostHash::new(config, post.id, Some(post.custom_thumbnail_size)).content_url(post.mime_type))
@@ -341,7 +340,7 @@ fn get_content_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infa
 }
 
 #[allow(clippy::unnecessary_wraps)]
-fn get_thumbnail_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, Infallible> {
+fn get_thumbnail_urls(config: &Config, posts: &[Post]) -> Result<Vec<String>, !> {
     Ok(posts
         .iter()
         .map(|post| PostHash::new(config, post.id, Some(post.custom_thumbnail_size)).thumbnail_url())
@@ -438,7 +437,7 @@ fn get_comments(conn: &mut PgConnection, ctx: &Context, posts: &[Post]) -> Query
                         creation_time: Some(comment.creation_time),
                         last_edit_time: Some(comment.last_edit_time),
                         score: Some(score),
-                        own_score: Some(client_scores.get(&id).copied().map(Rating::from).unwrap_or_default()),
+                        own_score: Some(client_scores.get(&id).copied().map_or_default(Rating::from)),
                     }
                 })
                 .collect()
@@ -535,7 +534,7 @@ fn get_own_scores(conn: &mut PgConnection, client: Client, posts: &[Post]) -> Qu
             .map(|client_scores| {
                 resource::order_as_padded(client_scores, posts, |score| score.post_id)
                     .into_iter()
-                    .map(|client_score| client_score.map(|score| Rating::from(score.score)).unwrap_or_default())
+                    .map(|client_score| client_score.map_or_default(|score| Rating::from(score.score)))
                     .collect()
             })
     } else {

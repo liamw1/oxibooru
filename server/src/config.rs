@@ -466,7 +466,7 @@ const DEFAULT_CONFIG: &str = include_str!("../config.toml.dist");
 
 #[cfg(not(feature = "load_env"))]
 #[allow(clippy::unnecessary_wraps)]
-fn load_dotenv(_config: &Config) -> Result<(), std::convert::Infallible> {
+fn load_dotenv(_config: &Config) -> Result<(), !> {
     Ok(())
 }
 
