@@ -247,6 +247,10 @@
     padding: 0;
 }
 
+.post-view .edit-sidebar .management a:focus:not(:focus-visible) {
+    outline: 0;
+}
+
 .post-view .edit-sidebar .management .confirmable {
     display: grid;
     align-items: center;
