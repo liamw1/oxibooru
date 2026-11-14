@@ -67,33 +67,33 @@
 }
 
 .darktheme .snapshot-list ul li div.operation-created {
-    background: oklch(from var(--snapshot-created-background-color) calc(l - 80%) c h);
+    background: hsl(from var(--snapshot-created-background-color) h s calc(l * 0.2));
 }
 
 .darktheme .snapshot-list ul li div.operation-created+.details {
-    background: oklch(from var(--snapshot-created-background-color) calc(l - 80%) c h / 50%);
+    background: hsl(from var(--snapshot-created-background-color) h s calc(l * 0.2) / 50%);
 }
 
 .darktheme .snapshot-list ul li div.operation-modified {
-    background: oklch(from var(--snapshot-modified-background-color) calc(l - 80%) c h);
+    background: hsl(from var(--snapshot-modified-background-color) h s calc(l * 0.2));
 }
 
 .darktheme .snapshot-list ul li div.operation-modified+.details {
-    background: oklch(from var(--snapshot-modified-background-color) calc(l - 80%) c h / 50%);
+    background: hsl(from var(--snapshot-modified-background-color) h s calc(l * 0.2) / 50%);
 }
 
 .darktheme .snapshot-list ul li div.operation-deleted {
-    background: oklch(from var(--snapshot-deleted-background-color) calc(l - 80%) c h);
+    background: hsl(from var(--snapshot-deleted-background-color) h s calc(l * 0.2));
 }
 
 .darktheme .snapshot-list ul li div.operation-deleted+.details {
-    background: oklch(from var(--snapshot-deleted-background-color) calc(l - 80%) c h / 50%);
+    background: hsl(from var(--snapshot-deleted-background-color) h s calc(l * 0.2) / 50%);
 }
 
 .darktheme .snapshot-list ul li div.operation-merged {
-    background: oklch(from var(--snapshot-merged-background-color) calc(l - 80%) c h);
+    background: hsl(from var(--snapshot-merged-background-color) h s calc(l * 0.2));
 }
 
 .darktheme .snapshot-list ul li div.operation-merged+.details {
-    background: oklch(from var(--snapshot-merged-background-color) calc(l - 80%) c h / 50%);
+    background: hsl(from var(--snapshot-merged-background-color) h s calc(l * 0.2) / 50%);
 }

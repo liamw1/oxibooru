@@ -224,19 +224,19 @@ input[type=time][readonly] {
 
 .darktheme input[type=date],
 .darktheme input[type=time] {
-    border: 2px solid oklch(from var(--input-enabled-border-color) calc(l - 75%) c h);
-    background: oklch(from var(--input-enabled-background-color) calc(l - 75%) c h);
+    border: 2px solid hsl(from var(--input-enabled-border-color) h s calc(l * 0.25));
+    background: hsl(from var(--input-enabled-background-color) h s calc(l * 0.25));
     color: var(--input-enabled-text-color-darktheme);
 }
 
 .darktheme input[type=date]:disabled,
 .darktheme input[type=time]:disabled {
-    background: oklch(from var(--input-disabled-background-color) calc(l - 75%) c h);
+    background: hsl(from var(--input-disabled-background-color) h s calc(l * 0.25));
 }
 
 .darktheme input[type=date][readonly],
 .darktheme input[type=time][readonly] {
-    background: oklch(from var(--input-disabled-background-color) calc(l - 75%) c h);
+    background: hsl(from var(--input-disabled-background-color) h s calc(l * 0.25));
 }
 
 /* Regular inputs */
@@ -300,8 +300,8 @@ input[type=number][readonly] {
 .darktheme input[type=email],
 .darktheme input[type=password],
 .darktheme input[type=number] {
-    border: 2px solid oklch(from var(--input-enabled-border-color) calc(l - 75%) c h);
-    background: oklch(from var(--input-enabled-background-color) calc(l - 75%) c h);
+    border: 2px solid hsl(from var(--input-enabled-border-color) h s calc(l * 0.25));
+    background: hsl(from var(--input-enabled-background-color) h s calc(l * 0.25));
     color: var(--input-enabled-text-color-darktheme);
 }
 
@@ -311,7 +311,7 @@ input[type=number][readonly] {
 .darktheme input[type=email]:disabled,
 .darktheme input[type=password]:disabled,
 .darktheme input[type=number]:disabled {
-    background: oklch(from var(--input-disabled-background-color) calc(l - 75%) c h);
+    background: hsl(from var(--input-disabled-background-color) h s calc(l * 0.25));
 }
 
 .darktheme select[readonly],
@@ -320,7 +320,7 @@ input[type=number][readonly] {
 .darktheme input[type=email][readonly],
 .darktheme input[type=password][readonly],
 .darktheme input[type=number][readonly] {
-    background: oklch(from var(--input-disabled-background-color) calc(l - 75%) c h);
+    background: hsl(from var(--input-disabled-background-color) h s calc(l * 0.25));
 }
 
 input[readonly],
@@ -376,7 +376,7 @@ form.show-validation .input input:valid {
 }
 
 .darktheme form.show-validation .input input:valid {
-    background: oklch(from var(--input-good-background-color) calc(l - 75%) c h);
+    background: hsl(from var(--input-good-background-color) h s calc(l * 0.25));
 }
 
 /* Buttons */

@@ -125,8 +125,8 @@
 }
 
 .post-list ul li .edit-overlay .safety-flipper a.safety-safe {
-    background-color: oklch(from var(--safety-safe) calc(l - 5%) c h);
-    border-color: oklch(from var(--safety-safe) calc(l - 5%) c h);
+    background-color: hsl(from var(--safety-safe) h s calc(l * 0.95));
+    border-color: hsl(from var(--safety-safe) h s calc(l * 0.95));
 }
 
 .post-list ul li .edit-overlay .safety-flipper a.safety-safe:not(.active) {

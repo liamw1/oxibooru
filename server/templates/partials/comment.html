@@ -21,26 +21,28 @@
             </nav>
             <nav class="readonly active">
                 <strong>
+                    {#- -#}
                     <span class="nickname">
-                        {% if let Some(user) = comment.user()? %}
+                        {%- if let Some(user) = comment.user()? -%}
                         <a {% if ctx.has_privilege(Action::UserView) %} href="user/{{ user.name }}" {% endif %}>
-                            {{ user.name }}
+                            {{- user.name -}}
                         </a>
-                        {% else %}
+                        {%- else -%}
                         Anonymous
-                        {% endif %}
+                        {%- endif -%}
                     </span>
+                    {#- -#}
                 </strong>
 
                 <span class="date">
-                    {% let creation_time = comment.creation_time()? %}
+                    {%- let creation_time = comment.creation_time()? -%}
                     <time datetime="{{ creation_time }}" title="{{ creation_time }}">commented {{
                         time::since(creation_time) }}</time>
+                    {#- -#}
                 </span>
-
+                {#- -#}
                 <wbr>
-
-                {% if ctx.has_privilege(Action::CommentScore) %}
+                {%- if ctx.has_privilege(Action::CommentScore) -%}
                 <div class="score-container">
                     <a class="upvote">
                         <i class="fa fa-thumbs{% if comment.own_score()? != Rating::Like %}-o{% endif %}-up"></i>
@@ -54,24 +56,28 @@
                         <span class="vim-nav-hint">dislike</span>
                     </a>
                 </div>
-                {% endif %}
+                {%- endif -%}
 
-                {% let can_edit_comment = true %}{# TODO #}
-                {% let can_delete_comment = true %}{# TODO #}
-                {% if can_edit_comment || can_delete_comment %}
+                {%- let can_edit_comment = true -%}{#- TODO -#}
+                {%- let can_delete_comment = true -%}{#- TODO -#}
+                {%- if can_edit_comment || can_delete_comment -%}
                 <span class="action-container">
-                    {% if can_edit_comment %}
+                    {%- if can_edit_comment -%}
                     <a href class="edit">
+                        {#- -#}
                         <i class="fa fa-pencil"></i>&nbsp;edit
+                        {#- -#}
                     </a>
-                    {% endif %}
-                    {% if can_delete_comment %}
+                    {%- endif -%}
+                    {%- if can_delete_comment -%}
                     <a href class="delete">
+                        {#- -#}
                         <i class="fa fa-remove"></i>&nbsp;delete
+                        {#- -#}
                     </a>
-                    {% endif %}
+                    {%- endif -%}
                 </span>
-                {% endif %}
+                {%- endif %}
             </nav>
         </header>
 

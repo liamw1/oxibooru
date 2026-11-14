@@ -179,7 +179,7 @@ hr {
 }
 
 .darktheme hr {
-    border-top: 1px solid oklch(from var(--line-color) calc(l - 25%) c h);
+    border-top: 1px solid hsl(from var(--line-color) h s calc(l * 0.75));
 }
 
 nav ul {
@@ -383,18 +383,18 @@ nav#top-navigation .thumbnail {
 }
 
 .darktheme .messages .message.info {
-    border: 1px solid oklch(from var(--message-info-border-color) calc(l - 30%) c h);
-    background: oklch(from var(--message-info-background-color) calc(l - 60%) c h);
+    border: 1px solid hsl(from var(--message-info-border-color) h s calc(l * 0.7));
+    background: hsl(from var(--message-info-background-color) h s calc(l * 0.4));
 }
 
 .darktheme .messages .message.error {
-    border: 1px solid oklch(from var(--message-error-border-color) calc(l - 30%) c h);
-    background: oklch(from var(--message-error-background-color) calc(l - 60%) c h);
+    border: 1px solid hsl(from var(--message-error-border-color) h s calc(l * 0.7));
+    background: hsl(from var(--message-error-background-color) h s calc(l * 0.4));
 }
 
 .darktheme .messages .message.success {
-    border: 1px solid oklch(from var(--message-success-border-color) calc(l - 30%) c h);
-    background: oklch(from var(--message-success-background-color) calc(l - 80%) c h);
+    border: 1px solid hsl(from var(--message-success-border-color) h s calc(l * 0.7));
+    background: hsl(from var(--message-success-background-color) h s calc(l * 0.2));
 }
 
 .thumbnail {

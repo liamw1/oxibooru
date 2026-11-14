@@ -62,11 +62,11 @@ ul.compact-pools li.duplicate {
 }
 
 .darktheme ul.compact-pools li.new {
-    --highlight: oklch(from var(--new-pool-background-color) calc(l - 80%) c h);
+    --highlight: hsl(from var(--new-pool-background-color) h s calc(l * 0.2));
 }
 
 .darktheme ul.compact-pools li.duplicate {
-    --highlight: oklch(from var(--duplicate-pool-background-color) calc(l - 80%) c h);
+    --highlight: hsl(from var(--duplicate-pool-background-color) h s calc(l * 0.2));
 }
 
 ul.compact-pools i {

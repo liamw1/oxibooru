@@ -98,7 +98,7 @@
     left: -1.5em;
     top: calc(50% - 0.75em);
     border: .75em solid transparent;
-    border-right: .75em solid oklch(from var(--comment-border-color) calc(l - 10%) c h);
+    border-right: .75em solid hsl(from var(--comment-border-color) h s calc(l * 0.9));
 }
 
 .comment-container .comment header:after {
