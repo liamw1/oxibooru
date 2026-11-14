@@ -11,6 +11,7 @@ use crate::resource::pool_category::PoolCategoryInfo;
 use crate::resource::post::{Field, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::string::LargeString;
+use crate::web::cookie::safety::SafetyFilter;
 use crate::web::form::FormField;
 use crate::web::form::post::{
     EditMode, EditPathForm, Focus, MergePathForm, MergeSearchPathForm, Operation, SafetyToggleForm, Side,
@@ -22,11 +23,9 @@ use askama::Template;
 use axum::response::{IntoResponse, Response};
 use axum::{Router, routing};
 use axum_extra::extract::CookieJar;
-use axum_extra::extract::cookie::{Cookie, SameSite};
 use serde::{Deserialize, Serialize};
 use server_macros::Deref;
 use std::num::NonZeroU64;
-use std::ops::{Deref, DerefMut};
 use strum::{Display, IntoEnumIterator};
 use tokio::{join, try_join};
 
@@ -39,8 +38,6 @@ pub fn routes() -> Router<AppState> {
         .route("/post/{post_id}/merge", routing::get(merge).post(merge_submit))
         .route("/post/{post_id}/merge/search", routing::post(merge_search))
 }
-
-const SAFETY_COOKIE: &str = "safety";
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(42).unwrap();
 
@@ -88,63 +85,6 @@ const MERGE_FIELDS: [Field; 10] = [
     Field::ContentUrl,
     Field::ThumbnailUrl,
 ];
-
-#[derive(Clone, Copy, Serialize, Deserialize)]
-struct SafetyFilter {
-    enabled_safeties: Mask<PostSafety>,
-}
-
-impl SafetyFilter {
-    fn from_jar(jar: &CookieJar) -> Self {
-        jar.get(SAFETY_COOKIE)
-            .and_then(|cookie| serde_urlencoded::from_str(cookie.value()).ok())
-            .unwrap_or_default()
-    }
-
-    fn to_cookie(self) -> Cookie<'static> {
-        let value = serde_urlencoded::to_string(self).expect("SafetyFilter is urlencodable");
-        Cookie::build((SAFETY_COOKIE, value))
-            .path("/") // TODO: Adjust to base URL
-            .http_only(true)
-            .same_site(SameSite::Strict)
-            .permanent()
-            .build()
-    }
-
-    fn query_filter(self) -> Option<&'static str> {
-        match (self[PostSafety::Safe], self[PostSafety::Sketchy], self[PostSafety::Unsafe]) {
-            (false, false, false) => Some("-safety:safe,sketchy,unsafe"),
-            (false, false, true) => Some("safety:unsafe"),
-            (false, true, false) => Some("safety:sketchy"),
-            (false, true, true) => Some("-safety:safe"),
-            (true, false, false) => Some("safety:safe"),
-            (true, false, true) => Some("-safety:sketchy"),
-            (true, true, false) => Some("-safety:unsafe"),
-            (true, true, true) => None,
-        }
-    }
-}
-
-impl Default for SafetyFilter {
-    fn default() -> Self {
-        Self {
-            enabled_safeties: Mask::none() | PostSafety::Safe | PostSafety::Sketchy,
-        }
-    }
-}
-
-impl Deref for SafetyFilter {
-    type Target = Mask<PostSafety>;
-    fn deref(&self) -> &Self::Target {
-        &self.enabled_safeties
-    }
-}
-
-impl DerefMut for SafetyFilter {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.enabled_safeties
-    }
-}
 
 async fn get_post(ctx: Ctx, path: Path<i64>, params: &MainParams, fields: Mask<Field>) -> ApiResult<PostInfo> {
     let query = params.query.clone();
