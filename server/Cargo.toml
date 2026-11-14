@@ -33,7 +33,7 @@ percent-encoding = "2.3.1"
 pq-sys = { version = "0.7.5", features = ["bundled"] }
 rayon = "1.10.0"
 regex = "1.11.1"
-reqwest = { version ="0.12.12", features = ["json", "stream"] }
+reqwest = { version ="0.12.12", default-features = false, features = ["default-tls", "json", "stream"] }
 rustyline = { version = "17.0.2", default-features = false, features = ["signal-hook"] }
 serde = { version = "1.0.217", features = ["derive", "rc"] }
 serde_json = "1.0.138"
@@ -51,9 +51,9 @@ tower-layer = "0.3.3"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = { version = "2.5.4", features = ["serde"] }
-utoipa = { version = "5.4.0", features = ["axum_extras", "time", "url", "uuid"] }
-utoipa-axum = "0.2.0"
-utoipa-swagger-ui = { version = "9.0.2", features = ["axum", "vendored"] }
+utoipa = { version = "6.0.0", features = ["axum_extras", "time", "url", "uuid"] }
+utoipa-axum = "0.3.0"
+utoipa-swagger-ui = { version = "10.0.2", features = ["axum", "vendored"] }
 uuid = { version = "1.13.1", features = ["v4", "serde"] }
 walkdir = "2.5.0"
 
