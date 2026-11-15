@@ -12,7 +12,7 @@ use crate::time::DateTime;
 use crate::web::form::FormField;
 use crate::web::form::tag::{DeletePathForm, EditPathForm, Focus, MergePathForm, Operation};
 use crate::web::pager::{Page, Pager};
-use crate::web::{Html, Message, Tab, WebError, WebResult};
+use crate::web::{Html, Message, Tab, WebError, WebResult, markdown};
 use crate::{api, time, web};
 use askama::Template;
 use axum::response::{IntoResponse, Response};

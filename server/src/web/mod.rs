@@ -6,7 +6,7 @@ use crate::{api, string};
 use axum::Router;
 use axum::extract::{DefaultBodyLimit, FromRequest, FromRequestParts, Request};
 use axum::http::StatusCode;
-use axum::http::header::{CACHE_CONTROL, VARY};
+use axum::http::header::{CACHE_CONTROL, CONTENT_SECURITY_POLICY, VARY};
 use axum::response::{Html as AxumHtml, IntoResponse, Redirect, Response};
 use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
@@ -24,6 +24,7 @@ mod form;
 mod help;
 mod home;
 mod login;
+mod markdown;
 mod middleware;
 mod pager;
 mod pool;
@@ -155,7 +156,14 @@ struct Html(String);
 
 impl IntoResponse for Html {
     fn into_response(self) -> Response {
-        ([(CACHE_CONTROL, "no-store"), (VARY, "HX-Request-Type")], AxumHtml(self.0)).into_response()
+        // Images from other sites (e.g. in user Markdown) would reveal viewers' IPs to whoever hosts them
+        let csp = "img-src 'self' https://gravatar.com";
+        let headers = [
+            (CACHE_CONTROL, "no-store"),
+            (VARY, "HX-Request-Type"),
+            (CONTENT_SECURITY_POLICY, csp),
+        ];
+        (headers, AxumHtml(self.0)).into_response()
     }
 }
 

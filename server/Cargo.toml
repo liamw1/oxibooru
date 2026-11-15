@@ -5,6 +5,7 @@ license = "GPL-3.0"
 edition = "2024"
 
 [dependencies]
+ammonia = "4.2.5"
 argon2 = { version = "0.5.3", features = ["std"] }
 askama = "0.15.6"
 axum = { version = "0.8.4", features = ["multipart"] }
@@ -34,6 +35,7 @@ openssl-sys = { version = "0.9.114", features = ["vendored"] }
 percent-encoding = "2.3.1"
 pq-sys = { version = "0.7.5", features = ["bundled"] }
 psl = "2.1.230"
+pulldown-cmark = { version = "0.13.6", default-features = false, features = ["html"] }
 rayon = "1.10.0"
 regex = "1.11.1"
 reqwest = { version ="0.12.12", default-features = false, features = ["default-tls", "json", "stream"] }

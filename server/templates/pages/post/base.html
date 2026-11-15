@@ -57,11 +57,10 @@
         </div>
 
         {% if !description.is_empty() %}
-        <div class="description-container">
+        <div class="description-container markdown">
             <details open>
                 <summary>Description</summary>
-                {# TODO: Markdown #}
-                <p>{{ description }}</p>
+                {{ markdown::render(description) | safe }}
             </details>
         </div>
         {% endif %}

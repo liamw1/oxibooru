@@ -17,7 +17,7 @@ use crate::web::form::post::{
     EditMode, EditPathForm, Focus, MergePathForm, MergeSearchPathForm, Operation, SafetyToggleForm, Side,
 };
 use crate::web::pager::{Page, Pager};
-use crate::web::{Html, Message, Tab, WebError, WebResult};
+use crate::web::{Html, Message, Tab, WebError, WebResult, markdown};
 use crate::{api, time, unit, web};
 use askama::Template;
 use axum::response::{IntoResponse, Response};

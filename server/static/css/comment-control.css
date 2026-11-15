@@ -204,38 +204,6 @@
     padding: 0 0 0 1.5em;
 }
 
-.comment-content .sjis {
-    font-family: 'MS PGothic', 'ＭＳ Ｐゴシック', 'IPAMonaPGothic', 'Trebuchet MS', Verdana, Futura, Arial, Helvetica, sans-serif;
-    background: #fbfbfb;
-    color: #111;
-    font-size: 1em;
-    line-height: 1;
-    margin: 0;
-    padding: 4px;
-    overflow: auto;
-    white-space: pre;
-    word-wrap: normal;
-}
-
-.comment-content .spoiler {
-    background: #eee;
-    color: #eee;
-}
-
-.comment-content .spoiler:hover {
-    color: #696969;
-}
-
-.comment-content .spoiler:before {
-    content: '[';
-    color: #000;
-}
-
-.comment-content .spoiler:after {
-    content: ']';
-    color: #000;
-}
-
 .comment-content blockquote {
     border-left: 3px solid #eee;
     margin-left: 0;

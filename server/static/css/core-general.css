@@ -452,3 +452,39 @@ nav#top-navigation .thumbnail {
 [data-pseudo-content]:before {
     content: attr(data-pseudo-content);
 }
+
+/* Confines user-styled Markdown (e.g. position: fixed overlays) to its own box
+   without changing margin collapsing like contain: paint would */
+.markdown {
+    overflow: clip;
+    transform: translate(0);
+}
+
+.markdown .sjis {
+    display: block;
+    font-family: 'MS PGothic', 'ＭＳ Ｐゴシック', 'IPAMonaPGothic', 'Trebuchet MS', Verdana, Futura, Arial, Helvetica, sans-serif;
+    background: #fbfbfb;
+    color: #111;
+    font-size: 1em;
+    line-height: 1;
+    margin: 0;
+    padding: 4px;
+    overflow: auto;
+    white-space: pre;
+    word-wrap: normal;
+}
+
+.markdown .spoiler {
+    background: #eee;
+    color: #eee;
+}
+
+.markdown .spoiler:hover {
+    color: #696969;
+}
+
+/* Art sets its own colors, which would otherwise show through spoilers */
+.markdown .spoiler .sjis {
+    background: inherit;
+    color: inherit;
+}

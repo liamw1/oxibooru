@@ -39,9 +39,8 @@
             </svg>
             <div class="note-anchor"></div>
             <div class="note-text" data-state="read-only">
-                {# TODO: Markdown #}
-                <div class="wrapper">
-                    <p>{{ note.text }}</p>
+                <div class="wrapper markdown">
+                    {{ markdown::render(note.text) | safe }}
                 </div>
             </div>
         </div>

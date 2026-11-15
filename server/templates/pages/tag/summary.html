@@ -59,14 +59,13 @@
         </section>
     </section>
 
-    <section class="description">
+    <section class="description markdown">
         <hr>
         {% let description = tag.description()? %}
         {% if description.is_empty() %}
-        This tag has no description yet.
+        <p>This tag has no description yet.</p>
         {% else %}
-        {# TODO: makeMarkdown #}
-        {{ tag.description()? }}
+        {{ markdown::render(description) | safe }}
         {% endif %}
         <p>
             This tag has <a href="{{ tag.search_url()? }}">{{ tag.usages()? }} usage{% if tag.usages()? != 1 %}s{% endif

@@ -37,7 +37,8 @@ pub async fn convert_error(ctx: Ctx, req: Request, next: Next) -> Response {
         .expect("Error template should never fail");
 
         // Override target in case error happens when client expects HTML fragment
-        ([("HX-Retarget", "body"), ("HX-Reswap", "innerHTML")], html).into_response()
+        let status = response.status();
+        (status, [("HX-Retarget", "body"), ("HX-Reswap", "innerHTML")], html).into_response()
     } else {
         response
     }

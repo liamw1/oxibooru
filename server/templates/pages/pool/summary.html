@@ -23,14 +23,13 @@
         </section>
     </section>
 
-    <section class="description">
+    <section class="description markdown">
         <hr>
         {% let description = pool.description()? %}
         {% if description.is_empty() %}
-        This pool has no description yet.
+        <p>This pool has no description yet.</p>
         {% else %}
-        {# TODO: makeMarkdown #}
-        {{ pool.description()? }}
+        {{ markdown::render(description) | safe }}
         {% endif %}
         <p>
             This pool has <a href="{{ pool.search_url()? }}">{{ pool.post_count()? }} post{% if pool.post_count()? != 1
