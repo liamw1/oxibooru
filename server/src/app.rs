@@ -53,12 +53,40 @@ impl AppState {
     }
 
     pub fn make_context(self, client: Client) -> Ctx {
+        // Fetch the user's blocklist, use it if it is not empty in place of the per-rank one
+        // First we need a DB connection
+        let preferences_override = if let Ok(mut conn) = self.connection_pool.get_blocking() {
+            // Then we get the preferences matching the user
+            if let Some(actual) = Preferences::new_from_client(&client, &mut conn, &self.config) {
+                // Skip if the blocklist is empty
+                if actual.tag_blacklist.is_empty() {
+                    None
+                } else {
+                    let mut base = match client.rank {
+                        UserRank::Anonymous => &self.config.anonymous_preferences,
+                        UserRank::Restricted => &self.config.restricted_preferences,
+                        UserRank::Regular => &self.config.regular_preferences,
+                        UserRank::Power => &self.config.power_preferences,
+                        UserRank::Moderator => &self.config.moderator_preferences,
+                        UserRank::Administrator => &self.config.administrator_preferences,
+                    }
+                    .clone();
+                    base.tag_blacklist = actual.tag_blacklist;
+                    Some(base)
+                }
+            } else {
+                None
+            }
+        } else {
+            None
+        };
         Ctx(
             Context {
                 client,
                 config: self.config,
                 downloader: self.downloader,
                 content_cache: self.content_cache,
+                preferences_override,
             },
             self.connection_pool,
         )
@@ -71,6 +99,7 @@ pub struct Context {
     pub client: Client,
     pub downloader: HttpClient,
     pub content_cache: Arc<Mutex<RingCache>>,
+    pub preferences_override: Option<Preferences>,
 }
 
 impl Context {
@@ -91,6 +120,11 @@ impl Context {
     }
 
     pub fn preferences(&self) -> &Preferences {
+        // If a preference override exists, use it.
+        if let Some(preferences_override) = &self.preferences_override {
+            return preferences_override;
+        }
+        // Else, use the per-rank one
         match self.client.rank {
             UserRank::Anonymous => &self.config.anonymous_preferences,
             UserRank::Restricted => &self.config.restricted_preferences,

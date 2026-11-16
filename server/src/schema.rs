@@ -287,6 +287,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    user_tag_blocklist (user_id, tag_id) {
+        user_id -> Int8,
+        tag_id -> Int8,
+    }
+}
+
+diesel::table! {
     user_token (id) {
         id -> Uuid,
         user_id -> Int8,
@@ -329,6 +336,8 @@ diesel::joinable!(tag_category_statistics -> tag_category (category_id));
 diesel::joinable!(tag_name -> tag (tag_id));
 diesel::joinable!(tag_statistics -> tag (tag_id));
 diesel::joinable!(user_statistics -> user (user_id));
+diesel::joinable!(user_tag_blocklist -> tag (tag_id));
+diesel::joinable!(user_tag_blocklist -> user (user_id));
 diesel::joinable!(user_token -> user (user_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
@@ -361,5 +370,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     tag_suggestion,
     user,
     user_statistics,
+    user_tag_blocklist,
     user_token,
 );
