@@ -1,4 +1,8 @@
-FROM --platform=$BUILDPLATFORM node:lts AS builder
+ARG ALPINE_VERSION=3.24
+ARG NGINX_VERSION=1.31.9
+ARG NODE_VERSION=26
+
+FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-alpine${ALPINE_VERSION} AS builder
 WORKDIR /opt/app
 
 COPY package.json package-lock.json ./
@@ -22,7 +26,7 @@ WORKDIR /var/www
 COPY --from=builder /opt/app/public/ .
 
 
-FROM nginx:alpine AS release
+FROM nginx:${NGINX_VERSION}-alpine${ALPINE_VERSION} AS release
 
 RUN apk --no-cache add dumb-init
 COPY --from=approot / /
