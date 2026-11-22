@@ -52,17 +52,16 @@ struct SjisArt<'a> {
     html: Option<String>,
 }
 
-struct SjisMatch {
-    start: usize,
-    end: usize,
+struct SjisMatch<'a, 'b> {
+    art: SjisArt<'a>,
+    before: &'a str,
+    after: &'a str,
+    after_lowercase: &'b str,
 }
 
-impl SjisMatch {
-    fn content_range(&self) -> Range<usize> {
-        let content_start = self.start + SJIS_OPEN.len();
-        let content_end = self.end - SJIS_CLOSE.len();
-        content_start..content_end
-    }
+struct TextStructure {
+    verbatim_ranges: Vec<Range<usize>>,
+    cell_ends: Vec<usize>,
 }
 
 fn is_same_origin(url: &str) -> bool {
@@ -86,49 +85,65 @@ fn mark_sjis(text: &str) -> (Cow<'_, str>, Vec<SjisArt<'_>>) {
     if !contains_ignore_ascii_case(text, SJIS_OPEN) {
         return (Cow::Borrowed(text), Vec::new());
     }
-
     let lowercase = text.to_ascii_lowercase();
-    let mut position = 0;
+
     let mut sjis_art = Vec::new();
     let mut marked = String::with_capacity(text.len());
-    while let Some(sjis) = find_sjis(&lowercase, position) {
-        push_without_markers(&mut marked, &text[position..sjis.start]);
-        write!(marked, "{MARKER_START}{}{MARKER_END}", sjis_art.len()).expect("Write to String is infallible");
+    let mut rest = text;
+    let mut rest_lowercase = lowercase.as_str();
+    while let Some(sjis) = find_sjis(rest, rest_lowercase) {
+        push_without_markers(&mut marked, sjis.before);
+        marked.push(MARKER_START);
+        marked.push_str(&sjis_art.len().to_string());
+        marked.push(MARKER_END);
 
-        // Lines holding only the tags aren't part of the art, so they don't add blank lines
-        let mut art = &text[sjis.content_range()];
-        if let Some((first_line, rest)) = art.split_once('\n')
-            && first_line.trim().is_empty()
-        {
-            art = rest;
-        }
-        if let Some((rest, last_line)) = art.rsplit_once('\n')
-            && last_line.trim().is_empty()
-        {
-            art = rest.trim_suffix('\r');
-        }
-
-        let art = ammonia::clean_text(art);
-        sjis_art.push(SjisArt {
-            source: &text[sjis.start..sjis.end],
-            html: Some(format!(r#"<span class="sjis">{art}</span>"#)),
-        });
-        position = sjis.end;
+        sjis_art.push(sjis.art);
+        (rest, rest_lowercase) = (sjis.after, sjis.after_lowercase);
     }
-    push_without_markers(&mut marked, &text[position..]);
+    push_without_markers(&mut marked, rest);
     (Cow::Owned(marked), sjis_art)
 }
 
-fn find_sjis(lowercase: &str, mut position: usize) -> Option<SjisMatch> {
+fn find_sjis<'a, 'b>(text: &'a str, lowercase: &'b str) -> Option<SjisMatch<'a, 'b>> {
+    let mut position = 0;
     loop {
-        let start = position + lowercase[position..].find(SJIS_OPEN)?;
+        let start = position + lowercase.get(position..)?.find(SJIS_OPEN)?;
         let content_start = start + SJIS_OPEN.len();
-        let content_end = content_start + lowercase[content_start..].find(SJIS_CLOSE)?;
+        let content_end = content_start + lowercase.get(content_start..)?.find(SJIS_CLOSE)?;
         let end = content_end + SJIS_CLOSE.len();
-        match lowercase[content_start..content_end].rfind(SJIS_OPEN) {
+
+        let lowercase_inner = lowercase.get(content_start..content_end)?;
+        match lowercase_inner.rfind(SJIS_OPEN) {
             Some(inner) => position = content_start + inner,
-            None if content_end > content_start => return Some(SjisMatch { start, end }),
-            None => position = start + 1, // Skip empty SJIS blocks
+            None if lowercase_inner.is_empty() => position = start + 1, // Skip empty SJIS blocks
+            None => {
+                // Lines holding only the tags aren't part of the art, so they don't add blank lines
+                let mut inner = text.get(content_start..content_end)?;
+                if let Some((first_line, rest)) = inner.split_once('\n')
+                    && first_line.trim().is_empty()
+                {
+                    inner = rest;
+                }
+                if let Some((rest, last_line)) = inner.rsplit_once('\n')
+                    && last_line.trim().is_empty()
+                {
+                    inner = rest.trim_suffix('\r');
+                }
+
+                let (before, rest) = text.split_at_checked(start)?;
+                let (source, after) = rest.split_at_checked(end - start)?;
+                let after_lowercase = lowercase.get(end..)?;
+
+                let inner = ammonia::clean_text(inner);
+                let html = Some(format!(r#"<span class="sjis">{inner}</span>"#));
+                let art = SjisArt { source, html };
+                return Some(SjisMatch {
+                    art,
+                    before,
+                    after,
+                    after_lowercase,
+                });
+            }
         }
     }
 }
@@ -161,22 +176,25 @@ fn rewrite_source(text: &str) -> Cow<'_, str> {
         return Cow::Borrowed(text);
     }
 
-    let (verbatim_ranges, cell_ends) = scan_structure(text);
+    let TextStructure {
+        verbatim_ranges,
+        cell_ends,
+    } = scan_structure(text);
     let mut verbatim_ranges = verbatim_ranges.iter().peekable();
-    let mut cell_ends = cell_ends.iter().peekable();
+    let mut cell_ends = cell_ends.into_iter().peekable();
     let mut linked = String::with_capacity(text.len());
     let mut copied = 0;
     let mut position = 0;
     while position < text.len() {
-        while verbatim_ranges.next_if(|range| range.end <= position).is_some() {}
-        while cell_ends.next_if(|&&end| end <= position).is_some() {}
-        let cell_end = cell_ends.peek().map_or(text.len(), |&&end| end);
+        while verbatim_ranges.next_if(|range| position >= range.end).is_some() {}
+        while cell_ends.next_if(|&end| position >= end).is_some() {}
+        let cell_end = cell_ends.peek().copied().unwrap_or(text.len());
         let limit = match verbatim_ranges.peek() {
-            Some(range) if range.start <= position => {
+            Some(range) if position >= range.start => {
                 position = range.end;
                 continue;
             }
-            Some(range) => range.start.min(cell_end),
+            Some(range) => std::cmp::min(range.start, cell_end),
             None => cell_end,
         };
 
@@ -200,12 +218,13 @@ fn rewrite_source(text: &str) -> Cow<'_, str> {
 }
 
 /// Finds source ranges that aren't prose (code, links, raw HTML, and link reference definitions)
-/// and where table cells end, since cells are the only structure a URL could run into within a line.
-fn scan_structure(text: &str) -> (Vec<Range<usize>>, Vec<usize>) {
+/// and where table cells end, since a cell's closing `|` can directly follow a URL and would
+/// otherwise be read as part of it.
+fn scan_structure(text: &str) -> TextStructure {
     let parser = Parser::new_ext(text, OPTIONS);
 
     let mut cell_ends = Vec::new();
-    let mut ranges: Vec<_> = parser
+    let mut verbatim_ranges: Vec<_> = parser
         .reference_definitions()
         .iter()
         .map(|(_, definition)| definition.span.clone())
@@ -216,12 +235,15 @@ fn scan_structure(text: &str) -> (Vec<Range<usize>>, Vec<usize>) {
             Event::Start(Tag::CodeBlock(_) | Tag::HtmlBlock | Tag::Link { .. } | Tag::Image { .. })
             | Event::Code(_)
             | Event::Html(_)
-            | Event::InlineHtml(_) => ranges.push(range),
+            | Event::InlineHtml(_) => verbatim_ranges.push(range),
             _ => (),
         }
     }
-    ranges.sort_unstable_by_key(|range| range.start);
-    (ranges, cell_ends)
+    verbatim_ranges.sort_unstable_by_key(|range| range.start);
+    TextStructure {
+        verbatim_ranges,
+        cell_ends,
+    }
 }
 
 fn push_url_link(markdown: &mut String, url: &str) {
@@ -818,6 +840,49 @@ mod test {
         );
         assert_eq!(render("*[sjis]x[/sjis]*"), "<p><em><span class=\"sjis\">x</span></em></p>\n");
         assert_eq!(render("[SJIS][/sjis]"), "<p>[SJIS][/sjis]</p>\n");
+    }
+
+    #[test]
+    fn nested_sjis() {
+        // The innermost block wins and the outer tags stay literal
+        assert_eq!(render("[sjis]a[sjis]b[/sjis]c[/sjis]"), "<p>[sjis]a<span class=\"sjis\">b</span>c[/sjis]</p>\n");
+        assert_eq!(render("[sjis][sjis]a[/sjis][/sjis]"), "<p>[sjis]<span class=\"sjis\">a</span>[/sjis]</p>\n");
+        assert_eq!(
+            render("[sjis]a[sjis]b[sjis]c[/sjis]d[/sjis]e[/sjis]"),
+            "<p>[sjis]a[sjis]b<span class=\"sjis\">c</span>d[/sjis]e[/sjis]</p>\n"
+        );
+        assert_eq!(render("[SJIS]a[Sjis]b[/SJIS]c[/sjis]"), "<p>[SJIS]a<span class=\"sjis\">b</span>c[/sjis]</p>\n");
+        assert_eq!(
+            render("[sjis]a[sjis]b[/sjis][sjis]c[/sjis][/sjis]"),
+            "<p>[sjis]a<span class=\"sjis\">b</span><span class=\"sjis\">c</span>[/sjis]</p>\n"
+        );
+        assert_eq!(
+            render("[sjis]\n[sjis]\na\n[/sjis]\n[/sjis]"),
+            "<p>[sjis]<span class=\"sjis\">a</span>[/sjis]</p>\n"
+        );
+
+        // An empty inner block is skipped and doesn't make the outer one match
+        assert_eq!(render("[sjis]a[sjis][/sjis][/sjis]"), "<p>[sjis]a[sjis][/sjis][/sjis]</p>\n");
+    }
+
+    #[test]
+    fn unmatched_sjis() {
+        assert_eq!(render("[sjis]a"), "<p>[sjis]a</p>\n");
+        assert_eq!(render("a[/sjis]"), "<p>a[/sjis]</p>\n");
+        assert_eq!(render("[/sjis]a[sjis]"), "<p>[/sjis]a[sjis]</p>\n");
+        assert_eq!(render("[sjis]a\n\nb"), "<p>[sjis]a</p>\n<p>b</p>\n");
+        assert_eq!(render("[sjis]é"), "<p>[sjis]é</p>\n");
+        assert_eq!(render("é[/sjis]"), "<p>é[/sjis]</p>\n");
+
+        // Incomplete tags don't count
+        assert_eq!(render("[sjis a[/sjis]"), "<p>[sjis a[/sjis]</p>\n");
+        assert_eq!(render("[sjis]a[/sjis"), "<p>[sjis]a[/sjis</p>\n");
+
+        // Extra tags next to a matched block stay literal
+        assert_eq!(render("[sjis]a[/sjis][/sjis]"), "<p><span class=\"sjis\">a</span>[/sjis]</p>\n");
+        assert_eq!(render("[sjis][sjis]a[/sjis]"), "<p>[sjis]<span class=\"sjis\">a</span></p>\n");
+        assert_eq!(render("[/sjis][sjis]a[/sjis]"), "<p>[/sjis]<span class=\"sjis\">a</span></p>\n");
+        assert_eq!(render("[sjis]a[/sjis][sjis]b"), "<p><span class=\"sjis\">a</span>[sjis]b</p>\n");
     }
 
     #[test]
