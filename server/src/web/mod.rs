@@ -94,6 +94,11 @@ pub fn tag_url(name: &str) -> String {
     format!("tag/{encoded_name}")
 }
 
+pub fn user_url(name: &str) -> String {
+    let encoded_name = percent_encoding::utf8_percent_encode(name, NON_ALPHANUMERIC);
+    format!("user/{encoded_name}")
+}
+
 pub fn tag_search_url(name: &str) -> String {
     let escaped_name = string::escape(name);
     let encoded_name = percent_encoding::utf8_percent_encode(&escaped_name, NON_ALPHANUMERIC);

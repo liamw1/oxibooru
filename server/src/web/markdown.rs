@@ -11,19 +11,23 @@ pub fn render(text: &str) -> String {
     let (text, sjis_art) = mark_sjis(text);
     let text = rewrite_source(&text);
     let parser = TextMergeStream::new(Parser::new_ext(&text, OPTIONS));
-    let renderer = Renderer {
-        sjis_art,
-        ..Renderer::default()
-    };
+
     let mut html = String::new();
-    html::push_html(&mut html, renderer.run(parser).into_iter());
+    html::push_html(&mut html, Renderer::new(sjis_art).run(parser).into_iter());
     SANITIZER.clean(&html).to_string()
 }
 
+const SPOILER_OPEN: &str = "[spoiler]";
+const SPOILER_CLOSE: &str = "[/spoiler]";
+const ICON_OPEN: &str = "[icon]";
+const ICON_CLOSE: &str = "[/icon]";
 const SJIS_OPEN: &str = "[sjis]";
 const SJIS_CLOSE: &str = "[/sjis]";
 const MARKER_START: char = '\u{E000}';
 const MARKER_END: char = '\u{E001}';
+
+const URL_PREFIXES: [&str; 3] = ["https://", "http://", "www."];
+const ENTITY_SIGILS: [char; 3] = ['@', '+', '#'];
 
 const OPTIONS: Options = Options::ENABLE_STRIKETHROUGH
     .union(Options::ENABLE_TABLES)
@@ -59,9 +63,331 @@ struct SjisMatch<'a, 'b> {
     after_lowercase: &'b str,
 }
 
+struct SjisMarker {
+    index: usize,
+    len: usize,
+}
+
+struct EntityLink {
+    len: usize,
+    text: String,
+    dest_url: String,
+}
+
 struct TextStructure {
     verbatim_ranges: Vec<Range<usize>>,
     cell_ends: Vec<usize>,
+}
+
+struct OpenSpoiler {
+    index: usize,
+    depth: usize,
+}
+
+enum SpoilerTag {
+    Open,
+    Close,
+}
+
+impl SpoilerTag {
+    fn len(&self) -> usize {
+        match self {
+            Self::Open => SPOILER_OPEN,
+            Self::Close => SPOILER_CLOSE,
+        }
+        .len()
+    }
+}
+
+struct Image {
+    url: String,
+    width: Option<u16>,
+    height: Option<u16>,
+    alt: String,
+}
+
+impl Image {
+    fn parse(dest_url: &str) -> Self {
+        Self::parse_sized(dest_url).unwrap_or_else(|| Self {
+            url: dest_url.to_owned(),
+            width: None,
+            height: None,
+            alt: String::new(),
+        })
+    }
+
+    // `url =WxH`, where either dimension may be omitted
+    fn parse_sized(dest_url: &str) -> Option<Self> {
+        let (url, size) = dest_url.rsplit_once('=')?;
+        let url = url.strip_suffix(char::is_whitespace)?.trim_end();
+        if url.is_empty() {
+            return None;
+        }
+
+        let dimension = |text: &str| match text.trim() {
+            "" => Some(None),
+            text => text.parse().ok().map(Some),
+        };
+        let (width, height) = size.split_once('x')?;
+        let (width, height) = (dimension(width)?, dimension(height)?);
+        Some(Self {
+            url: url.to_owned(),
+            width,
+            height,
+            alt: String::new(),
+        })
+    }
+
+    fn to_html(&self) -> String {
+        let mut html =
+            format!(r#"<img src="{}" alt="{}""#, ammonia::clean_text(&self.url), ammonia::clean_text(&self.alt));
+        if let Some(width) = self.width {
+            write!(html, r#" width="{width}""#).expect("Write to String is infallible");
+        }
+        if let Some(height) = self.height {
+            write!(html, r#" height="{height}""#).expect("Write to String is infallible");
+        }
+        html.push('>');
+        html
+    }
+}
+
+struct Renderer<'a> {
+    events: Vec<Event<'a>>,
+    open_spoilers: Vec<OpenSpoiler>,
+    sjis_art: Vec<SjisArt<'a>>,
+    depth: usize,
+    in_link: bool,
+    in_code_block: bool,
+}
+
+impl<'a> Renderer<'a> {
+    fn new(sjis_art: Vec<SjisArt<'a>>) -> Self {
+        Self {
+            events: Vec::new(),
+            open_spoilers: Vec::new(),
+            sjis_art,
+            depth: 0,
+            in_link: false,
+            in_code_block: false,
+        }
+    }
+
+    fn run(mut self, parser: impl Iterator<Item = Event<'a>>) -> Vec<Event<'a>> {
+        let mut images_in_alt = 0;
+        let mut image: Option<Image> = None;
+        for event in parser {
+            // Art outside of prose is shown as its source text
+            let event = match event {
+                Event::Code(text) => Event::Code(self.unmark(text)),
+                Event::InlineHtml(html) => Event::InlineHtml(self.unmark(html)),
+                Event::Html(html) => Event::Html(self.unmark(html)),
+                Event::Text(text) if self.in_code_block || image.is_some() => Event::Text(self.unmark(text)),
+                Event::Start(Tag::Link {
+                    link_type,
+                    dest_url,
+                    title,
+                    id,
+                }) => Event::Start(Tag::Link {
+                    link_type,
+                    dest_url: self.unmark(dest_url),
+                    title: self.unmark(title),
+                    id,
+                }),
+                Event::Start(Tag::Image {
+                    link_type,
+                    dest_url,
+                    title,
+                    id,
+                }) => Event::Start(Tag::Image {
+                    link_type,
+                    dest_url: self.unmark(dest_url),
+                    title, // We don't use title, so no need to unmark it
+                    id,
+                }),
+                event => event,
+            };
+
+            // Images are rendered once their alt text is known
+            if let Some(open_image) = &mut image {
+                match event {
+                    Event::Start(Tag::Image { .. }) => images_in_alt += 1,
+                    Event::End(TagEnd::Image) if images_in_alt > 0 => images_in_alt -= 1,
+                    Event::End(TagEnd::Image) => {
+                        if let Some(image) = image.take() {
+                            self.push_image(image);
+                        }
+                    }
+                    Event::Text(text) | Event::Code(text) => open_image.alt.push_str(&text),
+                    _ => (),
+                }
+                continue;
+            }
+
+            match event {
+                Event::Start(Tag::Image { dest_url, .. }) => image = Some(Image::parse(&dest_url)),
+                Event::Start(ref tag) => {
+                    match tag {
+                        Tag::Link { .. } => self.in_link = true,
+                        Tag::CodeBlock(_) => self.in_code_block = true,
+                        _ => (),
+                    }
+                    self.depth += 1;
+                    self.events.push(event);
+                }
+                Event::End(tag_end) => {
+                    // Spoilers left open when their container ends stay as plain text
+                    while self.open_spoilers.last().is_some_and(|open| open.depth >= self.depth) {
+                        self.open_spoilers.pop();
+                    }
+                    match tag_end {
+                        TagEnd::Link => self.in_link = false,
+                        TagEnd::CodeBlock => self.in_code_block = false,
+                        _ => (),
+                    }
+                    self.depth -= 1;
+
+                    if let [.., Event::Start(Tag::Paragraph), Event::Html(_)] = self.events[..]
+                        && tag_end == TagEnd::Paragraph
+                    {
+                        let art = self.events.pop();
+                        self.events.pop();
+                        self.events.extend(art);
+                    } else {
+                        self.events.push(event);
+                    }
+                }
+                Event::SoftBreak | Event::HardBreak => {
+                    if !matches!(self.events.last(), Some(Event::Html(_))) {
+                        self.events.push(Event::HardBreak);
+                    }
+                }
+                Event::Text(text) if !self.in_code_block => self.push_text(&text),
+                _ => self.events.push(event),
+            }
+        }
+        self.events
+    }
+
+    fn push_image(&mut self, image: Image) {
+        if is_same_origin(&image.url) {
+            return self.events.push(Event::InlineHtml(image.to_html().into()));
+        }
+
+        // External images would reveal viewers' IPs to whoever hosts them, so they become links,
+        // or just text inside another link since links can't nest
+        let Image { url, alt, .. } = image;
+        let text = if alt.is_empty() { url.clone() } else { alt };
+        if self.in_link {
+            self.push_plain(&text);
+        } else {
+            self.push_link(url, &text);
+        }
+    }
+
+    fn push_text(&mut self, text: &str) {
+        let mut plain_start = 0;
+        let mut position = 0;
+        while let Some(next_char) = text[position..].chars().next() {
+            let rest = &text[position..];
+            let token_len = if let Some(tag) = spoiler_tag(rest) {
+                self.push_plain(&text[plain_start..position]);
+                match tag {
+                    SpoilerTag::Open => self.open_spoiler(&rest[..tag.len()]),
+                    SpoilerTag::Close => self.close_spoiler(&rest[..tag.len()]),
+                }
+                tag.len()
+            } else if let Some(marker) = parse_marker(rest)
+                && let Some((source, html)) = self.take_art(marker.index)
+            {
+                self.push_plain(&text[plain_start..position]);
+                if self.in_link {
+                    self.push_plain(source);
+                } else {
+                    self.push_sjis(html);
+                }
+                marker.len
+            } else {
+                0
+            };
+
+            if token_len > 0 {
+                position += token_len;
+                plain_start = position;
+            } else {
+                position += next_char.len_utf8();
+            }
+        }
+        self.push_plain(&text[plain_start..]);
+    }
+
+    fn push_plain(&mut self, text: &str) {
+        if !text.is_empty() {
+            self.events.push(Event::Text(text.to_owned().into()));
+        }
+    }
+
+    fn push_link(&mut self, dest_url: String, text: &str) {
+        self.events.push(Event::Start(Tag::Link {
+            link_type: LinkType::Inline,
+            dest_url: CowStr::from(dest_url),
+            title: CowStr::Borrowed(""),
+            id: CowStr::Borrowed(""),
+        }));
+        self.push_plain(text);
+        self.events.push(Event::End(TagEnd::Link));
+    }
+
+    fn push_sjis(&mut self, html: String) {
+        // Art is displayed as a block, so line breaks next to it would only add blank lines
+        while self.events.last() == Some(&Event::HardBreak) {
+            self.events.pop();
+        }
+        self.events.push(Event::Html(CowStr::from(html)));
+    }
+
+    fn open_spoiler(&mut self, token: &str) {
+        self.open_spoilers.push(OpenSpoiler {
+            index: self.events.len(),
+            depth: self.depth,
+        });
+        self.push_plain(token);
+    }
+
+    fn close_spoiler(&mut self, token: &str) {
+        match self.open_spoilers.pop_if(|open| open.depth == self.depth) {
+            Some(open) if self.events.len() > open.index + 1 => {
+                self.events[open.index] = Event::InlineHtml(CowStr::Borrowed(r#"<span class="spoiler">"#));
+                self.events.push(Event::InlineHtml(CowStr::Borrowed("</span>")));
+            }
+            _ => self.push_plain(token),
+        }
+    }
+
+    fn unmark(&mut self, text: CowStr<'a>) -> CowStr<'a> {
+        if self.sjis_art.is_empty() || !text.contains(MARKER_START) {
+            return text;
+        }
+
+        let mut copied = 0;
+        let mut source = String::with_capacity(text.len());
+        for (i, _) in text.match_indices(MARKER_START) {
+            if let Some(marker) = parse_marker(&text[i..])
+                && let Some((art_source, _)) = self.take_art(marker.index)
+            {
+                source.push_str(&text[copied..i]);
+                source.push_str(art_source);
+                copied = i + marker.len;
+            }
+        }
+        source.push_str(&text[copied..]);
+        CowStr::from(source)
+    }
+
+    fn take_art(&mut self, index: usize) -> Option<(&'a str, String)> {
+        let art = self.sjis_art.get_mut(index)?;
+        art.html.take().map(|html| (art.source, html))
+    }
 }
 
 fn is_same_origin(url: &str) -> bool {
@@ -159,20 +485,33 @@ fn push_without_markers(marked: &mut String, text: &str) {
     }
 }
 
-// Returns the art index and the marker's length
-fn parse_marker(text: &str) -> Option<(usize, usize)> {
-    let digits = text.strip_prefix(MARKER_START)?;
-    let digits_len = digits.bytes().take_while(u8::is_ascii_digit).count();
-    let index = digits[..digits_len].parse().ok()?;
-    digits[digits_len..]
-        .starts_with(MARKER_END)
-        .then_some((index, MARKER_START.len_utf8() + digits_len + MARKER_END.len_utf8()))
+/// Returns the art index and the marker's length
+fn parse_marker(text: &str) -> Option<SjisMarker> {
+    const MAX_MARKER_DIGITS: usize = usize::MAX.ilog10() as usize + 1;
+
+    // Get index of SJIS art
+    let rest = text.strip_prefix(MARKER_START)?;
+    let digit_count = rest
+        .bytes()
+        .take(MAX_MARKER_DIGITS)
+        .take_while(u8::is_ascii_digit)
+        .count();
+    let (digits, rest) = rest.split_at(digit_count);
+
+    let index = digits.parse().ok()?;
+    let len = MARKER_START.len_utf8() + digit_count + MARKER_END.len_utf8();
+    rest.starts_with(MARKER_END).then_some(SjisMarker { index, len })
 }
 
-/// Rewrites `text` so that bare URLs and icon blocks become escaped Markdown links before parsing, so emphasis and
-/// smart punctuation can't alter them.
+/// Rewrites `text` so that bare URLs, icon blocks, and `@post`, `+user`, and `#tag` entities become escaped Markdown
+/// links before parsing, so emphasis and smart punctuation can't alter them. Entities are found here rather than in
+/// the parsed text because Markdown would consume the backslashes that escape punctuation in their names.
 fn rewrite_source(text: &str) -> Cow<'_, str> {
-    if !contains_ignore_ascii_case(text, "http") && !contains_ignore_ascii_case(text, "www.") {
+    if !text.contains(ENTITY_SIGILS)
+        && !URL_PREFIXES
+            .iter()
+            .any(|prefix| contains_ignore_ascii_case(text, prefix))
+    {
         return Cow::Borrowed(text);
     }
 
@@ -199,15 +538,23 @@ fn rewrite_source(text: &str) -> Cow<'_, str> {
         };
 
         let rest = &text[position..limit];
-        if let Some((icon_len, url)) = icon(rest) {
+        if let Some(url) = icon(rest) {
             linked.push_str(&text[copied..position]);
             push_url_link(&mut linked, url);
-            position += icon_len;
+            position += ICON_OPEN.len() + url.len() + ICON_CLOSE.len();
             copied = position;
         } else if let Some(url) = bare_url(rest) {
             linked.push_str(&text[copied..position]);
             push_url_link(&mut linked, url);
             position += url.len();
+            copied = position;
+        } else if let previous = text[..position].chars().next_back()
+            && is_entity_boundary(previous)
+            && let Some(entity) = entity_link(rest, previous == Some('_'))
+        {
+            linked.push_str(&text[copied..position]);
+            push_markdown_link(&mut linked, &entity.text, &entity.dest_url);
+            position += entity.len;
             copied = position;
         } else {
             position += rest.chars().next().map_or(1, char::len_utf8);
@@ -250,16 +597,19 @@ fn push_url_link(markdown: &mut String, url: &str) {
     markdown.push('[');
     push_escaped_markdown(markdown, url);
     markdown.push_str("](<");
-    push_escaped_markdown(markdown, &dest_url(url));
+    if strip_prefix_ignore_ascii_case(url, "www.").is_some() {
+        push_escaped_markdown(markdown, "http://");
+    }
+    push_escaped_markdown(markdown, url);
     markdown.push_str(">)");
 }
 
-fn dest_url(url: &str) -> Cow<'_, str> {
-    if strip_prefix_ignore_ascii_case(url, "www.").is_some() {
-        Cow::Owned(format!("http://{url}"))
-    } else {
-        Cow::Borrowed(url)
-    }
+fn push_markdown_link(markdown: &mut String, text: &str, dest_url: &str) {
+    markdown.push('[');
+    push_escaped_markdown(markdown, text);
+    markdown.push_str("](<");
+    push_escaped_markdown(markdown, dest_url);
+    markdown.push_str(">)");
 }
 
 fn push_escaped_markdown(markdown: &mut String, text: &str) {
@@ -271,35 +621,29 @@ fn push_escaped_markdown(markdown: &mut String, text: &str) {
     }
 }
 
-const SPOILER_OPEN: &str = "[spoiler]";
-const SPOILER_CLOSE: &str = "[/spoiler]";
-const ICON_OPEN: &str = "[icon]";
-const ICON_CLOSE: &str = "[/icon]";
-const URL_PREFIXES: [&str; 3] = ["https://", "http://", "www."];
-
-// Returns whether the tag closes and its length
-fn spoiler_tag(text: &str) -> Option<(bool, usize)> {
+/// Returns whether text starts with a opening or closing spoiler tag.
+fn spoiler_tag(text: &str) -> Option<SpoilerTag> {
     if strip_prefix_ignore_ascii_case(text, SPOILER_OPEN).is_some() {
-        Some((false, SPOILER_OPEN.len()))
+        Some(SpoilerTag::Open)
     } else if strip_prefix_ignore_ascii_case(text, SPOILER_CLOSE).is_some() {
-        Some((true, SPOILER_CLOSE.len()))
+        Some(SpoilerTag::Close)
     } else {
         None
     }
 }
 
-// Returns the length of `[icon]url[/icon]` and its URL
-fn icon(text: &str) -> Option<(usize, &str)> {
+/// Returns the URL inside a `[icon]url[/icon]` block.
+fn icon(text: &str) -> Option<&str> {
     let content = strip_prefix_ignore_ascii_case(text, ICON_OPEN)?;
-    let url_len = content
+    let url_end = content
         .find(|c: char| c.is_whitespace() || matches!(c, '[' | '<' | MARKER_START))
         .unwrap_or(content.len());
-    let url = &content[..url_len];
-    strip_prefix_ignore_ascii_case(&content[url_len..], ICON_CLOSE)?;
+    let (url, rest) = content.split_at(url_end);
+    strip_prefix_ignore_ascii_case(rest, ICON_CLOSE)?;
     URL_PREFIXES
         .iter()
-        .any(|prefix| url.len() > prefix.len() && strip_prefix_ignore_ascii_case(url, prefix).is_some())
-        .then_some((ICON_OPEN.len() + url_len + ICON_CLOSE.len(), url))
+        .any(|prefix| strip_prefix_ignore_ascii_case(url, prefix).is_some())
+        .then_some(url)
 }
 
 fn starts_with_tag(text: &str) -> bool {
@@ -317,272 +661,7 @@ fn contains_ignore_ascii_case(text: &str, needle: &str) -> bool {
 fn strip_prefix_ignore_ascii_case<'a>(text: &'a str, prefix: &str) -> Option<&'a str> {
     text.get(..prefix.len())
         .filter(|start| start.eq_ignore_ascii_case(prefix))
-        .map(|_| &text[prefix.len()..])
-}
-
-struct OpenSpoiler {
-    index: usize,
-    depth: usize,
-}
-
-#[derive(Default)]
-struct Renderer<'a> {
-    events: Vec<Event<'a>>,
-    open_spoilers: Vec<OpenSpoiler>,
-    sjis_art: Vec<SjisArt<'a>>,
-    depth: usize,
-    in_link: bool,
-    in_code_block: bool,
-}
-
-impl<'a> Renderer<'a> {
-    fn run(mut self, parser: impl Iterator<Item = Event<'a>>) -> Vec<Event<'a>> {
-        let mut image: Option<Image> = None;
-        let mut images_in_alt = 0;
-        for event in parser {
-            // Art outside of prose is shown as its source text
-            let event = match event {
-                Event::Code(text) => Event::Code(self.unmark(text)),
-                Event::InlineHtml(html) => Event::InlineHtml(self.unmark(html)),
-                Event::Html(html) => Event::Html(self.unmark(html)),
-                Event::Text(text) if self.in_code_block || image.is_some() => Event::Text(self.unmark(text)),
-                Event::Start(Tag::Link {
-                    link_type,
-                    dest_url,
-                    title,
-                    id,
-                }) => Event::Start(Tag::Link {
-                    link_type,
-                    dest_url: self.unmark(dest_url),
-                    title: self.unmark(title),
-                    id,
-                }),
-                Event::Start(Tag::Image {
-                    link_type,
-                    dest_url,
-                    title,
-                    id,
-                }) => Event::Start(Tag::Image {
-                    link_type,
-                    dest_url: self.unmark(dest_url),
-                    title,
-                    id,
-                }),
-                event => event,
-            };
-
-            // Images are rendered once their alt text is known
-            if let Some(open_image) = &mut image {
-                match event {
-                    Event::Start(Tag::Image { .. }) => images_in_alt += 1,
-                    Event::End(TagEnd::Image) if images_in_alt > 0 => images_in_alt -= 1,
-                    Event::End(TagEnd::Image) => {
-                        if let Some(image) = image.take() {
-                            self.push_image(image);
-                        }
-                    }
-                    Event::Text(text) | Event::Code(text) => open_image.alt.push_str(&text),
-                    _ => (),
-                }
-                continue;
-            }
-
-            match event {
-                Event::Start(Tag::Image { dest_url, .. }) => image = Some(Image::parse(&dest_url)),
-                Event::Start(ref tag) => {
-                    match tag {
-                        Tag::Link { .. } => self.in_link = true,
-                        Tag::CodeBlock(_) => self.in_code_block = true,
-                        _ => (),
-                    }
-                    self.depth += 1;
-                    self.events.push(event);
-                }
-                Event::End(tag_end) => {
-                    // Spoilers left open when their container ends stay as plain text
-                    while self.open_spoilers.last().is_some_and(|open| open.depth >= self.depth) {
-                        self.open_spoilers.pop();
-                    }
-                    match tag_end {
-                        TagEnd::Link => self.in_link = false,
-                        TagEnd::CodeBlock => self.in_code_block = false,
-                        _ => (),
-                    }
-                    self.depth -= 1;
-                    // Art on its own isn't wrapped in a paragraph, like in the original client
-                    if let [.., Event::Start(Tag::Paragraph), Event::Html(_)] = self.events[..]
-                        && tag_end == TagEnd::Paragraph
-                    {
-                        let art = self.events.pop();
-                        self.events.pop();
-                        self.events.extend(art);
-                    } else {
-                        self.events.push(event);
-                    }
-                }
-                Event::SoftBreak | Event::HardBreak => {
-                    if !matches!(self.events.last(), Some(Event::Html(_))) {
-                        self.events.push(Event::HardBreak);
-                    }
-                }
-                Event::Text(text) if !self.in_code_block => self.push_text(&text),
-                _ => self.events.push(event),
-            }
-        }
-        self.events
-    }
-
-    fn push_image(&mut self, image: Image) {
-        if is_same_origin(&image.url) {
-            return self.events.push(Event::InlineHtml(image.to_html().into()));
-        }
-
-        // External images would reveal viewers' IPs to whoever hosts them, so they become links,
-        // or just text inside another link since links can't nest
-        let Image { url, alt, .. } = image;
-        let text = if alt.is_empty() { url.clone() } else { alt };
-        if self.in_link {
-            self.push_plain(&text);
-        } else {
-            self.push_link(url, &text);
-        }
-    }
-
-    fn push_text(&mut self, text: &str) {
-        let mut plain_start = 0;
-        let mut position = 0;
-        while let Some(next_char) = text[position..].chars().next() {
-            let rest = &text[position..];
-            let token_len = if let Some((closing, len)) = spoiler_tag(rest) {
-                self.push_plain(&text[plain_start..position]);
-                if closing {
-                    self.close_spoiler(&rest[..len]);
-                } else {
-                    self.open_spoiler(&rest[..len]);
-                }
-                len
-            } else if let Some((index, len)) = parse_marker(rest)
-                && let Some((source, html)) = self.take_art(index)
-            {
-                self.push_plain(&text[plain_start..position]);
-                if self.in_link {
-                    self.push_plain(source);
-                } else {
-                    self.push_sjis(html);
-                }
-                len
-            } else if !self.in_link
-                && is_entity_boundary(text[..position].chars().next_back())
-                && let Some((len, dest_url)) = entity_link(rest)
-            {
-                self.push_plain(&text[plain_start..position]);
-                self.push_link(dest_url, &rest[..len]);
-                len
-            } else {
-                0
-            };
-
-            if token_len > 0 {
-                position += token_len;
-                plain_start = position;
-            } else {
-                position += next_char.len_utf8();
-            }
-        }
-        self.push_plain(&text[plain_start..]);
-    }
-
-    fn open_spoiler(&mut self, token: &str) {
-        self.open_spoilers.push(OpenSpoiler {
-            index: self.events.len(),
-            depth: self.depth,
-        });
-        self.push_plain(token);
-    }
-
-    fn close_spoiler(&mut self, token: &str) {
-        match self.open_spoilers.pop_if(|open| open.depth == self.depth) {
-            Some(open) if self.events.len() > open.index + 1 => {
-                self.events[open.index] = Event::InlineHtml(CowStr::Borrowed(r#"<span class="spoiler">"#));
-                self.events.push(Event::InlineHtml(CowStr::Borrowed("</span>")));
-            }
-            _ => self.push_plain(token),
-        }
-    }
-
-    fn push_sjis(&mut self, html: String) {
-        // Art is displayed as a block, so line breaks next to it would only add blank lines
-        while matches!(self.events.last(), Some(Event::HardBreak)) {
-            self.events.pop();
-        }
-        self.events.push(Event::Html(html.into()));
-    }
-
-    fn take_art(&mut self, index: usize) -> Option<(&'a str, String)> {
-        let art = self.sjis_art.get_mut(index)?;
-        art.html.take().map(|html| (art.source, html))
-    }
-
-    fn unmark(&mut self, text: CowStr<'a>) -> CowStr<'a> {
-        if self.sjis_art.is_empty() || !text.contains(MARKER_START) {
-            return text;
-        }
-
-        let mut source = String::with_capacity(text.len());
-        let mut copied = 0;
-        for (index, _) in text.match_indices(MARKER_START) {
-            if let Some((art_index, marker_len)) = parse_marker(&text[index..])
-                && let Some((art_source, _)) = self.take_art(art_index)
-            {
-                source.push_str(&text[copied..index]);
-                source.push_str(art_source);
-                copied = index + marker_len;
-            }
-        }
-        source.push_str(&text[copied..]);
-        source.into()
-    }
-
-    fn push_plain(&mut self, text: &str) {
-        if !text.is_empty() {
-            self.events.push(Event::Text(text.to_owned().into()));
-        }
-    }
-
-    fn push_link(&mut self, dest_url: String, text: &str) {
-        self.events.push(Event::Start(Tag::Link {
-            link_type: LinkType::Inline,
-            dest_url: dest_url.into(),
-            title: CowStr::Borrowed(""),
-            id: CowStr::Borrowed(""),
-        }));
-        self.push_plain(text);
-        self.events.push(Event::End(TagEnd::Link));
-    }
-}
-
-fn is_entity_boundary(previous: Option<char>) -> bool {
-    previous.is_none_or(|c| c.is_whitespace() || matches!(c, '(' | ')' | '[' | ']' | '<' | '>'))
-}
-
-fn entity_link(text: &str) -> Option<(usize, String)> {
-    let sigil = *text
-        .as_bytes()
-        .first()
-        .filter(|sigil| matches!(sigil, b'@' | b'+' | b'#'))?;
-    let name_len = text[1..]
-        .bytes()
-        .take_while(|&byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
-        .count();
-    let name = &text[1..=name_len];
-    let dest_url = match sigil {
-        _ if name.is_empty() => return None,
-        b'@' if name.bytes().all(|byte| byte.is_ascii_digit()) => format!("post/{name}"),
-        b'+' => format!("user/{name}"),
-        b'#' => web::tag_search_url(name),
-        _ => return None,
-    };
-    Some((1 + name_len, dest_url))
+        .and_then(|_| text.get(prefix.len()..))
 }
 
 fn bare_url(text: &str) -> Option<&str> {
@@ -599,10 +678,12 @@ fn bare_url(text: &str) -> Option<&str> {
 }
 
 fn trim_url(mut url: &str) -> &str {
+    const TRAILING_URL_PUNCTUATION: [char; 10] = ['?', '!', '.', ',', ':', '*', '_', '~', '\'', '"'];
+
     let open_parens = url.matches('(').count();
     let mut close_parens = url.matches(')').count();
     loop {
-        url = url.trim_end_matches(['?', '!', '.', ',', ':', '*', '_', '~', '\'', '"']);
+        url = url.trim_end_matches(TRAILING_URL_PUNCTUATION);
         match url.strip_suffix(')') {
             Some(trimmed) if close_parens > open_parens => {
                 url = trimmed;
@@ -613,50 +694,54 @@ fn trim_url(mut url: &str) -> &str {
     }
 }
 
-struct Image {
-    url: String,
-    width: String,
-    height: String,
-    alt: String,
+fn is_entity_boundary(previous: Option<char>) -> bool {
+    previous.is_none_or(|c| c.is_whitespace() || matches!(c, '(' | ')' | '[' | ']' | '<' | '>' | '|' | '*' | '_' | '~'))
 }
 
-impl Image {
-    fn parse(dest_url: &str) -> Self {
-        Self::parse_sized(dest_url).unwrap_or_else(|| Self {
-            url: dest_url.to_owned(),
-            width: String::new(),
-            height: String::new(),
-            alt: String::new(),
-        })
+fn entity_link(text: &str, trim_underscores: bool) -> Option<EntityLink> {
+    let sigil = text.chars().next().filter(|&sigil| ENTITY_SIGILS.contains(&sigil))?;
+    let rest = &text[sigil.len_utf8()..];
+
+    // Like in search, `\` makes the next character part of the name
+    let mut name = String::new();
+    let mut name_len = 0;
+    let mut untrimmed = (0, 0);
+    let mut escaped = false;
+    for (index, c) in rest.char_indices() {
+        if escaped && !c.is_whitespace() || !escaped && (c.is_alphanumeric() || matches!(c, '_' | '-')) {
+            name.push(c);
+            name_len = index + c.len_utf8();
+            if escaped || c != '_' {
+                untrimmed = (name.len(), name_len);
+            }
+            escaped = false;
+        } else if !escaped && c == '\\' {
+            escaped = true;
+        } else {
+            break;
+        }
     }
 
-    // `url =WxH`, where either dimension may be omitted
-    fn parse_sized(dest_url: &str) -> Option<Self> {
-        let (url, size) = dest_url.rsplit_once('=')?;
-        let url = url.strip_suffix(char::is_whitespace)?.trim_end();
-        let (width, height) = size.split_once('x')?;
-        let (width, height) = (width.trim(), height.trim());
-        let is_number = |text: &str| text.bytes().all(|byte| byte.is_ascii_digit());
-        (!url.is_empty() && is_number(width) && is_number(height)).then(|| Self {
-            url: url.to_owned(),
-            width: width.to_owned(),
-            height: height.to_owned(),
-            alt: String::new(),
-        })
+    // After an opening `_`, trailing underscores close the emphasis instead. `\_` keeps one in the name.
+    if trim_underscores {
+        name.truncate(untrimmed.0);
+        name_len = untrimmed.1;
+    }
+    if name.is_empty() {
+        return None;
     }
 
-    fn to_html(&self) -> String {
-        let mut html =
-            format!(r#"<img src="{}" alt="{}""#, ammonia::clean_text(&self.url), ammonia::clean_text(&self.alt));
-        if !self.width.is_empty() {
-            write!(html, r#" width="{}""#, self.width).expect("Write to String is infallible");
-        }
-        if !self.height.is_empty() {
-            write!(html, r#" height="{}""#, self.height).expect("Write to String is infallible");
-        }
-        html.push('>');
-        html
-    }
+    let dest_url = match sigil {
+        '@' if name.bytes().all(|b| b.is_ascii_digit()) => format!("post/{name}"),
+        '+' => web::user_url(&name),
+        '#' => web::tag_search_url(&name),
+        _ => return None,
+    };
+    Some(EntityLink {
+        len: sigil.len_utf8() + name_len,
+        text: format!("{sigil}{name}"),
+        dest_url,
+    })
 }
 
 #[cfg(test)]
@@ -706,6 +791,39 @@ mod test {
         assert_eq!(render("a@1"), "<p>a@1</p>\n");
         assert_eq!(render("me@example.com"), "<p>me@example.com</p>\n");
         assert_eq!(render("@abc"), "<p>@abc</p>\n");
+        assert_eq!(render("@１"), "<p>@１</p>\n");
+
+        // Names can be Unicode, but stop at punctuation
+        assert_eq!(render("#café"), format!("<p>{}</p>\n", link("posts?search-text=caf%C3%A9", "#café")));
+        assert_eq!(
+            render("+ユーザー"),
+            format!("<p>{}</p>\n", link("user/%E3%83%A6%E3%83%BC%E3%82%B6%E3%83%BC", "+ユーザー"))
+        );
+        assert_eq!(render("see #tag."), format!("<p>see {}.</p>\n", link("posts?search-text=tag", "#tag")));
+        assert_eq!(render("#a--b"), format!("<p>{}</p>\n", link("posts?search-text=a%2D%2Db", "#a--b")));
+
+        // Punctuation can be escaped like in search
+        assert_eq!(render("+user\\.name"), format!("<p>{}</p>\n", link("user/user%2Ename", "+user.name")));
+        assert_eq!(render("#a\\:b."), format!("<p>{}.</p>\n", link("posts?search-text=a%5C%3Ab", "#a:b")));
+        assert_eq!(render("#a\\\\b"), format!("<p>{}</p>\n", link("posts?search-text=a%5C%5Cb", "#a\\b")));
+        assert_eq!(render("#tag\\ x"), format!("<p>{}\\ x</p>\n", link("posts?search-text=tag", "#tag")));
+        assert_eq!(render("\\#tag"), "<p>#tag</p>\n");
+
+        // Markup around entities isn't part of their names
+        assert_eq!(render("*@1*"), format!("<p><em>{}</em></p>\n", link("post/1", "@1")));
+        assert_eq!(render("~~#a~~"), format!("<p><del>{}</del></p>\n", link("posts?search-text=a", "#a")));
+        assert_eq!(render("_#a_b_"), format!("<p><em>{}</em></p>\n", link("posts?search-text=a%5Fb", "#a_b")));
+        assert_eq!(render("__#a__"), format!("<p><strong>{}</strong></p>\n", link("posts?search-text=a", "#a")));
+        assert_eq!(render("_#a\\__"), format!("<p><em>{}</em></p>\n", link("posts?search-text=a%5F", "#a_")));
+        assert_eq!(render("#a_"), format!("<p>{}</p>\n", link("posts?search-text=a%5F", "#a_")));
+        assert_eq!(
+            render("|#a|b|\n|-|-|"),
+            format!(
+                "<table><thead><tr><th>{}</th><th>b</th></tr></thead><tbody>\n</tbody></table>\n",
+                link("posts?search-text=a", "#a")
+            )
+        );
+        assert_eq!(render("`#a` [x](#a)"), format!("<p><code>#a</code> {}</p>\n", link("#a", "x")));
     }
 
     #[test]
@@ -776,7 +894,6 @@ mod test {
             render("[icon][ICON]https://a.com[/Icon]"),
             format!("<p>[icon]{}</p>\n", link("https://a.com", "https://a.com"))
         );
-        assert_eq!(render("[icon]https://[/icon]"), "<p>[icon]https://[/icon]</p>\n");
         assert_eq!(
             render("[icon]https://a.com/a--b[/icon]"),
             format!("<p>{}</p>\n", link("https://a.com/a--b", "https://a.com/a--b"))
