@@ -89,6 +89,9 @@ class UserController {
                     canEditAvatar: api.hasPrivilege(
                         `user_edit_${infix}_avatar`
                     ),
+                    canEditBlocklist: api.hasPrivilege(
+                        `user_edit_${infix}_blocklist`,
+                    ),
                     canEditAnything: api.hasPrivilege(`user_edit_${infix}`),
                     canListTokens: api.hasPrivilege(
                         `user_token_list_${infix}`

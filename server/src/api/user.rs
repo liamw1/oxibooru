@@ -15,6 +15,7 @@ use crate::search::Builder;
 use crate::search::user::QueryBuilder;
 use crate::string::{SecretString, SmallString, lower};
 use crate::time::DateTime;
+use crate::update::tag::FetchMode;
 use crate::{api, filesystem, update};
 use axum::extract::DefaultBodyLimit;
 use diesel::dsl::exists;
@@ -399,6 +400,20 @@ async fn update_impl(
                         .set(user::rank.eq(rank))
                         .execute(conn)?;
                 }
+                if let Some(blocklist) = body.blocklist {
+                    ctx.verify_privilege(Action::UserEditSelfBlocklist)?;
+                    if !editing_self {
+                        ctx.verify_privilege(Action::UserEditAnyBlocklist)?;
+                    }
+
+                    let fetch_mode = if ctx.config.append_tag_implications_on_post_edit {
+                        FetchMode::Deep
+                    } else {
+                        FetchMode::Shallow
+                    };
+                    let (updated_tag_ids, _tags) = update::tag::get_or_create_tags(conn, &ctx, blocklist, fetch_mode)?;
+                    update::user::set_tags_blocklist(conn, user_id, &updated_tag_ids)?;
+                }
                 if let Some(avatar_style) = body.avatar_style {
                     ctx.verify_privilege(Action::UserEditSelfAvatar)?;
                     if !editing_self {
@@ -466,6 +481,8 @@ struct UserUpdateBody {
     email: Option<Option<SecretString>>,
     /// User rank.
     rank: Option<UserRank>,
+    /// Blocklist.
+    blocklist: Option<Vec<SmallString>>,
     /// Avatar style.
     avatar_style: Option<AvatarStyle>,
     /// Token referencing previously uploaded avatar.

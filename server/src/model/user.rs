@@ -1,5 +1,6 @@
 use crate::model::enums::{AvatarStyle, UserRank};
-use crate::schema::{user, user_token};
+use crate::model::tag::Tag;
+use crate::schema::{user, user_tag_blocklist, user_token};
 use crate::string::{LargeString, SecretString, SmallString};
 use crate::time::DateTime;
 use diesel::pg::Pg;
@@ -64,4 +65,14 @@ pub struct UserToken {
     pub creation_time: DateTime,
     pub last_edit_time: DateTime,
     pub last_usage_time: DateTime,
+}
+
+#[derive(Associations, Identifiable, Insertable, Queryable, Selectable)]
+#[diesel(belongs_to(User), belongs_to(Tag))]
+#[diesel(table_name = user_tag_blocklist)]
+#[diesel(primary_key(user_id, tag_id))]
+#[diesel(check_for_backend(Pg))]
+pub struct UserTagBlocklist {
+    pub user_id: i64,
+    pub tag_id: i64,
 }
