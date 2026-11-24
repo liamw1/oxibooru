@@ -2,7 +2,7 @@
 
 const marked = require("marked");
 const DOMPurify = require("dompurify");
-const TurndownService = require('turndown');
+const uri = require("./uri.js");
 
 class BaseMarkdownWrapper {
     preprocess(text) {
@@ -35,7 +35,9 @@ class SjisWrapper extends BaseMarkdownWrapper {
         return text.replace(
             /(?:<p>)?%%%SJIS(\d+)(?:<\/p>)?/,
             (match, capture) => {
-                return '<div class="sjis">' + this.buf[capture] + "</div>";
+                return (
+                    '<div class="sjis">' + escapeHtml(this.buf[capture]) + "</div>"
+                );
             }
         );
     }
@@ -112,11 +114,39 @@ class StrikeThroughWrapper extends BaseMarkdownWrapper {
 }
 
 class FaviconWrapper extends BaseMarkdownWrapper {
+    constructor() {
+        super();
+        this.buf = [];
+    }
+
+    // Swap in a placeholder so marked never sees (and escapes) our HTML, then
+    // build the link ourselves after rendering.
     preprocess(text) {
         return text.replace(
             /\[icon\]((?:[^\[]|\[(?!\/?icon\]))+)\[\/icon\]/gi,
-            '<a href="$1"><img src="https://www.google.com/s2/favicons?domain=$1"> $1</a>'
+            (match, capture) => {
+                const ret = "%%%ICON" + this.buf.length + "%%%";
+                this.buf.push(capture);
+                return ret;
+            }
         );
+    }
+
+    postprocess(text) {
+        return text.replace(/%%%ICON(\d+)%%%/g, (match, capture) => {
+            const url = this.buf[capture];
+            if (!uri.isSafeUrl(url)) {
+                return escapeHtml(url);
+            }
+            const favicon =
+                "https://www.google.com/s2/favicons?domain=" +
+                encodeURIComponent(url);
+            return (
+                '<a href="' + escapeHtml(url) + '">' +
+                '<img src="' + escapeHtml(favicon) + '"> ' +
+                escapeHtml(url) + "</a>"
+            );
+        });
     }
 }
 
@@ -132,9 +162,20 @@ function escapeHtml(unsafe) {
 
 function createRenderer() {
     const renderer = new marked.Renderer();
+    // User-supplied HTML is never rendered; show it as literal text instead.
+    renderer.html = (html) => escapeHtml(html);
+    renderer.link = function (href, title, text) {
+        if (!uri.isSafeUrl(href)) {
+            return text;
+        }
+        return marked.Renderer.prototype.link.call(this, href, title, text);
+    };
     renderer.image = (href, title, alt) => {
         let [_, url, width, height] =
             /^(.+?)(?:\s=\s*(\d*)\s*x\s*(\d*)\s*)?$/.exec(href);
+        if (!uri.isSafeUrl(url)) {
+            return escapeHtml(alt);
+        }
         let res = '<img src="' + escapeHtml(url) + '" alt="' + escapeHtml(alt);
         if (width) {
             res += '" width="' + width;
@@ -146,7 +187,6 @@ function createRenderer() {
     };
     return renderer;
 }
-
 function formatMarkdown(text) {
     const renderer = createRenderer();
     const options = {
@@ -166,8 +206,6 @@ function formatMarkdown(text) {
         new FaviconWrapper(),
     ];
 
-    const turndownService = createTurndownService();
-    text = turndownService.turndown(text);
     for (let wrapper of wrappers) {
         text = wrapper.preprocess(text);
     }
@@ -196,8 +234,7 @@ function formatInlineMarkdown(text) {
         new StrikeThroughWrapper(),
         new FaviconWrapper(),
     ];
-    const turndownService = createTurndownService();
-    text = turndownService.turndown(text);
+
     for (let wrapper of wrappers) {
         text = wrapper.preprocess(text);
     }
@@ -207,12 +244,6 @@ function formatInlineMarkdown(text) {
         text = wrapper.postprocess(text);
     }
     return DOMPurify.sanitize(text);
-}
-
-function createTurndownService() {
-    const service = new TurndownService();
-    service.escape = (s) => s;
-    return service;
 }
 
 module.exports = {

@@ -36,7 +36,7 @@ pub struct MicroPool {
     pub post_count: i64,
 }
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Clone, Copy, EnumString, ToSchema)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,

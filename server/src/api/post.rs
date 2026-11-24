@@ -137,7 +137,7 @@ where
 /// | `note-text`                                                  | having given note text (accepts wildcards)                              |
 /// | `relation-count`                                             | having given number of relations                                        |
 /// | `feature-count`                                              | having been featured given number of times                              |
-/// | `type`                                                       | type of posts (can be either `image`, `animation`, `flash`, or `video`) |
+/// | `type`                                                       | type of posts (`image`, `animation`, `flash`, `video`, or `document`)   |
 /// | `content-checksum`                                           | having given BLAKE3 checksum                                            |
 /// | `flag`                                                       | having given flag (can be either `loop` or `sound`)                     |
 /// | `source`                                                     | having given source                                                     |

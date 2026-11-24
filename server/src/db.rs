@@ -82,23 +82,26 @@ impl AsyncConnectionPool {
 
 /// Creates a connection pool to the database.
 pub fn create_connection_pool(env: &Env, config: Arc<Config>) -> Result<AsyncConnectionPool, PoolError> {
+    #[expect(
+        clippy::manual_assert,
+        reason = "assert! on a constant trips clippy::assertions_on_constants"
+    )]
     if cfg!(test) {
         panic!("Connection to production database disallowed in test build!")
-    } else {
-        let num_tokio_threads =
-            tokio::runtime::Handle::try_current().map_or(1, |handle| handle.metrics().num_workers());
-        let max_conns = std::cmp::max(num_tokio_threads, app::num_rayon_threads()) + 1;
-
-        let semaphore = Arc::new(Semaphore::new(max_conns));
-        Pool::builder()
-            .max_size(u32::try_from(max_conns).expect("Number of connections will never be greater than u32::MAX"))
-            .max_lifetime(None)
-            .idle_timeout(None)
-            .test_on_check_out(true)
-            .connection_customizer(Box::new(ConnectionInitializer { config }))
-            .build(ConnectionManager::new(config::database_url(env, None).read()))
-            .map(|pool| AsyncConnectionPool { pool, semaphore })
     }
+
+    let num_tokio_threads = tokio::runtime::Handle::try_current().map_or(1, |handle| handle.metrics().num_workers());
+    let max_conns = std::cmp::max(num_tokio_threads, app::num_rayon_threads()) + 1;
+
+    let semaphore = Arc::new(Semaphore::new(max_conns));
+    Pool::builder()
+        .max_size(u32::try_from(max_conns).expect("Number of connections will never be greater than u32::MAX"))
+        .max_lifetime(None)
+        .idle_timeout(None)
+        .test_on_check_out(true)
+        .connection_customizer(Box::new(ConnectionInitializer { config }))
+        .build(ConnectionManager::new(config::database_url(env, None).read()))
+        .map(|pool| AsyncConnectionPool { pool, semaphore })
 }
 
 #[cfg(test)]

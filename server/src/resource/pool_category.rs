@@ -10,7 +10,7 @@ use server_macros::non_nullable_options;
 use strum::EnumString;
 use utoipa::ToSchema;
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Clone, Copy, EnumString, ToSchema)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,

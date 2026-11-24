@@ -43,8 +43,8 @@ pub fn compute(image: &DynamicImage) -> [i64; COMPRESSED_SIGNATURE_LEN] {
 ///
 /// The lower the number, the more similar the two images are.
 pub fn distance(signature: &SignatureCache, compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> f64 {
-    const _MAX_DISTANCE: i32 = (NUM_SYMBOLS as i32).pow(2) * SIGNATURE_LEN as i32;
-    const _: () = assert!(_MAX_DISTANCE as i64 <= i32::MAX as i64); // Ensures no i32 overflow when computing distance
+    const MAX_DISTANCE: i32 = (NUM_SYMBOLS as i32).pow(2) * SIGNATURE_LEN as i32;
+    const _: () = assert!(MAX_DISTANCE as i64 <= i32::MAX as i64); // Ensures no i32 overflow when computing distance
 
     let signature_a = signature;
     let signature_b = uncompress(compressed_signature);
@@ -342,8 +342,8 @@ fn uncompress(compressed_signature: &[i64; COMPRESSED_SIGNATURE_LEN]) -> [u8; SI
 
 /// Computes L2 norm of the given `signature`.
 fn norm(signature: &[u8; SIGNATURE_LEN]) -> f64 {
-    const _MAX_NORM: i32 = ((NUM_SYMBOLS as i32) / 2).pow(2) * SIGNATURE_LEN as i32;
-    const _: () = assert!(_MAX_NORM as i64 <= i32::MAX as i64); // Ensures no i32 overflow when computing norm
+    const MAX_NORM: i32 = ((NUM_SYMBOLS as i32) / 2).pow(2) * SIGNATURE_LEN as i32;
+    const _: () = assert!(MAX_NORM as i64 <= i32::MAX as i64); // Ensures no i32 overflow when computing norm
 
     let norm_squard: i32 = signature
         .iter()

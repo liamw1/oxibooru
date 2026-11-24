@@ -1,6 +1,6 @@
 ARG ALPINE_VERSION=3.23
-ARG RUST_VERSION=1.94.0
-ARG CHEF_VERSION=0.1.77
+ARG RUST_VERSION=1.100.0
+ARG CHEF_VERSION=0.1.78
 ARG FFMPEG_VERSION=8.1
 ARG DAV1D_VERSION=1.5.3
 
@@ -76,6 +76,7 @@ RUN mkdir -p /data
 
 # Install system dependencies
 RUN apk add --no-cache build-base perl
+RUN apk add --no-cache --upgrade ca-certificates-bundle
 
 COPY --from=planner /opt/app/recipe.json recipe.json
 

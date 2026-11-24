@@ -16,7 +16,7 @@ use server_macros::non_nullable_options;
 use strum::EnumString;
 use utoipa::ToSchema;
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Clone, Copy, EnumString, ToSchema)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,
@@ -160,7 +160,7 @@ fn get_own_scores(conn: &mut PgConnection, client: Client, comments: &[Comment])
             .map(|client_scores| {
                 resource::order_as_padded(client_scores, comments, |score| score.comment_id)
                     .into_iter()
-                    .map(|client_score| client_score.map(|score| Rating::from(score.score)).unwrap_or_default())
+                    .map(|client_score| client_score.map_or_default(|score| Rating::from(score.score)))
                     .collect()
             })
     } else {

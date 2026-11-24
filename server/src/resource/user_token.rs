@@ -10,7 +10,7 @@ use strum::EnumString;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
-#[derive(Clone, Copy, EnumString)]
+#[derive(Clone, Copy, EnumString, ToSchema)]
 #[strum(serialize_all = "camelCase")]
 pub enum Field {
     Version,

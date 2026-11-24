@@ -51,7 +51,11 @@
             <section class='source'>
                 Source: <% for (let i = 0; i < ctx.post.sourceSplit.length; i++) { %>
                     <% if (i != 0) { %>&middot;<% } %>
-                    <a href='<%- ctx.post.sourceSplit[i] %>' title='<%- ctx.post.sourceSplit[i] %>'><%- ctx.extractRootDomain(ctx.post.sourceSplit[i]) %></a>
+                    <% if (ctx.isSafeUrl(ctx.post.sourceSplit[i])) { %>
+                        <a href='<%- ctx.post.sourceSplit[i] %>' title='<%- ctx.post.sourceSplit[i] %>'><%- ctx.extractRootDomain(ctx.post.sourceSplit[i]) %></a>
+                    <% } else { %>
+                        <span title='<%- ctx.post.sourceSplit[i] %>'><%- ctx.post.sourceSplit[i] %></span>
+                    <% } %>
                 <% } %>
             </section>
         <% } %>
