@@ -831,8 +831,14 @@ mod test {
         assert_eq!(render("[text](#anchor)"), format!("<p>{}</p>\n", link("#anchor", "text")));
         assert_eq!(
             render("https://example.com/#section"),
-            format!("<p>{}</p>\n", link("https://example.com/#section", "https://example.com/#section"))
+            format!("<p>{}</p>\n", bare_link("https://example.com/#section"))
         );
+    }
+
+    #[test]
+    fn entities_next_to_multibyte_characters() {
+        assert_eq!(render("é@1 “#a”"), "<p>é@1 “#a”</p>\n");
+        assert_eq!(render("→ @1"), format!("<p>→ {}</p>\n", link("post/1", "@1")));
     }
 
     #[test]
@@ -844,60 +850,9 @@ mod test {
     }
 
     #[test]
-    fn unsupported_tags_stay_literal() {
-        assert_eq!(render("[small]a[/small]"), "<p>[small]a[/small]</p>\n");
-        assert_eq!(render("[search]a[/search]"), "<p>[search]a[/search]</p>\n");
-    }
-
-    #[test]
-    fn malformed_tags() {
-        assert_eq!(render("[spoiler][/spoiler]"), "<p>[spoiler][/spoiler]</p>\n");
-        assert_eq!(render("[spoiler]a"), "<p>[spoiler]a</p>\n");
-        assert_eq!(render("a[/spoiler]"), "<p>a[/spoiler]</p>\n");
-        assert_eq!(render("[spoiler]a[spoiler]b[/spoiler]"), "<p>[spoiler]a<span class=\"spoiler\">b</span></p>\n");
-        assert_eq!(
-            render("[spoiler]a[/spoiler] [spoiler]b[/spoiler]"),
-            "<p><span class=\"spoiler\">a</span> <span class=\"spoiler\">b</span></p>\n"
-        );
-    }
-
-    #[test]
-    fn sjis() {
-        assert_eq!(render("[sjis] *a*  _b_ [/sjis]"), "<span class=\"sjis\"> *a*  _b_ </span>");
-        assert_eq!(render("[sjis]<b>@1</b>[/sjis]"), "<span class=\"sjis\">&lt;b&gt;@1&lt;/b&gt;</span>");
-        assert_eq!(render("[sjis]a\n\nb[/sjis]"), "<span class=\"sjis\">a\n\nb</span>");
-        assert_eq!(render("[sjis]\na\n[/sjis]"), "<span class=\"sjis\">a</span>");
-        assert_eq!(render("[sjis]  \n a \n  [/sjis]"), "<span class=\"sjis\"> a </span>");
-        assert_eq!(render("[sjis]\r\na\r\n[/sjis]"), "<span class=\"sjis\">a</span>");
-        assert_eq!(render("[sjis] a\n[/sjis]"), "<span class=\"sjis\"> a</span>");
-        assert_eq!(render("[sjis]\n\na[/sjis]"), "<span class=\"sjis\">\na</span>");
-    }
-
-    #[test]
-    fn icon() {
-        assert_eq!(
-            render("[icon]https://youtube.com[/icon]"),
-            format!("<p>{}</p>\n", link("https://youtube.com", "https://youtube.com"))
-        );
-        assert_eq!(render("[icon]www.a.com[/icon]"), format!("<p>{}</p>\n", link("http://www.a.com", "www.a.com")));
-        assert_eq!(render("[icon]javascript:alert(1)[/icon]"), "<p>[icon]javascript:alert(1)[/icon]</p>\n");
-        assert_eq!(render("[icon]a.com[/icon]"), "<p>[icon]a.com[/icon]</p>\n");
-        assert_eq!(
-            render("[icon]https://a.com b[/icon]"),
-            format!("<p>[icon]{} b[/icon]</p>\n", link("https://a.com", "https://a.com"))
-        );
-        assert_eq!(
-            render("[icon]https://a.com/.[/icon]"),
-            format!("<p>{}</p>\n", link("https://a.com/.", "https://a.com/."))
-        );
-        assert_eq!(
-            render("[icon][ICON]https://a.com[/Icon]"),
-            format!("<p>[icon]{}</p>\n", link("https://a.com", "https://a.com"))
-        );
-        assert_eq!(
-            render("[icon]https://a.com/a--b[/icon]"),
-            format!("<p>{}</p>\n", link("https://a.com/a--b", "https://a.com/a--b"))
-        );
+    fn spoilers_dont_cross_containers() {
+        assert_eq!(render("[spoiler]a\n\nb[/spoiler]"), "<p>[spoiler]a</p>\n<p>b[/spoiler]</p>\n");
+        assert_eq!(render("*a [spoiler]b* c[/spoiler]"), "<p><em>a [spoiler]b</em> c[/spoiler]</p>\n");
     }
 
     #[test]
@@ -909,12 +864,6 @@ mod test {
         assert_eq!(render("`see +user`"), "<p><code>see +user</code></p>\n");
         assert_eq!(render("`[spoiler]a[/spoiler]`"), "<p><code>[spoiler]a[/spoiler]</code></p>\n");
         assert_eq!(render("`[icon]https://a.com[/icon]`"), "<p><code>[icon]https://a.com[/icon]</code></p>\n");
-    }
-
-    #[test]
-    fn spoilers_dont_cross_containers() {
-        assert_eq!(render("[spoiler]a\n\nb[/spoiler]"), "<p>[spoiler]a</p>\n<p>b[/spoiler]</p>\n");
-        assert_eq!(render("*a [spoiler]b* c[/spoiler]"), "<p><em>a [spoiler]b</em> c[/spoiler]</p>\n");
     }
 
     #[test]
@@ -934,17 +883,33 @@ mod test {
     }
 
     #[test]
-    fn bare_urls_stop_at_tags() {
+    fn malformed_tags() {
+        assert_eq!(render("[spoiler][/spoiler]"), "<p>[spoiler][/spoiler]</p>\n");
+        assert_eq!(render("[spoiler]a"), "<p>[spoiler]a</p>\n");
+        assert_eq!(render("a[/spoiler]"), "<p>a[/spoiler]</p>\n");
+        assert_eq!(render("[spoiler]a[spoiler]b[/spoiler]"), "<p>[spoiler]a<span class=\"spoiler\">b</span></p>\n");
         assert_eq!(
-            render("[spoiler]https://a.com[/spoiler]"),
-            format!("<p><span class=\"spoiler\">{}</span></p>\n", link("https://a.com", "https://a.com"))
+            render("[spoiler]a[/spoiler] [spoiler]b[/spoiler]"),
+            "<p><span class=\"spoiler\">a</span> <span class=\"spoiler\">b</span></p>\n"
         );
     }
 
     #[test]
-    fn entities_next_to_multibyte_characters() {
-        assert_eq!(render("é@1 “#a”"), "<p>é@1 “#a”</p>\n");
-        assert_eq!(render("→ @1"), format!("<p>→ {}</p>\n", link("post/1", "@1")));
+    fn unsupported_tags_stay_literal() {
+        assert_eq!(render("[small]a[/small]"), "<p>[small]a[/small]</p>\n");
+        assert_eq!(render("[search]a[/search]"), "<p>[search]a[/search]</p>\n");
+    }
+
+    #[test]
+    fn sjis() {
+        assert_eq!(render("[sjis] *a*  _b_ [/sjis]"), "<span class=\"sjis\"> *a*  _b_ </span>");
+        assert_eq!(render("[sjis]<b>@1</b>[/sjis]"), "<span class=\"sjis\">&lt;b&gt;@1&lt;/b&gt;</span>");
+        assert_eq!(render("[sjis]a\n\nb[/sjis]"), "<span class=\"sjis\">a\n\nb</span>");
+        assert_eq!(render("[sjis]\na\n[/sjis]"), "<span class=\"sjis\">a</span>");
+        assert_eq!(render("[sjis]  \n a \n  [/sjis]"), "<span class=\"sjis\"> a </span>");
+        assert_eq!(render("[sjis]\r\na\r\n[/sjis]"), "<span class=\"sjis\">a</span>");
+        assert_eq!(render("[sjis] a\n[/sjis]"), "<span class=\"sjis\"> a</span>");
+        assert_eq!(render("[sjis]\n\na[/sjis]"), "<span class=\"sjis\">\na</span>");
     }
 
     #[test]
@@ -1066,10 +1031,7 @@ mod test {
             render("![cat](https://a.com/cat.png)"),
             format!("<p>{}</p>\n", link("https://a.com/cat.png", "cat"))
         );
-        assert_eq!(
-            render("![](https://a.com/cat.png)"),
-            format!("<p>{}</p>\n", link("https://a.com/cat.png", "https://a.com/cat.png"))
-        );
+        assert_eq!(render("![](https://a.com/cat.png)"), format!("<p>{}</p>\n", bare_link("https://a.com/cat.png")));
         assert_eq!(
             render("![*cat*](<https://a.com/cat.png =100x50>)"),
             format!("<p>{}</p>\n", link("https://a.com/cat.png", "cat"))
@@ -1103,21 +1065,6 @@ mod test {
     }
 
     #[test]
-    fn external_resources_are_stripped() {
-        assert_eq!(render("<img src=\"https://a.com/t.png\">"), "<img>");
-        assert_eq!(render("<img src=\"/\\a.com/t.png\">"), "<img>");
-        assert_eq!(render("<img src=\"data/t.png\">"), "<img src=\"data/t.png\">");
-        for style in [
-            "background: url(https://a.com/t.png)",
-            "background: URL(https://a.com/t.png)",
-            "background-image: image-set('https://a.com/t.png' 1x)",
-            "background: \\75 rl(https://a.com/t.png)",
-        ] {
-            assert_eq!(render(&format!("<span style=\"{style}\">a</span>")), "<p><span>a</span></p>\n");
-        }
-    }
-
-    #[test]
     fn sized_images() {
         assert_eq!(
             render("![alt](<a.png =100x50>)"),
@@ -1133,20 +1080,29 @@ mod test {
     }
 
     #[test]
+    fn external_resources_are_stripped() {
+        assert_eq!(render("<img src=\"https://a.com/t.png\">"), "<img>");
+        assert_eq!(render("<img src=\"/\\a.com/t.png\">"), "<img>");
+        assert_eq!(render("<img src=\"data/t.png\">"), "<img src=\"data/t.png\">");
+        for style in [
+            "background: url(https://a.com/t.png)",
+            "background: URL(https://a.com/t.png)",
+            "background-image: image-set('https://a.com/t.png' 1x)",
+            "background: \\75 rl(https://a.com/t.png)",
+        ] {
+            assert_eq!(render(&format!("<span style=\"{style}\">a</span>")), "<p><span>a</span></p>\n");
+        }
+    }
+
+    #[test]
     fn autolinks() {
         assert_eq!(
             render("go to https://example.com/a?b=c."),
-            format!("<p>go to {}.</p>\n", link("https://example.com/a?b=c", "https://example.com/a?b=c"))
+            format!("<p>go to {}.</p>\n", bare_link("https://example.com/a?b=c"))
         );
-        assert_eq!(
-            render("www.example.com"),
-            format!("<p>{}</p>\n", link("http://www.example.com", "www.example.com"))
-        );
-        assert_eq!(render("(https://a.com/b)"), format!("<p>({})</p>\n", link("https://a.com/b", "https://a.com/b")));
-        assert_eq!(
-            render("https://a.com/b_(c)"),
-            format!("<p>{}</p>\n", link("https://a.com/b_(c)", "https://a.com/b_(c)"))
-        );
+        assert_eq!(render("www.example.com"), format!("<p>{}</p>\n", bare_link("www.example.com")));
+        assert_eq!(render("(https://a.com/b)"), format!("<p>({})</p>\n", bare_link("https://a.com/b")));
+        assert_eq!(render("https://a.com/b_(c)"), format!("<p>{}</p>\n", bare_link("https://a.com/b_(c)")));
         assert_eq!(render("ftp://a.com"), "<p>ftp://a.com</p>\n");
     }
 
@@ -1160,25 +1116,19 @@ mod test {
             "https://a.com/*a*b",
             "https://a.com/a&amp;b",
         ] {
-            assert_eq!(
-                render(url),
-                format!("<p>{}</p>\n", link(&url.replace('&', "&amp;"), &url.replace('&', "&amp;")))
-            );
+            assert_eq!(render(url), format!("<p>{}</p>\n", bare_link(&url.replace('&', "&amp;"))));
         }
-        assert_eq!(render("www.a.com/a--b"), format!("<p>{}</p>\n", link("http://www.a.com/a--b", "www.a.com/a--b")));
+        assert_eq!(render("www.a.com/a--b"), format!("<p>{}</p>\n", bare_link("www.a.com/a--b")));
     }
 
     #[test]
     fn bare_urls_inside_markdown() {
-        assert_eq!(
-            render("*see https://a.com*"),
-            format!("<p><em>see {}</em></p>\n", link("https://a.com", "https://a.com"))
-        );
+        assert_eq!(render("*see https://a.com*"), format!("<p><em>see {}</em></p>\n", bare_link("https://a.com")));
         assert_eq!(
             render("|https://a.com/a|b|\n|-|-|"),
             format!(
                 "<table><thead><tr><th>{}</th><th>b</th></tr></thead><tbody>\n</tbody></table>\n",
-                link("https://a.com/a", "https://a.com/a")
+                bare_link("https://a.com/a")
             )
         );
     }
@@ -1191,17 +1141,15 @@ mod test {
         );
         assert_eq!(render("<a href=\"https://a.com\">x</a>"), format!("<p>{}</p>\n", link("https://a.com", "x")));
         assert_eq!(render("<div>https://a.com</div>"), "<div>https://a.com</div>");
-        assert_eq!(
-            render("<https://a.com/a--b>"),
-            format!("<p>{}</p>\n", link("https://a.com/a--b", "https://a.com/a--b"))
-        );
+        assert_eq!(render("<https://a.com/a--b>"), format!("<p>{}</p>\n", bare_link("https://a.com/a--b")));
     }
 
     #[test]
-    fn url_prefixes_ignore_case() {
-        assert_eq!(render("HTTPS://A.com/X"), format!("<p>{}</p>\n", link("HTTPS://A.com/X", "HTTPS://A.com/X")));
-        assert_eq!(render("WWW.a.com"), format!("<p>{}</p>\n", link("http://WWW.a.com", "WWW.a.com")));
-        assert_eq!(render("[ICON]Http://a.com[/icon]"), format!("<p>{}</p>\n", link("Http://a.com", "Http://a.com")));
+    fn bare_urls_stop_at_tags() {
+        assert_eq!(
+            render("[spoiler]https://a.com[/spoiler]"),
+            format!("<p><span class=\"spoiler\">{}</span></p>\n", bare_link("https://a.com"))
+        );
     }
 
     #[test]
@@ -1213,6 +1161,34 @@ mod test {
         assert_eq!(render("`https://a.com`"), "<p><code>https://a.com</code></p>\n");
         assert_eq!(render("```\nhttps://a.com\n```"), "<pre><code>https://a.com\n</code></pre>\n");
         assert_eq!(render("    https://a.com"), "<pre><code>https://a.com</code></pre>\n");
+    }
+
+    #[test]
+    fn url_prefixes_ignore_case() {
+        assert_eq!(render("HTTPS://A.com/X"), format!("<p>{}</p>\n", bare_link("HTTPS://A.com/X")));
+        assert_eq!(render("WWW.a.com"), format!("<p>{}</p>\n", bare_link("WWW.a.com")));
+        assert_eq!(render("[ICON]Http://a.com[/icon]"), format!("<p>{}</p>\n", bare_link("Http://a.com")));
+    }
+
+    #[test]
+    fn icon() {
+        assert_eq!(
+            render("[icon]https://youtube.com[/icon]"),
+            format!("<p>{}</p>\n", bare_link("https://youtube.com"))
+        );
+        assert_eq!(render("[icon]www.a.com[/icon]"), format!("<p>{}</p>\n", bare_link("www.a.com")));
+        assert_eq!(render("[icon]javascript:alert(1)[/icon]"), "<p>[icon]javascript:alert(1)[/icon]</p>\n");
+        assert_eq!(render("[icon]a.com[/icon]"), "<p>[icon]a.com[/icon]</p>\n");
+        assert_eq!(
+            render("[icon]https://a.com b[/icon]"),
+            format!("<p>[icon]{} b[/icon]</p>\n", bare_link("https://a.com"))
+        );
+        assert_eq!(render("[icon]https://a.com/.[/icon]"), format!("<p>{}</p>\n", bare_link("https://a.com/.")));
+        assert_eq!(
+            render("[icon][ICON]https://a.com[/Icon]"),
+            format!("<p>[icon]{}</p>\n", bare_link("https://a.com"))
+        );
+        assert_eq!(render("[icon]https://a.com/a--b[/icon]"), format!("<p>{}</p>\n", bare_link("https://a.com/a--b")));
     }
 
     #[test]
@@ -1239,5 +1215,13 @@ mod test {
 
     fn link(href: &str, text: &str) -> String {
         format!(r#"<a href="{href}" rel="noopener noreferrer">{text}</a>"#)
+    }
+
+    fn bare_link(text: &str) -> String {
+        if strip_prefix_ignore_ascii_case(text, "www.").is_some() {
+            link(&format!("http://{text}"), text)
+        } else {
+            link(text, text)
+        }
     }
 }
