@@ -85,6 +85,21 @@ function extractRootDomain(url) {
     return domain;
 }
 
+const SAFE_URL_PROTOCOLS = ["http:", "https:", "mailto:"];
+
+// Returns true if `url` is safe to put in an href/src: relative URLs and
+// http(s)/mailto only. Parsing with URL applies the same normalization a
+// browser does (stripping whitespace/control chars), so tricks like
+// "java\tscript:" can't sneak past.
+function isSafeUrl(url) {
+    try {
+        const parsed = new URL(url, "https://placeholder.invalid/");
+        return SAFE_URL_PROTOCOLS.includes(parsed.protocol);
+    } catch (e) {
+        return false;
+    }
+}
+
 function escapeTagName(text) {
     return text.replace(/:/g, "\\:").replace(/\./g, "\\.");
 }
@@ -97,4 +112,5 @@ module.exports = {
     unescapeParam: unescapeParam,
     extractHostname: extractHostname,
     extractRootDomain: extractRootDomain,
+    isSafeUrl: isSafeUrl,
 };
