@@ -9,11 +9,11 @@ group "default" {
 target "client" {
   context = "./client"
   platforms = ["linux/amd64", "linux/arm64"]
-  tags = ["oxibooru/client:0.9.0"]
+  tags = ["oxibooru/client:0.9.1"]
 }
 
 target "server" {
   context = "./server"
   platforms = ["linux/amd64", "linux/arm64"]
-  tags = ["oxibooru/server:0.9.0"]
+  tags = ["oxibooru/server:0.9.1"]
 }
