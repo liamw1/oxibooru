@@ -1,6 +1,7 @@
 use crate::admin::input::PostEditor;
 use crate::admin::{AdminResult, PRINT_INTERVAL, ProgressReporter, input};
 use crate::app::AppState;
+use crate::auth::ClientName;
 use crate::content::hash::{Checksum, PostHash};
 use crate::content::signature::SIGNATURE_VERSION;
 use crate::content::thumbnail::{ThumbnailCategory, ThumbnailType};
@@ -393,7 +394,7 @@ fn regenerate_thumbnail_in_parallel(state: &AppState, post_id: i64, progress: &P
 
 fn user_query(state: &AppState, editor: &mut PostEditor) -> AdminResult<Vec<i64>> {
     loop {
-        let ctx = state.clone().make_context(admin::client());
+        let ctx = state.clone().make_context(admin::client(), ClientName::anon());
         let user_input =
             input::read("Select posts (leave blank to select all, enter \"done\" when finished): ", editor)?;
         match QueryBuilder::new_with_anonymous_token(&ctx, &user_input, Token::Id) {

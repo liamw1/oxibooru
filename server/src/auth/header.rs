@@ -1,5 +1,5 @@
 use crate::app::AppState;
-use crate::auth::{self, Client};
+use crate::auth::{self, Client, ClientName};
 use crate::schema::{user, user_token};
 use crate::time::DateTime;
 use base64::prelude::BASE64_STANDARD;
@@ -34,7 +34,7 @@ pub enum AuthenticationError {
 
 /// Authentication can either be done by token-based authentication (recommended)
 /// or by sending password as plaintext.
-pub async fn authenticate_user(state: &AppState, auth: &str) -> Result<Client, AuthenticationError> {
+pub async fn authenticate_user(state: &AppState, auth: &str) -> Result<(Client, ClientName), AuthenticationError> {
     let (auth_type, credentials) = auth.split_once(' ').ok_or(AuthenticationError::MalformedCredentials)?;
     match auth_type {
         "Basic" => basic_access_authentication(state, credentials).await,
@@ -67,15 +67,18 @@ fn decode_credentials(credentials: &str) -> Result<(String, String), Authenticat
 
 /// Checks that the given `credentials` are of the form "username:password"
 /// and that the username/password combination is valid.
-async fn basic_access_authentication(state: &AppState, credentials: &str) -> Result<Client, AuthenticationError> {
+async fn basic_access_authentication(
+    state: &AppState,
+    credentials: &str,
+) -> Result<(Client, ClientName), AuthenticationError> {
     let (username, password) = decode_credentials(credentials)?;
-    let (user_id, rank, password_hash): (_, _, String) = {
+    let (user_id, name, rank, password_hash): (_, _, _, String) = {
         let mut conn = state.connection_pool.get().await?;
 
         // For security reasons, don't give any indication to the user if it was the password
         // or the username that was incorrect.
         user::table
-            .select((user::id, user::rank, user::password_hash))
+            .select((user::id, user::name, user::rank, user::password_hash))
             .filter(user::name.eq(username))
             .first(conn.as_mut())
             .optional()?
@@ -86,7 +89,7 @@ async fn basic_access_authentication(state: &AppState, credentials: &str) -> Res
         move || {
             auth::password::is_valid_password(&config, &password_hash, &password)
                 .is_ok()
-                .then_some(Client::new(Some(user_id), rank))
+                .then_some((Client::new(Some(user_id), rank), ClientName(Some(name))))
                 .ok_or(AuthenticationError::UsernamePasswordMismatch)
         }
     })
@@ -96,14 +99,17 @@ async fn basic_access_authentication(state: &AppState, credentials: &str) -> Res
 
 /// Checks that the given `credentials` are of the form "username:token"
 /// and that the username/token combination is valid and non-expired.
-async fn token_authentication(state: &AppState, credentials: &str) -> Result<Client, AuthenticationError> {
+async fn token_authentication(
+    state: &AppState,
+    credentials: &str,
+) -> Result<(Client, ClientName), AuthenticationError> {
     let (username, unparsed_token) = decode_credentials(credentials)?;
     let token = Uuid::parse_str(&unparsed_token)?;
     let mut conn = state.connection_pool.get().await?;
 
-    let (user_id, rank, enabled, expiration): (_, _, bool, Option<DateTime>) = user_token::table
+    let (user_id, name, rank, enabled, expiration): (_, _, _, bool, Option<DateTime>) = user_token::table
         .inner_join(user::table)
-        .select((user::id, user::rank, user_token::enabled, user_token::expiration_time))
+        .select((user::id, user::name, user::rank, user_token::enabled, user_token::expiration_time))
         .filter(user::name.eq(username))
         .filter(user_token::id.eq(token))
         .first(conn.as_mut())
@@ -114,6 +120,6 @@ async fn token_authentication(state: &AppState, credentials: &str) -> Result<Cli
     } else if expiration.is_some_and(|expiration_time| DateTime::now() > expiration_time) {
         Err(AuthenticationError::ExpiredToken)
     } else {
-        Ok(Client::new(Some(user_id), rank))
+        Ok((Client::new(Some(user_id), rank), ClientName(Some(name))))
     }
 }

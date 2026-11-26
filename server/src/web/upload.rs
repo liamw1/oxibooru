@@ -286,7 +286,7 @@ async fn upload_queue(ctx: &Ctx, hx: &HxRequest, form: &mut UploadForm) -> WebRe
     Ok(false)
 }
 
-fn posts_redirect(hx: &HxRequest, jar: CookieJar) -> Response {
+fn posts_redirect(hx: HxRequest, jar: CookieJar) -> Response {
     const POSTS_URL: &str = "/posts";
     const UPLOADED_MESSAGE: &str = "Post uploaded.";
 
@@ -339,7 +339,7 @@ async fn submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, multipart: Multipart) -
             let has_pending = form.next_pending_upload().is_some();
             if form.uploads.is_empty() {
                 if upload_count > 0 && messages.is_empty() {
-                    return Ok(posts_redirect(&hx, jar));
+                    return Ok(posts_redirect(hx, jar));
                 }
             } else if has_pending && !paused {
                 state = QueueState::Uploading;

@@ -12,7 +12,8 @@ use axum_extra::extract::CookieJar;
 use axum_extra::extract::cookie::{Cookie, SameSite};
 use percent_encoding::NON_ALPHANUMERIC;
 use serde::Serialize;
-use std::borrow::Cow;
+use serde_urlencoded::ser::Error as UrlSerializeError;
+use std::borrow::{Borrow, Cow};
 use std::ops::{Deref, DerefMut};
 use std::sync::Arc;
 use thiserror::Error;
@@ -42,7 +43,7 @@ mod user;
 pub enum WebError {
     Api(#[from] crate::api::error::ApiError),
     Template(#[from] askama::Error),
-    Url(#[from] serde_urlencoded::ser::Error),
+    Url(#[from] UrlSerializeError),
 }
 
 impl WebError {
@@ -68,12 +69,20 @@ impl IntoResponse for WebError {
     }
 }
 
-pub fn post_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
+pub fn comment_url<T: Serialize>(comment_id: impl Borrow<i64>, params: &T) -> Result<String, UrlSerializeError> {
+    url(&format!("comment/{}", comment_id.borrow()), params)
+}
+
+pub fn comment_edit_url<T: Serialize>(comment_id: impl Borrow<i64>, params: &T) -> Result<String, UrlSerializeError> {
+    url(&format!("comment/{}/edit", comment_id.borrow()), params)
+}
+
+pub fn post_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, UrlSerializeError> {
     let base = format!("post/{post_id}");
     url(&base, params)
 }
 
-pub fn post_edit_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
+pub fn post_edit_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, UrlSerializeError> {
     let base = format!("post/{post_id}/edit");
     url(&base, params)
 }
@@ -172,7 +181,7 @@ impl IntoResponse for Html {
     }
 }
 
-fn url<T: Serialize>(base: &str, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
+fn url<T: Serialize>(base: &str, params: &T) -> Result<String, UrlSerializeError> {
     serde_urlencoded::to_string(params).map(|query_string| {
         if query_string.is_empty() {
             base.to_owned()
@@ -232,7 +241,7 @@ where
     }
 }
 
-fn plain_redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Response {
+fn plain_redirect(relative_url: &str, hx: HxRequest, jar: CookieJar) -> Response {
     // TODO: Generate using base URL
     if hx.full_page() {
         (jar, Redirect::to(relative_url)).into_response()
@@ -241,7 +250,7 @@ fn plain_redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar) -> Respons
     }
 }
 
-fn redirect(relative_url: &str, hx: &HxRequest, jar: CookieJar, message: &str) -> Response {
+fn redirect(relative_url: &str, hx: HxRequest, jar: CookieJar, message: &str) -> Response {
     plain_redirect(relative_url, hx, with_flash(jar, message))
 }
 

@@ -280,7 +280,7 @@ async fn edit_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: EditPathForm
                     let new_primary_name = tag.primary_name()?;
                     if !hx.htmx() || new_primary_name != primary_name {
                         let new_url = format!("/tag/{new_primary_name}/edit");
-                        return Ok(web::redirect(&new_url, &hx, jar, SAVED_MESSAGE));
+                        return Ok(web::redirect(&new_url, hx, jar, SAVED_MESSAGE));
                     }
                     (EditPathForm::initialize(tag)?, focus, Message::Success(SAVED_MESSAGE.into()))
                 }
@@ -368,7 +368,7 @@ async fn merge_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: MergePathFo
             if !hx.htmx() {
                 let Ok(primary_name) = form.primary_name();
                 let url = format!("/tag/{primary_name}/merge");
-                return Ok(web::redirect(&url, &hx, jar, MERGED_MESSAGE));
+                return Ok(web::redirect(&url, hx, jar, MERGED_MESSAGE));
             }
             (MergePathForm::initialize(&tag)?, Message::Success(MERGED_MESSAGE.into()))
         }
@@ -440,7 +440,7 @@ async fn delete_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResu
 
 async fn delete_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: DeletePathForm) -> WebResult<Response> {
     match api::tag::delete(ctx.clone(), form.path(), Json(form.to_body())).await {
-        Ok(Json(())) => Ok(web::redirect("/tags", &hx, jar, DELETED_MESSAGE)),
+        Ok(Json(())) => Ok(web::redirect("/tags", hx, jar, DELETED_MESSAGE)),
         Err(err) => {
             let message = Message::Error(err);
             if hx.full_page() {

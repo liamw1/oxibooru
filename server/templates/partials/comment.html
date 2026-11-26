@@ -1,4 +1,7 @@
-<div class="comment-container">
+{%- let comment_id = comment.id()? -%}
+{%- let can_edit_comment = ctx.can_edit_comment(comment)? -%}
+{%- let can_delete_comment = ctx.can_delete_comment(comment)? -%}
+<div class="comment-container" id="comment-{{ comment_id }}">
     <div class="avatar">
         {% if let Some(user) = comment.user()? %}
         <a {% if ctx.has_privilege(Action::UserView) %} href="user/{{ user.name }}" {% endif %}>
@@ -13,12 +16,20 @@
 
     <div class="comment">
         <header>
-            <nav class="edit tabs">
+            {%- if let Some(draft) = draft && draft.comment_id == comment_id %}
+            <nav class="edit tabs active">
                 <ul>
-                    <li class="edit">Write</li>
-                    <li class="preview">Preview</li>
+                    <li class="edit{% if draft.tab == EditTab::Write %} active {% endif %}">
+                        <button form="comment-form-{{ comment_id }}" name="operation" value="write"
+                            formnovalidate>Write</button>
+                    </li>
+                    <li class="preview{% if draft.tab == EditTab::Preview %} active {% endif %}">
+                        <button form="comment-form-{{ comment_id }}" name="operation" value="preview"
+                            formnovalidate>Preview</button>
+                    </li>
                 </ul>
             </nav>
+            {%- else %}
             <nav class="readonly active">
                 <strong>
                     {#- -#}
@@ -51,19 +62,19 @@
                     </a>
                     <span class="value">{{ comment.score()? }}</span>
                     <a class="downvote">
-                        <i class="fa fa-thumbs{% if comment.own_score()? != Rating::Like %}-o{% endif %}-down"></i>
+                        <i class="fa fa-thumbs{% if comment.own_score()? != Rating::Dislike %}-o{% endif %}-down"></i>
                         <span class="vim-nav-hint">downvote</span>
                         <span class="vim-nav-hint">dislike</span>
                     </a>
                 </div>
                 {%- endif -%}
 
-                {%- let can_edit_comment = true -%}{#- TODO -#}
-                {%- let can_delete_comment = true -%}{#- TODO -#}
                 {%- if can_edit_comment || can_delete_comment -%}
                 <span class="action-container">
                     {%- if can_edit_comment -%}
-                    <a href class="edit">
+                    {%- let edit_url = web::comment_edit_url(comment_id, location)? -%}
+                    <a href="{{ edit_url }}#comment-{{ comment_id }}" class="edit" hx-get="{{ edit_url }}"
+                        hx-target="#comment-{{ comment_id }}" hx-swap="outerHTML">
                         {#- -#}
                         <i class="fa fa-pencil"></i>&nbsp;edit
                         {#- -#}
@@ -79,26 +90,56 @@
                 </span>
                 {%- endif %}
             </nav>
+            {%- endif %}
         </header>
 
-        <form class="body">
+        {% if let Some(draft) = draft && draft.comment_id == comment_id %}
+        {%- let form_url = web::comment_edit_url(comment_id, location)? %}
+        <form class="body" id="comment-form-{{ comment_id }}" method="post"
+            action="{{ form_url }}#comment-{{ comment_id }}" hx-post="{{ form_url }}"
+            hx-target="#comment-{{ comment_id }}" hx-swap="outerHTML">
+            <input type="hidden" name="version" value="{{ draft.version }}">
+
             <div class="keep-height">
-                <div class="tab preview active">
+                <div class="tab preview{% if draft.tab == EditTab::Preview %} active{% endif %}">
+                    {% if draft.tab == EditTab::Preview %}
                     <div class="comment-content markdown">
-                        {{ markdown::render(comment.text()?) | safe }}
+                        {{ markdown::render(draft.text) | safe }}
                     </div>
+                    {% endif %}
                 </div>
 
-                <div class="tab edit">
-                    {# TODO #}
-                    {# <textarea required minlength=1>comment.text()?</textarea> #}
+                <div class="tab edit{% if draft.tab == EditTab::Write %} active{% endif %}">
+                    <textarea name="text" required minlength="1" {% if draft.tab==EditTab::Write %} autofocus {% endif
+                        %}>
+                        {{- draft.text -}}
+                    </textarea>
                 </div>
             </div>
 
-            <nav class="edit">
-                <div class="messages"></div>
-                {# TODO #}
+            <nav class="edit active">
+                <div class="messages">
+                    {% match draft.message %}
+                    {% when Message::Error(err) %}
+                    <div class="message error">{{ err }}</div>
+                    {% when Message::Success(msg) %}
+                    <div class="message success">{{ msg }}</div>
+                    {% when Message::None | Message::Attention %}
+                    {% endmatch %}
+                </div>
+
+                <button name="operation" value="save">Save</button>
+                {%- let cancel_url = web::comment_url(comment_id, location)? %}
+                <a class="button discourage cancel-editing" href="{{ location.url(comment)? }}#comment-{{ comment_id }}"
+                    hx-get="{{ cancel_url }}" hx-target="#comment-{{ comment_id }}" hx-swap="outerHTML">Cancel</a>
             </nav>
         </form>
+        {% else %}
+        <div class="body">
+            <div class="comment-content markdown">
+                {{ markdown::render(comment.text()?) | safe }}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>

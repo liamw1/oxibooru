@@ -1,11 +1,13 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::api::middleware;
-use crate::auth::Client;
+use crate::auth::{Client, ClientName};
 use crate::config::{Action, Config, Env};
 use crate::content::cache::RingCache;
 use crate::db::AsyncConnectionPool;
 use crate::extract::Ctx;
 use crate::model::enums::UserRank;
+use crate::resource::NotRequested;
+use crate::resource::comment::CommentInfo;
 use crate::search::preferences::Preferences;
 use crate::{admin, api, db, filesystem, web};
 use axum::Router;
@@ -52,10 +54,11 @@ impl AppState {
         }
     }
 
-    pub fn make_context(self, client: Client) -> Ctx {
+    pub fn make_context(self, client: Client, client_name: ClientName) -> Ctx {
         Ctx(
             Context {
                 client,
+                client_name,
                 env: self.env,
                 config: self.config,
                 downloader: self.downloader,
@@ -71,6 +74,7 @@ pub struct Context {
     pub env: Arc<Env>,
     pub config: Arc<Config>,
     pub client: Client,
+    pub client_name: ClientName,
     pub downloader: HttpClient,
     pub content_cache: Arc<Mutex<RingCache>>,
 }
@@ -154,6 +158,21 @@ impl Context {
             || self.has_privilege(Action::TagCategorySetDefault)
     }
 
+    pub fn can_edit_comment(&self, comment: &CommentInfo) -> Result<bool, NotRequested> {
+        comment.author().map(|author| {
+            self.has_privilege(Action::CommentView)
+                && self.has_privilege(Action::CommentEditOwn)
+                && (self.is_client(author) || self.has_privilege(Action::CommentEditAny))
+        })
+    }
+
+    pub fn can_delete_comment(&self, comment: &CommentInfo) -> Result<bool, NotRequested> {
+        comment.author().map(|author| {
+            self.has_privilege(Action::CommentDeleteOwn) && self.is_client(author)
+                || self.has_privilege(Action::CommentDeleteAny)
+        })
+    }
+
     /// Returns error if client cannot perform given `action`.
     pub fn verify_privilege(&self, action: Action) -> ApiResult<()> {
         self.has_privilege(action)
@@ -174,6 +193,10 @@ impl Context {
             UserRank::Moderator => &self.config.moderator_preferences,
             UserRank::Administrator => &self.config.administrator_preferences,
         }
+    }
+
+    fn is_client(&self, owner: Option<&str>) -> bool {
+        self.client_name.as_deref().is_some_and(|name| Some(name) == owner)
     }
 }
 

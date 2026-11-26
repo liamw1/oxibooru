@@ -16,14 +16,14 @@
     <aside class="sidebar" hx-on:htmx:after:swap="syncPostMode(this, ctx)">
         <nav class="buttons">
             <article class="previous-post">
-                <a {% if let Some(post)=prev_post %} href="{{ post.url(*mode, params)? }}" {% else %} class="inactive"
+                <a {% if let Some(post)=prev_post %} href="{{ post.url(mode, params)? }}" {% else %} class="inactive"
                     hx-boost="false" {% endif %}>
                     <i class="fa fa-chevron-left"></i>
                     <span class="vim-nav-hint">&lt; Previous post</span>
                 </a>
             </article>
             <article class="next-post">
-                <a {% if let Some(post)=next_post %} href="{{ post.url(*mode, params)? }}" {% else %} class="inactive"
+                <a {% if let Some(post)=next_post %} href="{{ post.url(mode, params)? }}" {% else %} class="inactive"
                     hx-boost="false" {% endif %}>
                     <i class="fa fa-chevron-right"></i>
                     <span class="vim-nav-hint">Next post &gt;</span>
@@ -72,6 +72,7 @@
             {% endif %}
 
             {% if ctx.has_privilege(Action::CommentList) %}
+            {% let location = Location::post(mode, params) %}
             <div class="comments-container">
                 <div class="comments">
                     <ul>

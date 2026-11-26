@@ -11,6 +11,7 @@ use crate::resource::pool_category::PoolCategoryInfo;
 use crate::resource::post::{Field, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::string::LargeString;
+use crate::web::comment::{Draft, EditTab, Location};
 use crate::web::cookie::safety::SafetyFilter;
 use crate::web::form::FormField;
 use crate::web::form::post::{
@@ -25,9 +26,23 @@ use axum::{Router, routing};
 use axum_extra::extract::CookieJar;
 use serde::{Deserialize, Serialize};
 use server_macros::Deref;
+use std::borrow::Borrow;
 use std::num::NonZeroU64;
 use strum::{Display, IntoEnumIterator};
 use tokio::{join, try_join};
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct MainParams {
+    fit: Option<Fit>,
+    query: Option<String>,
+}
+
+impl MainParams {
+    fn fit(&self) -> Fit {
+        self.fit.unwrap_or_default()
+    }
+}
 
 pub fn routes() -> Router<AppState> {
     Router::new()
@@ -37,6 +52,29 @@ pub fn routes() -> Router<AppState> {
         .route("/post/{post_id}/edit", routing::get(edit).post(edit_submit))
         .route("/post/{post_id}/merge", routing::get(merge).post(merge_submit))
         .route("/post/{post_id}/merge/search", routing::post(merge_search))
+}
+
+pub async fn render_with_draft(
+    ctx: Ctx,
+    post_id: i64,
+    mode: Mode,
+    params: MainParams,
+    draft: Draft,
+) -> WebResult<Html> {
+    let path = Path(post_id);
+    match mode {
+        Mode::View => {
+            let mut page_info = PostPage::new(ctx, path, params, Mode::View).await?;
+            page_info.draft = Some(draft);
+            ViewTemplate(page_info).render()
+        }
+        Mode::Edit => {
+            let page_info = edit_page(ctx, path, params, Message::None, Some(draft)).await?;
+            EditTemplate(page_info).render()
+        }
+    }
+    .map(Html)
+    .map_err(WebError::from)
 }
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(42).unwrap();
@@ -147,9 +185,9 @@ impl ListParams {
         self
     }
 
-    fn to_main_params(&self, safety: SafetyFilter) -> MainParams {
+    fn to_main_params(&self, safety: impl Borrow<SafetyFilter>) -> MainParams {
         MainParams {
-            query: self.query(safety),
+            query: self.query(*safety.borrow()),
             fit: None,
         }
     }
@@ -224,7 +262,7 @@ async fn toggle_safety(hx: HxRequest, jar: CookieJar, Form(form): Form<SafetyTog
     let jar = jar.add(safety.to_cookie());
 
     let url = web::url("/posts", &ListParams::from(form))?;
-    Ok(web::plain_redirect(&url, &hx, jar))
+    Ok(web::plain_redirect(&url, hx, jar))
 }
 
 #[derive(Clone, Copy, Default, Display, PartialEq, Eq, Serialize, Deserialize)]
@@ -236,19 +274,6 @@ enum Fit {
     Height,
     #[default]
     Both,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-struct MainParams {
-    fit: Option<Fit>,
-    query: Option<String>,
-}
-
-impl MainParams {
-    fn fit(&self) -> Fit {
-        self.fit.unwrap_or_default()
-    }
 }
 
 struct PostPage<T> {
@@ -263,6 +288,7 @@ struct PostPage<T> {
     params: MainParams,
     description: LargeString,
     comments: Vec<CommentInfo>,
+    draft: Option<Draft>,
     focus: Focus,
     message: Message,
 }
@@ -283,6 +309,7 @@ impl PostPage<PostInfo> {
             tag_categories,
             pool_categories,
             params,
+            draft: None,
             focus: Focus::None,
             message: Message::None,
         })
@@ -349,23 +376,7 @@ async fn edit(
     let fields = Mask::from(VIEW_FIELDS) | Field::Version;
     let (jar, message) = web::redirect_message(jar);
     if hx.full_page() {
-        let (post, neighbors, tag_categories, pool_categories) =
-            get_posts_and_categories(ctx.clone(), path, &params, fields).await?;
-        let page_info = PostPage {
-            ctx,
-            active_tab: Tab::Post,
-            mode: Mode::Edit,
-            description: post.description().cloned()?,
-            comments: post.comments().cloned()?,
-            post: EditPathForm::initialize(post)?,
-            prev_post: neighbors.prev,
-            next_post: neighbors.next,
-            tag_categories,
-            pool_categories,
-            params,
-            focus: Focus::None,
-            message,
-        };
+        let page_info = edit_page(ctx, path, params, message, None).await?;
         EditTemplate(page_info).render()
     } else {
         let post = get_post(ctx.clone(), path, &params, fields).await?;
@@ -380,6 +391,34 @@ async fn edit(
     }
     .map(|html| (jar, Html(html)).into_response())
     .map_err(WebError::from)
+}
+
+async fn edit_page(
+    ctx: Ctx,
+    path: Path<i64>,
+    params: MainParams,
+    message: Message,
+    draft: Option<Draft>,
+) -> WebResult<PostPage<EditPathForm>> {
+    let fields = Mask::from(VIEW_FIELDS) | Field::Version;
+    let (post, neighbors, tag_categories, pool_categories) =
+        get_posts_and_categories(ctx.clone(), path, &params, fields).await?;
+    Ok(PostPage {
+        ctx,
+        active_tab: Tab::Post,
+        mode: Mode::Edit,
+        description: post.description().cloned()?,
+        comments: post.comments().cloned()?,
+        post: EditPathForm::initialize(post)?,
+        prev_post: neighbors.prev,
+        next_post: neighbors.next,
+        tag_categories,
+        pool_categories,
+        params,
+        draft,
+        focus: Focus::None,
+        message,
+    })
 }
 
 async fn edit_submit(
@@ -404,7 +443,7 @@ async fn edit_submit(
                 Ok(Json(post)) => {
                     if !hx.htmx() {
                         let new_url = post.url(Mode::Edit, &params)?;
-                        return Ok(web::redirect(&new_url, &hx, jar, SAVED_MESSAGE));
+                        return Ok(web::redirect(&new_url, hx, jar, SAVED_MESSAGE));
                     }
                     (EditPathForm::initialize(post)?, focus, Message::Success(SAVED_MESSAGE.into()))
                 }
@@ -417,7 +456,7 @@ async fn edit_submit(
                 Ok(Json(_)) => {
                     if !hx.htmx() {
                         let url = form.url(Mode::Edit, &params)?;
-                        return Ok(web::redirect(&url, &hx, jar, FEATURED_MESSAGE));
+                        return Ok(web::redirect(&url, hx, jar, FEATURED_MESSAGE));
                     }
                     (form, Focus::None, Message::Success(FEATURED_MESSAGE.into()))
                 }
@@ -425,7 +464,7 @@ async fn edit_submit(
             }
         }
         Operation::Delete => match api::post::delete(ctx.clone(), form.path(), Json(form.to_delete_body())).await {
-            Ok(Json(())) => return Ok(web::redirect("/posts", &hx, jar, DELETED_MESSAGE)),
+            Ok(Json(())) => return Ok(web::redirect("/posts", hx, jar, DELETED_MESSAGE)),
             Err(err) => (form, Focus::None, Message::Error(err)),
         },
     };
@@ -449,6 +488,7 @@ async fn edit_submit(
             tag_categories,
             pool_categories,
             params,
+            draft: None,
             focus,
             message,
         };
@@ -548,7 +588,7 @@ async fn merge_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: MergePathFo
         Ok(Json(merged_post)) => {
             let post_id = merged_post.id()?;
             let url = format!("/post/{post_id}");
-            return Ok(web::redirect(&url, &hx, jar, MERGED_MESSAGE));
+            return Ok(web::redirect(&url, hx, jar, MERGED_MESSAGE));
         }
         Err(err) => err,
     };

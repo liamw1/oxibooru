@@ -1,6 +1,6 @@
 use crate::api::error::{ApiError, ApiResult};
 use crate::app::AppState;
-use crate::auth::{Client as AuthClient, header};
+use crate::auth::{Client as AuthClient, ClientName, header};
 use crate::model::enums::UserRank;
 use crate::resource::field::Mask;
 use crate::resource::snapshot::{Field, SnapshotInfo};
@@ -36,11 +36,11 @@ pub async fn log_error(req: Request, next: Next) -> Response {
 /// Attempts to authorizes user by either username/password or user token.
 pub async fn auth(State(state): State<AppState>, mut request: Request, next: Next) -> ApiResult<Response> {
     let auth_header = request.headers().get(AUTHORIZATION);
-    let client = if let Some(auth_value) = auth_header {
+    let (client, client_name) = if let Some(auth_value) = auth_header {
         let auth_str = auth_value.to_str()?;
         header::authenticate_user(&state, auth_str).await
     } else {
-        Ok(AuthClient::new(None, UserRank::Anonymous))
+        Ok((AuthClient::new(None, UserRank::Anonymous), ClientName::anon()))
     }?;
 
     // If client is not anonymous and query contains "bump-login", update login time
@@ -53,6 +53,7 @@ pub async fn auth(State(state): State<AppState>, mut request: Request, next: Nex
     }
 
     request.extensions_mut().insert(client);
+    request.extensions_mut().insert(client_name);
     Ok(next.run(request).await)
 }
 

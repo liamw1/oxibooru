@@ -287,7 +287,7 @@ async fn edit_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: EditPathForm
             let new_primary_name = pool.primary_name()?;
             if !hx.htmx() || new_primary_name != primary_name {
                 let new_url = format!("/pool/{new_primary_name}/edit");
-                return Ok(web::redirect(&new_url, &hx, jar, SAVED_MESSAGE));
+                return Ok(web::redirect(&new_url, hx, jar, SAVED_MESSAGE));
             }
             (EditPathForm::initialize(pool)?, Message::Success(SAVED_MESSAGE.into()))
         }
@@ -373,7 +373,7 @@ async fn merge_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: MergePathFo
             if !hx.htmx() {
                 let Ok(primary_name) = form.primary_name();
                 let url = format!("/pool/{primary_name}/merge");
-                return Ok(web::redirect(&url, &hx, jar, MERGED_MESSAGE));
+                return Ok(web::redirect(&url, hx, jar, MERGED_MESSAGE));
             }
             (MergePathForm::initialize(&pool)?, Message::Success(MERGED_MESSAGE.into()))
         }
@@ -444,7 +444,7 @@ async fn delete_tab(ctx: Ctx, path: Path<SmallString>, hx: HxRequest) -> WebResu
 async fn delete_submit(ctx: Ctx, hx: HxRequest, jar: CookieJar, form: DeletePathForm) -> WebResult<Response> {
     let pool_id = get_id(&ctx, form.path()).await?;
     match api::pool::delete(ctx.clone(), Path(pool_id), Json(form.to_body())).await {
-        Ok(Json(())) => Ok(web::redirect("/pools", &hx, jar, DELETED_MESSAGE)),
+        Ok(Json(())) => Ok(web::redirect("/pools", hx, jar, DELETED_MESSAGE)),
         Err(err) => {
             let message = Message::Error(err);
             if hx.full_page() {

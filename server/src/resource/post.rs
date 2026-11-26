@@ -28,6 +28,7 @@ use diesel::{
 };
 use serde::{Deserialize, Serialize};
 use server_macros::resource;
+use std::borrow::Borrow;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Write;
 use std::sync::Arc;
@@ -35,7 +36,7 @@ use strum::EnumString;
 use url::Url;
 use utoipa::ToSchema;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Mode {
     View,
     Edit,
@@ -311,10 +312,14 @@ impl PostInfo {
         Ok(format!("@{id} ({post_type})\n\nTags:{tag_list}"))
     }
 
-    pub fn url<T: Serialize>(&self, mode: Mode, params: &T) -> Result<String, serde_urlencoded::ser::Error> {
+    pub fn url<T: Serialize>(
+        &self,
+        mode: impl Borrow<Mode>,
+        params: &T,
+    ) -> Result<String, serde_urlencoded::ser::Error> {
         self.id()
             .map_err(|err| serde_urlencoded::ser::Error::Custom(err.to_string().into()))
-            .and_then(|id| match mode {
+            .and_then(|id| match mode.borrow() {
                 Mode::View => web::post_url(id, params),
                 Mode::Edit => web::post_edit_url(id, params),
             })

@@ -63,8 +63,27 @@
     border: 1px solid transparent;
 }
 
-.comment-container .comment header nav.edit ul li a {
+.comment-container .comment header nav.edit ul li a,
+.comment-container .comment header nav.edit ul li button {
     padding: 0 1em;
+}
+
+.comment-container .comment header nav.edit ul li button {
+    border: 0;
+    background: none;
+    color: var(--main-color);
+    line-height: inherit;
+}
+
+.comment-container .comment header nav.edit ul li.active button {
+    color: var(--text-color);
+}
+
+.comment-container .comment .body nav.edit .cancel-editing {
+    display: inline-block;
+    padding: .2em .7em;
+    border: 2px solid transparent;
+    color: var(--button-disabled-text-color);
 }
 
 .comment-container .comment header nav.edit ul li.active {

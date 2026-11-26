@@ -5,6 +5,7 @@ use std::num::ParseIntError;
 use std::ops::Deref;
 use strum::Display;
 
+pub mod comment;
 pub mod pool;
 pub mod post;
 pub mod tag;

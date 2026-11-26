@@ -3,9 +3,9 @@ use crate::auth::Client;
 use crate::config::Config;
 use crate::model::comment::{Comment, CommentScore};
 use crate::model::enums::Rating;
-use crate::resource;
 use crate::resource::field::{Batcher, Mask};
 use crate::resource::user::MicroUser;
+use crate::resource::{self, NotRequested};
 use crate::schema::{comment, comment_score, comment_statistics, user};
 use crate::string::{LargeString, SmallString, lower};
 use crate::time::DateTime;
@@ -61,6 +61,10 @@ pub struct CommentInfo {
 }
 
 impl CommentInfo {
+    pub fn author(&self) -> Result<Option<&str>, NotRequested> {
+        self.user().map(|user| user.as_ref().map(|user| &*user.name))
+    }
+
     pub fn new(conn: &mut PgConnection, ctx: &Context, comment: Comment, fields: Mask<Field>) -> QueryResult<Self> {
         Self::new_batch(conn, ctx, vec![comment], fields).map(resource::single)
     }

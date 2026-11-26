@@ -44,7 +44,8 @@ where
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let Ok(State(state)) = State::<AppState>::from_request_parts(parts, state).await;
         let Extension(client) = parts.extract().await.map_err(ApiError::from)?;
-        Ok(state.make_context(client))
+        let client_name = parts.extensions.get().cloned().unwrap_or_default();
+        Ok(state.make_context(client, client_name))
     }
 }
 
@@ -143,6 +144,13 @@ where
 
 #[derive(Clone, Copy)]
 pub struct Query<T>(pub T);
+
+impl<T> Deref for Query<T> {
+    type Target = T;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
 
 impl<S, T> FromRequestParts<S> for Query<T>
 where
@@ -243,6 +251,10 @@ pub struct Offset {
 }
 
 impl Offset {
+    pub fn new(offset: Option<u64>) -> Self {
+        Self { offset }
+    }
+
     pub fn to_page_params(self, limit: NonZeroU64) -> PageParams {
         PageParams {
             offset: self.offset,
@@ -299,17 +311,17 @@ pub struct PagedResponse<T> {
 }
 
 /// Extracts the HTMX request headers relevant to the full-page vs fragment decision.
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct HxRequest {
     request_type: Option<HxRequestType>,
 }
 
 impl HxRequest {
-    pub fn htmx(&self) -> bool {
+    pub fn htmx(self) -> bool {
         self.request_type.is_some()
     }
 
-    pub fn full_page(&self) -> bool {
+    pub fn full_page(self) -> bool {
         self.request_type != Some(HxRequestType::Partial)
     }
 }
