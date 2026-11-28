@@ -457,6 +457,7 @@ nav#top-navigation .thumbnail {
    without changing margin collapsing like contain: paint would */
 .markdown {
     overflow: clip;
+    overflow-clip-margin: 2px; /* Room for link focus outlines */
     transform: translate(0);
 }
 

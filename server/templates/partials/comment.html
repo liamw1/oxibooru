@@ -85,18 +85,26 @@
                     {%- let delete_toggle = format!("delete-comment-toggle-{comment_id}") -%}
                     <form class="delete" method="post" action="{{ delete_url }}#comment-{{ comment_id }}"
                         hx-post="{{ delete_url }}" hx-target="#comment-{{ comment_id }}" hx-swap="outerHTML">
+                        {#- -#}
                         <input type="hidden" name="version" value="{{ comment.version()? }}">
+                        {#- -#}
                         <input type="checkbox" id="{{ delete_toggle }}" {% if let Some(CommentState::DeleteFailed(failure))=comment_state &&
                             failure.comment_id==comment_id %} checked {% endif %}>
+                        {#- -#}
                         <label for="{{ delete_toggle }}" class="prompt">
                             {#- -#}
                             <i class="fa fa-remove"></i>&nbsp;delete
                             {#- -#}
                         </label>
+                        {#- -#}
                         <span class="confirm">
+                            {#- -#}
                             <label for="{{ delete_toggle }}" class="cancel">Cancel</label>
+                            {#- -#}
                             <button>Yes, delete comment</button>
+                            {#- -#}
                         </span>
+                        {#- -#}
                     </form>
                     {%- endif -%}
                 </span>
@@ -141,9 +149,7 @@
                 </div>
 
                 <button name="operation" value="save">Save</button>
-                {%- let cancel_url = web::comment_url(comment_id, location)? %}
-                <a class="button discourage cancel-editing" href="{{ location.url(comment)? }}#comment-{{ comment_id }}"
-                    hx-get="{{ cancel_url }}" hx-target="#comment-{{ comment_id }}" hx-swap="outerHTML">Cancel</a>
+                <button class="discourage" name="operation" value="cancel" formnovalidate>Cancel</button>
             </nav>
         </form>
         {% else %}

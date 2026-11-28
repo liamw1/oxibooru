@@ -157,7 +157,6 @@ impl Serialize for Location {
 pub fn routes() -> Router<AppState> {
     Router::new()
         .route("/comments", routing::get(list))
-        .route("/comment/{comment_id}", routing::get(view))
         .route("/comment/{comment_id}/edit", routing::get(edit).post(edit_submit))
         .route("/comment/{comment_id}/delete", routing::post(delete_submit))
 }
@@ -298,21 +297,6 @@ async fn get_comment(ctx: Ctx, comment_id: i64) -> WebResult<CommentInfo> {
     Ok(comment)
 }
 
-async fn view(
-    ctx: Ctx,
-    Path(comment_id): Path<i64>,
-    Query(location): Query<Location>,
-    hx: HxRequest,
-    jar: CookieJar,
-) -> WebResult<Response> {
-    let comment = get_comment(ctx.clone(), comment_id).await?;
-    if hx.full_page() {
-        let redirect_url = location.redirect_url(&comment)?;
-        return Ok(web::plain_redirect(&redirect_url, hx, jar));
-    }
-    render(&hx, ctx, &jar, location, comment, None).await
-}
-
 async fn edit(
     ctx: Ctx,
     Path(comment_id): Path<i64>,
@@ -336,6 +320,15 @@ async fn edit_submit(
     let (tab, message) = match form.operation {
         Operation::Write => (EditTab::Write, Message::None),
         Operation::Preview => (EditTab::Preview, Message::None),
+        Operation::Cancel => {
+            let comment = get_comment(ctx.clone(), comment_id).await?;
+            return if hx.full_page() {
+                let redirect_url = location.redirect_url(&comment)?;
+                Ok(web::plain_redirect(&redirect_url, hx, jar))
+            } else {
+                render(&hx, ctx, &jar, location, comment, None).await
+            };
+        }
         Operation::Save => {
             let params = Query(COMMENT_FIELDS.into());
             let body = Json(CommentUpdateBody {

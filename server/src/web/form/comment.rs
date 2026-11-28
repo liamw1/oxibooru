@@ -7,6 +7,7 @@ pub enum Operation {
     Write,
     Preview,
     Save,
+    Cancel,
 }
 
 #[derive(Deserialize)]

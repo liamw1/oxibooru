@@ -72,18 +72,13 @@
     border: 0;
     background: none;
     color: var(--main-color);
+    font: inherit;
     line-height: inherit;
+    transition: color .1s linear;
 }
 
-.comment-container .comment header nav.edit ul li.active button {
-    color: var(--text-color);
-}
-
-.comment-container .comment .body nav.edit .cancel-editing {
-    display: inline-block;
-    padding: .2em .7em;
-    border: 2px solid transparent;
-    color: var(--button-disabled-text-color);
+.comment-container .comment header nav.edit ul li button:focus {
+    outline: 2px solid var(--main-color);
 }
 
 .comment-container .comment header nav.edit ul li.active {
@@ -137,7 +132,7 @@
 .comment-container .comment header .delete:not(.inactive) button,
 .comment-container .comment header .score-container a:not(.inactive),
 .comment-container .comment header .nickname a:not(.inactive) {
-    color: color-mix(in oklab, var(--main-color), var(--inactive-link-color));
+    color: color-mix(in srgb, var(--main-color), var(--inactive-link-color));
 }
 
 .comment-container .comment header form.delete {
@@ -208,6 +203,7 @@
 
 .comment-container .comment .body .keep-height {
     position: relative;
+    min-height: 150px;
 }
 
 .comment-container .comment .body .keep-height textarea {
@@ -243,7 +239,7 @@
 .darktheme .comment-container .comment header .delete:not(.inactive) button,
 .darktheme .comment-container .comment header .score-container a:not(.inactive),
 .darktheme .comment-container .comment header .nickname a:not(.inactive) {
-    color: color-mix(in oklab, var(--main-color), var(--inactive-link-color-darktheme));
+    color: color-mix(in srgb, var(--main-color), var(--inactive-link-color-darktheme));
 }
 
 .darktheme .comment-container .comment header:before {

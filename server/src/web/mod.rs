@@ -69,10 +69,6 @@ impl IntoResponse for WebError {
     }
 }
 
-pub fn comment_url<T: Serialize>(comment_id: impl Borrow<i64>, params: &T) -> Result<String, UrlSerializeError> {
-    url(&format!("comment/{}", comment_id.borrow()), params)
-}
-
 pub fn comment_edit_url<T: Serialize>(comment_id: impl Borrow<i64>, params: &T) -> Result<String, UrlSerializeError> {
     url(&format!("comment/{}/edit", comment_id.borrow()), params)
 }
