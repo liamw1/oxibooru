@@ -11,7 +11,7 @@ use crate::resource::pool_category::PoolCategoryInfo;
 use crate::resource::post::{Field, Mode, PostInfo};
 use crate::resource::tag_category::TagCategoryInfo;
 use crate::string::LargeString;
-use crate::web::comment::{Draft, EditTab, Location};
+use crate::web::comment::{CommentState, EditTab, Location};
 use crate::web::cookie::safety::SafetyFilter;
 use crate::web::form::FormField;
 use crate::web::form::post::{
@@ -54,22 +54,22 @@ pub fn routes() -> Router<AppState> {
         .route("/post/{post_id}/merge/search", routing::post(merge_search))
 }
 
-pub async fn render_with_draft(
+pub async fn render_with_comment_state(
     ctx: Ctx,
     post_id: i64,
     mode: Mode,
     params: MainParams,
-    draft: Draft,
+    comment_state: CommentState,
 ) -> WebResult<Html> {
     let path = Path(post_id);
     match mode {
         Mode::View => {
             let mut page_info = PostPage::new(ctx, path, params, Mode::View).await?;
-            page_info.draft = Some(draft);
+            page_info.comment_state = Some(comment_state);
             ViewTemplate(page_info).render()
         }
         Mode::Edit => {
-            let page_info = edit_page(ctx, path, params, Message::None, Some(draft)).await?;
+            let page_info = edit_page(ctx, path, params, Message::None, Some(comment_state)).await?;
             EditTemplate(page_info).render()
         }
     }
@@ -288,7 +288,7 @@ struct PostPage<T> {
     params: MainParams,
     description: LargeString,
     comments: Vec<CommentInfo>,
-    draft: Option<Draft>,
+    comment_state: Option<CommentState>,
     focus: Focus,
     message: Message,
 }
@@ -309,7 +309,7 @@ impl PostPage<PostInfo> {
             tag_categories,
             pool_categories,
             params,
-            draft: None,
+            comment_state: None,
             focus: Focus::None,
             message: Message::None,
         })
@@ -398,7 +398,7 @@ async fn edit_page(
     path: Path<i64>,
     params: MainParams,
     message: Message,
-    draft: Option<Draft>,
+    comment_state: Option<CommentState>,
 ) -> WebResult<PostPage<EditPathForm>> {
     let fields = Mask::from(VIEW_FIELDS) | Field::Version;
     let (post, neighbors, tag_categories, pool_categories) =
@@ -415,7 +415,7 @@ async fn edit_page(
         tag_categories,
         pool_categories,
         params,
-        draft,
+        comment_state,
         focus: Focus::None,
         message,
     })
@@ -488,7 +488,7 @@ async fn edit_submit(
             tag_categories,
             pool_categories,
             params,
-            draft: None,
+            comment_state: None,
             focus,
             message,
         };

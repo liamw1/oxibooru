@@ -16,7 +16,7 @@
 
     <div class="comment">
         <header>
-            {%- if let Some(draft) = draft && draft.comment_id == comment_id %}
+            {%- if let Some(CommentState::Edit(draft)) = comment_state && draft.comment_id == comment_id %}
             <nav class="edit tabs active">
                 <ul>
                     <li class="edit{% if draft.tab == EditTab::Write %} active {% endif %}">
@@ -81,11 +81,23 @@
                     </a>
                     {%- endif -%}
                     {%- if can_delete_comment -%}
-                    <a href class="delete">
-                        {#- -#}
-                        <i class="fa fa-remove"></i>&nbsp;delete
-                        {#- -#}
-                    </a>
+                    {%- let delete_url = web::comment_delete_url(comment_id, location)? -%}
+                    {%- let delete_toggle = format!("delete-comment-toggle-{comment_id}") -%}
+                    <form class="delete" method="post" action="{{ delete_url }}#comment-{{ comment_id }}"
+                        hx-post="{{ delete_url }}" hx-target="#comment-{{ comment_id }}" hx-swap="outerHTML">
+                        <input type="hidden" name="version" value="{{ comment.version()? }}">
+                        <input type="checkbox" id="{{ delete_toggle }}" {% if let Some(CommentState::DeleteFailed(failure))=comment_state &&
+                            failure.comment_id==comment_id %} checked {% endif %}>
+                        <label for="{{ delete_toggle }}" class="prompt">
+                            {#- -#}
+                            <i class="fa fa-remove"></i>&nbsp;delete
+                            {#- -#}
+                        </label>
+                        <span class="confirm">
+                            <label for="{{ delete_toggle }}" class="cancel">Cancel</label>
+                            <button>Yes, delete comment</button>
+                        </span>
+                    </form>
                     {%- endif -%}
                 </span>
                 {%- endif %}
@@ -93,7 +105,7 @@
             {%- endif %}
         </header>
 
-        {% if let Some(draft) = draft && draft.comment_id == comment_id %}
+        {% if let Some(CommentState::Edit(draft)) = comment_state && draft.comment_id == comment_id %}
         {%- let form_url = web::comment_edit_url(comment_id, location)? %}
         <form class="body" id="comment-form-{{ comment_id }}" method="post"
             action="{{ form_url }}#comment-{{ comment_id }}" hx-post="{{ form_url }}"
@@ -139,6 +151,11 @@
             <div class="comment-content markdown">
                 {{ markdown::render(comment.text()?) | safe }}
             </div>
+            {%- if let Some(CommentState::DeleteFailed(failure)) = comment_state && failure.comment_id == comment_id %}
+            <div class="messages">
+                <div class="message error">{{ failure.error }}</div>
+            </div>
+            {%- endif %}
         </div>
         {% endif %}
     </div>

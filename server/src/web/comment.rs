@@ -1,7 +1,8 @@
 use crate::api::comment::CommentUpdateBody;
+use crate::api::error::ApiError;
 use crate::app::AppState;
 use crate::config::Action;
-use crate::extract::{Ctx, Form, HxRequest, Json, Offset, Path, Query, ResourceParams};
+use crate::extract::{Ctx, DeleteBody, Form, HxRequest, Json, Offset, Path, Query, ResourceParams};
 use crate::model::enums::Rating;
 use crate::resource::comment::{CommentInfo, Field as CommentField};
 use crate::resource::post::{Field, Mode, PostInfo};
@@ -48,6 +49,26 @@ impl Draft {
     }
 }
 
+pub struct DeleteFailure {
+    pub comment_id: i64,
+    pub post_id: i64,
+    pub error: ApiError,
+}
+
+pub enum CommentState {
+    Edit(Draft),
+    DeleteFailed(DeleteFailure),
+}
+
+impl CommentState {
+    fn post_id(&self) -> i64 {
+        match self {
+            Self::Edit(draft) => draft.post_id,
+            Self::DeleteFailed(failure) => failure.post_id,
+        }
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(from = "LocationParams")]
 pub enum Location {
@@ -87,11 +108,13 @@ impl Location {
         self.url(comment).map(|url| format!("/{url}#comment-{comment_id}"))
     }
 
-    async fn render(self, ctx: Ctx, jar: &CookieJar, comment: &CommentInfo, draft: Draft) -> WebResult<Html> {
+    async fn render(self, ctx: Ctx, jar: &CookieJar, comment: &CommentInfo, state: CommentState) -> WebResult<Html> {
         let post_id = comment.post_id()?;
         match self {
-            Self::Post { mode, params } => web::post::render_with_draft(ctx, post_id, mode, params, draft).await,
-            Self::Comments { offset } => render_list(ctx, Offset::new(offset), jar, Some(draft)).await,
+            Self::Post { mode, params } => {
+                web::post::render_with_comment_state(ctx, post_id, mode, params, state).await
+            }
+            Self::Comments { offset } => render_list(ctx, Offset::new(offset), jar, Some(state)).await,
         }
     }
 }
@@ -136,6 +159,7 @@ pub fn routes() -> Router<AppState> {
         .route("/comments", routing::get(list))
         .route("/comment/{comment_id}", routing::get(view))
         .route("/comment/{comment_id}/edit", routing::get(edit).post(edit_submit))
+        .route("/comment/{comment_id}/delete", routing::post(delete_submit))
 }
 
 const LIMIT: NonZeroU64 = NonZeroU64::new(10).unwrap();
@@ -179,10 +203,15 @@ struct ListTemplate<'a> {
     posts: Vec<PostInfo>,
     pager: Pager<'a, ()>,
     location: Location,
-    draft: Option<Draft>,
+    comment_state: Option<CommentState>,
 }
 
-async fn render_list(ctx: Ctx, offset: Offset, jar: &CookieJar, draft: Option<Draft>) -> WebResult<Html> {
+async fn render_list(
+    ctx: Ctx,
+    offset: Offset,
+    jar: &CookieJar,
+    comment_state: Option<CommentState>,
+) -> WebResult<Html> {
     const BASE_QUERY: &str = "sort:comment-date comment-count:1..";
     const FIELDS: [Field; 3] = [Field::Id, Field::ThumbnailUrl, Field::Comments];
 
@@ -199,10 +228,10 @@ async fn render_list(ctx: Ctx, offset: Offset, jar: &CookieJar, draft: Option<Dr
     let mut posts = response.results;
 
     // The post may have moved off this page, or not be on the list at all
-    if let Some(draft) = &draft
-        && !posts.iter().any(|post| post.id().is_ok_and(|id| id == draft.post_id))
+    if let Some(state) = &comment_state
+        && !posts.iter().any(|post| post.id().is_ok_and(|id| id == state.post_id()))
     {
-        let Json(post) = api::post::get(ctx.clone(), Path(draft.post_id), Query(FIELDS.into())).await?;
+        let Json(post) = api::post::get(ctx.clone(), Path(state.post_id()), Query(FIELDS.into())).await?;
         posts.push(post);
     }
 
@@ -215,7 +244,7 @@ async fn render_list(ctx: Ctx, offset: Offset, jar: &CookieJar, draft: Option<Dr
         location: Location::Comments {
             offset: page_params.offset.filter(|&offset| offset > 0),
         },
-        draft,
+        comment_state,
     }
     .render()
     .map(Html)
@@ -231,7 +260,7 @@ async fn list(ctx: Ctx, Query(offset): Query<Offset>, jar: CookieJar) -> WebResu
 struct CommentTemplate {
     ctx: Ctx,
     comment: CommentInfo,
-    draft: Option<Draft>,
+    comment_state: Option<CommentState>,
     location: Location,
 }
 
@@ -241,13 +270,13 @@ async fn render(
     jar: &CookieJar,
     location: Location,
     comment: CommentInfo,
-    draft: Option<Draft>,
+    comment_state: Option<CommentState>,
 ) -> WebResult<Response> {
     if hx.full_page()
-        && let Some(draft) = draft
+        && let Some(state) = comment_state
     {
         return location
-            .render(ctx, jar, &comment, draft)
+            .render(ctx, jar, &comment, state)
             .await
             .map(IntoResponse::into_response);
     }
@@ -255,7 +284,7 @@ async fn render(
     CommentTemplate {
         ctx,
         comment,
-        draft,
+        comment_state,
         location,
     }
     .render()
@@ -293,7 +322,7 @@ async fn edit(
 ) -> WebResult<Response> {
     let comment = get_comment(ctx.clone(), comment_id).await?;
     let draft = Draft::new(&comment)?;
-    render(&hx, ctx, &jar, location, comment, Some(draft)).await
+    render(&hx, ctx, &jar, location, comment, Some(CommentState::Edit(draft))).await
 }
 
 async fn edit_submit(
@@ -315,11 +344,12 @@ async fn edit_submit(
             });
             match api::comment::update(ctx.clone(), Path(comment_id), params, body).await {
                 Ok(Json(comment)) => {
-                    if hx.full_page() {
+                    return if hx.full_page() {
                         let redirect_url = location.redirect_url(&comment)?;
-                        return Ok(web::plain_redirect(&redirect_url, hx, jar));
-                    }
-                    return render(&hx, ctx, &jar, location, comment, None).await;
+                        Ok(web::plain_redirect(&redirect_url, hx, jar))
+                    } else {
+                        render(&hx, ctx, &jar, location, comment, None).await
+                    };
                 }
                 Err(err) => (EditTab::Write, Message::Error(err)),
             }
@@ -337,5 +367,32 @@ async fn edit_submit(
         tab,
         message,
     };
-    render(&hx, ctx, &jar, location, comment, Some(draft)).await
+    render(&hx, ctx, &jar, location, comment, Some(CommentState::Edit(draft))).await
+}
+
+async fn delete_submit(
+    ctx: Ctx,
+    Path(comment_id): Path<i64>,
+    Query(location): Query<Location>,
+    hx: HxRequest,
+    jar: CookieJar,
+    Form(body): Form<DeleteBody>,
+) -> WebResult<Response> {
+    let comment = get_comment(ctx.clone(), comment_id).await?;
+    match api::comment::delete(ctx.clone(), Path(comment_id), Json(body)).await {
+        Ok(Json(())) => Ok(if hx.full_page() {
+            let redirect_url = format!("/{}", location.url(&comment)?);
+            web::plain_redirect(&redirect_url, hx, jar)
+        } else {
+            Html(String::new()).into_response()
+        }),
+        Err(err) => {
+            let failure = DeleteFailure {
+                comment_id,
+                post_id: comment.post_id()?,
+                error: err,
+            };
+            render(&hx, ctx, &jar, location, comment, Some(CommentState::DeleteFailed(failure))).await
+        }
+    }
 }

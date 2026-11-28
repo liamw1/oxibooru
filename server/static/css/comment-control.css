@@ -133,10 +133,52 @@
 }
 
 .comment-container .comment header .edit:not(.inactive),
-.comment-container .comment header .delete:not(.inactive),
+.comment-container .comment header .delete:not(.inactive) label,
+.comment-container .comment header .delete:not(.inactive) button,
 .comment-container .comment header .score-container a:not(.inactive),
 .comment-container .comment header .nickname a:not(.inactive) {
     color: color-mix(in oklab, var(--main-color), var(--inactive-link-color));
+}
+
+.comment-container .comment header form.delete {
+    display: inline;
+    user-select: none;
+}
+
+.comment-container .comment header form.delete label,
+.comment-container .comment header form.delete button {
+    display: inline;
+    margin: 0;
+    border: 0;
+    padding: 0;
+    background: none;
+    font: inherit;
+    line-height: inherit;
+    cursor: pointer;
+}
+
+.comment-container .comment header form.delete input:focus-visible+label {
+    outline: 2px solid var(--main-color);
+}
+
+.comment-container .comment header form.delete .confirm {
+    display: none;
+}
+
+.comment-container .comment header form.delete .confirm button {
+    margin-left: 1em;
+}
+
+.comment-container .comment header form.delete input:checked~.prompt {
+    display: none;
+}
+
+.comment-container .comment header form.delete input:checked~.confirm {
+    display: inline;
+}
+
+.comment-container .comment header form.delete .confirm label.cancel {
+    color: var(--button-disabled-text-color);
 }
 
 .comment-container .comment header i {
@@ -197,7 +239,8 @@
 }
 
 .darktheme .comment-container .comment header .edit:not(.inactive),
-.darktheme .comment-container .comment header .delete:not(.inactive),
+.darktheme .comment-container .comment header .delete:not(.inactive) label,
+.darktheme .comment-container .comment header .delete:not(.inactive) button,
 .darktheme .comment-container .comment header .score-container a:not(.inactive),
 .darktheme .comment-container .comment header .nickname a:not(.inactive) {
     color: color-mix(in oklab, var(--main-color), var(--inactive-link-color-darktheme));

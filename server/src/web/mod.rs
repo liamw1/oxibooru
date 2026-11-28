@@ -77,6 +77,10 @@ pub fn comment_edit_url<T: Serialize>(comment_id: impl Borrow<i64>, params: &T) 
     url(&format!("comment/{}/edit", comment_id.borrow()), params)
 }
 
+pub fn comment_delete_url<T: Serialize>(comment_id: impl Borrow<i64>, params: &T) -> Result<String, UrlSerializeError> {
+    url(&format!("comment/{}/delete", comment_id.borrow()), params)
+}
+
 pub fn post_url<T: Serialize>(post_id: i64, params: &T) -> Result<String, UrlSerializeError> {
     let base = format!("post/{post_id}");
     url(&base, params)
